@@ -40177,6 +40177,98 @@ mod auto_bump_done_tests {
         assert!(info.completed_at.is_some(), "completed_at should be set");
     }
 
+    /// BUG-426: a `docs(plans): …` plan commit names the specs it PLANS for
+    /// in its trailing `(SPEC-ID …)` group, but a plan is pre-implementation
+    /// — those specs stay Approved. The auto-bump candidate scan must NOT
+    /// treat a plan commit's trailer as a completion signal (it previously
+    /// false-completed the umbrella specs `(TASK-136 BUG-420)` off a plan-only
+    /// commit). A non-plan commit referencing the same spec still completes
+    /// it. trace:BUG-426 | ai:claude
+    #[test]
+    fn auto_bump_ignores_plan_commit_trailers() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        // Two Approved umbrella specs, exactly as TASK-136/BUG-420 were.
+        let planned = seed_spec_at(&store_path, "TASK-8801", "Approved");
+        let delivered = seed_spec_at(&store_path, "TASK-8802", "Approved");
+
+        // A plan commit naming both specs — must NOT complete either.
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        std::fs::write(project_root.join("plan.md"), "the plan\n").unwrap();
+        run_git(&project_root, &["add", "plan.md"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                &format!(
+                    "[AI:claude] docs(plans): hardening plan ({} {})",
+                    planned, delivered
+                ),
+            ],
+        );
+        // A real delivery commit for the second spec only.
+        std::fs::write(project_root.join("ship.rs"), "fn ship() {}\n").unwrap();
+        run_git(&project_root, &["add", "ship.rs"]);
+        run_git(
+            &project_root,
+            &["commit", "-m", &format!("fix: ship it ({})", delivered)],
+        );
+        let ship_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+
+        assert!(
+            !has_flip(&flips, &planned),
+            "plan-only spec must NOT be completed by a docs(plans) trailer"
+        );
+        assert!(
+            has_flip(&flips, &delivered),
+            "the fix-committed spec should still complete"
+        );
+
+        let after = storage.load().unwrap();
+        assert!(
+            matches!(
+                after.get_requirement_by_spec_id(&planned).unwrap().status,
+                RequirementStatus::Approved
+            ),
+            "planned-only umbrella stays Approved"
+        );
+        let shipped = after.get_requirement_by_spec_id(&delivered).unwrap();
+        assert!(matches!(shipped.status, RequirementStatus::Completed));
+        assert_eq!(
+            shipped
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.as_deref()),
+            Some(ship_sha.as_str()),
+            "completion_sha is the fix commit, not the plan commit"
+        );
+    }
+
+    /// BUG-426: `is_plan_commit_subject` recognizes plan commits (with or
+    /// without an `[AI:tool]` prefix) and leaves ordinary docs / delivery
+    /// commits alone. trace:BUG-426 | ai:claude
+    #[test]
+    fn is_plan_commit_subject_classifies_plan_commits() {
+        assert!(is_plan_commit_subject("docs(plans): a plan (TASK-1)"));
+        assert!(is_plan_commit_subject("docs(plan): a plan (TASK-1)"));
+        assert!(is_plan_commit_subject(
+            "[AI:claude] docs(plans): a plan (TASK-1)"
+        ));
+        assert!(is_plan_commit_subject(
+            "  [AI:claude:med] docs(plans): a plan (TASK-1)"
+        ));
+        // Not plan commits.
+        assert!(!is_plan_commit_subject("docs: update README (TASK-1)"));
+        assert!(!is_plan_commit_subject("docs(readme): tweak (TASK-1)"));
+        assert!(!is_plan_commit_subject("feat: land the thing (TASK-1)"));
+        assert!(!is_plan_commit_subject("fix(plans): real fix (TASK-1)"));
+    }
+
     /// BUG-405: a spec the drain shelved into NeedsAttention (with a
     /// populated FailureReason) whose referencing commit then lands on the
     /// default branch graduates to Completed, and the stale FailureReason is
@@ -52040,8 +52132,22 @@ fn auto_bump_done_to_completed(
         if sha.is_empty() || subject.is_empty() {
             continue;
         }
-        for spec_id in extract_spec_ids_from_commit(subject) {
-            candidates.entry(spec_id).or_insert_with(|| sha.to_string());
+        // BUG-426: a plan commit (`docs(plans): …`) names the specs it PLANS
+        // for in its trailing `(SPEC-ID …)` group, but a plan is a
+        // pre-implementation artifact — the plan template leaves those specs
+        // at Approved ("Plan only — not the implementation; specs stay
+        // Approved"). Honoring that trailer as a completion signal
+        // false-completes the planned (often umbrella) specs off a plan-only
+        // commit; verified against the store, both historic `docs(plans):`
+        // completions were false. Skip plan commits from the
+        // completion-candidate scan. They still surface in git-linkage display
+        // via `extract_spec_ids_from_commit`, and a plan PR that is genuinely
+        // reviewed + merged still completes via its review-story covers path.
+        // trace:BUG-426 | ai:claude
+        if !is_plan_commit_subject(subject) {
+            for spec_id in extract_spec_ids_from_commit(subject) {
+                candidates.entry(spec_id).or_insert_with(|| sha.to_string());
+            }
         }
         if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
             pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
@@ -52434,8 +52540,14 @@ fn handle_db_reconcile_status(
         if sha.is_empty() || subject.is_empty() {
             continue;
         }
-        for id in extract_spec_ids_from_commit(subject) {
-            candidates.entry(id).or_insert_with(|| sha.to_string());
+        // BUG-426: skip plan commits — their trailer names the planned specs,
+        // not delivered ones. Mirrors the gate in `auto_bump_done_to_completed`
+        // so the manual reconcile replay can't false-complete a planned spec
+        // the live pull already (correctly) left alone. trace:BUG-426 | ai:claude
+        if !is_plan_commit_subject(subject) {
+            for id in extract_spec_ids_from_commit(subject) {
+                candidates.entry(id).or_insert_with(|| sha.to_string());
+            }
         }
         if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
             pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
@@ -62068,6 +62180,25 @@ fn extract_acceptance_section(description: &str) -> Option<String> {
 /// prose, sub-commit lines in squash bodies) and are returned by
 /// [`extract_referenced_spec_ids_from_commit`] instead. trace:BUG-85 | ai:claude
 /// trace:STORY-67 | ai:claude
+/// True when a commit subject is an AIDA *plan* commit — `docs(plans): …`
+/// or `docs(plan): …`, optionally behind an `[AI:tool]` authorship prefix
+/// (`[AI:claude] docs(plans): …`). Plan commits are pre-implementation
+/// artifacts (the plan template leaves the planned specs at Approved), so
+/// their trailing `(SPEC-ID …)` group names what the plan is FOR, not what
+/// shipped. The auto-bump completion-candidate scan skips them so a plan-only
+/// commit never false-completes the specs it plans. trace:BUG-426 | ai:claude
+fn is_plan_commit_subject(subject: &str) -> bool {
+    let s = subject.trim();
+    // Strip an optional leading `[AI:tool]` authorship tag.
+    let s = s
+        .strip_prefix('[')
+        .and_then(|rest| rest.split_once(']'))
+        .map(|(_, after)| after.trim_start())
+        .unwrap_or(s);
+    let lower = s.to_ascii_lowercase();
+    lower.starts_with("docs(plans)") || lower.starts_with("docs(plan)")
+}
+
 pub(crate) fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     let subject = message.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let mut out = Vec::new();
