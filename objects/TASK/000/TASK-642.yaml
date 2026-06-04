@@ -1,0 +1,26 @@
+id: 019e9112-15e5-77c3-867e-7cf9d14f8d51
+spec_id: TASK-642
+agreed_id: TASK-642
+title: 'Final resume-drain end-to-end confirmation (post STORY-501): create docs/scratch/resume-probe.md (throwaway)'
+description: |-
+  Fourth + (hopefully) final STORY-492 live kill-and-resume, now that the shared root (STORY-501 — reviewer reviews PR-N without owning the spec) is fixed alongside BUG-436 + BUG-438. Goal: resume re-enters at the reviewer, the reviewer REVIEWS PR-N (no re-implement, no duplicate PR), then merge → pull → Completed.
+
+  Implementer: create docs/scratch/resume-probe.md (new dir + file) with one line: 'resume-drain end-to-end confirmation — <date>'. Change nothing else.
+
+  ## Acceptance
+  - docs/scratch/resume-probe.md exists with the one line.
+  - No other files changed.
+
+  NOTE: validation artifact — git rm after the run. trace:STORY-492 trace:STORY-501
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T05:19:02.117398658Z
+modified_at: 2026-06-04T05:19:02.117398658Z
+req_type: Task
+tags:
+- from-validation
+- resume-drain-test
+- story-501-revalidation
+- throwaway
