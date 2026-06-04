@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:54:06.230259737Z
-modified_at: 2026-06-04T15:54:06.230259737Z
+modified_at: 2026-06-04T15:54:45.003655811Z
 req_type: Story
 tags:
 - drain
@@ -17,3 +17,8 @@ tags:
 - gitlab
 - parent:EPIC-35
 - slice:4
+relationships:
+- rel_type: Child
+  target_id: 019e9333-7505-78f1-a063-06851ee7f85c
+  created_at: 2026-06-04T15:54:45.003644712Z
+  created_by: joe
