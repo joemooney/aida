@@ -1,0 +1,19 @@
+id: 019e9357-8216-7fb0-bf99-a6d2209f2a62
+spec_id: STORY-510
+agreed_id: STORY-510
+title: '[EPIC-35 s4] GitLab CI — ci_status via glab pipelines, wired into the drain CI-wait'
+description: 'Size M. Implement ci_status for GitLab (glab ci status / pipeline API) and wire it into the orchestrator CI-wait phase (replacing the GitHub-Actions wait when provider=gitlab). Depends on s3. Acceptance: --auto-complete on a GitLab project waits on the GitLab pipeline correctly (success/fail/timeout).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T15:54:06.230259737Z
+modified_at: 2026-06-04T15:54:06.230259737Z
+req_type: Story
+tags:
+- drain
+- forge-provider
+- from-product
+- gitlab
+- parent:EPIC-35
+- slice:4
