@@ -1,0 +1,44 @@
+id: 019e90b3-afa0-7ae0-8f0c-4407ddeba0f3
+spec_id: BUG-436
+agreed_id: BUG-436
+title: Reviewer phase refuses when backing spec is Done — BUG-379 preflight blocks the PR-scoped review session
+description: |-
+  Caught by the STORY-492 supervised kill-and-resume validation (TASK-639, 2026-06-03). The resume reconcile core worked perfectly — re-entered at phase 3 (reviewer), seeded PR-448, skipped phases 1-2 — but phase 3 then died:
+
+      ▶ Phase 3/6: reviewer session
+      working on TASK-639 (backs PR-448)
+      Error: spec `TASK-639` is Done — work already shipped, refusing to start a new session.
+      ✗ phase 3 (reviewer session) failed: the reviewer session exited 1
+
+  ## Root cause
+  The reviewer phase (run_reviewer) spawns `aida queue work PR-448`. That resolves PR-448 → its backing spec TASK-639 and starts a session with --owns TASK-639. The session-start preflight `preflight_spec_status` (BUG-379, aida-cli/src/main.rs ~24431) refuses any Done/Completed SPEC-ID: 'work already shipped, refusing to start a new session.'
+
+  But Done means 'work finished on a branch, awaiting review/merge' (lifecycle vocabulary) — reviewing a Done spec's PR is the CORRECT, expected state. The BUG-379 guard exists to stop *re-implementing* shipped work; it should not block the *reviewer* (or any PR-scoped review session). The reviewer never owns/implements the spec — it reviews the PR.
+
+  ## Trigger / scope
+  - Reliably triggered by resume-to-reviewer: by resume time the implementer has run `aida queue done` (spec → Done) and the PR is open, so reconcile correctly sends resume to the reviewer, which then hits the guard.
+  - LIKELY also affects a normal (non-resumed) --auto-complete drain whenever the spec is Done before phase 3 (the implementer runs `queue done` at end of phase 1). Confirm whether normal drains hit this or are somehow exempt — that determines severity (resume-only vs all-drains).
+
+  ## Fix direction
+  The reviewer/PR-review session-start path must be exempt from the Done/Completed refusal — a PR-scoped review session is legitimate on a Done spec. Options: (a) when the scope is a PR (review context, e.g. AIDA_REVIEW_VERDICT_FILE set or role=reviewer), skip the Done/Completed arm of preflight_spec_status; (b) gate the owns-status check on the *spec* only for implementer-role sessions, not reviewer. Prefer the narrowest exemption that keeps the re-implement guard intact for implementer pickups.
+
+  ## Acceptance criteria
+  - [ ] A reviewer phase / `aida queue work PR-N` review session starts successfully when the backing spec is Done (with an open, unmerged PR).
+  - [ ] The BUG-379 re-implement guard still refuses an *implementer* pickup of a Done/Completed spec (don't regress it).
+  - [ ] STORY-492 resume-to-reviewer completes through merge on the TASK-639-shaped scenario (validate with the validate-resume.sh live path, or an equivalent).
+  - [ ] Primary-caller check: walk it for both the orchestrated reviewer phase (run_reviewer spawns `queue work PR-N`) and a human running `aida queue work PR-N` to review.
+  trace:STORY-492 trace:BUG-379
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-04T03:35:55.552797621Z
+modified_at: 2026-06-04T03:35:55.552797621Z
+req_type: Bug
+tags:
+- drain
+- from-self-test
+- from-validation
+- orchestrator
+- resume
+- reviewer
