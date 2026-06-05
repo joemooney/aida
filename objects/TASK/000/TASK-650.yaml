@@ -1,0 +1,12 @@
+id: 019e96bf-0772-7692-8cec-4c03e6b2c4c6
+spec_id: TASK-650
+agreed_id: TASK-650
+title: '[EPIC-35 s2] Forge-aware hint text: sweep remaining files (helper + workflow_hints landed)'
+description: "Child of STORY-508. The forge-aware hint INFRASTRUCTURE is shipped: `ForgeKind::change_noun()` + `change_cmd_hint(verb, args)` (forge.rs, with unit tests) and the first conversion (workflow_hints.rs — queue-drained + session-end PR hints now resolve gh/glab/pure-git via project_root). \n\nTHIS task tracks the remaining call-site sweep across the other ~11 files that still hardcode `gh ...` in user-facing hint/error strings: auto_complete.rs, pr_ship.rs, pr_rebase.rs, network_retry.rs, status_cleanup.rs, drain_state.rs, punt.rs, state_snapshot.rs, cli.rs, main.rs. For each: thread the active ForgeKind (resolve_forge_kind(project_root)) into the hint builder and replace the literal with change_cmd_hint()/change_noun(), supplying a forge-neutral fallback for the pure-git (None) case. Disambiguate user-facing HINT strings from real `Command::new(\"gh\")` invocations — only the former change. Update any tests that hardcode `gh` literals to pass ForgeKind::GitHub + add a GitLab/pure-git assertion. \n\nRefinement to consider: glab merge flags differ from gh (`--remove-source-branch` vs `--delete-branch`); change_cmd_hint currently passes args verbatim (acceptable — the hint is directional), but a per-forge flag map would be more correct. \n\nAcceptance (inherited from STORY-508): no user-facing hint names a forge CLI the active provider doesn't use."
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T07:46:02.226097625Z
+modified_at: 2026-06-05T07:46:02.226097625Z
+req_type: Task
