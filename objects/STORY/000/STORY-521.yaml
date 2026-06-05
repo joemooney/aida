@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:37:53.949719227Z
-modified_at: 2026-06-05T21:36:51.637723680Z
+modified_at: 2026-06-05T22:17:40.443666769Z
 req_type: Story
 tags:
 - batch:gitlab-forge
@@ -45,3 +45,8 @@ comments:
   content: Commit a7ee86118 references this requirement
   created_at: 2026-06-05T21:36:51.637723680Z
   modified_at: 2026-06-05T21:36:51.637723680Z
+- id: 019e99dd-095b-7c91-a7eb-ee3a8830f224
+  author: joe
+  content: 'COMPLETE 2026-06-05: every gh call-site class from the SPIKE-49 inventory now routes through the Forge trait — merge (TASK-668/669), view (PR-538), ci-probe (672), ci-watch pr-checks (674) + run-watch (678), create (675), comment (676), list (677). checkout had no live sites. 8 forge PRs (#536-#544), all but the orchestrator-only paths dogfood-validated via aida pr ship; full create→watch→merge lifecycle proven through the trait. A GitLab/pure-git repo now drives the PR/CI/merge lifecycle through its own provider (GitLab providers still stubbed — STORY-509/510/511). GitHub behaviour preserved (byte-identical argv / delegate-to-existing-helpers, no classification reimpl). Remaining EPIC-35 work is the GitLab glab impls + e2e, not call-site routing.'
+  created_at: 2026-06-05T22:17:40.443666769Z
+  modified_at: 2026-06-05T22:17:40.443666769Z
