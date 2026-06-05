@@ -24,7 +24,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:06.320088198Z
-modified_at: 2026-06-04T16:22:19.264901782Z
+modified_at: 2026-06-05T01:40:08.702361460Z
 req_type: Task
 tags:
 - aida:init
@@ -52,6 +52,11 @@ comments:
   content: 'Promoted by joe 2026-06-04: Workflow correctness: ''aida findings promote'' should warn/auto-bump when the origin-ID already shipped, else it re-queues done work.'
   created_at: 2026-06-04T16:22:19.264901782Z
   modified_at: 2026-06-04T16:22:19.264901782Z
+- id: 019e9570-0b7e-7531-b2f1-9cabd6b3e332
+  author: joe
+  content: 'Verified already fixed (2026-06-04): the onboarding-task enqueue ships at main.rs:4756 (trace:TASK-1-097 — the exact finding this was promoted from). It builds a QueueEntry for the onboarding spec with for_role=implementer and queue_add''s it at init, so ''aida queue work'' / ''aida status'' show it as queue head (not just Recent activity). Closing as already-fixed.'
+  created_at: 2026-06-05T01:40:08.702361460Z
+  modified_at: 2026-06-05T01:40:08.702361460Z
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
