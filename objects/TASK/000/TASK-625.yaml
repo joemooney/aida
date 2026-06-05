@@ -23,12 +23,12 @@ description: |-
 
   - Trivial gitignore-only change. The `.claude/` tree is mostly tracked (skills/commands symlinks), unlike `.aida/` (deny-by-default), so runtime files under `.claude/` need explicit ignore lines.
   - Scaffolding consideration: if `aida init` scaffolds a `.gitignore` block, the same line likely belongs in that template so new projects inherit it (verify whether scheduler runs in scaffolded projects).
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:34:16.077853065Z
-modified_at: 2026-06-04T16:57:18.631567292Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - from-product
@@ -42,3 +42,7 @@ comments:
   content: Commit 525608da4 references this requirement
   created_at: 2026-06-04T16:57:18.631567292Z
   modified_at: 2026-06-04T16:57:18.631567292Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 9d0d0bb915e0541c0b5f4a8cff1acce5ecddf3b0

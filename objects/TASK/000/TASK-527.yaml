@@ -28,12 +28,12 @@ description: |-
   ## Origin
 
   Discovered immediately after the TASK-511 migration when sanity-checking the new namespace. The migration shipped because the substrate consistency + downstream tooling (STORY-444 backlog-groom uses namespace overlap as heuristic) have standalone value, but the prefix-glob is the headline payoff and needs to land for the convention to feel complete.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T06:41:30.840459709Z
-modified_at: 2026-06-05T04:27:42.669401424Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - aida:list
@@ -54,3 +54,7 @@ comments:
   content: Commit 8012867b1 references this requirement
   created_at: 2026-06-05T04:27:42.669401424Z
   modified_at: 2026-06-05T04:27:42.669401424Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 0628fd3a9a5b567efdf4e645f6ad6854717b0e3d

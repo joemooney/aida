@@ -14,12 +14,12 @@ description: |-
   - [ ] When global auto_claim is off but a per-type re-enable exists, the empty-blocks summary surfaces that something is configured (e.g. `auto-claim: off (configured per-type)` or similar).
   - [ ] Test case mirroring `auto_claim_summary_per_type_re_enable_wins_over_global_off` but for the empty-blocks branch.
   - [ ] No regression in the existing global-opt-out-no-re-enable case.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:05:12.250035615Z
-modified_at: 2026-06-05T04:01:46.693166801Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - block-allocation
@@ -32,3 +32,7 @@ comments:
   content: Commit 39f1b254d references this requirement
   created_at: 2026-06-05T04:01:46.693166801Z
   modified_at: 2026-06-05T04:01:46.693166801Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: b73f7f48c8fb12080b0097d866f388d927991dd4

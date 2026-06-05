@@ -44,12 +44,12 @@ description: |-
   ## Origin
 
   PR-193 (substrate sync) added skill-prompt-kinds.md; the discipline pack test failed on the hardcoded count of 6. Trivial to fix; recurring with every scaffolding-pack addition. Pattern strength = annoying but bounded.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T19:02:23.313938730Z
-modified_at: 2026-06-05T04:50:39.204760088Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - from-self-test
@@ -73,3 +73,7 @@ comments:
   content: Commit 0c1f5a661 references this requirement
   created_at: 2026-06-05T04:50:39.204760088Z
   modified_at: 2026-06-05T04:50:39.204760088Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 5e665d7d2682b2db5539edfa1745972477d52d9c

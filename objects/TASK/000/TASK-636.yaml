@@ -14,15 +14,19 @@ description: |-
   - No convention an agent must follow every session is lost (trace/commit format, daily commands, capture, lifecycle vocab stay inline).
   - claude_md.rs + aida_md.rs scaffolding tests still pass; a fresh 'aida init' in /tmp produces a coherent CLAUDE.md + AIDA.md.
   - Verified by: scaffold a throwaway project, confirm the @-imports resolve and the moved content is reachable via the discipline links.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T03:38:40.977521952Z
-modified_at: 2026-06-02T03:38:40.977521952Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - aida:init
 - context-budget
 - papercut
 - scaffolding
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 583ca688b1e7127d545df6b85d90e9276bdf8c27

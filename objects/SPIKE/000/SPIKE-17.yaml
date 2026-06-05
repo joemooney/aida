@@ -9,12 +9,12 @@ description: |-
 
   Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/04-hooks-lifecycle.md
   Acceptance: enumerated event types, return-value schema, AIDA hook scaffolding gap analysis.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:21:50.701180611Z
-modified_at: 2026-06-05T02:58:11.294656218Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
@@ -31,3 +31,7 @@ comments:
   content: Commit 6078aeee0 references this requirement
   created_at: 2026-06-05T02:58:11.294656218Z
   modified_at: 2026-06-05T02:58:11.294656218Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 6822c6ba9aaea05a02a81210c5e487303eae724c

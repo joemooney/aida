@@ -38,12 +38,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'why does history not show the ship?' after TASK-474's 10m44s drain. The default filter is correct for 'still-live work' but wrong for 'did my ship register?'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T23:37:10.507263122Z
-modified_at: 2026-06-05T04:41:22.709734518Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - cli-ux
@@ -59,3 +59,7 @@ comments:
   content: Commit a56fde456 references this requirement
   created_at: 2026-06-05T04:41:22.709734518Z
   modified_at: 2026-06-05T04:41:22.709734518Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: cb202ff5fe8e2bc145ae3a0639d34aaa305ba080

@@ -17,12 +17,12 @@ description: |
   covers the session-start visibility need.
 
   Raised in review of PR-69. Called out as "a clean follow-up" in the PR body.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:07:07.593034385Z
-modified_at: 2026-06-05T05:12:31.187670609Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - aida:pickup
@@ -35,3 +35,7 @@ comments:
   content: Commit 3950dcaef references this requirement
   created_at: 2026-06-05T05:12:31.187670609Z
   modified_at: 2026-06-05T05:12:31.187670609Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 936d6e1cefb03f736c84d22d95fc531ab6754ea4
