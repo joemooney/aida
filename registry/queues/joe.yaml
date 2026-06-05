@@ -480,12 +480,6 @@
   added_at: 2026-06-05T16:51:01.534094926Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 019e48d8-5a50-7113-af15-7adf8f207420
-  position: 369000
-  added_by: joe
-  added_at: 2026-06-05T17:18:43.934353602Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 019e58e2-77c6-7403-9f44-d7ddf41d55ef
   position: 370000
   added_by: joe
