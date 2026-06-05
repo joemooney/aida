@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T07:46:02.226097625Z
-modified_at: 2026-06-05T07:47:13.046178896Z
+modified_at: 2026-06-05T07:47:45.862290856Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,8 @@ comments:
   content: 'Scope of THIS task (completed by the merging PR): ForgeKind::change_noun() + change_cmd_hint() helper in forge.rs (with unit tests), and the first call-site conversion — workflow_hints.rs queue-drained + session-end PR hints now resolve gh/glab/pure-git via resolve_forge_kind(project_root). The remaining ~11-file call-site sweep is tracked separately (see the new sibling task) and STORY-508 stays open until that lands.'
   created_at: 2026-06-05T07:47:13.046178896Z
   modified_at: 2026-06-05T07:47:13.046178896Z
+- id: 019e96c0-9c46-7881-9c35-e9412ad982c8
+  author: joe
+  content: Commit 05a7c3812 references this requirement
+  created_at: 2026-06-05T07:47:45.862290856Z
+  modified_at: 2026-06-05T07:47:45.862290856Z
