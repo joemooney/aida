@@ -1463,13 +1463,6 @@
   added_at: 2026-06-04T15:17:31.400772947Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019e933f-70d6-7c41-b385-031f67efac7f
-  position: 342000
-  added_by: joe
-  note: 'Data-integrity: fresh clone reads wrong store silently. Repro fixture: clone ssh://git@localhost:2222/joe/aida-gl-test.git. Surfaced by GitLab store validation 2026-06-04.'
-  added_at: 2026-06-04T15:28:17.437617734Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e934f-ae55-75a0-960c-e1c3750fbafe
   position: 343000
   added_by: joe
