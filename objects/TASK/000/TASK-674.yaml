@@ -8,12 +8,12 @@ description: |-
   NOT in this slice: the orchestrator / --watch-ci path (`watch_ci_for_context` → `gh run watch` streaming + the non-streaming poll-wait + headless variants) — a different mechanism; separate sub-slice. Also `gh run view`.
 
   Streaming method can't be unit-tested; validated by dogfood (`aida pr ship` watches CI through it). Full suite green (1615).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:30:11.163679934Z
-modified_at: 2026-06-05T20:31:05.907771860Z
+modified_at: 2026-06-05T20:36:52.592895217Z
 req_type: Task
 tags:
 - batch:gitlab-forge
@@ -30,3 +30,7 @@ comments:
   content: Commit 08692288e references this requirement
   created_at: 2026-06-05T20:31:05.907771860Z
   modified_at: 2026-06-05T20:31:05.907771860Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T20:36:52.592895217Z
+  completion_sha: f93303f55b8a9d3566e216fed3e54560d495bac1
