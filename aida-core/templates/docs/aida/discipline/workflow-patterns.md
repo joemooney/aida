@@ -78,3 +78,33 @@ scaffolded by `aida init`). Promote a draft to `docs/plans/<name>.md` only when
 it's adopted (and commit it as part of that work). Never leave generated plans
 untracked in `docs/plans/` — they become a merge landmine for every later PR.
 trace:TASK-383 | ai:claude
+
+## Recursive-failure-risk fixes use the keyboard, not the drain
+
+A fix to the **autonomy machinery itself** — the orchestrator, lease
+management, the reviewer/implementer phase enforcement, merge/CI/drain
+plumbing — must NOT be shipped through an unsupervised `--auto-complete
+--no-human` drain. The reason is recursive: the fix rides *through* the very
+system it repairs, so if that system's current failure rate is non-trivial,
+the fix gets caught in the same failure it's meant to remove — and a headless
+drain has no human to recover it. You can spend a night watching a reliability
+fix fail to merge because of the bug it fixes.
+
+**Rule of thumb — sort the work by what it touches:**
+
+- **Touches the drain's own correctness** (orchestrator, leases, phase
+  transitions, merge/pull/build plumbing, anything whose failure would *abort
+  or corrupt a drain*) → ship it **at the keyboard**, supervised, via
+  `--zen --auto-complete` with a human (or live advisor) watching. The fix
+  still exercises the real path (strongest validation — see
+  `substrate-as-bouncer.md` on dogfooding the system you're fixing), but a
+  human catches the recursive failure the first time it bites.
+- **Touches anything else** (a CLI papercut, a display bug, docs, a new
+  read-only surface, a self-contained feature with small blast radius) → fine
+  to drain unsupervised.
+
+This refines the general "dogfood your fix through the system it fixes"
+instinct: dogfooding is right, but for the *recursive-failure-risk* subset you
+do it **watched**, not overnight. The supervised loop still counts as
+autonomous work — the only thing excluded is the *unattended* `--no-human`
+drain of a fix to the unattended drain.
