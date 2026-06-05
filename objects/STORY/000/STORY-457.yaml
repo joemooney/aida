@@ -51,3 +51,7 @@ tags:
 - heuristics
 - story-385-followup
 - working-tree
+relationships:
+- rel_type: Parent
+  target_id: 019e982d-98ae-78e0-a37a-c8cf73061cc3
+  created_at: 2026-06-05T14:26:33.607746675Z
