@@ -3,12 +3,12 @@ spec_id: TASK-676
 agreed_id: TASK-676
 title: 'EPIC-35 comment op: route gh pr comment through Forge::comment (checkout has no live sites)'
 description: 'Routes the orchestrator''s delegated-review trigger (, RealPhaseDriver) through forge_for(root).comment(ChangeRef{id:pr}, body). forge.comment already existed (real). Kept the resolve_gh_binary MissingTool guard (it also provides gh for the downstream check-run poll). Err→PhaseFailure. CHECKOUT op: no live  execution sites exist (only hint text + git checkout in tests), so nothing to route — checkout is effectively done. Not dogfoodable via aida pr ship (delegated-review path only); forge.comment is a thin gh wrapper. Full suite green (1615). Child of STORY-521.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T21:00:41.655560244Z
-modified_at: 2026-06-05T21:01:51.193728500Z
+modified_at: 2026-06-05T21:07:13.515909615Z
 req_type: Task
 tags:
 - batch:gitlab-forge
@@ -25,3 +25,7 @@ comments:
   content: Commit 4d70ce1df references this requirement
   created_at: 2026-06-05T21:01:51.193728500Z
   modified_at: 2026-06-05T21:01:51.193728500Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T21:07:13.515909615Z
+  completion_sha: 0048a2243c2904e11011be057885481cd8fa9ef7
