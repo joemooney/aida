@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:40.664367503Z
-modified_at: 2026-05-16T20:53:54.404100926Z
+modified_at: 2026-06-05T15:13:09.633402067Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -54,3 +54,9 @@ relationships:
   target_id: 019e31d7-9772-7090-8eda-45d2d67e6e9b
   created_at: 2026-05-16T20:53:54.404088744Z
   created_by: joe
+comments:
+- id: 019e9858-6201-7821-a3c8-c875931edb2b
+  author: joe
+  content: Commit 50073273a references this requirement
+  created_at: 2026-06-05T15:13:09.633402067Z
+  modified_at: 2026-06-05T15:13:09.633402067Z
