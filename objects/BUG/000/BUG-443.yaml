@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T16:12:29.431222886Z
-modified_at: 2026-06-04T16:12:29.431222886Z
+modified_at: 2026-06-05T02:37:31.568996548Z
 req_type: Bug
 tags:
 - docs
@@ -16,3 +16,9 @@ tags:
 - kind:bug-spotted
 - mcp
 - substrate-drift
+comments:
+- id: 019e95a4-9430-7ca0-ab53-059d2f450b08
+  author: joe
+  content: Commit 1506769f9 references this requirement
+  created_at: 2026-06-05T02:37:31.568996548Z
+  modified_at: 2026-06-05T02:37:31.568996548Z
