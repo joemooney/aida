@@ -5801,6 +5801,14 @@ pub enum Command {
         #[clap(long)]
         status_changes: bool,
 
+        /// Only recent Done→Completed ship transitions — the "did my ship
+        /// register?" view. Unlike `--all` (a recency-blind dump of every
+        /// terminal-status spec), this shows just what merged-to-default,
+        /// newest first. Implies --events; composes with --since/--until/--limit.
+        // trace:TASK-507 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        shipped: bool,
+
         /// (--events only) filter to comment events.
         #[clap(long)]
         comments: bool,
