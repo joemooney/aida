@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T07:47:15.344416583Z
-modified_at: 2026-06-05T07:57:15.240409398Z
+modified_at: 2026-06-05T08:09:15.729890835Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -27,3 +27,8 @@ comments:
     So the sweep needs a richer per-forge command vocabulary (a small table/methods: `ci_watch_cmd(n)`, `ci_view_cmd(run)`, `merge_cmd(n, opts)`, `create_cmd()`, `view_cmd(n)`), each returning the correct gh/glab/pure-git form, rather than templating a single verb. The chained hints (e.g. status_cleanup.rs:601 'checks --watch && merge && pull') should be assembled from these. Recommend designing this vocabulary first in a focused pass, THEN sweeping call sites — doing it per-hint piecemeal risks an incomplete/inconsistent abstraction. change_cmd_hint (TASK-650) stays useful for the simple view/create/merge verbs; this extends it. Pure-git fallback throughout: name no forge CLI (use git/aida-native or drop the parenthetical).
   created_at: 2026-06-05T07:57:15.240409398Z
   modified_at: 2026-06-05T07:57:15.240409398Z
+- id: 019e96d4-4ad1-7503-8bb5-407253dfdb5e
+  author: joe
+  content: 'Slice 1 landed (see sibling task just filed): per-forge command vocabulary (ci_watch_cmd/ci_view_cmd/merge_cmd/create_cmd/view_cmd on ForgeKind, tested) + status_cleanup.rs open-changes hint conversion. Remaining files to sweep: auto_complete.rs, pr_ship.rs, pr_rebase.rs, network_retry.rs, drain_state.rs (runtime hints only — most gh refs there are doc comments or real Command::new invocations), cli.rs, main.rs. Use the new vocabulary methods for numbered sites; the change_noun()/change_cmd_hint() helpers for prose.'
+  created_at: 2026-06-05T08:09:15.729890835Z
+  modified_at: 2026-06-05T08:09:15.729890835Z
