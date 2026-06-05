@@ -1,0 +1,53 @@
+id: 019e9689-2adb-7ac2-912b-4cfa39057e99
+spec_id: BUG-444
+agreed_id: BUG-444
+title: 'Phase-1 NoPr false-failure: empty-but-successful ''gh pr list'' (eventual-consistency lag) classified as definitive NoPr, no retry — the dominant drain-failure cause'
+description: |-
+  ## The bug (pinpointed via headless-log forensics + code read, 2026-06-04)
+
+  `detect_phase1_pr` (aida-cli/src/main.rs ~77702) treats an EMPTY-BUT-SUCCESSFUL gh result as a definitive phase-1 failure:
+
+  ```
+  PrLookup::NoOpenPr => match detect_open_pr_for_spec(...) {
+      PrLookup::Found(pr) => ...Found,
+      _ => Phase1PrResolve::NoPr,   // empty success -> definitive NoPr, NO RETRY
+  },
+  ```
+
+  Both detection queries are eventually-consistent gh LIST queries:
+  - detect_open_pr_for_branch  → `gh pr list --head <branch> --state open`  (main.rs ~29056)
+  - detect_open_pr_for_spec    → `gh pr list --search <spec> --state open`  (main.rs ~29123)  ← --search hits GitHub's SEARCH index, which lags PR creation by seconds-to-longer.
+
+  The TASK-136 bounded-backoff retry only fires on `PrLookup::GhUnreachable` (an API ERROR). An empty SUCCESS (`NoOpenPr`) has no retry path. So: `/aida-pr` runs `gh pr create` → the PR exists → the orchestrator immediately queries `gh pr list --head` + `--search` → both return empty (not yet indexed) → `NoOpenPr` on both → `Phase1PrResolve::NoPr` → FALSE phase-1 failure, even though the PR is open.
+
+  ## Why this is THE burn-down bottleneck (evidence)
+
+  Headless-log forensics (184 sessions): ~98% of implementer/reviewer sessions COMPLETE their work (110 clean `result` success + 71 exit-sentinel reaps; only 1 mid-work kill, 2 errors). Yet drain success is 56% (121/218; 88/97 failures in the agent-session phases). The gap = this misclassification: sessions ship PRs, the orchestrator races GitHub's index and declares NoPr.
+
+  Corroboration: STORY-78/80/81/82/83 all failed phase-1 at ONE timestamp (05-31 22:35) = a BATCH drain creating PRs rapidly + immediately detecting each → maximizes the race → a whole cluster false-fails at once (the "systemic burst").
+
+  ## Fix direction (implementer's call)
+
+  When BOTH lookups return `NoOpenPr` (empty success) AND the branch is on origin (`probe_branch_on_origin` == Present — the session DID push), treat it as `Phase1PrResolve::Retry` (eventual-consistency window), reusing the existing TASK-136 backoff — NOT a definitive `NoPr`. Declare `NoPr` only after the retry budget exhausts (the genuine "pushed but never opened a PR" case still fails correctly, just after the delay). I.e. extend the retry to cover the empty-SUCCESS path, not only the API-ERROR (`GhUnreachable`) path. Consider a faster-consistent primary probe than `--search` (e.g. `gh pr view <branch>` / a direct head-ref check) to shrink the window.
+
+  ## Expected impact
+
+  If the orchestrator stops false-failing the ~98% of sessions that succeed, drain success should climb 56% → ~90%+, and the backlog drains unattended. This is the single highest-leverage burn-down fix. KEYBOARD work (--zen), per the recursive-failure discipline — do not validate via unattended drain.
+
+  trace anchors: main.rs detect_phase1_pr ~77702, detect_open_pr_for_branch ~29056, detect_open_pr_for_spec ~29123, run_implementer retry loop ~78020.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T06:47:12.347580210Z
+modified_at: 2026-06-05T06:47:12.347580210Z
+req_type: Bug
+tags:
+- auto-complete
+- burn-down-keystone
+- eventual-consistency
+- from-forensics
+- orchestrator
+- parent:EPIC-33
+- phase-1
+- reviewer-not-own-spec-family
