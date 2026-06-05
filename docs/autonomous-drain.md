@@ -114,7 +114,12 @@ the next item, and the advisor triages it later (`aida findings list`).
   acknowledgement before launch. It shows once per kickoff. Skip the prompt
   for an unattended run by exporting `AIDA_NO_HUMAN_ACKNOWLEDGED=1`; a
   non-terminal stdin without it errors rather than blocking on an
-  unanswerable prompt.
+  unanswerable prompt. **For a recurring overnight loop, run
+  `aida no-human acknowledge` once** (TASK-394) — it persists the ack as a
+  marker (`~/.aida/no-human-acknowledged` machine-wide, or `--project` for
+  `.aida/no-human-acknowledged`) so each loop iteration's fresh process skips
+  the prompt without re-exporting the env var. `aida no-human status` shows the
+  current state; `aida no-human revoke` removes the marker.
 - **`--help` text** — `aida queue work --help` spells out the per-MODE scope.
 - **Statusline** — an interactive phase running inside an `--auto-complete`
   orchestrator shows `auto:N/6 <phase>`, the `no-human:<mode>` scope, and a

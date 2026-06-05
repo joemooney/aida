@@ -1221,6 +1221,13 @@ fn run() -> Result<()> {
         return handle_autonomy_command(autonomy_cmd);
     }
 
+    // TASK-394: the `--no-human` acknowledgement marker just touches/removes a
+    // file (no requirement store). Dispatch before storage init so it works on
+    // a fresh clone too. trace:TASK-394 | ai:claude
+    if let Command::NoHuman(no_human_cmd) = &cli.command {
+        return handle_no_human_command(no_human_cmd);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -1703,6 +1710,7 @@ fn run() -> Result<()> {
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
         Command::Autonomy(_) => unreachable!("autonomy is dispatched before storage init"),
+        Command::NoHuman(_) => unreachable!("no-human is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -72618,17 +72626,121 @@ fn no_human_scope_line(mode: auto_complete::NoHumanMode) -> &'static str {
 /// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` for an unattended run. STORY-276: `both` is
 /// now a shipped mode, so it is acknowledged like `reviewer-only` rather than
 /// rejected; the banner wording differs by mode. trace:TASK-306, STORY-276
-fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
-    let acknowledged = std::env::var("AIDA_NO_HUMAN_ACKNOWLEDGED")
+/// TASK-394: machine-wide `--no-human` acknowledgement marker
+/// (`~/.aida/no-human-acknowledged`) — persists across every project on the host.
+fn no_human_machine_marker() -> Option<std::path::PathBuf> {
+    dirs::home_dir().map(|h| h.join(".aida").join("no-human-acknowledged"))
+}
+
+/// TASK-394: project-scoped marker (`.aida/no-human-acknowledged`) — fresh per
+/// project, so the safety prompt returns on a new clone unless re-acked.
+fn no_human_project_marker() -> std::path::PathBuf {
+    std::path::Path::new(".aida").join("no-human-acknowledged")
+}
+
+/// TASK-394: is `--no-human` acknowledged via any channel? Returns the source
+/// label for the reminder line. Checked order: env var (existing path) → machine
+/// marker → project marker. An overnight loop acks once (the marker) instead of
+/// re-exporting the env var per iteration. trace:TASK-394 | ai:claude
+fn no_human_ack_source() -> Option<&'static str> {
+    if std::env::var("AIDA_NO_HUMAN_ACKNOWLEDGED")
         .map(|v| v == "1")
-        .unwrap_or(false);
+        .unwrap_or(false)
+    {
+        return Some("AIDA_NO_HUMAN_ACKNOWLEDGED");
+    }
+    if no_human_machine_marker()
+        .map(|p| p.exists())
+        .unwrap_or(false)
+    {
+        return Some("~/.aida/no-human-acknowledged");
+    }
+    if no_human_project_marker().exists() {
+        return Some(".aida/no-human-acknowledged");
+    }
+    None
+}
+
+/// TASK-394: `aida no-human acknowledge|revoke|status` — manage the persistent
+/// `--no-human` scope-acknowledgement marker so an unattended loop acks once
+/// rather than re-exporting AIDA_NO_HUMAN_ACKNOWLEDGED per iteration.
+/// trace:TASK-394 | ai:claude
+fn handle_no_human_command(cmd: &cli::NoHumanCommand) -> Result<()> {
+    let marker_for = |project: bool| -> Result<std::path::PathBuf> {
+        if project {
+            Ok(no_human_project_marker())
+        } else {
+            no_human_machine_marker()
+                .ok_or_else(|| anyhow::anyhow!("could not resolve home directory for the marker"))
+        }
+    };
+    match cmd {
+        cli::NoHumanCommand::Acknowledge { project } => {
+            let path = marker_for(*project)?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, "acknowledged\n")
+                .with_context(|| format!("writing {}", path.display()))?;
+            let scope = if *project {
+                "this project"
+            } else {
+                "this machine"
+            };
+            println!(
+                "{} --no-human acknowledged for {} ({}). Future drains skip the scope prompt.",
+                "✓".green(),
+                scope,
+                path.display()
+            );
+            if *project {
+                println!(
+                    "  {}",
+                    "Note: .aida/no-human-acknowledged is gitignored runtime state (per-clone)."
+                        .dimmed()
+                );
+            }
+            Ok(())
+        }
+        cli::NoHumanCommand::Revoke { project } => {
+            let path = marker_for(*project)?;
+            if path.exists() {
+                std::fs::remove_file(&path)
+                    .with_context(|| format!("removing {}", path.display()))?;
+                println!(
+                    "{} revoked {} — the scope prompt will return.",
+                    "✓".green(),
+                    path.display()
+                );
+            } else {
+                println!("(no acknowledgement marker at {})", path.display());
+            }
+            Ok(())
+        }
+        cli::NoHumanCommand::Status => {
+            match no_human_ack_source() {
+                Some(src) => println!("{} --no-human is acknowledged (via {}).", "✓".green(), src),
+                None => println!(
+                    "{} --no-human is NOT acknowledged — the scope prompt will fire. \
+                     Run `aida no-human acknowledge` to persist it.",
+                    "○".dimmed()
+                ),
+            }
+            Ok(())
+        }
+    }
+}
+
+fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
+    let ack_source = no_human_ack_source();
     let both = mode.wants_headless_implementer();
-    match classify_no_human_gate(acknowledged) {
+    match classify_no_human_gate(ack_source.is_some()) {
         NoHumanGate::Acknowledged => {
             eprintln!(
-                "  {} {} (acknowledged via AIDA_NO_HUMAN_ACKNOWLEDGED)",
+                "  {} {} (acknowledged via {})",
                 "ℹ".cyan(),
                 no_human_scope_line(mode),
+                ack_source.unwrap_or("acknowledgement"),
             );
             Ok(())
         }
@@ -72664,7 +72776,13 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
             eprintln!(
                 "   {}",
                 "Set AIDA_NO_HUMAN_ACKNOWLEDGED=1 to skip this prompt on an \
-                 unattended run."
+                 unattended run,"
+                    .dimmed()
+            );
+            eprintln!(
+                "   {}",
+                "or `aida no-human acknowledge` once to persist it across runs \
+                 (per machine; --project to scope to this repo). trace:TASK-394"
                     .dimmed()
             );
             eprintln!();
