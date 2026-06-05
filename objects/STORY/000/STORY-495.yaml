@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T02:54:40.561121692Z
-modified_at: 2026-06-04T16:13:12.189786194Z
+modified_at: 2026-06-05T17:27:39.497727035Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -96,6 +96,11 @@ comments:
     filed 2 task(s): TASK-632, TASK-633
   created_at: 2026-06-02T03:17:25.758097803Z
   modified_at: 2026-06-02T03:17:25.758097803Z
+- id: 019e98d3-84e9-7552-98cd-303e92b4896a
+  author: joe
+  content: Commit c07fba89a references this requirement
+  created_at: 2026-06-05T17:27:39.497727035Z
+  modified_at: 2026-06-05T17:27:39.497727035Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-02T03:16:52.227490152Z
