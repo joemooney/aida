@@ -41,3 +41,7 @@ tags:
 - multi-agent
 - story-385-followup
 - worktree
+relationships:
+- rel_type: Parent
+  target_id: 019e986a-d9c4-71f2-9bb8-b4e688d15395
+  created_at: 2026-06-05T15:33:33.196898821Z
