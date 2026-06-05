@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T06:47:12.347580210Z
-modified_at: 2026-06-05T15:53:30.683965110Z
+modified_at: 2026-06-05T19:54:28.122077987Z
 req_type: Bug
 tags:
 - auto-complete
@@ -67,3 +67,8 @@ comments:
   content: 'Fixed + merged (PR-520, commit on main 2026-06-05). detect_phase1_pr now retries empty-but-successful gh pr list on the eventual-consistency window (branch on origin → Retry via TASK-136 backoff) instead of false-failing NoPr; only a branch genuinely absent from origin is an immediate NoPr. Decision extracted to empty_phase1_lookup_is_definitive_nopr + unit-tested. VALIDATION STILL PENDING: per the spec''s recursive-failure directive, confirm the 56%→~90% drain-success impact via a WATCHED --zen drain, not an unattended one. Operator-requested.'
   created_at: 2026-06-05T15:53:29.325809791Z
   modified_at: 2026-06-05T15:53:29.325809791Z
+- id: 019e9959-ed9a-75c0-a970-9732ae2b9de3
+  author: joe
+  content: Commit 0bea3965e references this requirement
+  created_at: 2026-06-05T19:54:28.122077987Z
+  modified_at: 2026-06-05T19:54:28.122077987Z
