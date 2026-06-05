@@ -54,7 +54,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:39:06.245891646Z
-modified_at: 2026-05-23T22:39:06.245891646Z
+modified_at: 2026-06-05T07:12:39.196937152Z
 req_type: Task
 tags:
 - agent-comms
@@ -65,3 +65,9 @@ tags:
 - papercut
 - parent:EPIC-31
 - sibling-of-STORY-435
+comments:
+- id: 019e96a0-771c-76e3-8e7e-e28d75e04cc3
+  author: joe
+  content: Commit 80bd3a692 references this requirement
+  created_at: 2026-06-05T07:12:39.196937152Z
+  modified_at: 2026-06-05T07:12:39.196937152Z
