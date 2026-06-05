@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T13:42:30.862628604Z
-modified_at: 2026-06-05T05:41:29.697963885Z
+modified_at: 2026-06-05T15:45:40.293162083Z
 req_type: Epic
 tags:
 - autonomous-drain
@@ -99,3 +99,8 @@ comments:
     Caveat: forensics localize the failure to post-session orchestrator logic; pinpointing the exact reconciliation bug needs the orchestrator-side decision records (auto_complete.rs phase classification), not the session logs.
   created_at: 2026-06-05T05:41:29.697963885Z
   modified_at: 2026-06-05T05:41:29.697963885Z
+- id: 019e9876-25c5-7572-91a7-190e05fde10d
+  author: joe
+  content: Commit ea8a6d79c references this requirement
+  created_at: 2026-06-05T15:45:40.293162083Z
+  modified_at: 2026-06-05T15:45:40.293162083Z
