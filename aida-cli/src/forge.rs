@@ -777,31 +777,44 @@ impl Forge for PureGitForge {
         } else {
             c.base.clone()
         };
-        // Checkout base, merge the branch. Squash collapses, others fast-forward/merge.
-        let co = Command::new("git")
-            .arg("-C")
-            .arg(&self.project_root)
-            .args(["checkout", &base])
-            .output()?;
+        let git = |args: &[&str]| -> std::io::Result<std::process::Output> {
+            Command::new("git")
+                .arg("-C")
+                .arg(&self.project_root)
+                .args(args)
+                .output()
+        };
+        // Checkout base, then land the branch onto it.
         anyhow::ensure!(
-            co.status.success(),
+            git(&["checkout", &base])?.status.success(),
             "pure-git merge: could not checkout {base}"
         );
-        let merge_arg: &[&str] = match method {
-            MergeMethod::Squash => &["merge", "--squash"],
-            MergeMethod::Rebase => &["rebase"],
-            MergeMethod::Merge => &["merge", "--no-ff"],
+        let merged = match method {
+            MergeMethod::Squash => {
+                // `git merge --squash` STAGES the branch's changes WITHOUT
+                // committing — a commit must follow, or base is left unchanged
+                // with a dirty index (the merge silently no-ops). Commit with
+                // the branch head's subject so its `(SPEC-ID)` trailer survives
+                // and the trailer-driven auto-complete still fires.
+                // trace:STORY-516 | ai:claude
+                if !git(&["merge", "--squash", &c.branch])?.status.success() {
+                    false
+                } else {
+                    let subject = branch_head_subject(&self.project_root, &c.branch)
+                        .unwrap_or_else(|| format!("Merge {} into {}", c.branch, base));
+                    git(&["commit", "-m", &subject])?.status.success()
+                }
+            }
+            // `--no-edit` keeps the default merge message without opening an
+            // editor (which would hang a non-interactive ship/drain).
+            MergeMethod::Merge => git(&["merge", "--no-ff", "--no-edit", &c.branch])?
+                .status
+                .success(),
+            MergeMethod::Rebase => git(&["rebase", &c.branch])?.status.success(),
         };
-        let mut args: Vec<&str> = merge_arg.to_vec();
-        args.push(&c.branch);
-        let m = Command::new("git")
-            .arg("-C")
-            .arg(&self.project_root)
-            .args(&args)
-            .output()?;
         let sha = rev_parse(&self.project_root, &base);
         Ok(MergeResult {
-            merged: m.status.success(),
+            merged,
             sha,
             method,
         })
@@ -844,6 +857,27 @@ fn branch_is_ancestor_of(project_root: &Path, branch: &str, base: &str) -> bool 
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+/// First line (subject) of a ref's HEAD commit message — used to preserve a
+/// branch's `(SPEC-ID)`-trailered subject when squash-committing in pure-git
+/// mode. trace:STORY-516 | ai:claude
+fn branch_head_subject(project_root: &Path, r#ref: &str) -> Option<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-1", "--format=%s", r#ref])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
@@ -1047,5 +1081,79 @@ mod tests {
             .unwrap();
         assert_eq!(cr.id, 0, "pure-git change is synthetic");
         assert_eq!(cr.branch, "feat");
+    }
+
+    /// STORY-516: pure-git squash merge must actually COMMIT (advance base,
+    /// leave a clean index) and preserve the branch's `(SPEC-ID)`-trailered
+    /// subject — `git merge --squash` alone only stages. trace:STORY-516
+    #[test]
+    fn pure_git_squash_merge_commits_and_advances_base() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            let out = Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?}: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "base"]);
+        g(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "feat: the thing (TASK-9)"]);
+        g(&["checkout", "-q", "main"]);
+
+        let base_before = rev_parse(root, "main");
+        let forge = PureGitForge::new(root);
+        let cref = ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+        };
+        let res = forge.merge_change(&cref, MergeMethod::Squash).unwrap();
+        assert!(res.merged, "squash merge should report merged");
+
+        // base advanced (a real commit was made, not just a staged index).
+        assert_ne!(
+            base_before,
+            rev_parse(root, "main"),
+            "base HEAD must advance"
+        );
+        // working tree clean — committed, not left staged.
+        let status = Command::new("git")
+            .current_dir(root)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&status.stdout).trim().is_empty(),
+            "squash must commit, not leave a dirty index"
+        );
+        // the feature's change landed on base.
+        assert!(root.join("b").exists(), "feature file present on base");
+        // subject + trailer preserved.
+        let subj = branch_head_subject(root, "main").unwrap();
+        assert!(
+            subj.contains("TASK-9"),
+            "squash preserves the trailer: {subj}"
+        );
+        // ancestry now reports Merged.
+        assert_eq!(
+            forge.change_status(&cref).unwrap().state,
+            ChangeState::Merged
+        );
     }
 }
