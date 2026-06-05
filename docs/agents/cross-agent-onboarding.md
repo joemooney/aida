@@ -62,6 +62,11 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
   - `file_finding({title, description, source?, spec_id?, pr?, kind?, severity?})` — required: `title`, `description`. File a triage-able draft TASK with appropriate `from-*` tags.
   - `list_findings({pr?, source?, kind?})` — list findings.
   - `triage_finding({id, action, reason?})` — required: `id`, `action`. Promote (Approved) or dismiss (Rejected) a finding.
+  - **`file_finding` is for TRIAGEABLE ITEMS only** — a bug or task the project should act on. It is NOT a session journal or a phase-completion checkpoint. Filing "Phase 1 verification complete" / "Phase 2 outcome: clean" as findings just creates draft TASKs the advisor has to dismiss (empirical: a 3-phase verification once filed 4 such "findings", 3 dismissed + 1 duplicate). For checkpoints / intermediate status / session journals use instead:
+    - `aida session manifest` — the per-session brief,
+    - `add_comment` on the spec you're working — progress notes that live with the work,
+    - local agent-side notes (`walkthrough.md`, scratch files) — anything not meant for project triage.
+  - Litmus test — **good finding:** `"TOCTOU race in claim_task"` (a bug to fix). **Bad finding:** `"Phase 1 complete"` (a status update — belongs in a comment or the manifest).
 
 - **Task-claim channel:**
   - `claim_task({spec_id, role?})` — required: `spec_id`. Atomic lease on a queued spec (writes `.aida/sessions/<lease>.toml`).
