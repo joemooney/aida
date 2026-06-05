@@ -173,6 +173,8 @@ For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the work
 
 ### Divergent-branch recovery
 
+The convention behind the two-leg git-mirror verbs (`fetch` / `pull` / `push` / `rebase`) — what bundles, what's a deliberate non-mirror, and the `--code-only` / `--store-only` / `--dry-run` / `--json` rules a new verb must follow — is `docs/git-verb-surface.md` (TASK-109).
+
 `aida pull` for the **code** leg uses `git pull --ff-only` by design (see `aida-cli/src/main.rs:20120` — refuses to surprise the working tree with auto-rebase). On divergence it prints `git pull --rebase origin main` as a hint. The **store** leg uses `--rebase` (line 19678) because store conflicts are rare and the worktree is AIDA-managed.
 
 When the code leg refuses (or raw `git pull` hits "Need to specify how to reconcile"):
