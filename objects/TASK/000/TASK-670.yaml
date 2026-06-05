@@ -21,15 +21,20 @@ description: |-
 
   - queued (one queue read) + in-flight (one lease read) → cheap → DEFAULT-ON.
   - blocked (graph walk over BlockedBy) → not cheap → behind a flag (`--blocked`) or folded into `aida graph --blocked-by`.
-  - `--no-flow` to suppress the column; keep the fast pure-cache path available.
+
+  ## Two suppression flags (distinct purposes)
+
+  - `--no-flow` — drop the work-routing glyph COLUMN, keep the status glyphs (`◯ ▸ ✓ ⚠`). "I don't want the routing overlay but keep the pretty status."
+  - `--no-glyph` — strip ALL glyphs (status + flow) for PLAIN-TEXT output: scripting / grep, non-unicode terminals, accessibility. Glyphs stay default-on (operator likes them — user_likes_emoji); `--no-glyph` is an opt-OUT, not a default change. Should align with any existing plain/NO_COLOR convention.
 
   ## Acceptance (sketch)
 
   - [ ] `aida list` shows a leading glyph: `↑` queued, `▶` in-flight (live lease), space otherwise — default-on, cheap.
   - [ ] `⊘` blocked shown only with `--blocked` (or equivalent), since it needs a graph walk.
-  - [ ] `--no-flow` suppresses the column (restores pure-cache speed).
+  - [ ] `--no-flow` suppresses the routing column; status glyphs remain.
+  - [ ] `--no-glyph` suppresses ALL glyphs (status + flow) → plain text; restores the pure-cache fast path. (Honors existing NO_COLOR/plain convention if one exists.)
   - [ ] No glyph for Draft/NeedsAttention (already in Status); no duplication.
-  - [ ] `aida list --json` carries the routing state as fields (queued/in_flight/blocked) for machine consumers.
+  - [ ] `aida list --json` carries the routing state as fields (queued/in_flight/blocked) for machine consumers (glyphs are display-only).
 
   ## Notes
   - Complements (doesn't replace) `aida queue list` (the queue-focused view). This is the at-a-glance overlay on the main list.
@@ -39,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T18:57:35.377758546Z
-modified_at: 2026-06-05T18:57:35.377758546Z
+modified_at: 2026-06-05T19:01:21.196587161Z
 req_type: Task
 tags:
 - aida:list
