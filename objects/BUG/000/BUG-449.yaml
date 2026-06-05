@@ -30,9 +30,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:04:23.777103591Z
-modified_at: 2026-06-05T20:04:23.777103591Z
+modified_at: 2026-06-05T20:07:50.449443549Z
 req_type: Bug
 tags:
+- batch:mcp-gate-parity
 - caller-parity
 - from-self-test
 - gate
