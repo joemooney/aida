@@ -187,6 +187,52 @@ pub struct ChangeRef {
     pub url: String,
     pub branch: String,
     pub base: String,
+    /// Change title, when the lookup carried it (`gh pr view` / `glab mr view`).
+    /// `None` for refs built from a number alone (e.g. a merge target).
+    /// trace:STORY-516 | ai:claude
+    pub title: Option<String>,
+}
+
+/// STORY-516: the outcome of looking up the open change for a branch — the
+/// forge-neutral equivalent of the orchestrator's `PrLookup`. Preserves the
+/// BUG-257 distinction the orchestrator's phase-1 verdict depends on:
+/// `NoChange` (definitively none) is NOT the same as `Unreachable` (a transient
+/// API outage — cannot tell). trace:STORY-516 trace:BUG-257 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChangeLookup {
+    /// An open change exists for the branch.
+    Found(ChangeRef),
+    /// The forge CLI ran cleanly and reported no open change.
+    NoChange,
+    /// The forge CLI is not on PATH.
+    CliMissing,
+    /// The CLI ran but errored (auth / parse / non-transient). Carries stderr.
+    CliFailed(String),
+    /// The CLI could not reach the forge API — a *transient* network error.
+    /// The orchestrator treats this as Inconclusive, not a definitive "none".
+    /// Carries the diagnostic. trace:BUG-257 | ai:claude
+    Unreachable(String),
+}
+
+/// STORY-516: adapt the orchestrator's `PrLookup` (main.rs) to the forge-neutral
+/// `ChangeLookup`. 1:1 state mapping — preserves the BUG-257 transient
+/// (`GhUnreachable` → `Unreachable`) vs definitive (`NoOpenPr` → `NoChange`)
+/// distinction the phase-1 verdict depends on. Pure + unit-tested.
+/// trace:STORY-516 trace:BUG-257 | ai:claude
+fn change_lookup_from_pr_lookup(pl: crate::PrLookup, branch: &str) -> ChangeLookup {
+    match pl {
+        crate::PrLookup::Found(info) => ChangeLookup::Found(ChangeRef {
+            id: info.number,
+            url: info.url,
+            branch: branch.to_string(),
+            base: String::new(),
+            title: Some(info.title),
+        }),
+        crate::PrLookup::NoOpenPr => ChangeLookup::NoChange,
+        crate::PrLookup::GhMissing => ChangeLookup::CliMissing,
+        crate::PrLookup::GhFailed(s) => ChangeLookup::CliFailed(s),
+        crate::PrLookup::GhUnreachable(s) => ChangeLookup::Unreachable(s),
+    }
 }
 
 /// Inputs to open a new change.
@@ -309,8 +355,10 @@ pub trait Forge {
     /// `gh pr create` / `glab mr create` (or push-options) / pure-git no-op.
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef>;
 
-    /// `gh pr view` for the branch's open change (linkage). `None` when none.
-    fn change_for_branch(&self, branch: &str) -> Result<Option<ChangeRef>>;
+    /// `gh pr view` for the branch's open change. Returns a [`ChangeLookup`]
+    /// (STORY-516) so callers keep the BUG-257 transient-vs-definitive
+    /// distinction the orchestrator's phase-1 verdict depends on.
+    fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup>;
 
     /// `gh pr view` status (state + mergeable + review + head sha).
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus>;
@@ -559,37 +607,20 @@ impl Forge for GitHubForge {
             url,
             branch: req.branch,
             base: req.base,
+            title: Some(req.title),
         })
     }
 
-    fn change_for_branch(&self, branch: &str) -> Result<Option<ChangeRef>> {
-        let out = self.gh(&[
-            "pr",
-            "view",
+    fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
+        // STORY-516: delegate to the battle-tested `detect_open_pr_for_branch`
+        // (BUG-74/79 gh resolution, BUG-257 transient classification) and adapt
+        // its `PrLookup` to the forge-neutral `ChangeLookup` — no reimplementation
+        // of the classification logic, so the orchestrator's phase-1 contract is
+        // preserved exactly. trace:STORY-516 trace:BUG-257 | ai:claude
+        Ok(change_lookup_from_pr_lookup(
+            crate::detect_open_pr_for_branch(&self.project_root, branch),
             branch,
-            "--json",
-            "number,url,headRefName,baseRefName",
-            "-q",
-            "[.number, .url, .headRefName, .baseRefName] | @tsv",
-        ])?;
-        if !out.status.success() {
-            return Ok(None);
-        }
-        let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        let mut f = line.split('\t');
-        let id = f.next().unwrap_or("").parse().unwrap_or(0);
-        let url = f.next().unwrap_or("").to_string();
-        let head = f.next().unwrap_or(branch).to_string();
-        let base = f.next().unwrap_or("").to_string();
-        if id == 0 {
-            return Ok(None);
-        }
-        Ok(Some(ChangeRef {
-            id,
-            url,
-            branch: head,
-            base,
-        }))
+        ))
     }
 
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
@@ -791,6 +822,7 @@ impl Forge for GitHubForge {
                     url: f.next().unwrap_or("").to_string(),
                     branch: f.next().unwrap_or("").to_string(),
                     base: f.next().unwrap_or("").to_string(),
+                    title: None,
                 })
             })
             .collect())
@@ -872,10 +904,11 @@ impl Forge for GitLabForge {
             url,
             branch: req.branch,
             base: req.base,
+            title: Some(req.title),
         })
     }
 
-    fn change_for_branch(&self, _branch: &str) -> Result<Option<ChangeRef>> {
+    fn change_for_branch(&self, _branch: &str) -> Result<ChangeLookup> {
         anyhow::bail!("GitLab change_for_branch lands in EPIC-35 slice 3")
     }
 
@@ -974,15 +1007,19 @@ impl Forge for PureGitForge {
             url: String::new(),
             branch: req.branch,
             base: req.base,
+            title: Some(req.title),
         })
     }
 
-    fn change_for_branch(&self, branch: &str) -> Result<Option<ChangeRef>> {
-        Ok(Some(ChangeRef {
+    fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
+        // Pure-git has no PR concept — the branch itself is the change.
+        // trace:STORY-516 | ai:claude
+        Ok(ChangeLookup::Found(ChangeRef {
             id: 0,
             url: String::new(),
             branch: branch.to_string(),
             base: self.default_branch(),
+            title: None,
         }))
     }
 
@@ -1190,6 +1227,47 @@ fn default_branch_of(project_root: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// STORY-516: PrLookup → ChangeLookup is a 1:1 state map that preserves the
+    /// BUG-257 transient-vs-definitive distinction; Found carries number/url/title.
+    #[test]
+    fn change_lookup_maps_every_pr_lookup_state() {
+        use crate::{OpenPrInfo, PrLookup};
+        let found = change_lookup_from_pr_lookup(
+            PrLookup::Found(OpenPrInfo {
+                number: 42,
+                title: "Fix it".to_string(),
+                url: "https://example/pr/42".to_string(),
+            }),
+            "feature",
+        );
+        match found {
+            ChangeLookup::Found(c) => {
+                assert_eq!(c.id, 42);
+                assert_eq!(c.url, "https://example/pr/42");
+                assert_eq!(c.branch, "feature");
+                assert_eq!(c.title.as_deref(), Some("Fix it"));
+            }
+            other => panic!("expected Found, got {other:?}"),
+        }
+        assert_eq!(
+            change_lookup_from_pr_lookup(PrLookup::NoOpenPr, "b"),
+            ChangeLookup::NoChange
+        );
+        assert_eq!(
+            change_lookup_from_pr_lookup(PrLookup::GhMissing, "b"),
+            ChangeLookup::CliMissing
+        );
+        assert_eq!(
+            change_lookup_from_pr_lookup(PrLookup::GhFailed("auth".into()), "b"),
+            ChangeLookup::CliFailed("auth".into())
+        );
+        // The BUG-257 distinction: transient outage maps to Unreachable, NOT NoChange.
+        assert_eq!(
+            change_lookup_from_pr_lookup(PrLookup::GhUnreachable("dns".into()), "b"),
+            ChangeLookup::Unreachable("dns".into())
+        );
+    }
 
     /// STORY-508: forge-aware hint helpers — noun + templated CLI command.
     #[test]
@@ -1409,6 +1487,7 @@ mod tests {
             url: String::new(),
             branch: "feature".to_string(),
             base: "main".to_string(),
+            title: None,
         };
         let st = forge.change_status(&cref).unwrap();
         assert_eq!(st.state, ChangeState::Open, "feature ahead of main → Open");
@@ -1482,6 +1561,7 @@ mod tests {
             url: String::new(),
             branch: "feature".into(),
             base: "main".into(),
+            title: None,
         };
         let res = forge
             .merge_change(
