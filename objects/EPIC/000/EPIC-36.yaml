@@ -1,0 +1,57 @@
+id: 019e9826-5d9d-7f10-ab36-bd783796aae1
+spec_id: EPIC-36
+agreed_id: EPIC-36
+title: System-health metrics — deterministic drain/orchestrator telemetry (Tier 1) + LLM-triggered fact-finding (Tier 2)
+description: |-
+  ## Why (origin)
+
+  The 2026-06-04 burn-down forensics that found BUG-444 were ~90% DETERMINISTIC (log-parsing + arithmetic), not LLM reasoning. The killer finding — "98% of sessions succeed but only 56% of drains succeed" — is a pure number. A standing metric would have surfaced the whole problem in ONE command instead of an hour of manual forensics. Capture the class so the next regression announces itself.
+
+  ## The headline metric (MVP slice)
+
+  **Orchestrator misclassification rate = session_success_rate − drain_success_rate.**
+  - session_success_rate: parse each .aida/headless-logs/*.jsonl terminal `result` event → {clean-success, sentinel-reaped (success), mid-work-kill, error, truncated}. (sentinel-reap = touched AIDA_EXIT_SENTINEL in the tail = success.)
+  - drain_success_rate: already computed by `aida usage --auto-complete`.
+  - The GAP = work that succeeded but the orchestrator called failed. High gap → the agents are fine, the orchestrator is the bottleneck. THIS ONE METRIC replaces the BUG-444 forensics. Surface in `aida usage --auto-complete` or a new `aida health`.
+
+  ## Tier 1 — deterministic metrics (Rust, cheap, periodic; the smoke detector)
+
+  Pure functions over usage.jsonl + headless-logs + the spec graph:
+  - session-vs-drain divergence (misclassification rate) ← MVP, the star
+  - phase-failure distribution (exists: `--pattern`)
+  - reap-vs-genuine-kill breakdown
+  - drain halt-rate (halted vs shelve-and-continued)
+  - recovery latency (gap between a drain failure and the next drain — the "human-babysitting" cost; correlates with the commit-log gaps)
+  - draft-inbox depth (ADR-3 untriaged count)
+  - burn-down velocity (completions/day; net of advisor-adds)
+
+  ## Tier 2 — LLM fact-finding (triggered when a Tier-1 metric crosses a threshold; the investigator)
+
+  - root-cause an anomaly: "divergence is N% → read the post-session classification + name the bug" (what the forensics did by hand)
+  - categorize unstructured failure reasons into buckets
+  - synthesize a health narrative + recommended fixes
+  - Extends /aida-insights (TASK-577) from usage-patterns to system-health. Expensive/occasional — gated by Tier-1 thresholds, not run blindly.
+
+  ## Composition + relationships
+
+  Tier 1 surfaces; Tier 2 investigates only when alarmed. Builds on STORY-122 (usage telemetry), TASK-577 (/aida-insights), STORY-347 (calibration). Relates to EPIC-33: these metrics MEASURE whether the orchestrator-correctness fixes land — the divergence should drop after BUG-444 ships, which is the regression guard.
+
+  ## Slice hint (for the master to decompose)
+
+  1. MVP: the session-vs-drain divergence metric + headless-log session-outcome parser, surfaced in `aida usage --auto-complete`.
+  2. The rest of the Tier-1 catalog.
+  3. Tier-2 threshold-triggered LLM fact-finding (extend /aida-insights).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T14:18:31.709016159Z
+modified_at: 2026-06-05T14:18:31.709016159Z
+req_type: Epic
+tags:
+- from-forensics
+- from-product
+- metrics
+- orchestrator
+- system-health
+- telemetry
