@@ -1,0 +1,21 @@
+id: 019e997a-a0db-74d2-b817-7b6fd7a60122
+spec_id: TASK-674
+agreed_id: TASK-674
+title: 'EPIC-35 ci-watch (pr ship): route gh pr checks --watch through Forge::watch_ci'
+description: |-
+  ci-watch sub-slice (after the ci point-probe TASK-672). Adds `Forge::watch_ci(change) -> Result<CiState>` — a BLOCKING, stdio-streaming watch (GitHub `gh pr checks <id> --watch` via .status()); returns Success/Failed, or None for pure-git (no CI). Routes the `aida pr ship` step-2 watch through it.
+
+  NOT in this slice: the orchestrator / --watch-ci path (`watch_ci_for_context` → `gh run watch` streaming + the non-streaming poll-wait + headless variants) — a different mechanism; separate sub-slice. Also `gh run view`.
+
+  Streaming method can't be unit-tested; validated by dogfood (`aida pr ship` watches CI through it). Full suite green (1615).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T20:30:11.163679934Z
+modified_at: 2026-06-05T20:30:11.163679934Z
+req_type: Task
+tags:
+- batch:gitlab-forge
+- forge-routing
+- from-advisor:STORY-516
