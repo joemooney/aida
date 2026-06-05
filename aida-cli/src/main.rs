@@ -58325,6 +58325,9 @@ fn collect_cleanup_report(
         dormant_leases,
         stale_reviewer_leases,
         orphan_project_dirs,
+        // STORY-508/TASK-651: resolve the active forge so the open-change hint
+        // names the right CLI (gh/glab) or none (pure-git).
+        forge_kind: Some(crate::forge::resolve_forge_kind(project_root)),
     }
 }
 
