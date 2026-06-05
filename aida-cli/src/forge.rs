@@ -324,7 +324,17 @@ pub trait Forge {
     /// performed — the tool exited non-zero or could not be invoked — with the
     /// underlying stderr in the error chain so callers can log it + print a
     /// recovery hint. On `Ok`, the merge landed (`MergeResult::merged` is true).
-    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult>;
+    ///
+    /// `sink` receives retry events for any transient-blip retries (BUG-286):
+    /// the `aida pr ship` caller passes a `StderrSink`; the orchestrator passes
+    /// a `DualSink` (stderr + drain-state correlation). Providers that don't
+    /// retry (GitLab/pure-git today) ignore it. trace:STORY-516 | ai:claude
+    fn merge_change(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<MergeResult>;
 
     /// `gh pr comment` / `glab mr note` / pure-git log-only.
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()>;
@@ -671,7 +681,12 @@ impl Forge for GitHubForge {
         })
     }
 
-    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult> {
+    fn merge_change(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<MergeResult> {
         // STORY-516: route the pre-EPIC-35 `aida pr ship` / orchestrator merge
         // through here without changing behaviour. Two things the inline call
         // site did that this must preserve:
@@ -680,6 +695,8 @@ impl Forge for GitHubForge {
         //      is one source of truth). Non-squash methods build argv inline.
         //   2. transient-blip resilience — wrap the `gh` call in network_retry
         //      so a momentary GH-API blip retries instead of aborting (BUG-286).
+        //      Retry events go to the caller-supplied `sink` (StderrSink for
+        //      pr ship; DualSink for the orchestrator).
         // On a non-zero exit we return Err carrying gh's stderr (the merge_change
         // contract), so the caller keeps its activity-log + recovery-hint + bail.
         // trace:STORY-516 trace:BUG-286 | ai:claude
@@ -708,12 +725,11 @@ impl Forge for GitHubForge {
             }
         };
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
-        let mut sink = crate::network_retry::StderrSink;
         let project_root = self.project_root.clone();
         let out = crate::network_retry::run_with_retry(
             &format!("gh pr merge {}", c.id),
             &cfg,
-            &mut sink,
+            sink,
             || {
                 let mut cmd = Command::new("gh");
                 cmd.current_dir(&project_root)
@@ -871,7 +887,12 @@ impl Forge for GitLabForge {
         anyhow::bail!("GitLab ci_status lands in EPIC-35 slice 4")
     }
 
-    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult> {
+    fn merge_change(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<MergeResult> {
         // `glab mr merge <iid> --squash [--message <s>] [--remove-source-branch]
         // --yes`. Symmetric with the gh path; live-validated against a real
         // GitLab in slice 3 (needs a PAT). trace:STORY-516 | ai:claude
@@ -994,7 +1015,12 @@ impl Forge for PureGitForge {
         })
     }
 
-    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult> {
+    fn merge_change(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<MergeResult> {
         let base = if c.base.is_empty() {
             self.default_branch()
         } else {
@@ -1457,7 +1483,13 @@ mod tests {
             branch: "feature".into(),
             base: "main".into(),
         };
-        let res = forge.merge_change(&cref, &MergeOptions::squash()).unwrap();
+        let res = forge
+            .merge_change(
+                &cref,
+                &MergeOptions::squash(),
+                &mut crate::network_retry::NoopSink,
+            )
+            .unwrap();
         assert!(res.merged, "squash merge should report merged");
 
         // base advanced (a real commit was made, not just a staged index).

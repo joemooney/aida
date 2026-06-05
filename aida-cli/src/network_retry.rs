@@ -125,7 +125,7 @@ pub(crate) fn default_transient_patterns() -> &'static [&'static str] {
 /// the number of the call that *just failed*; `backoff_ms` is the wait before
 /// the next call.
 #[derive(Debug, Clone)]
-pub(crate) struct RetryEvent {
+pub struct RetryEvent {
     pub label: String,
     pub attempt: u32,
     pub max: u32,
@@ -135,7 +135,10 @@ pub(crate) struct RetryEvent {
 
 /// Where retry events go. The orchestrator wires a [`DualSink`] of
 /// [`StderrSink`] + drain-state sink so post-hoc analysis can correlate.
-pub(crate) trait RetrySink {
+/// `pub` (not `pub(crate)`) so it can appear in the `Forge::merge_change`
+/// signature — STORY-516 routes the orchestrator merge's DualSink through it.
+/// trace:STORY-516 | ai:claude
+pub trait RetrySink {
     fn on_retry(&mut self, ev: &RetryEvent);
 }
 
