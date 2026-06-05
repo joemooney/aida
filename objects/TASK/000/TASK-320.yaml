@@ -24,9 +24,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T20:44:29.539954621Z
-modified_at: 2026-05-17T21:26:37.044496892Z
+modified_at: 2026-06-05T03:27:34.985407890Z
 req_type: Task
 tags:
 - from-review:PR-75
 - severity:cosmetic
 - test
+comments:
+- id: 019e95d2-6849-7e31-a3c4-e5c159622053
+  author: joe
+  content: Commit 2d4455a85 references this requirement
+  created_at: 2026-06-05T03:27:34.985407890Z
+  modified_at: 2026-06-05T03:27:34.985407890Z
