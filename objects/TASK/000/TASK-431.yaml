@@ -31,7 +31,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T04:43:18.992090557Z
-modified_at: 2026-05-21T04:43:31.073306595Z
+modified_at: 2026-06-05T17:21:40.514797525Z
 req_type: Task
 tags:
 - followups
@@ -42,3 +42,9 @@ relationships:
   target_id: 019e1f98-8e83-7ad0-aea0-3a9217e72cf6
   created_at: 2026-05-21T04:43:31.073298206Z
   created_by: joe
+comments:
+- id: 019e98ce-0aa2-7ce3-bf16-e44382d4a972
+  author: joe
+  content: Commit 4b57e5399 references this requirement
+  created_at: 2026-06-05T17:21:40.514797525Z
+  modified_at: 2026-06-05T17:21:40.514797525Z
