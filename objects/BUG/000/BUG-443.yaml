@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T16:12:29.431222886Z
-modified_at: 2026-06-05T02:37:31.568996548Z
+modified_at: 2026-06-05T02:45:10.791385903Z
 req_type: Bug
 tags:
 - docs
@@ -22,3 +22,8 @@ comments:
   content: Commit 1506769f9 references this requirement
   created_at: 2026-06-05T02:37:31.568996548Z
   modified_at: 2026-06-05T02:37:31.568996548Z
+- id: 019e95ab-9607-7d43-9ab3-08b886b4ed13
+  author: joe
+  content: Commit 0e871f388 references this requirement
+  created_at: 2026-06-05T02:45:10.791385903Z
+  modified_at: 2026-06-05T02:45:10.791385903Z
