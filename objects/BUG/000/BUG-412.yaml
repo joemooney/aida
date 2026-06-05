@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T13:56:02.982424738Z
-modified_at: 2026-05-31T13:56:02.982424738Z
+modified_at: 2026-06-05T03:20:00.783130505Z
 req_type: Bug
 tags:
 - auto-bump
@@ -16,3 +16,9 @@ tags:
 - from-review
 - kind:bug-spotted
 - papercut
+comments:
+- id: 019e95cb-7a0f-7ed0-8901-09dda29a0fce
+  author: joe
+  content: Commit 80ab8793c references this requirement
+  created_at: 2026-06-05T03:20:00.783130505Z
+  modified_at: 2026-06-05T03:20:00.783130505Z
