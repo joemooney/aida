@@ -66,7 +66,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T02:48:03.560841139Z
-modified_at: 2026-05-25T07:42:01.201791723Z
+modified_at: 2026-06-05T16:43:13.228048745Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -80,3 +80,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T02:48:05.594398106Z
+comments:
+- id: 019e98aa-d5cc-7b52-907e-630b160c8f3f
+  author: joe
+  content: Commit 65d9a8113 references this requirement
+  created_at: 2026-06-05T16:43:13.228048745Z
+  modified_at: 2026-06-05T16:43:13.228048745Z
