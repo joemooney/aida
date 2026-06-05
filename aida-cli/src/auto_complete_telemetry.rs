@@ -83,6 +83,11 @@ pub struct AutoCompleteEvent {
     /// STORY-429: phase-3 stale-base auto-rebase attempts / skips.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub auto_rebase: Vec<AutoRebaseEvent>,
+    /// TASK-525: which `lifecycle:*` short-circuits were active for this run
+    /// (`no-ci-wait`, `no-review`, `no-build`), for retro analysis of how often
+    /// the fast-track tags fire and on what. Empty when none were set.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lifecycle_skips: Vec<String>,
 }
 
 impl AutoCompleteEvent {
@@ -209,6 +214,7 @@ mod tests {
             drafted_bug: failed_phase.map(|_| "BUG-200".to_string()),
             binary_sha: Some("abc1234".to_string()),
             auto_rebase: Vec::new(),
+            lifecycle_skips: Vec::new(),
         }
     }
 
