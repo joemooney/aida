@@ -4349,6 +4349,18 @@ pub enum Command {
         #[clap(long)]
         parent: Option<String>,
 
+        // trace:STORY-446 | ai:claude
+        /// SPEC-ID this new requirement is blocked by (repeatable; alias
+        /// `--depends-on`). Creates the BlockedBy edge + the inverse Blocks
+        /// edge atomically, so the pickability gate holds pickup until the
+        /// blocker is Completed.
+        #[clap(
+            long = "blocked-by",
+            visible_alias = "depends-on",
+            value_name = "SPEC-ID"
+        )]
+        blocked_by: Vec<String>,
+
         /// Override the guard that refuses `--parent <X>` when X is in
         /// a terminal status (Completed/Rejected). Use when intentionally
         /// backfilling a forgotten child onto a closed epic for
@@ -4639,6 +4651,22 @@ pub enum Command {
         // trace:TASK-351 | ai:claude
         #[clap(long = "remove-tag", value_name = "TAG", conflicts_with = "tags")]
         remove_tag: Vec<String>,
+
+        // trace:STORY-446 | ai:claude
+        /// Add a BlockedBy edge to this spec (repeatable; alias
+        /// `--depends-on`). Creates the BlockedBy edge + inverse Blocks edge
+        /// atomically; idempotent on a re-add.
+        #[clap(
+            long = "blocked-by",
+            visible_alias = "depends-on",
+            value_name = "SPEC-ID"
+        )]
+        blocked_by: Vec<String>,
+
+        /// Remove a BlockedBy edge from this spec (repeatable). Removes both
+        /// the BlockedBy edge and the inverse Blocks edge; no-op if absent.
+        #[clap(long = "remove-blocked-by", value_name = "SPEC-ID")]
+        remove_blocked_by: Vec<String>,
 
         /// Use interactive mode (launches editor)
         #[clap(long, short = 'i')]
