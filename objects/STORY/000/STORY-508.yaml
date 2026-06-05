@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:53:23.969580556Z
-modified_at: 2026-06-04T15:54:37.644370491Z
+modified_at: 2026-06-05T07:32:57.188928613Z
 req_type: Story
 tags:
 - forge-provider
@@ -21,3 +21,15 @@ relationships:
   target_id: 019e9333-7505-78f1-a063-06851ee7f85c
   created_at: 2026-06-04T15:54:37.644359731Z
   created_by: joe
+comments:
+- id: 019e96b3-0ce4-7672-b1b5-b60569100ef3
+  author: joe
+  content: |-
+    Scoping correction (2026-06-05, advisor loop): the 'Size S' estimate is optimistic. `gh` appears across **12 source files** (98 occurrences in main.rs alone), and the user-facing-hint subset must be disentangled from real `Command::new("gh")` invocations site-by-site. Three real costs:
+    1. The fix isn't a `cli_name()` swap — GitHub `gh pr view` → GitLab `glab mr view` changes the NOUN (pr→mr) and sometimes the verb, so it needs a small forge-hint templating helper (e.g. `ForgeKind::change_noun()` + `pr_command_hint(verb, n)`), not just the existing `cli_name()`.
+    2. Many hint sites lack `project_root` in scope — threading `resolve_forge_kind(project_root)` (or a resolved ForgeKind) to ~25 call sites across auto_complete.rs / pr_ship.rs / pr_rebase.rs / workflow_hints.rs / network_retry.rs / status_cleanup.rs / drain_state.rs / punt.rs / state_snapshot.rs / cli.rs / main.rs is the bulk of the work.
+    3. Existing tests hardcode `gh pr merge <n>` literals — they need forge-aware rewrites.
+
+    Re-estimate: **Size M**, best done as a focused fresh-context pass: (a) land the hint-templating helper on ForgeKind with unit tests, then (b) sweep call sites file-by-file. SAFE throughout (cosmetic text, zero blast radius — worst case a hint still says `gh` for a GitLab user, same as today), so it's a good candidate for an unsupervised pass once scoped. Not started this session to avoid a sprawling/incomplete sweep at the tail of a deep context.
+  created_at: 2026-06-05T07:32:57.188928613Z
+  modified_at: 2026-06-05T07:32:57.188928613Z
