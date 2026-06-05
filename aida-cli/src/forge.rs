@@ -433,6 +433,14 @@ pub trait Forge {
     /// verdict is the exit status, not captured output. trace:STORY-516 | ai:claude
     fn watch_ci(&self, change: &ChangeRef) -> Result<CiState>;
 
+    /// STORY-516: block until the branch's workflow-run CI reaches a terminal
+    /// state, then report the [`CiProbeResult`]. Streams live (`gh run watch`)
+    /// when `interactive` and stdout is a TTY; otherwise quiet-polls. This is
+    /// the orchestrator / `--watch-ci` path (distinct from [`watch_ci`]'s
+    /// `gh pr checks --watch`). `interactive` is the negation of headless mode.
+    /// trace:STORY-516 | ai:claude
+    fn stream_ci_for_branch(&self, branch: &str, interactive: bool) -> Result<CiProbeResult>;
+
     /// `gh pr merge` / `glab mr merge` / pure-git git merge.
     ///
     /// Contract (STORY-516): returns `Err` when the merge could not be
@@ -823,6 +831,17 @@ impl Forge for GitHubForge {
         })
     }
 
+    fn stream_ci_for_branch(&self, branch: &str, interactive: bool) -> Result<CiProbeResult> {
+        // STORY-516: delegate to the proven watch_ci_for_context (gh run list +
+        // gh run watch streaming, with the quiet-poll fallback + run-id
+        // resolution + re-probe). `interactive` maps to "not headless" — the
+        // helper takes `no_human_active`, so invert. trace:STORY-516 | ai:claude
+        Ok(ci_probe_result_from_ci_probe(crate::watch_ci_for_context(
+            branch,
+            !interactive,
+        )))
+    }
+
     fn merge_change(
         &self,
         c: &ChangeRef,
@@ -1047,6 +1066,10 @@ impl Forge for GitLabForge {
         anyhow::bail!("GitLab watch_ci lands in EPIC-35 slice 4")
     }
 
+    fn stream_ci_for_branch(&self, _branch: &str, _interactive: bool) -> Result<CiProbeResult> {
+        anyhow::bail!("GitLab stream_ci_for_branch lands in EPIC-35 slice 4")
+    }
+
     fn merge_change(
         &self,
         c: &ChangeRef,
@@ -1204,6 +1227,13 @@ impl Forge for PureGitForge {
     fn watch_ci(&self, _change: &ChangeRef) -> Result<CiState> {
         // Pure-git has no forge CI — nothing to wait on. trace:STORY-516
         Ok(CiState::None)
+    }
+
+    fn stream_ci_for_branch(&self, _branch: &str, _interactive: bool) -> Result<CiProbeResult> {
+        // Pure-git has no forge CI — nothing to stream. trace:STORY-516
+        Ok(CiProbeResult::NoSignal(
+            "no forge CI (pure-git)".to_string(),
+        ))
     }
 
     fn merge_change(
