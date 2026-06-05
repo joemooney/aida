@@ -22,12 +22,12 @@ description: |-
 
   ## Notes
   - Shares the role-picker component with TASK-644 (aida role enter). Build/extract it once.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T04:55:18.563605626Z
-modified_at: 2026-06-05T06:14:35.751237925Z
+modified_at: 2026-06-05T06:24:08.815444479Z
 req_type: Task
 tags:
 - aida:agent:new
@@ -52,3 +52,7 @@ comments:
   content: Commit 390c04fcc references this requirement
   created_at: 2026-06-05T06:14:35.751237925Z
   modified_at: 2026-06-05T06:14:35.751237925Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:24:08.815444479Z
+  completion_sha: 2b576fbc9f3c9d6b5cec426aac40eabcc1c45dab
