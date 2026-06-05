@@ -184,6 +184,7 @@ pub enum PrState {
 /// `branch` + `pr` drive the BUG-232 PR-aware sharpening. trace:BUG-232
 /// | ai:claude
 fn queue_drained_hint_lines(
+    kind: crate::forge::ForgeKind,
     role: Option<&str>,
     scope: Option<&str>,
     branch_commits_ahead: Option<u32>,
@@ -215,25 +216,42 @@ fn queue_drained_hint_lines(
     let branch_phrase = branch
         .map(|b| format!("`{}`", b))
         .unwrap_or_else(|| "this branch".to_string());
+    // STORY-508: forge-aware change-request noun ("PR"/"MR"/"change") and CLI
+    // hints, so a GitLab/pure-git user isn't told to run `gh`.
+    let noun = kind.change_noun();
     let body = match pr {
-        // BUG-232: the branch has unshipped commits and `gh` confirmed no
-        // PR exists — the spec is Done-but-unmergeable. Say so pointedly.
+        // BUG-232: the branch has unshipped commits and the forge confirmed no
+        // change exists — the spec is Done-but-unmergeable. Say so pointedly.
         PrState::Absent if commits > 0 => format!(
-            "⚠ No PR is open for {} — the work is committed but unshipped. \
+            "⚠ No {} is open for {} — the work is committed but unshipped. \
              Run `/aida-pr` to ship it, or it sits Done and unmergeable.",
-            branch_phrase
+            noun, branch_phrase
         ),
-        // A PR already exists — the next move is merge, not open.
-        PrState::Open(n) => format!(
-            "PR #{} is already open for this work — merge it once review is green \
-             (`gh pr merge {} --squash`), or pick a new cluster with `aida queue work <scope>`.",
-            n, n
-        ),
+        // A change already exists — the next move is merge, not open.
+        PrState::Open(n) => {
+            let merge_hint = kind
+                .change_cmd_hint("merge", &format!("{n} --squash"))
+                .map(|c| format!(" (`{}`)", c))
+                .unwrap_or_default();
+            format!(
+                "{} #{} is already open for this work — merge it once review is green{}, \
+                 or pick a new cluster with `aida queue work <scope>`.",
+                noun, n, merge_hint
+            )
+        }
         // Unknown PR state, or nothing committed to ship — the original
         // generic nudge.
-        _ => "Open a PR with `/aida-pr` (or `gh pr create`), or pick a new cluster \
-             with `aida queue work <scope>`."
-            .to_string(),
+        _ => {
+            let create_hint = kind
+                .change_cmd_hint("create", "")
+                .map(|c| format!(" (or `{}`)", c))
+                .unwrap_or_default();
+            format!(
+                "Open a {} with `/aida-pr`{}, or pick a new cluster \
+                 with `aida queue work <scope>`.",
+                noun, create_hint
+            )
+        }
     };
     vec![header, body]
 }
@@ -332,7 +350,11 @@ pub fn after_queue_drained(
     if !enabled(project_root) {
         return;
     }
-    let lines = queue_drained_hint_lines(role, scope, branch_commits_ahead, branch, pr);
+    // STORY-508: resolve the active forge so the hint names the right CLI/noun.
+    let kind = project_root
+        .map(crate::forge::resolve_forge_kind)
+        .unwrap_or(crate::forge::ForgeKind::None);
+    let lines = queue_drained_hint_lines(kind, role, scope, branch_commits_ahead, branch, pr);
     emit(project_root, &lines);
 }
 
@@ -351,8 +373,17 @@ pub fn after_queue_drained(
 /// `covered_specs` are the delivered `(REQ-ID)` trailers the PR carries;
 /// they name the `aida pull` auto-bump targets when known. Pure (no I/O)
 /// so it is unit-testable.
-fn session_end_pr_hint_lines(pr_number: u64, covered_specs: &[String], tty: bool) -> Vec<String> {
-    let merge_cmd = format!("gh pr merge {} --squash --delete-branch", pr_number);
+fn session_end_pr_hint_lines(
+    kind: crate::forge::ForgeKind,
+    pr_number: u64,
+    covered_specs: &[String],
+    tty: bool,
+) -> Vec<String> {
+    // STORY-508: forge-aware merge command. pure-git has no forge CLI, so fall
+    // back to a forge-neutral phrasing that names no wrong binary.
+    let merge_cmd = kind
+        .change_cmd_hint("merge", &format!("{} --squash --delete-branch", pr_number))
+        .unwrap_or_else(|| "merge it to your default branch".to_string());
     let bump_phrase = match covered_specs {
         [] => "auto-bumps the merged spec → Completed".to_string(),
         [one] => format!("auto-bumps {} → Completed", one),
@@ -394,7 +425,11 @@ pub fn after_session_end_with_pr(
         return;
     }
     let tty = std::io::IsTerminal::is_terminal(&std::io::stderr());
-    let lines = session_end_pr_hint_lines(pr_number, covered_specs, tty);
+    // STORY-508: resolve the active forge for forge-aware merge hint text.
+    let kind = project_root
+        .map(crate::forge::resolve_forge_kind)
+        .unwrap_or(crate::forge::ForgeKind::None);
+    let lines = session_end_pr_hint_lines(kind, pr_number, covered_specs, tty);
     if !tty {
         // Single-line summary routes through `emit` for the standard
         // `ⓘ Workflow hint:` prefix.
@@ -541,7 +576,7 @@ mod tests {
     #[test]
     fn session_end_hint_tty_is_numbered_sequential_block() {
         let specs = vec!["TASK-259".to_string()];
-        let lines = session_end_pr_hint_lines(47, &specs, true);
+        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &specs, true);
         // Header + 3 numbered steps + blank + sidebar header + sidebar cmd.
         assert_eq!(lines.len(), 7);
         assert_eq!(lines[0], "Next steps for PR #47:");
@@ -560,7 +595,7 @@ mod tests {
     #[test]
     fn session_end_hint_non_tty_is_single_line() {
         let specs = vec!["TASK-259".to_string()];
-        let lines = session_end_pr_hint_lines(47, &specs, false);
+        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &specs, false);
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("aida queue work PR-47"));
         assert!(lines[0].contains("gh pr merge 47 --squash --delete-branch"));
@@ -571,13 +606,13 @@ mod tests {
     #[test]
     fn session_end_hint_names_multiple_covered_specs() {
         let specs = vec!["TASK-259".to_string(), "BUG-113".to_string()];
-        let lines = session_end_pr_hint_lines(47, &specs, true);
+        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &specs, true);
         assert!(lines[3].contains("auto-bumps TASK-259, BUG-113 → Completed"));
     }
 
     #[test]
     fn session_end_hint_generic_when_no_covered_specs() {
-        let lines = session_end_pr_hint_lines(47, &[], true);
+        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &[], true);
         assert!(lines[3].contains("auto-bumps the merged spec → Completed"));
     }
 
@@ -587,6 +622,7 @@ mod tests {
     #[test]
     fn queue_drained_warns_when_commits_ahead_and_no_pr() {
         let lines = queue_drained_hint_lines(
+            crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
             Some(1),
@@ -604,6 +640,7 @@ mod tests {
     #[test]
     fn queue_drained_points_at_merge_when_pr_open() {
         let lines = queue_drained_hint_lines(
+            crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
             Some(2),
@@ -615,11 +652,54 @@ mod tests {
         assert!(!lines[1].contains("⚠"));
     }
 
+    // STORY-508: the same hint is forge-aware — GitLab gets MR/glab, pure-git
+    // names no forge CLI at all.
+    #[test]
+    fn queue_drained_hint_is_forge_aware() {
+        let gitlab = queue_drained_hint_lines(
+            crate::forge::ForgeKind::GitLab,
+            Some("implementer"),
+            None,
+            Some(2),
+            Some("task-264"),
+            PrState::Open(97),
+        );
+        assert!(gitlab[1].contains("MR #97 is already open"), "{:?}", gitlab);
+        assert!(gitlab[1].contains("glab mr merge 97 --squash"));
+        assert!(!gitlab[1].contains("gh pr"));
+
+        let pure_git = queue_drained_hint_lines(
+            crate::forge::ForgeKind::None,
+            Some("implementer"),
+            None,
+            Some(2),
+            Some("task-264"),
+            PrState::Open(97),
+        );
+        // pure-git: forge-neutral "change", and no forge CLI named.
+        assert!(pure_git[1].contains("change #97 is already open"));
+        assert!(!pure_git[1].contains("gh "));
+        assert!(!pure_git[1].contains("glab "));
+        // create-path likewise names no forge CLI for pure-git.
+        let pg_create = queue_drained_hint_lines(
+            crate::forge::ForgeKind::None,
+            Some("implementer"),
+            None,
+            Some(0),
+            Some("task-264"),
+            PrState::Unknown,
+        );
+        assert!(pg_create[1].contains("Open a change with `/aida-pr`"));
+        assert!(!pg_create[1].contains("gh "));
+        assert!(!pg_create[1].contains("glab "));
+    }
+
     // gh missing / unauthenticated → PrState::Unknown → fall back to the
     // generic nudge rather than asserting a PR is (or isn't) there.
     #[test]
     fn queue_drained_generic_when_pr_state_unknown() {
         let lines = queue_drained_hint_lines(
+            crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
             Some(1),
@@ -635,6 +715,7 @@ mod tests {
     #[test]
     fn queue_drained_no_warning_when_nothing_to_ship() {
         let lines = queue_drained_hint_lines(
+            crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
             Some(0),
