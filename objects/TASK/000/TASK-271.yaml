@@ -20,7 +20,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:37:46.494688183Z
-modified_at: 2026-05-16T18:38:01.013756331Z
+modified_at: 2026-06-05T16:40:09.837135642Z
 req_type: Task
 tags:
 - ''
@@ -28,3 +28,9 @@ relationships:
 - rel_type: Child
   target_id: 019e31c8-4b68-7e73-9065-92717c138769
   created_at: 2026-05-16T18:37:50.013476591Z
+comments:
+- id: 019e98a8-096d-79d2-aa40-ad3e44d9ef19
+  author: joe
+  content: Commit 6f76ff408 references this requirement
+  created_at: 2026-06-05T16:40:09.837135642Z
+  modified_at: 2026-06-05T16:40:09.837135642Z
