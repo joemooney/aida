@@ -113,7 +113,28 @@ impl LifecycleSkip {
     pub(crate) fn is_empty(self) -> bool {
         !self.no_ci_wait && !self.no_review && !self.no_build
     }
+}
 
+/// The lifecycle short-circuit tags AIDA recognizes (STORY-442). Used both by
+/// `LifecycleSkip::from_tags` and by the `aida edit`/`aida add` typo guard
+/// (TASK-524) so a misspelled `lifecycle:*` tag is flagged instead of silently
+/// no-op'ing. trace:TASK-524 | ai:claude
+pub(crate) const RECOGNIZED_LIFECYCLE_TAGS: &[&str] = &[
+    "lifecycle:no-ci-wait",
+    "lifecycle:no-review",
+    "lifecycle:no-build",
+    "lifecycle:trivial",
+];
+
+/// TASK-524: true when `tag` is in the `lifecycle:` namespace but is NOT one of
+/// the recognized short-circuit tags — i.e. a likely typo that would silently
+/// have no effect. Case-insensitive, matching `from_tags`.
+pub(crate) fn is_unrecognized_lifecycle_tag(tag: &str) -> bool {
+    let t = tag.trim().to_ascii_lowercase();
+    t.starts_with("lifecycle:") && !RECOGNIZED_LIFECYCLE_TAGS.contains(&t.as_str())
+}
+
+impl LifecycleSkip {
     pub(crate) fn banner_summary(self) -> Option<String> {
         if self.is_empty() {
             return None;
@@ -3353,6 +3374,45 @@ mod tests {
                 no_build: true,
             }
         );
+    }
+
+    /// TASK-524: the typo guard flags `lifecycle:*` tags that aren't recognized
+    /// short-circuits (they silently no-op), while passing the real ones and
+    /// non-lifecycle tags. Stays in sync with `from_tags` via the shared
+    /// RECOGNIZED_LIFECYCLE_TAGS list.
+    #[test]
+    fn unrecognized_lifecycle_tag_typo_guard() {
+        use super::is_unrecognized_lifecycle_tag;
+        // Recognized → not flagged (case-insensitive, like from_tags).
+        for t in [
+            "lifecycle:no-ci-wait",
+            "lifecycle:no-review",
+            "lifecycle:no-build",
+            "lifecycle:trivial",
+            "Lifecycle:Trivial",
+        ] {
+            assert!(!is_unrecognized_lifecycle_tag(t), "recognized: {t}");
+        }
+        // Typos in the lifecycle namespace → flagged.
+        for t in [
+            "lifecycle:no-ci",     // missing -wait
+            "lifecycle:trivai",    // misspelled
+            "lifecycle:no-builds", // plural
+            "lifecycle:skip-ci",   // wrong name
+        ] {
+            assert!(is_unrecognized_lifecycle_tag(t), "typo: {t}");
+        }
+        // Non-lifecycle tags are never flagged.
+        for t in ["papercut", "batch:x", "from-review:PR-1", "aida:queue:work"] {
+            assert!(!is_unrecognized_lifecycle_tag(t), "non-lifecycle: {t}");
+        }
+        // Every recognized tag must agree with from_tags (no drift).
+        for t in super::RECOGNIZED_LIFECYCLE_TAGS {
+            assert!(
+                !LifecycleSkip::from_tags([*t]).is_empty(),
+                "{t} should parse"
+            );
+        }
     }
 
     #[test]
