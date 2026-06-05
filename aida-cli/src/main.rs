@@ -32664,9 +32664,9 @@ fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
 /// `branch`. Returns the new PR's number, parsed from the URL `gh`
 /// prints on success. Branch must already be pushed; we push it first.
 fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64> {
-    use pr_ship::{
-        derive_pr_body_from_commit, derive_pr_title_from_commit, parse_pr_number_from_create_output,
-    };
+    // STORY-516: PR-number parsing now lives in GitHubForge::open_change, so
+    // `parse_pr_number_from_create_output` is no longer needed here.
+    use pr_ship::{derive_pr_body_from_commit, derive_pr_title_from_commit};
 
     // Push first so `gh pr create` doesn't error with "no commits between".
     eprintln!("  pushing {} to origin", branch);
@@ -32697,40 +32697,28 @@ fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64
         anyhow::bail!("could not derive a non-empty PR title from the latest commit");
     }
 
-    let mut args: Vec<String> = vec![
-        "pr".into(),
-        "create".into(),
-        "--title".into(),
-        title.clone(),
-        "--base".into(),
-        "main".into(),
-    ];
-    if body.is_empty() {
-        args.push("--body".into());
-        args.push("".into());
-    } else {
-        args.push("--body".into());
-        args.push(body);
-    }
-
-    let out = std::process::Command::new("gh")
-        .current_dir(project_root)
-        .args(args.iter().map(String::as_str))
-        .output()
+    // STORY-516: route PR creation through the Forge trait. open_change passes
+    // an explicit `--head <branch>` (the branch we just pushed) — equivalent to
+    // the prior inferred head, and what makes a GitLab/pure-git repo open its
+    // own change. Returns ChangeRef{id} (id == 0 on an unparseable URL, which we
+    // treat as the prior "no PR number found" bail). trace:STORY-516 | ai:claude
+    let req = crate::forge::OpenChange {
+        branch: branch.to_string(),
+        base: "main".to_string(),
+        title: title.clone(),
+        body,
+        draft: false,
+    };
+    let change = crate::forge::forge_for(project_root)
+        .open_change(req)
         .context("could not invoke `gh pr create`")?;
-    if !out.status.success() {
+    if change.id == 0 {
         anyhow::bail!(
-            "`gh pr create` failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
+            "`gh pr create` succeeded but no PR number found in its output: {}",
+            change.url
         );
     }
-    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-    parse_pr_number_from_create_output(&stdout).ok_or_else(|| {
-        anyhow::anyhow!(
-            "`gh pr create` succeeded but no PR number found in its output: {}",
-            stdout.trim()
-        )
-    })
+    Ok(change.id)
 }
 
 /// TASK-140: the full HEAD commit message of a BRANCH (not the local cwd HEAD).
