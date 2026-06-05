@@ -1,0 +1,40 @@
+id: 019e962f-146b-7dc0-846b-b14308b537ab
+spec_id: TASK-647
+agreed_id: TASK-647
+title: Advisor-gate the approve transition + queue-for-work (non-advisor/headless filers land draft)
+description: |-
+  Implements the gate from ADR-3 (intake-triage). The bouncer that makes the triage model real.
+
+  ## Behavior
+
+  Producing `approved` (via `aida add --status approved`, `aida edit --status <approved+>`) and queuing-for-work require **advisor authority** = `AIDA_SESSION_ROLE=advisor` OR an interactive TTY session. Otherwise the spec can only be `draft`.
+
+  - Non-advisor + non-TTY (headless `claude -p`, spawned agents, MCP `add_requirement`, drain/auto captures): `--status approved` is **refused or downgraded to `draft`** with a one-line notice; default-status add lands `draft`.
+  - Advisor role OR interactive human (TTY): may set `approved` + queue as today.
+
+  ## Acceptance
+
+  - [ ] `aida add --status approved` from a non-advisor, non-TTY context → result is `draft` (downgraded) + a notice; never silently `approved`.
+  - [ ] Same gate on `aida edit` promoting draft→approved and on `aida queue add` (queue-for-work) — non-advisor/non-TTY refused.
+  - [ ] MCP `add_requirement` (always non-TTY) lands `draft` regardless of requested status; the MCP tool result states it's queued for advisor triage.
+  - [ ] Advisor role (`AIDA_SESSION_ROLE=advisor`) OR an interactive TTY human → unchanged (can approve + queue).
+  - [ ] Uses ADR-2's `effective_role()` resolver for the role check; uses stdin/stdout `is_terminal` for the interactive check.
+  - [ ] Solo interactive human (implementer-default, at a TTY) is NOT blocked — they approve freely. (Walk this path; it's the common solo case.)
+
+  ## Notes
+  - Substrate-as-bouncer (cf. EPIC-34). A soft default would be bypassed by `--status approved`; this is the hard gate.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T05:08:48.363529487Z
+modified_at: 2026-06-05T05:08:48.363529487Z
+req_type: Task
+tags:
+- aida:add
+- from-product
+- intake-triage
+- mcp
+- parent:ADR-3
+- roles
+- substrate-as-bouncer
