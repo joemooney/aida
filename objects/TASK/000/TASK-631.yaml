@@ -18,10 +18,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T02:25:24.896723449Z
-modified_at: 2026-06-02T02:25:24.896723449Z
+modified_at: 2026-06-05T19:33:08.495711179Z
 req_type: Task
 tags:
 - aida:init
+- batch:onboarding-hardening
 - first-user-papercut
 - from-advisor
 - non-tty
