@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:55:27.418304419Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-06-05T05:18:40.866902914Z
 req_type: Task
 tags:
 - aida:pickup
@@ -125,6 +125,15 @@ comments:
     Test status: 551/551 aida-cli tests green; cargo fmt + clippy clean.
   created_at: 2026-05-17T16:57:50.224164388Z
   modified_at: 2026-05-17T16:57:50.224164388Z
+- id: 019e9638-1ee2-7511-b018-8261d56b00e4
+  author: joe
+  content: |-
+    Acceptance amendment (TASK-312, 2026-06-05) — reconciling the criteria with what PR-69 shipped (+ the later TASK-313):
+    - Bullet 9 ('Non-TTY mode: pretty-print degrades to a single-line summary') is SUPERSEDED. The card deliberately renders the box on a TTY AND through a pipe — /aida-pickup invokes 'aida show --card' through Claude Code's Bash tool (a captured pipe), so auto-collapse would hide the card in its own primary flow. The single-line mode is the explicit '--card --brief' opt-in, not non-TTY auto-collapse.
+    - Bullet 2 sub-elements: 'status transition' → the card shows CURRENT status only (a generic 'aida show' can't know the pickup transition). 'plan brief if any' → INITIALLY deferred by PR-69, now SHIPPED: the card boxes the owning plan's brief (Critical files / Followups / Definition of done) as of TASK-313 (PR #496).
+    Code is sound (PR-69 reviewed PASS); this is spec bookkeeping.
+  created_at: 2026-06-05T05:18:40.866902914Z
+  modified_at: 2026-06-05T05:18:40.866902914Z
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
