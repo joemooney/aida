@@ -4365,7 +4365,10 @@ pub enum Command {
         #[clap(long)]
         feature: Option<String>,
 
-        /// Filter by tags (comma separated)
+        /// Filter by tags (comma separated). A trailing `*` is a prefix-glob:
+        /// `aida:queue:*` matches every tag under that surface (and an exact
+        /// `aida:queue`). e.g. `--tags 'aida:queue:*'`.
+        // trace:TASK-527 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         tags: Option<String>,
 
