@@ -12562,5 +12562,13 @@ operations:
   timestamp: 2026-06-05T07:22:04.364974416Z
   kind: !SetStatus
     status: Completed
-clock: 1391
+- id: 019e96c0-177d-7742-b03d-5caef636c0ec
+  target_id: 019e96bf-0772-7692-8cec-4c03e6b2c4c6
+  author: aida
+  node_id: '1'
+  lamport: 1392
+  timestamp: 2026-06-05T07:47:11.869507054Z
+  kind: !SetTitle
+    title: '[EPIC-35 s2] Forge-aware hint helper + workflow_hints conversion (STORY-508 foundation slice)'
+clock: 1392
 node_id: '1'
