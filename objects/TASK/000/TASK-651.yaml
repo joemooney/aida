@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T07:47:15.344416583Z
-modified_at: 2026-06-05T08:09:15.729890835Z
+modified_at: 2026-06-05T08:29:13.765848358Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -32,3 +32,8 @@ comments:
   content: 'Slice 1 landed (see sibling task just filed): per-forge command vocabulary (ci_watch_cmd/ci_view_cmd/merge_cmd/create_cmd/view_cmd on ForgeKind, tested) + status_cleanup.rs open-changes hint conversion. Remaining files to sweep: auto_complete.rs, pr_ship.rs, pr_rebase.rs, network_retry.rs, drain_state.rs (runtime hints only — most gh refs there are doc comments or real Command::new invocations), cli.rs, main.rs. Use the new vocabulary methods for numbered sites; the change_noun()/change_cmd_hint() helpers for prose.'
   created_at: 2026-06-05T08:09:15.729890835Z
   modified_at: 2026-06-05T08:09:15.729890835Z
+- id: 019e96e6-92a5-7861-8b4f-92e892254db9
+  author: joe
+  content: 'Slice 2 landed: auto_complete.rs recovery_hint is now forge-aware (merge/ci-view/ci-timeout/missing-tool/spawn), plus the vocabulary methods now take &str ids and a cli_install_hint() helper was added. Remaining files: pr_ship.rs, pr_rebase.rs, network_retry.rs, cli.rs, main.rs (runtime hints only — most gh refs are real Command invocations or doc comments). The vocabulary + cli_install_hint + change_noun/change_cmd_hint now cover all the shapes the remaining sites need.'
+  created_at: 2026-06-05T08:29:13.765848358Z
+  modified_at: 2026-06-05T08:29:13.765848358Z
