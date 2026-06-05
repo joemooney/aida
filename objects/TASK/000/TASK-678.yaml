@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T22:13:56.453538078Z
-modified_at: 2026-06-05T22:14:29.140644955Z
+modified_at: 2026-06-05T22:27:21.536925637Z
 req_type: Task
 tags:
 - batch:gitlab-forge
@@ -30,3 +30,8 @@ comments:
   content: Commit d43936192 references this requirement
   created_at: 2026-06-05T22:14:29.140644955Z
   modified_at: 2026-06-05T22:14:29.140644955Z
+- id: 019e99e5-e740-72c3-aa46-0901c5c557c7
+  author: joe
+  content: 'Auto-bump missed this on the #544 merge because the commit subject appended '' — EPIC-35 routing complete'' AFTER the (TASK-678) trailer, breaking the (REQ-ID)-trailer parse (the commit-msg hook warned at commit time). #544 merged + main CI green (run 27042991171). Completing manually. Lesson: nothing after the (REQ-ID) trailer.'
+  created_at: 2026-06-05T22:27:21.536925637Z
+  modified_at: 2026-06-05T22:27:21.536925637Z
