@@ -27404,6 +27404,85 @@ fn untracked_is_safe_to_remove(path: &str) -> bool {
         .any(|seg| seg == "__pycache__" || seg == ".mypy_cache" || seg == ".pytest_cache")
 }
 
+/// STORY-456: `aida status` Worktrees section. Display-only — lists each
+/// non-main, non-store worktree with its branch, clean/dirty state, the
+/// session lease covering it (if any), live/dormant status, and a likely-
+/// obsolete hint (no lease + clean tree → safe to remove). Silent when only
+/// the main worktree exists. The full obsolescence verdict (commits-ahead,
+/// PR-merged, stale-CI) is a follow-up; this surfaces the recurring
+/// "git worktree list + aida session leases" mental-merge. trace:STORY-456
+fn print_status_worktrees_section(project_root: &std::path::Path) {
+    let main_root = main_worktree_root_from(project_root);
+    let worktrees = list_worktrees(&main_root);
+    let leases = list_leases(&main_root);
+    let live = process_probe::probe_live_claude_sessions();
+
+    let mut rows: Vec<String> = Vec::new();
+    for wt in &worktrees {
+        // Skip the main worktree and the AIDA-managed orphan store.
+        if wt.path == main_root || wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        let branch = wt.branch.as_deref().unwrap_or("(detached)");
+        let dirty = worktree_dirty_entries(&wt.path);
+        let lease = leases.iter().find(|l| l.worktree_path == wt.path);
+        let has_live = live
+            .iter()
+            .any(|s| !s.stale_cwd && (s.cwd == wt.path || s.cwd.starts_with(&wt.path)));
+
+        let lease_part = match lease {
+            Some(l) => format!("lease:{}", l.scope),
+            None => "no-lease".to_string(),
+        };
+        let live_part = if lease.is_some() {
+            if has_live {
+                "live".green().to_string()
+            } else {
+                "dormant".yellow().to_string()
+            }
+        } else if has_live {
+            "live".green().to_string()
+        } else {
+            String::new()
+        };
+        let dirty_part = if dirty.is_empty() {
+            "clean".to_string()
+        } else {
+            format!("dirty({})", dirty.len()).yellow().to_string()
+        };
+        // Likely-obsolete: no lease covers it AND the tree is clean AND nothing
+        // live is running there — the conservative "safe to remove" signal.
+        let marker = if lease.is_none() && dirty.is_empty() && !has_live {
+            "  ⚠ likely obsolete — `git worktree remove`"
+                .dimmed()
+                .to_string()
+        } else {
+            String::new()
+        };
+        let mut line = format!(
+            "  {} ({}) — {} · {}",
+            wt.path.display(),
+            branch.cyan(),
+            dirty_part,
+            lease_part
+        );
+        if !live_part.is_empty() {
+            line.push_str(&format!(" · {}", live_part));
+        }
+        line.push_str(&marker);
+        rows.push(line);
+    }
+
+    if rows.is_empty() {
+        return;
+    }
+    println!("{}", "─── Worktrees ───".bold());
+    for row in rows {
+        println!("{}", row);
+    }
+    println!();
+}
+
 /// TASK-539: `aida status` Findings section. Display-only — surfaces the
 /// pending-triage findings backlog (silent when empty) so it isn't invisible
 /// until the user remembers `aida findings list`. Reuses the same
@@ -59471,6 +59550,10 @@ fn handle_status_command_distributed(
 
     print_status_agents_section(&user_ctx);
     print_status_claude_code_section(&project_root);
+
+    // STORY-456: worktrees pane — git worktree + session lease + liveness in
+    // one view (display-only). trace:STORY-456 | ai:claude
+    print_status_worktrees_section(&project_root);
 
     // TASK-539: pending-findings backlog — silent when empty. Surfaced before
     // the working-tree section so triage-able items are visible without
