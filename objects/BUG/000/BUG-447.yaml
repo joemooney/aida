@@ -30,10 +30,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:28:27.752140615Z
-modified_at: 2026-06-05T19:28:27.752140615Z
+modified_at: 2026-06-05T19:33:06.138601308Z
 req_type: Bug
 tags:
 - aida:queue:work
+- batch:onboarding-hardening
 - first-run
 - from-self-test
 - onboarding
