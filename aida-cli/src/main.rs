@@ -56236,6 +56236,10 @@ mod queue_work_tests {
         // which bounces when the spec has no recorded claude session.
         assert!(!msg.contains("--resume"), "msg: {msg}");
         assert!(msg.contains("auto-bump"), "msg: {msg}");
+        // TASK-240: a Done spec's PR author gets a merge-now path, routed via
+        // `aida show` (which prints the PR number) so the command is honest.
+        assert!(msg.contains("gh pr merge"), "msg: {msg}");
+        assert!(msg.contains("aida show STORY-86"), "msg: {msg}");
     }
 
     #[test]
@@ -72366,10 +72370,17 @@ fn format_queue_work_not_queued_error(
         // including one with no recorded claude session — so it stays
         // `--work` (a fresh session), not `--work --resume` (which needs a
         // prior session and bounces when there isn't one). trace:BUG-236
+        // TASK-240: a Done spec usually means "PR open, awaiting merge". If the
+        // user authored that PR they may want to merge it NOW rather than wait —
+        // point them at the merge path. We can't name the PR number here (no gh
+        // lookup in this pure builder), so route via `aida show` which prints the
+        // PR linkage, keeping every suggested command honest/runnable.
+        // trace:TASK-240 | ai:claude
         RequirementStatus::Done => format!(
             "`{display_id}` isn't queued. Status is Done (work finished on a branch).\n  \
              If review found issues and more commits are needed: `aida queue rework {display_id} --work`\n  \
-             If just waiting for merge: nothing to do — auto-bump fires when the PR merges."
+             If the PR is yours and you want to merge now (CI green): find it with `aida show {display_id}`, then `gh pr merge <PR> --squash --delete-branch`.\n  \
+             Otherwise nothing to do — auto-bump fires when the PR merges."
         ),
         RequirementStatus::Completed => format!(
             "`{display_id}` is Completed (already shipped). Nothing to work on.\n  \
