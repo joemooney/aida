@@ -113,6 +113,24 @@ impl LifecycleSkip {
     pub(crate) fn is_empty(self) -> bool {
         !self.no_ci_wait && !self.no_review && !self.no_build
     }
+
+    /// TASK-525: the active short-circuit tokens (`no-ci-wait`, `no-review`,
+    /// `no-build`) for telemetry — recorded on the auto-complete JSONL event so
+    /// retro analysis can see how often fast-track tags fire and on what.
+    /// Empty when no skip is active. trace:TASK-525 | ai:claude
+    pub(crate) fn active_tokens(self) -> Vec<String> {
+        let mut v = Vec::new();
+        if self.no_ci_wait {
+            v.push("no-ci-wait".to_string());
+        }
+        if self.no_review {
+            v.push("no-review".to_string());
+        }
+        if self.no_build {
+            v.push("no-build".to_string());
+        }
+        v
+    }
 }
 
 /// The lifecycle short-circuit tags AIDA recognizes (STORY-442). Used both by
@@ -3361,6 +3379,25 @@ mod tests {
         assert!(skip.no_ci_wait);
         assert!(skip.no_review);
         assert!(skip.no_build);
+    }
+
+    /// TASK-525: active_tokens lists exactly the set skips (telemetry payload),
+    /// empty when none, all three for `trivial`.
+    #[test]
+    fn lifecycle_skip_active_tokens() {
+        assert!(LifecycleSkip::none().active_tokens().is_empty());
+        assert_eq!(
+            LifecycleSkip::from_tags(["lifecycle:no-review"]).active_tokens(),
+            vec!["no-review".to_string()]
+        );
+        assert_eq!(
+            LifecycleSkip::from_tags(["lifecycle:trivial"]).active_tokens(),
+            vec![
+                "no-ci-wait".to_string(),
+                "no-review".to_string(),
+                "no-build".to_string()
+            ]
+        );
     }
 
     #[test]

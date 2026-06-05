@@ -75312,6 +75312,7 @@ fn run_auto_complete(
         started_at,
         completed_at,
         json,
+        lifecycle_skip,
     );
 
     // STORY-301: a single-spec drain owns the file — clear it now the run is
@@ -76942,6 +76943,7 @@ fn record_auto_complete_run(
     started_at: chrono::DateTime<chrono::Utc>,
     completed_at: chrono::DateTime<chrono::Utc>,
     json: bool,
+    lifecycle_skip: auto_complete::LifecycleSkip,
 ) {
     if !usage::is_enabled(Some(project_root)) {
         return;
@@ -76975,6 +76977,7 @@ fn record_auto_complete_run(
         drafted_bug: None,
         binary_sha: build_sha_short(),
         auto_rebase: driver.auto_rebase_events.clone(),
+        lifecycle_skips: lifecycle_skip.active_tokens(),
     };
 
     // On a phase failure, attach a Draft BUG. Reuse the BUG from a recent
