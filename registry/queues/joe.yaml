@@ -462,13 +462,6 @@
   added_at: 2026-06-04T15:17:31.400772947Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019e9355-9481-78c2-91ae-f3f260e3ff87
-  position: 345000
-  added_by: joe
-  note: auto-queued by `session end` (019e9349); covers 1 spec
-  added_at: 2026-06-04T15:53:42.544517295Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e9582-68dd-7df1-a28d-2db6747b8fd5
   position: 349000
   added_by: joe
