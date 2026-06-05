@@ -1484,13 +1484,6 @@
   added_at: 2026-06-04T15:53:42.544517295Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e6262-2f8d-79b2-9bfe-c37ebc6ece05
-  position: 346000
-  added_by: joe
-  note: Promoted from finding TASK-1-100 via `aida findings promote`
-  added_at: 2026-06-04T16:22:13.360613267Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e74aa-b98c-7d31-8df3-d8d3f4d3fb5c
   position: 348000
   added_by: joe
