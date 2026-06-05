@@ -4552,6 +4552,14 @@ pub enum Command {
         /// no paragraph truncation. For deep dives.
         #[clap(long)]
         full: bool,
+
+        // trace:TASK-102 | ai:claude
+        /// Enumerate every relationship edge inline (direction + type +
+        /// target), regardless of count. Alias `--relations`. Without it,
+        /// `aida show` lists edges only when there are few (≤5) and otherwise
+        /// prints a count + a pointer to `aida rel list`.
+        #[clap(long = "rels", visible_alias = "relations")]
+        rels: bool,
     },
 
     /// Query the cross-spec relationship graph from a root spec: transitive
