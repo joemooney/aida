@@ -45605,6 +45605,17 @@ fn parse_batch_chain(raw: &str) -> Result<Vec<String>> {
 /// `conflicts_with(batch, id)` already rejects passing both, and a
 /// `batch:`-prefixed positional is rerouted to the batch slot.
 /// trace:TASK-270 | ai:claude
+/// TASK-322: true when a `queue work` positional is a `next` / `nextN`
+/// head-pickup keyword (vs a SPEC-ID or `batch:NAME`). Used to catch the
+/// `--batch` + `nextN` collision that otherwise silently dropped the keyword.
+/// trace:TASK-322 | ai:claude
+fn is_next_keyword_id(id: &str) -> bool {
+    id.to_ascii_lowercase()
+        .strip_prefix("next")
+        .map(|suffix| suffix.is_empty() || suffix.chars().all(|c| c.is_ascii_digit()))
+        .unwrap_or(false)
+}
+
 fn resolve_queue_work_batch<'a>(
     id: Option<&'a str>,
     batch: Option<&'a str>,
@@ -68300,6 +68311,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                      `aida queue work --batch A,B --auto-complete` or `--batches A,B`"
                 );
             }
+            // TASK-322: a batch drain (--batch NAME / batch:NAME / --batches) and
+            // a `nextN` head pickup are two different targets;
+            // resolve_queue_work_batch discards the positional when a batch is
+            // set, which silently swallowed the `nextN`. Catch the collision
+            // explicitly, mirroring the --batch+--type and --max+nextN guards.
+            // trace:TASK-322 | ai:claude
+            if (effective_batch.is_some() || effective_batches.is_some())
+                && id.as_deref().map(is_next_keyword_id).unwrap_or(false)
+            {
+                anyhow::bail!(
+                    "pick one: a batch drain (`--batch NAME`) or a head drain (`nextN`) — not both"
+                );
+            }
             // TASK-270: clap rejects `--batch` alongside `--type`; the
             // positional `batch:NAME` form bypasses that rule, so enforce
             // the same conflict here rather than silently dropping
@@ -69369,6 +69393,20 @@ mod queue_progress_tests {
 
         // No id, no flag → nothing resolved (head-pickup path).
         assert_eq!(resolve_queue_work_batch(None, None), (None, None));
+    }
+
+    /// TASK-322: the predicate behind the `--batch` + `nextN` collision guard.
+    #[test]
+    fn is_next_keyword_id_classifies() {
+        assert!(is_next_keyword_id("next"));
+        assert!(is_next_keyword_id("next3"));
+        assert!(is_next_keyword_id("NEXT5"));
+        assert!(is_next_keyword_id("Next10"));
+        // Not next-keywords.
+        assert!(!is_next_keyword_id("TASK-270"));
+        assert!(!is_next_keyword_id("batch:foo"));
+        assert!(!is_next_keyword_id("nextish")); // suffix not all-digits
+        assert!(!is_next_keyword_id("next-3")); // hyphen is not a digit
     }
 
     #[test]
