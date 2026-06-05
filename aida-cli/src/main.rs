@@ -50846,6 +50846,19 @@ fn handle_push_command(
             let branch =
                 git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
 
+            // TASK-494: when the code-leg has NOTHING to push (branch is
+            // up-to-date with `origin/<branch>`), the merged-branch +
+            // stale-base prompts below are pure noise — they warn about risks
+            // that don't apply to a no-op push (the user saw them fire next to
+            // "up to date, nothing to push"). They still fire when there ARE
+            // unpushed commits (the real-risk case) and when the branch was
+            // never pushed (`None` ≠ nothing-to-push → whole branch is unpushed).
+            // trace:TASK-494 | ai:claude
+            let code_nothing_to_push = matches!(
+                ahead_behind_vs_ref(&project_root, &branch, &format!("origin/{branch}")),
+                Some((0, _))
+            );
+
             // BUG-88: warn when pushing to a branch whose PR has
             // already merged. New commits land on `origin/<branch>`
             // but won't reach `main` without a fresh PR. Skipped on
@@ -50854,6 +50867,7 @@ fn handle_push_command(
             // state without it — silent rather than crying wolf).
             // trace:BUG-88 | ai:claude
             if !no_rebase_check
+                && !code_nothing_to_push
                 && branch != "main"
                 && branch != "master"
                 && matches!(
@@ -50909,7 +50923,8 @@ fn handle_push_command(
             // anyway). Skipped: --no-rebase-check (scripts/CI),
             // pushing main itself, no upstream main locally, branch
             // is exactly up-to-date. trace:TASK-54 | ai:claude
-            if !no_rebase_check {
+            // TASK-494: also skipped when the code-leg has nothing to push.
+            if !no_rebase_check && !code_nothing_to_push {
                 if let Some((behind, sample)) = branch_behind_main(&project_root, &branch) {
                     eprintln!(
                         "{} {} is {} commit{} behind {}:",
