@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:48:05.637187178Z
-modified_at: 2026-05-13T07:00:35.258635658Z
+modified_at: 2026-06-05T14:42:16.124248819Z
 req_type: Task
 tags:
 - discoverability
@@ -30,3 +30,8 @@ comments:
     Same TASK-102 pattern: failed agent attempts at command shape are diagnostic UX signals, not noise.
   created_at: 2026-05-13T07:00:35.258635658Z
   modified_at: 2026-05-13T07:00:35.258635658Z
+- id: 019e983c-19bc-74d2-abbc-d28b3bdb9531
+  author: joe
+  content: Commit 2c4bc1ed5 references this requirement
+  created_at: 2026-06-05T14:42:16.124248819Z
+  modified_at: 2026-06-05T14:42:16.124248819Z
