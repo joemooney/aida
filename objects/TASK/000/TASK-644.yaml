@@ -1,0 +1,49 @@
+id: 019e960f-773e-7d60-ae5e-dde7fae5e955
+spec_id: TASK-644
+agreed_id: TASK-644
+title: 'aida role enter: show an interactive role picker instead of erroring (when stdin is a TTY)'
+description: |-
+  ## Want (operator, 2026-06-04)
+
+  When `aida role enter` can't resolve a role AND the terminal is interactive, present a selectable list of roles to pick from instead of erroring.
+
+  Current behavior (verified):
+  - `aida role enter` (no NAME) → clap error "required argument <NAME>", exit 2.
+  - `aida role enter <unknown>` → "Error: No such role: <unknown> / Create it with `aida role add` / See `aida role list`", exit 1.
+
+  ## CRITICAL design constraint (primary-caller reality)
+
+  `aida role enter` writes **shell `eval` code to STDOUT**, consumed by the `aida-role` shell helper via `eval "$(aida role enter ...)"`. So in real use **stdout is a captured pipe, NOT a TTY**. A picker that gates on `stdout.is_terminal()` would NEVER trigger; a picker that draws to stdout would CORRUPT the eval payload.
+
+  Therefore:
+  - Detect interactivity via **`stdin().is_terminal()`** (and/or open `/dev/tty`) — never stdout.
+  - Render the picker UI (list + selection) to **stderr or `/dev/tty`**.
+  - Emit **only** the chosen role's `export AIDA_SESSION_ROLE=...` eval line to **stdout**, byte-identical to `aida role enter <chosen>` — so the surrounding `eval` still works and the role is actually entered.
+
+  (Note: don't double-wrap — the shell helper already auto-evals; see the existing role-enter eval contract.)
+
+  ## Acceptance criteria
+
+  - [ ] `aida role enter` with no NAME, when **stdin is a TTY**, shows a selectable list of the project's roles (global + project, same set as `aida role list`, active role marked `*`, with the role's last-active + purpose blurb), and on selection enters that role (stdout carries only the eval line).
+  - [ ] `aida role enter <unknown-name>`, when stdin is a TTY, shows the same picker instead of the hard error. (Design choice for impl: either picker-of-existing-roles only, or include an explicit "create <unknown-name>" entry — pick the simpler; note in the PR.)
+  - [ ] Works under the REAL invocation `eval "$(aida role enter)"` via the `aida-role` helper: picker draws to stderr/tty, stdout stays clean, the role is entered. (Walk this exact path in testing — it's the primary caller.)
+  - [ ] **Non-interactive fallback unchanged:** when stdin is NOT a terminal (scripts, pipes, headless), keep the current deterministic error + exit code — no picker, no hang, no blocking read.
+  - [ ] Cancelling the picker (Esc / Ctrl-C) exits cleanly WITHOUT entering a role and WITHOUT emitting a stray eval line (so `eval` is a no-op).
+
+  ## Notes
+
+  - Reuse an existing interactive-select helper if the codebase has one (AIDA already does `[Y/n]` / `[y/N/skip]` prompts); ensure it renders to /dev/tty or stderr, not stdout.
+  - Surface: aida-cli role-enter handler + the role-listing used by `aida role list`.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T04:34:16.510498786Z
+modified_at: 2026-06-05T04:34:16.510498786Z
+req_type: Task
+tags:
+- aida:role:enter
+- cli-ux
+- from-product
+- from-user-direction
+- interactive
