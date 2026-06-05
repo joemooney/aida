@@ -1,0 +1,12 @@
+id: 019e96f8-409d-7712-9625-66e5a952fdcb
+spec_id: TASK-654
+agreed_id: TASK-654
+title: '[EPIC-35 s2] Forge-aware pr-ship dry-run plan (TASK-651 slice 3)'
+description: 'Slice 3 of TASK-651. Converts pr_ship.rs format_dry_run_plan (shown by ''aida pr ship --dry-run'') to forge-aware output: the change noun (PR/MR/change), the watch-CI step (gh pr checks / glab ci status), the merge steps (gh/glab with the right branch-delete flag), and the resolve-change line. Threaded a ForgeKind param (kept the fn pure) resolved from project_root at the handler. pr_rebase.rs:70-74 gh-view error strings left as-is: they describe an actual gh invocation''s output (slice-1 hasn''t migrated invocations yet), not a user-action hint — out of STORY-508 scope. Remaining: network_retry.rs, cli.rs, main.rs runtime hints.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T08:48:32.413903001Z
+modified_at: 2026-06-05T08:48:32.413903001Z
+req_type: Task
