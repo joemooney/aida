@@ -3,12 +3,12 @@ spec_id: TASK-315
 agreed_id: TASK-315
 title: Consider widening `aida list`'s Status column and adding the glyph there too
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:29:42.264697428Z
-modified_at: 2026-06-05T17:05:23.380697032Z
+modified_at: 2026-06-05T17:10:33.286263857Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,7 @@ comments:
   content: Commit ef54208b3 references this requirement
   created_at: 2026-06-05T17:05:23.380697032Z
   modified_at: 2026-06-05T17:05:23.380697032Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T17:10:33.286263857Z
+  completion_sha: 0a09194813237544d0c953b809613144bc9b5797
