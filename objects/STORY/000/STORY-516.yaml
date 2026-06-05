@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T02:05:47.978816913Z
-modified_at: 2026-06-05T18:48:12.294595700Z
+modified_at: 2026-06-05T19:21:00.635752172Z
 req_type: Story
 tags:
 - epic-35-slice-1
@@ -48,6 +48,20 @@ comments:
   content: Commit 520f566bc references this requirement
   created_at: 2026-06-05T18:48:12.294595700Z
   modified_at: 2026-06-05T18:48:12.294595700Z
+- id: 019e993b-4bdb-7642-8796-191cb0c89d6a
+  author: joe
+  content: |-
+    VIEW-OP ROUTING — design constraint found 2026-06-05 (after merge op shipped via TASK-668/669). The 'gh pr view' op does NOT route uniformly: it splits by contract.
+
+    (a) SIMPLE display/linkage sites (aida show --git, aida status PR linkage) want only 'PR number for branch, or nothing' → forge.change_for_branch -> Result<Option<ChangeRef>> fits as-is. Low-risk slice.
+
+    (b) ORCHESTRATOR phase-1 PR detection (detect_open_pr_for_branch / detect_open_pr_for_spec / gh_pr_list_first → PrLookup) carries a 5-STATE contract: Found / NoOpenPr / GhMissing / GhFailed(stderr) / GhUnreachable(stderr). The GhUnreachable state is the BUG-257/BUG-444 'transient GH-API outage vs definitively-no-PR' distinction the orchestrator's phase-1 verdict depends on. change_for_branch's Option collapses NoOpenPr and GhUnreachable into Ok(None) — routing the orchestrator detection through it AS-IS would REGRESS BUG-257/BUG-444 (a transient outage would read as 'no PR' → wrong phase-1 verdict).
+
+    NEXT-SLICE DECISION before routing (b): either (i) enrich change_for_branch to return a richer result type (e.g. ChangeLookup with the 5 states / a transient-vs-definitive split) and map PrLookup onto it, or (ii) add a separate forge method for the orchestrator's detection. Keep GitHub argv byte-identical; preserve the GhUnreachable narrowing (probe_branch_on_origin ls-remote fallback). Reliability-critical → keyboard + watched drain.
+
+    Recommend: route slice (a) [simple display sites] first as its own low-risk PR; do (b) after the trait-contract decision.
+  created_at: 2026-06-05T19:21:00.635752172Z
+  modified_at: 2026-06-05T19:21:00.635752172Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-05T06:01:01.551505677Z
