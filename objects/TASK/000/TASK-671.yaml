@@ -1,0 +1,47 @@
+id: 019e9950-db51-7391-a7f5-66e654d41c81
+spec_id: TASK-671
+agreed_id: TASK-671
+title: 'queue list ''Awaiting commit'' Next-hint: substitute the real SPEC-ID, be remote-aware (no ''open a PR'' for local-only), show a literal commit example'
+description: |-
+  The 'Awaiting commit' Next-hint in `aida queue list` (main.rs:48428) is imprecise in three ways, all fixable from data already in scope:
+
+  CURRENT:
+    ▶ Next: commit the work with `(SPEC-ID)` in the message, then open a PR
+
+  GAPS:
+  1. Hardcoded placeholder "SPEC-ID" instead of the ACTUAL id. The spec ids are in `no_commit` and printed one line above (e.g. "◐ TASK-007"). A first-user has to mentally substitute. When there is exactly ONE awaiting spec, show the concrete id: `(TASK-007)`. (This is an allowed use of the id under the user-facing-text convention / TASK-268 — the id is the actionable payload the user must type into the commit, not opaque noise.)
+  2. "then open a PR" is hardcoded and WRONG for a local-only project (no `origin` remote — the same condition queue-work already detects: "No origin remote — skipping pull (local-only project)"). With no remote there is no PR; the commit-to-default-branch alone auto-completes the spec on the next `aida pull` / `aida db reconcile-status`.
+  3. No literal example command, so "commit the work" is vague — it even led an assistant to suggest `git commit -m "chore: scaffold AIDA"` WITHOUT the trailer, which is exactly how a spec lands in this stuck 'awaiting commit' state.
+
+  PROPOSED (single awaiting spec):
+    with a remote:
+      ▶ Next: commit your change with `(TASK-007)` in the message, then open a PR — the merge auto-completes it.
+              e.g.  git commit -m "... (TASK-007)"
+    local-only (no origin):
+      ▶ Next: commit your change with `(TASK-007)` in the message — that auto-completes it on the next `aida pull`.
+              e.g.  git commit -m "... (TASK-007)"
+
+  PROPOSED (multiple awaiting specs): keep a generic form but clarify per-spec, e.g. "commit each with its own `(SPEC-ID)` trailer", and still drop the PR step when local-only.
+
+  Acceptance:
+  - Single-spec case substitutes the real id in the hint and the example.
+  - The "open a PR" clause is shown only when an `origin` remote exists; local-only projects get the auto-complete-on-pull wording instead.
+  - A copy-pasteable `git commit -m "... (SPEC-ID)"` example line is included.
+  - Verified on a fresh local-only `aida init` (the EPIC-37 repro): the hint names TASK-007 and does not mention a PR.
+
+  Surfaced 2026-06-05 during the EPIC-37 onboarding dogfood (~/work/dummy1).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T19:44:33.617630390Z
+modified_at: 2026-06-05T19:44:33.617630390Z
+req_type: Task
+tags:
+- aida:queue
+- batch:onboarding-hardening
+- from-self-test
+- onboarding
+- papercut
+- user-facing-text
+- ux
