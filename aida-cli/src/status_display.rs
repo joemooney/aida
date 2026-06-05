@@ -95,6 +95,17 @@ pub(crate) fn status_badge(status: &str) -> String {
     format!("{} {}", status_glyph(status), paint_status(status, status))
 }
 
+/// A fixed-width status cell for list tables: `"<glyph> <coloured label>"` with
+/// the PLAIN label left-padded to `label_width` BEFORE colouring (ANSI escapes
+/// would otherwise inflate `{:<}` byte counts and break column alignment). The
+/// cell occupies `label_width + 2` visible columns — glyph (1) + space (1) +
+/// label. Use this where `aida show`/badges aren't appropriate but a glyph in
+/// the column is still wanted (TASK-315). trace:TASK-315 | ai:claude
+pub(crate) fn status_cell(status: &str, label_width: usize) -> String {
+    let padded = format!("{:<width$}", status, width = label_width);
+    format!("{} {}", status_glyph(status), paint_status(&padded, status))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,6 +159,23 @@ mod tests {
         let badge = status_badge("Done");
         assert!(badge.contains('◉'), "badge missing glyph: {badge:?}");
         assert!(badge.contains("Done"), "badge missing label: {badge:?}");
+    }
+
+    /// TASK-315: a list status cell is `"<glyph> <label>"` padded so its visible
+    /// width is `label_width + 2`. Asserted under NO_COLOR for an exact compare.
+    #[test]
+    fn status_cell_is_glyph_space_padded_label() {
+        colored::control::set_override(false);
+        let cell = status_cell("Approved", 11);
+        colored::control::unset_override();
+        // glyph + space + "Approved" padded to 11 = "Approved   ".
+        assert_eq!(cell, "▸ Approved   ", "cell: {cell:?}");
+        assert_eq!(cell.chars().count(), 13, "visible width = 11 + 2");
+        // Over-long labels are not truncated (alignment degrades gracefully).
+        colored::control::set_override(false);
+        let wide = status_cell("In Progress", 11);
+        colored::control::unset_override();
+        assert_eq!(wide, "◐ In Progress", "cell: {wide:?}");
     }
 
     #[test]
