@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:18:41.037832798Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-06-05T03:48:02.792420329Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -80,6 +80,11 @@ comments:
     Test status: 289/289 aida-cli tests green (4 new BUG-88 cases); `cargo fmt --all -- --check` clean.
   created_at: 2026-05-14T04:14:11.898614515Z
   modified_at: 2026-05-14T04:14:11.898614515Z
+- id: 019e95e5-2468-7bf1-a432-15ebdf0de3c9
+  author: joe
+  content: Commit c15458cdf references this requirement
+  created_at: 2026-06-05T03:48:02.792420329Z
+  modified_at: 2026-06-05T03:48:02.792420329Z
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
