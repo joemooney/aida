@@ -1,6 +1,6 @@
 ---
 name: aida-triage
-description: Structured bug investigation and diagnosis. Systematically reproduce, narrow, root-cause, and plan a fix for a reported bug.
+description: Two triage modes — clear the draft inbox (disposition untriaged intake) and investigate a bug (reproduce, narrow, root-cause, plan the fix).
 allowed-tools:
   - Bash
   - Read
@@ -10,7 +10,64 @@ allowed-tools:
 
 # AIDA Triage Skill
 
-## Purpose
+This skill has two modes. Pick by what you were asked:
+
+- **Inbox triage** — clear the backlog of untriaged `draft` specs, dispositioning each. Use when asked to "triage the inbox", "clear drafts", "groom intake", or when `aida status` shows an `Inbox: N untriaged drafts` line. Jump to [Inbox triage](#inbox-triage-clear-the-draft-backlog).
+- **Bug investigation** — diagnose one reported bug. Use when asked to "triage this bug", "investigate", "why is this broken?". Continue to [Bug investigation](#bug-investigation).
+
+---
+
+## Inbox triage (clear the draft backlog)
+
+### Purpose
+
+ADR-3 intake-triage: filed specs from headless agents, the MCP server, and drain captures land as `draft` (the advisor-gate holds back `approved` from non-advisor / non-interactive callers — see TASK-647). Those drafts are an **inbox** the advisor clears, dispositioning each into the pipeline, the backlog, or a clarification hold.
+
+> **Run this as the advisor.** Approving and queuing require advisor authority (advisor role or an interactive session). If you're in another role, `eval "$(aida role enter advisor)"` first, or run interactively.
+
+### Step 1: Size the inbox
+
+```bash
+aida list --status draft          # the untriaged inbox (oldest-relevant first)
+aida status                       # also shows "Inbox: N untriaged drafts" when N > 0
+```
+
+### Step 2: Walk each draft and disposition it
+
+For each draft, read it (`aida show <ID>`) and pick exactly one of the three ADR-3 dispositions:
+
+- **Keep** — it's real, well-formed, ready to build → approve it and queue it for work:
+  ```bash
+  aida edit <ID> --status approved
+  aida queue add <ID> --for implementer
+  ```
+- **Backlog / revisit** — valid but not now → leave it approved-but-unqueued, or archive it out of the active view:
+  ```bash
+  aida edit <ID> --status approved      # keep it visible, just not queued
+  # or, to clear it from the default view entirely:
+  aida archive <ID>
+  ```
+- **Unclear** — needs clarification before it can proceed → flag it:
+  ```bash
+  aida edit <ID> --status needs-attention
+  ```
+  (Reject outright with `aida edit <ID> --status rejected` when it's not worth keeping.)
+
+Disposition tersely — the goal is an empty inbox in one pass, not a deep review of each item. A draft that needs real investigation is itself a "Keep" (queue it) or "Unclear" (flag it).
+
+### Step 3: Confirm the inbox is clear
+
+```bash
+aida list --status draft          # ideally empty (or only items you deliberately left)
+```
+
+A clean draft inbox means every piece of intake has been seen and routed. Re-run on a cadence as agents/MCP refile new drafts.
+
+---
+
+## Bug investigation
+
+### Purpose
 
 Systematically investigate and diagnose a bug report. Walk through reproduction, narrowing, root cause analysis, impact assessment, and fix strategy. Record all findings on the requirement so knowledge is preserved even if the fix is deferred.
 
