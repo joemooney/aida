@@ -34,6 +34,7 @@ Everything in this directory is in service of making that scope honest. If a com
 | [vs-ultrareview.md](vs-ultrareview.md) | When to reach for AIDA's `/aida-review` (free, integrated, lifecycle-aware) vs Claude Code's `/ultrareview` (paid/quota, multi-agent depth). |
 | [vs-ultraplan.md](vs-ultraplan.md) | When `/ultraplan`'s dense LLM-generated planning brief earns its keep vs AIDA's persistent, graph-integrated plan files. Sister doc to vs-ultrareview. |
 | [vs-claude-code-subagents.md](vs-claude-code-subagents.md) | Why AIDA's roles aren't a reinvention of Claude Code's `/agents` — within-conversation primitive vs cross-conversation workflow layer, and how they compose. |
+| [vs-claude-code-workflows.md](vs-claude-code-workflows.md) | When Claude Code's `/workflows` (within-task JS orchestration — fan out subagents, hold the plan in code, end with one answer) fits vs AIDA's cross-session graph + drain (a spec's lifecycle across sessions/vendors). Different units of work; they compose. Companion to vs-claude-code-subagents.md. |
 | [vs-karpathy-md.md](vs-karpathy-md.md) | When structured markdown alone is enough vs when you actually need a relationship graph + stable IDs + MCP server. |
 | [vs-saas-pm.md](vs-saas-pm.md) | When Linear / Jira / GitHub Projects make sense vs the lightweight git-canonical, code-aware angle AIDA serves. |
 
