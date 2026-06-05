@@ -37107,6 +37107,28 @@ mod statusline_tests {
         assert!(!status_requires_advisor_authority(&S::NeedsAttention));
     }
 
+    /// BUG-444: the keystone phase-1 decision. When both PR lookups return
+    /// empty-but-successful, ONLY a branch genuinely absent from origin is a
+    /// definitive NoPr; an on-origin (or unconfirmable) branch is a retryable
+    /// eventual-consistency window. Regression guard for the dominant
+    /// drain-failure cause (false NoPr racing GitHub's index).
+    #[test]
+    fn empty_phase1_lookup_only_definitive_when_branch_absent() {
+        use super::{empty_phase1_lookup_is_definitive_nopr, BranchOriginProbe};
+        assert!(
+            empty_phase1_lookup_is_definitive_nopr(&BranchOriginProbe::Absent),
+            "absent branch (never pushed) → definitive NoPr"
+        );
+        assert!(
+            !empty_phase1_lookup_is_definitive_nopr(&BranchOriginProbe::Present),
+            "on-origin branch → retry (PR likely exists but not indexed yet)"
+        );
+        assert!(
+            !empty_phase1_lookup_is_definitive_nopr(&BranchOriginProbe::LsRemoteFailed),
+            "unconfirmable → retry rather than false NoPr"
+        );
+    }
+
     /// BUG-64: terminal-status predicate. Completed and Rejected are
     /// terminal; everything else (including the STORY-86 `Done` state) is
     /// open and accepts new children. trace:BUG-64 STORY-86 | ai:claude
@@ -78090,6 +78112,16 @@ enum Phase3StaleOverlapAction {
 /// *transient* GH-API outage that leaves it unable to confirm a PR — only the
 /// last case is retried (with the [`auto_complete::gh_verify_backoff_schedule`]
 /// backoff). trace:TASK-136 | ai:claude
+/// BUG-444: given that BOTH phase-1 PR lookups returned empty-but-successful,
+/// decide whether that's a *definitive* no-PR (the branch was never pushed) or a
+/// *retryable* eventual-consistency window (the branch is on origin, so a PR
+/// likely exists but isn't indexed yet). Only an `Absent` branch is a definitive
+/// NoPr; `Present` and `LsRemoteFailed` both retry. Pure so the keystone
+/// decision is unit-tested without gh/git. trace:BUG-444 | ai:claude
+fn empty_phase1_lookup_is_definitive_nopr(origin: &BranchOriginProbe) -> bool {
+    matches!(origin, BranchOriginProbe::Absent)
+}
+
 enum Phase1PrResolve {
     /// An open PR was found (directly or recovered via the spec-id search).
     Found(OpenPrInfo),
@@ -78587,7 +78619,41 @@ impl RealPhaseDriver {
                     );
                     Phase1PrResolve::Found(pr)
                 }
-                _ => Phase1PrResolve::NoPr,
+                // BUG-444: both the `--head` and `--search` lookups returned
+                // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
+                // LIST queries (`--search` hits the search index, which lags PR
+                // creation by seconds), so an empty result right after
+                // `/aida-pr` ran `gh pr create` does NOT mean "no PR" — it
+                // usually means "not indexed yet". If the branch is on origin
+                // the session pushed, so a PR very likely exists: RETRY within
+                // the eventual-consistency window (reusing the TASK-136 backoff)
+                // instead of declaring a false NoPr. Only a branch that is
+                // genuinely absent from origin is an immediate NoPr (the session
+                // never pushed). This was the dominant drain-failure cause:
+                // ~98% of sessions ship a PR, yet a whole batch could false-fail
+                // by racing the index. trace:BUG-444 EPIC-33 | ai:claude
+                _ => {
+                    let origin = probe_branch_on_origin(&self.project_root, branch);
+                    if empty_phase1_lookup_is_definitive_nopr(&origin) {
+                        Phase1PrResolve::NoPr
+                    } else {
+                        let reason = match origin {
+                            BranchOriginProbe::Present => format!(
+                                "no open PR indexed yet for `{branch}` (and the \
+                                 `{spec}` search), but the branch is on origin — \
+                                 likely GitHub eventual-consistency lag after \
+                                 `gh pr create`",
+                                spec = self.spec
+                            ),
+                            _ => format!(
+                                "no open PR found for `{branch}` and `git ls-remote` \
+                                 could not confirm whether the branch is on origin — \
+                                 retrying before concluding no PR exists"
+                            ),
+                        };
+                        Phase1PrResolve::Retry(reason)
+                    }
+                }
             },
             PrLookup::GhMissing => Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::MissingTool,
