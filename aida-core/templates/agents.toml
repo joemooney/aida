@@ -7,6 +7,25 @@
 # Merge order: user defaults are the base; this project file overrides
 # an agent's default_flags list when the same agent appears here.
 
+# Uniform permission-bypass knob (STORY-495).
+#
+# By default AIDA's launchers are *faithful*: they inject no permission flag,
+# so the agent keeps its own native posture (Claude prompts). Set
+# `bypass = true` to turn that off fleet-wide — every supervised launch
+# (`aida agent new`, `aida session new`, `aida session start --launch`,
+# `aida queue work`) then runs with permissions bypassed
+# (Claude: `--permission-mode=bypassPermissions`; no prompts).
+#
+# Resolution precedence (highest first):
+#   1. an explicit per-launch `--permission-mode` flag
+#   2. this `[agents] bypass` knob
+#   3. the agent's native default (faithful)
+# Merge: `~/.aida/agents.toml` is the base; this project file overrides it.
+# Leave it off unless every launch in this project is trusted to run unattended.
+
+# [agents]
+# bypass = false
+
 # [agents.claude]
 # default_flags = []
 
