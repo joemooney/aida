@@ -12,12 +12,12 @@ description: |-
   Fix: clip by chars not bytes — reuse overlay::clip, or 's.id.chars().take(12).collect()'. Same pattern is safe in picker.rs:68 only because parse_list_sessions guarantees hex; harmonising on a char-safe helper is cleanest.
 
   Surfaced in PR-43 review comment: https://github.com/joemooney/aida/pull/43#issuecomment-4464539917
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:45:39.082444287Z
-modified_at: 2026-06-05T16:34:22.618151747Z
+modified_at: 2026-06-05T16:40:43.535173539Z
 req_type: Task
 tags:
 - followup
@@ -33,3 +33,7 @@ comments:
   content: Commit f3798ea85 references this requirement
   created_at: 2026-06-05T16:34:22.618151747Z
   modified_at: 2026-06-05T16:34:22.618151747Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T16:40:43.535173539Z
+  completion_sha: 694aacd9055d3987d8ab940d4490d855ff002923
