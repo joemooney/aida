@@ -1,0 +1,38 @@
+id: 019e962f-37ad-7462-bea7-f0ea3ff40213
+spec_id: TASK-648
+agreed_id: TASK-648
+title: 'Triage-inbox workflow: extend /aida-triage into a draft-inbox clearer + surface inbox depth'
+description: |-
+  Implements the advisor-disposition half of ADR-3 (intake-triage).
+
+  ## Scope
+
+  - Extend the existing `/aida-triage` skill into an inbox-clearer over `aida list --status draft`: walk each draft and offer the three dispositions from ADR-3 as low-friction actions:
+    - **Keep** → set `approved` + `aida queue add --for implementer`.
+    - **Backlog / revisit** → `aida archive` (or leave approved-unqueued).
+    - **Unclear** → set `NeedsAttention` (flag for clarification).
+  - Surface **draft-inbox depth** to the advisor: a count in `aida status` (and statusline) so the inbox reads like a queue to clear.
+
+  ## Acceptance
+
+  - [ ] An advisor can clear the draft inbox in one pass, dispositioning each draft to queue / archive / NeedsAttention.
+  - [ ] `aida status` shows the draft-inbox count (e.g. "Inbox: N untriaged drafts") when > 0.
+  - [ ] Statusline reflects pending-triage depth for advisor sessions.
+  - [ ] No-op / clean when the inbox is empty.
+
+  ## Notes
+  - Pairs with the gate task (which feeds the inbox). Reuses existing archive / NeedsAttention / queue transitions.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T05:08:57.389147772Z
+modified_at: 2026-06-05T05:08:57.389147772Z
+req_type: Task
+tags:
+- aida:triage
+- backlog-hygiene
+- cli-ux
+- from-product
+- intake-triage
+- parent:ADR-3
