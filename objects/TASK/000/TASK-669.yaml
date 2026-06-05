@@ -21,10 +21,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T18:47:09.518683334Z
-modified_at: 2026-06-05T18:47:09.518683334Z
+modified_at: 2026-06-05T18:47:28.001456398Z
 req_type: Task
 tags:
 - batch:gitlab-forge
 - forge-routing
 - from-advisor:STORY-516
 - reliability
+relationships:
+- rel_type: Child
+  target_id: 019e9587-884a-7f70-899d-afc1e0ea9353
+  created_at: 2026-06-05T18:47:28.001447367Z
+  created_by: joe
