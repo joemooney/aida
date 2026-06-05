@@ -7406,6 +7406,30 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
                 changed = true;
             }
+            // TASK-524: typo guard — a `lifecycle:*` tag that isn't a recognized
+            // short-circuit tag silently no-ops at drain time (it's just an
+            // unread string). Warn on any misspelling the user passed via
+            // `--tags` or `--add-tag` so it's caught at edit time, not when a
+            // drain quietly fails to skip the phase. trace:TASK-524 | ai:claude
+            {
+                let passed: Vec<String> = tags
+                    .iter()
+                    .flat_map(|t| t.split(',').map(|s| s.trim().to_string()))
+                    .chain(add_tag.iter().cloned())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                for tag in &passed {
+                    if auto_complete::is_unrecognized_lifecycle_tag(tag) {
+                        eprintln!(
+                            "  {} unrecognized lifecycle tag `{}` — it will NOT short-circuit \
+                             any phase. Valid: {}",
+                            "⚠".yellow().bold(),
+                            tag,
+                            auto_complete::RECOGNIZED_LIFECYCLE_TAGS.join(", ")
+                        );
+                    }
+                }
+            }
             // STORY-333: `--human-only` / `--no-human-only` flip the typed
             // marker that the pickability gate consults. Clap's
             // `conflicts_with` keeps the two flags mutually exclusive, so
