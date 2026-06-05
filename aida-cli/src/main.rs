@@ -5392,6 +5392,24 @@ fn load_dispenser(store_path: &std::path::Path) -> Result<aida_core::models::Dis
     )))
 }
 
+/// TASK-102: human-readable phrase for a relationship edge, shared by
+/// `aida show`'s inline enumeration and the centralized renderer so the two
+/// stay consistent. trace:TASK-102 | ai:claude
+fn relationship_phrase(rt: &aida_core::models::RelationshipType) -> String {
+    use aida_core::models::RelationshipType as R;
+    match rt {
+        R::Parent => "is parent of".to_string(),
+        R::Child => "is child of".to_string(),
+        R::Duplicate => "is duplicate of".to_string(),
+        R::Verifies => "verifies".to_string(),
+        R::VerifiedBy => "is verified by".to_string(),
+        R::References => "references".to_string(),
+        R::BlockedBy => "is blocked by".to_string(),
+        R::Blocks => "blocks".to_string(),
+        R::Custom(name) => name.clone(),
+    }
+}
+
 /// STORY-446: add a BlockedBy edge from `spec_id` to `blocker_id`, plus the
 /// inverse Blocks edge on the blocker — atomically and idempotently. Returns
 /// the blocker's display id for messaging. The pickability gate
@@ -6843,6 +6861,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             card,
             brief,
             full,
+            rels,
         } => {
             // trace:TASK-518 | ai:antigravity
             let mut resolved_id = id.clone();
@@ -6985,12 +7004,51 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             req.tags.iter().cloned().collect::<Vec<_>>().join(", ")
                         );
                     }
+                    // TASK-102: enumerate relationships inline when there are
+                    // few (≤5) or `--rels` is passed; otherwise print the count
+                    // + a pointer to `aida rel list`. Truncate past 10 with a
+                    // "…N more" line so highly-connected specs don't flood the
+                    // view. Each edge shows direction-phrase + target + title.
+                    // trace:TASK-102 | ai:claude
                     if !req.relationships.is_empty() {
-                        println!(
-                            "{}: {} relationship(s)",
-                            "Relations".bold(),
-                            req.relationships.len()
-                        );
+                        let total = req.relationships.len();
+                        const INLINE_THRESHOLD: usize = 5;
+                        const TRUNCATE_AT: usize = 10;
+                        let spec_label = req.spec_id.as_deref().unwrap_or(id);
+                        if *rels || total <= INLINE_THRESHOLD {
+                            println!("{}:", "Relations".bold());
+                            for rel in req.relationships.iter().take(TRUNCATE_AT) {
+                                let phrase = relationship_phrase(&rel.rel_type);
+                                match backend.get_requirement(&rel.target_id)? {
+                                    Some(t) => println!(
+                                        "  ↳ {} {} ({})",
+                                        phrase.cyan(),
+                                        t.spec_id.as_deref().unwrap_or("?").yellow(),
+                                        t.title
+                                    ),
+                                    None => println!(
+                                        "  ↳ {} {} (missing)",
+                                        phrase.cyan(),
+                                        rel.target_id.to_string().dimmed()
+                                    ),
+                                }
+                            }
+                            if total > TRUNCATE_AT {
+                                println!(
+                                    "  … {} more — see `aida rel list {}`",
+                                    total - TRUNCATE_AT,
+                                    spec_label
+                                );
+                            }
+                        } else {
+                            println!(
+                                "{}: {} relationship(s)  (use {} to enumerate, or `aida rel list {}`)",
+                                "Relations".bold(),
+                                total,
+                                "--rels".cyan(),
+                                spec_label
+                            );
+                        }
                     }
                     // STORY-446: Blockers section — one line per BlockedBy edge
                     // with the blocker's status + a pickability glyph (✓ when
@@ -9552,6 +9610,25 @@ mod task_492_brief_tests {
         clear_pending_brief(&brief_b);
         assert!(read_pending_briefs(&pending).is_empty());
         assert!(!pending.exists(), "emptied .pending should be deleted");
+    }
+
+    /// TASK-102: `aida show --rels` (and the `--relations` alias) parse to the
+    /// `rels` flag.
+    #[test]
+    fn show_rels_flag_parses() {
+        for arg in ["--rels", "--relations"] {
+            let cli = Cli::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
+            match cli.command {
+                Command::Show { rels, .. } => assert!(rels, "{arg} should set rels"),
+                other => panic!("unexpected command: {other:?}"),
+            }
+        }
+        // default: off
+        let cli = Cli::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
+        match cli.command {
+            Command::Show { rels, .. } => assert!(!rels),
+            other => panic!("unexpected command: {other:?}"),
+        }
     }
 
     /// STORY-457: the untracked safe-to-remove classifier flags editor scratch,
@@ -12207,21 +12284,9 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
             if let Some(target_req) = target {
                 let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
 
-                // Format the relationship description based on type
-                let description = match &relationship.rel_type {
-                    RelationshipType::Parent => format!("is parent of"),
-                    RelationshipType::Child => format!("is child of"),
-                    RelationshipType::Duplicate => format!("is duplicate of"),
-                    RelationshipType::Verifies => format!("verifies"),
-                    RelationshipType::VerifiedBy => format!("is verified by"),
-                    RelationshipType::References => format!("references"),
-                    // STORY-333: typed `blocked-by` / `blocks` surface as
-                    // human-readable prose so `aida show` reads naturally.
-                    // trace:STORY-333 | ai:claude
-                    RelationshipType::BlockedBy => format!("is blocked by"),
-                    RelationshipType::Blocks => format!("blocks"),
-                    RelationshipType::Custom(name) => format!("{}", name),
-                };
+                // TASK-102: shared phrase mapping (STORY-333 added typed
+                // blocked-by/blocks prose; now via `relationship_phrase`).
+                let description = relationship_phrase(&relationship.rel_type);
 
                 println!(
                     "  {} {} - {}",
