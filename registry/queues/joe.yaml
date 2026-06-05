@@ -1510,3 +1510,10 @@
   note: agent new prompts for child role (reuses TASK-644 picker); default implementer non-interactive; never inherit launcher's role. ADR-2 refinement, operator 2026-06-04.
   added_at: 2026-06-05T04:55:40.173799959Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e962f-146b-7dc0-846b-b14308b537ab
+  position: 360000
+  added_by: joe
+  note: Intake-triage GATE (substrate-as-bouncer). ADR-3, operator 2026-06-04.
+  added_at: 2026-06-05T05:09:16.403876598Z
+  for_role: implementer
