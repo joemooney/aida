@@ -1,0 +1,48 @@
+id: 019e962e-71b5-7153-a856-b8d444389b34
+spec_id: ADR-3
+agreed_id: ADR-3
+title: 'Intake-triage model: captures land draft; approval is advisor-gated (role-or-interactive-human); advisor dispositions the inbox'
+description: |-
+  ## Decision (operator, 2026-06-04)
+
+  New work must pass a triage gate before entering the work queue. Today captures land `approved` and skip triage — which is how the backlog bloated to 281 approved (vs 35 draft). The fix is a role-aware intake gate.
+
+  ## The model
+
+  1. **Draft is the inbox.** Untriaged work lands as `draft` ("filed, not yet agreed" — AIDA's existing agreement gate). The work queue stays clean (only triaged, actionable items).
+  2. **Approval is advisor-GATED, not a default** (substrate-as-bouncer, cf. EPIC-34 "provenance as constraint, not convention"). A soft default won't hold — a confident agent just passes `--status approved`, which is exactly what caused the bloat. So the `draft → approved` transition AND queuing-for-work require **advisor authority**, defined as: `AIDA_SESSION_ROLE=advisor` **OR** an interactive TTY session. Headless / spawned-agent / MCP (non-advisor, non-TTY) filers can ONLY produce `draft`; an explicit `--status approved` from them is refused (or downgraded to draft with a notice).
+     - This blocks the actual bloat source (headless/MCP/auto captures — the 31 from-self-test, drain findings, observations) while keeping the solo path friction-free (a solo human at the keyboard approves without role-switching — honors ADR-2's implementer default).
+  3. **The advisor dispositions the inbox.** Triage a `draft` to one of three:
+     - **Keep** → `approved` + `queue add --for implementer`.
+     - **Backlog / revisit** → `archive` (or leave approved-unqueued).
+     - **Unclear** → `NeedsAttention` (flag for clarification).
+  4. **Surface the inbox.** Draft-inbox depth shown to the advisor (statusline / `aida status`) so it reads like a queue to clear.
+
+  ## Scope
+
+  Multi-agent concern: the gate exists to stop *automation* self-approving. Solo interactive humans approve freely (TTY). Mirrors the role model — the gate activates when more than one thing files work.
+
+  ## Rationale
+
+  - Root-causes the backlog bloat (captures bypass triage). A gate, not a convention, because the bypass is the failure mode.
+  - Reuses existing states (draft/approved/archived/NeedsAttention) + role resolver (ADR-2's effective_role) — minimal new machinery.
+
+  ## Follow-on tasks (children)
+
+  - TASK: advisor-gate the approve transition + queue-for-work (the bouncer; inherently makes non-advisor captures land draft).
+  - TASK: triage-inbox workflow — extend /aida-triage into a draft-inbox clearer (keep/backlog/needs-attention) + surface inbox depth.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T05:08:06.709671233Z
+modified_at: 2026-06-05T05:08:06.709671233Z
+req_type: Decision
+tags:
+- backlog-hygiene
+- from-product
+- from-user-direction
+- intake-triage
+- multi-agent
+- roles
+- substrate-as-bouncer
