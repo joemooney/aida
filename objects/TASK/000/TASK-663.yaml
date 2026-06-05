@@ -8,12 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:56:30.203846760Z
-modified_at: 2026-06-05T15:02:47.815225947Z
+modified_at: 2026-06-05T15:23:08.367777306Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e5aae-4248-7803-a662-d6fdeb535d15
   created_at: 2026-06-05T14:56:35.958026366Z
+comments:
+- id: 019e9861-84cf-7210-a3ad-d54da894ec83
+  author: joe
+  content: Commit 68b1f9f25 references this requirement
+  created_at: 2026-06-05T15:23:08.367777306Z
+  modified_at: 2026-06-05T15:23:08.367777306Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-05T15:02:47.815225947Z
