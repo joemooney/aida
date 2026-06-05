@@ -12510,5 +12510,41 @@ operations:
   timestamp: 2026-06-05T04:57:02.598843152Z
   kind: !SetStatus
     status: Completed
-clock: 1387
+- id: 019e9624-8a99-7ff0-8db9-37b694fa5623
+  target_id: 019e961e-359d-7951-b479-451a36c70d12
+  author: aida
+  node_id: '1'
+  lamport: 1388
+  timestamp: 2026-06-05T04:57:17.721032494Z
+  kind: !SetTitle
+    title: Implementer = read-side default role (unset → implementer everywhere) + surface it at init
+- id: 019e9624-8b4f-7f13-ba47-cf150a24f15d
+  target_id: 019e961e-359d-7951-b479-451a36c70d12
+  author: aida
+  node_id: '1'
+  lamport: 1389
+  timestamp: 2026-06-05T04:57:17.903842702Z
+  kind: !SetDescription
+    description: |-
+      Implements the default-role mechanism + onboarding-surfacing halves of ADR-2 (role onboarding, 2026-06-04). Pairs with TASK-638 (scaffolds the role SET).
+
+      Scope folds in (operator 2026-06-04) the codebase-wide read-side default — the load-bearing piece that makes "aida init can't set the env var" a non-issue: instead of init writing AIDA_SESSION_ROLE (impossible from a normal subprocess), every role READER treats unset as `implementer`.
+
+      ## Acceptance — read-side default (the mechanism)
+
+      - [ ] A single resolver (e.g. `effective_role()` → `AIDA_SESSION_ROLE` else `"implementer"`) is the one place "what role am I" is answered; all readers route through it.
+      - [ ] Statusline shows `implementer` (marked as default, e.g. `implementer*` or `implementer (default)`) when AIDA_SESSION_ROLE is unset — never `(none)`/blank.
+      - [ ] Role-context / launch-context snapshots resolve to implementer when unset.
+      - [ ] Queue routing already defaults to implementer (`unwrap_or("implementer")`) — confirm it flows through the same resolver so the default is uniform, not duplicated.
+      - [ ] The env var is NOT written by init or by the default path — it stays unset; the default is purely read-side. It is written ONLY when the user explicitly `eval "$(aida role enter <role>)"`s a different role.
+
+      ## Acceptance — init surfacing (the onboarding moment)
+
+      - [ ] `aida init` output includes a short, friendly roles block: names the implementer default, one-line "what roles are" (implementer/advisor/reviewer = different hats as the project grows), and the switch command `aida role enter <role>`.
+      - [ ] No undefined-role window: from the first command after init, the user has a clear, visible role identity (implementer) and knows roles exist.
+      - [ ] Does NOT force an interactive eval-enter at init (init isn't eval'd); the default is implicit + surfaced, switching is the user's per-shell act.
+
+      ## Notes
+      - This is the mechanism the rest of the role-onboarding set leans on. Sibling tasks (separate): TASK-646 (`aida agent new` prompts for child role), TASK-644 (role picker), and the later director-evolution progressive-disclosure hint.
+clock: 1389
 node_id: '1'
