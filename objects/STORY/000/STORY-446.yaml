@@ -23,12 +23,12 @@ description: |-
   - [ ] `aida queue work X` continues to refuse pickup when blockers aren't Completed (existing pickability behavior — regression test only).
 
   Composes with EPIC-28 STORY 4 (which uses the pickability gate already; this STORY just makes declaration ergonomic enough that users actually do it).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:05.585129303Z
-modified_at: 2026-06-05T14:13:39.229057186Z
+modified_at: 2026-06-05T14:19:34.976980619Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -45,3 +45,7 @@ comments:
   content: Commit 5a94ae8db references this requirement
   created_at: 2026-06-05T14:13:39.229057186Z
   modified_at: 2026-06-05T14:13:39.229057186Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T14:19:34.976980619Z
+  completion_sha: f0260768f9fc67e23bd473788c0a6fb2ef7cd9e8
