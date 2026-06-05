@@ -335,28 +335,49 @@ pub fn gh_pr_checks_output_is_unregistered(stdout: &str, stderr: &str) -> bool {
 /// order, prefixed by an arrow. Pure so the contract-visible output is
 /// pinned by tests — drift here is what makes the CLI feel inconsistent
 /// (mirrors `pr_rebase::manual_recipe`).
-pub fn format_dry_run_plan(opts: &PrShipOptions, steps: &[ShipStep]) -> String {
+pub fn format_dry_run_plan(
+    opts: &PrShipOptions,
+    steps: &[ShipStep],
+    forge: crate::forge::ForgeKind,
+) -> String {
+    // STORY-508/TASK-651: forge-aware noun + commands so a GitLab dry-run names
+    // glab/MR, not gh/PR. `<N>` placeholder since the plan is pre-resolution.
+    let noun = forge.change_noun();
     let mut out = String::from("aida pr ship — dry-run plan:\n");
     for (idx, step) in steps.iter().enumerate() {
         let n = idx + 1;
         let desc = match step {
             ShipStep::ResolvePr {
                 create_if_needed: true,
-            } => "resolve PR for current branch (create one if none exists)".to_string(),
+            } => format!("resolve {noun} for current branch (create one if none exists)"),
             ShipStep::ResolvePr {
                 create_if_needed: false,
             } => match opts.pr_number {
-                Some(n) => format!("use PR-{n} (explicit)"),
-                None => "resolve PR for current branch".to_string(),
+                Some(n) => format!("use {noun}-{n} (explicit)"),
+                None => format!("resolve {noun} for current branch"),
             },
-            ShipStep::WatchCi => "gh pr checks <N> --watch".to_string(),
+            ShipStep::WatchCi => forge
+                .ci_watch_cmd("<N>")
+                .unwrap_or_else(|| "watch CI to completion".to_string()),
             ShipStep::Merge {
                 delete_branch: true,
-            } => "gh pr merge <N> --squash --delete-branch".to_string(),
+            } => forge
+                .merge_cmd("<N>")
+                .unwrap_or_else(|| format!("merge the {noun} and delete the branch")),
             ShipStep::Merge {
                 delete_branch: false,
-            } => "gh pr merge <N> --squash  (skip --delete-branch: branch protected — sibling worktree or stacked children)"
-                .to_string(),
+            } => {
+                // Name each forge's actual branch-delete flag in the skip note.
+                let flag = match forge {
+                    crate::forge::ForgeKind::GitHub => "--delete-branch",
+                    crate::forge::ForgeKind::GitLab => "--remove-source-branch",
+                    crate::forge::ForgeKind::None => "branch delete",
+                };
+                forge
+                    .change_cmd_hint("merge", "<N> --squash")
+                    .map(|c| format!("{c}  (skip {flag}: branch protected — sibling worktree or stacked children)"))
+                    .unwrap_or_else(|| format!("merge the {noun} (keep the branch: protected — sibling worktree or stacked children)"))
+            }
             ShipStep::Pull => "aida pull (from main worktree)".to_string(),
             ShipStep::EndLease => "aida session end <lease>".to_string(),
         };
@@ -741,7 +762,7 @@ mod tests {
             ShipStep::Pull,
             ShipStep::EndLease,
         ];
-        let plan = format_dry_run_plan(&opts, &steps);
+        let plan = format_dry_run_plan(&opts, &steps, crate::forge::ForgeKind::GitHub);
         assert!(plan.contains("1. resolve PR"), "{plan}");
         assert!(plan.contains("2. gh pr checks"), "{plan}");
         assert!(plan.contains("3. gh pr merge"), "{plan}");
@@ -762,7 +783,7 @@ mod tests {
         let steps = vec![ShipStep::ResolvePr {
             create_if_needed: false,
         }];
-        let plan = format_dry_run_plan(&opts, &steps);
+        let plan = format_dry_run_plan(&opts, &steps, crate::forge::ForgeKind::GitHub);
         assert!(plan.contains("PR-182"), "{plan}");
         assert!(plan.contains("explicit"), "{plan}");
     }
@@ -777,7 +798,7 @@ mod tests {
             complexity: None,
             effort: None,
         };
-        let plan = format_dry_run_plan(&opts, &[]);
+        let plan = format_dry_run_plan(&opts, &[], crate::forge::ForgeKind::GitHub);
         assert!(plan.contains("--no-pull"), "{plan}");
         assert!(plan.contains("--no-cleanup"), "{plan}");
     }
@@ -795,9 +816,44 @@ mod tests {
         let steps = vec![ShipStep::Merge {
             delete_branch: false,
         }];
-        let plan = format_dry_run_plan(&opts, &steps);
+        let plan = format_dry_run_plan(&opts, &steps, crate::forge::ForgeKind::GitHub);
         assert!(plan.contains("skip --delete-branch"), "{plan}");
         assert!(plan.contains("sibling worktree"), "{plan}");
+    }
+
+    // STORY-508/TASK-651: the dry-run plan is forge-aware — a GitLab project
+    // sees glab/MR commands and the glab branch-delete flag, never gh.
+    #[test]
+    fn dry_run_plan_is_forge_aware_for_gitlab() {
+        let opts = PrShipOptions {
+            pr_number: None,
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+            complexity: None,
+            effort: None,
+        };
+        let steps = vec![
+            ShipStep::ResolvePr {
+                create_if_needed: true,
+            },
+            ShipStep::WatchCi,
+            ShipStep::Merge {
+                delete_branch: true,
+            },
+            ShipStep::Merge {
+                delete_branch: false,
+            },
+        ];
+        let plan = format_dry_run_plan(&opts, &steps, crate::forge::ForgeKind::GitLab);
+        assert!(plan.contains("resolve MR for current branch"), "{plan}");
+        assert!(plan.contains("glab ci status"), "{plan}");
+        assert!(
+            plan.contains("glab mr merge <N> --squash --remove-source-branch"),
+            "{plan}"
+        );
+        assert!(plan.contains("skip --remove-source-branch"), "{plan}");
+        assert!(!plan.contains("gh pr"), "{plan}");
     }
 
     #[test]
@@ -810,7 +866,7 @@ mod tests {
             complexity: Some(crate::complexity_calibration::ComplexityLevel::High),
             effort: None,
         };
-        let plan = format_dry_run_plan(&opts, &[]);
+        let plan = format_dry_run_plan(&opts, &[], crate::forge::ForgeKind::GitHub);
         assert!(plan.contains("--complexity high"), "{plan}");
         assert!(plan.contains(".aida/complexity-calibration/"), "{plan}");
     }
@@ -825,7 +881,7 @@ mod tests {
             complexity: None,
             effort: None,
         };
-        let plan = format_dry_run_plan(&opts, &[]);
+        let plan = format_dry_run_plan(&opts, &[], crate::forge::ForgeKind::GitHub);
         assert!(!plan.contains("complexity"), "{plan}");
     }
 
@@ -839,7 +895,7 @@ mod tests {
             complexity: None,
             effort: Some(crate::effort_calibration::EffortBucket::OneDay),
         };
-        let plan = format_dry_run_plan(&opts, &[]);
+        let plan = format_dry_run_plan(&opts, &[], crate::forge::ForgeKind::GitHub);
         assert!(plan.contains("--effort 1d"), "{plan}");
         assert!(plan.contains(".aida/effort-calibration/"), "{plan}");
     }

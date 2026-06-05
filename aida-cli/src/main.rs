@@ -31232,7 +31232,11 @@ fn pr_ship_handler(
 
     // ---- Dry-run: print the resolved plan and exit. ----
     if dry_run {
-        let plan = format_dry_run_plan(&opts, &steps);
+        let plan = format_dry_run_plan(
+            &opts,
+            &steps,
+            crate::forge::resolve_forge_kind(&project_root),
+        );
         print!("{}", plan);
         eprintln!(
             "  → PR target: {}",
