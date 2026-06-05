@@ -18,9 +18,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:37:53.949719227Z
-modified_at: 2026-06-05T20:37:53.949719227Z
+modified_at: 2026-06-05T20:38:22.459100080Z
 req_type: Story
 tags:
 - batch:gitlab-forge
 - forge-routing
 - from-advisor:STORY-516
+relationships:
+- rel_type: Child
+  target_id: 019e9333-7505-78f1-a063-06851ee7f85c
+  created_at: 2026-06-05T20:38:22.459092604Z
+  created_by: joe
