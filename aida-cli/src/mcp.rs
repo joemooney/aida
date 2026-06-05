@@ -1957,10 +1957,15 @@ impl<'a> McpServer<'a> {
         };
         write_atomic(&path, content.as_bytes()).map_err(|e| e.to_string())?;
         match std::fs::rename(&path, &acked_path) {
-            Ok(()) => Ok(format!(
-                "acked: {}",
-                brief_display_path(&self.project_root, &acked_path)
-            )),
+            Ok(()) => {
+                // TASK-502: keep the `.pending` sentinel in sync when an agent
+                // acks through MCP, same as the CLI ack path.
+                crate::clear_pending_brief(&path);
+                Ok(format!(
+                    "acked: {}",
+                    brief_display_path(&self.project_root, &acked_path)
+                ))
+            }
             Err(e) if acked_path.exists() => Ok(format!(
                 "already_acked: {}",
                 brief_display_path(&self.project_root, &acked_path)
