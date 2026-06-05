@@ -283,13 +283,6 @@
   added_at: 2026-05-23T23:41:36.231598351Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019e57d0-4004-7a21-9c44-b45cb4f77332
-  position: 272000
-  added_by: joe
-  note: auto-queued by `aida pr` (019e57ce); covers 1 spec
-  added_at: 2026-05-24T02:28:53.111164509Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e58a2-82b7-7fa2-94fe-5430c22ddc55
   position: 281000
   added_by: joe
