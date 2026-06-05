@@ -26,10 +26,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:17:06.196594607Z
-modified_at: 2026-06-05T20:17:06.196594607Z
+modified_at: 2026-06-05T23:03:22.373433490Z
 req_type: Task
 tags:
 - aida:doctor
+- batch:burndown-1
 - batch:mcp-gate-parity
 - from-self-test
 - integrity
