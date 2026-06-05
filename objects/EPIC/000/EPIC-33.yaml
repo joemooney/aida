@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T13:42:30.862628604Z
-modified_at: 2026-06-01T13:50:39.091110321Z
+modified_at: 2026-06-05T05:41:29.697963885Z
 req_type: Epic
 tags:
 - autonomous-drain
@@ -75,3 +75,27 @@ relationships:
   target_id: 019e8373-3149-72e2-b199-3aac9f854fa7
   created_at: 2026-06-01T13:50:39.091098685Z
   created_by: joe
+comments:
+- id: 019e964d-01e1-7482-b1f3-64e46699b490
+  author: joe
+  content: |-
+    FORENSIC EVIDENCE (2026-06-04) — the orchestrator, not the agents, is the burn-down bottleneck.
+
+    Analyzed all 184 .aida/headless-logs/ session streams (terminal-event forensics):
+      - 110 ended clean `result` success (is_error=false, end_turn)
+      - 71 truncated-on-exit-sentinel = clean completions REAPED by the orchestrator before the child wrote its result event (the designed reap; NOT failures)
+      - 1 genuine mid-work kill; 2 early crash/in-session error
+      → ~98% of implementer/reviewer SESSIONS complete their work.
+
+    Yet drain success is 56% (121/218; 88/97 failures in phases 1+3). Since the sessions overwhelmingly SUCCEED, the ~44% failure is in the orchestrator's POST-SESSION reconciliation — the phase-pass/fail / postcondition judgment that decides, after a successful session, whether the phase "passed." The orchestrator runs the session, the session ships the work, the orchestrator marks the phase failed anyway. Same class as BUG-436 (reviewer refused a Done spec): wrong JUDGMENT about phase state, not wrong work.
+
+    Prime suspects (for the keyboard fix, not unattended drain):
+      - `phase_postcondition_met` (TASK-601 resume core) — does it correctly detect "PR shipped" / "review verdict written" right after the session exits? Timing gap (PR created but gh not yet indexed; branch-name mismatch)?
+      - the preflight guards (BUG-379/436 family) that refuse on Done/leased specs.
+      - exit-sentinel reap racing the postcondition check.
+
+    STRATEGIC REDIRECT: the planned v2 advisor-triage stage (EPIC-30) does NOT address this — sessions don't fail on bad specs, they succeed. Fixing the orchestrator's post-session classification is the single highest-leverage burn-down move: if it recognized the ~98% session successes, drain success would jump 56% → ~90%+ and the backlog would drain unattended. This is EPIC-33's reason to be top priority.
+
+    Caveat: forensics localize the failure to post-session orchestrator logic; pinpointing the exact reconciliation bug needs the orchestrator-side decision records (auto_complete.rs phase classification), not the session logs.
+  created_at: 2026-06-05T05:41:29.697963885Z
+  modified_at: 2026-06-05T05:41:29.697963885Z
