@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:04:23.777103591Z
-modified_at: 2026-06-05T20:07:50.449443549Z
+modified_at: 2026-06-05T20:12:57.420265861Z
 req_type: Bug
 tags:
 - batch:mcp-gate-parity
@@ -41,3 +41,9 @@ tags:
 - mcp
 - multi-agent
 - substrate-as-bouncer
+comments:
+- id: 019e996a-dacc-7cf3-9a4c-3a9b331e4397
+  author: joe
+  content: 'SECOND repro + COMPOUNDING (2026-06-05, ~/work/dummy1, TASK-009). Same bypass: add->draft, update->approved (no gate), implementer update->completed. NOW the compounding is concrete: the store says TASK-008 AND TASK-009 are BOTH Completed, but dummy1 git has ZERO code commits (only ''caf8cda initial commit'' = .gitkeep and a trailer-less ''46e6e52 chore: scaffold AIDA''); hello_world.py is ?? UNTRACKED; and TASK-008''s trace comment was OVERWRITTEN by the TASK-009 rewrite (only trace:TASK-009 survives at line 18). After just two features the spec graph (2 features Completed) and git truth (nothing shipped) have fully diverged -- the exact git-canonical-truth + traceability failure AIDA exists to prevent, occurring inside AIDA because the gate is absent at the MCP surface. Strongest possible argument for closing EPIC-38.'
+  created_at: 2026-06-05T20:12:57.420265861Z
+  modified_at: 2026-06-05T20:12:57.420265861Z
