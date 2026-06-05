@@ -5281,6 +5281,13 @@ pub enum Command {
         #[clap(long = "as-deep-link")]
         as_deep_link: bool,
 
+        // trace:TASK-502 | ai:claude
+        /// Mark the brief urgent: write a `.pending` sentinel so an idle
+        /// agent's `aida status` (and statusline) surfaces it without a
+        /// heartbeat. Omit for FYI-only briefs that shouldn't interrupt.
+        #[clap(long)]
+        notify: bool,
+
         #[clap(subcommand)]
         cmd: Option<BriefCommand>,
     },
