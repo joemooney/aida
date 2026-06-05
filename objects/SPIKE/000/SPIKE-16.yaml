@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:21:43.258647695Z
-modified_at: 2026-06-05T02:00:25.464136204Z
+modified_at: 2026-06-05T02:56:29.894894580Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
@@ -25,3 +25,9 @@ relationships:
   target_id: 019e9582-68dd-7df1-a28d-2db6747b8fd5
   created_at: 2026-06-05T02:00:25.464127348Z
   created_by: joe
+comments:
+- id: 019e95b5-f2c6-7683-a1fc-775af40afff8
+  author: joe
+  content: Commit b008a989a references this requirement
+  created_at: 2026-06-05T02:56:29.894894580Z
+  modified_at: 2026-06-05T02:56:29.894894580Z
