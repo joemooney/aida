@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:53:23.969580556Z
-modified_at: 2026-06-05T07:32:57.188928613Z
+modified_at: 2026-06-05T08:57:36.781792392Z
 req_type: Story
 tags:
 - forge-provider
@@ -48,3 +48,8 @@ comments:
     Re-estimate: **Size M**, best done as a focused fresh-context pass: (a) land the hint-templating helper on ForgeKind with unit tests, then (b) sweep call sites file-by-file. SAFE throughout (cosmetic text, zero blast radius — worst case a hint still says `gh` for a GitLab user, same as today), so it's a good candidate for an unsupervised pass once scoped. Not started this session to avoid a sprawling/incomplete sweep at the tail of a deep context.
   created_at: 2026-06-05T07:32:57.188928613Z
   modified_at: 2026-06-05T07:32:57.188928613Z
+- id: 019e9700-8f0d-7590-a8fe-af87d50ec6f7
+  author: joe
+  content: 'COMPLETE (2026-06-05). All four hint surfaces converted to forge-aware output via children TASK-650/652/653/654 + the sweep verification (TASK-651): queue-drained & session-end hints, cleanup-report open-changes section, orchestrator per-phase recovery hints, and the pr-ship dry-run plan. Infrastructure landed on ForgeKind: change_noun(), change_cmd_hint(), the per-forge command vocabulary (ci_watch_cmd/ci_view_cmd/merge_cmd/create_cmd/view_cmd), and cli_install_hint() — all unit-tested with GitLab + pure-git assertions; GitHub output preserved byte-for-byte. Acceptance met: no actionable user-facing hint names a forge CLI the active provider doesn''t use (verified by an empty actionable-hint grep across all candidate files). Residual gh mentions are clap --help descriptions of internal mechanics + invocation-error diagnostics that accurately report the still-GitHub Command::new invocations; those convert with the slice-1 invocation migration (EPIC-35 provider task #24), not here.'
+  created_at: 2026-06-05T08:57:36.781792392Z
+  modified_at: 2026-06-05T08:57:36.781792392Z
