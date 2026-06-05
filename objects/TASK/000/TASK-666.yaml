@@ -1,0 +1,29 @@
+id: 019e9891-6c29-7d22-96c5-dfc4d9dd6be3
+spec_id: TASK-666
+agreed_id: TASK-666
+title: 'STORY-457 persistence slice: .aida/last-status.toml + untracked-history.toml (recent-vs-stale + unblocks TASK-662 delta)'
+description: |-
+  TASK-660 shipped the working-tree section (staged/modified/untracked-safe/other) but NOT the recent-vs-stale time distinction, which STORY-457 specifies needs a persistence layer. Ship that layer.
+
+  ## Acceptance
+  - `.aida/last-status.toml` records the timestamp of the previous `aida status` run (RFC3339). Written every run (best-effort; no-op when `.aida/` absent). Readable via a helper so TASK-662's delta-since-last-run can consume it.
+  - `.aida/untracked-history.toml` records first-observed timestamp per untracked path. Each run: upsert new paths (first-observed = now), prune paths no longer untracked, persist.
+  - Working-tree section classifies non-cruft untracked into recent (<1h since first-observed) vs stale (≥1d) vs mid, per the STORY-457 heuristic.
+  - Both files are gitignored by the existing deny-by-default `.aida/*` rule (no .gitignore change).
+  - Best-effort I/O: failures degrade gracefully (everything reads as first-seen-now); never break `aida status`.
+  - Unit tests: untracked-history upsert+prune round-trip; last-status read/write round-trip.
+
+  ## Out of scope
+  - TASK-662's actual delta-since-last-run rendering (this only lays the readable foundation).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T16:15:27.785933092Z
+modified_at: 2026-06-05T16:15:27.785933092Z
+req_type: Task
+tags:
+- aida:status
+- batch:status-surfaces
+- from-advisor:STORY-457
+- story-385-followup
