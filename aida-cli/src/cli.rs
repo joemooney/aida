@@ -2821,11 +2821,13 @@ pub enum QueueCommand {
         // trace:TASK-280 | ai:claude
         #[clap(long, visible_alias = "to-back")]
         bottom: bool,
-        /// Move to an absolute 1-indexed slot, counting among the live
-        /// items `aida queue list` shows — `--to 1` is the front, `--to
-        /// 3` the third slot. An N past the end of the queue clamps to
-        /// the last slot rather than erroring.
-        // trace:TASK-280 | ai:claude
+        /// Move to an absolute 1-indexed slot among this user's live
+        /// (non-terminal) queue entries — `--to 1` is the front, `--to 3`
+        /// the third slot. An N past the end clamps to the last slot rather
+        /// than erroring. These match a bare `aida queue list`; a
+        /// role/scope-filtered list shows a subset, so the visible slot may
+        /// differ there — prefer `--to-front`/`--to-back` under a role filter.
+        // trace:TASK-280 | ai:claude — trace:TASK-317 (soften "same as queue list")
         #[clap(long, value_name = "N", conflicts_with_all = ["top", "bottom", "before", "after"])]
         to: Option<usize>,
         /// Move before this requirement ID
