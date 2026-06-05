@@ -9683,6 +9683,98 @@ mod task_492_brief_tests {
         }
     }
 
+    /// TASK-666 (STORY-457): the untracked-history reconcile core upserts new
+    /// paths with first-observed=now and prunes paths no longer untracked,
+    /// preserving the original timestamp of paths that persist.
+    #[test]
+    fn untracked_history_upsert_and_prune() {
+        use super::reconcile_untracked_map;
+        use std::collections::HashMap;
+        let now = chrono::Utc::now();
+        let older = (now - chrono::Duration::days(2)).to_rfc3339();
+        let mut stored: HashMap<String, String> = HashMap::new();
+        stored.insert("kept.md".to_string(), older.clone());
+        stored.insert("gone.md".to_string(), older.clone());
+
+        let current = vec!["kept.md".to_string(), "fresh.md".to_string()];
+        let merged = reconcile_untracked_map(stored, &current, now);
+
+        // Pruned: no longer untracked.
+        assert!(!merged.contains_key("gone.md"));
+        // Kept: original (older) timestamp preserved, not reset to now.
+        assert_eq!(
+            merged.get("kept.md").map(String::as_str),
+            Some(older.as_str())
+        );
+        // New: first-observed = now.
+        assert_eq!(
+            merged.get("fresh.md").map(String::as_str),
+            Some(now.to_rfc3339().as_str())
+        );
+        assert_eq!(merged.len(), 2);
+    }
+
+    /// TASK-666 (STORY-457): age classification buckets first-observed times into
+    /// recent (<1h) / mid / stale (≥1d); a missing first-seen reads as recent.
+    #[test]
+    fn untracked_age_classification() {
+        use super::{classify_untracked_age, UntrackedAge};
+        let now = chrono::Utc::now();
+        assert_eq!(classify_untracked_age(None, now), UntrackedAge::Recent);
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::minutes(30)), now),
+            UntrackedAge::Recent
+        );
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::hours(5)), now),
+            UntrackedAge::Mid
+        );
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::days(3)), now),
+            UntrackedAge::Stale
+        );
+        // Exactly 1h is no longer "recent"; exactly 1d is "stale".
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::hours(1)), now),
+            UntrackedAge::Mid
+        );
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::days(1)), now),
+            UntrackedAge::Stale
+        );
+    }
+
+    /// TASK-666 (STORY-457): last-status timestamp round-trips through
+    /// `.aida/last-status.toml`, and is absent (None) before the first write.
+    #[test]
+    fn last_status_at_round_trip() {
+        use super::{read_last_status_at, write_last_status_at};
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+
+        // No file yet → None.
+        assert!(read_last_status_at(root).is_none());
+
+        let now = chrono::Utc::now();
+        write_last_status_at(root, now);
+        let read = read_last_status_at(root).expect("recorded timestamp");
+        // RFC3339 round-trip is second-or-finer exact; compare at second precision.
+        assert_eq!(read.timestamp(), now.timestamp());
+    }
+
+    /// TASK-666 (STORY-457): `write_last_status_at` is a no-op when `.aida/` is
+    /// absent (uninitialized project) — never creates state or panics.
+    #[test]
+    fn last_status_at_noop_without_aida_dir() {
+        use super::{read_last_status_at, write_last_status_at};
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        write_last_status_at(root, chrono::Utc::now());
+        assert!(!root.join(".aida").exists());
+        assert!(read_last_status_at(root).is_none());
+    }
+
     /// STORY-446: `--blocked-by` (repeatable) + the `--depends-on` alias parse
     /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
     #[test]
@@ -27572,6 +27664,126 @@ fn print_status_findings_section(backend: &aida_core::CachedGitBackend) {
 /// Silent when the tree is clean. (The mtime recent-vs-stale split + the
 /// content-matches-HEAD heuristic from the spec are a follow-up refinement.)
 /// trace:STORY-457 | ai:claude
+/// STORY-457 persistence: per-clone status-run state under `.aida/`, gitignored
+/// by the deny-by-default `.aida/*` rule (no .gitignore change needed). Two
+/// files drive the recent-vs-stale untracked heuristic and TASK-662's
+/// delta-since-last-run:
+///   - `last-status.toml`: timestamp of the previous `aida status` run.
+///   - `untracked-history.toml`: first-observed timestamp per untracked path.
+/// All I/O is best-effort: failures degrade to an empty / in-memory view
+/// (everything reads as first-seen-now) and never break `aida status`.
+/// trace:STORY-457 | ai:claude
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct LastStatusRecord {
+    last_status_at: Option<String>,
+}
+
+fn status_last_path(root: &std::path::Path) -> std::path::PathBuf {
+    root.join(".aida").join("last-status.toml")
+}
+
+fn status_untracked_history_path(root: &std::path::Path) -> std::path::PathBuf {
+    root.join(".aida").join("untracked-history.toml")
+}
+
+/// Read the previous `aida status` run timestamp, if one was recorded.
+/// Consumed by the recent-vs-stale heuristic and (later) TASK-662's delta.
+/// trace:STORY-457 | ai:claude
+fn read_last_status_at(root: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let txt = std::fs::read_to_string(status_last_path(root)).ok()?;
+    let rec: LastStatusRecord = toml::from_str(&txt).ok()?;
+    rec.last_status_at
+        .as_deref()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+/// Record `now` as the latest `aida status` run time (best-effort; no-op when
+/// `.aida/` is absent, i.e. not an initialized project). trace:STORY-457
+fn write_last_status_at(root: &std::path::Path, now: chrono::DateTime<chrono::Utc>) {
+    if !root.join(".aida").is_dir() {
+        return;
+    }
+    let rec = LastStatusRecord {
+        last_status_at: Some(now.to_rfc3339()),
+    };
+    if let Ok(txt) = toml::to_string(&rec) {
+        let _ = std::fs::write(status_last_path(root), txt);
+    }
+}
+
+/// Load → upsert (first-observed = `now` for new paths) → prune (drop paths no
+/// longer untracked) → persist the untracked-history map, returning the
+/// first-observed timestamp for each currently-untracked path. Pure-data core
+/// is `reconcile_untracked_map` (unit-tested); this wrapper does the I/O.
+/// trace:STORY-457 | ai:claude
+fn reconcile_untracked_history(
+    root: &std::path::Path,
+    current: &[String],
+    now: chrono::DateTime<chrono::Utc>,
+) -> std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> {
+    let path = status_untracked_history_path(root);
+    let stored: std::collections::HashMap<String, String> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| toml::from_str(&t).ok())
+        .unwrap_or_default();
+    let merged = reconcile_untracked_map(stored, current, now);
+    if root.join(".aida").is_dir() {
+        if let Ok(txt) = toml::to_string(&merged) {
+            let _ = std::fs::write(&path, txt);
+        }
+    }
+    merged
+        .into_iter()
+        .filter_map(|(p, ts)| {
+            chrono::DateTime::parse_from_rfc3339(&ts)
+                .ok()
+                .map(|dt| (p, dt.with_timezone(&chrono::Utc)))
+        })
+        .collect()
+}
+
+/// Pure core of `reconcile_untracked_history`: upsert new paths with
+/// first-observed = `now`, prune entries no longer untracked. RFC3339 strings
+/// in/out so it's trivially serializable + testable. trace:STORY-457 | ai:claude
+fn reconcile_untracked_map(
+    mut stored: std::collections::HashMap<String, String>,
+    current: &[String],
+    now: chrono::DateTime<chrono::Utc>,
+) -> std::collections::HashMap<String, String> {
+    let cur: std::collections::HashSet<&str> = current.iter().map(|s| s.as_str()).collect();
+    stored.retain(|p, _| cur.contains(p.as_str()));
+    for p in current {
+        stored.entry(p.clone()).or_insert_with(|| now.to_rfc3339());
+    }
+    stored
+}
+
+/// STORY-457 recent-vs-stale classification of an untracked path given its
+/// first-observed time: recent (<1h), stale (≥1d), or mid. trace:STORY-457
+#[derive(Debug, PartialEq, Eq)]
+enum UntrackedAge {
+    Recent,
+    Mid,
+    Stale,
+}
+
+fn classify_untracked_age(
+    first_seen: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> UntrackedAge {
+    // Missing first-seen → just observed → recent.
+    let seen = first_seen.unwrap_or(now);
+    let age = now.signed_duration_since(seen);
+    if age < chrono::Duration::hours(1) {
+        UntrackedAge::Recent
+    } else if age >= chrono::Duration::days(1) {
+        UntrackedAge::Stale
+    } else {
+        UntrackedAge::Mid
+    }
+}
+
 fn print_status_working_tree_section(root: &std::path::Path) {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -27615,6 +27827,19 @@ fn print_status_working_tree_section(root: &std::path::Path) {
         }
     }
 
+    // STORY-457 persistence: record this run's timestamp + first-observation
+    // history BEFORE the clean-tree early-return, so the recent-vs-stale clock
+    // advances on every `aida status` (and TASK-662's delta has a baseline)
+    // regardless of whether the tree is dirty. trace:STORY-457 | ai:claude
+    let now = chrono::Utc::now();
+    let all_untracked: Vec<String> = untracked_safe
+        .iter()
+        .chain(untracked_other.iter())
+        .cloned()
+        .collect();
+    let first_seen = reconcile_untracked_history(root, &all_untracked, now);
+    write_last_status_at(root, now);
+
     if staged == 0 && modified.is_empty() && untracked_safe.is_empty() && untracked_other.is_empty()
     {
         return;
@@ -27628,6 +27853,27 @@ fn print_status_working_tree_section(root: &std::path::Path) {
             .collect::<Vec<_>>()
             .join(", ")
     };
+    let preview_refs = |paths: &[&String]| {
+        paths
+            .iter()
+            .take(3)
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    // STORY-457: split non-cruft untracked into recent (<1h) / mid / stale (≥1d)
+    // by first-observed age so long-lingering files stand out from fresh ones.
+    let mut untracked_recent: Vec<&String> = Vec::new();
+    let mut untracked_mid: Vec<&String> = Vec::new();
+    let mut untracked_stale: Vec<&String> = Vec::new();
+    for p in &untracked_other {
+        match classify_untracked_age(first_seen.get(p).copied(), now) {
+            UntrackedAge::Recent => untracked_recent.push(p),
+            UntrackedAge::Mid => untracked_mid.push(p),
+            UntrackedAge::Stale => untracked_stale.push(p),
+        }
+    }
 
     println!("{}", "─── Working tree ───".bold());
     if staged > 0 {
@@ -27646,13 +27892,35 @@ fn print_status_working_tree_section(root: &std::path::Path) {
             if modified.len() > 3 { ", …" } else { "" }
         );
     }
-    if !untracked_other.is_empty() {
+    if !untracked_recent.is_empty() {
+        println!(
+            "  {} {} untracked — recent (<1h) — {}{}  (new)",
+            "?".cyan(),
+            untracked_recent.len(),
+            preview_refs(&untracked_recent),
+            if untracked_recent.len() > 3 {
+                ", …"
+            } else {
+                ""
+            }
+        );
+    }
+    if !untracked_mid.is_empty() {
         println!(
             "  {} {} untracked — {}{}  (commit or remove)",
             "?".cyan(),
-            untracked_other.len(),
-            preview(&untracked_other),
-            if untracked_other.len() > 3 {
+            untracked_mid.len(),
+            preview_refs(&untracked_mid),
+            if untracked_mid.len() > 3 { ", …" } else { "" }
+        );
+    }
+    if !untracked_stale.is_empty() {
+        println!(
+            "  {} {} untracked — stale (≥1d) — {}{}  (commit or remove)",
+            "?".yellow(),
+            untracked_stale.len(),
+            preview_refs(&untracked_stale),
+            if untracked_stale.len() > 3 {
                 ", …"
             } else {
                 ""
