@@ -1,0 +1,32 @@
+id: 019e9865-29d2-7842-b538-0cb2d20b4b0a
+spec_id: STORY-518
+agreed_id: STORY-518
+title: 'Panel-review: repeatable adversarial multi-agent analysis capability (Workflow saved-script + provenance + cross-vendor reproduce)'
+description: |-
+  Make the ECC analysis pattern (SPIKE-50) a repeatable, scriptable capability instead of a hand-run one-off. Composes already-studied surfaces: SPIKE-14 (dynamic workflows / saved-script lane), SPIKE-29 (agent teams), SPIKE-44/46 (multi-vendor substrate access). The pattern: N diverse independent analyses -> a claims ledger -> ADVERSARIAL REPRODUCTION (refute + re-run, not nod) -> reconcile with per-claim provenance.
+
+  The five load-bearing invariants (the spec; the orchestrator is plumbing): (1) method/vendor DIVERSITY (not N copies of one model on one source); (2) adversarial framing (reviewer refutes, self-grades); (3) forced reproduction (falsifiable claims + verify commands, agree-is-not-an-option); (4) immutable record + sibling rebuttal; (5) provenance labeling (verified-by-me vs delegated). Anti-pattern to design against: 'spawn N and average' = consensus not truth (our ECC run: all 5 artifacts shared the wrong 207k/50k/182k star number; averaging would enshrine it, reproduction caught it).
+
+  Substrate choice: Workflow (saved-script lane) is the deterministic/replayable engine; Agent Teams is the optional LIVE-debate front-end (experimental, non-deterministic); AIDA adds the layer neither has -- durable dated artifacts anchored to a SPIKE, per-claim provenance, and cross-vendor reproduce routed via the brief surface (a DIFFERENT vendor verifies, true independence). Same lesson as the ECC verdict: orchestration is commoditized (borrow the harness's), substrate-integration is the moat.
+
+  Acceptance:
+  - A runnable Workflow script at .claude/workflows/panel-review.js, parameterized by args {target, question, lenses?, crossVendor?, maxVerify?}, implementing Analyze (parallel blind analysts, schema-forced findings) -> Consolidate (claims ledger) -> Verify (one adversarial reproducer per load-bearing claim, must re-run, self-grades) -> Reconcile (report with per-claim provenance + 'what did we ALL miss?' completeness pass).
+  - Re-running it on a new {target, question} reproduces the loop with no hand-holding.
+  - Disputed/low-confidence claims optionally emit a cross-vendor reproduce brief (aida brief <other-vendor>).
+  - The ECC run (SPIKE-50) is the documented first instance.
+
+  Out of scope (follow-ups, do NOT build here): a /aida-panel-review skill wrapper; templatizing into aida-core/templates/ for scaffolding; the live Agent-Teams front-end; the daemon/control-plane version (that is EPIC-30 territory).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T15:27:07.218907040Z
+modified_at: 2026-06-05T15:27:07.218907040Z
+req_type: Story
+tags:
+- aida:workflow
+- competitive-analysis
+- from:SPIKE-50
+- multi-vendor
+- orchestration
+- workflow
