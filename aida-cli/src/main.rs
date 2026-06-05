@@ -37504,6 +37504,43 @@ reason = "reserved by docs build"
         );
     }
 
+    /// BUG-412: a `(PREFIX-NNN)` literal inside a pasted code snippet in the
+    /// body must NOT be mined as a referenced spec, while a genuine prose/bullet
+    /// reference still is. trace:BUG-412 | ai:claude
+    #[test]
+    fn referenced_specs_skip_code_like_body_lines() {
+        let msg = "feat(x): real work (TASK-1)\n\n\
+            - genuinely references the same area as (TASK-48)\n\
+            enum Status { Ok = (STATUS-200) }\n\
+            let x = compute(CODE-42);\n";
+        let refs = extract_referenced_spec_ids_from_commit(msg);
+        assert!(
+            refs.contains(&"TASK-48".to_string()),
+            "prose ref kept: {refs:?}"
+        );
+        assert!(
+            !refs
+                .iter()
+                .any(|r| r.starts_with("STATUS-") || r == "CODE-42"),
+            "code-snippet literals must be skipped: {refs:?}"
+        );
+    }
+
+    #[test]
+    fn body_line_is_code_like_classifies() {
+        assert!(body_line_is_code_like("enum Status { Ok = (STATUS-200) }"));
+        assert!(body_line_is_code_like("let x = foo();"));
+        assert!(body_line_is_code_like("fn handle() {"));
+        assert!(body_line_is_code_like("    pub struct Foo;"));
+        assert!(body_line_is_code_like("a::b::c"));
+        // Genuine reference lines are NOT code-like.
+        assert!(!body_line_is_code_like(
+            "- references (TASK-48) for context"
+        ));
+        assert!(!body_line_is_code_like("trace:STORY-7"));
+        assert!(!body_line_is_code_like("This touches the (BUG-83) area."));
+    }
+
     /// STORY-67: looks_like_spec_id validates the alpha-DASH-digits
     /// shape used throughout AIDA.
     /// trace:STORY-67 | ai:claude
@@ -62533,6 +62570,34 @@ fn parse_review_story_pr_number(title: &str) -> Option<u64> {
 /// deliver them per AIDA's "one (REQ-ID) trailer in the subject" convention.
 /// IDs already present in the subject are excluded so the two lists are
 /// disjoint. trace:BUG-85 | ai:claude
+/// BUG-412: heuristic — does a commit-body line look like CODE rather than a
+/// prose/trace reference? Used to skip pasted snippets so `(PREFIX-NNN)` literals
+/// inside them aren't mined as bogus "referenced" specs. Conservative: only the
+/// markers that strongly imply code and don't appear in genuine reference lines
+/// (`trace:SPEC-ID`, `(SPEC-ID)` in prose, `- (SPEC-ID) …` bullets).
+/// trace:BUG-412 | ai:claude
+fn body_line_is_code_like(line: &str) -> bool {
+    let t = line.trim();
+    if t.is_empty() {
+        return false;
+    }
+    // Structural code punctuation that prose references don't use.
+    if t.contains('{') || t.contains('}') || t.contains(';') || t.contains("=>") || t.contains("::")
+    {
+        return true;
+    }
+    // An assignment `=` (but not `==`/`!=`/`<=`/`>=` comparisons or `(SPEC-ID)`
+    // prose). A lone `=` surrounded by spaces, or `x =`, signals code.
+    if t.contains(" = ") || t.contains("=(") || t.contains(")=") {
+        return true;
+    }
+    // Leading code keywords.
+    const KW: [&str; 9] = [
+        "fn ", "pub ", "const ", "let ", "enum ", "struct ", "impl ", "use ", "static ",
+    ];
+    KW.iter().any(|k| t.starts_with(k))
+}
+
 pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
     let delivered = extract_spec_ids_from_commit(message);
     let mut lines = message.lines();
@@ -62540,6 +62605,14 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
     let _subject = lines.by_ref().find(|l| !l.trim().is_empty());
     let mut raw: Vec<String> = Vec::new();
     for line in lines {
+        // BUG-412: skip code-like body lines so a `(PREFIX-NNN)` literal inside a
+        // pasted code snippet (e.g. `enum Status { OK = (STATUS-200) }`) isn't
+        // mined as a bogus "referenced" spec on the auto-filed review story.
+        // Genuine reference lines (trace:, prose, bullet lists) don't carry these
+        // code markers. trace:BUG-412 | ai:claude
+        if body_line_is_code_like(line) {
+            continue;
+        }
         push_paren_spec_ids_from_line(line, &mut raw);
     }
     let mut out: Vec<String> = Vec::new();
