@@ -84,7 +84,7 @@ Antigravity also writes per-session brain artifacts under `~/.gemini/antigravity
 
 ## Verify Tool Discovery
 
-The expected tool count is **26**, matching the canonical tools advertised by MCP `tools/list`:
+The expected tool count is **29**, matching the canonical tools advertised by MCP `tools/list`:
 
 - **Spec graph**: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `add_relationship`, `list_features`, `history`.
 - **Punt channel**: `list_punts`, `read_punt`, `post_punt`, `resolve_punt`, `escalate_punt`.
@@ -116,9 +116,9 @@ tests/test_mcp_doc_consistency.sh
 ```
 Expected result:
 ```text
-TEST parse docs/agents/cross-agent-onboarding.md ... ok (26 tools mentioned)
+TEST parse docs/agents/cross-agent-onboarding.md ... ok (29 tools mentioned)
 TEST start aida mcp-serve in scratch project ... ok
-TEST tools/list ... ok (26 tools advertised)
+TEST tools/list ... ok (29 tools advertised)
 TEST doc-vs-MCP consistency ... ok
 PASS doc-vs-MCP consistency
 ```
