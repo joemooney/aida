@@ -67210,10 +67210,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 entries = storage.queue_list(&user_id, true)?;
             }
             // TASK-280: `--to <N>` absolute positioning. The slot counts
-            // among the queue's live (non-terminal) entries — the same
-            // items `aida queue list` numbers — so Completed/Rejected
-            // entries lingering in the queue file don't throw the slot
-            // number off. Only those live entries are renumbered (with a
+            // among the queue's live (non-terminal) entries — the same items a
+            // BARE `aida queue list` numbers (a role/scope-filtered list shows a
+            // subset, so the visible slot can differ — TASK-317) — so
+            // Completed/Rejected entries lingering in the queue file don't throw
+            // the slot number off. Only those live entries are renumbered (with a
             // fresh 1000-gap); terminal entries keep their positions and,
             // being hidden, don't affect the visible order.
             // trace:TASK-280 | ai:claude
@@ -67271,9 +67272,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // TASK-491: `--top` (alias `--to-top`/`--to-front`) on a spec
             // that's already at queue position 1 is a friendly no-op rather
             // than a position-renumber that prints `Moved`. "Position 1" is
-            // measured among live (non-terminal) entries — the same items
-            // `aida queue list` numbers — so a Completed entry lingering in
-            // the YAML file doesn't mask the real head.
+            // measured among live (non-terminal) entries — the same items a
+            // bare `aida queue list` numbers (a filtered list shows a subset —
+            // TASK-317) — so a Completed entry lingering in the YAML file
+            // doesn't mask the real head.
             // trace:TASK-491 | ai:claude
             if *top {
                 let already_first = entries
