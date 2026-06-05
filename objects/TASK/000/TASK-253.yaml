@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:39.019532900Z
-modified_at: 2026-05-15T23:46:39.019532900Z
+modified_at: 2026-06-05T16:23:14.599939114Z
 req_type: Task
 tags:
 - agent-collaboration
 - dev-environment
 - dogfooding
 - mcp
+comments:
+- id: 019e9898-8ba7-7632-bb7a-97018e935b9f
+  author: joe
+  content: Commit 06f8a3d07 references this requirement
+  created_at: 2026-06-05T16:23:14.599939114Z
+  modified_at: 2026-06-05T16:23:14.599939114Z
