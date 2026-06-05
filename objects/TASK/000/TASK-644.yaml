@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T04:34:16.510498786Z
-modified_at: 2026-06-05T04:34:16.510498786Z
+modified_at: 2026-06-05T06:00:16.970051265Z
 req_type: Task
 tags:
 - aida:role:enter
@@ -47,3 +47,9 @@ tags:
 - from-product
 - from-user-direction
 - interactive
+comments:
+- id: 019e965e-354a-7ef3-b57e-67dfdebe1d85
+  author: joe
+  content: Commit 85f07563c references this requirement
+  created_at: 2026-06-05T06:00:16.970051265Z
+  modified_at: 2026-06-05T06:00:16.970051265Z
