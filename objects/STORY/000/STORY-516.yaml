@@ -14,12 +14,12 @@ description: |-
   6. PURE-GIT SHIP/DRAIN: when resolve_forge_kind == None, 'aida pr ship' merges branch->default via PureGitForge (after the squash-commit fix) + push + pull, skipping PR-create/CI-watch/gh-merge; the drain treats ci_status None like lifecycle:no-ci-wait. Additive — GitHub paths byte-identical. End-to-end test like BUG-442 (real repo, pure-git ship merges + completes via (SPEC-ID) trailer).
 
   SAFETY: GitHub behavior byte-for-byte unchanged (provider-routed, GitHub impl preserves current argv). Each op its own PR. Reliability-critical (ship/drain) -> at-keyboard incremental, not blind drain (feedback_reliability_fixes_use_keyboard_not_drain). gh workflow dispatch (1 site) defer to GitHub-only initially (master decision on SPIKE-49).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T02:05:47.978816913Z
-modified_at: 2026-06-05T19:54:32.049360370Z
+modified_at: 2026-06-05T20:20:58.579330906Z
 req_type: Story
 tags:
 - epic-35-slice-1

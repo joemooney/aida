@@ -10,12 +10,12 @@ description: |-
   - NOT in this slice (separate ci sub-slices): the WATCH ops — `gh pr checks --watch` (pr ship step 2 + orchestrator CI watch) and `gh run watch` (--watch-ci stream) — forge models a point-query, not a blocking watch. Also `gh run view`.
 
   Tests: full aida-cli suite green (1615), incl. ci_probe_result_maps_every_ci_probe_state + auto_complete.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:14:46.637172408Z
-modified_at: 2026-06-05T20:15:22.042828293Z
+modified_at: 2026-06-05T20:20:58.579330906Z
 req_type: Task
 tags:
 - batch:gitlab-forge
@@ -32,3 +32,7 @@ comments:
   content: Commit 2303dae72 references this requirement
   created_at: 2026-06-05T20:15:22.042828293Z
   modified_at: 2026-06-05T20:15:22.042828293Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T20:20:58.579330906Z
+  completion_sha: 9c11e5741edb2f782f524657e81bcede3a8f2195
