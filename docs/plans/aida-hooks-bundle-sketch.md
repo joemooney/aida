@@ -4,6 +4,19 @@
 **Status**: DRAFT SKETCH (Pending Master Review)
 **Target Spec**: [SPIKE-41](file:///.aida-store/objects/SPIKE/000/SPIKE-41.yaml)
 
+> **⚠ Verification caveat (master, 2026-06-05):** this sketch references items
+> NOT yet confirmed against primary sources — treat as proposals to validate
+> before implementing:
+> - The **`InstructionsLoaded`** hook event is **unverified** against the
+>   Claude Code hook taxonomy (`docs/agents/session-communication.md` documents
+>   SessionStart/SessionEnd/PreToolUse/PostToolUse/Stop/PreCompact). Re-confirm
+>   it exists before wiring an integration to it.
+> - The commands `aida snapshot`, `aida lease validate`/`check`, and
+>   `aida rules audit`/`verify` **do not exist today** (real surface:
+>   `aida session leases`, `aida rules sync`, internal `state-snapshot`).
+> - The settings.json `{"event","action"}` array shape differs from AIDA's
+>   actual keyed-object hook config (SessionStart/PreToolUse/…).
+
 ---
 
 ## 1. Goal Description
