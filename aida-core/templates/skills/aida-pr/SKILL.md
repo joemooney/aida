@@ -508,15 +508,18 @@ not an acceptable signal, especially on the conclusion surface.
 
 **Templates.** Each shows the State preamble, an optional Deciding-factor
 line, prose lead-in lines, the next-steps table, and a *loud closing
-block* naming the next user-action — print the State preamble as
+block* naming the next user-action — print the State preamble (from
+`aida state-snapshot --spec <SPEC-ID>`, emitted verbatim) as
 fixed-width text, the lead-ins as normal sentences, the table as a real
 GFM markdown table (no surrounding code fence), and the closing block as
 its own visually-distinct stanza:
 
 *Orchestrator mode (`aida orchestrator status` = `orchestrated`) — TASK-286:*
 
-Print the State preamble first (substitute concrete values; omit rows
-genuinely absent, never leave a vague placeholder):
+Print the State preamble first — generate it with `aida state-snapshot
+--spec <SPEC-ID>` (TASK-391) and emit its output verbatim above the table:
+one deterministic command, not seven manual lookups (it labels/omits absent
+rows itself, never a vague placeholder). Example output:
 
 ```
 State:
