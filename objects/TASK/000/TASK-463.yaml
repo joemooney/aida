@@ -21,12 +21,12 @@ description: |-
   ## Origin
 
   User hit the validator rejection 2026-05-22 while committing \`[AI:codex+claude] docs+scripts: ...\` for the substrate-landing PR. Fix was to drop to \`[AI:claude]\` with Codex captured as Co-Authored-By trailer. Pattern will recur as multi-agent dogfooding continues; worth structurally supporting.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T17:54:13.742323958Z
-modified_at: 2026-06-05T03:53:47.828715376Z
+modified_at: 2026-06-05T03:53:49.029289471Z
 req_type: Task
 tags:
 - cli-ux
