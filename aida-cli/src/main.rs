@@ -69397,14 +69397,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
         // trace:TASK-537 | ai:claude
         QueueCommand::Prune {
             orphaned,
+            merged,
             dry_run,
             user,
             r#for,
         } => {
-            if !*orphaned {
+            if !*orphaned && !*merged {
                 anyhow::bail!(
                     "no prune predicate specified — pass `--orphaned` to remove queue \
-                     entries whose backing spec no longer exists"
+                     entries whose backing spec no longer exists, or `--merged` to remove \
+                     auto-queued reviewer entries whose PR has already merged"
                 );
             }
             let user_id = get_user(user);
@@ -69413,21 +69415,73 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let existing_ids: std::collections::HashSet<uuid::Uuid> =
                 store.requirements.iter().map(|r| r.id).collect();
 
-            // Find queue entries whose backing requirement isn't in the store
-            // and (optionally) match the role filter.
-            let orphans: Vec<&aida_core::models::QueueEntry> = entries
-                .iter()
-                .filter(|e| !existing_ids.contains(&e.requirement_id))
-                .filter(|e| match (r#for.as_deref(), e.for_role.as_deref()) {
-                    (None, _) => true,
-                    (Some(want), Some(have)) => want.eq_ignore_ascii_case(have),
-                    (Some(_), None) => false,
-                })
-                .collect();
+            let role_matches = |e: &&aida_core::models::QueueEntry| match (
+                r#for.as_deref(),
+                e.for_role.as_deref(),
+            ) {
+                (None, _) => true,
+                (Some(want), Some(have)) => want.eq_ignore_ascii_case(have),
+                (Some(_), None) => false,
+            };
+
+            // Collect prune targets from whichever predicates were passed,
+            // deduped by requirement id (a row can match more than one).
+            // trace:TASK-593 | ai:claude
+            let mut seen: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+            let mut orphans: Vec<&aida_core::models::QueueEntry> = Vec::new();
+
+            if *orphaned {
+                for e in entries
+                    .iter()
+                    .filter(|e| !existing_ids.contains(&e.requirement_id))
+                    .filter(role_matches)
+                {
+                    if seen.insert(e.requirement_id) {
+                        orphans.push(e);
+                    }
+                }
+            }
+
+            if *merged {
+                // TASK-593: a review row ("Review PR-N: …") whose PR has merged
+                // outside the reviewer's `aida queue done` flow lingers because
+                // its backing spec is often still non-terminal (the orphaned
+                // predicate only catches deleted specs). Match review rows by
+                // title, parse the PR number, and confirm merge state via gh.
+                let by_id: std::collections::HashMap<uuid::Uuid, &aida_core::Requirement> =
+                    store.requirements.iter().map(|r| (r.id, r)).collect();
+                let project_root = find_project_root()?;
+                let mut sink = network_retry::NoopSink;
+                for e in entries.iter().filter(role_matches) {
+                    if seen.contains(&e.requirement_id) {
+                        continue;
+                    }
+                    let Some(req) = by_id.get(&e.requirement_id) else {
+                        continue; // missing spec → that's the --orphaned case
+                    };
+                    let Some(pr) = parse_review_story_pr_number(&req.title) else {
+                        continue; // not an auto-queued review row
+                    };
+                    if pr_is_merged_with_sink(&project_root, pr as u32, &mut sink) == Some(true)
+                        && seen.insert(e.requirement_id)
+                    {
+                        orphans.push(e);
+                    }
+                }
+            }
+
+            // Predicate-neutral noun for the result messages.
+            let noun = if *orphaned && *merged {
+                "stale"
+            } else if *merged {
+                "merged-PR"
+            } else {
+                "orphan"
+            };
 
             if orphans.is_empty() {
                 println!(
-                    "{} No orphan queue entries found{}",
+                    "{} No {noun} queue entries found{}",
                     "✓".green(),
                     if r#for.is_some() {
                         format!(" for role {}", r#for.as_deref().unwrap())
@@ -69438,7 +69492,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             } else {
                 let n = orphans.len();
                 println!(
-                    "{} {} orphan queue entr{} ({})",
+                    "{} {} {noun} queue entr{} ({})",
                     if *dry_run {
                         "ℹ".yellow()
                     } else {
@@ -69475,7 +69529,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         storage.queue_remove(&user_id, &e.requirement_id)?;
                     }
                     println!(
-                        "{} Removed {} orphan queue entr{}",
+                        "{} Removed {} {noun} queue entr{}",
                         "✓".green(),
                         n.to_string().bold(),
                         if n == 1 { "y" } else { "ies" },
