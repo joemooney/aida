@@ -32241,26 +32241,26 @@ fn pr_ship_handler(
         );
     }
 
-    let retry_cfg = crate::network_retry::RetryConfig::load(&main_worktree);
-    let mut stderr_sink = crate::network_retry::StderrSink;
-    let merge_out = crate::network_retry::run_with_retry(
-        &format!("gh pr merge {pr_number}"),
-        &retry_cfg,
-        &mut stderr_sink,
-        || {
-            let mut cmd = std::process::Command::new("gh");
-            let args =
-                pr_ship::merge_args(pr_number, delete_branch, explicit_squash_subject.as_deref());
-            cmd.current_dir(&project_root)
-                .args(args.iter().map(String::as_str));
-            cmd
-        },
-    )
-    .context("could not invoke `gh pr merge`")?;
-    if !merge_out.status.success() {
-        let stderr_text = String::from_utf8_lossy(&merge_out.stderr)
-            .trim()
-            .to_string();
+    // STORY-516: route the merge through the Forge trait instead of an inline
+    // `gh pr merge`. GitHubForge::merge_change reuses the SPEC-410-pinned
+    // `merge_args` (byte-identical argv) and the same network_retry wrapper, so
+    // this is behaviour-preserving on GitHub; a GitLab / pure-git repo now gets
+    // its own provider's merge. The unified contract returns Err (with stderr)
+    // on a failed merge, which we map to the existing activity-log + recovery
+    // hint + bail. trace:STORY-516 | ai:claude
+    let merge_opts = crate::forge::MergeOptions {
+        method: crate::forge::MergeMethod::Squash,
+        squash_subject: explicit_squash_subject.clone(),
+        delete_branch,
+    };
+    let change_ref = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: branch.clone(),
+        base: String::new(),
+    };
+    if let Err(e) = crate::forge::forge_for(&project_root).merge_change(&change_ref, &merge_opts) {
+        let stderr_text = format!("{e:#}");
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
@@ -32270,7 +32270,7 @@ fn pr_ship_handler(
         let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
         eprintln!("{} merge failed: {}", "✗".red().bold(), stderr_text);
         eprintln!("  {}", hint);
-        anyhow::bail!("`gh pr merge` exited {}", merge_out.status);
+        return Err(e.context("`gh pr merge` failed"));
     }
     eprintln!("  {} merged PR-{}", "✓".green(), pr_number);
     log_ship_activity(
