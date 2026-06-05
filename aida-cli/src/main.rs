@@ -44869,6 +44869,31 @@ fn apply_color_mode(mode: &str) {
 /// budget holds even when the orphan store has hundreds of objects.
 /// Returns `None` if the file is missing or unreadable.
 /// trace:FR-1-041 | ai:claude
+/// TASK-648 (ADR-3): non-archived draft count from the cache, read-only and
+/// fast (same SQLite-without-Cache::open pattern as the statusline freshness
+/// probe — no migration, no write lock on the prompt hot path). The advisor's
+/// statusline shows this as the draft-inbox depth to triage. Returns 0 when
+/// the cache is absent or unreadable rather than erroring the prompt.
+fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
+    if !cache_path.exists() {
+        return 0;
+    }
+    let conn = match rusqlite::Connection::open_with_flags(
+        cache_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
+        Ok(c) => c,
+        Err(_) => return 0,
+    };
+    conn.query_row(
+        "SELECT COUNT(*) FROM requirements_cache WHERE archived = 0 AND LOWER(status) = 'draft'",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|n| n.max(0) as usize)
+    .unwrap_or(0)
+}
+
 fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Option<usize> {
     // BUG-89: route through the canonical helper so the statusline depth
     // counts the same queue file `aida queue list` reads from in this
@@ -45249,6 +45274,16 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     }
     if queue_depth > 0 {
         parts.push(format!("q:{}", queue_depth));
+    }
+    // TASK-648 (ADR-3): the advisor seat owns intake triage, so its statusline
+    // surfaces the draft-inbox depth (untriaged drafts to disposition). Only
+    // for the advisor — other roles don't clear this queue — and only when
+    // non-empty, so a clear inbox stays quiet. trace:TASK-648 | ai:claude
+    if effective_role_name == "advisor" {
+        let inbox_depth = read_draft_inbox_depth(&cache_path);
+        if inbox_depth > 0 {
+            parts.push(format!("inbox:{}", inbox_depth).cyan().to_string());
+        }
     }
     // Cache freshness: only surface non-fresh states. Fresh is the boring
     // default; rendering it on every prompt is noise.
@@ -58605,6 +58640,28 @@ fn handle_status_command_distributed(
         print_status_pr_section(&user_ctx, false);
     }
     print_status_queue_section(&user_ctx, false);
+
+    // TASK-648 (ADR-3): surface the draft-inbox depth. Drafts are untriaged
+    // intake awaiting an advisor disposition (keep → queue / backlog → archive
+    // / unclear → needs-attention). Shown only when non-empty so an empty
+    // inbox stays quiet, and reads like a queue to clear. trace:TASK-648
+    let draft_inbox = backend
+        .list_summaries(&aida_core::ListFilter {
+            status: Some("draft".to_string()),
+            ..Default::default()
+        })
+        .map(|v| v.len())
+        .unwrap_or(0);
+    if draft_inbox > 0 {
+        println!(
+            "  {} {} untriaged draft{} — clear with {}",
+            "Inbox:".bold().yellow(),
+            draft_inbox,
+            if draft_inbox == 1 { "" } else { "s" },
+            "/aida-triage".cyan()
+        );
+        println!();
+    }
 
     // TASK-294: a one-line pending-directive summary so the worker control
     // channel has the same visibility as the work queue. Silent when the
