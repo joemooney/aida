@@ -1483,9 +1483,3 @@
   note: auto-queued by `session end` (019e9586); covers 1 spec
   added_at: 2026-06-05T02:06:07.682023778Z
   for_role: reviewer
-- user_id: joe
-  requirement_id: 019e58b7-a4d8-7e90-9ed4-834308da85f2
-  position: 356000
-  added_by: joe
-  added_at: 2026-06-05T03:48:43.855620254Z
-  for_role: implementer
