@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:38:03.402773762Z
-modified_at: 2026-05-28T16:38:03.402773762Z
+modified_at: 2026-06-05T17:07:44.525311741Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -29,3 +29,9 @@ tags:
 - discoverability
 - from-user-friction
 - ux-papercut
+comments:
+- id: 019e98c1-490d-7111-aa24-37fb89e6c58a
+  author: joe
+  content: 'Implementation path (deferred to a keyboard session — touches the drain command''s arg validation): add a bool ''--drain'' to queue work that expands in the handler to auto_complete=Some("full") + no_human=Some("both") + max defaulted to queue size (99 fallback). The composition requirement (''--drain composes with --max / --max-failures / --batch'') needs ''--max'' and ''--max-failures'' — today ''requires = "auto_complete"'' — to ALSO accept ''--drain''. Clean clap idiom is an ArgGroup(''drain_mode'', [auto_complete, drain], multiple) with those flags ''requires = "drain_mode"''. There is currently NO ArgGroup anywhere in cli.rs, so this introduces the first one ON the reliability-critical drain command. Per the recursive-failure-risk discipline (TASK-456, just shipped), validation changes to the drain command''s parsing should land watched, not in an unsupervised loop — a mis-validation would surface at drain invocation. Behavior of the existing --auto-complete drain is unchanged; --drain is pure sugar. Verify with: ''queue work --drain --dry-run'', ''queue work --drain --max-failures 3'', ''queue work --max 3'' (should still error without a drain mode), and --help showing --drain prominently.'
+  created_at: 2026-06-05T17:07:44.525311741Z
+  modified_at: 2026-06-05T17:07:44.525311741Z
