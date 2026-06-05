@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T04:50:22.749375534Z
-modified_at: 2026-06-05T04:57:17.647044154Z
+modified_at: 2026-06-05T06:07:52.924303545Z
 req_type: Task
 tags:
 - aida:init
@@ -42,3 +42,9 @@ relationships:
   target_id: 019e961e-0de0-7c21-a218-63205d82a7ad
   created_at: 2026-06-05T04:50:45.838198796Z
   created_by: joe
+comments:
+- id: 019e9665-2a5c-7113-97fe-42611a22630c
+  author: joe
+  content: Commit 3960e7c94 references this requirement
+  created_at: 2026-06-05T06:07:52.924303545Z
+  modified_at: 2026-06-05T06:07:52.924303545Z
