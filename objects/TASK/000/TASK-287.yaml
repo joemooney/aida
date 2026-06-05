@@ -34,12 +34,12 @@ description: |-
   - TASK-268 (parent audit — fixed the println/eprintln instance + wrote the convention doc)
   - TASK-267, TASK-260, TASK-259 — workflow-hint / UX polish family
   - First-users alpha readiness
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:40.664367503Z
-modified_at: 2026-06-05T15:13:09.633402067Z
+modified_at: 2026-06-05T15:18:34.292953848Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -60,3 +60,7 @@ comments:
   content: Commit 50073273a references this requirement
   created_at: 2026-06-05T15:13:09.633402067Z
   modified_at: 2026-06-05T15:13:09.633402067Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T15:18:34.292953848Z
+  completion_sha: 3a73d7da453d6e6e607377a957c08e93473db29d
