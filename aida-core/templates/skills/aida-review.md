@@ -308,7 +308,7 @@ Branch on the result:
   ✓ PR-<N> already merged — nothing to review. Exiting.
   ```
 
-  If a `Review PR-<N>: ...` story is still in `Approved` or `In Progress`, mention it and suggest the cleanup: `aida edit STORY-<X> --status completed && aida queue remove STORY-<X> --yes`. Then exit. Don't load the prompt, don't walk specs.
+  If a `Review PR-<N>: ...` story is still in `Approved` or `In Progress`, mention it and suggest the cleanup: `aida edit STORY-<X> --status completed && aida queue remove STORY-<X>`. Then exit. Don't load the prompt, don't walk specs.
 
 - **`CLOSED`** (closed without merge) → exit 0 with a different message:
 
@@ -316,7 +316,7 @@ Branch on the result:
   ⓘ PR-<N> closed without merge — no review needed.
     Review story <STORY-X> can be marked completed/rejected as appropriate:
       aida edit <STORY-X> --status rejected
-      aida queue remove <STORY-X> --yes
+      aida queue remove <STORY-X>
   ```
 
   Same rationale — there's nothing actionable here. Exit.
@@ -1003,7 +1003,7 @@ aida queue done <review-story-id> --yes
 
   ```bash
   aida edit <review-story-id> --status rejected
-  aida queue remove <review-story-id> --yes
+  aida queue remove <review-story-id>
   ```
 
 Never silently leave a review story in In Progress when the PR was closed without merge — the next session would see it as still-active work. (BUG-34)
