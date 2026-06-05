@@ -57775,6 +57775,44 @@ fn print_status_json(
             }),
         );
 
+        // TASK-662: machine-readable findings detail (count + per-finding
+        // rows), mirroring the text Findings section — draft-filtered so the
+        // count matches `aida findings list`. trace:TASK-662 | ai:claude
+        {
+            let f_filter = aida_core::ListFilter {
+                status: Some("draft".to_string()),
+                ..Default::default()
+            };
+            if let Ok(summaries) = backend.list_summaries(&f_filter) {
+                let sections = crate::findings::build_findings_view(
+                    &summaries,
+                    &crate::findings::FindingsFilter::default(),
+                );
+                let total = crate::findings::count_findings(&sections);
+                let mut items = Vec::new();
+                for section in &sections {
+                    let source = section.source.label();
+                    for group in &section.groups {
+                        for row in &group.rows {
+                            items.push(json!({
+                                "id": row.display_id,
+                                "source": source,
+                                "origin": group.origin,
+                                "severity": row.severity.label(),
+                                "kind": row.kind,
+                                "recurrence": row.recurrence,
+                                "title": row.title,
+                            }));
+                        }
+                    }
+                }
+                out.insert(
+                    "findings".to_string(),
+                    json!({ "pending": total, "items": items }),
+                );
+            }
+        }
+
         // SPIKE-30: emit the same Claude Code cross-substrate view machine-
         // readable when the operator passes `--json`. Absent when the
         // `claude` binary isn't on PATH — graceful no-op, not an error key.
