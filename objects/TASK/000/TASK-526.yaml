@@ -3,12 +3,12 @@ spec_id: TASK-526
 agreed_id: TASK-526
 title: 'aida list --tag-prefix lifecycle: column for fast-track audit view'
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T06:11:42.928197741Z
-modified_at: 2026-06-05T17:29:40.417168405Z
+modified_at: 2026-06-05T17:29:42.323976721Z
 req_type: Task
 relationships:
 - rel_type: Child
