@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T02:05:47.978816913Z
-modified_at: 2026-06-05T09:06:22.622921786Z
+modified_at: 2026-06-05T18:48:12.294595700Z
 req_type: Story
 tags:
 - epic-35-slice-1
@@ -43,6 +43,11 @@ comments:
   content: 'REOPENED 2026-06-05 (advisor loop, verify-first): this was mis-bumped to Completed by PR-483''s trailer, but PR-483/481/480 landed only the PREP — the MergeOptions trait extension + the PureGitForge squash-commit fix + a flaky-test fix. Plan item #2 (the actual call-site routing) did NOT land. Verified: forge.merge_change() has exactly ONE caller and it''s a unit test (forge.rs ~1399); the real merge path (pr_ship.rs ~285/701, builds raw ["pr","merge","--squash","--delete-branch"] argv) and the orchestrator merge still invoke gh directly. Same for gh pr view / gh run / gh pr create — none route through the trait. NET: the Forge abstraction + GitHubForge (real) + PureGitForge (real) + GitLabForge (status/ci stubbed for slice 3/4) are all PLUMBED, but nothing is WIRED — so GitLab/pure-git do NOT actually drive the lifecycle yet despite the foundation being in place. Matches feedback_commit_trailer_completes_the_spec: prep-work commits trailered the umbrella story. The remaining routing is reliability-critical (merge/ship/drain) and this spec''s own SAFETY note says at-keyboard-incremental, not blind drain — so it was deliberately NOT done in the unsupervised overnight loop. Pick up at the keyboard, per-op in SPIKE-49 order (merge first), each op its own PR, GitHub argv byte-identical.'
   created_at: 2026-06-05T09:06:22.622921786Z
   modified_at: 2026-06-05T09:06:22.622921786Z
+- id: 019e991d-4306-7d40-bd4a-c3dc913215ce
+  author: joe
+  content: Commit 520f566bc references this requirement
+  created_at: 2026-06-05T18:48:12.294595700Z
+  modified_at: 2026-06-05T18:48:12.294595700Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-05T06:01:01.551505677Z
