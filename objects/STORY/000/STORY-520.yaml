@@ -1,0 +1,55 @@
+id: 019e98db-d480-7e51-95b6-f9b1fe14a006
+spec_id: STORY-520
+agreed_id: STORY-520
+title: 'Integrator role + producer/consumer drain split: parallel implementers produce PRs, a single integrator serializes phases 2-6 (consumes the Done→open-PR signal)'
+description: |-
+  ## Idea (operator, 2026-06-05)
+
+  Make `integrator` a first-class role: a single loop that watches for open PRs (the "ready for integration" set) and drives the back-end phases on each in turn — decoupling PR PRODUCTION (implementers, parallel) from PR INTEGRATION (one integrator, serial). The optional division of labor that makes parallel activity safe.
+
+  ## Why it's the right concurrency model
+
+  Roles map to resource contention:
+  - implementer / planner → isolated worktree/scope (no shared resource) → PARALLEL safe.
+  - integrator → `main` (merge order is a SHARED, serial resource) → SINGULAR (one loop, in turn).
+
+  Parallel `--auto-complete` breaks today because N orchestrators all merge into one `main` (contention, merge races — BUG-431). The producer/consumer split removes that: implementers never merge; a single integrator serializes merges. Same "singular authority over a shared resource" principle as the single disposing advisor (ADR-3 / TASK-661) — the integrator is the merge-authority counterpart.
+
+  ## Mechanism (mostly specced)
+
+  The integrator = a loop around TASK-405 (PR-only invocation: drive phases 2/3-6 on an externally-produced PR). The new parts: the `integrator` role + the watch-loop + the "ready for integration" query (specs in Done with an open PR).
+
+  ## Communication protocol = the SUBSTRATE, not a message bus
+
+  The implementer→integrator handoff is a STATE TRANSITION (spec → Done) + an ARTIFACT (open PR), both substrate-resident. The integrator polls for "Done + open PR" — no messaging needed; the substrate state machine IS the protocol (the AIDA thesis). AIDA's mailbox (STORY-493) stays for OUT-OF-BAND messages (heads-ups, escalations, questions) — not the structured pipeline handoff. Three layers, all already present: substrate state (handoff) + leases (no overlap) + mailbox (out-of-band). Claude Code's mailbox (within-session/ephemeral) is NOT needed here — this pipeline is cross-session/durable, which is AIDA's substrate's job.
+
+  ## Synthesis with BUG-444
+
+  The integrator is where the PR-detection/merge logic runs — so BUG-444 (the phase-1 NoPr eventual-consistency race) becomes a SINGLE-LOCUS fix: one reliable serial integration loop, not the logic duplicated across N parallel orchestrators.
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] `integrator` is a first-class role (taxonomy, scaffold, queue routing, statusline).
+  - [ ] An integrator loop watches the ready-for-integration set (Done specs with open PRs) and drives TASK-405's phase-2-6 on each, in turn, serially (never two merges concurrent).
+  - [ ] Implementers (parallel, leased to scopes) produce PRs + set Done; they never run phases 2-6.
+  - [ ] The handoff is a substrate query (Done + open PR), not a message; leases prevent two integrators.
+  - [ ] Single-integrator invariant (one merge authority over `main`) — reuse the disposition/triage-lease pattern (TASK-661) for the integrator over the `main` scope.
+
+  ## Relationships
+  - Builds on TASK-405 (PR-only mechanism). BUG-444 lives in the integrator (single-locus). Sibling parallelism: STORY-519 (parallel planning), parallel implementers. Concurrency principle: ADR-3 / TASK-661 (singular authority over a shared resource). Out-of-band comms: STORY-493 (mailbox). Loop container: EPIC-30.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T17:36:44.160363907Z
+modified_at: 2026-06-05T17:36:44.160363907Z
+req_type: Story
+tags:
+- drain
+- from-product
+- from-user-direction
+- integrator-role
+- parallel-pipelining
+- parent:TASK-405
+- producer-consumer
+- roles
