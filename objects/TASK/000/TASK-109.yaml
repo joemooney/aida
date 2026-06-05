@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:07:55.136477775Z
-modified_at: 2026-05-13T06:07:55.136477775Z
+modified_at: 2026-06-05T17:12:12.814909892Z
 req_type: Task
 tags:
 - convention
@@ -19,3 +19,9 @@ relationships:
 - rel_type: Child
   target_id: 019e1ff2-4f0c-7501-b5fc-098cbcc7edd8
   created_at: 2026-05-13T06:07:57.475859931Z
+comments:
+- id: 019e98c5-610e-7891-abb2-f527d68c4b50
+  author: joe
+  content: Commit 9eafd7382 references this requirement
+  created_at: 2026-06-05T17:12:12.814909892Z
+  modified_at: 2026-06-05T17:12:12.814909892Z
