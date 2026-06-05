@@ -1,0 +1,27 @@
+id: 019e9935-64c3-7d52-a0f9-554c357af298
+spec_id: BUG-446
+agreed_id: BUG-446
+title: aida init has no guard against initializing over a workspace-of-projects — silently git-inits a tree of nested .git repos and roots the store there
+description: |-
+  REPRO / EVIDENCE (2026-06-05, /home/joe/ai on this machine): aida init was run at the workspace root /home/joe/ai -- a directory with 87 entries and 15+ nested git repos (the aida repo itself, dummy2, wordy, ditm, ai-provenance, several aida-demo-* projects, ...). init proceeded with NO warning: created /home/joe/ai/.git (initial commit = just .gitkeep), .aida/, .aida-store/ (orphan store), and the scaffolded files -- capturing the ENTIRE workspace as 87 untracked entries (including nested repos that would become gitlinks) and rooting the orphan store at the workspace level.
+
+  The user then created an empty subdir dummy1 intending it as "the new project". Because dummy1 has no .git/.aida of its own, project-root resolution climbs UP to /home/joe/ai, so every aida command from dummy1 (queue list/work, store reads) operates on the workspace-wide init. This is the "odd state" the user reported.
+
+  init's own file-writing was correct (the .gitignore it wrote is properly scoped). The bug is the MISSING GUARD: a brand-new-project "aida init" over a non-empty directory that contains nested .git repositories (or is clearly a workspace-of-projects) should WARN and require confirmation / --force rather than silently git-init the whole tree and seed an orphan store at that level.
+
+  Suggested detection (triage, not a spec): refuse-by-default when the target contains >=1 nested .git below it (excluding the target's own), or an unusually high subdir/entry count; print guidance to init inside an actual project subdir instead.
+
+  NOTE (out of scope for this bug): recovery from the current state is destructive -- remove /home/joe/ai/.git + .aida + .aida-store + the init-written files (.gitignore, .mcp.json, AGENTS.md, CLAUDE.md, .codex/, etc.) + the /home/joe/ai-task-007 worktree, after ending the live session/lease -- and is left for the operator to decide; not done here.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T19:14:33.794990413Z
+modified_at: 2026-06-05T19:14:33.794990413Z
+req_type: Bug
+tags:
+- aida:init
+- footgun
+- from-self-test
+- guard
+- project-root
