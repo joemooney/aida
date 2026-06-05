@@ -53,6 +53,11 @@ pub(crate) struct CleanupReport {
     /// longer exists. Pure cleanup — covered by
     /// `aida session prune --orphans`.
     pub orphan_project_dirs: Vec<OrphanProjectDirItem>,
+    /// STORY-508/TASK-651: the project's active forge, so the open-PR hint
+    /// names the right CLI (gh/glab) or none (pure-git). `None` means "not
+    /// resolved" (e.g. a `default()`-built report in a test) — rendered as
+    /// GitHub for back-compat. Set by `collect_cleanup_report`.
+    pub forge_kind: Option<crate::forge::ForgeKind>,
 }
 
 /// A worktree with uncommitted modifications. Surfaces the path + lease
@@ -357,7 +362,7 @@ impl CleanupReport {
         render_sticky_in_progress(&self.sticky_in_progress, cap, &mut w)?;
         render_branches_ahead(&self.branches_ahead_no_pr, cap, &mut w)?;
         render_missed_auto_bump(&self.missed_auto_bump, cap, &mut w)?;
-        render_open_prs(&self.open_prs, cap, &mut w)?;
+        render_open_prs(&self.open_prs, self.forge_kind, cap, &mut w)?;
         render_dormant_leases(&self.dormant_leases, cap, &mut w)?;
         render_stale_reviewer_leases(&self.stale_reviewer_leases, cap, &mut w)?;
         render_orphan_project_dirs(&self.orphan_project_dirs, cap, &mut w)?;
@@ -570,14 +575,24 @@ fn render_missed_auto_bump(
     Ok(())
 }
 
-fn render_open_prs(items: &[OpenPrItem], cap: usize, w: &mut impl Write) -> std::io::Result<()> {
+fn render_open_prs(
+    items: &[OpenPrItem],
+    forge_kind: Option<crate::forge::ForgeKind>,
+    cap: usize,
+    w: &mut impl Write,
+) -> std::io::Result<()> {
     if items.is_empty() {
         return Ok(());
     }
+    // STORY-508/TASK-651: forge-aware noun + command chain. Unresolved (test
+    // default()) renders as GitHub for back-compat.
+    let kind = forge_kind.unwrap_or(crate::forge::ForgeKind::GitHub);
+    let noun = kind.change_noun();
     writeln!(
         w,
-        "{} Open PRs awaiting review/merge ({}):",
+        "{} Open {}s awaiting review/merge ({}):",
         "⚠".yellow(),
+        noun,
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -596,10 +611,23 @@ fn render_open_prs(items: &[OpenPrItem], cap: usize, w: &mut impl Write) -> std:
         }
     }
     print_overflow(items.len(), cap, w)?;
-    writeln!(
-        w,
-        "    → `gh pr checks <N> --watch && gh pr merge <N> --squash --delete-branch && aida pull`"
-    )?;
+    // STORY-508/TASK-651: the watch→merge→pull hint, in each forge's command
+    // shape (gh checks/--delete-branch vs glab ci status/--remove-source-branch;
+    // pure-git names no forge CLI).
+    let chain = match kind {
+        crate::forge::ForgeKind::GitHub => {
+            "`gh pr checks <N> --watch && gh pr merge <N> --squash --delete-branch && aida pull`"
+                .to_string()
+        }
+        crate::forge::ForgeKind::GitLab => {
+            "`glab ci status && glab mr merge <N> --squash --remove-source-branch && aida pull`"
+                .to_string()
+        }
+        crate::forge::ForgeKind::None => {
+            "merge each change to your default branch, then `aida pull`".to_string()
+        }
+    };
+    writeln!(w, "    → {chain}")?;
     writeln!(w)?;
     Ok(())
 }
@@ -881,6 +909,36 @@ mod tests {
         assert!(out.contains("aida session end"));
         assert!(out.contains("aida session prune --orphans"));
         assert!(out.contains("Total: 8 items need attention"));
+    }
+
+    // STORY-508/TASK-651: the open-change section is forge-aware — GitLab gets
+    // "Open MRs" + glab commands, pure-git names no forge CLI.
+    #[test]
+    fn open_changes_hint_is_forge_aware() {
+        colored::control::set_override(false);
+        let mut report = CleanupReport::default();
+        report.open_prs.push(OpenPrItem {
+            number: 42,
+            title: "t".into(),
+            head_branch: "b".into(),
+            ci_rollup: Some("pass".into()),
+            mergeable: Some("clean".into()),
+            review_decision: None,
+        });
+
+        report.forge_kind = Some(crate::forge::ForgeKind::GitLab);
+        let gitlab = render_to_string(&report, false);
+        assert!(gitlab.contains("Open MRs awaiting"), "{gitlab}");
+        assert!(gitlab.contains("glab mr merge"), "{gitlab}");
+        assert!(gitlab.contains("glab ci status"), "{gitlab}");
+        assert!(!gitlab.contains("gh pr"), "{gitlab}");
+
+        report.forge_kind = Some(crate::forge::ForgeKind::None);
+        let pure = render_to_string(&report, false);
+        assert!(pure.contains("Open changes awaiting"), "{pure}");
+        assert!(!pure.contains("gh pr"), "{pure}");
+        assert!(!pure.contains("glab "), "{pure}");
+        colored::control::unset_override();
     }
 
     #[test]
