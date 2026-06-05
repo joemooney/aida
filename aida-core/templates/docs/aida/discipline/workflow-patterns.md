@@ -62,3 +62,19 @@ Examples — parallel: an end-of-session menu (continue / open PR / pause —
 pick one). Sequential: a post-merge hint (`merge` → `pull` → `build` — do
 all). Do not cross-reference one spec's format from another unless the
 shapes genuinely match.
+
+## Planning-pass discipline (don't leave untracked plan files)
+
+A "planning pass" — a loop of `/aida-plan <SPEC>` over several queue items, run
+from the main repo — writes one plan file per spec. If those land directly in
+`docs/plans/` as **untracked** files, a later implementer's PR that lands its own
+plan at the same path makes `git pull --ff-only` abort:
+
+    error: The following untracked working tree files would be overwritten by merge:
+        docs/plans/2026-05-19-<spec>.md
+
+**Rule:** a planning pass writes drafts to `docs/plans/_draft/` (gitignored —
+scaffolded by `aida init`). Promote a draft to `docs/plans/<name>.md` only when
+it's adopted (and commit it as part of that work). Never leave generated plans
+untracked in `docs/plans/` — they become a merge landmine for every later PR.
+trace:TASK-383 | ai:claude

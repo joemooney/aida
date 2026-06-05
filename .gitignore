@@ -95,3 +95,8 @@ docs/writeups/
 # scheduler (e.g. `.claude/scheduled_tasks.lock`) — never source. (`*.yaml.lock`
 # is covered separately; no tracked `.claude/*.lock` exists.) trace:TASK-625
 .claude/*.lock
+
+# TASK-383: planning-pass drafts — scratch plans written by a loop of
+# `/aida-plan` over queue items; promote to docs/plans/<name>.md when adopted.
+# Gitignored so they don't linger untracked and abort a later PR's pull. trace:TASK-383
+docs/plans/_draft/

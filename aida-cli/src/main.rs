@@ -4321,12 +4321,22 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          # tracked. trace:SPIKE-31 | ai:claude\n\
          .claude/rules/aida-specs/\n";
 
+    // trace:TASK-383 | ai:claude — a "planning pass" (a loop of `/aida-plan`
+    // over queue items run from main) writes scratch plans to
+    // docs/plans/_draft/. Gitignored so they never linger as untracked files
+    // that abort a later PR's `git pull --ff-only` when the implementer's plan
+    // lands at docs/plans/<same>.md. Promote a draft to docs/plans/ when adopted.
+    let plans_draft_entry = "\n# AIDA planning-pass drafts — scratch plans; promote to\n\
+         # docs/plans/<name>.md when adopted. Gitignored so they don't conflict\n\
+         # with a later PR's landed plan. trace:TASK-383 | ai:claude\n\
+         docs/plans/_draft/\n";
+
     if !gitignore_path.exists() {
         std::fs::write(
             &gitignore_path,
             format!(
-                "{}{}{}{}",
-                store_entry, runtime_entry, claude_local_entry, rules_sync_entry
+                "{}{}{}{}{}",
+                store_entry, runtime_entry, claude_local_entry, rules_sync_entry, plans_draft_entry
             ),
         )?;
         return Ok(false);
@@ -4365,6 +4375,16 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
             .ends_with(".claude/rules/aida-specs")
     }) {
         file.write_all(rules_sync_entry.as_bytes())?;
+        wrote = true;
+    }
+    // trace:TASK-383 | ai:claude — same idempotency pattern; match the bare
+    // path so an operator-added glob doesn't trigger a duplicate.
+    if !content.lines().any(|line| {
+        line.trim()
+            .trim_end_matches('/')
+            .ends_with("docs/plans/_draft")
+    }) {
+        file.write_all(plans_draft_entry.as_bytes())?;
         wrote = true;
     }
     Ok(wrote)
@@ -43873,22 +43893,22 @@ mod add_aida_gitignore_entries_tests {
         assert!(content.contains("!.aida/config.toml"), "{}", content);
     }
 
-    /// Existing .gitignore that already covers ALL four blocks (store,
-    /// runtime, CLAUDE.local.md, rules/aida-specs/) → no write, returns
-    /// Ok(false). The third block (CLAUDE.local.md) was added in commit
-    /// bf50e7c0 for TASK-572. The fourth (.claude/rules/aida-specs/) was
-    /// added by SPIKE-31 for path-gated rule sync.
-    /// trace:BUG-73 trace:TASK-572 trace:SPIKE-31 | ai:claude
+    /// Existing .gitignore that already covers ALL five blocks (store,
+    /// runtime, CLAUDE.local.md, rules/aida-specs/, docs/plans/_draft/) → no
+    /// write, returns Ok(false). The third block (CLAUDE.local.md) was added in
+    /// commit bf50e7c0 for TASK-572. The fourth (.claude/rules/aida-specs/) was
+    /// added by SPIKE-31. The fifth (docs/plans/_draft/) by TASK-383.
+    /// trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 | ai:claude
     #[test]
     fn idempotent_when_both_blocks_present() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".gitignore");
-        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\n";
+        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n";
         std::fs::write(&path, original).unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
         assert!(
             !updated,
-            "all four blocks already present → expected no append"
+            "all five blocks already present → expected no append"
         );
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, original);
