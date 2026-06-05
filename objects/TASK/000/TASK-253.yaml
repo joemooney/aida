@@ -17,12 +17,12 @@ description: |-
   ## Composes with
 
   - The MCP modernization EPIC (next filing) — adding \`.mcp.json\` here lets us validate each new tool as we add it
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:39.019532900Z
-modified_at: 2026-06-05T16:23:14.599939114Z
+modified_at: 2026-06-05T16:29:34.983025520Z
 req_type: Task
 tags:
 - agent-collaboration
@@ -35,3 +35,7 @@ comments:
   content: Commit 06f8a3d07 references this requirement
   created_at: 2026-06-05T16:23:14.599939114Z
   modified_at: 2026-06-05T16:23:14.599939114Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T16:29:34.983025520Z
+  completion_sha: 08f18db16fc5240f3a1663d686119dce4d0b31e0
