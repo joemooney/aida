@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T05:08:57.389147772Z
-modified_at: 2026-06-05T05:08:57.389147772Z
+modified_at: 2026-06-05T05:09:14.303629035Z
 req_type: Task
 tags:
 - aida:triage
@@ -36,3 +36,8 @@ tags:
 - from-product
 - intake-triage
 - parent:ADR-3
+relationships:
+- rel_type: Child
+  target_id: 019e962e-71b5-7153-a856-b8d444389b34
+  created_at: 2026-06-05T05:09:14.303620254Z
+  created_by: joe
