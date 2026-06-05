@@ -67,7 +67,7 @@ credential distribution, and cross-machine trust questions.
 
 ## AIDA MCP surface verified from source
 
-The current `aida-cli/src/mcp.rs` tools/list descriptors advertise 26 tools:
+The current `aida-cli/src/mcp.rs` tools/list descriptors advertise 29 tools:
 
 - Spec graph: `list_requirements`, `show_requirement`, `add_requirement`,
   `update_requirement`, `search_requirements`, `add_comment`,
@@ -142,7 +142,7 @@ agent scenarios. The moment AIDA offers remote MCP, it needs:
 1. Keep `codex mcp add aida -- aida mcp-serve` as the primary local setup path.
 2. Add a Codex-facing health check that verifies:
    - `codex mcp list` contains enabled `aida`;
-   - `aida mcp-serve` tools/list has the expected 26 tools;
+   - `aida mcp-serve` tools/list has the expected 29 tools;
    - the brief trio `list_briefs`, `read_brief`, `ack_brief` is present;
    - the write tools `add_requirement`, `add_comment`, `add_relationship`,
      `update_requirement`, `post_punt`, `file_finding`, `claim_task`, and
