@@ -23830,6 +23830,96 @@ pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+/// TASK-475: how many commits the local `aida-store` branch is behind
+/// `origin/aida-store`, using already-known refs (no network fetch). `None`
+/// when the origin ref is unknown (never fetched), git is unavailable, or the
+/// range doesn't resolve; `Some(0)` when up-to-date. trace:TASK-475 | ai:claude
+fn orphan_store_behind_count(project_root: &std::path::Path) -> Option<u32> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-list",
+            "--count",
+            "refs/heads/aida-store..refs/remotes/origin/aida-store",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u32>()
+        .ok()
+}
+
+#[cfg(test)]
+mod task_475_store_behind_tests {
+    use super::*;
+
+    fn git(root: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {:?}: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn init(root: &std::path::Path) {
+        git(root, &["init", "-q", "-b", "aida-store"]);
+        git(root, &["config", "user.email", "t@t.t"]);
+        git(root, &["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-q", "-m", "A"]);
+    }
+
+    /// TASK-475: count commits origin/aida-store is ahead of local aida-store.
+    #[test]
+    fn behind_count_counts_origin_ahead() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init(root);
+        let a = git(root, &["rev-parse", "HEAD"]);
+        for f in ["b", "c"] {
+            std::fs::write(root.join(f), "x").unwrap();
+            git(root, &["add", "."]);
+            git(root, &["commit", "-q", "-m", f]);
+        }
+        // origin = C (2 ahead), local aida-store reset back to A.
+        git(
+            root,
+            &["update-ref", "refs/remotes/origin/aida-store", "HEAD"],
+        );
+        git(root, &["update-ref", "refs/heads/aida-store", &a]);
+        assert_eq!(orphan_store_behind_count(root), Some(2));
+    }
+
+    /// Up-to-date → Some(0); no origin ref → None (skip the nudge).
+    #[test]
+    fn behind_count_zero_and_none_cases() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init(root);
+        // No origin ref yet → unknown.
+        assert_eq!(orphan_store_behind_count(root), None);
+        // Origin == local → 0.
+        git(
+            root,
+            &["update-ref", "refs/remotes/origin/aida-store", "HEAD"],
+        );
+        assert_eq!(orphan_store_behind_count(root), Some(0));
+    }
+}
+
 /// Render the BUG-108 dangling-cwd warning, given the result of a
 /// `getcwd()` probe. Pure, so the removed-worktree state is regression-
 /// testable without a process-global `chdir`: a worktree that `aida
@@ -65955,6 +66045,27 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             by_batch,
         } => {
             let user_id = get_user(user);
+            // TASK-475: nudge when the local orphan store lags origin — a
+            // multi-node user otherwise sees a silently-stale listing. Uses
+            // already-known refs (no fetch); best-effort to stderr so it never
+            // pollutes the listing on stdout, and skipped at 0/unknown.
+            // trace:TASK-475 | ai:claude
+            if !*global {
+                if let Ok(root) = find_project_root() {
+                    if let Some(n) = orphan_store_behind_count(&root) {
+                        if n > 0 {
+                            eprintln!(
+                                "{} orphan store is {} commit{} behind origin/aida-store. Run `{}` or `{}` to refresh.",
+                                "Note:".yellow(),
+                                n,
+                                if n == 1 { "" } else { "s" },
+                                "aida pull".cyan(),
+                                "aida queue list --sync".cyan(),
+                            );
+                        }
+                    }
+                }
+            }
             // TASK-270: tolerate a redundant `batch:` prefix on `--batch`
             // (the value this very command prints), so `--batch batch:NAME`
             // and `--batch NAME` resolve identically. trace:TASK-270
