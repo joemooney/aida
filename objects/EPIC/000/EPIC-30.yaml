@@ -131,7 +131,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-05-17T02:14:16.125474423Z
+modified_at: 2026-06-05T05:27:56.409504571Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
@@ -172,3 +172,23 @@ comments:
     Until any of those: STAY HERE. Captured for posterity, not blocking the alpha critical path.
   created_at: 2026-05-17T02:14:16.125474423Z
   modified_at: 2026-05-17T02:14:16.125474423Z
+- id: 019e9640-98f9-79c0-befe-1169a1a2a28b
+  author: joe
+  content: |-
+    ARCHITECTURE (operator design, 2026-06-04): triage-gated drain loop with watchdog. Unifies EPIC-30 (the loop) + ADR-3 (intake triage as a PRE-FLIGHT stage) + TASK-136 (progress watchdog) + STORY-347 (calibration).
+
+    Per-item cycle over queue (then backlog as a continuous-groomer sweep):
+      1. PRE-FLIGHT advisor verdict (only for un-vetted items — untriaged / no acceptance criteria / stale; fast-path clean advisor-triaged items straight to drain): WORK | UPDATE(refine criteria) | ARCHIVE | NEEDS-HUMAN.
+      2. WORKABLE → `aida queue work --auto-complete --no-human` under a heartbeat watchdog.
+      3. WATCHDOG (TASK-136): per-phase progress timeout → SIGTERM the session, SHELVE the spec to NeedsAttention ("watchdog timeout"), CONTINUE the loop. Must terminate+advance, not just alarm.
+      4. Record each triage verdict vs outcome → calibration (STORY-347); the gate gets smarter over weeks.
+
+    WHY the pre-flight stage matters (evidence 2026-06-04): drain success is 56% (121/218); 88 of 97 failures are in the two AGENT-SESSION phases (phase 1 implementer 55, phase 3 reviewer 33); deterministic plumbing (CI/merge/pull/build) is 9. A chunk of phase-1 failures are SYSTEMIC bursts (5 stories failed at one timestamp = an epic-cluster bug, smells like BUG-431), not independent bad specs — so the triage stage handles the under-specified/should-archive items, but orchestrator reliability (EPIC-33) handles the systemic bursts. Both needed.
+
+    SEQUENCING (advisor pushback — ship simple first):
+      - v1 (NOW): plain resilient loop — `nextN --auto-complete --no-human --max-failures BIG` + inter-iteration `doctor heal stale-leases` + systemd --user supervisor. No advisor stage, no fancy watchdog. Gives CONSTANT VIGILANCE (never halts; parks failures) tonight. Shipped as scripts/drain-loop.sh + a systemd unit (branch drain-loop-v1 / PR — do not merge into a running loop's main without review).
+      - v2 (incremental): add the pre-flight advisor stage + TASK-136 watchdog + calibration onto this EPIC. This is where FOOL-PROOF (high success rate) comes from.
+
+    Honest limit: "fool-proof = everything ships unattended" is gated on driving down the phase-1/phase-3 failure rate (EPIC-33). The loop converts "halts and waits for a human" into "continues and parks the ~40% to NeedsAttention" — strictly better, but still a triage pile until reliability climbs.
+  created_at: 2026-06-05T05:27:56.409504571Z
+  modified_at: 2026-06-05T05:27:56.409504571Z
