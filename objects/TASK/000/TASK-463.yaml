@@ -26,7 +26,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T17:54:13.742323958Z
-modified_at: 2026-05-22T17:54:13.742323958Z
+modified_at: 2026-06-05T03:53:47.828715376Z
 req_type: Task
 tags:
 - cli-ux
@@ -34,3 +34,9 @@ tags:
 - from-self-test
 - multi-agent
 - validator
+comments:
+- id: 019e95ea-6834-79d2-a307-25d6bd009b79
+  author: joe
+  content: 'Verified already done (2026-06-05): the commit-msg hook accepts multi-author [AI:tool1+tool2] via AI_TOOL_PATTERN=''[a-zA-Z]+(\+[a-zA-Z]+)*'' (aida-core/templates/hooks/aida-commit-msg:30, shipped by TASK-509 with optional whole-commit confidence [AI:t1+t2:med]). No separate Rust-side validator exists. Closing as already-fixed.'
+  created_at: 2026-06-05T03:53:47.828715376Z
+  modified_at: 2026-06-05T03:53:47.828715376Z
