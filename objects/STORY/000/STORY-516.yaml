@@ -1,0 +1,29 @@
+id: 019e9587-884a-7f70-899d-afc1e0ea9353
+spec_id: STORY-516
+agreed_id: STORY-516
+title: 'EPIC-35 slice 1b: route the gh call sites behind the Forge trait (+ pure-git ship/drain)'
+description: |-
+  Slice-1a (STORY-513) landed the Forge trait + providers + config + auto-detection. Slice 1b routes the ~113 gh call sites through the trait (behavior-preserving for GitHub) so GitLab + pure-git work, per the SPIKE-49 inventory.
+
+  ROUTING PLAN (SPIKE-49 order — highest-frequency first):
+  1. PRE-REQ FIX: PureGitForge::merge_change Squash currently runs 'git merge --squash' which STAGES without committing — add the follow-up commit (and a unit test; merge_change is currently untested). Caught while scoping slice-1b 2026-06-04.
+  2. Merge op (gh pr merge, 29 sites) — the cross-cutting snag: pr_ship's merge is wrapped in the network-retry layer + carries --subject (SPEC-410 squash-subject repair, see TASK-140) + --delete-branch guard (BUG-434). Extend Forge::merge_change to carry {method, squash_subject, delete_branch}; keep the retry at the call site (provider builds+returns or the caller wraps) so BUG-434/SPEC-410/retry don't regress. Add a forge-routed merge with the GitHub impl issuing identical argv.
+  3. pr view status/linkage (gh pr view, 19 sites) -> change_status / change_for_branch.
+  4. CI status (gh run, 12) -> ci_status.
+  5. pr create (10), pr list (5), comment (1), checkout (6) -> respective methods.
+  6. PURE-GIT SHIP/DRAIN: when resolve_forge_kind == None, 'aida pr ship' merges branch->default via PureGitForge (after the squash-commit fix) + push + pull, skipping PR-create/CI-watch/gh-merge; the drain treats ci_status None like lifecycle:no-ci-wait. Additive — GitHub paths byte-identical. End-to-end test like BUG-442 (real repo, pure-git ship merges + completes via (SPEC-ID) trailer).
+
+  SAFETY: GitHub behavior byte-for-byte unchanged (provider-routed, GitHub impl preserves current argv). Each op its own PR. Reliability-critical (ship/drain) -> at-keyboard incremental, not blind drain (feedback_reliability_fixes_use_keyboard_not_drain). gh workflow dispatch (1 site) defer to GitHub-only initially (master decision on SPIKE-49).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T02:05:47.978816913Z
+modified_at: 2026-06-05T02:05:47.978816913Z
+req_type: Story
+tags:
+- epic-35-slice-1
+- forge-provider
+- gitlab
+- multi-vendor
+- parent:EPIC-35
