@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:07:39.591015455Z
-modified_at: 2026-06-05T20:07:39.591015455Z
+modified_at: 2026-06-05T20:07:48.611324691Z
 req_type: Epic
 tags:
 - batch:mcp-gate-parity
@@ -21,3 +21,8 @@ tags:
 - epic
 - mcp
 - substrate-as-bouncer
+relationships:
+- rel_type: Parent
+  target_id: 019e9963-0461-78b3-a7ef-5286bc98f87a
+  created_at: 2026-06-05T20:07:48.611320153Z
+  created_by: joe
