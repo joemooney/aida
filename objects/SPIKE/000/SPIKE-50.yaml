@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T06:51:53.573221392Z
-modified_at: 2026-06-05T07:16:34.538583764Z
+modified_at: 2026-06-05T15:28:37.594070754Z
 req_type: Spike
 tags:
 - aida:competitive
@@ -26,3 +26,8 @@ comments:
   content: 'RECONCILED (full adversarial loop closed, 2026-06-05). Codex meta-review verified independently by Claude. Corrections that STAND: (1) star count = 207,592 API-real but NOT mindshare-proven (cite as ''GitHub reports 207k stars'', not users); (2) ''remote dispatch is a misnomer'' was TOO STRONG — real token-auth HTTP intake at main.rs:3894 (POST /dispatch) + TcpListener main.rs:3837; accurate = ''remote intake, local execution''; (3) ''create_draft_pr unwired'' TOO STRONG — wrapper unused but TUI calls create_draft_pr_with_options at dashboard.rs:3461; accurate = ''wrapper unused, dashboard PR path exists''; (4) asymmetry is QUALITATIVE not absolute — don''t assume ECC can''t add a good-enough git-sync layer. Report''s worst flaw (Codex, confirmed): it labeled delegated-subagent findings as ''verified ground truth'' in §3 while telling Codex to distrust subagents. THESIS HELD: AIDA''s git-canonical truth moat is real; ECC = local-SQLite control plane. CONVERGED ACTION: Slice 1 only (template-drift CI guard) now; defer 2-4; harness-matrix → docs-only.'
   created_at: 2026-06-05T07:16:34.538583764Z
   modified_at: 2026-06-05T07:16:34.538583764Z
+- id: 019e9866-8ada-7c93-8f3d-c1e7f2abb73d
+  author: joe
+  content: 'Capability extracted: the ECC loop run by hand here is now codified as the reusable panel-review Workflow (STORY-518, .claude/workflows/panel-review.js). SPIKE-50 is its documented first instance.'
+  created_at: 2026-06-05T15:28:37.594070754Z
+  modified_at: 2026-06-05T15:28:37.594070754Z
