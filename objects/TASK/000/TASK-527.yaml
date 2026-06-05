@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T06:41:30.840459709Z
-modified_at: 2026-05-25T07:43:07.492746851Z
+modified_at: 2026-06-05T04:27:42.669401424Z
 req_type: Task
 tags:
 - aida:list
@@ -48,3 +48,9 @@ relationships:
   target_id: 019e57d6-044d-77d2-a817-240a89f767e5
   created_at: 2026-05-24T06:41:46.019881787Z
   created_by: joe
+comments:
+- id: 019e9609-74cd-73e2-bbf0-7658e9fcf292
+  author: joe
+  content: Commit 8012867b1 references this requirement
+  created_at: 2026-06-05T04:27:42.669401424Z
+  modified_at: 2026-06-05T04:27:42.669401424Z
