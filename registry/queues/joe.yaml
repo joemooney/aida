@@ -271,13 +271,6 @@
   for_role: implementer
   for_scope: STORY-426
 - user_id: joe
-  requirement_id: 019e5615-4bcc-7242-8aac-a0300c477e4b
-  position: 268000
-  added_by: joe
-  note: auto-queued by `aida pr` (019e5605); covers 1 spec
-  added_at: 2026-05-23T18:25:04.956936358Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e5166-872c-72d2-9c51-11499e6aefe6
   position: 269000
   added_by: joe
