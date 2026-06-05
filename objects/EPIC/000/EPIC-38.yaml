@@ -26,3 +26,6 @@ relationships:
   target_id: 019e9963-0461-78b3-a7ef-5286bc98f87a
   created_at: 2026-06-05T20:07:48.611320153Z
   created_by: joe
+- rel_type: Parent
+  target_id: 019e996e-a694-7be0-8678-03d74bb6a525
+  created_at: 2026-06-05T20:17:13.891430643Z
