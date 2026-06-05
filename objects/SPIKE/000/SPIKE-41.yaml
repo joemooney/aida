@@ -3,12 +3,12 @@ spec_id: SPIKE-41
 agreed_id: SPIKE-41
 title: AIDA hook bundle for lifecycle integration (SessionEnd→aida pull, PreCompact→snapshot, Stop→lease validate)
 description: 'Claude Code ships 27 hook events (not the 9 I previously catalogued). New-to-me events with AIDA relevance: PostToolBatch (can block loop after parallel batch), InstructionsLoaded (fires when CLAUDE.md/rules/* load, with load_reason discriminator), PreCompact/PostCompact (gates on context compaction — substrate sync moment), FileChanged async (react to .env / config), SessionEnd matcher discriminating clear|resume|logout. AIDA could ship a default hook bundle scaffolded by ''aida init'': SessionEnd→''aida pull'' to sync auto-bumps; PreCompact→snapshot lease state to .aida/snapshots/; Stop→validate lease isn''t dormant; InstructionsLoaded→audit AIDA-emitted rules actually fired. Hook types: command|http|mcp_tool|prompt|agent — significant new surface vs the simpler model I had. Reference: code.claude.com/docs/en/hooks. trace:strategic-recompose-round-3'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T07:09:30.835858568Z
-modified_at: 2026-06-02T03:20:32.116546578Z
+modified_at: 2026-06-05T02:04:43.576241047Z
 req_type: Spike
 tags:
 - claude-code-compose
