@@ -1103,13 +1103,14 @@ pub enum PrCommand {
 // trace:EPIC-1-001 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum RoleCommand {
-    /// Enter (resume) an existing role. Errors if the role doesn't exist —
-    /// use `aida role add` to create a new one. Outputs shell code:
+    /// Enter (resume) an existing role. With no name on an interactive
+    /// terminal, shows a picker of the project's roles; non-interactively
+    /// it errors. Outputs shell code:
     ///   `eval "$(aida role enter advisor)"`
     /// or via the `aida-role` shell helper.
     Enter {
-        /// Role name — must already exist
-        name: String,
+        /// Role name — picker shown when omitted on a TTY
+        name: Option<String>,
 
         /// Restore the role's last working directory (cd in the eval output)
         #[clap(long)]
