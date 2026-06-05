@@ -1,0 +1,39 @@
+id: 019e9622-b923-7541-8374-162f60242f02
+spec_id: TASK-646
+agreed_id: TASK-646
+title: 'aida agent new: prompt for the child''s role when none provided (interactive); default implementer + notice when not'
+description: |-
+  Implements the agent-new half of ADR-2 (role onboarding). Reuses the shared role picker from TASK-644.
+
+  ## Behavior
+
+  Role for the SPAWNED CHILD resolves as:
+  1. `--role X` provided → use X (no prompt).
+  2. else, stdin is a TTY → **PROMPT** via the role picker (the TASK-644 component), pre-highlighting `implementer` (the dominant spawn). Selected role is propagated as the child's AIDA_SESSION_ROLE.
+  3. else (non-interactive: headless/scripted) → default `implementer` + a one-line notice ("no --role given, defaulting to implementer").
+
+  ## Acceptance
+
+  - [ ] `aida agent new <type>` with `--role X` → child launched with role X, no prompt.
+  - [ ] `aida agent new <type>` (no --role), interactive → role picker shown; chosen role becomes the child's AIDA_SESSION_ROLE; never launches role-less.
+  - [ ] `aida agent new <type>` (no --role), non-interactive → defaults implementer + prints the notice; never errors, never role-less, never hangs on a prompt.
+  - [ ] Does NOT silently inherit the launching shell's AIDA_SESSION_ROLE into the child (advisor/product spawning implementer is the common case — inheriting clones the wrong hat). The launcher's role may at most pre-highlight a picker default, not auto-select.
+  - [ ] Cancelling the picker aborts the launch cleanly (no half-spawned agent).
+
+  ## Notes
+  - Shares the role-picker component with TASK-644 (aida role enter). Build/extract it once.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T04:55:18.563605626Z
+modified_at: 2026-06-05T04:55:18.563605626Z
+req_type: Task
+tags:
+- aida:agent:new
+- cli-ux
+- from-product
+- from-user-direction
+- interactive
+- onboarding-flow
+- roles
