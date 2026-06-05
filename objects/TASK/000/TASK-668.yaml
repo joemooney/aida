@@ -13,12 +13,12 @@ description: |-
   A GitLab / pure-git repo now gets its own provider's merge instead of always shelling gh.
 
   Verified: forge (19) + pr_ship (46) + merge_args (2) tests green; argv byte-identity structural (merge_change calls merge_args).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T18:46:29.168564530Z
-modified_at: 2026-06-05T18:48:15.586201934Z
+modified_at: 2026-06-05T18:54:19.779840591Z
 req_type: Task
 tags:
 - batch:gitlab-forge
@@ -35,3 +35,7 @@ comments:
   content: Commit 520f566bc references this requirement
   created_at: 2026-06-05T18:48:15.586201934Z
   modified_at: 2026-06-05T18:48:15.586201934Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T18:54:19.779840591Z
+  completion_sha: ce344fa8e301526d3032cf53276c6a32ade80c43
