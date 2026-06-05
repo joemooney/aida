@@ -1000,6 +1000,7 @@ impl<'a> McpServer<'a> {
             since,
             until: None,
             status_changes_only: false,
+            shipped_only: false,
             comments_only: false,
             oneline: false,
             // MCP consumers expect an event ledger, not the CLI's
