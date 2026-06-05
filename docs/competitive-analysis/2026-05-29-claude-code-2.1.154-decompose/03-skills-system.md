@@ -36,8 +36,8 @@ Claude Code skill templates (usually placed in `~/.claude/skills/` or project `.
 | Dimension | AIDA Templates (`aida-core/templates/skills/`) | Claude Code Skills | Gap / Action |
 |---|---|---|---|
 | **Storage Location** | Committed in repository source | `.claude/skills/` and `~/.claude/skills/` | AIDA must compile/sync templates to `.claude/skills/` on init/sync. |
-| **Tool Restrictions** | Documented in markdown text | Schema-enforced (`allowed-tools` / `disallowed-tools`) | AIDA must map text directives to schema fields during generation. |
-| **Model Disablement** | Checked by human review | Schema-enforced (`disable-model-invocation`) | Critical for purely mechanical tasks (e.g. format runs). |
+| **Tool Restrictions** | Schema-enforced — `allowed-tools` in SKILL.md frontmatter (verified: `aida-core/templates/skills/*.md`) | Schema-enforced (`allowed-tools` / `disallowed-tools`) | Already aligned; consider also emitting `disallowed-tools` where useful. |
+| **Model Disablement** | Schema-enforced — `disable-model-invocation: true` in frontmatter (verified) | Schema-enforced (`disable-model-invocation`) | Already aligned; critical for purely mechanical tasks (e.g. format runs). |
 | **Reloading** | Manual process restart | Command-driven (`/reload-skills`) | AIDA hooks should leverage `reloadSkills: true`. |
 
 ---
