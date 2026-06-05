@@ -1,0 +1,17 @@
+id: 019e968d-7565-7a02-813d-4049c11ce342
+spec_id: SPIKE-50
+agreed_id: SPIKE-50
+title: ECC (affaan-m/ecc) competitive deep-dive + multi-agent meta-review
+description: 'Deep-dive of affaan-m/ecc (Everything Claude Code, v2.0.0-rc.1, ~207k GitHub stars) vs AIDA. Three analyses produced 2026-06-04: Draft 1 (README-only), Draft 2 (Claude, clone + 3 subagents), Draft 3 (committed doc docs/competitive-analysis/2026-06-05-ecc-deep-dive.md). Critique of Draft 3 + a consolidated brutally-honest review at docs/competitive-analysis/2026-06-04-ecc-analyses-review-and-rebuttal.md. This SPIKE is the HONEST traceability anchor for the thread (Draft 3 had falsely cited SPIKE-27/28, which are Antigravity specs). Next: Codex meta-analysis (adversarial review of the consolidated report; fill its Codex Rebuttal Surface §9). Key finding to carry forward: only the CI path/ownership validator slice passes AIDA''s bugs-before-marketing phase filter; defer the rest of a distribution epic.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T06:51:53.573221392Z
+modified_at: 2026-06-05T06:51:53.573221392Z
+req_type: Spike
+tags:
+- aida:competitive
+- competitive-analysis
+- ecc
+- meta-review
