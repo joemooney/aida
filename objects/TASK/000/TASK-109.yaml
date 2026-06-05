@@ -3,12 +3,12 @@ spec_id: TASK-109
 agreed_id: TASK-109
 title: 'docs/git-verb-surface.md: design reference naming the convention'
 description: "Captures the AIDA git-mirror verb convention so future contributors don't have to re-derive it from scattered TASK descriptions.\n\n## Content outline\n\n1. The thesis: AIDA verbs earn their name when they bundle meaningful behavior across the code + store legs. Otherwise they're vestigial.\n\n2. Existing + planned verb grid:\n   - aida fetch / pull / push / rebase — bundles\n   - aida session start / end — worktree-managed, not pure git-mirror\n   - aida db sync — older surface, partially superseded\n   \n3. Intentional non-mirrors:\n   - aida merge: rebase-first workflow, no use case for cross-leg merge\n   - aida stash: git's works fine\n   - aida cherry-pick / aida tag: code-only operations, no store dimension\n   - aida log / aida diff / aida show: aida has different semantics (show is for SPEC details)\n   \n4. Default-behavior convention: bundle BOTH legs unless --code-only / --store-only.\n\n5. Discoverability convention: help text opening line explicitly names two-leg behavior; pre-action summary surfaces what each leg will do.\n\n6. Dry-run convention: --dry-run shows what would happen across both legs without acting.\n\n7. JSON output convention: --json for machine consumption; same shape across all verbs.\n\n## Audience\n\n- AIDA contributors adding new verbs\n- Power users scripting around AIDA\n- Future implementer sessions on TASKs that touch the verb surface\n\n## Composes with\n\n- STORY-114 (aida rebase) — first published example of the convention\n- AIDA.md / CLAUDE.md daily-commands sections — should cross-link to this doc\n\n## Acceptance\n\n- [ ] docs/git-verb-surface.md exists with the 7 sections\n- [ ] Cross-linked from CLAUDE.md and from AIDA.md scaffolded content\n- [ ] Each verb section in CLAUDE.md daily-commands has a one-line 'see docs/git-verb-surface.md for convention' pointer\n- [ ] First-time-contributor section: 'when adding a new git-mirror verb, read this first'"
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:07:55.136477775Z
-modified_at: 2026-06-05T17:12:12.814909892Z
+modified_at: 2026-06-05T17:18:12.260146960Z
 req_type: Task
 tags:
 - convention
@@ -25,3 +25,7 @@ comments:
   content: Commit 9eafd7382 references this requirement
   created_at: 2026-06-05T17:12:12.814909892Z
   modified_at: 2026-06-05T17:12:12.814909892Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T17:18:12.260146960Z
+  completion_sha: 419346879b2e11d5212b56211c4223f7c6d1c4b5
