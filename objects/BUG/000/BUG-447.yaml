@@ -1,0 +1,42 @@
+id: 019e9942-1e68-7aa1-80c8-97f59d03e7df
+spec_id: BUG-447
+agreed_id: BUG-447
+title: aida queue work session-resume matches prior claude sessions by spec-id GLOBALLY (~/.claude/projects scan, no project scoping) — a deleted/other project's TASK-007 session bleeds into a fresh project
+description: |-
+  MECHANISM (source of truth):
+  - "aida queue work" resolves prior sessions via session::list_scope_sessions(scope) where scope = the spec id, e.g. "TASK-007" (main.rs:81158).
+  - list_scope_sessions (session.rs:1090) scans ALL of ~/.claude/projects/ -- every project dir, every .jsonl session log on the MACHINE (most-recent 150) -- and filters to sessions whose parsed spec equals the scope string, case-insensitive (session.rs:1125-1130). There is NO scoping to the current project root, cwd subtree, store, or node identity.
+
+  REPRO (hit by a real user 2026-06-05):
+  1. An earlier (mistaken) "aida init" ran at ~/ai; its onboarding task was TASK-007; a claude session ran for it (worktree ~/ai-task-007). Claude Code logged that session at ~/.claude/projects/<encoded ~/ai-task-007>/<sid>.jsonl.
+  2. User removed the mistaken init (~/ai/.aida, ~/ai/.git, ~/ai-task-007) -- but NOT ~/.claude/projects/ (Claude Code's machine-global session history; aida cleanup does not touch it).
+  3. User correctly created ~/ai/dummy1, git init, aida init -> a FRESH project whose onboarding task is ALSO seeded as TASK-007.
+  4. "aida queue work" in dummy1 prints: "1 prior claude session(s) for TASK-007 -- resume one?" -- offering the stale session from the deleted ~/ai project.
+
+  TWO COMPOUNDING ROOT CAUSES:
+  (1) Session discovery is keyed by spec-id ALONE, scanned machine-globally, with no project scoping. A TASK-007 session in ANY project matches a TASK-007 lookup in ANY other project.
+  (2) Every "aida init" seeds the onboarding task as the SAME id, TASK-007 (TASK-510 seed; cf TASK-1-097). So the id collides across every project on the machine, making (1) bite immediately on the most common first-run path. Resuming the offered session would replay a DIFFERENT, deleted project's context into the new project.
+
+  IMPACT: systematic. Any machine that runs "aida init" on >1 project gets cross-project session bleed on "aida queue work", and the first-run onboarding path is exactly where it surfaces (every project's TASK-007).
+
+  FIX SPACE (triage, do not implement):
+  - Scope list_scope_sessions to the CURRENT project: filter the ~/.claude/projects scan to session logs whose recorded cwd is within the current project root (or whose worktree path / store node-id matches), not every TASK-007 on disk. The encoded-cwd is already available (process_probe::claude_projects_dir_for_cwd).
+  - And/or stop reusing a global-constant id for the onboarding task across projects (spec ids are per-store, so two stores both minting TASK-007 is expected -- which is exactly why the session match must be store/project-scoped, not id-only).
+  - Interim user guidance: at the prompt, pick "start a fresh session"; never resume a session from a different/deleted project.
+
+  Related: TASK-1-097 (onboarding TASK-007 surface), BUG-89 (queue identity must be scoped correctly), BUG-445/BUG-446 (the same onboarding flow).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T19:28:27.752140615Z
+modified_at: 2026-06-05T19:28:27.752140615Z
+req_type: Bug
+tags:
+- aida:queue:work
+- first-run
+- from-self-test
+- onboarding
+- project-scoping
+- queue
+- session-resume
