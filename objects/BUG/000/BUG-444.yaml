@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T06:47:12.347580210Z
-modified_at: 2026-06-05T06:47:25.101485498Z
+modified_at: 2026-06-05T15:45:37.576018906Z
 req_type: Bug
 tags:
 - auto-complete
@@ -56,3 +56,9 @@ relationships:
   target_id: 019e836b-f4ce-7c01-8ee1-4b4767cfe3bd
   created_at: 2026-06-05T06:47:25.101482358Z
   created_by: joe
+comments:
+- id: 019e9876-1b28-78b2-a419-2da082205c49
+  author: joe
+  content: Commit ea8a6d79c references this requirement
+  created_at: 2026-06-05T15:45:37.576018906Z
+  modified_at: 2026-06-05T15:45:37.576018906Z
