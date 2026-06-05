@@ -4,6 +4,17 @@
 **Source-verified**: Yes — analyzed official hook documentation at [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks) and tested hooks execution behavior using Claude Code (version 2.1.162).
 **Verdict**: **COMPOSE + EXTEND** — AIDA should leverage Claude Code's extensive hook lifecycle events (specifically `SessionStart`, `SessionEnd`, and `PreCompact`) to automate local git syncs, snapshot leases, and reload workspace-level rules.
 
+> **⚠ Verification caveat (master, 2026-06-05):** AIDA confirms only this hook
+> set in its own integration (`docs/agents/session-communication.md`):
+> `SessionStart`, `SessionEnd`, `PreToolUse`, `PostToolUse`, `Stop`,
+> `PreCompact`, plus the return schema (`permissionDecision` allow/deny/ask/defer,
+> `permissionDecisionReason`, `continue:false`, `hookSpecificOutput`). The wider
+> taxonomy below — the "27 events" count and events like `MessageDisplay`,
+> `StopFailure`, `PostToolUseFailure`, `PostCompact`, **`InstructionsLoaded`**,
+> and return keys like `reloadSkills`/`updatedToolOutput` — is **NOT
+> independently verified against a primary source** here. Re-confirm against the
+> live Claude Code hooks docs before building any integration on them.
+
 ---
 
 ## 1. Event Taxonomy and Trigger Lifecycle
