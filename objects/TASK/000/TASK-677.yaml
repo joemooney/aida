@@ -1,0 +1,19 @@
+id: 019e99b7-30f2-7f33-822c-19c717fd1f2f
+spec_id: TASK-677
+agreed_id: TASK-677
+title: 'EPIC-35 list op: route detect_open_pr_for_spec + detect_merged_pr_for_branch through the Forge trait'
+description: |-
+  list op (STORY-521). Adds Forge::change_for_spec (gh pr list --search, BUG-223 fallback) + Forge::merged_change_for_branch (gh pr list --state merged). GitHubForge delegates to the existing detect_open_pr_for_spec / detect_merged_pr_for_branch + reuses change_lookup_from_pr_lookup; GitLab bails (slice 3); pure-git returns NoChange (no merged-PR concept). Crate helpers detect_open_pr_for_spec_via_forge / detect_merged_pr_for_branch_via_forge round-trip ChangeLookup back to PrLookup (new pr_lookup_from_change_lookup) so the 9 call sites are a pure name-swap (match arms stay PrLookup) — lowest risk on the orchestrator sites. Migrated all 9 callers (incl. orchestrator phase-1 spec-search + the BUG-88 merged-branch guard).
+
+  Caught + fixed a regression: pure-git merged_change_for_branch initially used git-ancestry to report 'merged', which broke resolve_stack_base_accepts_existing_local_branch (a no-origin test repo resolves to pure-git). Reverted to NoChange — pure-git has no merged-PR concept; the ancestry question is handled separately. Full suite green (1615). Child of STORY-521.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T21:36:20.210872299Z
+modified_at: 2026-06-05T21:36:20.210872299Z
+req_type: Task
+tags:
+- batch:gitlab-forge
+- forge-routing
+- from-advisor:STORY-521
