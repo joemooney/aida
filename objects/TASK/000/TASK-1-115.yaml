@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T16:56:46.220862956Z
-modified_at: 2026-06-04T16:22:47.452617410Z
+modified_at: 2026-06-05T02:01:52.937123999Z
 req_type: Task
 tags:
 - aida:pr:ship
@@ -31,3 +31,8 @@ comments:
   content: 'Promoted by joe 2026-06-04: Correctness: wrong spec credited on squash-merge → bad auto-bump (spec-credit family, BUG-426/440).'
   created_at: 2026-06-04T16:22:47.452617410Z
   modified_at: 2026-06-04T16:22:47.452617410Z
+- id: 019e9583-f229-7662-ac20-381d76d56fee
+  author: joe
+  content: Commit ce78da07f references this requirement
+  created_at: 2026-06-05T02:01:52.937123999Z
+  modified_at: 2026-06-05T02:01:52.937123999Z
