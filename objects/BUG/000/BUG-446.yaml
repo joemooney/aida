@@ -17,10 +17,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:33.794990413Z
-modified_at: 2026-06-05T19:14:33.794990413Z
+modified_at: 2026-06-05T19:33:03.352609550Z
 req_type: Bug
 tags:
 - aida:init
+- batch:onboarding-hardening
 - footgun
 - from-self-test
 - guard
