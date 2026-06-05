@@ -46,6 +46,41 @@ impl ForgeKind {
         }
     }
 
+    /// User-facing noun for a change request — "PR" (GitHub) / "MR" (GitLab) /
+    /// "change" (pure-git). For hint and error prose so a GitLab user reads
+    /// "merge the MR" rather than "merge the PR". trace:STORY-508 | ai:claude
+    pub fn change_noun(self) -> &'static str {
+        match self {
+            ForgeKind::GitHub => "PR",
+            ForgeKind::GitLab => "MR",
+            ForgeKind::None => "change",
+        }
+    }
+
+    /// A forge-aware CLI hint for a change-request action (`view` / `merge` /
+    /// `create` / `checks` / …). GitHub → `gh pr <verb> [args]`, GitLab →
+    /// `glab mr <verb> [args]`. Returns `None` for pure-git, which has no forge
+    /// CLI — callers supply a git/aida-native alternative for that case.
+    ///
+    /// `args` is appended verbatim (e.g. `"47 --squash --delete-branch"`); the
+    /// hint is directional, so minor per-forge flag differences (glab's
+    /// `--remove-source-branch` vs gh's `--delete-branch`) are acceptable —
+    /// the load-bearing fix is to stop naming `gh` to a non-GitHub user.
+    /// trace:STORY-508 | ai:claude
+    pub fn change_cmd_hint(self, verb: &str, args: &str) -> Option<String> {
+        let (cli, noun) = match self {
+            ForgeKind::GitHub => ("gh", "pr"),
+            ForgeKind::GitLab => ("glab", "mr"),
+            ForgeKind::None => return None,
+        };
+        let trimmed = args.trim();
+        if trimmed.is_empty() {
+            Some(format!("{cli} {noun} {verb}"))
+        } else {
+            Some(format!("{cli} {noun} {verb} {trimmed}"))
+        }
+    }
+
     /// The `[forge] provider` config token.
     pub fn config_token(self) -> &'static str {
         match self {
@@ -992,6 +1027,38 @@ fn default_branch_of(project_root: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// STORY-508: forge-aware hint helpers — noun + templated CLI command.
+    #[test]
+    fn change_noun_per_forge() {
+        assert_eq!(ForgeKind::GitHub.change_noun(), "PR");
+        assert_eq!(ForgeKind::GitLab.change_noun(), "MR");
+        assert_eq!(ForgeKind::None.change_noun(), "change");
+    }
+
+    #[test]
+    fn change_cmd_hint_templates_cli_and_noun() {
+        // GitHub → gh pr, GitLab → glab mr, with args appended verbatim.
+        assert_eq!(
+            ForgeKind::GitHub.change_cmd_hint("merge", "47 --squash --delete-branch"),
+            Some("gh pr merge 47 --squash --delete-branch".to_string())
+        );
+        assert_eq!(
+            ForgeKind::GitLab.change_cmd_hint("merge", "47 --squash --delete-branch"),
+            Some("glab mr merge 47 --squash --delete-branch".to_string())
+        );
+        // No args → bare command, no trailing space.
+        assert_eq!(
+            ForgeKind::GitHub.change_cmd_hint("create", ""),
+            Some("gh pr create".to_string())
+        );
+        assert_eq!(
+            ForgeKind::GitLab.change_cmd_hint("view", "  42  "),
+            Some("glab mr view 42".to_string())
+        );
+        // pure-git has no forge CLI — caller supplies a native alternative.
+        assert_eq!(ForgeKind::None.change_cmd_hint("merge", "47"), None);
+    }
 
     #[test]
     fn detect_github_ssh_and_https() {
