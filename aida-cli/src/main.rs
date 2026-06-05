@@ -28121,6 +28121,36 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
 /// `CiProbe::NoSignal` for any failure path so callers don't have to
 /// distinguish between "no PR" and "gh broken" — both degrade to "proceed
 /// silently." trace:TASK-111 | ai:claude
+/// STORY-516: forge-routed CI probe — the ci-op entry point the call sites use
+/// instead of `probe_ci_state_for_branch` directly, so a GitLab / pure-git repo
+/// goes through its own provider. GitHubForge delegates back to
+/// `probe_ci_state_for_branch` (which runs `gh` in CWD), so behaviour on GitHub
+/// is unchanged — `project_root` is used only to SELECT the provider, so it is
+/// resolved internally here and the call sites stay a pure name-swap. Converts
+/// the forge-neutral `CiProbeResult` back to `CiProbe` so the existing match
+/// sites are unchanged; a provider Err collapses to `NoSignal`.
+/// trace:STORY-516 | ai:claude
+pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    match crate::forge::forge_for(&project_root).ci_probe_for_branch(branch) {
+        Ok(crate::forge::CiProbeResult::NoSignal(why)) => CiProbe::NoSignal(why),
+        Ok(crate::forge::CiProbeResult::NoChecks { change }) => CiProbe::PrNoChecks {
+            pr_number: change as u32,
+        },
+        Ok(crate::forge::CiProbeResult::InProgress { change }) => CiProbe::InProgress {
+            pr_number: change as u32,
+        },
+        Ok(crate::forge::CiProbeResult::Green { change }) => CiProbe::Green {
+            pr_number: change as u32,
+        },
+        Ok(crate::forge::CiProbeResult::Failed { change, summary }) => CiProbe::Red {
+            pr_number: change as u32,
+            failed_summary: summary,
+        },
+        Err(e) => CiProbe::NoSignal(format!("{e:#}")),
+    }
+}
+
 pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
     let gh = match resolve_gh_binary() {
         Some(p) => p,
@@ -28256,7 +28286,7 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
     let started = std::time::Instant::now();
     for poll in 0..MAX_POLLS {
         std::thread::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
-        let probe = probe_ci_state_for_branch(branch);
+        let probe = ci_probe_via_forge(branch); // STORY-516: forge-routed
         let elapsed = started.elapsed().as_secs();
         match &probe {
             CiProbe::InProgress { pr_number } => {
@@ -28348,7 +28378,7 @@ fn watch_ci_terminal(branch: &str) -> CiProbe {
         .args(["run", "watch", &run_id])
         .status();
     // Re-probe to classify Green/Red for the end-session decision tree.
-    probe_ci_state_for_branch(branch)
+    ci_probe_via_forge(branch) // STORY-516: forge-routed
 }
 
 /// trace:STORY-73 | ai:claude
@@ -29170,9 +29200,9 @@ fn session_end(
             "Note:".dimmed()
         );
     } else if !skip_ci && !force {
-        let probe = probe_ci_state_for_branch(&target.branch);
-        // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
-        // same `CiAction::Wait`; the difference is the live display.
+        let probe = ci_probe_via_forge(&target.branch); // STORY-516: forge-routed
+                                                        // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
+                                                        // same `CiAction::Wait`; the difference is the live display.
         match decide_ci_action(&probe, wait_ci || watch_ci, yes) {
             CiAction::Proceed => {}
             CiAction::Wait => {
@@ -48313,7 +48343,7 @@ fn render_in_flight_grouped(
                 let local_state = detect_local_review_state(project_root, all_reqs, pr.number);
                 let ci =
                     if approved.is_none() && matches!(local_state, LocalReviewState::NotStarted) {
-                        probe_ci_state_for_branch(branch)
+                        ci_probe_via_forge(branch) // STORY-516: forge-routed
                     } else {
                         CiProbe::NoSignal(String::new())
                     };
@@ -74800,7 +74830,7 @@ fn probe_resume_facts(
     let ci_green = pr_merged
         || branch
             .as_deref()
-            .map(|b| matches!(probe_ci_state_for_branch(b), CiProbe::Green { .. }))
+            .map(|b| matches!(ci_probe_via_forge(b), CiProbe::Green { .. })) // STORY-516
             .unwrap_or(false);
 
     // reviewed — an Approved verdict file exists for the PR.
@@ -79595,7 +79625,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // lifecycle:no-ci-wait / lifecycle:trivial. The non-waiting path still
         // records the PR number and still ends the implementer lease below;
         // it just lets CI finish in parallel with review/merge. trace:STORY-442
-        let mut probe = probe_ci_state_for_branch(&branch);
+        let mut probe = ci_probe_via_forge(&branch); // STORY-516: forge-routed
         if matches!(probe, CiProbe::InProgress { .. }) && self.lifecycle_skip.no_ci_wait {
             eprintln!(
                 "  {} CI still running on `{}` — skipping wait per lifecycle tag.",
