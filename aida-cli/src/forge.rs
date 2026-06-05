@@ -404,6 +404,15 @@ pub trait Forge {
     /// distinction the orchestrator's phase-1 verdict depends on.
     fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup>;
 
+    /// STORY-516: open change whose body/title references `spec` (the BUG-223
+    /// fallback when the branch-keyed lookup misses because the branch was
+    /// swapped). GitHub: `gh pr list --search <spec> --state open`.
+    fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup>;
+
+    /// STORY-516: the *merged* change for `branch` (did the branch's PR already
+    /// land?). GitHub: `gh pr list --head <branch> --state merged`.
+    fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup>;
+
     /// `gh pr view` status (state + mergeable + review + head sha).
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus>;
 
@@ -677,6 +686,24 @@ impl Forge for GitHubForge {
         // preserved exactly. trace:STORY-516 trace:BUG-257 | ai:claude
         Ok(change_lookup_from_pr_lookup(
             crate::detect_open_pr_for_branch(&self.project_root, branch),
+            branch,
+        ))
+    }
+
+    fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup> {
+        // STORY-516: delegate to detect_open_pr_for_spec (gh pr list --search).
+        // The branch label is unknown from a spec search, so pass "". | ai:claude
+        Ok(change_lookup_from_pr_lookup(
+            crate::detect_open_pr_for_spec(&self.project_root, spec),
+            "",
+        ))
+    }
+
+    fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
+        // STORY-516: delegate to detect_merged_pr_for_branch (gh pr list --state
+        // merged). trace:STORY-516 | ai:claude
+        Ok(change_lookup_from_pr_lookup(
+            crate::detect_merged_pr_for_branch(&self.project_root, branch),
             branch,
         ))
     }
@@ -996,6 +1023,14 @@ impl Forge for GitLabForge {
         anyhow::bail!("GitLab change_for_branch lands in EPIC-35 slice 3")
     }
 
+    fn change_for_spec(&self, _spec: &str) -> Result<ChangeLookup> {
+        anyhow::bail!("GitLab change_for_spec lands in EPIC-35 slice 3")
+    }
+
+    fn merged_change_for_branch(&self, _branch: &str) -> Result<ChangeLookup> {
+        anyhow::bail!("GitLab merged_change_for_branch lands in EPIC-35 slice 3")
+    }
+
     fn change_status(&self, _c: &ChangeRef) -> Result<ChangeStatus> {
         anyhow::bail!("GitLab change_status lands in EPIC-35 slice 3")
     }
@@ -1113,6 +1148,21 @@ impl Forge for PureGitForge {
             base: self.default_branch(),
             title: None,
         }))
+    }
+
+    fn change_for_spec(&self, _spec: &str) -> Result<ChangeLookup> {
+        // Pure-git has no searchable PR index. trace:STORY-516
+        Ok(ChangeLookup::NoChange)
+    }
+
+    fn merged_change_for_branch(&self, _branch: &str) -> Result<ChangeLookup> {
+        // Pure-git has no merged-PR concept (no PRs at all) — report NoChange,
+        // matching the pre-routing behaviour where this lookup degraded to
+        // "no merged PR" without a forge CLI. (A git-ancestry "is it on the
+        // default branch?" check is a *different* question callers handle
+        // separately; conflating it here regressed resolve_stack_base.)
+        // trace:STORY-516 | ai:claude
+        Ok(ChangeLookup::NoChange)
     }
 
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
