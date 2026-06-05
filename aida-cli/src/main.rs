@@ -16278,6 +16278,25 @@ fn pick_role_interactively(
     project_root: &std::path::Path,
     unknown: Option<&str>,
 ) -> Result<Option<String>> {
+    let header = match unknown.filter(|u| !u.is_empty()) {
+        Some(u) => format!("No such role: {} — pick one of the existing roles:", u),
+        None => "Select a role to enter:".to_string(),
+    };
+    // role-enter marks the *active* shell role; no spawn-default to highlight.
+    pick_role_with_header(project_root, &header, None)
+}
+
+/// TASK-644/TASK-646: shared role picker. Renders `header` then the role
+/// list over `/dev/tty` (stderr fallback) and reads a numeric selection from
+/// stdin — so callers whose stdout is a captured pipe (`eval "$(...)"`) stay
+/// uncorrupted. `highlight`, when set, marks that role `▸` and is offered as
+/// the default on a blank Enter (rather than cancelling). Returns
+/// `Ok(Some(name))` on selection, `Ok(None)` on cancel.
+fn pick_role_with_header(
+    project_root: &std::path::Path,
+    header: &str,
+    highlight: Option<&str>,
+) -> Result<Option<String>> {
     use std::io::Write;
 
     let roles = list_roles(project_root)?;
@@ -16308,13 +16327,13 @@ fn pick_role_interactively(
     }
 
     let active = std::env::var("AIDA_SESSION_ROLE").ok();
-    if let Some(u) = unknown.filter(|u| !u.is_empty()) {
-        ui!("No such role: {} — pick one of the existing roles:", u);
-    } else {
-        ui!("Select a role to enter:");
-    }
+    let highlight_idx = highlight.and_then(|h| roles.iter().position(|r| r.name == h));
+    ui!("{}", header);
     for (i, role) in roles.iter().enumerate() {
-        let marker = if active.as_deref() == Some(&role.name) {
+        // `*` = currently-active shell role; `▸` = the offered default.
+        let marker = if Some(i) == highlight_idx {
+            "▸"
+        } else if active.as_deref() == Some(&role.name) {
             "*"
         } else {
             " "
@@ -16336,10 +16355,24 @@ fn pick_role_interactively(
             purpose
         );
     }
-    ui!("  Enter a number (or blank/q to cancel): ");
+    match highlight_idx {
+        Some(_) => ui!(
+            "  Enter a number (blank = {}, q to cancel): ",
+            highlight.unwrap_or("default")
+        ),
+        None => ui!("  Enter a number (or blank/q to cancel): "),
+    }
 
     let mut answer = String::new();
     std::io::stdin().read_line(&mut answer)?;
+    // TASK-646: with a highlighted default, a blank line accepts it instead
+    // of cancelling; `q` still cancels. Without a default, blank cancels.
+    let trimmed = answer.trim();
+    if trimmed.is_empty() {
+        if let Some(idx) = highlight_idx {
+            return Ok(Some(roles[idx].name.clone()));
+        }
+    }
     match parse_role_selection(&answer, roles.len()) {
         RoleSelection::Index(i) => Ok(Some(roles[i].name.clone())),
         RoleSelection::Cancel => Ok(None),
@@ -20615,6 +20648,51 @@ fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
     }
 }
 
+/// TASK-646: resolve the role for a SPAWNED CHILD agent. ADR-2 ordering:
+///   1. `--role X` → use X (no prompt).
+///   2. no `--role`, stdin is a TTY → prompt via the shared role picker,
+///      pre-highlighting `implementer` (the dominant spawn); blank Enter
+///      accepts implementer, `q` cancels.
+///   3. no `--role`, non-interactive → default `implementer` + a one-line
+///      notice; never errors, never hangs, never launches role-less.
+/// The launching shell's `AIDA_SESSION_ROLE` is deliberately NOT inherited —
+/// advisor/product spawning an implementer is the common case, so cloning the
+/// launcher's hat would be wrong. Returns `Ok(None)` only when the user
+/// cancels the picker, so the caller aborts the launch cleanly.
+fn resolve_child_role(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    agent_type: &str,
+) -> Result<Option<String>> {
+    if let Some(r) = role {
+        return Ok(Some(r));
+    }
+    if std::io::stdin().is_terminal() {
+        let header = format!("Select a role for the new {} agent:", agent_type);
+        // `pick_role_with_header` returns Ok(None) on cancel → propagate as
+        // the abort signal.
+        pick_role_with_header(project_root, &header, Some("implementer"))
+    } else {
+        eprintln!(
+            "{} no --role given, defaulting to {} (non-interactive launch)",
+            "ℹ".cyan(),
+            "implementer".cyan()
+        );
+        Ok(Some("implementer".to_string()))
+    }
+}
+
+/// TASK-646: project root for child-role resolution, derived from the
+/// launch cwd (or the process cwd) the same way `agent_new_with_config`
+/// derives it — so the picker lists the right project's roles.
+fn child_role_project_root(cwd: Option<&std::path::Path>) -> Result<std::path::PathBuf> {
+    let base = cwd
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let discovered_root = find_aida_project_root_from(&base)?;
+    Ok(main_worktree_root_from(&discovered_root))
+}
+
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
@@ -20626,6 +20704,15 @@ fn agent_new_claude(
     name: Option<String>,
     bg: bool,
 ) -> Result<()> {
+    // TASK-646: resolve the child role (flag → picker → implementer default)
+    // before any launch work. A cancelled picker aborts cleanly.
+    let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "claude")? {
+        Some(r) => Some(r),
+        None => {
+            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            return Ok(());
+        }
+    };
     // STORY-495: faithful default — inject `--permission-mode` only when the
     // operator passed it explicitly. Otherwise leave Claude on its native
     // posture and let the uniform `[agents] bypass` knob (applied in
@@ -20700,6 +20787,14 @@ fn agent_new_codex(
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
+    // TASK-646: resolve the child role before launch (flag → picker → default).
+    let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "codex")? {
+        Some(r) => Some(r),
+        None => {
+            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            return Ok(());
+        }
+    };
     let mut default_args = Vec::new();
     if bypass_sandbox {
         default_args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
@@ -20736,6 +20831,14 @@ fn agent_new_antigravity(
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
+    // TASK-646: resolve the child role before launch (flag → picker → default).
+    let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "antigravity")? {
+        Some(r) => Some(r),
+        None => {
+            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            return Ok(());
+        }
+    };
     let mut default_args = Vec::new();
     if bypass_sandbox {
         default_args.push("--dangerously-skip-permissions".to_string());
