@@ -1,0 +1,31 @@
+id: 019e9a28-1ba1-7362-aeb7-6389fb4ec7ee
+spec_id: BUG-453
+agreed_id: BUG-453
+title: 'Headless drain: phase-1 watchdog kills PRODUCTIVE implementer sessions (no-commit-in-10m fires despite real file edits)'
+description: |-
+  Empirical 2026-06-05, burning down the approved backlog via `aida queue work --batch ... --auto-complete --no-human=both`. The headless implementer for TASK-673 (a crisp 'aida doctor integrity check' task) ran competently — read the spec, explored aida doctor, and WROTE 503 insertions to main.rs (the check + cutoff tests + alias-normalize tests). Then the phase-1 watchdog killed it: 'the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session.' It was NOT degenerate — the work is preserved (.aida/recovered/task-673-headless-wip.patch, 503 lines).
+
+  ROOT CAUSE (one or both):
+  1. The watchdog's no-progress window (BUG-420, default 10m) is too tight for an exploration-heavy task on a 20k-line file: the implementer wrote code early, then spent the final window READING/refining tests (aida doctor's existing tests) without a fresh commit — so 'no commit OR file-change for 10m' fired even though the session was productive.
+  2. OR the watchdog's file-change detection does not count Edit-tool edits in the worktree (only git-commit or mtime?), giving a false 'no progress' on a session that was actively editing.
+
+  IMPACT: this is the dominant blocker for unsupervised backlog burn-down. Even crisp tasks get killed mid-implementation before they can commit, leaving a stranded lease + worktree that blocks the drain's own retry ('scope owned by lease'). Net: --no-human=both drains shelve productive work.
+
+  FIX OPTIONS: (a) have the headless implementer commit incrementally / commit-before-deep-refine; (b) count Edit/Write tool file-changes (not just commits) in the watchdog's progress signal; (c) make the window configurable + larger default for big-file tasks; (d) reset the watchdog on any tool-use that mutates the worktree. Verify by re-draining TASK-673 (its work is patch-recoverable) and confirming it ships.
+
+  RELIABILITY-CRITICAL (autonomy keystone) → fix at the keyboard, not via the broken drain.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T23:39:40.321213715Z
+modified_at: 2026-06-05T23:39:40.321213715Z
+req_type: Bug
+tags:
+- autonomy
+- from-self-test
+- kind:bug-spotted
+- orchestrator
+- reliability
+- severity:major
+- watchdog
