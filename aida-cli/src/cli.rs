@@ -4734,9 +4734,10 @@ pub enum Command {
     #[clap(subcommand)]
     Autonomy(AutonomyCommand),
 
+    // trace:TASK-394 | ai:claude
     /// Persist (or revoke) the one-time `--no-human` scope acknowledgement so
     /// an overnight `aida queue work --auto-complete --no-human=both` loop
-    /// doesn't re-prompt every iteration. trace:TASK-394 | ai:claude
+    /// doesn't re-prompt every iteration.
     #[clap(subcommand)]
     NoHuman(NoHumanCommand),
 
