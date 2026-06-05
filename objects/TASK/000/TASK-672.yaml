@@ -1,0 +1,23 @@
+id: 019e996c-856d-7e31-8933-5f12241717b8
+spec_id: TASK-672
+agreed_id: TASK-672
+title: 'EPIC-35 ci op (point-probe): route probe_ci_state_for_branch through Forge::ci_probe_for_branch'
+description: |-
+  Third SPIKE-49 op (after merge TASK-668/669 + view PR-538). Routes the branch-keyed CI point-probe through the Forge trait.
+
+  - New forge-owned `CiProbeResult` (NoSignal/NoChecks/InProgress/Green/Failed) mirroring the orchestrator's `CiProbe`, preserving the NoSignal(reason) "couldn't probe" state + per-state change number. Forge `ci_probe_for_branch(branch)` added; GitHubForge delegates to the proven `probe_ci_state_for_branch` (single `gh pr list --json number,statusCheckRollup` call + BUG-* NoSignal degradations) and adapts via the pure `ci_probe_result_from_ci_probe`. GitLab bails (slice 4); pure-git → NoSignal.
+  - crate helper `ci_probe_via_forge(branch)` converts back to CiProbe so the 6 call sites are a pure name-swap (lowest risk on the orchestrator CI phase). Migrated: 2 status/display, the --watch-ci re-probe, in-flight PR display, the Green-check map, and the orchestrator CI phase.
+  - NOT in this slice (separate ci sub-slices): the WATCH ops — `gh pr checks --watch` (pr ship step 2 + orchestrator CI watch) and `gh run watch` (--watch-ci stream) — forge models a point-query, not a blocking watch. Also `gh run view`.
+
+  Tests: full aida-cli suite green (1615), incl. ci_probe_result_maps_every_ci_probe_state + auto_complete.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T20:14:46.637172408Z
+modified_at: 2026-06-05T20:14:46.637172408Z
+req_type: Task
+tags:
+- batch:gitlab-forge
+- forge-routing
+- from-advisor:STORY-516
