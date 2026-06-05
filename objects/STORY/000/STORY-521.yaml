@@ -13,12 +13,12 @@ description: |-
   5. checkout: `gh pr checkout` → forge.checkout_change.
 
   PROVEN PATTERN (4×): forge-owned result type mirroring the rich main.rs type + GitHubForge DELEGATES to the existing battle-tested helper + pure tested mapping fn + crate helper callers swap to. Zero classification reimpl → contracts preserved. Details + warnings in memory project_forge_plumbed_not_wired.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:37:53.949719227Z
-modified_at: 2026-06-05T22:17:40.443666769Z
+modified_at: 2026-06-05T22:17:42.949481982Z
 req_type: Story
 tags:
 - batch:gitlab-forge
