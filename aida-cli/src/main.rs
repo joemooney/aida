@@ -1512,6 +1512,7 @@ fn run() -> Result<()> {
             note,
             depends_on,
             as_deep_link,
+            notify,
             cmd,
         } => {
             let store = storage.load()?;
@@ -1523,6 +1524,7 @@ fn run() -> Result<()> {
                 note.as_deref(),
                 depends_on.as_deref(),
                 *as_deep_link,
+                *notify,
                 cmd,
                 &store,
                 &project_root,
@@ -5460,6 +5462,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             note,
             depends_on,
             as_deep_link,
+            notify,
             cmd,
         } => {
             let store = backend.load()?;
@@ -5472,6 +5475,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 note.as_deref(),
                 depends_on.as_deref(),
                 *as_deep_link,
+                *notify,
                 cmd,
                 &store,
                 project_root,
@@ -8310,6 +8314,7 @@ fn handle_brief_command(
     note: Option<&str>,
     depends_on: Option<&str>,
     as_deep_link: bool,
+    notify: bool,
     cmd: &Option<BriefCommand>,
     store: &RequirementsStore,
     project_root: &std::path::Path,
@@ -8339,6 +8344,17 @@ fn handle_brief_command(
                 depends_on,
             )?;
             println!("{}", path.display());
+            // TASK-502: --notify marks the brief urgent — write a `.pending`
+            // sentinel so the receiving agent's `aida status` surfaces it
+            // without a heartbeat. Idempotent. trace:TASK-502 | ai:claude
+            if notify {
+                add_pending_brief(project_root, agent, &path)?;
+                eprintln!(
+                    "{} notified — {} will see this in `aida status`",
+                    "📬".to_string(),
+                    agent.cyan()
+                );
+            }
             // SPIKE-33: also print a claude-cli:// deep link the operator
             // can click → opens Claude Code in the spec's worktree (or
             // project root) with a short pickup prompt referencing the
@@ -8933,6 +8949,136 @@ fn spec_id_from_brief_filename(name: &str) -> Option<String> {
     Some(spec.to_string())
 }
 
+/// TASK-502: the `.pending` sentinel for an agent — one urgent (unacked,
+/// `--notify`'d) brief path per line, project-relative. Lives in the agent's
+/// brief dir so `ack`, which only has the brief path, can find it from the
+/// brief's parent without needing the project root or agent name.
+fn pending_briefs_path(project_root: &std::path::Path, agent: &str) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join("agent-briefs")
+        .join(agent)
+        .join(".pending")
+}
+
+/// Read the current `.pending` entries (project-relative brief paths), trimming
+/// blanks. Missing file → empty list.
+fn read_pending_briefs(pending_path: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(pending_path)
+        .map(|s| {
+            s.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Rewrite `.pending` from a list — delete the file when the list is empty so
+/// an empty inbox leaves no sentinel behind.
+fn write_pending_briefs(pending_path: &std::path::Path, entries: &[String]) -> Result<()> {
+    if entries.is_empty() {
+        if pending_path.exists() {
+            std::fs::remove_file(pending_path)
+                .with_context(|| format!("failed to remove empty {}", pending_path.display()))?;
+        }
+        return Ok(());
+    }
+    if let Some(parent) = pending_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    std::fs::write(pending_path, format!("{}\n", entries.join("\n")))
+        .with_context(|| format!("failed to write {}", pending_path.display()))?;
+    Ok(())
+}
+
+/// Add a brief to the agent's `.pending` sentinel, idempotently (re-notifying
+/// the same brief does not duplicate the entry). Stored project-relative.
+fn add_pending_brief(
+    project_root: &std::path::Path,
+    agent: &str,
+    brief_path: &std::path::Path,
+) -> Result<()> {
+    let pending_path = pending_briefs_path(project_root, agent);
+    let rel = brief_path
+        .strip_prefix(project_root)
+        .unwrap_or(brief_path)
+        .display()
+        .to_string();
+    let mut entries = read_pending_briefs(&pending_path);
+    if !entries.iter().any(|e| e == &rel) {
+        entries.push(rel);
+    }
+    write_pending_briefs(&pending_path, &entries)
+}
+
+/// Remove a brief from its agent's `.pending` sentinel (called on ack). The
+/// agent dir is the brief's parent, so we don't need the project root. Matches
+/// either the bare brief name or any path entry ending in it, so an
+/// absolute-vs-relative mismatch doesn't strand the entry.
+fn clear_pending_brief(brief_path: &std::path::Path) {
+    let Some(dir) = brief_path.parent() else {
+        return;
+    };
+    let pending_path = dir.join(".pending");
+    if !pending_path.exists() {
+        return;
+    }
+    let Some(name) = brief_path.file_name().and_then(|n| n.to_str()) else {
+        return;
+    };
+    let kept: Vec<String> = read_pending_briefs(&pending_path)
+        .into_iter()
+        .filter(|e| {
+            // Drop the entry whose final path component is this brief's file
+            // name (handles project-relative vs absolute storage).
+            std::path::Path::new(e).file_name().and_then(|n| n.to_str()) != Some(name)
+        })
+        .collect();
+    let _ = write_pending_briefs(&pending_path, &kept);
+}
+
+/// TASK-502: scan `.aida/agent-briefs/*/.pending` and return `(agent, count)`
+/// for every agent with at least one urgent (notify'd, unacked) brief. When
+/// `AIDA_AGENT_NAME` resolves to a known brief-agent, narrow to that one (the
+/// "current agent's identity" case); otherwise report all agents.
+fn collect_pending_brief_counts(project_root: &std::path::Path) -> Vec<(String, usize)> {
+    let briefs_root = project_root.join(".aida").join("agent-briefs");
+    let Ok(entries) = std::fs::read_dir(&briefs_root) else {
+        return Vec::new();
+    };
+    // Derive the current brief-agent from the stable session name
+    // (e.g. "claude-3f2a" → "claude"), if any.
+    let current_agent = std::env::var("AIDA_AGENT_NAME").ok().and_then(|name| {
+        ["claude", "codex", "antigravity"]
+            .into_iter()
+            .find(|a| name == *a || name.starts_with(&format!("{a}-")))
+            .map(str::to_string)
+    });
+    let mut out: Vec<(String, usize)> = Vec::new();
+    for entry in entries.flatten() {
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let Some(agent) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        if let Some(cur) = &current_agent {
+            if &agent != cur {
+                continue;
+            }
+        }
+        let count = read_pending_briefs(&entry.path().join(".pending")).len();
+        if count > 0 {
+            out.push((agent, count));
+        }
+    }
+    out.sort();
+    out
+}
+
 fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
     let path = brief_file;
     if !path.exists() {
@@ -8963,6 +9109,9 @@ fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
             acked_path.display()
         )
     })?;
+    // TASK-502: drop this brief from the agent's `.pending` sentinel (no-op if
+    // it was never --notify'd). Uses the pre-rename path's file name.
+    clear_pending_brief(path);
     println!("Acknowledged: {}", acked_path.display());
     Ok(())
 }
@@ -9150,6 +9299,46 @@ mod task_492_brief_tests {
         store
     }
 
+    /// TASK-502: the `.pending` sentinel lifecycle — add is idempotent,
+    /// clear drops the matching entry, and an emptied sentinel is removed.
+    #[test]
+    fn pending_brief_sentinel_add_clear_lifecycle() {
+        use super::{
+            add_pending_brief, clear_pending_brief, pending_briefs_path, read_pending_briefs,
+        };
+        let dir = tempfile::TempDir::new().unwrap();
+        let root = dir.path();
+        let agent_dir = root.join(".aida").join("agent-briefs").join("codex");
+        std::fs::create_dir_all(&agent_dir).unwrap();
+        let brief_a = agent_dir.join("TASK-1-stamp.md");
+        let brief_b = agent_dir.join("TASK-2-stamp.md");
+        std::fs::write(&brief_a, "a").unwrap();
+        std::fs::write(&brief_b, "b").unwrap();
+
+        let pending = pending_briefs_path(root, "codex");
+
+        // add A twice → one entry (idempotent); add B → two entries.
+        add_pending_brief(root, "codex", &brief_a).unwrap();
+        add_pending_brief(root, "codex", &brief_a).unwrap();
+        add_pending_brief(root, "codex", &brief_b).unwrap();
+        let entries = read_pending_briefs(&pending);
+        assert_eq!(entries.len(), 2, "idempotent add: {entries:?}");
+        // stored project-relative
+        assert!(entries.iter().all(|e| e.starts_with(".aida/agent-briefs/")));
+
+        // clear A → only B remains, file still present.
+        clear_pending_brief(&brief_a);
+        let entries = read_pending_briefs(&pending);
+        assert_eq!(entries.len(), 1, "after clearing A: {entries:?}");
+        assert!(entries[0].ends_with("TASK-2-stamp.md"));
+        assert!(pending.exists());
+
+        // clear B → empty → sentinel removed.
+        clear_pending_brief(&brief_b);
+        assert!(read_pending_briefs(&pending).is_empty());
+        assert!(!pending.exists(), "emptied .pending should be deleted");
+    }
+
     #[test]
     fn brief_cli_parses_canonical_create_shape() {
         let cli = Cli::try_parse_from(["aida", "brief", "codex", "TASK-492", "--note", "ship it"])
@@ -9161,6 +9350,7 @@ mod task_492_brief_tests {
                 note,
                 depends_on,
                 as_deep_link,
+                notify,
                 cmd,
             } => {
                 assert_eq!(agent.as_deref(), Some("codex"));
@@ -9168,6 +9358,7 @@ mod task_492_brief_tests {
                 assert_eq!(note.as_deref(), Some("ship it"));
                 assert_eq!(depends_on, None);
                 assert!(!as_deep_link);
+                assert!(!notify);
                 assert!(cmd.is_none());
             }
             other => panic!("unexpected command: {other:?}"),
@@ -58660,6 +58851,25 @@ fn handle_status_command_distributed(
             if draft_inbox == 1 { "" } else { "s" },
             "/aida-triage".cyan()
         );
+        println!();
+    }
+
+    // TASK-502: surface urgent (notify'd) agent briefs from the `.pending`
+    // sentinels, so an idle agent's `aida status` flags work routed to it
+    // without a heartbeat. Filtered to the current agent when identifiable,
+    // else all agents. trace:TASK-502 | ai:claude
+    let pending_briefs = collect_pending_brief_counts(&project_root);
+    if !pending_briefs.is_empty() {
+        for (agent, count) in &pending_briefs {
+            println!(
+                "  {} {} pending brief{} for {} — run {}",
+                "📬".to_string(),
+                count,
+                if *count == 1 { "" } else { "s" },
+                agent.cyan(),
+                format!("aida brief list --for-agent {agent}").cyan()
+            );
+        }
         println!();
     }
 
