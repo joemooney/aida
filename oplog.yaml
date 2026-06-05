@@ -12546,5 +12546,13 @@ operations:
 
       ## Notes
       - This is the mechanism the rest of the role-onboarding set leans on. Sibling tasks (separate): TASK-646 (`aida agent new` prompts for child role), TASK-644 (role picker), and the later director-evolution progressive-disclosure hint.
-clock: 1389
+- id: 019e9638-2aab-7fb1-9c0f-f79e21818750
+  target_id: 019e36e7-d8f7-7b01-8bc3-be83b2477bf7
+  author: aida
+  node_id: '1'
+  lamport: 1390
+  timestamp: 2026-06-05T05:18:43.883328662Z
+  kind: !SetStatus
+    status: Completed
+clock: 1390
 node_id: '1'
