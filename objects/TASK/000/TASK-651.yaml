@@ -1,0 +1,12 @@
+id: 019e96c0-2510-7262-bf32-f8239e4368ad
+spec_id: TASK-651
+agreed_id: TASK-651
+title: '[EPIC-35 s2] Forge-aware hint text: sweep the remaining ~11 files'
+description: 'Sibling of TASK-650 (which landed the helper + workflow_hints). Convert the remaining user-facing `gh ...` hint/error strings in: auto_complete.rs, pr_ship.rs, pr_rebase.rs, network_retry.rs, status_cleanup.rs, drain_state.rs, punt.rs, state_snapshot.rs, cli.rs, main.rs. For each: thread resolve_forge_kind(project_root) into the hint builder, replace literals with change_cmd_hint()/change_noun() + a forge-neutral pure-git fallback; disambiguate hints from real Command::new("gh") invocations (only hints change); update hardcoded-gh tests to inject ForgeKind. Refinement: per-forge merge flags (glab --remove-source-branch vs gh --delete-branch). Closing this + TASK-650 satisfies STORY-508''s acceptance: no user-facing hint names a forge CLI the active provider doesn''t use.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T07:47:15.344416583Z
+modified_at: 2026-06-05T07:47:15.344416583Z
+req_type: Task
