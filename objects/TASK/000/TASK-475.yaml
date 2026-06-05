@@ -19,7 +19,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:50:12.455310995Z
-modified_at: 2026-05-22T20:50:28.175483403Z
+modified_at: 2026-06-05T04:11:27.410443221Z
 req_type: Task
 tags:
 - from-spec:BUG-220
@@ -31,3 +31,9 @@ relationships:
   target_id: 019e3390-c205-7c52-8921-c3a947323295
   created_at: 2026-05-22T20:50:28.175476353Z
   created_by: joe
+comments:
+- id: 019e95fa-9332-7ae1-af41-1d48464d04aa
+  author: joe
+  content: Commit a5852baed references this requirement
+  created_at: 2026-06-05T04:11:27.410443221Z
+  modified_at: 2026-06-05T04:11:27.410443221Z
