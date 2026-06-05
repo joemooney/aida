@@ -1,0 +1,12 @@
+id: 019e96e6-57d5-7b22-8409-3260431370de
+spec_id: TASK-653
+agreed_id: TASK-653
+title: '[EPIC-35 s2] Forge-aware orchestrator recovery hints (TASK-651 slice 2)'
+description: 'Slice 2 of the TASK-651 sweep. (1) Refactored the per-forge command vocabulary (merge_cmd/view_cmd/ci_watch_cmd) to take a display-string change id so callers pass a number OR a ''<N>'' placeholder uniformly (no u64 cast, no duplication). (2) Added ForgeKind::cli_install_hint() (CLI name + install URL per forge). (3) Converted auto_complete.rs''s per-phase recovery_hint: the merge/CI-view/CI-timeout/missing-tool/spawn hints now resolve via a forge field on HintContext (set from the driver''s project_root), so a GitLab drain failure names glab/MR/ci commands and the right install URL, never gh. ForgeKind now derives Default (= None/pure-git, matching resolve_forge_kind''s fallback).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T08:28:58.709242752Z
+modified_at: 2026-06-05T08:28:58.709242752Z
+req_type: Task
