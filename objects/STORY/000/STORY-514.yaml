@@ -1,0 +1,31 @@
+id: 019e9582-68dd-7df1-a28d-2db6747b8fd5
+spec_id: STORY-514
+agreed_id: STORY-514
+title: 'Review PR-475: [AI:codex] docs(spike): Claude Code skills system decomposition (SPIKE-16)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e9580`) for branch `spike-16`.
+
+  - PR: <https://github.com/joemooney/aida/pull/475>
+  - Branch: `spike-16` → `main`
+
+  ## Covers
+
+  - SPIKE-16
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 475` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T02:00:12.253888192Z
+modified_at: 2026-06-05T02:00:24.072566484Z
+req_type: Story
+relationships:
+- rel_type: !Custom implements
+  target_id: 019e71c0-865a-72a0-8474-d00eed34672a
+  created_at: 2026-06-05T02:00:24.072553201Z
+  created_by: joe
