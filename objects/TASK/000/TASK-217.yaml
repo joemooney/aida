@@ -66,7 +66,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:00:30.455249397Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-06-05T16:43:10.134823449Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -114,6 +114,11 @@ comments:
     Test status: 8 new unit tests cover all 6 status branches + container + role-fallback paths. 332/332 cargo tests green.
   created_at: 2026-05-14T07:11:53.976807092Z
   modified_at: 2026-05-14T07:11:53.976807092Z
+- id: 019e98aa-c9b6-71e1-898c-366cee9fa014
+  author: joe
+  content: Commit 65d9a8113 references this requirement
+  created_at: 2026-06-05T16:43:10.134823449Z
+  modified_at: 2026-06-05T16:43:10.134823449Z
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
