@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T04:50:12.576842109Z
-modified_at: 2026-06-05T04:50:12.576842109Z
+modified_at: 2026-06-05T04:55:17.489909747Z
 req_type: Decision
 tags:
 - cli-ux
@@ -43,3 +43,12 @@ tags:
 - mental-model
 - onboarding-flow
 - roles
+comments:
+- id: 019e9622-b4f1-79c0-ad0c-a289a856b446
+  author: joe
+  content: |-
+    Refinements (operator, 2026-06-04):
+    1. ENV-VAR CONSTRAINT: `aida init` cannot set AIDA_SESSION_ROLE in the parent shell (normal subprocess; only the eval-via-shell-function pattern can, à la `aida dev activate`). RESOLUTION: don't make init write the env. The implementer default is IMPLICIT/read-side — every role reader (statusline, context, routing) treats UNSET AIDA_SESSION_ROLE as `implementer`. init just SURFACES it. Env is written only when the user explicitly `aida role enter`s a different role. No shell-function-wrapped `aida-init` (overkill).
+    2. AGENT NEW: prompt, don't silently default. `aida agent new` role resolution: --role X → X; else interactive → PROMPT via the shared role picker (TASK-644's component); else non-interactive → default implementer + notice. Do NOT inherit the launcher's AIDA_SESSION_ROLE into the child — the common case is advisor/product spawning an IMPLEMENTER; inheriting clones the wrong hat. Pre-highlight implementer in the picker as the likely pick.
+  created_at: 2026-06-05T04:55:17.489909747Z
+  modified_at: 2026-06-05T04:55:17.489909747Z
