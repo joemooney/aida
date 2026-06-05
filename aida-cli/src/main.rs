@@ -29607,10 +29607,10 @@ fn session_end(
 /// Open-PR metadata captured by `gh pr list` for a session's branch. Just
 /// the fields the auto-queue side-effect needs to brief a reviewer.
 /// trace:STORY-66 | ai:claude
-struct OpenPrInfo {
-    number: u64,
-    title: String,
-    url: String,
+pub(crate) struct OpenPrInfo {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    pub(crate) url: String,
 }
 
 /// Why `detect_open_pr_for_branch` returned no PR — so the caller (and the
@@ -29625,7 +29625,7 @@ struct OpenPrInfo {
 /// failure — same as before. Conflating the two made every network blip
 /// look like a "no PR" failure with a misleading recovery hint.
 /// trace:BUG-72 BUG-257 | ai:claude
-enum PrLookup {
+pub(crate) enum PrLookup {
     Found(OpenPrInfo),
     /// `gh` ran cleanly but reported no open PR for this branch.
     NoOpenPr,
@@ -30155,7 +30155,7 @@ fn bounded_text(text: &str, max: usize) -> String {
 /// return shape lets callers print an honest skip reason (no PR yet / gh
 /// missing / gh failed) instead of collapsing every case to `None`.
 /// trace:STORY-66 BUG-72 BUG-74 | ai:claude
-fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+pub(crate) fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "open"])
 }
 
@@ -32258,6 +32258,7 @@ fn pr_ship_handler(
         url: String::new(),
         branch: branch.clone(),
         base: String::new(),
+        title: None,
     };
     let mut merge_sink = crate::network_retry::StderrSink;
     if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
@@ -80071,6 +80072,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             url: String::new(),
             branch: String::new(),
             base: String::new(),
+            title: None,
         };
         let opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
