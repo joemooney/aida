@@ -30662,6 +30662,29 @@ pub(crate) fn find_plan_files_for_spec(
 /// Parse the `## Followups` section of a plan: collect the column-0
 /// `- `/`* ` bullets until the next `##` header. Leading marker and a
 /// trailing period are stripped; placeholder/empty bullets are dropped.
+/// TASK-431: is this `## Followups` bullet a "no followups" sentinel
+/// (`None`, `N/A`, `NA`, `Nothing`, `(none)`, optionally followed by an
+/// em-dash / colon / spaced-dash explanation) rather than a real followup?
+/// Conservative — only when the sentinel is the WHOLE leading clause, so a
+/// genuine bullet like "None of these handlers do X" is kept. trace:TASK-431
+fn followup_is_sentinel(text: &str) -> bool {
+    let lower = text.trim().to_ascii_lowercase();
+    let unparen = lower.trim_start_matches('(').trim_end_matches(')').trim();
+    // Leading clause = everything before the first explanation separator.
+    let head = unparen
+        .split([':', '—'])
+        .next()
+        .unwrap_or(unparen)
+        .split(" - ")
+        .next()
+        .unwrap_or(unparen)
+        .trim();
+    matches!(
+        head,
+        "none" | "n/a" | "na" | "nothing" | "nothing here" | "nothing to do"
+    )
+}
+
 fn parse_plan_followups(content: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut in_section = false;
@@ -30690,7 +30713,11 @@ fn parse_plan_followups(content: &str) -> Vec<String> {
             // STARTS with `<`, e.g. `<describe the followup>`) — not any bullet
             // that merely contains `<` (a real followup like "support `Vec<T>`"
             // or "fix the `a < b` guard" was being silently dropped).
-            if text.is_empty() || text.starts_with('<') || text.starts_with("file as") {
+            if text.is_empty()
+                || text.starts_with('<')
+                || text.starts_with("file as")
+                || followup_is_sentinel(&text)
+            {
                 continue;
             }
             out.push(text);
@@ -38555,6 +38582,49 @@ mod statusline_tests {
             parse_plan_followups(fenced),
             vec!["real followup".to_string()]
         );
+    }
+
+    /// TASK-431: "no followups" sentinel bullets (None / N/A / Nothing /
+    /// (none), with or without an em-dash/colon/dash explanation) are dropped,
+    /// while a real bullet that merely STARTS with one of those words is kept.
+    #[test]
+    fn plan_followups_drops_sentinel_bullets() {
+        let plan = "\
+## Followups
+
+- None — the fix is self-contained.
+- N/A
+- (none)
+- Nothing
+- Nothing to do: shipped complete
+- None of these handlers validate the input
+- Note: add a retry here
+
+## Related
+";
+        assert_eq!(
+            parse_plan_followups(plan),
+            vec![
+                "None of these handlers validate the input".to_string(),
+                "Note: add a retry here".to_string(),
+            ]
+        );
+        // Direct predicate coverage.
+        // The caller strips a trailing '.' before calling, so pass dotless forms.
+        for s in [
+            "None",
+            "none",
+            "N/A",
+            "na",
+            "Nothing",
+            "(none)",
+            "Nothing — done",
+        ] {
+            assert!(followup_is_sentinel(s), "should be sentinel: {s:?}");
+        }
+        for s in ["None of these", "Nothing works yet", "Notify the user"] {
+            assert!(!followup_is_sentinel(s), "should be real: {s:?}");
+        }
     }
 
     /// BUG-104: a real followup that merely *contains* `<` (generics, a `<`
