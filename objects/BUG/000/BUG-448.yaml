@@ -1,0 +1,37 @@
+id: 019e9948-f805-7181-9730-cef5b60afc93
+spec_id: BUG-448
+agreed_id: BUG-448
+title: aida graph --tree (epic rollup) omits children parented via 'aida rel add --type parent' — parent FIELD vs Parent EDGE are two divergent sources of truth
+description: |-
+  REPRO (2026-06-05):
+  1. aida rel add EPIC-37 BUG-445 --type parent   (and BUG-446/447, TASK-631)
+  2. aida show EPIC-37            -> correctly lists "is parent of BUG-445 ..." (4 edges)
+  3. aida graph EPIC-37 --follow parent  -> correctly lists the 4 children
+  4. aida graph EPIC-37 --tree           -> "(no related specs in this direction)"  <-- WRONG
+     (still empty after `aida cache rebuild`)
+  Control: aida graph EPIC-33 --tree -> correctly shows its children. EPIC-33's children were created with `aida add --parent EPIC-33` (parent set AT creation); EPIC-37's were parented post-hoc via `aida rel add --type parent`.
+
+  DIAGNOSIS (hypothesis, evidence strong):
+  There appear to be TWO sources of parenthood that diverge:
+  - the requirement's PARENT FIELD (populated by `aida add --parent`), which `graph --tree` (the epic-rollup) walks; and
+  - the Parent RELATIONSHIP EDGE (created by `aida rel add --type parent`), which `aida show` and `graph --follow parent` walk.
+  `aida rel add --type parent` writes the relationship edge but does NOT set the child's parent field, so a spec parented post-hoc is shown by `show` / `--follow parent` but is INVISIBLE in `--tree`, the canonical "what are this epic's children?" view. `aida edit` has no `--parent` flag, so there is currently no way to set the parent field on an existing spec to repair the rollup.
+
+  IMPACT: an operator who groups existing specs under an epic via `aida rel add` (the documented way to relate existing specs) gets an epic whose rollup looks EMPTY -- it reads as "this epic has no children" when it has four. Trust/correctness gap in a headline graph feature. Surfaced while building the EPIC-37 onboarding-hardening umbrella.
+
+  FIX SPACE (triage, do not implement): make the parent field and the Parent edge ONE source of truth -- either (a) `rel add --type parent` also sets the child's parent field (and `rel remove` clears it), or (b) `graph --tree` walks Parent relationship edges (like `--follow parent`) rather than a separate field, or (c) add `aida edit --parent` so existing specs can be reparented and have the field set. Whichever, `show`, `--tree`, and `--follow parent` must agree.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T19:35:56.677371121Z
+modified_at: 2026-06-05T19:35:56.677371121Z
+req_type: Bug
+tags:
+- aida:graph
+- aida:rel
+- epic-rollup
+- from-self-test
+- graph
+- papercut
+- relationships
