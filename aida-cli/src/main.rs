@@ -81100,50 +81100,41 @@ mod story_255_discipline_pack_tests {
     //! trace:STORY-255 | STORY-443 | ai:claude
     use super::*;
 
-    /// Verifies the embedded discipline pack scaffolds the full set
-    /// of canonical files into a new project's docs/aida/discipline/
-    /// directory. The expected count grows as the pack grows; the test
-    /// name was renamed from `_seven_docs_plus_readme` to a stable form
-    /// so adding a doc no longer requires renaming the test.
-    /// trace:TASK-534 | ai:claude
+    /// Verifies the embedded discipline pack scaffolds the full set of canonical
+    /// files into a new project's docs/aida/discipline/ directory.
+    ///
+    /// TASK-465: STRUCTURAL, not count-based. The expected file set is derived
+    /// from the SAME single source `ensure_discipline_pack_scaffold` writes from
+    /// — the `docs/aida/discipline/` keys in `EMBEDDED_TEMPLATES` — so adding a
+    /// doc to the master template can never break this test (the prior hardcoded
+    /// `assert_eq!(written, 16)` + hand-maintained file list broke on every pack
+    /// addition, e.g. PR-193). trace:TASK-465 | ai:claude
     #[test]
     fn discipline_pack_scaffolds_full_set() {
-        // trace:TASK-479 | ai:antigravity — robust-project-root-resolution.md joins the pack.
-        // trace:TASK-512 | ai:claude — tag-conventions.md joins the pack.
-        // trace:STORY-444 | ai:claude — backlog-grooming.md joins the pack.
-        // trace:TASK-517 | ai:codex — reserved-paths.md documents the
-        // `/ultraplan` namespace-reservation prompt source.
-        // trace:BUG-378 | ai:claude — brief-polling.md joins the pack.
-        // trace:STORY-467 | ai:claude — observation-discipline.md joins the pack.
-        // trace:TASK-1-100 | ai:claude — glossary.yaml joins the pack as the
-        // structured single-source vocabulary surface consumed by the demo
-        // script and (future) TUI tooltips.
+        use aida_core::templates::EMBEDDED_TEMPLATES;
+        // Single source of truth: every embedded `docs/aida/discipline/<file>`.
+        let expected: Vec<String> = EMBEDDED_TEMPLATES
+            .keys()
+            .filter_map(|k| k.strip_prefix("docs/aida/discipline/"))
+            .filter(|n| !n.is_empty())
+            .map(|n| n.to_string())
+            .collect();
+        assert!(
+            expected.len() >= 10,
+            "sanity: expected a populated discipline pack, found {}",
+            expected.len()
+        );
+
         let root = tempfile::tempdir().unwrap();
         let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
         assert_eq!(
-            written, 16,
-            "expected README + 14 discipline docs + glossary.yaml"
+            written,
+            expected.len(),
+            "scaffolded count must match the embedded discipline pack"
         );
 
         let dir = root.path().join("docs/aida/discipline");
-        for f in [
-            "README.md",
-            "advisor-role.md",
-            "backlog-grooming.md",
-            "brief-polling.md",
-            "glossary.yaml",
-            "implementer-discipline.md",
-            "lifecycle-vocabulary.md",
-            "machinery-glossary.md",
-            "observation-discipline.md",
-            "tag-conventions.md",
-            "workflow-patterns.md",
-            "session-discipline.md",
-            "skill-prompt-kinds.md",
-            "substrate-as-bouncer.md",
-            "robust-project-root-resolution.md",
-            "reserved-paths.md",
-        ] {
+        for f in &expected {
             assert!(dir.join(f).is_file(), "missing discipline doc: {f}");
         }
 
@@ -81155,7 +81146,7 @@ mod story_255_discipline_pack_tests {
         // --force re-writes them all.
         assert_eq!(
             ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-            16
+            expected.len()
         );
     }
 
