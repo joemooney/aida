@@ -62638,6 +62638,49 @@ fn render_spec_card(
         }
     }
 
+    // TASK-313: the owning plan's brief (Critical Files / Followups /
+    // Verification) inside the card box — the same brief /aida-pickup surfaces,
+    // reusing `aida queue work`'s plan discovery (discover_plan_context) rather
+    // than duplicating it. Renders only when a docs/plans/ file owns the spec.
+    // trace:TASK-313 | ai:claude
+    {
+        let project_root = store_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        let plan = discover_plan_context(&project_root, &req.display_id()).or_else(|| {
+            req.spec_id
+                .as_deref()
+                .and_then(|s| discover_plan_context(&project_root, s))
+        });
+        if let Some(ctx) = plan {
+            println!("  {} {}", "▸ Plan brief:".bold(), ctx.plan_file.cyan());
+            if !ctx.critical_files.is_empty() {
+                println!(
+                    "    {} ({})",
+                    "Critical files".dimmed(),
+                    ctx.critical_files.len()
+                );
+                for f in &ctx.critical_files {
+                    println!("      {}", f);
+                }
+            }
+            if !ctx.followups.is_empty() {
+                println!("    {} ({})", "Followups".dimmed(), ctx.followups.len());
+                for f in &ctx.followups {
+                    println!("      - {}", f);
+                }
+            }
+            if let Some(v) = &ctx.verification {
+                println!("    {}", "Definition of done".dimmed());
+                for l in v.lines() {
+                    println!("      {}", l.dimmed());
+                }
+            }
+            println!();
+        }
+    }
+
     // Git linkage — reuse the same section `aida show` appends, grepped
     // against every id form the spec has worn. trace:TASK-241
     if !no_git {
