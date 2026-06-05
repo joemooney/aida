@@ -3,12 +3,12 @@ spec_id: TASK-102
 agreed_id: TASK-102
 title: 'aida show: enumerate relationships inline (not just the count)'
 description: "Today aida show <ID> displays 'Relations: N relationship(s)' as a count without listing the actual edges. The enumerator is aida rel list <ID> — but that's a separate command on a separate subcommand tree.\n\nDiscoverability signal: 2026-05-13, an agent attempted aida show STORY-86 --relations expecting the flag to enumerate. The flag doesn't exist (error: unexpected argument). The agent's mental model — 'show should show everything about the thing' — was reasonable, and the inline 'Relations: N' line in aida show output didn't point at aida rel list as the next step.\n\nTwo complementary fixes:\n\n1. Enumerate inline below a threshold (e.g. < 5 edges) — most reqs have few relationships and they're cheap to display:\n   Relations:\n     ↳ child of EPIC-21 (Code↔store commit pairing)\n   \n2. Expose a flag (--rels or --relations) to force enumeration regardless of count, and to hint at the flag when count is hidden:\n   Relations: 12 relationship(s)  (use --rels to enumerate, or 'aida rel list STORY-86')\n\nOr just always enumerate, with truncation past N=10 + a 'plus M more, see aida rel list <ID>' line. The N-threshold approach is more conservative (doesn't bloat output for highly-connected reqs).\n\nComposes with aida show --tree (STORY-62 — hierarchy view) but addresses a different question: --tree shows descendants vertically; relations enumeration shows ALL edge types (child, parent, references, verifies, etc.) horizontally.\n\n## Acceptance\n\n- [ ] aida show enumerates relationships inline when count <= threshold (default 5, configurable)\n- [ ] aida show --rels (or --relations) forces enumeration regardless of count\n- [ ] When count exceeds threshold, the 'Relations: N' line includes a hint pointing at aida rel list <ID>\n- [ ] Truncation past N=10 with '...M more, see aida rel list <ID>' line\n- [ ] Edge rendering shows direction + type + target title (e.g. '↳ child of EPIC-21 (Code↔store commit pairing)')"
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:48:05.637187178Z
-modified_at: 2026-06-05T14:42:16.124248819Z
+modified_at: 2026-06-05T14:48:34.435288135Z
 req_type: Task
 tags:
 - discoverability
@@ -35,3 +35,7 @@ comments:
   content: Commit 2c4bc1ed5 references this requirement
   created_at: 2026-06-05T14:42:16.124248819Z
   modified_at: 2026-06-05T14:42:16.124248819Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T14:48:34.435288135Z
+  completion_sha: 4b834d19d5471265353b04b803ec4983c8f1885a
