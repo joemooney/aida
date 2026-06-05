@@ -1,0 +1,42 @@
+id: 019e98d6-09cf-7651-ba80-a784deba34c4
+spec_id: TASK-667
+agreed_id: TASK-667
+title: Shell wrapper signals presence via env var; binary tailors auto-eval hints (bare vs eval form)
+description: |-
+  ## Bug (operator-found, 2026-06-05)
+
+  The `aida()` shell wrapper (installed by `aida dev shell-init`) auto-evals a fixed set of subcommands — `dev activate/deactivate`, `role enter/end/add`, `session start/end` — via `eval "$(command aida "$@")"`. But it sets NO env var marking its presence, and the binary prints `eval "$(aida role enter <role>)"` (aida-cli/src/main.rs:4714) UNCONDITIONALLY.
+
+  Result: under the wrapper, the printed hint `eval "$(aida role enter <role>)"` DOUBLE-EVALS and breaks (the inner eval runs in a subshell; the role change is lost). The correct form under the wrapper is the BARE `aida role enter <role>` (the function evals it). Neither static string is right for both contexts — and the binary is already inconsistent (other paths, e.g. main.rs:16887/16992/17168, print the bare form). This is the long-standing double-eval footgun (memory feedback_no_eval_role_enter) — the binary should stop EMITTING it, not rely on the user/agent to remember.
+
+  ## Fix (two parts)
+
+  1. **Wrapper signals itself.** The shell-helpers block (`aida dev shell-init` template) exports a marker when sourced — e.g. `export AIDA_SHELL_WRAPPER=1` (optionally listing the wrapped verbs, `AIDA_SHELL_WRAPPER=role,session,dev`, so the binary knows exactly which subcommands are auto-evaled). Sourced helpers ⇒ the `aida()` function is defined ⇒ wrapper active.
+  2. **Binary tailors the hint.** A single helper (e.g. `eval_subcommand_hint("role enter <role>")`) emits the BARE form when `AIDA_SHELL_WRAPPER` is set, the `eval "$(...)"` form when not. Route every auto-eval hint through it (role enter/end/add, session start/end, dev activate/deactivate — incl. main.rs:4714 and the role picker/onboarding hints).
+
+  ## Acceptance
+
+  - [ ] With the shell helpers sourced (`AIDA_SHELL_WRAPPER` set), runtime hints for auto-evaled subcommands show the BARE form (`aida role enter <role>`), never `eval "$(...)"`.
+  - [ ] Without the wrapper (raw binary, var unset), hints show the `eval "$(...)"` form (current behavior preserved).
+  - [ ] The shell-init template exports the marker; regenerating helpers (`aida dev shell-init --install`) adds it.
+  - [ ] `--help` text (static, can't branch) shows both forms with a one-line "via the shell helper, just `aida role enter`" note.
+  - [ ] Covers the TASK-645 init-onboarding hint (it currently hardcodes the bare form — route it through the same helper).
+
+  ## Notes
+  - Resolves the manual workaround behind memory feedback_no_eval_role_enter. The env var also lets the binary make other wrapper-aware decisions later (it can know its eval-output will actually take effect in the caller's shell).
+  - Relates to TASK-645 (init role surfacing), TASK-644 (role picker) — both emit role-enter hints.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T17:30:24.591085057Z
+modified_at: 2026-06-05T17:30:24.591085057Z
+req_type: Task
+tags:
+- aida:role:enter
+- auto-eval
+- cli-ux
+- from-product
+- from-user-direction
+- role-enter
+- shell-wrapper
