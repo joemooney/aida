@@ -8,12 +8,12 @@ description: |-
   Extracted ci_probe_from_ci_probe_result (reverse map, shared by ci_probe_via_forge). Crate helper watch_ci_for_context_via_forge(branch, no_human) routes through forge + converts back to CiProbe so the 2 callers (orchestrator CI phase + the --watch-ci flow) are a pure name-swap.
 
   Not dogfoodable via aida pr ship (that path uses gh pr checks --watch, already routed via watch_ci); validate via a watched --zen --auto-complete drain. Full suite green (1615). Child of STORY-521. After this merges, STORY-521 (and EPIC-35 routing) is complete.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T22:13:56.453538078Z
-modified_at: 2026-06-05T22:27:21.536925637Z
+modified_at: 2026-06-05T22:27:27.047355695Z
 req_type: Task
 tags:
 - batch:gitlab-forge
