@@ -12670,5 +12670,13 @@ operations:
       ## Notes
       - Complements (doesn't replace) `aida queue list` (the queue-focused view). This is the at-a-glance overlay on the main list.
       - The in-flight signal reads the same lease registry as `aida session leases`; reaped/dead leases must not show `▶` (use the live-lease check, cf. the dead-agent reaper STORY-496).
-clock: 1400
+- id: 019e9972-e892-78d0-98cd-976ef3c77aa6
+  target_id: 019e9587-884a-7f70-899d-afc1e0ea9353
+  author: aida
+  node_id: '1'
+  lamport: 1401
+  timestamp: 2026-06-05T20:21:45.234264690Z
+  kind: !SetStatus
+    status: Approved
+clock: 1401
 node_id: '1'
