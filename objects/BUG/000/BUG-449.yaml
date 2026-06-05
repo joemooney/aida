@@ -1,0 +1,42 @@
+id: 019e9963-0461-78b3-a7ef-5286bc98f87a
+spec_id: BUG-449
+agreed_id: BUG-449
+title: MCP update_requirement bypasses the TASK-647 advisor-authority status gate (enforced in add_requirement) — agent self-advances spec to Completed on uncommitted code
+description: |-
+  The TASK-647/ADR-3 "MCP cannot be trusted as advisor authority" gate is enforced in MCP add_requirement but ENTIRELY ABSENT in MCP update_requirement, so it is trivially bypassable and lets an agent self-advance a spec all the way to Completed (on uncommitted code).
+
+  SOURCE (verified):
+  - tool_add_requirement (mcp.rs:753-772): any requested Approved/Planned/InProgress/Done/Completed is downgraded to Draft -- "Producing an approved+ spec is the advisor's triage decision, so MCP intake always lands draft regardless of the requested status." trace:TASK-647
+  - tool_update_requirement (mcp.rs:836-845): status change only checks forbidden_attention_transition; NO advisor-authority / lifecycle gate. Any spec can be flipped Draft->Approved->Completed via update_requirement.
+
+  REPRO (Codex multi-agent session in ~/work/dummy1, 2026-06-05):
+  1. aida.add_requirement(status:approved) -> "filed as draft, queued for advisor triage; requested status needs advisor authority" (gate fired).
+  2. aida.update_requirement(id:TASK-008, status:approved) -> "Updated TASK-008: status: Draft -> Approved" (NO gate).
+  3. implementer sub-agent: aida.update_requirement(status:completed) -> TASK-008 = Completed.
+  4. git status in ~/work/dummy1: "?? hello_world.py" -- the code is UNTRACKED. There is NO code commit referencing TASK-008. So the spec is Completed with the work uncommitted.
+
+  IMPACT: defeats the whole point of TASK-647 (substrate-as-bouncer: an agent/MCP caller must not self-grant approved+ status). add-then-update is a one-line bypass. Worse, an agent can self-mark Completed -- which is supposed to be merge-driven (auto-bump on a (SPEC-ID) commit landing on the default branch, STORY-86) -- with no commit at all.
+
+  FIX SPACE (precise -- do NOT over-restrict): update_requirement should mirror add's intake-authority logic, but only for the transitions that are NOT an implementer's to make:
+  - BLOCK/downgrade via MCP: Draft->Approved / ->Planned (advisor triage) and ->Completed / ->Released (merge-driven auto-bump). For Completed specifically, require a commit referencing the spec (the same condition the 'awaiting commit' surface tracks).
+  - ALLOW via MCP: ->InProgress, ->Done, ->NeedsAttention (legitimate implementer/agent transitions).
+  - Either refuse with a clear message ("Completed is set by a (SPEC-ID) commit landing on the default branch, not by hand"), or no-op + explain.
+
+  Note: the CLI already enforces the analogous gate (AIDA_SESSION_ROLE=advisor required for approved+; cf the dummy1 CLI add that refused). This is a CLI-vs-MCP caller-parity hole -- the gate must hold in BOTH surfaces. cf feedback_verify_acceptance_matches_primary_caller, substrate-as-bouncer.
+
+  Surfaced during a Codex(advisor)->gpt-5.5(implementer) multi-vendor handoff -- the cross-vendor coordination itself worked well; this is the integrity gap underneath it.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T20:04:23.777103591Z
+modified_at: 2026-06-05T20:04:23.777103591Z
+req_type: Bug
+tags:
+- caller-parity
+- from-self-test
+- gate
+- lifecycle
+- mcp
+- multi-agent
+- substrate-as-bouncer
