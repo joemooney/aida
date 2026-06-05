@@ -14929,6 +14929,15 @@ fn auto_claim_summary(cfg: &aida_core::BlockAllocationConfig, type_prefix: &str)
 /// trace:TASK-449 | ai:claude
 fn global_auto_claim_summary(cfg: &aida_core::BlockAllocationConfig) -> String {
     if !cfg.auto_claim {
+        // TASK-467: a per-type re-enable (e.g. `[block_allocation.bug]
+        // auto_claim = true` under a global `auto_claim = false`) means
+        // auto-claim still fires for those types. The type-agnostic empty-blocks
+        // summary can't name them, but it must not report a flat "off" that
+        // hides the per-type wiring — surface that it's re-enabled per-type.
+        // trace:TASK-467 | ai:claude
+        if cfg.per_type.values().any(|t| t.auto_claim == Some(true)) {
+            return "auto-claim: off globally (re-enabled per-type)".to_string();
+        }
         return "auto-claim: off (global opt-out)".to_string();
     }
     let configured = !cfg.per_type.is_empty();
@@ -15232,6 +15241,22 @@ mod block_allocation_reader_tests {
         assert_eq!(
             global_auto_claim_summary(&cfg),
             "auto-claim: off (global opt-out)"
+        );
+    }
+
+    /// TASK-467: global off + a per-type re-enable must surface the per-type
+    /// wiring in the empty-blocks summary, not a flat "off (global opt-out)".
+    #[test]
+    fn global_auto_claim_summary_surfaces_per_type_re_enable() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[block_allocation]\nauto_claim = false\n\n[block_allocation.bug]\nauto_claim = true\n",
+        );
+        let cfg = read_block_allocation_config(tmp.path());
+        assert_eq!(
+            global_auto_claim_summary(&cfg),
+            "auto-claim: off globally (re-enabled per-type)"
         );
     }
 
