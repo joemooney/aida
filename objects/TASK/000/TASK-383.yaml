@@ -34,7 +34,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T05:00:12.783237551Z
-modified_at: 2026-05-28T15:47:00.304209366Z
+modified_at: 2026-06-05T05:03:04.728290294Z
 req_type: Task
 tags:
 - advisor-discipline
@@ -43,4 +43,10 @@ tags:
 - papercut
 - planning-pass
 - workflow
+comments:
+- id: 019e9629-d618-7cf3-85d4-0a1dab870ebe
+  author: joe
+  content: Commit 555cff8cb references this requirement
+  created_at: 2026-06-05T05:03:04.728290294Z
+  modified_at: 2026-06-05T05:03:04.728290294Z
 human_only: true
