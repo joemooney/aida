@@ -1,0 +1,38 @@
+id: 019e996e-a694-7be0-8678-03d74bb6a525
+spec_id: TASK-673
+agreed_id: TASK-673
+title: 'aida doctor integrity check: flag Completed specs with no commit referencing them (spec-graph ⟂ git tripwire)'
+description: |-
+  Defense-in-depth companion to BUG-449. Even once the MCP gate is closed, a spec can reach Completed without a corroborating commit from any surface (manual edit, a future tool, a reconcile miss). Make the substrate SELF-AUDITING: detect when the spec graph claims completion that git cannot corroborate.
+
+  THE INVARIANT TO POLICE: a spec in Completed (and arguably Released) status should have at least one commit ON THE DEFAULT CODE BRANCH that references it -- either a `(SPEC-ID)` trailer/subject or an in-code `// trace:SPEC-ID`. If none exists, the spec graph is asserting work that git has never seen.
+
+  MOTIVATING EVIDENCE (~/work/dummy1, 2026-06-05): store says TASK-008 AND TASK-009 are Completed, but the code branch has ZERO commits referencing them (hello_world.py untracked; history is just .gitkeep + a trailer-less scaffold commit). This check would have fired after TASK-008.
+
+  SCOPE / ACCEPTANCE:
+  - A check (home: `aida doctor`; consider also a one-line count in `aida status`) that lists every Completed spec with NO referencing commit on the DEFAULT CODE branch.
+  - CRITICAL: scan CODE commits on the default branch, NOT the orphan `aida-store` branch. The aida-store 'update SPEC-NNN' metadata commits must NOT count as references (they always exist, so they'd mask every violation).
+  - A reference counts if a default-branch commit carries the spec id in subject/trailer OR a tracked file carries `// trace:SPEC-ID`.
+  - Do NOT double-report specs already surfaced by the queue 'awaiting commit' section (those are Done-awaiting-merge, a known transient). This check is specifically the Completed-without-corroboration case -- a harder integrity violation.
+  - Read-only / advisory. Output names the specs + remediation (commit with the trailer then `aida pull`/`aida db reconcile-status`, or re-open with `--force`). Optionally a `--fix` that re-opens to Done / NeedsAttention for triage.
+  - Local-only projects (no origin) still apply -- scan the local default branch.
+  - Exemption knob for legacy specs completed before trace conventions (e.g. `--since <ref>` or a config cutoff) so the check is not noisy on old history.
+
+  WHY THIS HALF MATTERS: BUG-449 closes one door (the MCP gate); this watches ALL doors and makes AIDA police its own core claim -- git-canonical truth + traceability -- about itself. Substrate-as-bouncer as a continuous audit, not just an entry gate. Pairs with the existing 'awaiting commit' surface (the Done side) to cover the full lifecycle.
+
+  Relates: BUG-449 (the gate), ADR-3/TASK-647 (the policy), STORY-86 (done-vs-completed semantics), the queue 'awaiting commit' surface (the Done-side analogue).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T20:17:06.196594607Z
+modified_at: 2026-06-05T20:17:06.196594607Z
+req_type: Task
+tags:
+- aida:doctor
+- batch:mcp-gate-parity
+- from-self-test
+- integrity
+- mcp
+- self-audit
+- substrate-as-bouncer
