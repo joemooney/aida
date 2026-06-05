@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T17:47:31.451020038Z
-modified_at: 2026-05-20T17:47:39.211825Z
+modified_at: 2026-06-05T05:33:29.686765152Z
 req_type: Task
 tags:
 - from-implementer:TASK-391
@@ -30,3 +30,9 @@ relationships:
   target_id: 019e4466-aebc-7791-94c5-0e38aa589471
   created_at: 2026-05-20T17:47:39.211819539Z
   created_by: joe
+comments:
+- id: 019e9645-aed6-7621-b169-d796705c55ea
+  author: joe
+  content: Commit fd953f795 references this requirement
+  created_at: 2026-06-05T05:33:29.686765152Z
+  modified_at: 2026-06-05T05:33:29.686765152Z
