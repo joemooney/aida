@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T04:55:18.563605626Z
-modified_at: 2026-06-05T04:55:38.480631398Z
+modified_at: 2026-06-05T06:14:35.751237925Z
 req_type: Task
 tags:
 - aida:agent:new
@@ -46,3 +46,9 @@ relationships:
   target_id: 019e960f-773e-7d60-ae5e-dde7fae5e955
   created_at: 2026-06-05T04:55:38.480624223Z
   created_by: joe
+comments:
+- id: 019e966b-4fe7-7231-ba96-1a5b5ce6d80d
+  author: joe
+  content: Commit 390c04fcc references this requirement
+  created_at: 2026-06-05T06:14:35.751237925Z
+  modified_at: 2026-06-05T06:14:35.751237925Z
