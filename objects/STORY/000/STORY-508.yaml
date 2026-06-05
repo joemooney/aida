@@ -3,12 +3,12 @@ spec_id: STORY-508
 agreed_id: STORY-508
 title: '[EPIC-35 s2] Forge-aware hint/error text (replace hard-coded ''gh ...'' user-facing strings)'
 description: 'Size S, separable from s1. Replace hard-coded `gh run view` / `gh api /rate_limit` / etc. HINT and error strings with forge-aware text via `forge.cli_name()` + templates, so GitLab/pure-git users aren''t told to run gh. Distinct from the trait (these are user-facing strings, not invocations). Acceptance: no user-facing hint names a forge CLI the active provider doesn''t use.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:53:23.969580556Z
-modified_at: 2026-06-05T08:57:36.781792392Z
+modified_at: 2026-06-05T08:57:38.831465747Z
 req_type: Story
 tags:
 - forge-provider
