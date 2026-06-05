@@ -1513,3 +1513,10 @@
   added_by: joe
   added_at: 2026-06-05T04:33:14.831644612Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e960f-773e-7d60-ae5e-dde7fae5e955
+  position: 357000
+  added_by: joe
+  note: 'Operator-requested 2026-06-04. Interactive role picker. KEY: detect TTY via stdin (stdout is the eval pipe); render to stderr/tty; keep stdout clean for the eval payload.'
+  added_at: 2026-06-05T04:34:39.279020330Z
+  for_role: implementer
