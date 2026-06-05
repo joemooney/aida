@@ -1521,3 +1521,10 @@
   note: 'Onboarding clarity: implementer default + role explainer at init. Operator decision ADR-2, 2026-06-04. Pairs with TASK-638 (scaffolds role set).'
   added_at: 2026-06-05T04:50:47.629912116Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e9622-b923-7541-8374-162f60242f02
+  position: 359000
+  added_by: joe
+  note: agent new prompts for child role (reuses TASK-644 picker); default implementer non-interactive; never inherit launcher's role. ADR-2 refinement, operator 2026-06-04.
+  added_at: 2026-06-05T04:55:40.173799959Z
+  for_role: implementer
