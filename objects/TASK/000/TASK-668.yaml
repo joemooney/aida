@@ -1,0 +1,26 @@
+id: 019e991b-b030-78b3-bc20-a55fd8528d94
+spec_id: TASK-668
+agreed_id: TASK-668
+title: 'EPIC-35 slice-1b: route the aida pr ship merge through Forge::merge_change'
+description: |-
+  First op of STORY-516 slice-1b routing (SPIKE-49 order: merge first). Routes the `aida pr ship` step-3 merge (main.rs, derive_pr_ship_squash_subject path) through `crate::forge::forge_for(project_root).merge_change(&ChangeRef, &MergeOptions)` instead of the inline `gh pr merge`.
+
+  Behavior-preserving on GitHub:
+  - GitHubForge::merge_change reuses the SPEC-410-pinned `pr_ship::merge_args` for the squash path → argv byte-identical (--squash [--delete-branch] [--subject S], same order).
+  - Wraps the gh call in network_retry::run_with_retry → preserves BUG-286 transient-blip resilience.
+  - Unified merge_change contract: Err(stderr) on failed merge across GitHubForge/GitLabForge/PureGitForge (previously all returned Ok{merged:false}); call site maps Err → activity-log + recovery-hint + bail.
+
+  A GitLab / pure-git repo now gets its own provider's merge instead of always shelling gh.
+
+  Verified: forge (19) + pr_ship (46) + merge_args (2) tests green; argv byte-identity structural (merge_change calls merge_args).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T18:46:29.168564530Z
+modified_at: 2026-06-05T18:46:29.168564530Z
+req_type: Task
+tags:
+- batch:gitlab-forge
+- forge-routing
+- from-advisor:STORY-516
