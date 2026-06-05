@@ -29,6 +29,10 @@ pub struct HistoryOpts {
     pub since: Option<String>,
     pub until: Option<String>,
     pub status_changes_only: bool,
+    /// TASK-507: `--shipped` — only Done→Completed status transitions (the
+    /// "did my ship register?" view), vs `--all`'s recency-blind archive dump.
+    /// Implies events mode. trace:TASK-507 | ai:claude
+    pub shipped_only: bool,
     pub comments_only: bool,
     pub oneline: bool,
     /// Spec-IDs currently archived. The default `aida history` view hides
@@ -49,6 +53,16 @@ struct CommitMeta {
     /// `last_modified_by` field at event-rendering time, but the git
     /// author is the fallback when the YAML doesn't have one.
     git_author: String,
+}
+
+/// TASK-507: is this event the Done→Completed ship transition (merge-to-default
+/// branch)? The `--shipped` view keeps only these. trace:TASK-507 | ai:claude
+fn is_ship_event(kind: &EventKind) -> bool {
+    matches!(
+        kind,
+        EventKind::StatusChange { from, to }
+            if from.eq_ignore_ascii_case("Done") && to.eq_ignore_ascii_case("Completed")
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -290,6 +304,14 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
                 return true;
             }
             matches!(e.kind, EventKind::StatusChange { .. })
+        })
+        .filter(|e| {
+            // TASK-507: `--shipped` keeps only the Done→Completed transition —
+            // the merge-to-default ship event. trace:TASK-507 | ai:claude
+            if !opts.shipped_only {
+                return true;
+            }
+            is_ship_event(&e.kind)
         })
         .filter(|e| {
             if !opts.comments_only {
@@ -1306,6 +1328,34 @@ mod tests {
         diff_modified(&before, &after, &mk, &mut out);
         assert_eq!(out.len(), 1);
         assert!(matches!(out[0].kind, EventKind::StatusChange { .. }));
+    }
+
+    /// TASK-507: `--shipped` keeps only Done→Completed, not other status flips.
+    #[test]
+    fn is_ship_event_only_done_to_completed() {
+        let ship = EventKind::StatusChange {
+            from: "Done".into(),
+            to: "Completed".into(),
+        };
+        assert!(is_ship_event(&ship));
+        // case-insensitive
+        assert!(is_ship_event(&EventKind::StatusChange {
+            from: "done".into(),
+            to: "completed".into(),
+        }));
+        // other transitions are not ships
+        assert!(!is_ship_event(&EventKind::StatusChange {
+            from: "Approved".into(),
+            to: "Done".into(),
+        }));
+        assert!(!is_ship_event(&EventKind::StatusChange {
+            from: "InProgress".into(),
+            to: "Done".into(),
+        }));
+        assert!(!is_ship_event(&EventKind::PriorityChange {
+            from: "Low".into(),
+            to: "High".into(),
+        }));
     }
 
     #[test]
