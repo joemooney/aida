@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:36:27.894170541Z
-modified_at: 2026-05-31T01:36:55.462961053Z
+modified_at: 2026-06-05T02:47:46.565095289Z
 req_type: Bug
 tags:
 - from-antigravity
@@ -68,6 +68,11 @@ comments:
   content: 'Docs follow-up (out of scope for the code fix): PR-187''s Antigravity setup doc may still narrate the .aida-store symlink workaround — needs an edit to remove it now that sibling worktrees resolve the canonical store automatically. The code-generated symlink line (agent-brief Setup section) was removed in this fix.'
   created_at: 2026-05-31T01:32:26.364079291Z
   modified_at: 2026-05-31T01:32:26.364079291Z
+- id: 019e95ad-f685-7ae3-a2e6-7dcbd303f6b5
+  author: joe
+  content: Commit 03166776f references this requirement
+  created_at: 2026-06-05T02:47:46.565095289Z
+  modified_at: 2026-06-05T02:47:46.565095289Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T01:36:55.462961053Z
