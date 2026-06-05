@@ -78958,6 +78958,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             pr_number: self.pr_number,
             implementer_session: self.implementer_lease.clone(),
             ci_run_id: self.ci_run_id.clone(),
+            // STORY-508/TASK-651: resolve the active forge so recovery hints
+            // name the right CLI when a phase fails.
+            forge: crate::forge::resolve_forge_kind(&self.project_root),
         }
     }
 
