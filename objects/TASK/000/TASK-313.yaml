@@ -22,10 +22,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T17:07:07.593034385Z
-modified_at: 2026-05-24T06:37:02.169598881Z
+modified_at: 2026-06-05T05:12:31.187670609Z
 req_type: Task
 tags:
 - aida:pickup
 - enhancement
 - from-review:PR-69
 - severity:minor
+comments:
+- id: 019e9632-7ad3-7792-8b07-e6e605697708
+  author: joe
+  content: Commit 3950dcaef references this requirement
+  created_at: 2026-06-05T05:12:31.187670609Z
+  modified_at: 2026-06-05T05:12:31.187670609Z
