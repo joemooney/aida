@@ -63,8 +63,14 @@ WARNINGS=()
 STAGED_FILES=$(git diff --cached --name-only 2>/dev/null)
 HAS_TRACE_FILES=false
 
-# Files to exclude from trace detection (data files, not source code)
-EXCLUDE_PATTERNS="requirements.yaml requirements.yaml.lock requirements.db .md"
+# Files to exclude from trace detection (data files, not the committer's source).
+# TASK-128: `.claude/` holds SCAFFOLDED templates (hooks, skills, commands)
+# whose `trace:` comments reference AIDA's OWN spec ids — foreign to a downstream
+# project. Without excluding them, a first-user's `git add . && git commit` for
+# the scaffold gets a confusing "Staged files trace to: TASK-586 …" warning for
+# ids that aren't theirs. (`.md` already covers the markdown skills/commands +
+# the docs/aida discipline pack.) trace:TASK-128 | ai:claude
+EXCLUDE_PATTERNS="requirements.yaml requirements.yaml.lock requirements.db .md .claude/"
 
 for file in $STAGED_FILES; do
     # Skip excluded files
