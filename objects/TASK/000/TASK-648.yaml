@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T05:08:57.389147772Z
-modified_at: 2026-06-05T05:09:14.303629035Z
+modified_at: 2026-06-05T06:55:57.882795271Z
 req_type: Task
 tags:
 - aida:triage
@@ -41,3 +41,9 @@ relationships:
   target_id: 019e962e-71b5-7153-a856-b8d444389b34
   created_at: 2026-06-05T05:09:14.303620254Z
   created_by: joe
+comments:
+- id: 019e9691-2fba-7062-890a-e6f982fc1545
+  author: joe
+  content: Commit fd4332be9 references this requirement
+  created_at: 2026-06-05T06:55:57.882795271Z
+  modified_at: 2026-06-05T06:55:57.882795271Z
