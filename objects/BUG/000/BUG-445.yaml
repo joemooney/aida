@@ -1,0 +1,34 @@
+id: 019e9935-3243-7dd3-86bb-cc0b2babaa17
+spec_id: BUG-445
+agreed_id: BUG-445
+title: Onboarding first-task 'Commit AIDA scaffolding' breaks under 'aida queue work' worktree isolation — scaffolding absent + git add . embeds gitlink/symlinks
+description: |-
+  REPRO (fresh aida init, then the natural first action): "aida queue work" picks up the auto-seeded onboarding task TASK-007 "Commit AIDA scaffolding (initial setup)" (for:implementer, auto-queued by init). queue-work ISOLATES it into a new git worktree on branch task-007, checked out from the initial commit (which contains only .gitkeep -- scaffolding is uncommitted on master; see TASK-631).
+
+  In that worktree the task cannot be completed correctly and is actively dangerous:
+  - The scaffolding it must commit (.aida/config.toml, .gitignore, .claude/*) is ABSENT -- untracked files on master are not carried into a worktree branched off another commit.
+  - No .gitignore exists in the worktree, so the implied "git add ." would stage: (1) .aida-store -> a nested git worktree, committed as a GITLINK; (2) .aida/cache.db -> a symlink to the primary's cache (outside-repo, machine-specific); (3) .aida/sessions -> symlink outside the repo. All three are wrong and would bake broken absolute-path symlinks + an embedded repo into history.
+
+  The implementer (Opus, /aida-pickup --auto-first) correctly refused to commit and surfaced the contradiction. Verified 2026-06-05 against a real init at /home/joe/ai (initial commit 48cf57a = .gitkeep only; scaffolding untracked on master).
+
+  FIX SPACE (do not implement -- triage only):
+  (a) TASK-631 (commit scaffolding AT init) largely dissolves this -- then there is no "commit scaffolding" task and a worktree off that commit already has the files.
+  (b) Regardless: setup/scaffolding-commit tasks act on the PRIMARY worktree's uncommitted state and must NOT route through queue-work worktree isolation. The seeded first-task should not be a queue-drainable for:implementer item, or should be flagged primary-worktree-only.
+  (c) The task instruction should never be a bare "git add ." without the .gitignore present.
+
+  Relates-to TASK-631 (root-cause fix), BUG-433 (worktree symlink + no committed config -> wrong data).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T19:14:20.867633023Z
+modified_at: 2026-06-05T19:14:20.867633023Z
+req_type: Bug
+tags:
+- aida:init
+- aida:queue:work
+- first-run
+- from-self-test
+- onboarding
+- queue
+- worktree
