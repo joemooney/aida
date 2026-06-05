@@ -1406,6 +1406,7 @@ fn run() -> Result<()> {
             tags,
             prefix,
             parent,
+            blocked_by: _, // STORY-446: blocked-by edges land on the git-backend path
             force_parent,
             interactive,
             effort: _,
@@ -1545,6 +1546,8 @@ fn run() -> Result<()> {
             tags,
             add_tag,
             remove_tag,
+            blocked_by: _, // STORY-446: blocked-by edges land on the git-backend path
+            remove_blocked_by: _,
             interactive,
             strict: _, // legacy SQLite path ignores session leases
             force: _,  // TASK-47 guard only applies to git-canonical Edit
@@ -5389,6 +5392,112 @@ fn load_dispenser(store_path: &std::path::Path) -> Result<aida_core::models::Dis
     )))
 }
 
+/// STORY-446: add a BlockedBy edge from `spec_id` to `blocker_id`, plus the
+/// inverse Blocks edge on the blocker — atomically and idempotently. Returns
+/// the blocker's display id for messaging. The pickability gate
+/// (`aida_core::pickability`) already matches the typed BlockedBy variant, so
+/// this is purely the ergonomic declaration path (STORY-333 added the variant).
+/// trace:STORY-446 | ai:claude
+fn add_blocked_by_edge(
+    backend: &aida_core::CachedGitBackend,
+    spec_id: &str,
+    blocker_id: &str,
+) -> Result<String> {
+    use aida_core::models::{Relationship, RelationshipType};
+    use aida_core::DatabaseBackend;
+
+    let mut req = backend
+        .get_requirement_by_spec_id(spec_id)?
+        .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
+    let blocker = backend
+        .get_requirement_by_spec_id(blocker_id)?
+        .ok_or_else(|| not_found::requirement_not_found(blocker_id, None))?;
+    if blocker.id == req.id {
+        anyhow::bail!("a requirement cannot be blocked by itself ({})", spec_id);
+    }
+    let blocker_display = blocker
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| blocker_id.to_string());
+
+    // Idempotent: only add the BlockedBy edge if absent.
+    if !req
+        .relationships
+        .iter()
+        .any(|r| matches!(r.rel_type, RelationshipType::BlockedBy) && r.target_id == blocker.id)
+    {
+        req.relationships.push(Relationship {
+            rel_type: RelationshipType::BlockedBy,
+            target_id: blocker.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+    }
+
+    // Inverse Blocks edge on the blocker (also idempotent).
+    let mut blocker = backend.get_requirement_by_spec_id(blocker_id)?.unwrap();
+    if !blocker
+        .relationships
+        .iter()
+        .any(|r| matches!(r.rel_type, RelationshipType::Blocks) && r.target_id == req.id)
+    {
+        blocker.relationships.push(Relationship {
+            rel_type: RelationshipType::Blocks,
+            target_id: req.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+        blocker.modified_at = chrono::Utc::now();
+        backend.update_requirement(&blocker)?;
+    }
+    Ok(blocker_display)
+}
+
+/// STORY-446: remove the BlockedBy edge from `spec_id` to `blocker_id` and the
+/// inverse Blocks edge on the blocker. No-op (returns the display id) when the
+/// edge is absent. trace:STORY-446 | ai:claude
+fn remove_blocked_by_edge(
+    backend: &aida_core::CachedGitBackend,
+    spec_id: &str,
+    blocker_id: &str,
+) -> Result<String> {
+    use aida_core::models::RelationshipType;
+    use aida_core::DatabaseBackend;
+
+    let mut req = backend
+        .get_requirement_by_spec_id(spec_id)?
+        .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
+    let blocker = backend
+        .get_requirement_by_spec_id(blocker_id)?
+        .ok_or_else(|| not_found::requirement_not_found(blocker_id, None))?;
+    let blocker_display = blocker
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| blocker_id.to_string());
+
+    let before = req.relationships.len();
+    req.relationships.retain(|r| {
+        !(matches!(r.rel_type, RelationshipType::BlockedBy) && r.target_id == blocker.id)
+    });
+    if req.relationships.len() != before {
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+    }
+
+    let mut blocker = backend.get_requirement_by_spec_id(blocker_id)?.unwrap();
+    let inv_before = blocker.relationships.len();
+    blocker
+        .relationships
+        .retain(|r| !(matches!(r.rel_type, RelationshipType::Blocks) && r.target_id == req.id));
+    if blocker.relationships.len() != inv_before {
+        blocker.modified_at = chrono::Utc::now();
+        backend.update_requirement(&blocker)?;
+    }
+    Ok(blocker_display)
+}
+
 /// Handle commands routed to the GitBackend (when --file points to a directory).
 fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -> Result<()> {
     // STORY-43: warn loudly when this clone has been hijacked. Runs once
@@ -6091,6 +6200,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             tags,
             prefix,
             parent,
+            blocked_by,
             force_parent,
             interactive,
             effort,
@@ -6563,6 +6673,26 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     record_role_activity(sid, "add");
                 }
 
+                // STORY-446: apply any --blocked-by / --depends-on edges now
+                // that the spec exists, atomically with the inverse Blocks
+                // edge so the pickability gate holds pickup until the blocker
+                // is Completed. trace:STORY-446 | ai:claude
+                if !blocked_by.is_empty() {
+                    if let Some(sid) = last.spec_id.as_deref() {
+                        for blocker in blocked_by {
+                            match add_blocked_by_edge(&backend, sid, blocker) {
+                                Ok(disp) => println!("  Blocked by: {}", disp.cyan()),
+                                Err(e) => eprintln!(
+                                    "  {} could not add blocked-by {}: {}",
+                                    "Warning:".yellow().bold(),
+                                    blocker,
+                                    e
+                                ),
+                            }
+                        }
+                    }
+                }
+
                 // BUG-58: when adding from inside a session worktree
                 // WITHOUT --parent, hint that the session's scope is
                 // probably the right parent. Surfaced after the add line
@@ -6862,6 +6992,51 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             req.relationships.len()
                         );
                     }
+                    // STORY-446: Blockers section — one line per BlockedBy edge
+                    // with the blocker's status + a pickability glyph (✓ when
+                    // Completed/satisfied, ◐ when it still blocks pickup), so the
+                    // pickability gate's verdict is visible at a glance.
+                    // trace:STORY-446 | ai:claude
+                    let blocker_targets: Vec<uuid::Uuid> = req
+                        .relationships
+                        .iter()
+                        .filter(|r| matches!(r.rel_type, RelationshipType::BlockedBy))
+                        .map(|r| r.target_id)
+                        .collect();
+                    if !blocker_targets.is_empty() {
+                        println!("\n{}:", "Blockers".bold());
+                        let mut unsatisfied = 0;
+                        for target in &blocker_targets {
+                            let (sid, status, satisfied) = match backend.get_requirement(target)? {
+                                Some(b) => {
+                                    let satisfied =
+                                        matches!(b.status, RequirementStatus::Completed);
+                                    (
+                                        b.spec_id.clone().unwrap_or_else(|| "?".to_string()),
+                                        format!("{}", b.status),
+                                        satisfied,
+                                    )
+                                }
+                                None => (target.to_string(), "missing".to_string(), false),
+                            };
+                            if !satisfied {
+                                unsatisfied += 1;
+                            }
+                            let glyph = if satisfied {
+                                "✓".green().to_string()
+                            } else {
+                                "◐".yellow().to_string()
+                            };
+                            println!("  {} {} ({})", glyph, sid, status);
+                        }
+                        if unsatisfied > 0 {
+                            println!(
+                                "  {} blocked — {} blocker(s) not yet Completed; `aida queue work` will refuse pickup",
+                                "⚠".yellow(),
+                                unsatisfied
+                            );
+                        }
+                    }
                     if !req.comments.is_empty() {
                         println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
                     }
@@ -6975,6 +7150,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             tags,
             add_tag,
             remove_tag,
+            blocked_by,
+            remove_blocked_by,
             strict,
             force,
             human_only,
@@ -7274,8 +7451,38 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         cleanup_escalated_leases_for_spec(&project_root, spec_id);
                     }
                 }
-            } else {
+            } else if blocked_by.is_empty() && remove_blocked_by.is_empty() {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
+            }
+
+            // STORY-446: apply blocked-by edge add/remove AFTER any scalar edit
+            // has been saved, so the helper operates on the persisted spec
+            // (avoiding a save that would clobber the new edge). Runs whether or
+            // not a scalar field changed. trace:STORY-446 | ai:claude
+            if !blocked_by.is_empty() || !remove_blocked_by.is_empty() {
+                let edit_spec = req.spec_id.as_deref().unwrap_or(id).to_string();
+                for blocker in blocked_by {
+                    match add_blocked_by_edge(&backend, &edit_spec, blocker) {
+                        Ok(disp) => println!("  Blocked by: {}", disp.cyan()),
+                        Err(e) => eprintln!(
+                            "  {} could not add blocked-by {}: {}",
+                            "Warning:".yellow().bold(),
+                            blocker,
+                            e
+                        ),
+                    }
+                }
+                for blocker in remove_blocked_by {
+                    match remove_blocked_by_edge(&backend, &edit_spec, blocker) {
+                        Ok(disp) => println!("  Removed blocked-by: {}", disp.cyan()),
+                        Err(e) => eprintln!(
+                            "  {} could not remove blocked-by {}: {}",
+                            "Warning:".yellow().bold(),
+                            blocker,
+                            e
+                        ),
+                    }
+                }
             }
         }
         Command::Del { id, yes } => {
@@ -9345,6 +9552,53 @@ mod task_492_brief_tests {
         clear_pending_brief(&brief_b);
         assert!(read_pending_briefs(&pending).is_empty());
         assert!(!pending.exists(), "emptied .pending should be deleted");
+    }
+
+    /// STORY-446: `--blocked-by` (repeatable) + the `--depends-on` alias parse
+    /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
+    #[test]
+    fn blocked_by_flags_parse_on_add_and_edit() {
+        let add = Cli::try_parse_from([
+            "aida",
+            "add",
+            "--title",
+            "t",
+            "--type",
+            "task",
+            "--blocked-by",
+            "TASK-1",
+            "--depends-on",
+            "TASK-2",
+        ])
+        .unwrap();
+        match add.command {
+            Command::Add { blocked_by, .. } => {
+                assert_eq!(blocked_by, vec!["TASK-1".to_string(), "TASK-2".to_string()]);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let edit = Cli::try_parse_from([
+            "aida",
+            "edit",
+            "TASK-9",
+            "--blocked-by",
+            "TASK-1",
+            "--remove-blocked-by",
+            "TASK-3",
+        ])
+        .unwrap();
+        match edit.command {
+            Command::Edit {
+                blocked_by,
+                remove_blocked_by,
+                ..
+            } => {
+                assert_eq!(blocked_by, vec!["TASK-1".to_string()]);
+                assert_eq!(remove_blocked_by, vec!["TASK-3".to_string()]);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
     }
 
     #[test]
