@@ -32,9 +32,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T21:14:32.309131776Z
-modified_at: 2026-05-17T21:26:39.863799204Z
+modified_at: 2026-06-05T04:57:00.593256086Z
 req_type: Task
 tags:
 - acceptance-text
 - from-review:PR-76
 - severity:minor
+comments:
+- id: 019e9624-47b1-78e3-9a74-b1dad6dd0c1a
+  author: joe
+  content: Verified the clap conflict (cli.rs:3195-3198) and recorded the correction on TASK-292. --no-launch genuinely cannot compose with --auto-complete (by design — prep-without-starting is meaningless when the orchestrator drives all phases). Closing.
+  created_at: 2026-06-05T04:57:00.593256086Z
+  modified_at: 2026-06-05T04:57:00.593256086Z
