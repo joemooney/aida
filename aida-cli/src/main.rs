@@ -27365,12 +27365,13 @@ fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
     // stays Unknown so the hint never *asserts* there's no PR on guesswork.
     // trace:BUG-232 | ai:claude
     let pr_state = match (branch.as_deref(), commits_ahead) {
-        (Some(b), Some(n)) if n > 0 => match detect_open_pr_for_branch(&project_root, b) {
-            PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
-            PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
-            PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_) => {
-                workflow_hints::PrState::Unknown
-            }
+        // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+        (Some(b), Some(n)) if n > 0 => match change_lookup_for_branch(&project_root, b) {
+            crate::forge::ChangeLookup::Found(c) => workflow_hints::PrState::Open(c.id),
+            crate::forge::ChangeLookup::NoChange => workflow_hints::PrState::Absent,
+            crate::forge::ChangeLookup::CliMissing
+            | crate::forge::ChangeLookup::CliFailed(_)
+            | crate::forge::ChangeLookup::Unreachable(_) => workflow_hints::PrState::Unknown,
         },
         _ => workflow_hints::PrState::Unknown,
     };
@@ -29104,12 +29105,13 @@ fn session_end(
     // GH confirms no open PR; unknown GH states never assert "missing PR".
     // trace:BUG-361
     let commits_ahead = branch_commits_ahead_main(&project_root, &target.branch);
-    let pr_state = match detect_open_pr_for_branch(&project_root, &target.branch) {
-        PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
-        PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
-        PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_) => {
-            workflow_hints::PrState::Unknown
-        }
+    // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+    let pr_state = match change_lookup_for_branch(&project_root, &target.branch) {
+        crate::forge::ChangeLookup::Found(c) => workflow_hints::PrState::Open(c.id),
+        crate::forge::ChangeLookup::NoChange => workflow_hints::PrState::Absent,
+        crate::forge::ChangeLookup::CliMissing
+        | crate::forge::ChangeLookup::CliFailed(_)
+        | crate::forge::ChangeLookup::Unreachable(_) => workflow_hints::PrState::Unknown,
     };
     // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
     // for this branch has already been squash-merged / merged, the work is shipped
@@ -29607,10 +29609,10 @@ fn session_end(
 /// Open-PR metadata captured by `gh pr list` for a session's branch. Just
 /// the fields the auto-queue side-effect needs to brief a reviewer.
 /// trace:STORY-66 | ai:claude
-struct OpenPrInfo {
-    number: u64,
-    title: String,
-    url: String,
+pub(crate) struct OpenPrInfo {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    pub(crate) url: String,
 }
 
 /// Why `detect_open_pr_for_branch` returned no PR — so the caller (and the
@@ -29625,7 +29627,7 @@ struct OpenPrInfo {
 /// failure — same as before. Conflating the two made every network blip
 /// look like a "no PR" failure with a misleading recovery hint.
 /// trace:BUG-72 BUG-257 | ai:claude
-enum PrLookup {
+pub(crate) enum PrLookup {
     Found(OpenPrInfo),
     /// `gh` ran cleanly but reported no open PR for this branch.
     NoOpenPr,
@@ -30151,11 +30153,27 @@ fn bounded_text(text: &str, max: usize) -> String {
     format!("{}…", &text[..end])
 }
 
+/// STORY-516: forge-routed branch lookup — the view-op entry point the call
+/// sites use instead of `detect_open_pr_for_branch` directly, so a GitLab /
+/// pure-git repo goes through its own provider. GitHubForge delegates back to
+/// `detect_open_pr_for_branch`, so behaviour on GitHub is unchanged. The
+/// provider returns `Result<ChangeLookup>`; GitHub never errs (it adapts a
+/// PrLookup), and a provider Err (GitLab stub) collapses to `CliFailed` so
+/// callers keep a single 5-state match. trace:STORY-516 | ai:claude
+pub(crate) fn change_lookup_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> crate::forge::ChangeLookup {
+    crate::forge::forge_for(project_root)
+        .change_for_branch(branch)
+        .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")))
+}
+
 /// Look up a single open PR keyed on `branch`. The richer [`PrLookup`]
 /// return shape lets callers print an honest skip reason (no PR yet / gh
 /// missing / gh failed) instead of collapsing every case to `None`.
 /// trace:STORY-66 BUG-72 BUG-74 | ai:claude
-fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+pub(crate) fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "open"])
 }
 
@@ -31298,27 +31316,33 @@ fn try_auto_queue_pr_review(
         ));
     }
 
-    let pr = match detect_open_pr_for_branch(project_root, branch) {
-        PrLookup::Found(pr) => pr,
-        PrLookup::NoOpenPr => {
+    // STORY-516: forge-routed. Reconstruct OpenPrInfo from the ChangeRef so the
+    // downstream pr.number/url/title uses stay unchanged. trace:STORY-516 | ai:claude
+    let pr = match change_lookup_for_branch(project_root, branch) {
+        crate::forge::ChangeLookup::Found(c) => OpenPrInfo {
+            number: c.id,
+            title: c.title.unwrap_or_default(),
+            url: c.url,
+        },
+        crate::forge::ChangeLookup::NoChange => {
             return AutoQueueOutcome::skipped_by_design(format!(
                 "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
                 branch
             ));
         }
-        PrLookup::GhMissing => {
+        crate::forge::ChangeLookup::CliMissing => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `{}`. Install gh to enable.",
                 branch
             ));
         }
-        PrLookup::GhFailed(reason) => {
+        crate::forge::ChangeLookup::CliFailed(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: `gh pr list` failed for branch `{}` ({}) — no reviewer story filed",
                 branch, reason
             ));
         }
-        PrLookup::GhUnreachable(reason) => {
+        crate::forge::ChangeLookup::Unreachable(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: GH API unreachable for branch `{}` ({}) — no reviewer story filed (transient; retry once the API is reachable)",
                 branch, reason
@@ -32258,6 +32282,7 @@ fn pr_ship_handler(
         url: String::new(),
         branch: branch.clone(),
         base: String::new(),
+        title: None,
     };
     let mut merge_sink = crate::network_retry::StderrSink;
     if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
@@ -48256,8 +48281,16 @@ fn render_in_flight_grouped(
             .collect::<Vec<_>>()
             .join("  ");
 
-        match detect_open_pr_for_branch(project_root, branch) {
-            PrLookup::Found(pr) => {
+        // STORY-516: forge-routed; reconstruct OpenPrInfo so the Found block is
+        // unchanged. The `_` arm already covers every non-Found state.
+        // trace:STORY-516 | ai:claude
+        match change_lookup_for_branch(project_root, branch) {
+            crate::forge::ChangeLookup::Found(c) => {
+                let pr = OpenPrInfo {
+                    number: c.id,
+                    title: c.title.unwrap_or_default(),
+                    url: c.url,
+                };
                 println!(
                     "  {} {} — {} spec{}:",
                     format!("PR-{}", pr.number).cyan().bold(),
@@ -48686,27 +48719,28 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                         wt,
                         "in flight".yellow()
                     );
-                    match detect_open_pr_for_branch(project_root, b) {
-                        PrLookup::Found(pr) => println!(
+                    // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+                    match change_lookup_for_branch(project_root, b) {
+                        crate::forge::ChangeLookup::Found(c) => println!(
                             "  {}         {} {}",
                             "PR".bold(),
-                            format!("PR-{}", pr.number).cyan(),
-                            pr.url.dimmed()
+                            format!("PR-{}", c.id).cyan(),
+                            c.url.dimmed()
                         ),
-                        PrLookup::NoOpenPr => {
+                        crate::forge::ChangeLookup::NoChange => {
                             println!("  {}         {}", "PR".bold(), "no PR opened yet".dimmed())
                         }
-                        PrLookup::GhMissing => println!(
+                        crate::forge::ChangeLookup::CliMissing => println!(
                             "  {}         {}",
                             "PR".bold(),
                             "gh not installed — PR state unknown".dimmed()
                         ),
-                        PrLookup::GhFailed(_) => println!(
+                        crate::forge::ChangeLookup::CliFailed(_) => println!(
                             "  {}         {}",
                             "PR".bold(),
                             "gh lookup failed — PR state unknown".dimmed()
                         ),
-                        PrLookup::GhUnreachable(_) => println!(
+                        crate::forge::ChangeLookup::Unreachable(_) => println!(
                             "  {}         {}",
                             "PR".bold(),
                             "GH API unreachable — PR state unknown (transient)".dimmed()
@@ -52781,8 +52815,8 @@ fn handle_push_command(
                 && branch != "main"
                 && branch != "master"
                 && matches!(
-                    detect_open_pr_for_branch(&project_root, &branch),
-                    PrLookup::NoOpenPr
+                    change_lookup_for_branch(&project_root, &branch),
+                    crate::forge::ChangeLookup::NoChange
                 )
             {
                 if let PrLookup::Found(pr) = detect_merged_pr_for_branch(&project_root, &branch) {
@@ -70151,18 +70185,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                                 );
                             }
                             if commits_ahead.unwrap_or(0) > 0 {
-                                let pr_state = match detect_open_pr_for_branch(
+                                // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+                                let pr_state = match change_lookup_for_branch(
                                     &project_root,
                                     &branch,
                                 ) {
-                                    PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
-                                    PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
-                                    PrLookup::GhMissing
-                                    | PrLookup::GhFailed(_)
-                                    | PrLookup::GhUnreachable(_) => {
+                                    crate::forge::ChangeLookup::Found(c) => {
+                                        workflow_hints::PrState::Open(c.id)
+                                    }
+                                    crate::forge::ChangeLookup::NoChange => {
+                                        workflow_hints::PrState::Absent
+                                    }
+                                    crate::forge::ChangeLookup::CliMissing
+                                    | crate::forge::ChangeLookup::CliFailed(_)
+                                    | crate::forge::ChangeLookup::Unreachable(_) => {
                                         eprintln!(
                                             "{} queue-done PR-check proceeding without `gh` confirmation \
-                                             (PrLookup::Unknown). Gate may not fire if PR actually missing.",
+                                             (lookup unknown). Gate may not fire if PR actually missing.",
                                             "warning:".yellow().bold()
                                         );
                                         workflow_hints::PrState::Unknown
@@ -74073,15 +74112,16 @@ fn gather_state_snapshot(
     });
 
     let pr = match branch.as_ref() {
-        Some(b) => match detect_open_pr_for_branch(&project_root, &b.name) {
-            PrLookup::Found(info) => PrRow::Open {
-                number: info.number,
-                url: info.url,
+        // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+        Some(b) => match change_lookup_for_branch(&project_root, &b.name) {
+            crate::forge::ChangeLookup::Found(c) => PrRow::Open {
+                number: c.id,
+                url: c.url,
             },
-            PrLookup::NoOpenPr => PrRow::None,
-            PrLookup::GhMissing => PrRow::GhMissing,
-            PrLookup::GhUnreachable(detail) => PrRow::GhUnreachable { detail },
-            PrLookup::GhFailed(detail) => PrRow::GhFailed { detail },
+            crate::forge::ChangeLookup::NoChange => PrRow::None,
+            crate::forge::ChangeLookup::CliMissing => PrRow::GhMissing,
+            crate::forge::ChangeLookup::Unreachable(detail) => PrRow::GhUnreachable { detail },
+            crate::forge::ChangeLookup::CliFailed(detail) => PrRow::GhFailed { detail },
         },
         None => PrRow::None,
     };
@@ -79124,76 +79164,91 @@ impl RealPhaseDriver {
     /// fallback and the BUG-257 `git ls-remote` narrowing. Mutates `self.branch`
     /// when the spec-id search recovers a swapped branch. trace:TASK-136
     fn detect_phase1_pr(&mut self, branch: &str) -> Phase1PrResolve {
-        match detect_open_pr_for_branch(&self.project_root, branch) {
-            PrLookup::Found(pr) => Phase1PrResolve::Found(pr),
-            PrLookup::NoOpenPr => match detect_open_pr_for_spec(&self.project_root, &self.spec) {
-                PrLookup::Found(pr) => {
-                    // Realign the branch so the CI / merge phases probe the
-                    // PR's actual head, not the worktree HEAD the branch-keyed
-                    // lookup just missed on. trace:BUG-223
-                    if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
-                        self.branch = Some(head);
-                    }
-                    eprintln!(
-                        "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
+        // STORY-516: forge-routed branch lookup (view op). The inner spec-id
+        // search (detect_open_pr_for_spec) is the LIST op — routed in a later
+        // slice — so it stays PrLookup here. The BUG-444/BUG-257 narrowing
+        // bodies are unchanged; only the outer variant names move to
+        // ChangeLookup. trace:STORY-516 trace:BUG-444 trace:BUG-257 | ai:claude
+        match change_lookup_for_branch(&self.project_root, branch) {
+            crate::forge::ChangeLookup::Found(c) => Phase1PrResolve::Found(OpenPrInfo {
+                number: c.id,
+                title: c.title.unwrap_or_default(),
+                url: c.url,
+            }),
+            crate::forge::ChangeLookup::NoChange => {
+                match detect_open_pr_for_spec(&self.project_root, &self.spec) {
+                    PrLookup::Found(pr) => {
+                        // Realign the branch so the CI / merge phases probe the
+                        // PR's actual head, not the worktree HEAD the branch-keyed
+                        // lookup just missed on. trace:BUG-223
+                        if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
+                            self.branch = Some(head);
+                        }
+                        eprintln!(
+                            "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
                          search (the implementer branch was swapped by /aida-pr's \
                          merged-branch guard)",
-                        "ⓘ".cyan(),
-                        branch,
-                        pr.number,
-                        self.spec,
-                    );
-                    Phase1PrResolve::Found(pr)
-                }
-                // BUG-444: both the `--head` and `--search` lookups returned
-                // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
-                // LIST queries (`--search` hits the search index, which lags PR
-                // creation by seconds), so an empty result right after
-                // `/aida-pr` ran `gh pr create` does NOT mean "no PR" — it
-                // usually means "not indexed yet". If the branch is on origin
-                // the session pushed, so a PR very likely exists: RETRY within
-                // the eventual-consistency window (reusing the TASK-136 backoff)
-                // instead of declaring a false NoPr. Only a branch that is
-                // genuinely absent from origin is an immediate NoPr (the session
-                // never pushed). This was the dominant drain-failure cause:
-                // ~98% of sessions ship a PR, yet a whole batch could false-fail
-                // by racing the index. trace:BUG-444 EPIC-33 | ai:claude
-                _ => {
-                    let origin = probe_branch_on_origin(&self.project_root, branch);
-                    if empty_phase1_lookup_is_definitive_nopr(&origin) {
-                        Phase1PrResolve::NoPr
-                    } else {
-                        let reason = match origin {
-                            BranchOriginProbe::Present => format!(
-                                "no open PR indexed yet for `{branch}` (and the \
+                            "ⓘ".cyan(),
+                            branch,
+                            pr.number,
+                            self.spec,
+                        );
+                        Phase1PrResolve::Found(pr)
+                    }
+                    // BUG-444: both the `--head` and `--search` lookups returned
+                    // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
+                    // LIST queries (`--search` hits the search index, which lags PR
+                    // creation by seconds), so an empty result right after
+                    // `/aida-pr` ran `gh pr create` does NOT mean "no PR" — it
+                    // usually means "not indexed yet". If the branch is on origin
+                    // the session pushed, so a PR very likely exists: RETRY within
+                    // the eventual-consistency window (reusing the TASK-136 backoff)
+                    // instead of declaring a false NoPr. Only a branch that is
+                    // genuinely absent from origin is an immediate NoPr (the session
+                    // never pushed). This was the dominant drain-failure cause:
+                    // ~98% of sessions ship a PR, yet a whole batch could false-fail
+                    // by racing the index. trace:BUG-444 EPIC-33 | ai:claude
+                    _ => {
+                        let origin = probe_branch_on_origin(&self.project_root, branch);
+                        if empty_phase1_lookup_is_definitive_nopr(&origin) {
+                            Phase1PrResolve::NoPr
+                        } else {
+                            let reason = match origin {
+                                BranchOriginProbe::Present => format!(
+                                    "no open PR indexed yet for `{branch}` (and the \
                                  `{spec}` search), but the branch is on origin — \
                                  likely GitHub eventual-consistency lag after \
                                  `gh pr create`",
-                                spec = self.spec
-                            ),
-                            _ => format!(
-                                "no open PR found for `{branch}` and `git ls-remote` \
+                                    spec = self.spec
+                                ),
+                                _ => format!(
+                                    "no open PR found for `{branch}` and `git ls-remote` \
                                  could not confirm whether the branch is on origin — \
                                  retrying before concluding no PR exists"
-                            ),
-                        };
-                        Phase1PrResolve::Retry(reason)
+                                ),
+                            };
+                            Phase1PrResolve::Retry(reason)
+                        }
                     }
                 }
-            },
-            PrLookup::GhMissing => Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::MissingTool,
-                "`gh` is not on PATH — auto-complete needs it to track the PR",
-            )),
-            PrLookup::GhFailed(why) => Phase1PrResolve::Fail(auto_complete::PhaseFailure::new(
-                format!("could not look up the PR for `{branch}`: {why}"),
-            )),
+            }
+            crate::forge::ChangeLookup::CliMissing => {
+                Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::MissingTool,
+                    "`gh` is not on PATH — auto-complete needs it to track the PR",
+                ))
+            }
+            crate::forge::ChangeLookup::CliFailed(why) => {
+                Phase1PrResolve::Fail(auto_complete::PhaseFailure::new(format!(
+                    "could not look up the PR for `{branch}`: {why}"
+                )))
+            }
             // BUG-257: the GH API was unreachable — *transient*, not "no PR".
             // Narrow with `git ls-remote` (git protocol, separate from the
             // HTTPS API): if the branch isn't on origin no PR can exist, so
             // that collapses to a genuine NoPR failure. Otherwise it is a
             // retryable inconclusive. trace:BUG-257 TASK-136 | ai:claude
-            PrLookup::GhUnreachable(why) => {
+            crate::forge::ChangeLookup::Unreachable(why) => {
                 match probe_branch_on_origin(&self.project_root, branch) {
                     BranchOriginProbe::Absent => {
                         Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
@@ -80071,6 +80126,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             url: String::new(),
             branch: String::new(),
             base: String::new(),
+            title: None,
         };
         let opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
@@ -80635,36 +80691,43 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // A ship opens a PR — a spec-id lookup is branch-independent and
         // robust, with the recorded branch as a fallback.
-        let pr = match detect_open_pr_for_spec(&self.project_root, &self.spec) {
-            PrLookup::Found(pr) => Some(pr),
-            PrLookup::NoOpenPr => self.branch.as_deref().and_then(|b| {
-                match detect_open_pr_for_branch(&self.project_root, b) {
-                    PrLookup::Found(pr) => Some(pr),
-                    _ => None,
+        let pr =
+            match detect_open_pr_for_spec(&self.project_root, &self.spec) {
+                PrLookup::Found(pr) => Some(pr),
+                // STORY-516: inner branch lookup forge-routed (the outer spec search
+                // is the list op, routed later). trace:STORY-516 | ai:claude
+                PrLookup::NoOpenPr => self.branch.as_deref().and_then(|b| {
+                    match change_lookup_for_branch(&self.project_root, b) {
+                        crate::forge::ChangeLookup::Found(c) => Some(OpenPrInfo {
+                            number: c.id,
+                            title: c.title.unwrap_or_default(),
+                            url: c.url,
+                        }),
+                        _ => None,
+                    }
+                }),
+                PrLookup::GhMissing => {
+                    return Err(PhaseFailure::of(
+                        FailureKind::MissingTool,
+                        "`gh` is not on PATH — auto-complete needs it to track the PR",
+                    ));
                 }
-            }),
-            PrLookup::GhMissing => {
-                return Err(PhaseFailure::of(
-                    FailureKind::MissingTool,
-                    "`gh` is not on PATH — auto-complete needs it to track the PR",
-                ));
-            }
-            PrLookup::GhFailed(why) => {
-                return Err(PhaseFailure::new(format!(
-                    "could not look up the PR after the implementer resume: {why}"
-                )));
-            }
-            // BUG-257: a transient GH-API outage on the resumed-implementer PR
-            // lookup is Inconclusive, not a failure. Drain pauses; the next
-            // retry re-attempts the lookup once the API is reachable.
-            // trace:BUG-257 | ai:claude
-            PrLookup::GhUnreachable(why) => {
-                return Ok(ImplementerOutcome::Inconclusive {
-                    reason: format!("GH API unreachable after the implementer resume: {why}"),
-                    retry_hint: None,
-                });
-            }
-        };
+                PrLookup::GhFailed(why) => {
+                    return Err(PhaseFailure::new(format!(
+                        "could not look up the PR after the implementer resume: {why}"
+                    )));
+                }
+                // BUG-257: a transient GH-API outage on the resumed-implementer PR
+                // lookup is Inconclusive, not a failure. Drain pauses; the next
+                // retry re-attempts the lookup once the API is reachable.
+                // trace:BUG-257 | ai:claude
+                PrLookup::GhUnreachable(why) => {
+                    return Ok(ImplementerOutcome::Inconclusive {
+                        reason: format!("GH API unreachable after the implementer resume: {why}"),
+                        retry_hint: None,
+                    });
+                }
+            };
         match pr {
             Some(pr) => {
                 self.pr_number = Some(pr.number as u32);
