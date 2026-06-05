@@ -3,14 +3,18 @@ spec_id: TASK-664
 agreed_id: TASK-664
 title: 'TASK-662 JSON slice: findings detail in aida status --json'
 description: 'Completed by the shipping PR: ''aida status --json'' now carries a findings object {pending, items:[{id,source,origin,severity,kind,recurrence,title}]}, draft-filtered to match the text section + ''aida findings list''. The delta-since-last-run half of TASK-662 remains, intentionally deferred to ride STORY-457''s .aida/last-status.toml persistence rather than add a redundant per-cwd file.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:22:07.017215895Z
-modified_at: 2026-06-05T15:22:07.017215895Z
+modified_at: 2026-06-05T15:28:40.563404752Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e9848-38e9-79b0-a341-d970530e8e29
   created_at: 2026-06-05T15:22:18.170255965Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T15:28:40.563404752Z
+  completion_sha: 06c41beb72ccbdf18f319bded5eee0a58a7c60f6
