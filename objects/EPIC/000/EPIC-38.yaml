@@ -1,0 +1,23 @@
+id: 019e9966-0147-7a21-9e0c-beac7c0c112e
+spec_id: EPIC-38
+agreed_id: EPIC-38
+title: MCP gate parity — every mutating MCP tool must enforce the same authority/lifecycle gates as the CLI (ADR-3)
+description: |-
+  The MCP server is an agent intake surface that, per ADR-3 / TASK-647, cannot be trusted as advisor authority (it may inherit a role from the launching shell but can't verify it). add_requirement correctly enforces this (downgrades any approved+ request to draft). But other mutating MCP tools do NOT, so the gate is bypassable and the substrate-as-bouncer invariant holds only at the CLI, not at the MCP surface.
+
+  This umbrella tracks closing every MCP-vs-CLI caller-parity gap so the gate holds at EVERY surface. Governing policy: ADR-3 (intake-triage model), TASK-647 (CLI-side enforcement).
+
+  Members: BUG-449 (update_requirement bypasses the gate → agent self-completes on uncommitted code). Natural next member (offer): an audit of all mutating MCP tools (update_requirement, add_relationship, add_comment, punt, …) for missing authority/lifecycle gates.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T20:07:39.591015455Z
+modified_at: 2026-06-05T20:07:39.591015455Z
+req_type: Epic
+tags:
+- batch:mcp-gate-parity
+- caller-parity
+- epic
+- mcp
+- substrate-as-bouncer
