@@ -16040,7 +16040,7 @@ fn record_role_activity(spec_id: &str, action: &str) {
 fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     let project_root = statusline_project_root();
     match cmd {
-        RoleCommand::Enter { name, cd } => handle_role_enter(&project_root, name, *cd),
+        RoleCommand::Enter { name, cd } => handle_role_enter(&project_root, name.as_deref(), *cd),
         RoleCommand::Add {
             name,
             purpose,
@@ -16219,14 +16219,47 @@ fn print_role_scope(state: &RoleState) {
     }
 }
 
-fn handle_role_enter(project_root: &std::path::Path, name: &str, cd: bool) -> Result<()> {
-    let (mut state, _) = load_role(project_root, name).map_err(|_| {
+fn handle_role_enter(project_root: &std::path::Path, name: Option<&str>, cd: bool) -> Result<()> {
+    // TASK-644: resolve the role name. When the name is omitted, or names a
+    // role that doesn't exist, fall back to an interactive picker — but ONLY
+    // when stdin is a TTY. The primary caller is `eval "$(aida role enter)"`,
+    // so stdout is a captured pipe; gate on stdin, draw to /dev/tty (stderr
+    // fallback), and keep stdout carrying nothing but the eval payload.
+    let resolved = match name {
+        Some(n) if load_role(project_root, n).is_ok() => n.to_string(),
+        explicit => {
+            if std::io::stdin().is_terminal() {
+                match pick_role_interactively(project_root, explicit)? {
+                    Some(chosen) => chosen,
+                    None => return Ok(()), // cancelled — stdout stays empty, eval is a no-op
+                }
+            } else {
+                // Non-interactive: preserve the deterministic error + exit code.
+                let n = explicit.unwrap_or("");
+                if n.is_empty() {
+                    anyhow::bail!(
+                        "No role name given and stdin is not a terminal.\n\
+                         Pass a name (`aida role enter <name>`) or run interactively.\n\
+                         See available roles with: `aida role list`"
+                    );
+                }
+                anyhow::bail!(
+                    "No such role: {}\n\
+                     Create it with: `aida role add {}`\n\
+                     See available roles with: `aida role list`",
+                    n,
+                    n
+                );
+            }
+        }
+    };
+    let (mut state, _) = load_role(project_root, &resolved).map_err(|_| {
         anyhow::anyhow!(
             "No such role: {}\n\
              Create it with: `aida role add {}`\n\
              See available roles with: `aida role list`",
-            name,
-            name
+            resolved,
+            resolved
         )
     })?;
     state.last_active_at = chrono::Utc::now();
@@ -16235,6 +16268,109 @@ fn handle_role_enter(project_root: &std::path::Path, name: &str, cd: bool) -> Re
     save_role_at(&state, &save_path)?;
     emit_role_enter_eval(project_root, &state, cd, /* was_existing */ true);
     Ok(())
+}
+
+/// TASK-644: interactive role picker for `aida role enter` (no name / unknown
+/// name on a TTY). Renders the list and reads the selection over `/dev/tty`
+/// (falling back to stderr+stdin) so stdout stays clean for the eval payload.
+/// Returns `Ok(Some(name))` on selection, `Ok(None)` if the user cancels.
+fn pick_role_interactively(
+    project_root: &std::path::Path,
+    unknown: Option<&str>,
+) -> Result<Option<String>> {
+    use std::io::Write;
+
+    let roles = list_roles(project_root)?;
+    if roles.is_empty() {
+        anyhow::bail!(
+            "No roles defined for {}.\n\
+             Create one with: `aida role add <name>`\n\
+             Or install a starter set: `aida role scaffold`",
+            project_root.display()
+        );
+    }
+
+    // Prefer a direct /dev/tty handle so the picker is visible even when both
+    // stdout and stderr are redirected (the `eval "$(...)"` case captures
+    // stdout; stderr may also be captured by tooling). Fall back to stderr.
+    let mut tty = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/tty")
+        .ok();
+    macro_rules! ui {
+        ($($arg:tt)*) => {{
+            if let Some(t) = tty.as_mut() {
+                let _ = writeln!(t, $($arg)*);
+            } else {
+                eprintln!($($arg)*);
+            }
+        }};
+    }
+
+    let active = std::env::var("AIDA_SESSION_ROLE").ok();
+    if let Some(u) = unknown.filter(|u| !u.is_empty()) {
+        ui!("No such role: {} — pick one of the existing roles:", u);
+    } else {
+        ui!("Select a role to enter:");
+    }
+    for (i, role) in roles.iter().enumerate() {
+        let marker = if active.as_deref() == Some(&role.name) {
+            "*"
+        } else {
+            " "
+        };
+        let scope = if role.global { " [global]" } else { "" };
+        let last = humanize_relative(role.last_active_at);
+        let purpose = role
+            .purpose
+            .as_deref()
+            .map(|p| format!(" — {}", p))
+            .unwrap_or_default();
+        ui!(
+            "  {} {:>2}) {}{}  (last active {}){}",
+            marker,
+            i + 1,
+            role.name,
+            scope,
+            last,
+            purpose
+        );
+    }
+    ui!("  Enter a number (or blank/q to cancel): ");
+
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    match parse_role_selection(&answer, roles.len()) {
+        RoleSelection::Index(i) => Ok(Some(roles[i].name.clone())),
+        RoleSelection::Cancel => Ok(None),
+        RoleSelection::Invalid => {
+            ui!("Not a valid selection: {} — cancelled.", answer.trim());
+            Ok(None)
+        }
+    }
+}
+
+/// TASK-644: outcome of parsing a role-picker selection line. Pure so the
+/// picker's branch logic is testable without a real TTY read.
+#[derive(Debug, PartialEq, Eq)]
+enum RoleSelection {
+    /// Zero-based index into the role list.
+    Index(usize),
+    /// Blank line or `q`/`Q` — user cancelled.
+    Cancel,
+    /// Non-numeric or out-of-range — treated as a cancel, with a notice.
+    Invalid,
+}
+
+fn parse_role_selection(input: &str, n_roles: usize) -> RoleSelection {
+    let trimmed = input.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("q") {
+        return RoleSelection::Cancel;
+    }
+    match trimmed.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= n_roles => RoleSelection::Index(n - 1),
+        _ => RoleSelection::Invalid,
+    }
 }
 
 fn handle_role_add(
@@ -35967,6 +36103,23 @@ mod statusline_tests {
         assert_eq!(humanize_size(1024 * 1024), "1.0 MB");
         assert_eq!(humanize_size(1024 * 1024 * 3 / 2), "1.5 MB");
         assert_eq!(humanize_size(1024 * 1024 * 1024), "1.0 GB");
+    }
+
+    /// TASK-644: role-picker selection parsing. Blank/`q` cancels, a valid
+    /// 1-based number maps to a 0-based index, anything else is Invalid.
+    #[test]
+    fn role_selection_parse_covers_cancel_index_and_invalid() {
+        use super::{parse_role_selection, RoleSelection};
+        assert_eq!(parse_role_selection("", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("  \n", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("q", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("Q\n", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("1", 3), RoleSelection::Index(0));
+        assert_eq!(parse_role_selection(" 3 \n", 3), RoleSelection::Index(2));
+        assert_eq!(parse_role_selection("0", 3), RoleSelection::Invalid);
+        assert_eq!(parse_role_selection("4", 3), RoleSelection::Invalid);
+        assert_eq!(parse_role_selection("nope", 3), RoleSelection::Invalid);
+        assert_eq!(parse_role_selection("1x", 3), RoleSelection::Invalid);
     }
 
     /// BUG-64: terminal-status predicate. Completed and Rejected are
