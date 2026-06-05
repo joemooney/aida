@@ -3,12 +3,12 @@ spec_id: BUG-443
 agreed_id: BUG-443
 title: 'MCP tool-count drift: docs/agents/cross-agent-onboarding.md says 26, source advertises 29 (self-test asserts stale 26)'
 description: 'Surfaced by cross-validating the Codex spike PRs (#462/#463, 2026-06-04). Three-way count conflict for AIDA''s MCP tool surface: aida-cli/src/mcp.rs advertises 29 tools (29 `"name":` descriptors / 29 dispatch arms); docs/agents/cross-agent-onboarding.md says ''9 spec graph + 17 coordination = 26'' AND its self-test asserts ''26 tools advertised''; STORY-399''s text mentions 21 (the outputSchema subset from TASK-440). The doc + its self-test are stale at 26 — they should track the live tools/list (29) or assert against it dynamically rather than a hardcoded number. The self-test asserting a stale literal is the substrate-as-bouncer anti-pattern (a gate that enforces the wrong invariant). Fix: update the doc to 29 (or ''see tools/list''), and make the self-test count from source / tools/list instead of a literal. Spotted by master cross-validation; the Codex PRs faithfully copied the stale doc count.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T16:12:29.431222886Z
-modified_at: 2026-06-05T02:46:31.464908136Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Bug
 tags:
 - docs
@@ -32,3 +32,7 @@ comments:
   content: Commit 94ea32356 references this requirement
   created_at: 2026-06-05T02:46:31.464908136Z
   modified_at: 2026-06-05T02:46:31.464908136Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 03166776f4ee1d7453c11f8eee59fbe22c8f9ec7

@@ -54,12 +54,12 @@ description: |-
   ## Priority rationale
 
   LOW. Cosmetic friction. The warnings are correct when commits exist; just noisy when they don't. Not blocking; reasonable to batch with other operator-UX papercuts in a future coherent cleanup pass.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T07:16:23.581595276Z
-modified_at: 2026-06-05T03:48:05.255078436Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - aida:push
@@ -74,3 +74,7 @@ comments:
   content: Commit c15458cdf references this requirement
   created_at: 2026-06-05T03:48:05.255078436Z
   modified_at: 2026-06-05T03:48:05.255078436Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 31183ccd52ecf39aa3ed706ea92c87c630b06948

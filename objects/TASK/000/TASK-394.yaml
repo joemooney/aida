@@ -29,12 +29,12 @@ description: |-
   ## Origin
 
   2026-05-20, overnight drain — the loop stalled at iteration 2 because `AIDA_NO_HUMAN_ACKNOWLEDGED=1` wasn't exported before the `for` loop ran. Advisor's loop-construction prompt didn't include the export, but even with discipline the env-var-only mechanism is awkward for the recurring overnight-drain pattern.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T13:33:54.596276481Z
-modified_at: 2026-06-05T05:46:56.452788917Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - autonomous-drain
@@ -48,3 +48,7 @@ comments:
   content: Commit 22db5fdc5 references this requirement
   created_at: 2026-06-05T05:46:56.452788917Z
   modified_at: 2026-06-05T05:46:56.452788917Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: a0f68fa729625c2eb26f202ff41505078bb3a6f0

@@ -33,12 +33,12 @@ description: |-
   ## Workaround
 
   `aida init` in the fresh clone bootstraps + attaches correctly (the documented teammate path) — but the auto path is what's advertised and the silent-wrong-read is the real danger.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:27:48.950629573Z
-modified_at: 2026-06-04T16:46:38.401491171Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Bug
 tags:
 - aida:list
@@ -54,3 +54,7 @@ comments:
   content: Commit f4ca4818d references this requirement
   created_at: 2026-06-04T16:46:38.401491171Z
   modified_at: 2026-06-04T16:46:38.401491171Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 5a1df2b2b01581e6c7139bc05db224b8de1bff0e

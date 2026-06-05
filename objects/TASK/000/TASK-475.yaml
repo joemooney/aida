@@ -14,12 +14,12 @@ description: |-
   Origin: BUG-220 acceptance bullet (B) — 'possibly improve aida queue list to flag stale-cache state'. The doc landed in PR; this is the optional in-tool nudge.
 
   Why low priority: '--sync' already exists and 'auto_push = "session-end"' is the durable fix; this is a papercut for users who haven't configured it.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:50:12.455310995Z
-modified_at: 2026-06-05T04:11:27.410443221Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - from-spec:BUG-220
@@ -37,3 +37,7 @@ comments:
   content: Commit a5852baed references this requirement
   created_at: 2026-06-05T04:11:27.410443221Z
   modified_at: 2026-06-05T04:11:27.410443221Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 7864afa6b1ec219ab155b4659eb71eb6c0ad7f7c

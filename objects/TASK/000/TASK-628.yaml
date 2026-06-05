@@ -17,12 +17,12 @@ description: |-
 
   - Content is the deliverable; this is pure wiring. Low priority.
   - The doc's core thesis (capture for the competitive synthesis): Workflows = within-task ephemeral fan-out; AIDA = cross-session persistent substrate + lifecycle. They compose (workflow reads AIDA's MCP graph; AIDA delegates a phase to a workflow). Orchestration mechanism overlaps + is commoditizing — divest posture (SPIKE-34), because the moat is the substrate, not the mechanism.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T07:13:50.655568174Z
-modified_at: 2026-06-01T07:20:54.227368908Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - claude-code-compose
@@ -46,3 +46,7 @@ comments:
     - [ ] Link-verify pass (aida plan verify / markdown link check) across the edited set.
   created_at: 2026-06-01T07:20:54.227368908Z
   modified_at: 2026-06-01T07:20:54.227368908Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 41cfdf887a05c57e5b08f914cb0ff1de8a15b956

@@ -10,12 +10,12 @@ description: |-
   Suggested fix: after `resolve_queue_work_batch`, if `effective_batch.is_some()` and the raw `id` was a `next*` keyword, bail with a directive message (e.g. "pick one: a batch drain (--batch NAME) or a head drain (nextN) — not both").
 
   Raised in review of PR-77 (TASK-293): https://github.com/joemooney/aida/pull/77
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T21:43:50.080342038Z
-modified_at: 2026-06-05T03:39:15.779008074Z
+modified_at: 2026-06-05T06:01:01.551505677Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -29,3 +29,7 @@ comments:
   content: Commit 4d24f9c32 references this requirement
   created_at: 2026-06-05T03:39:15.779008074Z
   modified_at: 2026-06-05T03:39:15.779008074Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:01:01.551505677Z
+  completion_sha: 286f779cd53c1c98c84f8dbb6e39e20ff83afd49
