@@ -236,7 +236,8 @@ pub enum ScaffoldCommand {
         /// Remove obsolete `aida-*` skills/commands/hooks that this AIDA
         /// version no longer ships (left over from an older version). Without
         /// this, they are only reported. Symlinks and non-`aida-` files are
-        /// never touched. (BUG-298)
+        /// never touched.
+        // trace:BUG-298 | ai:claude
         #[clap(long)]
         prune: bool,
     },
@@ -1432,7 +1433,7 @@ pub enum MailboxCommand {
     Sync,
 }
 
-/// SPIKE-31: Claude Code path-gated rules sync.
+/// Claude Code path-gated rules sync.
 // trace:SPIKE-31 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum RulesCommand {
@@ -1444,7 +1445,8 @@ pub enum RulesCommand {
         #[clap(long)]
         dry_run: bool,
 
-        /// SPIKE-35: also emit a project-root `REVIEW.md` that
+        // trace:SPIKE-35 | ai:claude
+        /// Also emit a project-root `REVIEW.md` that
         /// aggregates every active spec's acceptance criteria as
         /// the highest-priority injection into Anthropic's managed
         /// Code Review pipeline. One file, committed.
@@ -3698,7 +3700,8 @@ pub enum CalibrationAction {
     },
 }
 
-/// TASK-394: persist the one-time `--no-human` scope acknowledgement as a
+// trace:TASK-394 | ai:claude
+/// Persist the one-time `--no-human` scope acknowledgement as a
 /// file marker so an unattended loop doesn't re-prompt per iteration. The
 /// pre-flight gate checks the marker in addition to AIDA_NO_HUMAN_ACKNOWLEDGED.
 #[derive(Subcommand, Debug, Clone)]
@@ -3721,11 +3724,11 @@ pub enum NoHumanCommand {
     Status,
 }
 
-/// Three-way complexity-calibration views (pickup vs ship vs reviewer)
-/// — STORY-439. The parent `aida autonomy` namespace is shared with
-/// TASK-340's eventual `report` subcommand; this PR adds only the
-/// calibration surface so the two land cleanly side-by-side.
-// trace:STORY-439 | ai:claude
+/// Three-way complexity-calibration views (pickup vs ship vs reviewer).
+/// The parent `aida autonomy` namespace is shared with an eventual `report`
+/// subcommand; this adds only the calibration surface so the two land cleanly
+/// side-by-side.
+// trace:STORY-439 trace:TASK-340 | ai:claude
 #[derive(Subcommand, Debug, Clone)]
 pub enum AutonomyCommand {
     /// Calibration views over `.aida/complexity-calibration/`.
@@ -4003,7 +4006,8 @@ pub enum DrainCommand {
     },
 }
 
-/// Stack-graph introspection for STORY-248. `aida queue work --stack /
+// trace:STORY-248 | ai:claude
+/// Stack-graph introspection. `aida queue work --stack /
 /// --base` records each stacked branch's parent in `.aida/stacks.json`;
 /// `aida stack show` renders the chain tree; `aida stack list` prints one
 /// chain per line for scripting.
@@ -4467,7 +4471,7 @@ pub enum Command {
 
         /// Emit `[{spec_id,title,req_type,status,tags}]` as JSON instead
         /// of the human table. Internal-use surface for the TUI launcher
-        /// (STORY-244) to populate its Backlog / History panes; the
+        /// to populate its Backlog / History panes; the
         /// schema may change without notice.
         // trace:STORY-244 | ai:claude
         #[clap(long, hide = true)]
@@ -5631,7 +5635,8 @@ pub enum Command {
         // trace:TASK-487 | ai:claude
         #[clap(long)]
         no_recover: bool,
-        /// Force launcher mode (STORY-244): the TUI renders a dashboard,
+        // trace:STORY-244 | ai:claude
+        /// Force launcher mode: the TUI renders a dashboard,
         /// exits emitting one intent line, and the `aida-tui` bash
         /// wrapper dispatches the intent. Defaults to whatever
         /// `[tui] mode` resolves to (launcher unless overridden).
@@ -6437,6 +6442,39 @@ mod tests {
              (placeholders or real markers — both leak into `--help` output \
              when on a clap field). Demote to a plain `//` line above the \
              item, or reword the prose to drop the literal token:\n{}",
+            offenders
+                .iter()
+                .map(|(n, l)| format!("  {n}: {l}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+
+    // TASK-287: bare spec-id provenance in `///` clap doc comments leaks into
+    // `aida <cmd> --help`, where it's opaque noise to a user. Keep ids as `//`
+    // trace markers or in commits instead. Usage examples (`e.g. ...`) are
+    // legitimate help text and are exempted. (This comment uses `//`, not
+    // `///`, so it isn't itself scanned.)
+    #[test]
+    fn source_doc_comments_carry_no_spec_id_provenance() {
+        let src = include_str!("cli.rs");
+        let re =
+            regex::Regex::new(r"\b(STORY|TASK|BUG|EPIC|SPIKE|FR|SPEC|ADR|PRIN)-[0-9]+").unwrap();
+        let offenders: Vec<(usize, &str)> = src
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| {
+                let trimmed = line.trim_start();
+                // `///` doc lines only; exempt usage examples ("e.g." / "e.g ").
+                trimmed.starts_with("///") && re.is_match(trimmed) && !trimmed.contains("e.g.")
+            })
+            .map(|(i, line)| (i + 1, line))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "`///` doc comments in cli.rs must not carry bare SPEC-ID provenance \
+             (it leaks into `--help`). Move the id to a `//` trace marker above \
+             the item, or reword. Usage examples may use `e.g. \\`TASK-N\\``:\n{}",
             offenders
                 .iter()
                 .map(|(n, l)| format!("  {n}: {l}"))
