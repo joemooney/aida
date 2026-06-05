@@ -9554,6 +9554,34 @@ mod task_492_brief_tests {
         assert!(!pending.exists(), "emptied .pending should be deleted");
     }
 
+    /// STORY-457: the untracked safe-to-remove classifier flags editor scratch,
+    /// build droppings, and OS cruft — never source/docs.
+    #[test]
+    fn untracked_safe_to_remove_classifier() {
+        use super::untracked_is_safe_to_remove;
+        for p in [
+            "foo.bak",
+            "a/b/c.tmp",
+            ".x.swp",
+            "main.rs.orig",
+            "mod.pyc",
+            ".DS_Store",
+            "pkg/__pycache__/m.pyc",
+            "editor~",
+        ] {
+            assert!(untracked_is_safe_to_remove(p), "should flag: {p}");
+        }
+        for p in [
+            "src/main.rs",
+            "docs/plans/2026-06-05-x.md",
+            "scripts/deploy.sh",
+            "README.md",
+            "Cargo.toml",
+        ] {
+            assert!(!untracked_is_safe_to_remove(p), "should NOT flag: {p}");
+        }
+    }
+
     /// STORY-446: `--blocked-by` (repeatable) + the `--depends-on` alias parse
     /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
     #[test]
@@ -27290,6 +27318,135 @@ fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
         .filter(|l| !l.trim().is_empty())
         .map(|l| l.to_string())
         .collect()
+}
+
+/// STORY-457: is this untracked path auto-flaggable as safe-to-remove? Editor
+/// scratch, build droppings, and OS cruft — never source. Matched on the file
+/// name / extension or a path segment. trace:STORY-457 | ai:claude
+fn untracked_is_safe_to_remove(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    const SUFFIXES: &[&str] = &[
+        ".bak", ".tmp", ".swp", ".swo", ".orig", ".pyc", ".pyo", ".class", "~",
+    ];
+    if SUFFIXES.iter().any(|s| name.ends_with(s)) {
+        return true;
+    }
+    if name == ".DS_Store" || name == "Thumbs.db" {
+        return true;
+    }
+    // Build/cache dirs anywhere in the path.
+    path.split('/')
+        .any(|seg| seg == "__pycache__" || seg == ".mypy_cache" || seg == ".pytest_cache")
+}
+
+/// STORY-457: `aida status` working-tree section. Display-only — parses
+/// `git status --porcelain` in `root` and groups into staged / modified-tracked
+/// / untracked, auto-flagging safe-to-remove untracked cruft with an `rm`
+/// recommendation and surfacing the rest for a commit-or-remove decision.
+/// Silent when the tree is clean. (The mtime recent-vs-stale split + the
+/// content-matches-HEAD heuristic from the spec are a follow-up refinement.)
+/// trace:STORY-457 | ai:claude
+fn print_status_working_tree_section(root: &std::path::Path) {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["status", "--porcelain"])
+        .output();
+    let Ok(out) = out else { return };
+    if !out.status.success() {
+        return;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+
+    let mut staged = 0usize;
+    let mut modified: Vec<String> = Vec::new();
+    let mut untracked_safe: Vec<String> = Vec::new();
+    let mut untracked_other: Vec<String> = Vec::new();
+
+    for line in text.lines() {
+        if line.len() < 3 {
+            continue;
+        }
+        let code = &line[..2];
+        let path = line[3..].trim().to_string();
+        let x = code.chars().next().unwrap_or(' '); // index (staged) column
+        let y = code.chars().nth(1).unwrap_or(' '); // worktree column
+        if code == "??" {
+            if untracked_is_safe_to_remove(&path) {
+                untracked_safe.push(path);
+            } else {
+                untracked_other.push(path);
+            }
+            continue;
+        }
+        // Staged: index column carries a change other than space/?.
+        if x != ' ' && x != '?' {
+            staged += 1;
+        }
+        // Modified/deleted in the worktree (unstaged).
+        if y == 'M' || y == 'D' {
+            modified.push(path);
+        }
+    }
+
+    if staged == 0 && modified.is_empty() && untracked_safe.is_empty() && untracked_other.is_empty()
+    {
+        return;
+    }
+
+    let preview = |paths: &[String]| {
+        paths
+            .iter()
+            .take(3)
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    println!("{}", "─── Working tree ───".bold());
+    if staged > 0 {
+        println!(
+            "  {} {} staged file(s) — `git diff --cached` to review",
+            "●".green(),
+            staged
+        );
+    }
+    if !modified.is_empty() {
+        println!(
+            "  {} {} modified — {}{}",
+            "✎".yellow(),
+            modified.len(),
+            preview(&modified),
+            if modified.len() > 3 { ", …" } else { "" }
+        );
+    }
+    if !untracked_other.is_empty() {
+        println!(
+            "  {} {} untracked — {}{}  (commit or remove)",
+            "?".cyan(),
+            untracked_other.len(),
+            preview(&untracked_other),
+            if untracked_other.len() > 3 {
+                ", …"
+            } else {
+                ""
+            }
+        );
+    }
+    if !untracked_safe.is_empty() {
+        println!(
+            "  {} {} removable cruft — {}{}  (safe: `rm`)",
+            "🧹".to_string(),
+            untracked_safe.len(),
+            preview(&untracked_safe),
+            if untracked_safe.len() > 3 {
+                ", …"
+            } else {
+                ""
+            }
+        );
+    }
+    println!();
 }
 
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
@@ -59153,6 +59310,13 @@ fn handle_status_command_distributed(
 
     print_status_agents_section(&user_ctx);
     print_status_claude_code_section(&project_root);
+
+    // STORY-457: working-tree state — modified / staged / untracked (with
+    // safe-to-remove cruft auto-flagged). Display-only; silent when clean.
+    // Reads the main worktree so it's consistent regardless of cwd.
+    // trace:STORY-457 | ai:claude
+    let wt_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+    print_status_working_tree_section(&wt_root);
 
     println!("{}", "─── Project ───".bold());
     let name = if store.name.is_empty() {
