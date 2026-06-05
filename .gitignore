@@ -90,3 +90,8 @@ docs/writeups/
 # the spec graph. Regenerated on demand; would thrash across worktrees if
 # committed. Hand-authored rules outside this subdir remain tracked.
 .claude/rules/aida-specs/
+
+# TASK-625: per-machine runtime locks from Claude Code's /schedule + /loop
+# scheduler (e.g. `.claude/scheduled_tasks.lock`) — never source. (`*.yaml.lock`
+# is covered separately; no tracked `.claude/*.lock` exists.) trace:TASK-625
+.claude/*.lock
