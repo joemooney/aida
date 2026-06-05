@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:27:07.218907040Z
-modified_at: 2026-06-05T15:27:07.218907040Z
+modified_at: 2026-06-05T15:28:35.655060062Z
 req_type: Story
 tags:
 - aida:workflow
@@ -30,3 +30,9 @@ tags:
 - multi-vendor
 - orchestration
 - workflow
+comments:
+- id: 019e9866-8347-7ca3-8dcb-6851130fb90e
+  author: joe
+  content: 'First slice landed: runnable Workflow at .claude/workflows/panel-review.js (parses clean). 4 phases — Analyze (parallel blind analysts, FINDINGS_SCHEMA) → Consolidate (claims ledger, load-bearing/unverified prioritized) → Verify (adversarial reproducers, VERDICT_SCHEMA, must re-run + self-grade) → Reconcile (per-claim provenance + completeness pass, leads with consensus-but-wrong). Optional crossVendor flag emits a brief-routed second-vendor reproduction for disputed claims. Run: Workflow({name:''panel-review'', args:{target, question, crossVendor:true}}). Follow-ups remain out of scope per the spec (skill wrapper, templatize, live Teams front-end).'
+  created_at: 2026-06-05T15:28:35.655060062Z
+  modified_at: 2026-06-05T15:28:35.655060062Z
