@@ -416,6 +416,14 @@ pub trait Forge {
     /// state the orchestrator's CI phase relies on. trace:STORY-516 | ai:claude
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult>;
 
+    /// STORY-516: block until the change's CI reaches a terminal state,
+    /// **streaming** progress to the terminal (`gh pr checks <id> --watch`).
+    /// Returns `Success` / `Failed` once CI settles, or `None` when the forge
+    /// has no CI (pure-git) — nothing to wait on. `Err` only when the watch
+    /// itself could not be invoked. Stdio is inherited (live progress), so the
+    /// verdict is the exit status, not captured output. trace:STORY-516 | ai:claude
+    fn watch_ci(&self, change: &ChangeRef) -> Result<CiState>;
+
     /// `gh pr merge` / `glab mr merge` / pure-git git merge.
     ///
     /// Contract (STORY-516): returns `Err` when the merge could not be
@@ -772,6 +780,22 @@ impl Forge for GitHubForge {
         ))
     }
 
+    fn watch_ci(&self, change: &ChangeRef) -> Result<CiState> {
+        // Stream live progress (inherit stdio) — capturing would swallow the
+        // point of `--watch`. CI failures are real (not transient) so there is
+        // no retry. trace:STORY-516 | ai:claude
+        let status = Command::new("gh")
+            .current_dir(&self.project_root)
+            .args(["pr", "checks", &change.id.to_string(), "--watch"])
+            .status()
+            .context("could not invoke `gh pr checks --watch`")?;
+        Ok(if status.success() {
+            CiState::Success
+        } else {
+            CiState::Failed
+        })
+    }
+
     fn merge_change(
         &self,
         c: &ChangeRef,
@@ -984,6 +1008,10 @@ impl Forge for GitLabForge {
         anyhow::bail!("GitLab ci_probe_for_branch lands in EPIC-35 slice 4")
     }
 
+    fn watch_ci(&self, _change: &ChangeRef) -> Result<CiState> {
+        anyhow::bail!("GitLab watch_ci lands in EPIC-35 slice 4")
+    }
+
     fn merge_change(
         &self,
         c: &ChangeRef,
@@ -1121,6 +1149,11 @@ impl Forge for PureGitForge {
         Ok(CiProbeResult::NoSignal(
             "no forge CI (pure-git)".to_string(),
         ))
+    }
+
+    fn watch_ci(&self, _change: &ChangeRef) -> Result<CiState> {
+        // Pure-git has no forge CI — nothing to wait on. trace:STORY-516
+        Ok(CiState::None)
     }
 
     fn merge_change(

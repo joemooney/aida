@@ -32247,17 +32247,27 @@ fn pr_ship_handler(
     // `--watch`. CI failures are real (not transient), so no retry.
     eprintln!("  step 2: watching CI for PR-{}", pr_number);
     wait_for_pr_checks_to_register(&project_root, pr_number)?;
-    let watch_status = std::process::Command::new("gh")
-        .current_dir(&project_root)
-        .args(["pr", "checks", &pr_number.to_string(), "--watch"])
-        .status()
-        .context("could not invoke `gh pr checks --watch`")?;
-    if !watch_status.success() {
+    // STORY-516: route the blocking CI watch through the Forge trait (streams
+    // live; GitHub `gh pr checks <N> --watch`). trace:STORY-516 | ai:claude
+    let watch_change = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: branch.clone(),
+        base: String::new(),
+        title: None,
+    };
+    let ci_result = crate::forge::forge_for(&project_root).watch_ci(&watch_change);
+    let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
+    if ci_failed {
+        let detail = match &ci_result {
+            Err(e) => format!("{e:#}"),
+            _ => format!("CI did not pass for PR-{pr_number}"),
+        };
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &ShipStep::WatchCi,
-            &StepOutcome::Failed(format!("exit {}", watch_status)),
+            &StepOutcome::Failed(detail),
         );
         let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
         eprintln!("{} CI failed for PR-{}", "✗".red().bold(), pr_number);
