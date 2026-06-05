@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:05.585129303Z
-modified_at: 2026-05-24T04:08:05.585129303Z
+modified_at: 2026-06-05T14:13:39.229057186Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -39,3 +39,9 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-05-24T04:08:07.887922444Z
+comments:
+- id: 019e9821-e71d-7f01-8dfd-9fc1234cce59
+  author: joe
+  content: Commit 5a94ae8db references this requirement
+  created_at: 2026-06-05T14:13:39.229057186Z
+  modified_at: 2026-06-05T14:13:39.229057186Z
