@@ -1,0 +1,12 @@
+id: 019e986a-d9c4-71f2-9bb8-b4e688d15395
+spec_id: TASK-665
+agreed_id: TASK-665
+title: 'STORY-456 core: worktrees pane in aida status'
+description: 'Completed by the shipping PR: a Worktrees section in ''aida status'' merging git worktree + session lease + live/dormant (process probe) into one pane, with a clean/dirty count and a conservative ''likely obsolete'' hint (no lease + clean + nothing live → safe to git worktree remove). Display-only; silent when only the main worktree exists. Deferred to STORY-456 (stays open): the Open-PRs pane (all open PRs, not just current-branch), the Recently-merged section, commits-ahead + PR-merged in the obsolescence verdict, and the stale-CI distinction.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T15:33:19.940784969Z
+modified_at: 2026-06-05T15:33:19.940784969Z
+req_type: Task
