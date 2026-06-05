@@ -6206,6 +6206,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 req.set_status_from_str(canonical);
             }
+            // TASK-647 (ADR-3): advisor-gate the production of approved+ specs.
+            // A non-advisor, non-TTY caller (headless agent, drain/auto
+            // capture) can only file `draft`; a requested approved+ status is
+            // downgraded with a one-line triage notice. An interactive human
+            // (TTY) or the advisor role is unaffected. trace:TASK-647 | ai:claude
+            let intake_downgraded_from =
+                if status_requires_advisor_authority(&req.status) && !has_advisor_authority() {
+                    let from = req.status;
+                    req.status = RequirementStatus::Draft;
+                    Some(from)
+                } else {
+                    None
+                };
             if let Some(p) = &effective_priority {
                 let canonical = validate_priority_input(p).map_err(|e| anyhow::anyhow!(e))?;
                 req.set_priority_from_str(canonical);
@@ -6531,6 +6544,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     last.spec_id.as_deref().unwrap_or("?"),
                     last.title
                 );
+                // TASK-647 (ADR-3): note that a requested approved+ status was
+                // held for advisor triage. The spec is filed (as draft); this
+                // is informational, not an error. trace:TASK-647 | ai:claude
+                if let Some(from) = intake_downgraded_from {
+                    eprintln!(
+                        "{} filed as {} (requested {} needs advisor authority) — queued for advisor triage.",
+                        "ℹ".cyan(),
+                        "draft".yellow(),
+                        from.to_string().to_lowercase().dimmed()
+                    );
+                }
                 if let Some(sid) = last.spec_id.as_deref() {
                     record_role_activity(sid, "add");
                 }
@@ -7042,6 +7066,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     forbidden_attention_transition(&req.status, &parse_status(canonical)?)
                 {
                     anyhow::bail!(msg);
+                }
+                // TASK-647 (ADR-3): advisor-gate the draft→approved promotion.
+                // A non-advisor, non-TTY caller may not lift a draft into the
+                // approved+ pipeline — that's the intake-triage decision the
+                // advisor (or an interactive human) owns. Execution flips
+                // (Approved→InProgress→Done) are NOT gated, so drains are
+                // unaffected. trace:TASK-647 | ai:claude
+                let new_status = parse_status(canonical)?;
+                if matches!(req.status, RequirementStatus::Draft)
+                    && status_requires_advisor_authority(&new_status)
+                    && !has_advisor_authority()
+                {
+                    anyhow::bail!(
+                        "promoting a draft to {} needs advisor authority (advisor role or an \
+                         interactive session). Leave it draft for advisor triage, or run as \
+                         the advisor.",
+                        canonical
+                    );
                 }
                 let was_needs_attention = matches!(req.status, RequirementStatus::NeedsAttention);
                 req.set_status_from_str(canonical);
@@ -11351,6 +11393,20 @@ fn add_requirement_cli(
         requirement.status = parse_status(status)?;
     }
 
+    // TASK-647 (ADR-3): advisor-gate the production of approved+ specs. A
+    // non-advisor, non-TTY caller (headless agent, drain/auto capture) can
+    // only file `draft`; a requested approved+ status is downgraded with a
+    // one-line triage notice. Advisor role or an interactive human is
+    // unaffected. trace:TASK-647 | ai:claude
+    let intake_downgraded_from =
+        if status_requires_advisor_authority(&requirement.status) && !has_advisor_authority() {
+            let from = requirement.status;
+            requirement.status = RequirementStatus::Draft;
+            Some(from)
+        } else {
+            None
+        };
+
     if let Some(priority) = priority_str {
         requirement.priority = parse_priority(priority)?;
     }
@@ -11427,6 +11483,17 @@ fn add_requirement_cli(
     println!("UUID: {}", id);
     if let Some(spec_id) = &added_req.spec_id {
         println!("ID: {}", spec_id.green());
+    }
+
+    // TASK-647 (ADR-3): tell the caller their requested status was held for
+    // triage. Quiet and non-fatal — the spec is filed, just as draft.
+    if let Some(from) = intake_downgraded_from {
+        eprintln!(
+            "{} filed as {} (requested {} needs advisor authority) — queued for advisor triage.",
+            "ℹ".cyan(),
+            "draft".yellow(),
+            from.to_string().to_lowercase().dimmed()
+        );
     }
 
     // Show parent relationship if created
@@ -36286,6 +36353,23 @@ mod statusline_tests {
         );
     }
 
+    /// TASK-647 (ADR-3): the intake gate's status predicate. Approved and
+    /// beyond require advisor authority to produce; Draft / Rejected /
+    /// NeedsAttention don't (they aren't approved pipeline work).
+    #[test]
+    fn status_authority_gate_covers_approved_and_beyond() {
+        use super::status_requires_advisor_authority;
+        use aida_core::models::RequirementStatus as S;
+        assert!(status_requires_advisor_authority(&S::Approved));
+        assert!(status_requires_advisor_authority(&S::Planned));
+        assert!(status_requires_advisor_authority(&S::InProgress));
+        assert!(status_requires_advisor_authority(&S::Done));
+        assert!(status_requires_advisor_authority(&S::Completed));
+        assert!(!status_requires_advisor_authority(&S::Draft));
+        assert!(!status_requires_advisor_authority(&S::Rejected));
+        assert!(!status_requires_advisor_authority(&S::NeedsAttention));
+    }
+
     /// BUG-64: terminal-status predicate. Completed and Rejected are
     /// terminal; everything else (including the STORY-86 `Done` state) is
     /// open and accepts new children. trace:BUG-64 STORY-86 | ai:claude
@@ -44873,6 +44957,35 @@ fn resolve_effective_role(raw: Option<&str>) -> (String, bool) {
 
 fn effective_role_resolved() -> (String, bool) {
     resolve_effective_role(std::env::var("AIDA_SESSION_ROLE").ok().as_deref())
+}
+
+/// TASK-647 (ADR-3): a status whose *production* requires advisor authority —
+/// anything that places a spec into the active execution pipeline (Approved
+/// and beyond). Draft / Rejected / NeedsAttention don't gate (they are not
+/// "approved work" a non-advisor could smuggle past triage).
+fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Approved
+            | RequirementStatus::Planned
+            | RequirementStatus::InProgress
+            | RequirementStatus::Done
+            | RequirementStatus::Completed
+    )
+}
+
+/// TASK-647 (ADR-3): "advisor authority" — permission to produce approved+
+/// specs and queue work for execution. Held by an explicit advisor role OR a
+/// human at an interactive terminal (stdin is a TTY). Headless `claude -p`,
+/// spawned agents, and drain/auto captures have neither, so their intake
+/// lands `draft` for advisor triage. This is the hard gate (substrate-as-
+/// bouncer): a soft default would be bypassed by `--status approved`.
+///
+/// NB: the MCP server runs non-TTY but may inherit an advisor `AIDA_SESSION_ROLE`
+/// from the launching shell — it therefore does NOT use this helper and gates
+/// unconditionally (see `tool_add_requirement`).
+fn has_advisor_authority() -> bool {
+    effective_role() == "advisor" || std::io::stdin().is_terminal()
 }
 
 /// they disagree — and the warning is enabled — both are shown with a
@@ -67481,6 +67594,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             global,
             force,
         } => {
+            // TASK-647 (ADR-3): queue-for-work is an advisor-authority act —
+            // it commits a spec to the execution pipeline. A non-advisor,
+            // non-TTY caller (headless agent, drain capture) is refused; they
+            // file drafts and let the advisor triage + queue. Internal Rust
+            // callers (orchestrator) use `storage.queue_add()` directly and
+            // bypass this CLI gate. trace:TASK-647 | ai:claude
+            if !has_advisor_authority() {
+                anyhow::bail!(
+                    "queuing work for execution needs advisor authority (advisor role or an \
+                     interactive session). File the spec for advisor triage instead, or run \
+                     as the advisor."
+                );
+            }
             let user_id = get_user(user);
             let store = storage.load()?;
 

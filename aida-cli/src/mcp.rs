@@ -738,18 +738,38 @@ impl<'a> McpServer<'a> {
                 type_arg, VALID_MCP_REQUIREMENT_TYPES
             )
         })?;
-        let status = args
+        let requested_status = args
             .get("status")
             .and_then(|v| v.as_str())
             .and_then(parse_status)
             .unwrap_or(RequirementStatus::Draft);
-        if status == RequirementStatus::NeedsAttention {
+        if requested_status == RequirementStatus::NeedsAttention {
             return Err(
                 "cannot create a requirement with status `needs-attention` — \
                  it is reached only by punting In-Progress work"
                     .to_string(),
             );
         }
+        // TASK-647 (ADR-3): the MCP server is an intake surface used by agents
+        // (always non-interactive, and it may inherit an advisor role from the
+        // launching shell — so it cannot be trusted as advisor authority).
+        // Producing an approved+ spec is the advisor's triage decision, so MCP
+        // intake always lands `draft` regardless of the requested status; the
+        // result tells the agent it is queued for advisor triage.
+        // trace:TASK-647 | ai:claude
+        let intake_downgraded = matches!(
+            requested_status,
+            RequirementStatus::Approved
+                | RequirementStatus::Planned
+                | RequirementStatus::InProgress
+                | RequirementStatus::Done
+                | RequirementStatus::Completed
+        );
+        let status = if intake_downgraded {
+            RequirementStatus::Draft
+        } else {
+            requested_status
+        };
         let priority = args
             .get("priority")
             .and_then(|v| v.as_str())
@@ -787,7 +807,17 @@ impl<'a> McpServer<'a> {
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
 
-        Ok(format!("Requirement added: {} — {}", new_spec_id, title))
+        // TASK-647 (ADR-3): if a requested approved+ status was held back, say
+        // so in the result so the agent knows it is awaiting advisor triage.
+        if intake_downgraded {
+            Ok(format!(
+                "Requirement added: {} — {} (filed as draft, queued for advisor triage; \
+                 requested status needs advisor authority)",
+                new_spec_id, title
+            ))
+        } else {
+            Ok(format!("Requirement added: {} — {}", new_spec_id, title))
+        }
     }
 
     fn tool_update_requirement(&self, args: &Value) -> Result<String, String> {
@@ -3726,7 +3756,7 @@ mod tests {
         }
     }
 
-    // trace:BUG-377 TASK-550 | ai:codex
+    // trace:BUG-377 TASK-550 TASK-647 | ai:codex
     #[test]
     fn mcp_add_requirement_persists_all_advertised_fields() {
         let dir = tempdir().unwrap();
@@ -3742,6 +3772,12 @@ mod tests {
             }))
             .unwrap();
         let spec_id = added_spec_id(&response);
+        // TASK-647 (ADR-3): MCP intake always lands `draft` (advisor-gated),
+        // and the response says so — even though `approved` was requested.
+        assert!(
+            response.contains("advisor triage"),
+            "expected triage notice in: {response}"
+        );
 
         let store = server.storage.load().unwrap();
         let req = store
@@ -3750,7 +3786,8 @@ mod tests {
         assert_eq!(req.title, "MCP write map");
         assert_eq!(req.description, "All advertised fields should persist");
         assert_eq!(req.req_type, RequirementType::Bug);
-        assert_eq!(req.status, RequirementStatus::Approved);
+        // TASK-647: requested `approved` was downgraded to `draft` at intake.
+        assert_eq!(req.status, RequirementStatus::Draft);
         assert_eq!(req.priority, RequirementPriority::High);
         assert!(req.tags.contains("mcp"));
         assert!(req.tags.contains("roundtrip"));
@@ -3761,26 +3798,32 @@ mod tests {
     fn mcp_list_requirements_normalizes_status_type_and_priority_filters() {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
+        // TASK-647 (ADR-3): MCP add lands draft, so set the non-draft statuses
+        // this filter test needs via the (ungated) update tool.
         let working = server
             .tool_add_requirement(&json!({
                 "title": "Working MCP item",
                 "description": "status filter target",
                 "type": "task",
-                "status": "in-progress",
                 "priority": "high",
             }))
             .unwrap();
         let working_id = added_spec_id(&working).to_string();
+        server
+            .tool_update_requirement(&json!({ "id": working_id, "status": "in-progress" }))
+            .unwrap();
         let planned = server
             .tool_add_requirement(&json!({
                 "title": "Planned MCP item",
                 "description": "negative control",
                 "type": "story",
-                "status": "planned",
                 "priority": "low",
             }))
             .unwrap();
         let planned_id = added_spec_id(&planned).to_string();
+        server
+            .tool_update_requirement(&json!({ "id": planned_id, "status": "planned" }))
+            .unwrap();
         let nfr = server
             .tool_add_requirement(&json!({
                 "title": "Nonfunctional MCP item",
@@ -4191,10 +4234,14 @@ mod tests {
                 "title": "Closed parent",
                 "description": "terminal parent",
                 "type": "epic",
-                "status": "completed",
             }))
             .unwrap();
         let parent_id = added_spec_id(&parent).to_string();
+        // TASK-647 (ADR-3): MCP add lands draft; drive the parent to the
+        // terminal `completed` state (the guard's precondition) via update.
+        server
+            .tool_update_requirement(&json!({ "id": parent_id, "status": "completed" }))
+            .unwrap();
         let child = server
             .tool_add_requirement(&json!({
                 "title": "Child task",
@@ -4246,11 +4293,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let srv = mk_server(dir.path());
         let add = srv
-            .tool_add_requirement(
-                &json!({"title":"flip me","description":"d","type":"task","status":"in-progress"}),
-            )
+            .tool_add_requirement(&json!({"title":"flip me","description":"d","type":"task"}))
             .unwrap();
         let id = added_spec_id(&add).to_string();
+        // TASK-647 (ADR-3): MCP add lands draft; reach In Progress (the punt
+        // pre-state) via the ungated update tool.
+        srv.tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .unwrap();
 
         let r = srv
             .tool_post_punt(
