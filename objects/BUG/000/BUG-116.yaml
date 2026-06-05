@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:38:18.073686442Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-06-05T03:27:32.683024971Z
 req_type: Bug
 tags:
 - batch:workflow-hint-polish
@@ -84,6 +84,11 @@ comments:
   content: 'Discipline codified as TASK-319: see `docs/aida-discipline/session-discipline.md` (*"Dated historical artifacts stay frozen"*) and memory `feedback_dated_artifacts_immutable.md`. The implementer''s note on this BUG — *"dated historical observation record, not living guidance"* — is the phrasing the new convention is built around. Discriminator table now lives in the discipline doc + memory so the next cross-cutting refactor inherits the rule.'
   created_at: 2026-05-21T05:59:36.651390617Z
   modified_at: 2026-05-21T05:59:36.651390617Z
+- id: 019e95d2-5f4b-7d63-aeae-e5426fed8171
+  author: joe
+  content: Commit 2d4455a85 references this requirement
+  created_at: 2026-06-05T03:27:32.683024971Z
+  modified_at: 2026-06-05T03:27:32.683024971Z
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
