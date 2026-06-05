@@ -3697,6 +3697,29 @@ pub enum CalibrationAction {
     },
 }
 
+/// TASK-394: persist the one-time `--no-human` scope acknowledgement as a
+/// file marker so an unattended loop doesn't re-prompt per iteration. The
+/// pre-flight gate checks the marker in addition to AIDA_NO_HUMAN_ACKNOWLEDGED.
+#[derive(Subcommand, Debug, Clone)]
+pub enum NoHumanCommand {
+    /// Persist the acknowledgement so future `--no-human` drains skip the
+    /// scope prompt. Machine-wide (`~/.aida/no-human-acknowledged`) by default;
+    /// `--project` scopes it to this repo (`.aida/no-human-acknowledged`).
+    Acknowledge {
+        /// Scope the acknowledgement to this project instead of the machine.
+        #[clap(long)]
+        project: bool,
+    },
+    /// Remove the persistent acknowledgement (the scope prompt returns).
+    Revoke {
+        /// Revoke the project-scoped marker instead of the machine-wide one.
+        #[clap(long)]
+        project: bool,
+    },
+    /// Show whether `--no-human` is currently acknowledged and via which channel.
+    Status,
+}
+
 /// Three-way complexity-calibration views (pickup vs ship vs reviewer)
 /// — STORY-439. The parent `aida autonomy` namespace is shared with
 /// TASK-340's eventual `report` subcommand; this PR adds only the
@@ -4710,6 +4733,12 @@ pub enum Command {
     // trace:STORY-439 | ai:claude
     #[clap(subcommand)]
     Autonomy(AutonomyCommand),
+
+    /// Persist (or revoke) the one-time `--no-human` scope acknowledgement so
+    /// an overnight `aida queue work --auto-complete --no-human=both` loop
+    /// doesn't re-prompt every iteration. trace:TASK-394 | ai:claude
+    #[clap(subcommand)]
+    NoHuman(NoHumanCommand),
 
     /// Quantitative effort/load views. Effort buckets are 15m, 1h, 4h,
     /// 1d (8 work-hours), and 1w (5 work-days / 40 work-hours).
