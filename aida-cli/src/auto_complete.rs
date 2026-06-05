@@ -487,6 +487,10 @@ pub(crate) struct HintContext {
     pub(crate) pr_number: Option<u32>,
     pub(crate) implementer_session: Option<String>,
     pub(crate) ci_run_id: Option<String>,
+    /// STORY-508/TASK-651: the project's active forge, so recovery hints name
+    /// the right CLI (gh/glab) — or a forge-neutral phrasing for pure-git —
+    /// when a drain phase fails. Set by the driver's `hint_context()`.
+    pub(crate) forge: crate::forge::ForgeKind,
 }
 
 /// The outcome of phase 1 — the implementer session. The implementer either
@@ -885,6 +889,29 @@ pub(crate) fn phase_event(
     serde_json::Value::Object(obj).to_string()
 }
 
+/// STORY-508/TASK-651: forge-aware "CLI not on PATH" recovery message. `action`
+/// is what the missing CLI was needed for ("merge the PR"); `retry` is the
+/// resume verb ("re-run"). Names the right CLI + install URL per forge; pure-git
+/// (no forge CLI) gets a forge-neutral phrasing — it shouldn't normally reach a
+/// MissingTool failure since it shells out to neither gh nor glab.
+fn forge_cli_missing_hint(forge: crate::forge::ForgeKind, action: &str, retry: &str) -> String {
+    match forge.cli_install_hint() {
+        Some((name, url)) => format!(
+            "`{}` is not on PATH — auto-complete needs the {} to {}. \
+             Install it ({}), then {}.",
+            forge.cli_name(),
+            name,
+            action,
+            url,
+            retry
+        ),
+        None => format!(
+            "A forge CLI is needed to {action}, but this project is configured pure-git. \
+             Complete the step manually, then {retry}."
+        ),
+    }
+}
+
 /// Pick the recovery hint for a failed phase. Pure — each branch names a
 /// concrete next command, parameterised by the failure `kind` (so a spawn
 /// ENOENT is never reported as red CI) and whatever the driver discovered.
@@ -912,7 +939,10 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 Phase::Implementer => format!("aida queue work {spec}"),
                 Phase::Ci => format!("aida session end {session} --wait-ci"),
                 Phase::Reviewer => format!("aida queue work PR-{pr}"),
-                Phase::Merge => format!("gh pr merge {pr} --squash --delete-branch"),
+                Phase::Merge => ctx
+                    .forge
+                    .merge_cmd(&pr)
+                    .unwrap_or_else(|| format!("merge PR {pr} to your default branch")),
                 Phase::Pull => "aida pull".to_string(),
                 Phase::Build => "cargo build --release".to_string(),
             };
@@ -980,9 +1010,7 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
             )
         }
         (Phase::Implementer, FailureKind::MissingTool) => {
-            "`gh` is not on PATH — auto-complete needs the GitHub CLI to track the PR. \
-             Install it (https://cli.github.com), then re-run."
-                .to_string()
+            forge_cli_missing_hint(ctx.forge, "track the PR", "re-run")
         }
         (Phase::Implementer, _) => {
             let resume = ctx
@@ -994,22 +1022,39 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         }
 
         (Phase::Ci, FailureKind::CiRed) => {
+            // STORY-508/TASK-651: forge-aware CI viewer. With a run id → view
+            // it (gh run view / glab ci view); else point at the branch's
+            // runs/pipeline (gh run list / glab ci status); pure-git has none.
+            let branch_runs = match ctx.forge {
+                crate::forge::ForgeKind::GitHub => Some(format!("gh run list --branch {branch}")),
+                crate::forge::ForgeKind::GitLab => Some("glab ci status".to_string()),
+                crate::forge::ForgeKind::None => None,
+            };
             let view = ctx
                 .ci_run_id
                 .as_deref()
-                .map(|r| format!("gh run view {r}"))
-                .unwrap_or_else(|| format!("gh run list --branch {branch}"));
+                .and_then(|r| ctx.forge.ci_view_cmd(r))
+                .or(branch_runs)
+                .unwrap_or_else(|| "check your CI dashboard".to_string());
             let run = ctx.ci_run_id.as_deref().unwrap_or("<ID>");
             format!(
                 "CI failed on run {run} — view it: `{view}`. Push fixups to the same \
                  branch: `aida queue work {spec} --branch {branch} --steal`"
             )
         }
-        (Phase::Ci, FailureKind::CiTimeout) => format!(
-            "CI never reached a terminal state in the wait window — it may be queued or \
-             a runner is slow, CI is not red. Check progress with \
-             `gh run list --branch {branch}`, then re-run auto-complete once CI settles."
-        ),
+        (Phase::Ci, FailureKind::CiTimeout) => {
+            // STORY-508/TASK-651: forge-aware "check CI progress" command.
+            let progress = match ctx.forge {
+                crate::forge::ForgeKind::GitHub => format!("`gh run list --branch {branch}`"),
+                crate::forge::ForgeKind::GitLab => "`glab ci status`".to_string(),
+                crate::forge::ForgeKind::None => "your CI dashboard".to_string(),
+            };
+            format!(
+                "CI never reached a terminal state in the wait window — it may be queued or \
+                 a runner is slow, CI is not red. Check progress with {progress}, then re-run \
+                 auto-complete once CI settles."
+            )
+        }
         (Phase::Ci, _) => format!(
             "The implementer session would not end cleanly — it may have uncommitted \
              changes. Commit or discard them in the worktree, then end it: \
@@ -1030,11 +1075,16 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         ),
 
         (Phase::Merge, FailureKind::MissingTool) => {
-            "`gh` is not on PATH — auto-complete needs the GitHub CLI to merge the PR. \
-             Install it (https://cli.github.com), then merge the PR manually."
-                .to_string()
+            forge_cli_missing_hint(ctx.forge, "merge the PR", "merge the PR manually")
         }
-        (Phase::Merge, _) => format!("Investigate the merge failure: `gh pr view {pr}`"),
+        (Phase::Merge, _) => {
+            let view = ctx
+                .forge
+                .view_cmd(&pr)
+                .map(|c| format!("`{c}`"))
+                .unwrap_or_else(|| "your forge's web UI".to_string());
+            format!("Investigate the merge failure: {view}")
+        }
 
         (Phase::Pull, _) => "Classify the divergence: `aida rebase --dry-run --json`".to_string(),
 
@@ -3229,6 +3279,7 @@ mod tests {
                 pr_number: Some(46),
                 implementer_session: Some("019e2f423e7c".to_string()),
                 ci_run_id: Some("9988776655".to_string()),
+                forge: crate::forge::ForgeKind::GitHub,
             }
         }
         fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
@@ -4502,6 +4553,7 @@ mod tests {
             pr_number: Some(46),
             implementer_session: Some("019e2f423e7c".to_string()),
             ci_run_id: Some("9988776655".to_string()),
+            forge: crate::forge::ForgeKind::GitHub,
         }
     }
 
@@ -4536,6 +4588,32 @@ mod tests {
     fn recovery_hint_merge_failed_names_pr_view() {
         let hint = recovery_hint(Phase::Merge, FailureKind::Failed, &ctx());
         assert!(hint.contains("gh pr view 46"));
+    }
+
+    /// STORY-508/TASK-651: recovery hints are forge-aware — a GitLab project's
+    /// drain failure names glab/MR commands, never gh.
+    #[test]
+    fn recovery_hints_are_forge_aware_for_gitlab() {
+        let mut c = ctx();
+        c.forge = crate::forge::ForgeKind::GitLab;
+
+        let merge = recovery_hint(Phase::Merge, FailureKind::Failed, &c);
+        assert!(merge.contains("glab mr view 46"), "{merge}");
+        assert!(!merge.contains("gh pr"), "{merge}");
+
+        let merge_missing = recovery_hint(Phase::Merge, FailureKind::MissingTool, &c);
+        assert!(merge_missing.contains("glab"), "{merge_missing}");
+        assert!(merge_missing.contains("GitLab CLI"), "{merge_missing}");
+        assert!(!merge_missing.contains("gh"), "{merge_missing}");
+
+        let ci_red = recovery_hint(Phase::Ci, FailureKind::CiRed, &c);
+        assert!(ci_red.contains("glab ci view"), "{ci_red}");
+        assert!(!ci_red.contains("gh run"), "{ci_red}");
+
+        // Spawn-on-merge workaround also routes through glab.
+        let spawn = recovery_hint(Phase::Merge, FailureKind::Spawn, &c);
+        assert!(spawn.contains("glab mr merge 46"), "{spawn}");
+        assert!(spawn.contains("--remove-source-branch"), "{spawn}");
     }
 
     /// BUG-236 regression guard: by phase 3 the spec is Done (the

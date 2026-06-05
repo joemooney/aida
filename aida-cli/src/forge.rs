@@ -24,14 +24,16 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Which forge backs a project's collaboration lifecycle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ForgeKind {
     GitHub,
     GitLab,
     /// No forge — the project works direct-to-default-branch; "is it merged?"
     /// is a git-ancestry query and `(SPEC-ID)`-trailer auto-complete drives the
     /// lifecycle. Makes any git remote (incl. a fresh GitLab) usable immediately,
-    /// before MR-drain parity lands.
+    /// before MR-drain parity lands. The default: matches `resolve_forge_kind`'s
+    /// fallback and names no forge CLI when the forge is unknown.
+    #[default]
     None,
 }
 
@@ -90,8 +92,10 @@ impl ForgeKind {
     /// `--remove-source-branch`. Each returns `None` for pure-git (no forge
     /// CLI) — callers supply a git/aida-native phrasing or drop the hint.
 
-    /// Watch a change's CI to completion. trace:TASK-651 | ai:claude
-    pub fn ci_watch_cmd(self, change_id: u64) -> Option<String> {
+    /// Watch a change's CI to completion. `change_id` is a display string so
+    /// callers can pass a number (`"47"`) or a placeholder (`"<N>"`).
+    /// trace:TASK-651 | ai:claude
+    pub fn ci_watch_cmd(self, change_id: &str) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some(format!("gh pr checks {change_id} --watch")),
             // glab CI status is pipeline-scoped, not mr-scoped; `glab ci status`
@@ -111,8 +115,9 @@ impl ForgeKind {
     }
 
     /// Merge a change, squashing and deleting the source branch — with each
-    /// forge's correct branch-cleanup flag. trace:TASK-651 | ai:claude
-    pub fn merge_cmd(self, change_id: u64) -> Option<String> {
+    /// forge's correct branch-cleanup flag. `change_id` is a display string
+    /// (number or `"<N>"` placeholder). trace:TASK-651 | ai:claude
+    pub fn merge_cmd(self, change_id: &str) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some(format!("gh pr merge {change_id} --squash --delete-branch")),
             ForgeKind::GitLab => Some(format!(
@@ -131,8 +136,20 @@ impl ForgeKind {
         }
     }
 
-    /// View a change by id. trace:TASK-651 | ai:claude
-    pub fn view_cmd(self, change_id: u64) -> Option<String> {
+    /// Human name + install URL for this forge's CLI, for "tool not on PATH"
+    /// errors. `None` for pure-git (no forge CLI is needed at all).
+    /// trace:TASK-651 | ai:claude
+    pub fn cli_install_hint(self) -> Option<(&'static str, &'static str)> {
+        match self {
+            ForgeKind::GitHub => Some(("GitHub CLI", "https://cli.github.com")),
+            ForgeKind::GitLab => Some(("GitLab CLI (glab)", "https://gitlab.com/gitlab-org/cli")),
+            ForgeKind::None => None,
+        }
+    }
+
+    /// View a change by id (display string — number or `"<N>"`).
+    /// trace:TASK-651 | ai:claude
+    pub fn view_cmd(self, change_id: &str) -> Option<String> {
         match self {
             ForgeKind::GitHub => Some(format!("gh pr view {change_id}")),
             ForgeKind::GitLab => Some(format!("glab mr view {change_id}")),
@@ -1123,16 +1140,21 @@ mod tests {
     /// the noun (ci status, run/pipeline viewer, merge branch-cleanup flag).
     #[test]
     fn command_vocabulary_per_forge() {
-        // CI watch: gh is pr-scoped, glab is pipeline-scoped.
+        // CI watch: gh is pr-scoped, glab is pipeline-scoped. Display-string
+        // id accepts a number or a placeholder.
         assert_eq!(
-            ForgeKind::GitHub.ci_watch_cmd(47),
+            ForgeKind::GitHub.ci_watch_cmd("47"),
             Some("gh pr checks 47 --watch".to_string())
         );
         assert_eq!(
-            ForgeKind::GitLab.ci_watch_cmd(47),
+            ForgeKind::GitHub.ci_watch_cmd("<N>"),
+            Some("gh pr checks <N> --watch".to_string())
+        );
+        assert_eq!(
+            ForgeKind::GitLab.ci_watch_cmd("47"),
             Some("glab ci status".to_string())
         );
-        assert_eq!(ForgeKind::None.ci_watch_cmd(47), None);
+        assert_eq!(ForgeKind::None.ci_watch_cmd("47"), None);
 
         // Run / pipeline viewer.
         assert_eq!(
@@ -1147,14 +1169,14 @@ mod tests {
 
         // Merge: correct branch-cleanup flag per forge.
         assert_eq!(
-            ForgeKind::GitHub.merge_cmd(47),
+            ForgeKind::GitHub.merge_cmd("47"),
             Some("gh pr merge 47 --squash --delete-branch".to_string())
         );
         assert_eq!(
-            ForgeKind::GitLab.merge_cmd(47),
+            ForgeKind::GitLab.merge_cmd("47"),
             Some("glab mr merge 47 --squash --remove-source-branch".to_string())
         );
-        assert_eq!(ForgeKind::None.merge_cmd(47), None);
+        assert_eq!(ForgeKind::None.merge_cmd("47"), None);
 
         // Create + view.
         assert_eq!(
@@ -1167,10 +1189,10 @@ mod tests {
         );
         assert_eq!(ForgeKind::None.create_cmd(), None);
         assert_eq!(
-            ForgeKind::GitLab.view_cmd(9),
+            ForgeKind::GitLab.view_cmd("9"),
             Some("glab mr view 9".to_string())
         );
-        assert_eq!(ForgeKind::None.view_cmd(9), None);
+        assert_eq!(ForgeKind::None.view_cmd("9"), None);
     }
 
     #[test]
