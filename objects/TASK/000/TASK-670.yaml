@@ -1,0 +1,50 @@
+id: 019e9925-da91-7840-9a38-4886ca744c05
+spec_id: TASK-670
+agreed_id: TASK-670
+title: 'aida list: leading work-routing glyph (queued ↑ / in-flight ▶ / blocked ⊘) — surface the axis status doesn''t carry'
+description: |-
+  ## Want (operator, 2026-06-05)
+
+  `aida list` shows a spec's STATUS but not its WORK-ROUTING state — you can't tell from `aida list` whether a spec is queued (it's also in `aida queue list`, two views). Surface the orthogonal axis with a leading glyph.
+
+  ## Design
+
+  A leading single-glyph column (leftmost, before ID) for the work-routing state that is ORTHOGONAL to status (Draft/NeedsAttention are already statuses — `◯`/`⚠` — so NOT duplicated here):
+  - `↑` queued — in a role queue, not yet started
+  - `▶` in-flight — an active session lease holds it (someone's on it NOW; additive over `in-progress` status, which persists after a dead session)
+  - `⊘` blocked — BlockedBy an incomplete spec
+  - ` ` (space) — idle/backlog
+
+  Priority when several apply: in-flight `▶` > blocked `⊘` > queued `↑`. Unicode, matching the status-glyph family (`◯ ▸ ✓ ⚠`, status_display.rs); operator likes unicode glyphs.
+
+  ## Default vs opt-in (perf — `aida list` is sub-ms cache-backed)
+
+  - queued (one queue read) + in-flight (one lease read) → cheap → DEFAULT-ON.
+  - blocked (graph walk over BlockedBy) → not cheap → behind a flag (`--blocked`) or folded into `aida graph --blocked-by`.
+  - `--no-flow` to suppress the column; keep the fast pure-cache path available.
+
+  ## Acceptance (sketch)
+
+  - [ ] `aida list` shows a leading glyph: `↑` queued, `▶` in-flight (live lease), space otherwise — default-on, cheap.
+  - [ ] `⊘` blocked shown only with `--blocked` (or equivalent), since it needs a graph walk.
+  - [ ] `--no-flow` suppresses the column (restores pure-cache speed).
+  - [ ] No glyph for Draft/NeedsAttention (already in Status); no duplication.
+  - [ ] `aida list --json` carries the routing state as fields (queued/in_flight/blocked) for machine consumers.
+
+  ## Notes
+  - Complements (doesn't replace) `aida queue list` (the queue-focused view). This is the at-a-glance overlay on the main list.
+  - The in-flight signal reads the same lease registry as `aida session leases`; reaped/dead leases must not show `▶` (use the live-lease check, cf. the dead-agent reaper STORY-496).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T18:57:35.377758546Z
+modified_at: 2026-06-05T18:57:35.377758546Z
+req_type: Task
+tags:
+- aida:list
+- cli-ux
+- from-product
+- from-user-direction
+- glyph
+- work-routing
