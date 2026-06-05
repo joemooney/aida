@@ -64,7 +64,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:31:03.578198534Z
-modified_at: 2026-05-25T07:42:04.626384608Z
+modified_at: 2026-06-05T17:09:36.737827494Z
 req_type: Task
 tags:
 - aida:session:end
@@ -78,3 +78,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T14:31:05.869998373Z
+comments:
+- id: 019e98c2-ff61-7223-a2b3-493b6afcab9a
+  author: joe
+  content: 'Verified 2026-06-05 by code evidence (per the spec''s ''mark Completed if correct by then, noting which upstream fix addressed it''). All three preconditions shipped: BUG-85, TASK-226, TASK-234 all Completed. ROOT CAUSE STRUCTURALLY ELIMINATED: the auto-queue covered-specs count (build_auto_queue / note ''covers N specs'', aida-cli/src/main.rs ~31397) now derives spec_ids from the PR''s DURABLE commit range — pr_base_head + git_log_messages(base,head) + extract_spec_ids_from_commit per message — NOT the ephemeral session manifest that each ''aida queue done'' reset in cluster mode (the 2026-05-14 ''covers no specs'' failure, hypotheses #1/#2). A cluster PR with 6 trailered commits now counts all 6 from git history regardless of manifest state. Covered by green tests: auto_bump_flips_cluster_pr_covered_specs_via_review_story + extract_spec_ids_from_commit_subject. Note: this is a code-evidence verification, not a fresh live 3-spec cluster drain (the drain machinery is keyboard/expensive work); the manifest-dependency that caused the under-count no longer exists in the code path. Closing Completed; reopen with --force if a live cluster drain ever shows a recount.'
+  created_at: 2026-06-05T17:09:36.737827494Z
+  modified_at: 2026-06-05T17:09:36.737827494Z
