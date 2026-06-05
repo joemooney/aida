@@ -131,7 +131,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-06-05T05:27:56.409504571Z
+modified_at: 2026-06-05T05:41:31.029017273Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
@@ -192,3 +192,8 @@ comments:
     Honest limit: "fool-proof = everything ships unattended" is gated on driving down the phase-1/phase-3 failure rate (EPIC-33). The loop converts "halts and waits for a human" into "continues and parks the ~40% to NeedsAttention" — strictly better, but still a triage pile until reliability climbs.
   created_at: 2026-06-05T05:27:56.409504571Z
   modified_at: 2026-06-05T05:27:56.409504571Z
+- id: 019e964d-0715-72a0-97d6-216275092833
+  author: joe
+  content: 'CORRECTION (2026-06-04, post-forensics): the earlier note said the v2 advisor pre-flight stage ''attacks the 55 phase-1 failures.'' The headless-log forensics REFUTE that — ~98% of sessions succeed; phase-1 ''failures'' are orchestrator post-session MISCLASSIFICATION, not bad specs (see EPIC-33 evidence). The advisor-triage stage is still useful for archiving/clarifying backlog items, but it is NOT the failure-rate fix. Deprioritize v2-as-reliability-fix; the reliability fix is EPIC-33 (orchestrator phase-classification).'
+  created_at: 2026-06-05T05:41:31.029017273Z
+  modified_at: 2026-06-05T05:41:31.029017273Z
