@@ -28130,9 +28130,12 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
 /// the forge-neutral `CiProbeResult` back to `CiProbe` so the existing match
 /// sites are unchanged; a provider Err collapses to `NoSignal`.
 /// trace:STORY-516 | ai:claude
-pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
-    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    match crate::forge::forge_for(&project_root).ci_probe_for_branch(branch) {
+/// STORY-516: reverse of `ci_probe_result_from_ci_probe` — convert a forge
+/// `CiProbeResult` (incl. a provider `Err`) back to the orchestrator's
+/// `CiProbe`, so the `*_via_forge` CI helpers stay a pure name-swap at their
+/// call sites. trace:STORY-516 | ai:claude
+fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiProbe {
+    match r {
         Ok(crate::forge::CiProbeResult::NoSignal(why)) => CiProbe::NoSignal(why),
         Ok(crate::forge::CiProbeResult::NoChecks { change }) => CiProbe::PrNoChecks {
             pr_number: change as u32,
@@ -28149,6 +28152,25 @@ pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
         },
         Err(e) => CiProbe::NoSignal(format!("{e:#}")),
     }
+}
+
+pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    ci_probe_from_ci_probe_result(
+        crate::forge::forge_for(&project_root).ci_probe_for_branch(branch),
+    )
+}
+
+/// STORY-516: forge-routed orchestrator / `--watch-ci` CI watch — blocks until
+/// the branch's workflow-run CI is terminal (streaming when interactive),
+/// returning CiProbe. GitHubForge delegates to `watch_ci_for_context`.
+/// `no_human_active` is the headless flag (inverted to `interactive`).
+/// trace:STORY-516 | ai:claude
+pub(crate) fn watch_ci_for_context_via_forge(branch: &str, no_human_active: bool) -> CiProbe {
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    ci_probe_from_ci_probe_result(
+        crate::forge::forge_for(&project_root).stream_ci_for_branch(branch, !no_human_active),
+    )
 }
 
 pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
@@ -28315,7 +28337,7 @@ fn should_stream_ci_watch(stdout_is_tty: bool, no_human_active: bool) -> bool {
     stdout_is_tty && !no_human_active
 }
 
-fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiProbe {
+pub(crate) fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiProbe {
     if should_stream_ci_watch(std::io::stdout().is_terminal(), no_human_active) {
         watch_ci_terminal(branch)
     } else {
@@ -29213,7 +29235,7 @@ fn session_end(
                         "{} CI in progress — watching until terminal state (Ctrl+C to stop watching)",
                         "→".cyan()
                     );
-                    watch_ci_for_context(&target.branch, false)
+                    watch_ci_for_context_via_forge(&target.branch, false) // STORY-516
                 } else {
                     eprintln!(
                         "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
@@ -79690,7 +79712,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             probe = if self.json {
                 wait_for_ci_terminal(&branch)
             } else {
-                watch_ci_for_context(&branch, self.no_human.is_some())
+                watch_ci_for_context_via_forge(&branch, self.no_human.is_some())
+                // STORY-516
             };
         }
 
