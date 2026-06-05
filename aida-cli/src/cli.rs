@@ -4041,6 +4041,13 @@ pub enum BriefCommand {
 #[derive(Subcommand, Debug)]
 pub enum AgentCommand {
     /// Launch a new agent process.
+    ///
+    /// This lane spawns a one-shot agent that does its work, ships a PR, and
+    /// exits. It is NOT the orchestrated pipeline — it does not run CI, the
+    /// reviewer phase, or the merge for you. For a supervised end-to-end drain
+    /// (implementer → CI → reviewer → merge → pull), use
+    /// `aida queue work <SPEC> --auto-complete` instead.
+    // trace:TASK-626 | ai:claude — plain `//` keeps the marker out of `--help`.
     #[clap(subcommand)]
     New(AgentNewCommand),
 
