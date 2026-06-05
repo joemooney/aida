@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:36:20.559861309Z
-modified_at: 2026-05-16T16:36:20.559861309Z
+modified_at: 2026-06-05T16:35:40.820894528Z
 req_type: Task
 tags:
 - auto-complete
@@ -18,3 +18,9 @@ relationships:
 - rel_type: Child
   target_id: 019e2f35-3d80-7da2-893e-65bd6aa6e144
   created_at: 2026-05-16T16:36:23.132355427Z
+comments:
+- id: 019e98a3-ee94-7843-8850-9d800dffcdf6
+  author: joe
+  content: 'OBE — verified 2026-06-05: AIDA_AUTO_COMPLETE is NOT unused. It is read in aida-cli/src/orchestrator.rs: detect() at line 225 (classify''s first arg) and live_run_marker() at line 238, and is the primary signal (corroborated by AIDA_AUTO_COMPLETE_TOKEN against the drain-state file) for OrchestratorContext classification. The ''unused'' premise predates the STORY-246 / BUG-233 / TASK-336 orchestrator-corroboration work that wired it. No code change needed; closing as completed. The const AUTO_COMPLETE_ENV centralizes the name; nothing to wire or drop.'
+  created_at: 2026-06-05T16:35:40.820894528Z
+  modified_at: 2026-06-05T16:35:40.820894528Z
