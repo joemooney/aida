@@ -79811,6 +79811,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 pr
             );
 
+            // The MissingTool guard also provides `gh` for the downstream
+            // check-run polling (step 2), which is not part of the comment op.
             let gh = resolve_gh_binary().ok_or_else(|| {
                 auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::MissingTool,
@@ -79818,27 +79820,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             })?;
 
-            // 1. Trigger review via PR comment: gh pr comment <PR> --body "@claude review once"
-            let comment_status = std::process::Command::new(&gh)
-                .current_dir(&self.project_root)
-                .args([
-                    "pr",
-                    "comment",
-                    &pr.to_string(),
-                    "--body",
-                    "@claude review once",
-                ])
-                .status()
-                .map_err(|e| {
-                    auto_complete::PhaseFailure::of(
-                        auto_complete::FailureKind::Spawn,
-                        format!("could not spawn `gh pr comment`: {e}"),
-                    )
-                })?;
-
-            if !comment_status.success() {
+            // 1. Trigger review via PR comment (STORY-516: forge-routed `gh pr
+            // comment`). trace:STORY-516 | ai:claude
+            let review_change = crate::forge::ChangeRef {
+                id: pr as u64,
+                url: String::new(),
+                branch: String::new(),
+                base: String::new(),
+                title: None,
+            };
+            if let Err(e) = crate::forge::forge_for(&self.project_root)
+                .comment(&review_change, "@claude review once")
+            {
                 return Err(auto_complete::PhaseFailure::new(format!(
-                    "failed to comment on PR {pr} to trigger delegated review"
+                    "failed to comment on PR {pr} to trigger delegated review: {e:#}"
                 )));
             }
 
