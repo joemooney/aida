@@ -61,12 +61,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user observed: 'I don't know what to do now?' when status-aware error didn't surface the gh pr merge action.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T02:48:03.560841139Z
-modified_at: 2026-06-05T16:43:13.228048745Z
+modified_at: 2026-06-05T16:49:45.773830001Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -86,3 +86,7 @@ comments:
   content: Commit 65d9a8113 references this requirement
   created_at: 2026-06-05T16:43:13.228048745Z
   modified_at: 2026-06-05T16:43:13.228048745Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T16:49:45.773830001Z
+  completion_sha: 681711c014bd37854d5edd97825f42ae6aa44be5

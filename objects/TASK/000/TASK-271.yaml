@@ -15,12 +15,12 @@ description: |-
   - Reword so the lease-id list is clearly diagnostic-only and not an argument to --resume.
 
   Low priority — genuine-miss is a rare path (the deterministic claude-id pin from BUG-114 makes the miss itself uncommon). Surfaced in the PR-48 review (review story STORY-250).
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T18:37:46.494688183Z
-modified_at: 2026-06-05T16:40:09.837135642Z
+modified_at: 2026-06-05T16:49:45.773830001Z
 req_type: Task
 tags:
 - ''
@@ -34,3 +34,7 @@ comments:
   content: Commit 6f76ff408 references this requirement
   created_at: 2026-06-05T16:40:09.837135642Z
   modified_at: 2026-06-05T16:40:09.837135642Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T16:49:45.773830001Z
+  completion_sha: 99c58f9dae74117b33763614ff2d4e1636e539c3
