@@ -6095,16 +6095,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 if *show_origin {
                     if *show_tags {
                         println!(
-                            "{:<12} {:<14} {:<12} {:<10} {:<50} {}",
+                            "{:<12} {:<14} {:<12} {:<13} {:<50} {}",
                             "ID", "Origin ID", "Type", "Status", "Title", "Tags"
                         );
                     } else {
                         println!(
-                            "{:<12} {:<14} {:<12} {:<10} {}",
+                            "{:<12} {:<14} {:<12} {:<13} {}",
                             "ID", "Origin ID", "Type", "Status", "Title"
                         );
                     }
-                    println!("{}", "─".repeat(if *show_tags { 110 } else { 78 }));
+                    println!("{}", "─".repeat(if *show_tags { 113 } else { 81 }));
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -6126,10 +6126,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         // string to column width FIRST, then colour —
                         // {:<10} counts ANSI escape bytes otherwise.
                         // trace:TASK-269 | ai:claude
-                        let status_cell = status_display::paint_status(
-                            &format!("{:<10}", req.status),
-                            &req.status,
-                        );
+                        // TASK-315: glyph + colour in the Status column (cell is
+                        // 13 visible cols: glyph + space + 11-wide label).
+                        let status_cell = status_display::status_cell(&req.status, 11);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
@@ -6152,16 +6151,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 } else {
                     if *show_tags {
                         println!(
-                            "{:<14} {:<12} {:<10} {:<10} {:<50} {}",
+                            "{:<14} {:<12} {:<13} {:<10} {:<50} {}",
                             "ID", "Type", "Status", "Priority", "Title", "Tags"
                         );
                     } else {
                         println!(
-                            "{:<14} {:<12} {:<10} {:<10} {}",
+                            "{:<14} {:<12} {:<13} {:<10} {}",
                             "ID", "Type", "Status", "Priority", "Title"
                         );
                     }
-                    println!("{}", "─".repeat(if *show_tags { 108 } else { 74 }));
+                    println!("{}", "─".repeat(if *show_tags { 111 } else { 77 }));
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -6170,10 +6169,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             .unwrap_or("?");
                         // TASK-269: unified status palette — pad-then-colour
                         // keeps the column aligned. trace:TASK-269 | ai:claude
-                        let status_cell = status_display::paint_status(
-                            &format!("{:<10}", req.status),
-                            &req.status,
-                        );
+                        // TASK-315: glyph + colour in the Status column (cell is
+                        // 13 visible cols: glyph + space + 11-wide label).
+                        let status_cell = status_display::status_cell(&req.status, 11);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
