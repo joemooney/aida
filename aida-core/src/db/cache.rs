@@ -591,12 +591,23 @@ impl Cache {
         // trace:TASK-1-021 | ai:claude
         // tags_json is a JSON array text column; bracket each tag with quotes
         // to avoid `foo` matching `foobar` mid-string.
+        //
+        // TASK-527: a trailing `*` (`aida:queue:*`) is a prefix-glob — match any
+        // tag whose JSON-quoted value starts with the literal prefix, plus the
+        // bare prefix without its trailing `:` (so `aida:queue:*` also matches an
+        // exact `aida:queue`). The opening `"` anchors the prefix to a JSON
+        // string boundary so it can't match mid-value. trace:TASK-527 | ai:claude
+        let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
         for tag in &filter.tags {
-            sql.push_str(" AND tags_json LIKE ?");
-            args.push(format!(
-                "%\"{}\"%",
-                tag.replace('\\', "\\\\").replace('"', "\\\"")
-            ));
+            if let Some(prefix) = tag.strip_suffix('*') {
+                let bare = prefix.strip_suffix(':').unwrap_or(prefix);
+                sql.push_str(" AND (tags_json LIKE ? OR tags_json LIKE ?)");
+                args.push(format!("%\"{}%", esc(prefix))); // "aida:queue:...
+                args.push(format!("%\"{}\"%", esc(bare))); // exact "aida:queue"
+            } else {
+                sql.push_str(" AND tags_json LIKE ?");
+                args.push(format!("%\"{}\"%", esc(tag)));
+            }
         }
 
         sql.push_str(" ORDER BY modified_at DESC");
@@ -869,6 +880,44 @@ mod tests {
             })
             .unwrap();
         assert_eq!(everything.len(), 3);
+    }
+
+    /// TASK-527: `--tags aida:queue:*` prefix-glob matches every tag under the
+    /// `aida:queue:` surface plus an exact bare `aida:queue`, and never a
+    /// sibling surface; exact match still works.
+    #[test]
+    fn list_summaries_tag_prefix_glob() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut work = sample_req("TASK-1", "work");
+        work.tags.insert("aida:queue:work".into());
+        let mut list = sample_req("TASK-2", "list");
+        list.tags.insert("aida:queue:list".into());
+        let mut bare = sample_req("TASK-3", "bare");
+        bare.tags.insert("aida:queue".into());
+        let mut status = sample_req("TASK-4", "status");
+        status.tags.insert("aida:status".into());
+        store.requirements.extend([work, list, bare, status]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let glob = cache
+            .list_summaries(&ListFilter {
+                tags: vec!["aida:queue:*".into()],
+                ..Default::default()
+            })
+            .unwrap();
+        // work + list (prefix) + bare (exact via glob) = 3; aida:status excluded.
+        assert_eq!(glob.len(), 3, "prefix-glob over the queue surface");
+
+        let exact = cache
+            .list_summaries(&ListFilter {
+                tags: vec!["aida:status".into()],
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(exact.len(), 1, "exact match unaffected");
     }
 
     /// trace:TASK-132 | ai:codex
