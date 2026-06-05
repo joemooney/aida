@@ -27404,6 +27404,64 @@ fn untracked_is_safe_to_remove(path: &str) -> bool {
         .any(|seg| seg == "__pycache__" || seg == ".mypy_cache" || seg == ".pytest_cache")
 }
 
+/// TASK-539: `aida status` Findings section. Display-only — surfaces the
+/// pending-triage findings backlog (silent when empty) so it isn't invisible
+/// until the user remembers `aida findings list`. Reuses the same
+/// `build_findings_view` the findings command uses; shows a compact per-finding
+/// line (source + id + origin + title), capped, with a pointer to the full
+/// list. trace:TASK-539 | ai:claude
+fn print_status_findings_section(backend: &aida_core::CachedGitBackend) {
+    // Findings are DRAFT specs carrying a from-* tag (matches `aida findings
+    // list`). Filtering to draft avoids counting completed/rejected specs that
+    // still carry their origin from-review/from-implementer tag.
+    let filter = aida_core::ListFilter {
+        status: Some("draft".to_string()),
+        ..Default::default()
+    };
+    let Ok(summaries) = backend.list_summaries(&filter) else {
+        return;
+    };
+    let sections = crate::findings::build_findings_view(
+        &summaries,
+        &crate::findings::FindingsFilter::default(),
+    );
+    let total = crate::findings::count_findings(&sections);
+    if total == 0 {
+        return;
+    }
+    println!("{}", "─── Findings ───".bold());
+    println!(
+        "  {} pending finding(s) awaiting triage",
+        total.to_string().yellow()
+    );
+    const CAP: usize = 6;
+    let mut shown = 0;
+    'outer: for section in &sections {
+        for group in &section.groups {
+            for row in &group.rows {
+                println!(
+                    "  • {} {} ({}) — {}",
+                    section.source.label().dimmed(),
+                    row.display_id.yellow(),
+                    group.origin,
+                    row.title
+                );
+                shown += 1;
+                if shown >= CAP {
+                    break 'outer;
+                }
+            }
+        }
+    }
+    if total > shown {
+        println!(
+            "  … {} more — `aida findings list` (promote/dismiss to triage)",
+            total - shown
+        );
+    }
+    println!();
+}
+
 /// STORY-457: `aida status` working-tree section. Display-only — parses
 /// `git status --porcelain` in `root` and groups into staged / modified-tracked
 /// / untracked, auto-flagging safe-to-remove untracked cruft with an `rm`
@@ -59375,6 +59433,11 @@ fn handle_status_command_distributed(
 
     print_status_agents_section(&user_ctx);
     print_status_claude_code_section(&project_root);
+
+    // TASK-539: pending-findings backlog — silent when empty. Surfaced before
+    // the working-tree section so triage-able items are visible without
+    // remembering `aida findings list`. trace:TASK-539 | ai:claude
+    print_status_findings_section(backend);
 
     // STORY-457: working-tree state — modified / staged / untracked (with
     // safe-to-remove cruft auto-flagged). Display-only; silent when clean.
