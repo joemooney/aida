@@ -19,10 +19,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T20:05:12.250035615Z
-modified_at: 2026-05-22T20:05:12.250035615Z
+modified_at: 2026-06-05T04:01:46.693166801Z
 req_type: Task
 tags:
 - block-allocation
 - from-review:PR-198
 - severity:minor
 - task-449-followup
+comments:
+- id: 019e95f1-b6c5-75f2-b8d5-6a60893e075a
+  author: joe
+  content: Commit 39f1b254d references this requirement
+  created_at: 2026-06-05T04:01:46.693166801Z
+  modified_at: 2026-06-05T04:01:46.693166801Z
