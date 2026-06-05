@@ -3,12 +3,12 @@ spec_id: TASK-632
 agreed_id: TASK-632
 title: Document the `[agents] bypass` knob in the discipline pack / CLAUDE.md agents.toml section
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T03:16:59.130207463Z
-modified_at: 2026-06-05T17:27:42.347299041Z
+modified_at: 2026-06-05T17:36:45.181654358Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,7 @@ comments:
   content: Commit c07fba89a references this requirement
   created_at: 2026-06-05T17:27:42.347299041Z
   modified_at: 2026-06-05T17:27:42.347299041Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T17:36:45.181654358Z
+  completion_sha: b59b7f3246eb84a2dca8b01f4473f1a806958793
