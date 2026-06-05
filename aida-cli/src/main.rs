@@ -78703,8 +78703,10 @@ impl RealPhaseDriver {
     /// from parallel user sessions or nested `/aida-pickup`, and immune to
     /// the `.manifest.toml` companion file that the old lease-set diff
     /// miscounted as a second lease (the BUG-114 phase-1 failure). On a miss,
-    /// the error names the candidate lease ids so the user can resume one.
-    /// trace:BUG-114 | ai:claude
+    /// the error suggests bare `--resume` (continues the most recent recorded
+    /// claude session) and lists the candidate lease ids as diagnostic-only —
+    /// they are lease ids, not `--resume` arguments (TASK-271).
+    /// trace:BUG-114 trace:TASK-271 | ai:claude
     fn discover_orchestrated_lease(
         &self,
         claude_session_id: &str,
@@ -78716,13 +78718,21 @@ impl RealPhaseDriver {
                     "no session lease appeared — `aida queue work` did not start a session",
                 )
             } else {
+                // TASK-271: suggest BARE `--resume` (continues the most recent
+                // recorded claude session for the scope) — never paste a listed
+                // id into `--resume`, because these are LEASE ids and `--resume`
+                // resolves against claude SESSION ids, so a pasted lease id hits
+                // a second clean error. The lease list is diagnostic-only.
+                // trace:TASK-271 trace:BUG-114 | ai:claude
                 auto_complete::PhaseFailure::new(format!(
                     "could not match the orchestrated session (claude id {}) to a \
-                     session lease. Candidate lease(s): {}. Resume one manually with \
-                     `aida queue work {} --resume <session-id>`.",
+                     session lease. Resume the most recent recorded session with \
+                     `aida queue work {} --resume` (bare — no id needed). \
+                     Active lease id(s), for diagnosis only (NOT `--resume` \
+                     arguments — these are lease ids, not claude session ids): {}.",
                     &claude_session_id[..claude_session_id.len().min(8)],
-                    candidates.join(", "),
                     self.spec,
+                    candidates.join(", "),
                 ))
             }
         })
