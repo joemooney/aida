@@ -32259,7 +32259,12 @@ fn pr_ship_handler(
         branch: branch.clone(),
         base: String::new(),
     };
-    if let Err(e) = crate::forge::forge_for(&project_root).merge_change(&change_ref, &merge_opts) {
+    let mut merge_sink = crate::network_retry::StderrSink;
+    if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
+        &change_ref,
+        &merge_opts,
+        &mut merge_sink,
+    ) {
         let stderr_text = format!("{e:#}");
         log_ship_activity(
             &main_worktree,
@@ -80027,20 +80032,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
-        let gh = resolve_gh_binary().ok_or_else(|| {
-            auto_complete::PhaseFailure::of(
+        // STORY-516/TASK-669: keep the `gh`-on-PATH guard as a MissingTool
+        // (non-shelvable → stop-the-drain) pre-check. An env failure should halt
+        // the batch, not shelve every member. The orchestrator is GitHub-only
+        // today; a GitLab orchestrator would make this forge-aware.
+        if resolve_gh_binary().is_none() {
+            return Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::MissingTool,
                 "`gh` is not on PATH — cannot merge the PR",
-            )
-        })?;
-        let pr_str = pr.to_string();
-        // BUG-286: wrap the orchestrator-side `gh pr merge` through the retry
-        // helper so a sub-second network blip (the 2026-05-21 BUG-286 symptom)
-        // is absorbed instead of stalling the drain mid-phase-4. Retry events
-        // surface to stderr (so a user watching the drain sees them live) and
-        // to `.aida/drain-state.json` (so post-hoc analysis can correlate).
-        // trace:BUG-286 | ai:claude
-        let cfg = network_retry::RetryConfig::load(&self.project_root);
+            ));
+        }
+        // BUG-286/TASK-669: route the phase-4 merge through Forge::merge_change,
+        // passing a DualSink (stderr + drain-state) so transient-blip retry
+        // events still correlate into `.aida/drain-state.json` for post-hoc
+        // analysis. merge_change reuses the SPEC-410-pinned argv (`pr merge <pr>
+        // --squash --delete-branch`, byte-identical) and the same network_retry
+        // wrapper, and owns the gh subprocess — so the prior raw gh-stdout echo
+        // is replaced by AIDA's own ✓ line (consistent with `aida pr ship`). A
+        // failed merge returns the unified Err → a shelvable `Failed`
+        // PhaseFailure, matching the previous non-zero-exit behaviour.
+        // trace:STORY-516 trace:TASK-669 trace:BUG-286 | ai:claude
         let mut stderr_sink = network_retry::StderrSink;
         let mut state_sink = drain_state::DrainStateSink {
             project_root: &self.project_root,
@@ -80055,36 +80066,23 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             a: &mut stderr_sink,
             b: &mut state_sink,
         };
-        let label = format!("gh pr merge {pr} --squash --delete-branch");
-        let out = network_retry::run_with_retry(&label, &cfg, &mut sink, || {
-            let mut c = std::process::Command::new(&gh);
-            c.current_dir(&self.project_root).args([
-                "pr",
-                "merge",
-                &pr_str,
-                "--squash",
-                "--delete-branch",
-            ]);
-            c
-        })
-        .map_err(|e| {
-            auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::Spawn,
-                format!("could not run `gh pr merge`: {e}"),
-            )
-        })?;
-        // Echo the captured streams so the user sees gh's confirmation
-        // (`✓ Squashed and merged pull request #N`) — `run_with_retry` uses
-        // `.output()` to inspect stderr, which swallows the live tty stream
-        // the old `.status()` path passed through.
-        use std::io::Write;
-        let _ = std::io::stdout().write_all(&out.stdout);
-        let _ = std::io::stderr().write_all(&out.stderr);
-        if !out.status.success() {
-            return Err(auto_complete::PhaseFailure::new(format!(
-                "`gh pr merge {pr}` failed"
-            )));
-        }
+        let change_ref = crate::forge::ChangeRef {
+            id: pr as u64,
+            url: String::new(),
+            branch: String::new(),
+            base: String::new(),
+        };
+        let opts = crate::forge::MergeOptions {
+            method: crate::forge::MergeMethod::Squash,
+            squash_subject: None,
+            delete_branch: true,
+        };
+        crate::forge::forge_for(&self.project_root)
+            .merge_change(&change_ref, &opts, &mut sink)
+            .map_err(|e| {
+                auto_complete::PhaseFailure::new(format!("`gh pr merge {pr}` failed: {e:#}"))
+            })?;
+        println!("  {} merged PR-{}", "✓".green(), pr);
         Ok(())
     }
 
