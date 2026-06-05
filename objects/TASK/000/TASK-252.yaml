@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:45:39.082444287Z
-modified_at: 2026-05-15T23:45:39.082444287Z
+modified_at: 2026-06-05T16:34:22.618151747Z
 req_type: Task
 tags:
 - followup
@@ -27,3 +27,9 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-05-15T23:45:41.645006203Z
+comments:
+- id: 019e98a2-bd1a-7060-9a48-2c01808b2f5e
+  author: joe
+  content: Commit f3798ea85 references this requirement
+  created_at: 2026-06-05T16:34:22.618151747Z
+  modified_at: 2026-06-05T16:34:22.618151747Z
