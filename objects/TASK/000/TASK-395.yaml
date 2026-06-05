@@ -36,7 +36,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T13:33:58.143177440Z
-modified_at: 2026-05-20T13:33:58.143177440Z
+modified_at: 2026-06-05T07:22:01.633942111Z
 req_type: Task
 tags:
 - backlog
@@ -45,3 +45,15 @@ tags:
 - headless
 - no-human
 - visibility
+comments:
+- id: 019e96a9-0c21-7103-ad2b-1ad6bf068391
+  author: joe
+  content: |-
+    Verify-first (2026-06-05, advisor loop): already satisfied by `aida headless tail` (shipped under TASK-398 / TASK-487). It meets every substantive acceptance criterion:
+    - follow output across one/all specs without knowing the worktree path → `--list`, no-arg picks newest, SPEC-ID or lease-prefix targeting
+    - human-readable by default (clean assistant prose) with `--with-tools`/`--tools-only`/`--include-user` filters; `-n/--no-follow` to print-and-exit
+    - works concurrently with the drain (tail -f polling, no daemon, no impact on the session); `--since` window filtering
+    - documented in docs/autonomous-drain.md (lines ~138, ~488)
+    The spec's `--raw` suggestion is redundant — the `.aida/headless-logs/*.jsonl` file IS the raw stream, and `--list` prints its path. The chosen verb is `aida headless tail` rather than `aida logs tail`, but the capability is complete. Closing as done-by-supersession rather than building a duplicate surface.
+  created_at: 2026-06-05T07:22:01.633942111Z
+  modified_at: 2026-06-05T07:22:01.633942111Z
