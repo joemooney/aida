@@ -22,11 +22,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:20.867633023Z
-modified_at: 2026-06-05T19:14:20.867633023Z
+modified_at: 2026-06-05T19:33:01.198300011Z
 req_type: Bug
 tags:
 - aida:init
 - aida:queue:work
+- batch:onboarding-hardening
 - first-run
 - from-self-test
 - onboarding
