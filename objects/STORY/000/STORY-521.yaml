@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:37:53.949719227Z
-modified_at: 2026-06-05T20:46:30.747206723Z
+modified_at: 2026-06-05T21:01:48.313791237Z
 req_type: Story
 tags:
 - batch:gitlab-forge
@@ -35,3 +35,8 @@ comments:
   content: Commit 80e8c8935 references this requirement
   created_at: 2026-06-05T20:46:30.747206723Z
   modified_at: 2026-06-05T20:46:30.747206723Z
+- id: 019e9997-9399-72d0-a926-30bbb898802c
+  author: joe
+  content: Commit 4d70ce1df references this requirement
+  created_at: 2026-06-05T21:01:48.313791237Z
+  modified_at: 2026-06-05T21:01:48.313791237Z
