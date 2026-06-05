@@ -7812,7 +7812,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // config — the orphan-store model wants linear history
             // anyway (replay local commits on top of remote), so
             // rebase is the right default.
-            if *pull {
+            if *pull && !aida_core::git_ops::has_remote(store_path, "origin") {
+                // BUG-432: local-only / fresh-init projects have no `origin`
+                // yet (the aida-demo + pre-remote flow). The pull is a graceful
+                // skip, not a fatal — otherwise `aida queue work`'s startup sync
+                // (and a standalone `aida db sync --pull`) die before a remote
+                // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
+                // trace:BUG-432 | ai:claude
+                println!("  No `origin` remote — skipping pull (local-only project).");
+            } else if *pull {
                 // Snapshot local state before pull for conflict detection
                 let local_reqs = backend.load().map(|s| s.requirements).unwrap_or_default();
 
