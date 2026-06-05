@@ -46,13 +46,6 @@
   added_at: 2026-05-13T06:17:50.851180255Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e51ef-ada6-78f1-a545-36e88953d0f6
-  position: 11000
-  added_by: joe
-  note: auto-queued by `session end` (019e51df); covers 1 spec
-  added_at: 2026-05-22T23:05:29.586888729Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e51f5-b118-7bd3-8e1b-5e3c8cd1f2f3
   position: 12000
   added_by: joe
