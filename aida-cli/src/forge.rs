@@ -135,6 +135,31 @@ pub enum MergeMethod {
     Rebase,
 }
 
+/// How to merge a change. Carries the cross-cutting concerns the pre-EPIC-35
+/// `gh pr merge` call sites already honored — the explicit squash `--subject`
+/// (SPEC-410 / TASK-140 trailer preservation) and `--delete-branch` (subject to
+/// the BUG-434 stacked-children guard, decided by the caller). trace:STORY-516
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeOptions {
+    pub method: MergeMethod,
+    /// Explicit squash/merge subject. `None` lets the forge default (gh: the PR
+    /// title; pure-git: the branch head's subject).
+    pub squash_subject: Option<String>,
+    /// Delete the source branch after a successful merge (forge-side).
+    pub delete_branch: bool,
+}
+
+impl MergeOptions {
+    /// Squash with no explicit subject and no branch delete — the common default.
+    pub fn squash() -> Self {
+        Self {
+            method: MergeMethod::Squash,
+            squash_subject: None,
+            delete_branch: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergeResult {
     pub merged: bool,
@@ -183,7 +208,7 @@ pub trait Forge {
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus>;
 
     /// `gh pr merge` / `glab mr merge` / pure-git git merge.
-    fn merge_change(&self, c: &ChangeRef, method: MergeMethod) -> Result<MergeResult>;
+    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult>;
 
     /// `gh pr comment` / `glab mr note` / pure-git log-only.
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()>;
@@ -530,17 +555,33 @@ impl Forge for GitHubForge {
         })
     }
 
-    fn merge_change(&self, c: &ChangeRef, method: MergeMethod) -> Result<MergeResult> {
-        let m = match method {
-            MergeMethod::Squash => "--squash",
-            MergeMethod::Merge => "--merge",
-            MergeMethod::Rebase => "--rebase",
-        };
-        let out = self.gh(&["pr", "merge", &c.id.to_string(), m])?;
+    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult> {
+        // Mirror the pre-EPIC-35 `gh pr merge` argv exactly so routing the call
+        // sites through this is byte-identical: `gh pr merge <id> --<method>
+        // [--subject <s>] [--delete-branch]`. trace:STORY-516 | ai:claude
+        let id = c.id.to_string();
+        let mut args: Vec<String> = vec!["pr".into(), "merge".into(), id];
+        args.push(
+            match opts.method {
+                MergeMethod::Squash => "--squash",
+                MergeMethod::Merge => "--merge",
+                MergeMethod::Rebase => "--rebase",
+            }
+            .to_string(),
+        );
+        if let Some(subject) = &opts.squash_subject {
+            args.push("--subject".into());
+            args.push(subject.clone());
+        }
+        if opts.delete_branch {
+            args.push("--delete-branch".into());
+        }
+        let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = self.gh(&argv)?;
         Ok(MergeResult {
             merged: out.status.success(),
             sha: None,
-            method,
+            method: opts.method,
         })
     }
 
@@ -680,8 +721,32 @@ impl Forge for GitLabForge {
         anyhow::bail!("GitLab ci_status lands in EPIC-35 slice 4")
     }
 
-    fn merge_change(&self, _c: &ChangeRef, _method: MergeMethod) -> Result<MergeResult> {
-        anyhow::bail!("GitLab merge_change lands in EPIC-35 slice 3")
+    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult> {
+        // `glab mr merge <iid> --squash [--message <s>] [--remove-source-branch]
+        // --yes`. Symmetric with the gh path; live-validated against a real
+        // GitLab in slice 3 (needs a PAT). trace:STORY-516 | ai:claude
+        let iid = c.id.to_string();
+        let mut args: Vec<String> = vec!["mr".into(), "merge".into(), iid];
+        match opts.method {
+            MergeMethod::Squash => args.push("--squash".into()),
+            MergeMethod::Rebase => args.push("--rebase".into()),
+            MergeMethod::Merge => {}
+        }
+        if let Some(subject) = &opts.squash_subject {
+            args.push("--message".into());
+            args.push(subject.clone());
+        }
+        if opts.delete_branch {
+            args.push("--remove-source-branch".into());
+        }
+        args.push("--yes".into());
+        let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = self.glab(&argv)?;
+        Ok(MergeResult {
+            merged: out.status.success(),
+            sha: None,
+            method: opts.method,
+        })
     }
 
     fn comment(&self, _c: &ChangeRef, _body: &str) -> Result<()> {
@@ -771,7 +836,7 @@ impl Forge for PureGitForge {
         })
     }
 
-    fn merge_change(&self, c: &ChangeRef, method: MergeMethod) -> Result<MergeResult> {
+    fn merge_change(&self, c: &ChangeRef, opts: &MergeOptions) -> Result<MergeResult> {
         let base = if c.base.is_empty() {
             self.default_branch()
         } else {
@@ -789,19 +854,21 @@ impl Forge for PureGitForge {
             git(&["checkout", &base])?.status.success(),
             "pure-git merge: could not checkout {base}"
         );
-        let merged = match method {
+        let merged = match opts.method {
             MergeMethod::Squash => {
                 // `git merge --squash` STAGES the branch's changes WITHOUT
                 // committing — a commit must follow, or base is left unchanged
                 // with a dirty index (the merge silently no-ops). Commit with
-                // the branch head's subject so its `(SPEC-ID)` trailer survives
-                // and the trailer-driven auto-complete still fires.
-                // trace:STORY-516 | ai:claude
+                // the caller's subject (or the branch head's) so the
+                // `(SPEC-ID)` trailer survives and trailer-driven auto-complete
+                // still fires. trace:STORY-516 | ai:claude
                 if !git(&["merge", "--squash", &c.branch])?.status.success() {
                     false
                 } else {
-                    let subject = branch_head_subject(&self.project_root, &c.branch)
-                        .unwrap_or_else(|| format!("Merge {} into {}", c.branch, base));
+                    let subject = opts.squash_subject.clone().unwrap_or_else(|| {
+                        branch_head_subject(&self.project_root, &c.branch)
+                            .unwrap_or_else(|| format!("Merge {} into {}", c.branch, base))
+                    });
                     git(&["commit", "-m", &subject])?.status.success()
                 }
             }
@@ -812,11 +879,15 @@ impl Forge for PureGitForge {
                 .success(),
             MergeMethod::Rebase => git(&["rebase", &c.branch])?.status.success(),
         };
+        // STORY-516: forge-side branch delete after a pure-git merge.
+        if merged && opts.delete_branch {
+            let _ = git(&["branch", "-D", &c.branch]);
+        }
         let sha = rev_parse(&self.project_root, &base);
         Ok(MergeResult {
             merged,
             sha,
-            method,
+            method: opts.method,
         })
     }
 
@@ -1123,7 +1194,7 @@ mod tests {
             branch: "feature".into(),
             base: "main".into(),
         };
-        let res = forge.merge_change(&cref, MergeMethod::Squash).unwrap();
+        let res = forge.merge_change(&cref, &MergeOptions::squash()).unwrap();
         assert!(res.merged, "squash merge should report merged");
 
         // base advanced (a real commit was made, not just a staged index).
