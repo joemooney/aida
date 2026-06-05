@@ -34,12 +34,12 @@ description: |-
 
   - Reuse an existing interactive-select helper if the codebase has one (AIDA already does `[Y/n]` / `[y/N/skip]` prompts); ensure it renders to /dev/tty or stderr, not stdout.
   - Surface: aida-cli role-enter handler + the role-listing used by `aida role list`.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T04:34:16.510498786Z
-modified_at: 2026-06-05T06:00:16.970051265Z
+modified_at: 2026-06-05T06:24:08.815444479Z
 req_type: Task
 tags:
 - aida:role:enter
@@ -53,3 +53,7 @@ comments:
   content: Commit 85f07563c references this requirement
   created_at: 2026-06-05T06:00:16.970051265Z
   modified_at: 2026-06-05T06:00:16.970051265Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:24:08.815444479Z
+  completion_sha: 9e862b51e35e78f3114d84a2c87bb0175932bbe2
