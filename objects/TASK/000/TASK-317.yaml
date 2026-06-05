@@ -34,10 +34,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T19:51:13.826297632Z
-modified_at: 2026-05-24T06:38:28.895742949Z
+modified_at: 2026-06-05T03:57:00.910764042Z
 req_type: Task
 tags:
 - aida:queue:move
 - from-review:PR-74
 - severity:minor
 - user-facing-text
+comments:
+- id: 019e95ed-5a6e-7733-934a-862d91cc3bb7
+  author: joe
+  content: Commit 0c53f2c47 references this requirement
+  created_at: 2026-06-05T03:57:00.910764042Z
+  modified_at: 2026-06-05T03:57:00.910764042Z
