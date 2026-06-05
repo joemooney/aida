@@ -49,12 +49,12 @@ description: |-
   - STORY-426 (MCP brief surface — already shipped)
   - STORY-435 (EPIC-31 Phase 4 — agent heartbeat; this TASK is the lightweight bridge until then)
   - EPIC-31 strategic arc — agent-lifecycle layer
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T22:39:06.245891646Z
-modified_at: 2026-06-05T07:12:39.196937152Z
+modified_at: 2026-06-05T07:18:41.877733877Z
 req_type: Task
 tags:
 - agent-comms
@@ -71,3 +71,7 @@ comments:
   content: Commit 80bd3a692 references this requirement
   created_at: 2026-06-05T07:12:39.196937152Z
   modified_at: 2026-06-05T07:12:39.196937152Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T07:18:41.877733877Z
+  completion_sha: 94f78a12f6170c136007b214731de07fc187ff38
