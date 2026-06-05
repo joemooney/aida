@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T18:47:09.518683334Z
-modified_at: 2026-06-05T18:47:28.001456398Z
+modified_at: 2026-06-05T19:04:08.806066492Z
 req_type: Task
 tags:
 - batch:gitlab-forge
@@ -33,3 +33,9 @@ relationships:
   target_id: 019e9587-884a-7f70-899d-afc1e0ea9353
   created_at: 2026-06-05T18:47:28.001447367Z
   created_by: joe
+comments:
+- id: 019e992b-db66-7d50-b6d8-1055c2f2e3cf
+  author: joe
+  content: Commit 94319874a references this requirement
+  created_at: 2026-06-05T19:04:08.806066492Z
+  modified_at: 2026-06-05T19:04:08.806066492Z
