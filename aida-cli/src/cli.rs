@@ -2898,8 +2898,16 @@ pub enum QueueCommand {
         /// orphans when the spec they cover is later deleted or rejected.
         #[clap(long)]
         orphaned: bool,
+        /// Remove auto-queued reviewer entries whose PR has already merged. A
+        /// review row ("Review PR-N: …") lingers when its PR merges outside the
+        /// reviewer's `aida queue done` flow (e.g. a hand-merge); the backing
+        /// spec is often still non-terminal so `--orphaned` misses it. Checks
+        /// each review row's PR state with `gh`. Combine with `--orphaned` to
+        /// sweep both.
+        #[clap(long)]
+        merged: bool,
         /// Preview the entries that would be removed; don't actually remove
-        /// them. Pair with `--orphaned` for safe inspection.
+        /// them. Pair with `--orphaned` / `--merged` for safe inspection.
         #[clap(long)]
         dry_run: bool,
         /// User ID (defaults to AIDA_USER or system user)
