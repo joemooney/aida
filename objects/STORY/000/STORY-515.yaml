@@ -1,0 +1,26 @@
+id: 019e9584-8f95-7450-8474-d060422bb5e7
+spec_id: STORY-515
+agreed_id: STORY-515
+title: 'Review PR-477: [AI:codex] docs(spike): Claude Code hooks lifecycle analysis (SPIKE-17)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e9582`) for branch `spike-17`.
+
+  - PR: <https://github.com/joemooney/aida/pull/477>
+  - Branch: `spike-17` → `main`
+
+  ## Covers
+
+  - SPIKE-17
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 477` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T02:02:33.237882247Z
+modified_at: 2026-06-05T02:02:33.237882247Z
+req_type: Story
