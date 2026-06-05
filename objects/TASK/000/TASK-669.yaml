@@ -1,0 +1,30 @@
+id: 019e991c-4dce-7ff2-a5ee-f0f80480fa6d
+spec_id: TASK-669
+agreed_id: TASK-669
+title: 'EPIC-35 slice-1b: route the orchestrator phase-4 merge through Forge::merge_change (needs retry-sink injection)'
+description: |-
+  Second merge call site of STORY-516 slice-1b (after TASK-668 routed the aida pr ship merge). The orchestrator's auto-complete phase-4 merge (main.rs ~80059, RealPhaseDriver merge phase) is NOT yet routed because it has a richer retry contract than Forge::merge_change currently models:
+
+  - It wraps `gh pr merge <pr> --squash --delete-branch` in network_retry with a **DualSink** (StderrSink + drain_state::DrainStateSink) so retry events correlate into `.aida/drain-state.json` for BUG-286 post-hoc analysis. merge_change uses only StderrSink internally, so naive routing would REGRESS the drain-state correlation.
+  - It echoes captured stdout/stderr so the user watching the drain sees gh's `✓ Squashed and merged` confirmation.
+  - It returns `auto_complete::PhaseFailure` (Spawn / generic), not anyhow::Error.
+
+  ## Approach
+  Generalize Forge::merge_change to accept a retry sink (e.g. `&mut dyn network_retry::RetrySink`) OR add a `merge_change_with_sink` variant, so the orchestrator can pass its DualSink. Then route the phase-4 site, mapping the unified Err → PhaseFailure and preserving the stdout/stderr echo. Keep GitHub argv byte-identical (no subject on this path — orchestrator phase-4 does not do squash-subject repair).
+
+  ## Verify
+  Watched `--zen --auto-complete` drain on a real PR (reliability-critical → keyboard, per the recursive-failure-risk discipline). Confirm drain-state.json still records merge-phase retry events.
+
+  Reliability-critical: ship at the keyboard, not an unsupervised drain.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T18:47:09.518683334Z
+modified_at: 2026-06-05T18:47:09.518683334Z
+req_type: Task
+tags:
+- batch:gitlab-forge
+- forge-routing
+- from-advisor:STORY-516
+- reliability
