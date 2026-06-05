@@ -1,0 +1,29 @@
+id: 019e96a4-1585-72b2-a30b-b3aa1b98ca89
+spec_id: TASK-649
+agreed_id: TASK-649
+title: 'CI guard: assert every embedded-template path exists + is uniquely owned (template-drift defense)'
+description: |-
+  Converged outcome of SPIKE-50 (ECC deep-dive + Codex meta-review). The ONE ECC lesson that passes AIDA's bugs-before-marketing phase filter, because — per Codex's hardened framing — it is NOT 'borrow ECC's installer'; it is a testable guard against AIDA's OWN known dual-copy template-drift risk (build.rs-embedded aida-core/templates + per-file .claude/ symlinks, kept in sync today only by 'make sync-templates' + manual discipline).
+
+  Model: ECC's scripts/ci/validate-install-manifests.js fails CI if any declared module path is missing on disk OR two modules claim the same destination path.
+
+  Acceptance:
+  - A cargo test (e.g. aida-core tests) walks the embedded-template set and asserts every embedded/scaffolded source path exists on disk (no phantom embeds).
+  - Asserts no two scaffold sources map to the same destination path (single-ownership; catches collisions before they ship).
+  - Fails the build (non-zero) on drift — so 'templates drifted from .claude symlinks / scaffolding' becomes a build failure, not a latent runtime bug.
+  - Verified by: deliberately introduce a missing-path and a duplicate-dest, confirm the test goes red; remove, confirm green.
+
+  Out of scope (deferred to backlog, NOT this task): install-state.json + uninstall, manifest profiles, ecc2-style TUI telemetry. Harness-adapter honesty matrix → separate docs-only follow-up (cheap, on-phase) if filed.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T07:16:36.357077926Z
+modified_at: 2026-06-05T07:16:36.357077926Z
+req_type: Task
+tags:
+- ci
+- competitive-analysis
+- from:SPIKE-50
+- scaffolding
+- template-drift
