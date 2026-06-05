@@ -242,6 +242,8 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 Long-running MCP servers self-respawn after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA for the same version. The current MCP response is flushed first; the next request runs on the new binary. If a client still appears stale, kill that agent's `aida mcp-serve` process and let the MCP client respawn it.
 
+**This dev repo dogfoods its own MCP server.** A checked-in `.mcp.json` registers `aida mcp-serve` (resolved off PATH — run `aida-on` so it's the in-repo build) so Claude Code sessions working *in* this repo exercise the MCP tools, not just the CLI. MCP-vs-CLI parity gaps (schema drift, tool-response edge cases) therefore surface here first, in our own workflow, rather than only when downstream projects hit them. trace:TASK-253
+
 ## Template architecture (CRITICAL for AIDA development)
 
 AIDA has a dual-copy template system. Master templates live in `aida-core/templates/` and get embedded into the binary at compile time via `build.rs`. The project-local copy under `.claude/` mirrors them so this repo dogfoods its own scaffolding:

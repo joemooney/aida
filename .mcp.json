@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "aida": {
+      "command": "aida",
+      "args": ["mcp-serve"],
+      "description": "AIDA — spec graph + coordination surface. Dogfooding our own MCP server in the dev repo (TASK-253)."
+    }
+  }
+}
