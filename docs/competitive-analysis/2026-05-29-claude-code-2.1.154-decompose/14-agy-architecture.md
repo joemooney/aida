@@ -39,7 +39,7 @@ AIDA registers its stdio server within Antigravity by feeding a JSON definition 
 ```bash
 antigravity --add-mcp '{"name":"aida","command":"/home/joe/ai/aida/target/debug/aida","args":["mcp-serve"]}'
 ```
-This writes the server configuration to Antigravity's user profile, allowing the `agy` runtime to auto-start `aida mcp-serve` on stdio to access the 26 canonical spec graph and coordination tools.
+This writes the server configuration to Antigravity's user profile, allowing the `agy` runtime to auto-start `aida mcp-serve` on stdio to access the 29 canonical spec graph and coordination tools.
 
 ### B. Supervised Launch Env Injection (`aida agent new antigravity`)
 When AIDA's launcher prepares an Antigravity instance, it configures `AgentLaunchConfig` to run `agy` using the interactive flag `--prompt-interactive`. During process spawn, AIDA injects the following environment context:
@@ -51,7 +51,7 @@ When AIDA's launcher prepares an Antigravity instance, it configures `AgentLaunc
 * `AIDA_AGENT_CONTEXT_FILE=<path>` (points to the point-in-time launch-context snapshot containing role briefs and queue hints)
 * `AIDA_AGENT_REGISTRY_TOKEN=<token>`
 
-The launcher records the process state dynamically under `.aida/agents/<agent_type>#<pid>.toml` to track liveness and busy/idle heartbeats.
+The launcher records the process state dynamically under `.aida/agents/<agent-type>-<pid>.toml` (the on-disk filename; the `<type>#<pid>` form is the CLI display id only) to track liveness and busy/idle heartbeats.
 
 ### C. The Bypass Knob (`[agents.antigravity]`)
 Under AIDA's faithful-launcher model (STORY-495), the bypass posture is controlled via TOML config:
