@@ -29,12 +29,12 @@ description: |-
   ## Origin
 
   2026-05-22 after the overnight drain caught 3/6 specs (BUG-307, BUG-311, BUG-310) in exactly the recursive-failure-risk pattern. Memory captured the principle; this task propagates it to new projects via the scaffolding pack.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T15:50:03.158657255Z
-modified_at: 2026-06-05T16:37:03.471312230Z
+modified_at: 2026-06-05T16:43:46.258125552Z
 req_type: Task
 tags:
 - discipline
@@ -48,3 +48,7 @@ comments:
   content: Commit dac9f9649 references this requirement
   created_at: 2026-06-05T16:37:03.471312230Z
   modified_at: 2026-06-05T16:37:03.471312230Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T16:43:46.258125552Z
+  completion_sha: ebfb8e86874578a0b07e1f73f3f043ccad03ea48
