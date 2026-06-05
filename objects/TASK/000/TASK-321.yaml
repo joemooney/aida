@@ -27,12 +27,12 @@ description: |
   quick edit-or-dismiss.
 
   Raised in review of PR-76 (TASK-292).
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T21:14:32.309131776Z
-modified_at: 2026-06-05T04:57:00.593256086Z
+modified_at: 2026-06-05T04:57:02.523104980Z
 req_type: Task
 tags:
 - acceptance-text
