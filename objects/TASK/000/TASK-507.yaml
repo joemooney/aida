@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T23:37:10.507263122Z
-modified_at: 2026-05-23T23:37:10.507263122Z
+modified_at: 2026-06-05T04:41:22.709734518Z
 req_type: Task
 tags:
 - cli-ux
@@ -53,3 +53,9 @@ tags:
 - papercut
 - parent:STORY-441
 - ship-visibility
+comments:
+- id: 019e9615-f815-78f2-bee4-c1e4f3e5cb33
+  author: joe
+  content: Commit a56fde456 references this requirement
+  created_at: 2026-06-05T04:41:22.709734518Z
+  modified_at: 2026-06-05T04:41:22.709734518Z
