@@ -285,6 +285,50 @@ pub struct CiStatus {
     pub failing_checks: Vec<String>,
 }
 
+/// STORY-516: the outcome of a branch-keyed CI probe — the forge-neutral
+/// equivalent of the orchestrator's `CiProbe`. Richer than [`CiStatus`]: it
+/// carries the change number each state belongs to and a `NoSignal(reason)`
+/// for "couldn't probe" (gh missing / no PR / API blip), distinct from a
+/// genuine "no checks configured". trace:STORY-516 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CiProbeResult {
+    /// Could not probe (no CLI / no change / transient failure). Carries why.
+    NoSignal(String),
+    /// The change exists but CI has not started (no runs yet).
+    NoChecks { change: u64 },
+    /// CI is running on the latest commit.
+    InProgress { change: u64 },
+    /// All checks passed.
+    Green { change: u64 },
+    /// At least one check failed; `summary` names the failing checks.
+    Failed { change: u64, summary: String },
+}
+
+/// STORY-516: adapt the orchestrator's `CiProbe` (main.rs) to the forge-neutral
+/// `CiProbeResult` — 1:1, preserving `NoSignal(reason)`. Pure + unit-tested.
+/// trace:STORY-516 | ai:claude
+fn ci_probe_result_from_ci_probe(p: crate::CiProbe) -> CiProbeResult {
+    match p {
+        crate::CiProbe::NoSignal(why) => CiProbeResult::NoSignal(why),
+        crate::CiProbe::PrNoChecks { pr_number } => CiProbeResult::NoChecks {
+            change: pr_number as u64,
+        },
+        crate::CiProbe::InProgress { pr_number } => CiProbeResult::InProgress {
+            change: pr_number as u64,
+        },
+        crate::CiProbe::Green { pr_number } => CiProbeResult::Green {
+            change: pr_number as u64,
+        },
+        crate::CiProbe::Red {
+            pr_number,
+            failed_summary,
+        } => CiProbeResult::Failed {
+            change: pr_number as u64,
+            summary: failed_summary,
+        },
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeMethod {
     Squash,
@@ -365,6 +409,12 @@ pub trait Forge {
 
     /// `gh run` / `glab ci` / pure-git `CiState::None`.
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus>;
+
+    /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
+    /// — the forge-neutral form of `probe_ci_state_for_branch`. Returns a
+    /// [`CiProbeResult`] preserving the `NoSignal(reason)` "couldn't probe"
+    /// state the orchestrator's CI phase relies on. trace:STORY-516 | ai:claude
+    fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult>;
 
     /// `gh pr merge` / `glab mr merge` / pure-git git merge.
     ///
@@ -712,6 +762,16 @@ impl Forge for GitHubForge {
         })
     }
 
+    fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
+        // STORY-516: delegate to the proven `probe_ci_state_for_branch` (single
+        // `gh pr list --json number,statusCheckRollup` call → PR number + rollup,
+        // with the BUG-* NoSignal degradations) and adapt CiProbe → CiProbeResult.
+        // No classification reimplementation. trace:STORY-516 | ai:claude
+        Ok(ci_probe_result_from_ci_probe(
+            crate::probe_ci_state_for_branch(branch),
+        ))
+    }
+
     fn merge_change(
         &self,
         c: &ChangeRef,
@@ -920,6 +980,10 @@ impl Forge for GitLabForge {
         anyhow::bail!("GitLab ci_status lands in EPIC-35 slice 4")
     }
 
+    fn ci_probe_for_branch(&self, _branch: &str) -> Result<CiProbeResult> {
+        anyhow::bail!("GitLab ci_probe_for_branch lands in EPIC-35 slice 4")
+    }
+
     fn merge_change(
         &self,
         c: &ChangeRef,
@@ -1050,6 +1114,13 @@ impl Forge for PureGitForge {
             url: None,
             failing_checks: Vec::new(),
         })
+    }
+
+    fn ci_probe_for_branch(&self, _branch: &str) -> Result<CiProbeResult> {
+        // Pure-git has no forge CI — nothing to probe. trace:STORY-516
+        Ok(CiProbeResult::NoSignal(
+            "no forge CI (pure-git)".to_string(),
+        ))
     }
 
     fn merge_change(
@@ -1266,6 +1337,39 @@ mod tests {
         assert_eq!(
             change_lookup_from_pr_lookup(PrLookup::GhUnreachable("dns".into()), "b"),
             ChangeLookup::Unreachable("dns".into())
+        );
+    }
+
+    /// STORY-516: CiProbe → CiProbeResult is a 1:1 map that preserves the
+    /// NoSignal(reason) "couldn't probe" state + the per-state change number.
+    #[test]
+    fn ci_probe_result_maps_every_ci_probe_state() {
+        use crate::CiProbe;
+        assert_eq!(
+            ci_probe_result_from_ci_probe(CiProbe::NoSignal("gh down".into())),
+            CiProbeResult::NoSignal("gh down".into())
+        );
+        assert_eq!(
+            ci_probe_result_from_ci_probe(CiProbe::PrNoChecks { pr_number: 7 }),
+            CiProbeResult::NoChecks { change: 7 }
+        );
+        assert_eq!(
+            ci_probe_result_from_ci_probe(CiProbe::InProgress { pr_number: 7 }),
+            CiProbeResult::InProgress { change: 7 }
+        );
+        assert_eq!(
+            ci_probe_result_from_ci_probe(CiProbe::Green { pr_number: 7 }),
+            CiProbeResult::Green { change: 7 }
+        );
+        assert_eq!(
+            ci_probe_result_from_ci_probe(CiProbe::Red {
+                pr_number: 7,
+                failed_summary: "build".into()
+            }),
+            CiProbeResult::Failed {
+                change: 7,
+                summary: "build".into()
+            }
         );
     }
 
