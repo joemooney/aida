@@ -3,12 +3,12 @@ spec_id: TASK-525
 agreed_id: TASK-525
 title: auto-complete telemetry record LifecycleSkip in JSONL event for retro analysis
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T06:11:35.569319066Z
-modified_at: 2026-06-05T17:35:59.879365926Z
+modified_at: 2026-06-05T17:42:47.696288757Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,7 @@ comments:
   content: Commit 20eacc11c references this requirement
   created_at: 2026-06-05T17:35:59.879365926Z
   modified_at: 2026-06-05T17:35:59.879365926Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T17:42:47.696288757Z
+  completion_sha: 952c40e32d3aa6fe1b404670472668ebfee87f07
