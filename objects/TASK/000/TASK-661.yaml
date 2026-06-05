@@ -1,0 +1,41 @@
+id: 019e982e-2e70-7f50-afb2-ba88e5404a3a
+spec_id: TASK-661
+agreed_id: TASK-661
+title: 'Disposition/triage lease: enforce ONE disposing advisor per scope (ADR-3 gate covers WHO, not HOW-MANY)'
+description: |-
+  ## Gap (operator-raised, 2026-06-05)
+
+  ADR-3's gate checks WHO may dispose (approve/queue) = advisor-authority (advisor role OR interactive). It does NOT check HOW MANY advisors are disposing the same scope concurrently. So two advisor-role (or interactive) sessions both pass the gate and can race the same draft inbox — each disposing from its own divergent session memory, neither holding the authoritative source-of-truth context. Conflicting dispositions, double-approval, fragmented source of truth.
+
+  ## Principle to enforce
+
+  Disposition authority must be (1) SINGULAR PER SCOPE and (2) exercised from FRESH SUBSTRATE READS, not stale session memory. The substrate is the source of truth — a single fresh-reading advisor is authoritative; two session-memory advisors are both unauthoritative. Multi-advisor is safe ONLY when scopes are partitioned and non-overlapping (SPIKE-10 subsystem-scoped model), each scope with one authoritative advisor.
+
+  ## Proposal
+
+  Extend the ADR-3 disposition gate with a **disposition/triage lease** (reuse the queue/session lease mechanism): acquiring disposition rights over a scope (default scope = whole project) takes an exclusive lease. A second advisor session attempting to dispose the same scope is refused (or told who holds it) — the same substrate-as-bouncer pattern the queue already uses for work scope. As subsystem advisors arrive (SPIKE-10), the lease is per-scope, so non-overlapping advisors dispose in parallel safely.
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] A second advisor session disposing the same scope while one holds the lease is refused, naming the holder.
+  - [ ] Lease is per-scope; non-overlapping scopes dispose concurrently (SPIKE-10 path).
+  - [ ] Stale/dead-process disposition leases are reaped (like session leases), so a crashed advisor doesn't lock triage forever.
+  - [ ] Disposition reads fresh substrate (cache-current) at decision time — documented norm + (if cheap) a staleness guard.
+
+  ## Relationships
+  - Extends ADR-3 (the disposition gate). Builds on SPIKE-10 (subsystem-scoped advisors). Same lease family as the queue/session model (BUG-89 user_id, session leases).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T14:27:03.920818292Z
+modified_at: 2026-06-05T14:27:03.920818292Z
+req_type: Task
+tags:
+- advisor
+- disposition-authority
+- from-product
+- from-user-question
+- intake-triage
+- parent:ADR-3
+- substrate-as-bouncer
