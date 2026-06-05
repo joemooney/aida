@@ -3,12 +3,12 @@ spec_id: TASK-660
 agreed_id: TASK-660
 title: 'STORY-457 core: aida status working-tree section (modified/staged/untracked + safe-to-remove)'
 description: 'Slice of STORY-457. Adds the display-only working-tree section to ''aida status'': staged count, modified-tracked list, untracked split into safe-to-remove cruft (*.bak/*.tmp/*.swp/*.orig/*.pyc/.DS_Store/__pycache__/ etc. → ''rm'' recommendation) vs ambiguous (commit-or-remove). Reads the main worktree; silent when clean. Deferred to a follow-up (STORY-457 stays open): the .aida/last-status.toml recency split (untracked recent <1h vs stale ≥1d), the .aida/untracked-history.toml first-observed tracking, and the content-matches-HEAD ''safe to clear'' heuristic for modified-tracked.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:26:25.582291161Z
-modified_at: 2026-06-05T14:27:02.580715874Z
+modified_at: 2026-06-05T14:32:37.062477746Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,7 @@ comments:
   content: Commit c92c1e703 references this requirement
   created_at: 2026-06-05T14:27:02.580715874Z
   modified_at: 2026-06-05T14:27:02.580715874Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T14:32:37.062477746Z
+  completion_sha: 9a377080c57dfc0439acff6ba5ac64c38f12917c
