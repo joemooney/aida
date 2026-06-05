@@ -483,6 +483,33 @@ mod tests {
             ('⏵', "alternate-path glyph ⏵ — use ⇒ instead"),
             ('🚪', "stop/exit glyph 🚪 — use ⏸ instead"),
         ];
+        // TASK-320: the retired glyphs must not reappear in ANY embedded skill
+        // prompt, not just the three originally spot-checked — a new or edited
+        // skill that reintroduces ⏵/🚪 should fail CI. Enumerate every prompt
+        // skill template via the classifier (folder + flat forms; helper files
+        // excluded). trace:TASK-320 | ai:claude
+        let skill_keys: Vec<String> = EMBEDDED_TEMPLATES
+            .keys()
+            .filter(|k| classify_skill_key(k).map(|s| s.is_prompt).unwrap_or(false))
+            .map(|k| k.to_string())
+            .collect();
+        assert!(
+            skill_keys.len() >= 3,
+            "expected to enumerate embedded skill prompts, found {}",
+            skill_keys.len()
+        );
+        for key in &skill_keys {
+            let content = EMBEDDED_TEMPLATES
+                .get(key.as_str())
+                .unwrap_or_else(|| panic!("missing embedded template: {key}"));
+            for &(glyph, why) in RETIRED {
+                assert!(!content.contains(glyph), "{key} still uses retired {why}");
+            }
+        }
+
+        // The refined glyphs (⇒ / ⏸) must be present in the skills that carry a
+        // Path/What happens/Why table — kept scoped, since not every skill has
+        // one. trace:BUG-116 | ai:claude
         for key in &[
             "skills/aida-pickup.md",
             "skills/aida-pr/SKILL.md",
@@ -491,11 +518,6 @@ mod tests {
             let content = EMBEDDED_TEMPLATES
                 .get(*key)
                 .unwrap_or_else(|| panic!("missing embedded template: {key}"));
-            for &(glyph, why) in RETIRED {
-                assert!(!content.contains(glyph), "{key} still uses retired {why}");
-            }
-            // Every skill carries a Path/What happens/Why table, so both
-            // refined glyphs must be present after the BUG-116 swap.
             assert!(
                 content.contains('⇒'),
                 "{key} is missing the ⇒ alternative-path glyph"
