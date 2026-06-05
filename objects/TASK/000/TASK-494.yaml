@@ -59,7 +59,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T07:16:23.581595276Z
-modified_at: 2026-05-24T06:37:20.410100618Z
+modified_at: 2026-06-05T03:48:05.255078436Z
 req_type: Task
 tags:
 - aida:push
@@ -68,3 +68,9 @@ tags:
 - operator-mental-model
 - papercut
 - ux
+comments:
+- id: 019e95e5-2e07-7cf1-bc2b-869d3f304130
+  author: joe
+  content: Commit c15458cdf references this requirement
+  created_at: 2026-06-05T03:48:05.255078436Z
+  modified_at: 2026-06-05T03:48:05.255078436Z
