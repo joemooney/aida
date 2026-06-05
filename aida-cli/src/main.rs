@@ -18562,7 +18562,7 @@ fn collect_doctor_findings(
             .creator_pid
             .is_some_and(|pid| !process_probe::pid_is_alive(pid));
         let branch_merged = matches!(
-            detect_merged_pr_for_branch(project_root, &lease.branch),
+            detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
             PrLookup::Found(_)
         );
         if matches!(state, LeaseState::Stale) || pid_dead || branch_merged {
@@ -25524,7 +25524,7 @@ fn resolve_stack_base(
             );
         }
         if !force {
-            let merged = detect_merged_pr_for_branch(project_root, b);
+            let merged = detect_merged_pr_for_branch_via_forge(project_root, b);
             if let PrLookup::Found(pr) = &merged {
                 anyhow::bail!(
                     "--base `{}` is already merged (PR-{}); branching from it \
@@ -25551,7 +25551,7 @@ fn resolve_stack_base(
         .filter(|l| !lease_covers_cwd(l, &canon_cwd))
         .filter(|l| {
             !matches!(
-                detect_merged_pr_for_branch(project_root, &l.branch),
+                detect_merged_pr_for_branch_via_forge(project_root, &l.branch),
                 PrLookup::Found(_)
             )
         })
@@ -29159,7 +29159,9 @@ fn session_end(
         }
     }
     if !is_completed {
-        if let PrLookup::Found(_) = detect_merged_pr_for_branch(&project_root, &target.branch) {
+        if let PrLookup::Found(_) =
+            detect_merged_pr_for_branch_via_forge(&project_root, &target.branch)
+        {
             is_completed = true;
         }
     }
@@ -30183,6 +30185,50 @@ fn bounded_text(text: &str, max: usize) -> String {
     format!("{}…", &text[..end])
 }
 
+/// STORY-516: reverse of `change_lookup_from_pr_lookup` — convert a forge
+/// `ChangeLookup` back to the orchestrator's `PrLookup` so the `*_via_forge`
+/// helpers are a pure name-swap at their call sites (match arms stay PrLookup).
+/// trace:STORY-516 | ai:claude
+fn pr_lookup_from_change_lookup(c: crate::forge::ChangeLookup) -> PrLookup {
+    match c {
+        crate::forge::ChangeLookup::Found(r) => PrLookup::Found(OpenPrInfo {
+            number: r.id,
+            title: r.title.unwrap_or_default(),
+            url: r.url,
+        }),
+        crate::forge::ChangeLookup::NoChange => PrLookup::NoOpenPr,
+        crate::forge::ChangeLookup::CliMissing => PrLookup::GhMissing,
+        crate::forge::ChangeLookup::CliFailed(s) => PrLookup::GhFailed(s),
+        crate::forge::ChangeLookup::Unreachable(s) => PrLookup::GhUnreachable(s),
+    }
+}
+
+/// STORY-516: forge-routed spec-search open-PR lookup (BUG-223 fallback). GitHub
+/// delegates to `detect_open_pr_for_spec`. trace:STORY-516 | ai:claude
+pub(crate) fn detect_open_pr_for_spec_via_forge(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> PrLookup {
+    pr_lookup_from_change_lookup(
+        crate::forge::forge_for(project_root)
+            .change_for_spec(spec)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+    )
+}
+
+/// STORY-516: forge-routed merged-PR-for-branch lookup. GitHub delegates to
+/// `detect_merged_pr_for_branch`. trace:STORY-516 | ai:claude
+pub(crate) fn detect_merged_pr_for_branch_via_forge(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> PrLookup {
+    pr_lookup_from_change_lookup(
+        crate::forge::forge_for(project_root)
+            .merged_change_for_branch(branch)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+    )
+}
+
 /// STORY-516: forge-routed branch lookup — the view-op entry point the call
 /// sites use instead of `detect_open_pr_for_branch` directly, so a GitLab /
 /// pure-git repo goes through its own provider. GitHubForge delegates back to
@@ -30270,7 +30316,7 @@ fn probe_branch_on_origin(project_root: &std::path::Path, branch: &str) -> Branc
 /// every covered spec in its `## Per-spec` section, so the spec id is a
 /// reliable key even after the branch the PR was opened from changed.
 /// trace:BUG-223 | ai:claude
-fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
+pub(crate) fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--search", spec, "--state", "open"])
 }
 
@@ -30311,7 +30357,10 @@ fn pr_head_branch(project_root: &std::path::Path, pr_number: u64) -> Option<Stri
 /// but it won't reach `main` without a new PR. Mirrors the shape of
 /// [`detect_open_pr_for_branch`] but queries `--state merged` and returns
 /// only the first hit (most recent). trace:BUG-88 | ai:claude
-fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+pub(crate) fn detect_merged_pr_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "merged"])
 }
 
@@ -52847,7 +52896,9 @@ fn handle_push_command(
                     crate::forge::ChangeLookup::NoChange
                 )
             {
-                if let PrLookup::Found(pr) = detect_merged_pr_for_branch(&project_root, &branch) {
+                if let PrLookup::Found(pr) =
+                    detect_merged_pr_for_branch_via_forge(&project_root, &branch)
+                {
                     eprintln!(
                         "{} branch {} was the head of {} which already merged.",
                         "⚠".yellow().bold(),
@@ -74800,7 +74851,7 @@ fn probe_resume_facts(
     // PR number: prefer what drain-state recorded; else look it up by spec.
     let mut pr = member.and_then(|m| m.pr);
     if pr.is_none() {
-        if let PrLookup::Found(p) = detect_open_pr_for_spec(project_root, spec) {
+        if let PrLookup::Found(p) = detect_open_pr_for_spec_via_forge(project_root, spec) {
             pr = Some(p.number as u32);
         }
     }
@@ -78994,7 +79045,7 @@ impl RealPhaseDriver {
         match self
             .branch
             .as_deref()
-            .map(|b| detect_merged_pr_for_branch(&self.project_root, b))
+            .map(|b| detect_merged_pr_for_branch_via_forge(&self.project_root, b))
         {
             Some(PrLookup::Found(pr)) => matches!(
                 pr_credit_match_with_sink(
@@ -79204,7 +79255,7 @@ impl RealPhaseDriver {
                 url: c.url,
             }),
             crate::forge::ChangeLookup::NoChange => {
-                match detect_open_pr_for_spec(&self.project_root, &self.spec) {
+                match detect_open_pr_for_spec_via_forge(&self.project_root, &self.spec) {
                     PrLookup::Found(pr) => {
                         // Realign the branch so the CI / merge phases probe the
                         // PR's actual head, not the worktree HEAD the branch-keyed
@@ -80715,7 +80766,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // A ship opens a PR — a spec-id lookup is branch-independent and
         // robust, with the recorded branch as a fallback.
         let pr =
-            match detect_open_pr_for_spec(&self.project_root, &self.spec) {
+            match detect_open_pr_for_spec_via_forge(&self.project_root, &self.spec) {
                 PrLookup::Found(pr) => Some(pr),
                 // STORY-516: inner branch lookup forge-routed (the outer spec search
                 // is the list op, routed later). trace:STORY-516 | ai:claude
