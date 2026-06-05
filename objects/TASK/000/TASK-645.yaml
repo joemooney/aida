@@ -1,0 +1,31 @@
+id: 019e961e-359d-7951-b479-451a36c70d12
+spec_id: TASK-645
+agreed_id: TASK-645
+title: 'aida init: set + surface the implementer default role with a one-line role explainer'
+description: |-
+  Implements the onboarding half of the role-onboarding DECISION (2026-06-04). Pairs with TASK-638 (scaffolds the role SET).
+
+  ## Acceptance
+
+  - [ ] After `aida init`, the user is operating as `implementer` by default (not `(none)`/undefined) — verifiable via statusline + `aida role active`-equivalent.
+  - [ ] `aida init` output includes a short, friendly roles block: names the implementer default, one-line "what roles are" (implementer/advisor/reviewer = different hats as the project grows), and the switch command `aida role enter <role>`.
+  - [ ] The statusline renders the active role (implementer by default) so state is never ambiguous.
+  - [ ] No undefined-role window: from the first command after init, the user has a clear role identity.
+  - [ ] Does NOT force an interactive eval-enter at init (init isn't eval'd); the default is implicit + surfaced, switching is the user's per-shell act.
+
+  ## Notes
+  - Sibling tasks (separate): `aida agent new` defaults implementer+notice; the director-evolution progressive-disclosure hint. Keep this one scoped to the init onboarding moment.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T04:50:22.749375534Z
+modified_at: 2026-06-05T04:50:22.749375534Z
+req_type: Task
+tags:
+- aida:init
+- cli-ux
+- from-product
+- from-user-direction
+- onboarding-flow
+- roles
