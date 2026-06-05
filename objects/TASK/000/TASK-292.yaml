@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:04:18.586209459Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-06-05T04:56:59.543540968Z
 req_type: Task
 tags:
 - auto-complete
@@ -66,6 +66,11 @@ comments:
     Test status: 5/5 new unit tests green; cargo fmt + clippy clean
   created_at: 2026-05-17T21:05:34.612384862Z
   modified_at: 2026-05-17T21:05:34.612384862Z
+- id: 019e9624-4397-7142-a3dd-af23b8f81b9d
+  author: joe
+  content: 'Correction (TASK-321, 2026-06-05): acceptance criterion 5 (''Composes naturally with --no-launch …'') is WRONG for the --no-launch half. cli.rs:3195-3198 declares the --auto-complete arg with conflicts_with_all = ["no_launch", "fresh", "list_sessions", "dry_run", "type_filter"], so ''aida queue work --auto-complete --no-launch'' is rejected by clap before it runs. The --batch X half of the criterion holds. Recording the correction here rather than rewriting this completed spec''s description.'
+  created_at: 2026-06-05T04:56:59.543540968Z
+  modified_at: 2026-06-05T04:56:59.543540968Z
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
