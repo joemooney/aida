@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:20.867633023Z
-modified_at: 2026-06-05T19:33:01.198300011Z
+modified_at: 2026-06-05T19:38:51.011685443Z
 req_type: Bug
 tags:
 - aida:init
@@ -33,3 +33,9 @@ tags:
 - onboarding
 - queue
 - worktree
+comments:
+- id: 019e994b-a103-7623-9e21-98558ac550b5
+  author: joe
+  content: 'CLEAN STANDALONE REPRO 2026-06-05 (~/work/dummy1, a properly isolated project — NOT the earlier ~/ai workspace-wrap). Confirms BUG-445 is a genuine standalone defect, not an artifact of BUG-446. Same failure: queue-work isolates TASK-007 into worktree dummy1-task-007 off initial commit (caf8cda = .gitkeep only); no .gitignore / no config.toml there; git add . would stage 3 outside-repo symlinks. This is the canonical repro. Verified-safe workaround: the scaffolding commit belongs in the CANONICAL repo (~/work/dummy1) where .gitignore exists — git add . there stages 141 scaffolding files and correctly IGNORES .aida-store/.aida/cache.db/.aida/sessions. The queue-work worktree should never have been created for this task (the BUG-445 fix).'
+  created_at: 2026-06-05T19:38:51.011685443Z
+  modified_at: 2026-06-05T19:38:51.011685443Z
