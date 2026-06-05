@@ -1484,13 +1484,6 @@
   added_at: 2026-06-05T02:06:07.682023778Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 019e962f-37ad-7462-bea7-f0ea3ff40213
-  position: 361000
-  added_by: joe
-  note: Triage-inbox workflow. ADR-3.
-  added_at: 2026-06-05T05:09:21.440917274Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e45fe-457c-7050-90f2-868a63ca82dd
   position: 364000
   added_by: joe
@@ -1507,4 +1500,10 @@
   position: 366000
   added_by: joe
   added_at: 2026-06-05T05:19:20.000676190Z
+  for_role: implementer
+- user_id: joe
+  requirement_id: 019e962f-37ad-7462-bea7-f0ea3ff40213
+  position: 367000
+  added_by: joe
+  added_at: 2026-06-05T06:45:10.600199303Z
   for_role: implementer
