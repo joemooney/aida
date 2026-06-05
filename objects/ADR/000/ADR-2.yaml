@@ -1,0 +1,45 @@
+id: 019e961e-0de0-7c21-a218-63205d82a7ad
+spec_id: ADR-2
+agreed_id: ADR-2
+title: 'Role onboarding: implementer is the default role; surface roles at init; never leave the user role-undefined'
+description: |-
+  ## Decision (operator, 2026-06-04)
+
+  Onboarding must put the user in a clear default role from minute one and name the role concept immediately. An UNDEFINED role state is confusing — it breeds a confused mental model at the very first command. Simplicity = one clear default + the concept surfaced, NOT the concept hidden.
+
+  Supersedes the earlier "no role = solo mode" framing (rejected: absence reads as ambiguity, not simplicity).
+
+  ## The model
+
+  1. **Default role = `implementer`.** A fresh shell/user is implementer by default — never `(none)`. Promote the existing routing-default (`for_override.unwrap_or("implementer")`) to the FULL default: statusline, role-context, and routing all read `implementer` when nothing else is entered.
+  2. **`aida init` names roles.** Init output introduces roles in one short block: "You're set up as implementer (you drive work to done). Roles (implementer/advisor/reviewer) let you wear different hats as your project grows. Switch with `aida role enter <role>`." Concept surfaced at minute one.
+  3. **Always visible.** The statusline shows the active role (implementer by default) so state is never ambiguous.
+  4. **`aida agent new`** with no `--role` defaults to `implementer` + a one-line notice (never errors, never role-less).
+  5. **Progressive disclosure of the director-evolution.** The "human becomes advisor/director, agents implement" model is TAUGHT LATER — surfaced when the user spawns their first agent or first uses `--for <role>` — not at onboarding. A brand-new solo dev's first act is to build, so implementer is the correct first identity; the director transition is an advanced, taught step.
+
+  ## Rationale
+
+  - Onboarding clarity > conceptual purity. The solo dev is here to build → implementer is the right, clear default.
+  - Trojan-horse hides platform DEPTH, not the user's own STATE. Leaving role undefined is the bad kind of hidden.
+  - No separate `solo` role (concept proliferation); implementer carries the solo default AND its multi-agent seat meaning.
+
+  ## Follow-on work (file as children/tasks)
+
+  - TASK: `aida init` surfaces the implementer default + one-line role explainer (pairs with TASK-638 which scaffolds the role SET).
+  - TASK: make `implementer` the full default (statusline/context show it, not `(none)`).
+  - TASK: `aida agent new` defaults `--role implementer` + notice.
+  - (later) progressive-disclosure hint on first `aida agent new` / first `--for`.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T04:50:12.576842109Z
+modified_at: 2026-06-05T04:50:12.576842109Z
+req_type: Decision
+tags:
+- cli-ux
+- from-product
+- from-user-direction
+- mental-model
+- onboarding-flow
+- roles
