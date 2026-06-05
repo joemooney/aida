@@ -23,12 +23,12 @@ description: |-
 
   ## Notes
   - Substrate-as-bouncer (cf. EPIC-34). A soft default would be bypassed by `--status approved`; this is the hard gate.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T05:08:48.363529487Z
-modified_at: 2026-06-05T06:39:01.940383107Z
+modified_at: 2026-06-05T06:44:36.746751523Z
 req_type: Task
 tags:
 - aida:add
@@ -49,3 +49,7 @@ comments:
   content: Commit 1bd4540a7 references this requirement
   created_at: 2026-06-05T06:39:01.940383107Z
   modified_at: 2026-06-05T06:39:01.940383107Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T06:44:36.746751523Z
+  completion_sha: 6c530e22581e9e6be10c8828ecce4cb195df938e
