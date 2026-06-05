@@ -1518,3 +1518,9 @@
   note: Triage-inbox workflow. ADR-3.
   added_at: 2026-06-05T05:09:21.440917274Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019e467f-f4fb-7cd3-8e14-2a09d6f9afea
+  position: 362000
+  added_by: joe
+  added_at: 2026-06-05T05:19:04.188702714Z
+  for_role: implementer
