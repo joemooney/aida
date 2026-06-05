@@ -31005,6 +31005,27 @@ fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64
     })
 }
 
+/// TASK-140: the full HEAD commit message of a BRANCH (not the local cwd HEAD).
+/// Tries the local ref first, then `origin/<branch>` (shipping a PR whose branch
+/// isn't checked out locally). `None` when neither resolves. Caller takes the
+/// first line as the squash subject. trace:TASK-140 | ai:claude
+fn branch_head_commit_message(project_root: &std::path::Path, branch: &str) -> Option<String> {
+    for r in [branch.to_string(), format!("origin/{branch}")] {
+        let out = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args(["log", "-1", "--format=%B", &r])
+            .output()
+            .ok()?;
+        if out.status.success() {
+            let msg = String::from_utf8_lossy(&out.stdout).to_string();
+            if !msg.trim().is_empty() {
+                return Some(msg);
+            }
+        }
+    }
+    None
+}
+
 /// Return an explicit `gh pr merge --subject` value only when the default
 /// squash subject would drop spec IDs that are recoverable from PR metadata.
 // trace:SPEC-410 | ai:codex
@@ -31013,18 +31034,19 @@ fn derive_pr_ship_squash_subject(
     pr_number: u64,
     branch: &str,
 ) -> Result<Option<String>> {
-    let commit_msg_out = std::process::Command::new("git")
-        .current_dir(project_root)
-        .args(["log", "-1", "--format=%B"])
-        .output()
-        .context("could not invoke `git log` to derive squash subject")?;
-    if !commit_msg_out.status.success() {
-        anyhow::bail!(
-            "`git log -1 --format=%B` failed: {}",
-            String::from_utf8_lossy(&commit_msg_out.stderr).trim()
-        );
-    }
-    let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
+    // TASK-140: read the subject from the PR BRANCH's head commit, NOT the local
+    // cwd HEAD. `aida pr ship` frequently runs from the main worktree (an
+    // orchestrated ship, or shipping a pre-existing PR), where HEAD is main's
+    // tip — an UNRELATED commit. Deriving the squash subject from cwd HEAD then
+    // produced a wrong subject (main's-tip subject with only a `(SPEC-ID)`
+    // appended) — the PR-347 / 778f0293 incident. The branch ref is the
+    // authoritative source for what's being squashed. trace:TASK-140 | ai:claude
+    let commit_msg = branch_head_commit_message(project_root, branch).ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not read the head commit of branch `{branch}` (tried local and origin/) \
+             to derive the squash subject"
+        )
+    })?;
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
     if current_subject.is_empty() {
         return Ok(None);
@@ -31046,6 +31068,62 @@ fn derive_pr_ship_squash_subject(
         Ok(None)
     } else {
         Ok(Some(normalized))
+    }
+}
+
+#[cfg(test)]
+mod task_140_squash_subject_tests {
+    use super::*;
+
+    fn git(root: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {:?}: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// TASK-140: the squash subject must come from the PR BRANCH's head, not the
+    /// local cwd HEAD. Here cwd HEAD is `main` (an unrelated subject) while the
+    /// PR branch carries the real one — the function must return the branch's.
+    #[test]
+    fn branch_head_commit_message_reads_branch_not_cwd_head() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        git(root, &["init", "-q", "-b", "main"]);
+        git(root, &["config", "user.email", "t@t.t"]);
+        git(root, &["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-q", "-m", "unrelated main-tip subject"]);
+        // Feature branch with the REAL subject.
+        git(root, &["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        git(root, &["add", "."]);
+        git(
+            root,
+            &["commit", "-q", "-m", "the real PR subject (TASK-575)"],
+        );
+        // Back on main: cwd HEAD is now the unrelated tip — the bug condition.
+        git(root, &["checkout", "-q", "main"]);
+
+        let msg = branch_head_commit_message(root, "feature").expect("branch head readable");
+        assert!(
+            msg.contains("the real PR subject"),
+            "must read the branch's commit, got: {msg}"
+        );
+        assert!(
+            !msg.contains("unrelated main-tip"),
+            "must NOT read cwd HEAD (main), got: {msg}"
+        );
+        // Unknown branch (no local, no origin) → None.
+        assert!(branch_head_commit_message(root, "no-such-branch").is_none());
     }
 }
 
