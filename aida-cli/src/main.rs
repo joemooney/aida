@@ -4686,6 +4686,29 @@ fn complete_init_scaffolding(
         " ".repeat(23)
     );
 
+    // TASK-645: surface the role model at the onboarding moment so there is
+    // no undefined-role window. The default is read-side (`AIDA_SESSION_ROLE`
+    // unset → implementer); init can't set the env var from a subprocess, so
+    // it names the default and the switch command rather than entering one.
+    println!();
+    println!("  {}:", "Your role".bold());
+    println!(
+        "    You're the {} by default — the seat that picks up and ships work.",
+        "implementer".green().bold()
+    );
+    println!(
+        "    {} Roles are just hats you wear as the project grows ({}/{}/{}).",
+        "·".dimmed(),
+        "implementer".cyan(),
+        "advisor".cyan(),
+        "reviewer".cyan()
+    );
+    println!(
+        "    {} Switch any time: {}",
+        "·".dimmed(),
+        "eval \"$(aida role enter <role>)\"".cyan()
+    );
+
     if !verbose {
         println!();
         // BUG-38: the prior hint pointed at re-running `aida init
@@ -36122,6 +36145,44 @@ mod statusline_tests {
         assert_eq!(parse_role_selection("1x", 3), RoleSelection::Invalid);
     }
 
+    /// TASK-645: the read-side role default. Unset/blank → implementer
+    /// (flagged as default); any explicit value passes through canonicalized
+    /// and unflagged. `dialog` canonicalizes to `advisor` (TASK-586).
+    #[test]
+    fn effective_role_defaults_to_implementer_when_unset() {
+        use super::resolve_effective_role;
+        assert_eq!(
+            resolve_effective_role(None),
+            ("implementer".to_string(), true)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("")),
+            ("implementer".to_string(), true)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("   ")),
+            ("implementer".to_string(), true)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("advisor")),
+            ("advisor".to_string(), false)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("  reviewer  ")),
+            ("reviewer".to_string(), false)
+        );
+        // explicit implementer is NOT flagged as the implicit default
+        assert_eq!(
+            resolve_effective_role(Some("implementer")),
+            ("implementer".to_string(), false)
+        );
+        // dialog → advisor canonicalization still applies
+        assert_eq!(
+            resolve_effective_role(Some("dialog")),
+            ("advisor".to_string(), false)
+        );
+    }
+
     /// BUG-64: terminal-status predicate. Completed and Rejected are
     /// terminal; everything else (including the STORY-86 `Done` state) is
     /// open and accepts new children. trace:BUG-64 STORY-86 | ai:claude
@@ -44686,6 +44747,31 @@ fn statusline_role_mismatch_enabled(project_dir: &std::path::Path) -> bool {
 /// TASK-244: render the statusline `role:` segment, surfacing a mismatch
 /// between the shell-persistent role (`$AIDA_SESSION_ROLE`, set by `aida
 /// role enter`) and the active AIDA session's role (the lease). When
+/// TASK-645: the one place "what role am I" is answered. An unset (or
+/// blank) `AIDA_SESSION_ROLE` resolves to `implementer` — the read-side
+/// default — so no command ever faces a roleless session. The env var is
+/// never written by this path; it stays unset until the user explicitly
+/// `eval "$(aida role enter <role>)"`s a different role.
+fn effective_role() -> String {
+    effective_role_resolved().0
+}
+
+/// Same resolution as [`effective_role`], but also reports whether the
+/// result is the implicit default (`true`) versus an explicitly-entered
+/// role (`false`). Callers that want to *show* the default-ness (e.g. the
+/// statusline marking `implementer (default)`) use the flag. Pure over the
+/// passed-in value so it is unit-testable without touching the process env.
+fn resolve_effective_role(raw: Option<&str>) -> (String, bool) {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(r) => (canonical_role_name(r), false),
+        None => ("implementer".to_string(), true),
+    }
+}
+
+fn effective_role_resolved() -> (String, bool) {
+    resolve_effective_role(std::env::var("AIDA_SESSION_ROLE").ok().as_deref())
+}
+
 /// they disagree — and the warning is enabled — both are shown with a
 /// `⚠` glyph so three-way role confusion (shell vs session vs resumed
 /// conversation) is visible at a glance. Returns `(text, is_mismatch)`
@@ -44735,7 +44821,13 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         });
     let project_label = store_name.unwrap_or(project_name);
 
-    let role = std::env::var("AIDA_SESSION_ROLE").ok();
+    // TASK-645: resolve through the one role resolver. An unset/blank
+    // env var becomes the implementer default (marked below) so the
+    // statusline never shows a roleless `(none)`/blank segment.
+    let raw_role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let (effective_role_name, role_is_default) = resolve_effective_role(raw_role.as_deref());
 
     // STORY-79: opportunistic background fetch. Fire-and-forget; uses
     // current state for this render, refreshed state next render.
@@ -44807,7 +44899,10 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     // active role (or all entries when no role is set). Reads the orphan
     // store's queues/<user>.yaml file directly to keep this off the
     // backend's heavier load() path.
-    let queue_depth = read_queue_depth(&project_root, role.as_deref()).unwrap_or(0);
+    // TASK-645: depth for the effective role (implementer when unset), so
+    // the default sees its own queue rather than the all-entries view.
+    let queue_depth =
+        read_queue_depth(&project_root, Some(effective_role_name.as_str())).unwrap_or(0);
 
     let separator = " · ".dimmed().to_string();
     // Brand anchor: Greek transliteration of "AIDA". Same 4-column
@@ -44852,13 +44947,22 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         .ok()
         .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
 
-    if let Some(r) = &role {
+    {
+        let r = &effective_role_name;
         // TASK-244: surface a shell-role vs active-session-role mismatch
         // (e.g. shell persists `implementer` while the only active
         // session is `reviewer`). trace:TASK-244 | ai:claude
+        // TASK-645: a *defaulted* (unset) role can't meaningfully mismatch a
+        // session lease — suppress the warning and tag the segment
+        // `(default)` so the implicit role is visible but unalarming.
         let session_role = lease.as_ref().and_then(|l| l.role.as_deref());
-        let warn_enabled = statusline_role_mismatch_enabled(&project_root);
+        let warn_enabled = !role_is_default && statusline_role_mismatch_enabled(&project_root);
         let (role_text, role_mismatch) = role_segment_text(r, session_role, warn_enabled);
+        let role_text = if role_is_default {
+            format!("{} (default)", role_text)
+        } else {
+            role_text
+        };
         let role_segment = if role_mismatch {
             role_text.red().bold().to_string()
         } else {
@@ -44955,7 +45059,10 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     // either way — without it, three sessions on EPIC-20 (batch3, batch4,
     // batch5) would all render `sess:EPIC-20`, losing the only thing
     // distinguishing them. trace:STORY-53 trace:TASK-60 trace:TASK-282 | ai:claude
-    if role.is_none() {
+    // TASK-645: `role_is_default` is the old `role.is_none()` — no explicit
+    // role entered, so the @<scope> role segment carried no session anchor
+    // and the standalone `sess:` segment still earns its place.
+    if role_is_default {
         if let Some(l) = lease.as_ref() {
             let suffix = derive_session_branch_suffix(&l.scope, &l.branch);
             let label = sess_label_with_suffix(&l.scope, &suffix, SESS_LABEL_MAX);
