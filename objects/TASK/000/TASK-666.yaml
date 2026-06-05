@@ -15,12 +15,12 @@ description: |-
 
   ## Out of scope
   - TASK-662's actual delta-since-last-run rendering (this only lays the readable foundation).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T16:15:27.785933092Z
-modified_at: 2026-06-05T16:21:04.220021166Z
+modified_at: 2026-06-05T16:28:21.213786472Z
 req_type: Task
 tags:
 - aida:status
@@ -38,3 +38,7 @@ comments:
   content: Commit a3f4a794d references this requirement
   created_at: 2026-06-05T16:21:04.220021166Z
   modified_at: 2026-06-05T16:21:04.220021166Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-05T16:28:21.213786472Z
+  completion_sha: c0c9a2c93547d8b555d8bcbc09f56a1c3db8ea92
