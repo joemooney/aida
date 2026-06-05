@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T02:05:47.978816913Z
-modified_at: 2026-06-05T02:05:47.978816913Z
+modified_at: 2026-06-05T02:09:24.848261017Z
 req_type: Story
 tags:
 - epic-35-slice-1
@@ -27,3 +27,9 @@ tags:
 - gitlab
 - multi-vendor
 - parent:EPIC-35
+comments:
+- id: 019e958a-d770-74c0-b48f-e29d7c79d4d1
+  author: joe
+  content: Commit 290593da9 references this requirement
+  created_at: 2026-06-05T02:09:24.848261017Z
+  modified_at: 2026-06-05T02:09:24.848261017Z
