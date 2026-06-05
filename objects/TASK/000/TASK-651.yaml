@@ -8,9 +8,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T07:47:15.344416583Z
-modified_at: 2026-06-05T07:47:15.344416583Z
+modified_at: 2026-06-05T07:57:15.240409398Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e9356-dd01-7b11-959c-17b23b159488
   created_at: 2026-06-05T07:47:23.514354993Z
+comments:
+- id: 019e96c9-4c68-7401-afc5-6fafa41d37c2
+  author: joe
+  content: |-
+    Design finding (2026-06-05, while converting status_cleanup.rs): the simple `change_cmd_hint(verb, args)` from TASK-650 is NOT sufficient for several hints — glab's command SHAPE diverges from gh per-verb, not just the cli+noun:
+    - `gh pr checks <N> --watch` (PR CI) → glab is `glab ci status` / `glab ci view`, NOT `glab mr checks`.
+    - `gh run view` (workflow run) → `glab ci view`.
+    - merge flags: gh `--delete-branch` → glab `--remove-source-branch`; gh `--squash` → glab `--squash` (ok).
+    - `gh pr create` → `glab mr create` (ok via change_cmd_hint).
+
+    So the sweep needs a richer per-forge command vocabulary (a small table/methods: `ci_watch_cmd(n)`, `ci_view_cmd(run)`, `merge_cmd(n, opts)`, `create_cmd()`, `view_cmd(n)`), each returning the correct gh/glab/pure-git form, rather than templating a single verb. The chained hints (e.g. status_cleanup.rs:601 'checks --watch && merge && pull') should be assembled from these. Recommend designing this vocabulary first in a focused pass, THEN sweeping call sites — doing it per-hint piecemeal risks an incomplete/inconsistent abstraction. change_cmd_hint (TASK-650) stays useful for the simple view/create/merge verbs; this extends it. Pure-git fallback throughout: name no forge CLI (use git/aida-native or drop the parenthetical).
+  created_at: 2026-06-05T07:57:15.240409398Z
+  modified_at: 2026-06-05T07:57:15.240409398Z
