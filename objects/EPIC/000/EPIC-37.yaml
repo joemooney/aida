@@ -1,0 +1,22 @@
+id: 019e9944-71ec-7c00-94c6-774bf4500521
+spec_id: EPIC-37
+agreed_id: EPIC-37
+title: Onboarding hardening — a fresh 'aida init' → first 'aida queue work' must be clean, safe, and project-scoped
+description: |-
+  Umbrella for the first-run failures surfaced by a real new-project dogfood (2026-06-05). A user who runs 'aida init' then the natural next action 'aida queue work' currently hits a chain of papercuts and footguns. Goal: the fresh-init → first-pickup path is boring and correct.
+
+  Members (filed this session): BUG-445 (seeded 'commit scaffolding' first-task is uncompletable + dangerous under queue-work worktree isolation), BUG-446 (init has no guard against initializing over a workspace-of-projects), BUG-447 (queue-work session-resume bleeds a deleted/other project's TASK-007 session in — global ~/.claude/projects scan, no project scoping). Root-cause-coupled: TASK-631 (init should commit its own scaffolding — fixes BUG-445's root). Candidates to fold in: BUG-433, TASK-450, TASK-1-097.
+
+  Drain together via 'aida queue work --batch onboarding-hardening'.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-05T19:31:00.203994130Z
+modified_at: 2026-06-05T19:31:00.203994130Z
+req_type: Epic
+tags:
+- batch:onboarding-hardening
+- epic
+- first-run
+- onboarding
