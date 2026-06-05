@@ -59,12 +59,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — overnight wrap: PR-26 batch drain → 'filed STORY-124 (covers no specs) → reviewer queue (PR #26)'. User flagged it as 'minor UX nit' worth a backlog check after other fixes settle.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:31:03.578198534Z
-modified_at: 2026-06-05T17:09:36.737827494Z
+modified_at: 2026-06-05T17:09:39.279840128Z
 req_type: Task
 tags:
 - aida:session:end
