@@ -519,6 +519,11 @@ EOF
 - The PR is not open yet at 5b time, so the description carries the branch +
   commit SHA; the advisor recovers the PR from the SHA. Capture each printed
   `<ID>` (e.g. `TASK-303`).
+- **Source the metadata from the snapshot, not by hand.**
+  `aida state-snapshot --spec <SPEC-ID> --json` emits the branch / commit / PR /
+  drain state as a machine-readable object — use it for the `Branch:` / `Commit:`
+  line (and to attach a structured snapshot beside the finding's prose) rather
+  than re-deriving from `git` per finding. trace:TASK-415 | ai:claude
 
 **Report what was filed.** Close the step with a one-line summary naming the
 count and the TASK IDs — under TASK-307's tee this reaches the terminal, and
@@ -717,7 +722,11 @@ into the path row. Full rubric:
 `docs/aida/discipline/session-discipline.md` § *Finish-state
 communication rubric*.
 
-The preamble has a fixed shape, printed verbatim above the table:
+The preamble is generated deterministically by `aida state-snapshot --spec
+<SPEC-ID> [--tests "…"] [--fmt "…"]` (TASK-391) — one command replaces the
+seven manual lookups (git status / gh pr view / aida show / aida session
+show) that used to drift. Emit its output verbatim above the table. Its
+fixed shape:
 
 ```
 State:
@@ -776,8 +785,10 @@ markdown table (no surrounding code fence):
 
 *Orchestrator mode (`aida orchestrator status` = `orchestrated`) — TASK-286:*
 
-Print the State preamble first (substitute concrete values; omit rows
-genuinely absent):
+Print the State preamble first — generate it with `aida state-snapshot
+--spec <SPEC-ID>` and emit its output verbatim above the table (the command
+labels/omits absent rows itself; pass `--tests "…"` / `--fmt "…"` after a
+run). Example output:
 
 ```
 State:
@@ -840,8 +851,9 @@ trace:TASK-329
 
 *Batch mode (`batch:<NAME>` still has queued members) — TASK-272:*
 
-Print the State preamble first (substitute concrete values; omit rows
-genuinely absent, never leave a vague placeholder):
+Print the State preamble first — generate it with `aida state-snapshot
+--spec <SPEC-ID>` and emit its output verbatim above the table (the command
+labels/omits absent rows itself, never a vague placeholder). Example output:
 
 ```
 State:
@@ -881,8 +893,10 @@ form).
 
 *Cluster drained:*
 
-Print the State preamble first (substitute concrete values; omit rows
-genuinely absent):
+Print the State preamble first — generate it with `aida state-snapshot
+--spec <SPEC-ID>` and emit its output verbatim above the table (the command
+labels/omits absent rows itself; pass `--tests "…"` / `--fmt "…"` after a
+run). Example output:
 
 ```
 State:
@@ -914,8 +928,10 @@ Drained <N> items from <cluster-id>.
 
 *Cluster partial:*
 
-Print the State preamble first (substitute concrete values; omit rows
-genuinely absent):
+Print the State preamble first — generate it with `aida state-snapshot
+--spec <SPEC-ID>` and emit its output verbatim above the table (the command
+labels/omits absent rows itself; pass `--tests "…"` / `--fmt "…"` after a
+run). Example output:
 
 ```
 State:
@@ -948,8 +964,10 @@ the next pickup.">
 
 *Simple mode, queue has more items routed to this role:* — trace:TASK-414
 
-Print the State preamble first (substitute concrete values; omit rows
-genuinely absent):
+Print the State preamble first — generate it with `aida state-snapshot
+--spec <SPEC-ID>` and emit its output verbatim above the table (the command
+labels/omits absent rows itself; pass `--tests "…"` / `--fmt "…"` after a
+run). Example output:
 
 ```
 State:
@@ -990,8 +1008,10 @@ Step 6 — Step 5c hard-gates it. So the natural primary action is
 **releasing the lease cleanly**, not opening a PR that already exists or
 doesn't apply.
 
-Print the State preamble first (substitute concrete values; omit rows
-genuinely absent):
+Print the State preamble first — generate it with `aida state-snapshot
+--spec <SPEC-ID>` and emit its output verbatim above the table (the command
+labels/omits absent rows itself; pass `--tests "…"` / `--fmt "…"` after a
+run). Example output:
 
 ```
 State:
