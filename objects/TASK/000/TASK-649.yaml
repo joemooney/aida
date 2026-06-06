@@ -14,12 +14,12 @@ description: |-
   - Verified by: deliberately introduce a missing-path and a duplicate-dest, confirm the test goes red; remove, confirm green.
 
   Out of scope (deferred to backlog, NOT this task): install-state.json + uninstall, manifest profiles, ecc2-style TUI telemetry. Harness-adapter honesty matrix → separate docs-only follow-up (cheap, on-phase) if filed.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T07:16:36.357077926Z
-modified_at: 2026-06-06T17:36:04.078171259Z
+modified_at: 2026-06-06T17:53:44.062353160Z
 req_type: Task
 tags:
 - ci
@@ -39,3 +39,7 @@ comments:
   content: Commit bc70ccca3 references this requirement
   created_at: 2026-06-06T17:36:04.078171259Z
   modified_at: 2026-06-06T17:36:04.078171259Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T17:53:44.062353160Z
+  completion_sha: f5cd9376c474674d95b146c44e807f7ccdee0b09
