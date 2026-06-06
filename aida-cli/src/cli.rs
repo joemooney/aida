@@ -6053,6 +6053,16 @@ pub enum Command {
     #[clap(subcommand)]
     Plan(PlanCommand),
 
+    /// Dependency-graph tooling. Today: `aida deps sweep` lists likely
+    /// dependencies inferred read-only from the trace graph (shared
+    /// trace-link files) plus same-parent siblings — a "did I miss a
+    /// dependency before an overnight drain?" check. Read-only: it never
+    /// writes edges (confirm them by hand with `aida edit <id>
+    /// --blocked-by <dep>`).
+    // trace:STORY-447 | ai:claude
+    #[clap(subcommand)]
+    Deps(DepsCommand),
+
     /// Generate `CHANGELOG.md` mechanically from git tags + the spec
     /// graph. Walks `v*` tags as release boundaries, scans commits
     /// between them for `(SPEC-ID)` references, classifies each spec
@@ -6167,6 +6177,29 @@ pub enum SkillCommand {
     Render {
         /// The name of the skill to render (e.g. `agent-contract`).
         name: String,
+    },
+}
+
+/// Dependency-inference tooling. Read-only: surfaces likely dependency
+/// edges for human confirmation; it never writes the graph itself.
+// trace:STORY-447 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum DepsCommand {
+    /// List likely dependencies inferred from the trace graph, without
+    /// writing anything. For each spec, ranks other specs that share
+    /// trace-link files (≥2 shared files: high; 1: medium) and, weaker,
+    /// share a parent. Confirm a real edge by hand with
+    /// `aida edit <id> --blocked-by <dep>`.
+    // trace:STORY-447 | ai:claude
+    Sweep {
+        /// Limit the sweep to a single source spec (SPEC-ID or UUID)
+        /// instead of every spec in the store.
+        #[clap(long, value_name = "SPEC")]
+        for_spec: Option<String>,
+
+        /// Emit the result as JSON for agents / scripts.
+        #[clap(long)]
+        json: bool,
     },
 }
 
