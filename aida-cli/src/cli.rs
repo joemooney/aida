@@ -1633,6 +1633,23 @@ pub enum DocCommand {
         /// Doc spec id, or any other spec id to walk `--about` references.
         id: String,
     },
+
+    /// Release-time doc-coverage gate. List specs that reached Completed
+    /// since the previous git tag but have no `aida doc` entry about them
+    /// (no Doc that References them). Warn-only — exits 0 even when gaps
+    /// exist — so it can be wired into the release flow without blocking.
+    // trace:TASK-680 | ai:claude
+    Coverage {
+        /// Treat everything after this git ref/tag as "this release". When
+        /// absent, the most recent `v*` tag is used; if there is no tag, the
+        /// full history is scanned.
+        #[clap(long, value_name = "REF")]
+        since: Option<String>,
+
+        /// Emit the gap list as JSON instead of a human warning block.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
