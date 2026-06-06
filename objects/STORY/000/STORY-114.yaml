@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:54:53.622257823Z
-modified_at: 2026-05-13T05:54:53.622257823Z
+modified_at: 2026-06-06T08:37:17.174550013Z
 req_type: Story
 tags:
 - cli
@@ -66,3 +66,9 @@ relationships:
 - rel_type: Parent
   target_id: 019e1fe8-3e3c-76c0-b403-23c7b01e539d
   created_at: 2026-05-13T05:56:23.137500271Z
+comments:
+- id: 019e9c14-4ef6-7bf0-bc8c-cca5014e6f88
+  author: joe
+  content: Disposition sweep 2026-06-06 — COMPLETED. Shipped — aida rebase CLI (4-phase detect/classify/execute/report) + /aida-rebase skill/command exist; aida-commit cross-references the playbook.
+  created_at: 2026-06-06T08:37:17.174550013Z
+  modified_at: 2026-06-06T08:37:17.174550013Z
