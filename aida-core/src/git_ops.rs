@@ -571,6 +571,110 @@ pub fn register_node_full(
     );
 }
 
+/// Backfill a node entry into the shared registry WITHOUT touching the local
+/// clone's identity. Unlike [`register_node_full`], this never writes
+/// `.aida/node.toml` and never allocates blocks — the entry being backfilled
+/// describes some *other* (typically legacy) clone, not the one running the
+/// command. Used by `aida node acquire --remote-only` to formalize a clone
+/// that has been operating with an implicit pre-EPIC-1-052 node id, from a
+/// sibling clone, without hijacking the running clone's own identity.
+///
+/// `id`, `hostname`, and `email` are all required and explicit — none are
+/// inferred from the local environment, since the entry is not about the
+/// local clone. The same CAS push loop as [`register_node_full`] applies so
+/// concurrent backfills serialize through git. Returns the registered id.
+/// trace:FR-265 | ai:claude
+pub fn register_node_remote_only(
+    aida_repo: &Path,
+    id: String,
+    user_id: u32,
+    hostname: &str,
+    email: String,
+) -> Result<String> {
+    use crate::node::NodeRegistry;
+
+    let registry_dir = aida_repo.join("registry");
+    std::fs::create_dir_all(&registry_dir)?;
+
+    let registry_path = registry_dir.join("nodes.toml");
+    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
+
+    let local_only = !has_remote(aida_repo, "origin");
+
+    for attempt in 0..MAX_CAS_RETRIES {
+        // Step 1: Pull latest (skip on first attempt if no remote)
+        if attempt > 0 && !local_only {
+            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
+                anyhow::bail!(
+                    "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
+                    attempt, e
+                );
+            }
+        }
+
+        // Step 2: Load registry and verify the requested id isn't already in
+        // nodes.toml. A block-only id (legacy clone with blocks but no
+        // registry entry) is the legitimate backfill *target*, so unlike the
+        // normal acquire path we do NOT treat block ownership as a collision.
+        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+        if registry.is_registered(&id) {
+            anyhow::bail!(
+                "Node id {} is already in registry/nodes.toml — nothing to backfill",
+                id
+            );
+        }
+
+        // Step 3: Register the entry. clone_path is None: we don't know the
+        // legacy clone's path from here, and recording the local clone's path
+        // would be wrong (the entry isn't about this clone).
+        registry.register_specific_full(
+            id.clone(),
+            user_id,
+            hostname.to_string(),
+            Some(email.clone()),
+            None,
+        );
+        registry.save(&registry_path)?;
+
+        // Step 4: Stage, commit
+        add(aida_repo, &["registry/nodes.toml"])?;
+        let msg = format!(
+            "chore(registry): backfill node {} for user {} ({}) [remote-only]",
+            id, user_id, hostname
+        );
+        commit(aida_repo, &msg)?;
+
+        // Step 5: Push (skip when there's no remote — the commit lives on the
+        // local orphan branch and uploads on the next `aida push`). Crucially,
+        // NO local node.toml is ever written on any path — the running clone
+        // keeps its own identity. trace:FR-265 | ai:claude
+        if local_only {
+            return Ok(id);
+        }
+        match push(aida_repo, "origin", &branch) {
+            Ok(true) => return Ok(id),
+            Ok(false) => {
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(aida_repo)
+                    .output();
+                eprintln!(
+                    "Remote-only node backfill: push rejected (attempt {}), retrying...",
+                    attempt + 1
+                );
+                continue;
+            }
+            Err(e) => anyhow::bail!("Remote-only node backfill failed: {}", e),
+        }
+    }
+
+    anyhow::bail!(
+        "Remote-only node backfill failed after {} attempts — too much contention on the registry",
+        MAX_CAS_RETRIES
+    );
+}
+
 /// Outcome of [`hijack_node`]. Tells the CLI whether a stale-clone marker
 /// was successfully dropped or whether we just re-attributed silently
 /// (because the old clone is unreachable from this machine).
@@ -1146,6 +1250,48 @@ mod tests {
 
         let node_id2 = register_node(&aida2, 2, "alice-dev").unwrap();
         assert_eq!(node_id2, "2");
+    }
+
+    /// FR-265: `register_node_remote_only` backfills a registry entry for some
+    /// other (legacy) clone WITHOUT writing the local clone's `.aida/node.toml`
+    /// and WITHOUT allocating blocks. The running clone keeps its own identity.
+    /// trace:FR-265 | ai:claude
+    #[test]
+    fn test_register_node_remote_only_skips_local_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_bare, aida, _branch) = setup_remote_and_clone(dir.path(), "aida");
+
+        // Sanity: no local node.toml before we start.
+        let node_config_path = aida.join(".aida/node.toml");
+        assert!(!node_config_path.exists());
+
+        // Backfill node "2" (spock) from this clone.
+        let id =
+            register_node_remote_only(&aida, "2".into(), 2, "spock", "spock@example.com".into())
+                .unwrap();
+        assert_eq!(id, "2");
+
+        // The registry entry exists with the backfilled provenance.
+        let registry = crate::node::NodeRegistry::load(&aida.join("registry/nodes.toml")).unwrap();
+        assert!(registry.is_registered("2"));
+        let entry = registry.get("2").unwrap();
+        assert_eq!(entry.hostname, "spock");
+        assert_eq!(entry.email.as_deref(), Some("spock@example.com"));
+        // clone_path must NOT point at the local clone — we don't know the
+        // legacy clone's path, so it's left None.
+        assert!(entry.clone_path.is_none());
+
+        // Crucially: the local clone's identity file was NOT written.
+        assert!(
+            !node_config_path.exists(),
+            "remote-only backfill must not write local .aida/node.toml"
+        );
+
+        // A second backfill of an already-registered id refuses.
+        let err =
+            register_node_remote_only(&aida, "2".into(), 2, "spock", "spock@example.com".into())
+                .unwrap_err();
+        assert!(err.to_string().contains("already in registry"));
     }
 
     #[test]
