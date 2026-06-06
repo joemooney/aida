@@ -4920,6 +4920,8 @@ fn init_scaffold_candidate_paths() -> &'static [&'static str] {
         "AGENTS.md",
         ".claude",
         ".codex",
+        // trace:TASK-457 | ai:claude
+        ".antigravity",
         "docs/plans",
         "docs/aida",
         "docs/agents",
@@ -5063,6 +5065,9 @@ fn complete_init_scaffolding(
         "claude" => {
             config.generate_agents_md = false;
             config.generate_codex_skills = false;
+            // .antigravity/ mirrors the non-Claude .codex/ dir; the
+            // Claude-only profile skips both. trace:TASK-457 | ai:claude
+            config.generate_antigravity_skills = false;
         }
         "codex" => {
             config.generate_claude_md = false;
@@ -5083,6 +5088,9 @@ fn complete_init_scaffolding(
         config.generate_skills = false;
         config.generate_commands = false;
         config.generate_codex_skills = false;
+        // --no-skills skips every agent-skill dir consistently, including
+        // the new .antigravity/skills/. trace:TASK-457 | ai:claude
+        config.generate_antigravity_skills = false;
         config.include_aida_req_skill = false;
         config.include_aida_plan_skill = false;
         config.include_aida_implement_skill = false;
@@ -5248,6 +5256,14 @@ fn complete_init_scaffolding(
                 "    {}{}Workflow skills (Codex-compatible)",
                 ".codex/skills/".white().bold(),
                 " ".repeat(24)
+            );
+        }
+        // trace:TASK-457 | ai:claude
+        if config_for_output.generate_antigravity_skills {
+            println!(
+                "    {}{}Workflow skills (Antigravity-compatible)",
+                ".antigravity/skills/".white().bold(),
+                " ".repeat(18)
             );
         }
         if !no_hooks && config_for_output.generate_claude_code_hooks {
