@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:51.042943699Z
-modified_at: 2026-05-17T02:14:47.662413122Z
+modified_at: 2026-06-06T08:19:04.997544201Z
 req_type: Story
 tags:
 - companion-project
@@ -46,3 +46,9 @@ relationships:
 - rel_type: Child
   target_id: 019e3383-3b25-78c2-b59c-f06bd6b44c07
   created_at: 2026-05-17T01:20:54.007458944Z
+comments:
+- id: 019e9c03-a4a5-7730-b240-8dd1acaeba05
+  author: joe
+  content: 🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input. Blocked on the EPIC-29 LINCHPIN decision (extract aida-tui to a companion repo vs keep it in-core — see EPIC-29's decision packet). This child only proceeds if the split is approved; advisor recommendation is to REJECT the split (it contradicts the shipped 'TUI is the product' / EPIC-26 positioning), which would reject this child with it.
+  created_at: 2026-06-06T08:19:04.997544201Z
+  modified_at: 2026-06-06T08:19:04.997544201Z
