@@ -39,12 +39,12 @@ description: |-
   ## Notes
   - Complements (doesn't replace) `aida queue list` (the queue-focused view). This is the at-a-glance overlay on the main list.
   - The in-flight signal reads the same lease registry as `aida session leases`; reaped/dead leases must not show `▶` (use the live-lease check, cf. the dead-agent reaper STORY-496).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T18:57:35.377758546Z
-modified_at: 2026-06-06T08:20:38.167101905Z
+modified_at: 2026-06-06T18:31:55.894827971Z
 req_type: Task
 tags:
 - aida:list
@@ -60,3 +60,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). Leading work-routing glyph column on aida list (queued/in-flight-lease/blocked) + --no-flow suppression + JSON routing fields. Reuses queue/lease reads + status-glyph family.
   created_at: 2026-06-06T08:14:36.976789532Z
   modified_at: 2026-06-06T08:14:36.976789532Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T18:31:55.894827971Z
+  completion_sha: 6faf5a033bfd0d84a5855848e7b45cd6058f3012
