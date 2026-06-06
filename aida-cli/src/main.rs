@@ -35382,6 +35382,90 @@ fn preflight_stale_base_file_sets(
     )
 }
 
+/// TASK-480: reviewer pre-flight intermediate-only check. Fetches the
+/// PR's head, computes the files it changes against its base, asks the
+/// repo's own `.gitignore` whether each is ignored, and runs the pure
+/// [`pr_rebase::classify_intermediate_only`] classifier.
+///
+/// Same fail-open convention as [`preflight_stale_base_check`]: gh /
+/// git infra errors surface as `Err` and the caller proceeds with a
+/// warning — we never block an autonomous drain on a transient blip.
+/// A *successfully detected* intermediate-only diff always refuses.
+/// trace:TASK-480 | ai:claude
+fn preflight_intermediate_only_check(
+    project_root: &std::path::Path,
+    n: u64,
+) -> Result<pr_rebase::IntermediateOnlyOutcome> {
+    preflight_intermediate_only_check_with_gh(project_root, n, std::ffi::OsStr::new("gh"))
+}
+
+fn preflight_intermediate_only_check_with_gh(
+    project_root: &std::path::Path,
+    n: u64,
+    gh_bin: &std::ffi::OsStr,
+) -> Result<pr_rebase::IntermediateOnlyOutcome> {
+    let info = fetch_pr_info_via_gh_bin(project_root, n, gh_bin)
+        .and_then(|j| pr_rebase::parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
+        .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
+
+    let origin_base = format!("origin/{}", info.base_ref);
+
+    // Refresh origin + fetch the PR head, same as the stale-base probe.
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["fetch", "origin", "--prune"])
+        .status();
+    let pr_local_branch = format!("pr-{n}");
+    let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    let pr_fetch = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["fetch", "origin", pr_refspec.as_str()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    if !matches!(pr_fetch, Ok(s) if s.success()) {
+        anyhow::bail!(
+            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) for pre-flight \
+             intermediate-only check"
+        );
+    }
+
+    let changed = files_in_range(project_root, &format!("{origin_base}..{pr_local_branch}"));
+    Ok(classify_intermediate_only_with_gitignore(
+        project_root,
+        &changed,
+    ))
+}
+
+/// Run the pure classifier with a `git check-ignore`-backed gitignore
+/// predicate. Pulled out so the wiring (build the predicate, call the
+/// classifier) is reused by the preflight and unit-testable in
+/// isolation. trace:TASK-480 | ai:claude
+fn classify_intermediate_only_with_gitignore(
+    project_root: &std::path::Path,
+    changed: &[String],
+) -> pr_rebase::IntermediateOnlyOutcome {
+    pr_rebase::classify_intermediate_only(changed, |path| git_path_is_ignored(project_root, path))
+}
+
+/// `git check-ignore -q <path>` — exit 0 ⇒ ignored. We pass `--no-index`
+/// so a path that is *tracked* but matches an ignore rule still reports
+/// its ignore status (we OR this with the generated-path heuristic; a
+/// tracked-but-ignored build output is exactly the intermediate case we
+/// want to catch). Any spawn/other error ⇒ treat as not-ignored (fail
+/// open). trace:TASK-480 | ai:claude
+fn git_path_is_ignored(project_root: &std::path::Path, path: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["check-ignore", "-q", "--no-index", path])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod task_471_stale_base_preflight_tests {
     use super::*;
@@ -35400,6 +35484,66 @@ mod task_471_stale_base_preflight_tests {
             String::from_utf8_lossy(&out.stderr)
         );
         String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    // --- TASK-480: intermediate-only gitignore-backed wiring ---
+
+    #[test]
+    fn git_path_is_ignored_honors_dot_gitignore() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "-q"]);
+        std::fs::write(repo.join(".gitignore"), "generated/\n*.gen.rs\n").unwrap();
+
+        assert!(git_path_is_ignored(repo, "generated/api.rs"));
+        assert!(git_path_is_ignored(repo, "foo.gen.rs"));
+        assert!(!git_path_is_ignored(repo, "src/main.rs"));
+    }
+
+    #[test]
+    fn classify_with_gitignore_refuses_project_specific_generated_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "-q"]);
+        // A project-specific generated dir NOT in the built-in heuristic
+        // list, only known via the project's own .gitignore.
+        std::fs::write(repo.join(".gitignore"), "proto-gen/\n").unwrap();
+
+        let only_generated = vec!["proto-gen/api.pb.rs".to_string()];
+        assert!(matches!(
+            classify_intermediate_only_with_gitignore(repo, &only_generated),
+            pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { .. }
+        ));
+
+        let with_source = vec![
+            "proto-gen/api.pb.rs".to_string(),
+            "src/handler.rs".to_string(),
+            "src/lib.rs".to_string(),
+        ];
+        // 1 intermediate : 2 source → minority → clean.
+        assert_eq!(
+            classify_intermediate_only_with_gitignore(repo, &with_source),
+            pr_rebase::IntermediateOnlyOutcome::Clean
+        );
+    }
+
+    #[test]
+    fn classify_with_gitignore_refuses_heuristic_target_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "-q"]);
+        // Empty .gitignore — the target/ refusal must come from the
+        // built-in heuristic, not the project's ignore rules.
+        std::fs::write(repo.join(".gitignore"), "\n").unwrap();
+
+        let only_target = vec![
+            "target/debug/foo.bin".to_string(),
+            "target/release/aida".to_string(),
+        ];
+        assert!(matches!(
+            classify_intermediate_only_with_gitignore(repo, &only_target),
+            pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { .. }
+        ));
     }
 
     #[cfg(unix)]
@@ -73979,6 +74123,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             calibrate,
             no_calibrate,
             allow_stale_base,
+            allow_intermediate_only,
             no_auto_rebase,
             complexity,
             assist_est,
@@ -74252,6 +74397,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if let Some(m) = phase_ceiling_minutes {
                     std::env::set_var("AIDA_PHASE_CEILING_MINUTES", m.to_string());
                 }
+                // TASK-480: propagate the intermediate-only opt-out to the
+                // orchestrator phase-3 reviewer pre-flight via an env var
+                // (same pattern as the BUG-420 watchdog flags) so we don't
+                // thread the bool through every batch/nextN/auto-complete
+                // handler signature. The single-spec `handle_queue_work`
+                // path below also receives it explicitly.
+                // trace:TASK-480 | ai:claude
+                if *allow_intermediate_only {
+                    std::env::set_var("AIDA_ALLOW_INTERMEDIATE_ONLY", "1");
+                }
                 // STORY-492: `--resume-drain` is its own entry — read the crashed
                 // drain-state, gate on PID-liveness, reconcile from reality, and
                 // re-enter (or `--dry-run` preview). It never returns. Routed
@@ -74520,6 +74675,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // STORY-281: opt out of the reviewer pre-flight stale-base
                 // refusal. trace:STORY-281 | ai:claude
                 *allow_stale_base,
+                // TASK-480: opt out of the reviewer pre-flight
+                // intermediate-only refusal. trace:TASK-480 | ai:claude
+                *allow_intermediate_only,
                 // STORY-439: pickup-time calibration capture. Each value
                 // writes to .aida/complexity-calibration/<SPEC>.yaml AND
                 // stamps a tag on the spec.
@@ -75591,6 +75749,7 @@ fn handle_queue_rework(
             /* batch_name */ None,
             /* quiet */ false,
             /* allow_stale_base */ false,
+            /* allow_intermediate_only */ false,
             /* complexity */ None,
             /* assist_est */ None,
             /* effort */ None,
@@ -76424,6 +76583,10 @@ fn handle_queue_work(
     // Only meaningful when scope resolves to a PR + role is reviewer;
     // ignored on every other pickup. trace:STORY-281 | ai:claude
     allow_stale_base: bool,
+    // TASK-480: opt out of the reviewer pre-flight intermediate-only
+    // refusal. Same scoping as allow_stale_base — only meaningful for a
+    // reviewer pickup of a GitHub PR. trace:TASK-480 | ai:claude
+    allow_intermediate_only: bool,
     // STORY-439: pickup-time complexity + assistance estimate. Each
     // value writes a slot to `.aida/complexity-calibration/<SPEC>.yaml`
     // AND stamps a `complexity:<level>` / `estimated-assistance:<level>`
@@ -76624,6 +76787,63 @@ fn handle_queue_work(
                     Err(e) => {
                         eprintln!(
                             "  {} pre-flight stale-base check for PR-{pr_n} failed \
+                             ({e}); proceeding with reviewer",
+                            "⚠".yellow().bold()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // TASK-480: reviewer pre-flight intermediate-only check. Sibling
+    // substrate-as-bouncer gate to the STORY-281 stale-base refusal
+    // above — same scoping (reviewer + GitHub PR + launching). Refuses a
+    // PR whose diff is exclusively intermediate/generated paths (build
+    // outputs, gitignored files, lockfiles with no source change)
+    // because such a fix is not reproducible. The check is a
+    // PROGRAMMATIC GATE here, not skill-template instruction text
+    // (BUG-280-class lesson). Fails open on infra error.
+    //
+    //   Clean                   → silent proceed
+    //   SourcePlusIntermediate  → warning, proceed (flag-but-allow)
+    //   IntermediateOnly        → refuse unless --allow-intermediate-only
+    //
+    // trace:TASK-480 | ai:claude
+    if !no_launch && role == "reviewer" {
+        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+            if let Some(root) = project_root_for_config.as_deref() {
+                let allow = allow_intermediate_only
+                    || std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
+                        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                        .unwrap_or(false);
+                match preflight_intermediate_only_check(root, pr_n) {
+                    Ok(pr_rebase::IntermediateOnlyOutcome::Clean) => {}
+                    Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate {
+                        intermediate,
+                    }) => {
+                        eprintln!(
+                            "  {} {}",
+                            "⚠".yellow().bold(),
+                            pr_rebase::intermediate_only_warn_message(pr_n, &intermediate).yellow()
+                        );
+                    }
+                    Ok(pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { intermediate }) => {
+                        let msg = pr_rebase::intermediate_only_block_message(pr_n, &intermediate);
+                        if allow {
+                            eprintln!(
+                                "  {} intermediate-only diff detected; \
+                                 `--allow-intermediate-only` is set, proceeding.\n{}",
+                                "⚠".yellow().bold(),
+                                msg.yellow()
+                            );
+                        } else {
+                            anyhow::bail!(msg);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "  {} pre-flight intermediate-only check for PR-{pr_n} failed \
                              ({e}); proceeding with reviewer",
                             "⚠".yellow().bold()
                         );
@@ -83477,6 +83697,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         "⚠".yellow().bold()
                     );
                     break;
+                }
+            }
+        }
+
+        // TASK-480: pre-flight intermediate-only check — sibling
+        // substrate-as-bouncer gate to the stale-base loop above. Refuse
+        // the reviewer (park NeedsAttention via PhaseFailure) when the
+        // PR's diff is exclusively intermediate/generated paths, because
+        // the fix is not reproducible. `--allow-intermediate-only`
+        // (env `AIDA_ALLOW_INTERMEDIATE_ONLY`) opts out. Fails open on
+        // infra error, same as stale-base. trace:TASK-480 | ai:claude
+        {
+            let allow = std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            match preflight_intermediate_only_check(&self.project_root, pr as u64) {
+                Ok(pr_rebase::IntermediateOnlyOutcome::Clean) => {}
+                Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate { intermediate }) => {
+                    eprintln!(
+                        "  {} {}",
+                        "⚠".yellow().bold(),
+                        pr_rebase::intermediate_only_warn_message(pr as u64, &intermediate)
+                            .yellow()
+                    );
+                }
+                Ok(pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { intermediate }) => {
+                    let msg = pr_rebase::intermediate_only_block_message(pr as u64, &intermediate);
+                    if allow {
+                        eprintln!(
+                            "  {} intermediate-only diff detected; \
+                             `--allow-intermediate-only` set, proceeding.\n{}",
+                            "⚠".yellow().bold(),
+                            msg.yellow()
+                        );
+                    } else {
+                        return Err(auto_complete::PhaseFailure::new(msg));
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  {} pre-flight intermediate-only check failed ({e}); \
+                         proceeding with reviewer",
+                        "⚠".yellow().bold()
+                    );
                 }
             }
         }
