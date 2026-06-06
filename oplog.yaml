@@ -14631,5 +14631,18 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER until post-stability + a concrete remote/cloud-agent need — opening a network transport with token auth + audit log is exactly the new security surface to hold during the bugs-first phase (the High-priority tag predates that decision). When built, pair with STORY-474 profiles so a read-only profile is the default exposed over HTTP.
-clock: 1517
+- id: 019e9d3f-34ba-74e1-a011-97fd9021dced
+  target_id: 019e683a-359c-7a73-a6ec-cbbf76fad2b4
+  author: aida
+  node_id: '1'
+  lamport: 1518
+  timestamp: 2026-06-06T14:03:45.722610553Z
+  kind: !SetDescription
+    description: |
+      Productize AIDA's dogfood telemetry into a report that proves coordination value. Acceptance: aida metrics agent-lift --since <window> reports manual interventions per drain, stale-base recoveries, unshipped commits caught, brief-to-PR time, auto-bump success rate, coordinated agent count, and trace coverage where available; markdown export supports release notes/case studies; docs explain metric limitations.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER to the marketing phase — its explicit purpose is dogfood-proof / case-study / release-note material, which is exactly the deferred marketing phase. Nothing downstream is blocked today. The telemetry substrate exists, so it's a quick reporting layer when the time comes.
+clock: 1518
 node_id: '1'
