@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:46:38.055787185Z
-modified_at: 2026-06-06T08:18:21.072754111Z
+modified_at: 2026-06-06T14:25:49.458595001Z
 req_type: Task
 tags:
 - aida-pickup-gap
@@ -31,3 +31,8 @@ comments:
       REC: a — minimal, reuses existing human_only substrate, matches the empirical 'implementer correctly bailed' behavior; (b) can follow if demand appears.
   created_at: 2026-06-06T08:18:17.256891859Z
   modified_at: 2026-06-06T08:18:17.256891859Z
+- id: 019e9d53-6792-7100-ba38-c47c539aae14
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Auto-set human_only on type=Spike (unless explicitly overridden) — reuses the STORY-333 human_only primitive, matches the empirical ''implementer correctly bailed on a research head'' behavior, and keeps research human-driven. A dedicated research playbook (ultraplan + experimental-design walkthrough) is a possible follow-up if demand appears, not part of this fix.'
+  created_at: 2026-06-06T14:25:49.458595001Z
+  modified_at: 2026-06-06T14:25:49.458595001Z
