@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:25.766156033Z
-modified_at: 2026-05-17T05:17:25.766156033Z
+modified_at: 2026-06-06T08:35:32.553147643Z
 req_type: Task
 tags:
 - aida-no-human-env
@@ -45,3 +45,9 @@ tags:
 - auto-complete-followup
 - headless
 - skill-templates
+comments:
+- id: 019e9c12-b649-7831-baa2-1608e13dff1a
+  author: joe
+  content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded audit-and-harden of skill templates for headless mode: add AIDA_NO_HUMAN=1 paths (auto-confirm/skip/punt) to interactive skills. On-phase orchestrator-reliability work, enumerated skill list, no open decision.'
+  created_at: 2026-06-06T08:35:32.553147643Z
+  modified_at: 2026-06-06T08:35:32.553147643Z
