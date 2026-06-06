@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:07:39.591015455Z
-modified_at: 2026-06-05T20:07:48.611324691Z
+modified_at: 2026-06-06T08:30:02.621727524Z
 req_type: Epic
 tags:
 - batch:mcp-gate-parity
@@ -29,3 +29,14 @@ relationships:
 - rel_type: Parent
   target_id: 019e996e-a694-7be0-8678-03d74bb6a525
   created_at: 2026-06-05T20:17:13.891430643Z
+comments:
+- id: 019e9c0d-ad7d-74e2-b4e4-409afd2ae2e0
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Both current members (BUG-449, TASK-673) are Completed. Do we close EPIC-38 or commission the proposed audit of all mutating MCP tools (update_requirement done; add_relationship/add_comment/punt/… unaudited) for missing authority/lifecycle gates?
+      a) Commission the full audit now as a child task — substrate-as-bouncer invariant must hold at EVERY MCP surface, not just the two fixed so far.
+      b) Close EPIC-38 as drained; file individual bugs reactively if a specific MCP tool is found bypassing a gate.
+      REC: a — this is an active do-now epic and the gate is security-relevant (agent self-completion on uncommitted code was the BUG-449 failure mode); a single bounded audit of the remaining mutating tools is cheaper than per-incident discovery. The open decision (audit vs close) is why this is human.
+  created_at: 2026-06-06T08:30:02.621727524Z
+  modified_at: 2026-06-06T08:30:02.621727524Z
