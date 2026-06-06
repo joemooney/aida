@@ -3883,6 +3883,73 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
                 Ok(())
             }
         },
+        // Human-intervention maturity report: count of escalate-to-human punt
+        // records, rolled up per day. The honest maturity signal — the count
+        // trending toward zero shows the autonomy investment paying off.
+        // (Operator decision 2026-06-06: ship the intervention-count only;
+        // the availability-polluted duration fraction is skipped.)
+        // trace:TASK-340 | ai:claude
+        AutonomyCommand::Report { last, json } => {
+            let project_root = find_project_root()?;
+            let records = punt::read_ledger(&project_root);
+            let days = punt::human_interventions_by_day(&records);
+            let total = punt::total_human_interventions(&records);
+
+            if *json {
+                let capped: Vec<&punt::AutonomyDay> = days.iter().take(*last).collect();
+                let payload = serde_json::json!({
+                    "total_human_interventions": total,
+                    "days": capped,
+                });
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+                return Ok(());
+            }
+
+            println!("{}", "Autonomy maturity — human interventions".bold());
+            println!(
+                "  {}",
+                "count of escalate-to-human punt decisions, per day (newest first)".dimmed()
+            );
+            println!();
+
+            if days.is_empty() {
+                println!(
+                    "  {}",
+                    "No human interventions recorded — no drain has escalated to a human yet."
+                        .green()
+                );
+                println!(
+                    "  {}",
+                    "interventions are escalate-to-human records in .aida/punts.jsonl".dimmed()
+                );
+                return Ok(());
+            }
+
+            println!("  {:<12} {}", "DATE".dimmed(), "INTERVENTIONS".dimmed());
+            for day in days.iter().take(*last) {
+                println!(
+                    "  {:<12} {}",
+                    day.date,
+                    day.interventions.to_string().bold()
+                );
+            }
+            println!();
+            println!(
+                "  {} {} across {} day{}",
+                "Total:".bold(),
+                total.to_string().bold(),
+                days.len(),
+                if days.len() == 1 { "" } else { "s" },
+            );
+            println!(
+                "  {}",
+                "the count trending toward zero is the maturity signal; \
+                 it is NOT polluted by human-availability latency the way a \
+                 raw duration fraction would be"
+                    .dimmed()
+            );
+            Ok(())
+        }
     }
 }
 /// Add a promoted finding to a role's work queue.
