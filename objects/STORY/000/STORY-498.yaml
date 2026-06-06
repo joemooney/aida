@@ -16,12 +16,12 @@ description: |-
   - Mechanical/release/docs commits with no REQ-ID are exempt by the existing audited rule, not silently skipped.
   - Verify the criteria in the PRIMARY CALLER environment: GitHub PR CI on a real branch, not just a local unit test.
   trace:self
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:08.739188377Z
-modified_at: 2026-06-06T08:30:48.464637960Z
+modified_at: 2026-06-06T19:29:51.568754728Z
 req_type: Story
 tags:
 - ci-gate
@@ -39,3 +39,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). MVP slice of EPIC-34 — a server-side PR-CI check that walks branch commit trailers, resolves each (SPEC-ID) against the live graph, and fails on dangling/dead/nonexistent ids; buildable from the existing trailer parser + TASK-488 mechanical-commit exemption, no open design question.
   created_at: 2026-06-06T08:30:47.212435656Z
   modified_at: 2026-06-06T08:30:47.212435656Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T19:29:51.568754728Z
+  completion_sha: ea6cad3aaf41bb4f818c5f8c799e1c0c417843cb
