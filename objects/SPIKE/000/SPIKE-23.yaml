@@ -14,9 +14,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:22:36.086909551Z
-modified_at: 2026-05-29T03:22:36.086909551Z
+modified_at: 2026-06-06T04:16:13.418972726Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
 - claude-code-2.1.154
 - plugins
+archived: true
+archived_at: 2026-06-06T04:16:13.418972726Z
