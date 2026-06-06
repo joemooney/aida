@@ -57462,7 +57462,7 @@ mod queue_work_tests {
         let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "reviewer"),
+            derive_queue_work_prompt(&plan, "reviewer", false),
             "/aida-review --pr 11"
         );
     }
@@ -57472,7 +57472,10 @@ mod queue_work_tests {
     fn prompt_reviewer_non_pr_is_bare() {
         let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
-        assert_eq!(derive_queue_work_prompt(&plan, "reviewer"), "/aida-review");
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "reviewer", false),
+            "/aida-review"
+        );
     }
 
     /// Implementer + item mode → `/aida-pickup <ID>` (focus directive).
@@ -57488,7 +57491,7 @@ mod queue_work_tests {
             anchor_title: "title".into(),
         };
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer"),
+            derive_queue_work_prompt(&plan, "implementer", false),
             "/aida-pickup BUG-83"
         );
     }
@@ -57501,7 +57504,7 @@ mod queue_work_tests {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer"),
+            derive_queue_work_prompt(&plan, "implementer", false),
             "/aida-pickup --auto-first"
         );
     }
@@ -57515,9 +57518,42 @@ mod queue_work_tests {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer"),
+            derive_queue_work_prompt(&plan, "implementer", false),
             "/aida-pickup --auto-first"
         );
+    }
+
+    /// STORY-265: plan-only mode runs /aida-plan (not /aida-pickup) with the
+    /// item focus, so the session writes a plan instead of implementing.
+    #[test]
+    fn prompt_plan_only_runs_aida_plan() {
+        let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = QueueWorkPlan {
+            mode: QueueWorkMode::Item,
+            entries: vec![e],
+            scope: "EPIC-20".into(),
+            review_target: None,
+            anchor_display: "BUG-83".into(),
+            anchor_title: "title".into(),
+        };
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "implementer", true),
+            "/aida-plan BUG-83"
+        );
+    }
+
+    /// STORY-265: plan-only defaults the permission mode to `plan` (read-only),
+    /// overriding env/config/bypass — but an explicit --permission-mode wins.
+    #[test]
+    fn plan_only_defaults_permission_to_plan_but_flag_wins() {
+        // no explicit flag: plan-only forces read-only `plan` even with bypass on
+        let (m, o) = resolve_queue_work_permission_mode(None, Some("auto"), None, true, true);
+        assert_eq!(m.as_deref(), Some("plan"));
+        assert!(o.contains("plan-only"));
+        // explicit --permission-mode flag still wins over plan-only
+        let (m, _) =
+            resolve_queue_work_permission_mode(Some("acceptEdits"), None, None, false, true);
+        assert_eq!(m.as_deref(), Some("acceptEdits"));
     }
 
     /// Title shape "Review PR-11: …" overrides for_scope and parent
@@ -57679,8 +57715,13 @@ mod queue_work_tests {
     /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_flag_wins() {
-        let (m, o) =
-            resolve_queue_work_permission_mode(Some("plan"), Some("auto"), Some("default"), true);
+        let (m, o) = resolve_queue_work_permission_mode(
+            Some("plan"),
+            Some("auto"),
+            Some("default"),
+            true,
+            false,
+        );
         assert_eq!(m.as_deref(), Some("plan"));
         assert_eq!(o, "--permission-mode flag");
     }
@@ -57689,7 +57730,8 @@ mod queue_work_tests {
     /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_env_beats_config() {
-        let (m, o) = resolve_queue_work_permission_mode(None, Some("auto"), Some("default"), true);
+        let (m, o) =
+            resolve_queue_work_permission_mode(None, Some("auto"), Some("default"), true, false);
         assert_eq!(m.as_deref(), Some("auto"));
         assert_eq!(o, "AIDA_PERMISSION_MODE env");
     }
@@ -57698,7 +57740,8 @@ mod queue_work_tests {
     /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_config_beats_worktree_default() {
-        let (m, o) = resolve_queue_work_permission_mode(None, None, Some("acceptEdits"), true);
+        let (m, o) =
+            resolve_queue_work_permission_mode(None, None, Some("acceptEdits"), true, false);
         assert_eq!(m.as_deref(), Some("acceptEdits"));
         assert_eq!(o, ".aida/config.toml");
     }
@@ -57707,7 +57750,7 @@ mod queue_work_tests {
     /// bypassPermissions. trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_bypass_knob_injects_bypass() {
-        let (m, o) = resolve_queue_work_permission_mode(None, None, None, true);
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, true, false);
         assert_eq!(m.as_deref(), Some("bypassPermissions"));
         assert_eq!(o, "[agents] bypass knob");
     }
@@ -57717,7 +57760,7 @@ mod queue_work_tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_faithful_default_is_native() {
-        let (m, o) = resolve_queue_work_permission_mode(None, None, None, false);
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, false, false);
         assert_eq!(m, None);
         assert_eq!(o, "native (faithful default)");
     }
@@ -57727,7 +57770,7 @@ mod queue_work_tests {
     /// resolution falls through to the bypass knob. trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_empty_strings_are_ignored() {
-        let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true);
+        let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true, false);
         assert_eq!(m.as_deref(), Some("bypassPermissions"));
         assert_eq!(o, "[agents] bypass knob");
     }
@@ -58435,7 +58478,7 @@ mod queue_work_tests {
             "PR-N pickup must set review_target so it routes to the reviewer"
         );
         assert_eq!(
-            derive_queue_work_prompt(&plan, "reviewer"),
+            derive_queue_work_prompt(&plan, "reviewer", false),
             "/aida-review --pr 457"
         );
     }
@@ -72143,6 +72186,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             count,
             permission_mode,
             no_launch,
+            plan_only,
             role,
             no_pull,
             type_filter,
@@ -72675,6 +72719,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 *assist_est,
                 *effort,
                 *strict,
+                // STORY-265: plan-only mode — launch /aida-plan in `plan`
+                // permission mode instead of /aida-pickup implement.
+                *plan_only,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -73740,6 +73787,7 @@ fn handle_queue_rework(
             /* assist_est */ None,
             /* effort */ None,
             /* strict */ false,
+            /* plan_only */ false,
         )?;
     } else {
         println!(
@@ -74485,13 +74533,22 @@ fn infer_queue_work_role(
 ///                argument) still pauses to confirm.
 ///                trace:TASK-86 trace:TASK-548 | ai:claude
 /// trace:STORY-42 | ai:claude
-fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
+fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str, plan_only: bool) -> String {
     let role_lower = role.to_ascii_lowercase();
     if role_lower == "reviewer" {
         if let Some((_, n)) = plan.review_target {
             return format!("/aida-review --pr {}", n);
         }
         return "/aida-review".to_string();
+    }
+    // STORY-265: plan-only mode runs the planning skill instead of pickup —
+    // produce a docs/plans/ file, no code. (Reviewer handled above; plan-only
+    // is an implementer-side mode.)
+    if plan_only {
+        if plan.mode == QueueWorkMode::Item {
+            return format!("/aida-plan {}", plan.anchor_display);
+        }
+        return "/aida-plan".to_string();
     }
     // Implementer (and unknown roles): /aida-pickup with optional focus.
     if plan.mode == QueueWorkMode::Item {
@@ -74570,6 +74627,11 @@ fn handle_queue_work(
     effort: Option<effort_calibration::EffortBucket>,
     // trace:TASK-547 | ai:antigravity
     strict: bool,
+    // STORY-265: plan-only mode — run /aida-plan (not /aida-pickup) in `plan`
+    // permission mode so the session writes a docs/plans/ file without
+    // touching code; promote Approved -> Planned afterward via
+    // `aida plan promote`. trace:STORY-265 | ai:claude
+    plan_only: bool,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -74700,12 +74762,13 @@ fn handle_queue_work(
         env_mode.as_deref(),
         config_mode.as_deref(),
         bypass_knob,
+        plan_only,
     );
     if permission_mode.is_none() {
         maybe_show_faithful_launcher_notice();
     }
 
-    let prompt = derive_queue_work_prompt(&plan, &role);
+    let prompt = derive_queue_work_prompt(&plan, &role, plan_only);
 
     // STORY-281: reviewer pre-flight stale-base check. Fires only when
     // the resolved scope is a GitHub PR AND the inferred role is the
@@ -82646,9 +82709,17 @@ fn resolve_queue_work_permission_mode(
     env: Option<&str>,
     config: Option<&str>,
     bypass_knob: bool,
+    plan_only: bool,
 ) -> (Option<String>, &'static str) {
     if let Some(m) = flag.filter(|s| !s.is_empty()) {
         return (Some(m.to_string()), "--permission-mode flag");
+    }
+    // STORY-265: a plan-only session is read-only by default — it writes a
+    // docs/plans/ file, not code. An explicit --permission-mode flag (above)
+    // still wins; otherwise `plan` overrides env/config/bypass so the planning
+    // session can't edit code even on a bypass-by-default project.
+    if plan_only {
+        return (Some("plan".to_string()), "--plan-only (read-only default)");
     }
     if let Some(m) = env.filter(|s| !s.is_empty()) {
         return (Some(m.to_string()), "AIDA_PERMISSION_MODE env");
