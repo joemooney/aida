@@ -3253,24 +3253,41 @@ pub enum QueueCommand {
             value_name = "MODE",
             num_args = 0..=1,
             default_missing_value = "full",
+            group = "autonomous",
             conflicts_with_all = [
                 "no_launch", "fresh", "list_sessions",
                 "dry_run", "type_filter",
             ]
         )]
         auto_complete: Option<String>,
+        /// Drain the queue: try to ship every drivable queued item in order,
+        /// fully autonomously, skipping items that can't be driven (blocked,
+        /// human-only, already in flight). A discoverable shorthand for
+        /// `--auto-complete --no-human=both --max <queue-size>`. Composes with
+        /// `--batch` (drain that batch instead of the whole queue) and
+        /// `--max-failures` (cap the shelving budget). Explicit `--auto-complete`,
+        /// `--no-human`, or `--max` flags override the shorthand's defaults.
+        // trace:TASK-578 | ai:claude — plain `//` keeps the marker out of `--help`.
+        // `group = "autonomous"` lets `--drain` satisfy the `requires` on the
+        // auto-complete-only flags (`--max-failures`, `--json`, …) the same way
+        // an explicit `--auto-complete` does. trace:TASK-578 | ai:claude
+        #[clap(long, group = "autonomous")]
+        drain: bool,
         /// With `--auto-complete`: emit one JSON line per phase transition
         /// on stdout (machine-readable progress for TUI / scripting) instead
         /// of the human-readable progress lines.
         // trace:STORY-246 | ai:claude
-        #[clap(long, requires = "auto_complete")]
+        // TASK-578: `requires = "autonomous"` so `--drain` (a group member)
+        // satisfies it the same way `--auto-complete` does.
+        #[clap(long, requires = "autonomous")]
         json: bool,
         /// With `--batch NAME --auto-complete`: stop the batch drain after
         /// N members ship, even when the batch has more queued. Without it
         /// the drain runs until the batch is empty for the role. Only
         /// meaningful for a batch drain.
         // trace:TASK-285 | ai:claude
-        #[clap(long, value_name = "N", requires = "auto_complete")]
+        // trace:TASK-578 — `requires = "autonomous"` so `--drain` satisfies it.
+        #[clap(long, value_name = "N", requires = "autonomous")]
         max: Option<usize>,
         /// With `--auto-complete`: after this many phase failures shelve in
         /// a single batch, stop the drain entirely rather than continue
@@ -3280,20 +3297,24 @@ pub enum QueueCommand {
         /// Per-batch — a `--batches A,B,C` chain gets an independent budget
         /// for each.
         // trace:EPIC-28 | ai:claude
-        #[clap(long, value_name = "N", requires = "auto_complete")]
+        // trace:TASK-578 — `requires = "autonomous"` so `--drain --max-failures`
+        // composes (the spec's named composition case).
+        #[clap(long, value_name = "N", requires = "autonomous")]
         max_failures: Option<usize>,
         /// With `--auto-complete`: minutes a *headless* phase may make no
         /// commit / file-change before the watchdog kills + shelves it (a
         /// degenerate echo/sleep spin). Default 10; `0` disables. Overrides
         /// `[drain] no_progress_minutes`.
         // trace:BUG-420 | ai:claude
-        #[clap(long, value_name = "MIN", requires = "auto_complete")]
+        // trace:TASK-578 — `requires = "autonomous"` so `--drain` satisfies it.
+        #[clap(long, value_name = "MIN", requires = "autonomous")]
         no_progress_minutes: Option<u64>,
         /// With `--auto-complete`: hard wall-clock ceiling (minutes) per
         /// *headless* phase — a backstop in case progress-detection misses.
         /// Default 45; `0` disables. Overrides `[drain] phase_ceiling_minutes`.
         // trace:BUG-420 | ai:claude
-        #[clap(long, value_name = "MIN", requires = "auto_complete")]
+        // trace:TASK-578 — `requires = "autonomous"` so `--drain` satisfies it.
+        #[clap(long, value_name = "MIN", requires = "autonomous")]
         phase_ceiling_minutes: Option<u64>,
         /// Resume a crashed `--auto-complete` drain from `.aida/drain-state.json`
         /// instead of starting fresh. Probes git/PR/spec reality to re-enter at
