@@ -35,11 +35,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:44:33.617630390Z
-modified_at: 2026-06-05T23:03:29.889797045Z
+modified_at: 2026-06-06T04:53:02.398258842Z
 req_type: Task
 tags:
 - aida:queue
 - batch:burndown-1
+- batch:burndown-2
 - batch:onboarding-hardening
 - from-self-test
 - onboarding
