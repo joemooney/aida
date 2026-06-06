@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:36:26.089388165Z
-modified_at: 2026-05-16T16:36:26.089388165Z
+modified_at: 2026-06-06T08:35:36.221059126Z
 req_type: Task
 tags:
 - auto-complete
@@ -18,3 +18,9 @@ relationships:
 - rel_type: Child
   target_id: 019e2f35-3d80-7da2-893e-65bd6aa6e144
   created_at: 2026-05-16T16:36:28.628378158Z
+comments:
+- id: 019e9c12-c49d-7da2-84f4-968565ce94c9
+  author: joe
+  content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Tech-debt test gap: add coverage for RealPhaseDriver subprocess wiring (discover_new_lease 0/1/N, read_verdict_file malformed/missing, ensure_queued idempotence, or fake-claude e2e smoke). Well-scoped, on-phase (stability), no open decision.'
+  created_at: 2026-06-06T08:35:36.221059126Z
+  modified_at: 2026-06-06T08:35:36.221059126Z
