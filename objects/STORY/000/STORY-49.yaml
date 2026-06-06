@@ -13,9 +13,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:30:50.120081171Z
-modified_at: 2026-05-10T02:30:50.120081171Z
+modified_at: 2026-06-06T08:36:23.296970650Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e0fa6-72a0-7e83-9705-ce293487413d
   created_at: 2026-05-10T02:30:50.839851018Z
+comments:
+- id: 019e9c13-7c80-73c0-8c9b-e914fdf71817
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: `aida store checkout <code-sha>` time-travel is unimplemented (store has only status/install-hook). The v1 pairing trailer (`Aida-Store:`) + `aida store status` shipped, but is read-only time-travel of the orphan worktree worth building under the current git-canonical model?
+      a) Implement: `aida store checkout HEAD` resets .aida-store/ to the commit's paired SHA (read-only), `aida store reset` returns to canonical HEAD, with aida status drift warnings.
+      b) Reject — niche capability (reproduce store-as-of-an-old-code-commit) with no demonstrated demand; the pairing trailer already records the linkage for forensic lookup without a live checkout.
+      c) Build only the `aida status` drift warning (the cheap, high-signal half) and defer the actual worktree checkout.
+      REC: c — drift visibility is low-cost and useful; the full read-only-checkout mechanism is complexity (rewound-store write-branch hazards the spec itself flags) without a concrete caller asking for it.
+  created_at: 2026-06-06T08:36:23.296970650Z
+  modified_at: 2026-06-06T08:36:23.296970650Z
