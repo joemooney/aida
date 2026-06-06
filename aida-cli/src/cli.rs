@@ -5788,7 +5788,8 @@ pub enum Command {
 
     /// Initialize AIDA in the current project
     Init {
-        /// Skip generating agent skills and commands (.claude/* and .codex/skills/*)
+        /// Skip generating agent skills and commands (.claude/*, .codex/skills/*, and .antigravity/skills/*)
+        // trace:TASK-457 | ai:claude
         #[clap(long)]
         no_skills: bool,
 
