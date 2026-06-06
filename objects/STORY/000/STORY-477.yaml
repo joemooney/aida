@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:58:25.820595517Z
-modified_at: 2026-06-06T14:03:48.434339867Z
+modified_at: 2026-06-06T14:03:50.890585993Z
 req_type: Story
 tags:
 - agent-lift
@@ -21,7 +21,6 @@ tags:
 - deferred:post-stability
 - marketplace
 - metrics
-- needs-human-input
 - telemetry
 relationships:
 - rel_type: Child
