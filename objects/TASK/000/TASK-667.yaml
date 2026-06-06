@@ -25,12 +25,12 @@ description: |-
   ## Notes
   - Resolves the manual workaround behind memory feedback_no_eval_role_enter. The env var also lets the binary make other wrapper-aware decisions later (it can know its eval-output will actually take effect in the caller's shell).
   - Relates to TASK-645 (init role surfacing), TASK-644 (role picker) — both emit role-enter hints.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T17:30:24.591085057Z
-modified_at: 2026-06-06T08:20:41.881119609Z
+modified_at: 2026-06-06T17:53:48.427474746Z
 req_type: Task
 tags:
 - aida:role:enter
@@ -47,3 +47,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). AIDA_SHELL_WRAPPER env marker (set by shell-init template) + one eval_subcommand_hint helper so the binary emits bare vs eval form correctly. Fixes the double-eval footgun; sites named.
   created_at: 2026-06-06T08:15:07.140333530Z
   modified_at: 2026-06-06T08:15:07.140333530Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T17:53:48.427474746Z
+  completion_sha: 72050d9004d11b3f80a1a9aabefb9d59322e1701
