@@ -35,10 +35,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T06:06:25.155058912Z
-modified_at: 2026-06-06T08:01:34.564855689Z
+modified_at: 2026-06-06T08:02:35.497855512Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-1
 - implementer
+comments:
+- id: 019e9bf4-8b69-7870-83e3-fe9008b10910
+  author: joe
+  content: 'Rejected (disposition sweep 2026-06-06): stale auto-drafted drain-failure breadcrumb. The referenced task has since shipped (Completed), been Rejected, or been deliberately deferred; the underlying orchestrator failure modes were fixed this cycle (BUG-453/459/460/462). No standing work.'
+  created_at: 2026-06-06T08:02:35.497855512Z
+  modified_at: 2026-06-06T08:02:35.497855512Z
