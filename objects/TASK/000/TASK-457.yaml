@@ -29,12 +29,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   ALWAYS scaffold .antigravity/ alongside .codex/ (no new flag) — --no-skills skips both consistently. Low-blast-radius onboarding parity for a second supported agent (NOT marketing). A selective --agents= flag is speculative until a user asks for selectivity. Mirror the .codex/ template structure + reference docs/agents/antigravity-mcp-setup.md.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:11.174903400Z
-modified_at: 2026-06-06T15:12:32.142822010Z
+modified_at: 2026-06-06T23:13:43.505906376Z
 req_type: Task
 tags:
 - agent-integration
@@ -79,3 +79,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): ALWAYS scaffold .antigravity/ alongside .codex/ (no new flag) — --no-skills skips both consistently. Low-blast-radius onboarding parity for a second supported agent (NOT marketing). A selective --agents= flag is speculative until a user asks for selectivity. Mirror the .codex/ template structure + reference docs/agents/antigravity-mcp-setup.md.'
   created_at: 2026-06-06T15:12:24.683359255Z
   modified_at: 2026-06-06T15:12:24.683359255Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T23:13:43.505906376Z
+  completion_sha: 7b306e94e6eb2a98f6235e6c22043879dd4a3683
