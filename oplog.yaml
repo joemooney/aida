@@ -15383,5 +15383,18 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Build the MINIMAL slice: a 'base is N behind origin/main' WARNING at worktree creation (no auto-pull), pointing at 'aida rebase'. Closes the visibility half of the original 2026-05-13 pain cheaply. Do NOT auto-pull (risks surprising the worktree) — the orchestrator drain (fresh main per-phase) + the rebase verb already own divergence handling.
-clock: 1547
+- id: 019e9d83-7a8d-7643-b260-bbb6be195dca
+  target_id: 019e6839-a52b-7bd3-9884-5fdf749557d2
+  author: aida
+  node_id: '1'
+  lamport: 1548
+  timestamp: 2026-06-06T15:18:20.045072049Z
+  kind: !SetDescription
+    description: |
+      Add lightweight external-reference support so AIDA specs can compose with PM systems without trying to replace them. Acceptance: specs can record validated refs such as linear:LIN-123, jira:PROJ-456, and github:owner/repo#123; aida show renders links via configured base URLs; MCP search/filter can find external refs; docs explain one-way refs as the default before any bidirectional sync.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER to the marketing/adoption phase — one-way external issue refs (linear:/jira:/github:) are a PM-integration feature, not a bug/stability item; consistent with deferring STORY-475. When built: the generic provider:id ref field (render via configured base URLs + MCP search, NO bidirectional sync) is the right bounded shape.
+clock: 1548
 node_id: '1'

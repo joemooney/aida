@@ -2,13 +2,18 @@ id: 019e6839-a52b-7bd3-9884-5fdf749557d2
 spec_id: STORY-476
 agreed_id: STORY-476
 title: External issue refs for Linear/Jira/GitHub composition
-description: 'Add lightweight external-reference support so AIDA specs can compose with PM systems without trying to replace them. Acceptance: specs can record validated refs such as linear:LIN-123, jira:PROJ-456, and github:owner/repo#123; aida show renders links via configured base URLs; MCP search/filter can find external refs; docs explain one-way refs as the default before any bidirectional sync.'
+description: |
+  Add lightweight external-reference support so AIDA specs can compose with PM systems without trying to replace them. Acceptance: specs can record validated refs such as linear:LIN-123, jira:PROJ-456, and github:owner/repo#123; aida show renders links via configured base URLs; MCP search/filter can find external refs; docs explain one-way refs as the default before any bidirectional sync.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER to the marketing/adoption phase — one-way external issue refs (linear:/jira:/github:) are a PM-integration feature, not a bug/stability item; consistent with deferring STORY-475. When built: the generic provider:id ref field (render via configured base URLs + MCP search, NO bidirectional sync) is the right bounded shape.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:57:48.843375306Z
-modified_at: 2026-06-06T15:18:17.516585870Z
+modified_at: 2026-06-06T15:18:20.027447705Z
 req_type: Story
 tags:
 - codex
