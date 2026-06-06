@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:30.825157935Z
-modified_at: 2026-05-21T02:19:30.825157935Z
+modified_at: 2026-06-06T08:35:14.371486773Z
 req_type: Story
 tags:
 - advisor
@@ -17,3 +17,15 @@ tags:
 - multi-project
 - sibling-initiation
 - track-a
+comments:
+- id: 019e9c12-6f43-7b53-b6a4-1196a997e7c6
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: This is a SPIKE-10 multi-project advisor-handoff feature (strategic, cross-project). Does it fit the current bug-clear→stability→marketing phase?
+      a) Defer until post-stability — it is net-new strategic surface, not a bug/stability item
+      b) Build now as a thin checked-in-brief generator (bounded: template + 5 sections, mostly operator-authored content) since it is low-blast-radius and advances the multi-vendor/substrate thesis the standing mandate calls out
+      c) Reject/fold into a single SPIKE-10 umbrella with STORY-362 and revisit both together when a real second project needs handoff
+      REC: a — strategic and clearly off the current phase; keep Approved as a backlog marker. No second-project demand is pulling it yet, so building now is speculative.
+  created_at: 2026-06-06T08:35:14.371486773Z
+  modified_at: 2026-06-06T08:35:14.371486773Z
