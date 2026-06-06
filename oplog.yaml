@@ -14891,5 +14891,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Ship the READ+ANSWER surface first: the DecisionRequest artifact + 'aida questions list/answer' (deterministic, bounded, immediately useful for async batch-answering — exactly today's sweep). DEFER the loop-resume auto-applier (couples to the orchestrator, design risk). HARD RULE: every choice must encode a deterministic resolution (status/tag/param) — never free-form; un-reducible forks stay advisor-tier escalations, not questions. (Do not promote to EPIC yet.)
-clock: 1530
+- id: 019e9d48-1781-7d30-8e6c-a0a3549c3abe
+  target_id: 019e9af8-9aa2-7913-b29e-60c9ef204038
+  author: aida
+  node_id: '1'
+  lamport: 1531
+  timestamp: 2026-06-06T14:13:28.065134023Z
+  kind: !SetStatus
+    status: Approved
+clock: 1531
 node_id: '1'
