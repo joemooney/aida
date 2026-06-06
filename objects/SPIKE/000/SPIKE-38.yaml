@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T06:48:48.340994675Z
-modified_at: 2026-05-29T06:48:48.340994675Z
+modified_at: 2026-06-06T08:38:08.932665249Z
 req_type: Spike
 tags:
 - claude-code-compose
@@ -16,3 +16,9 @@ tags:
 - from-strategic-recompose-round-2
 - priority:4
 - reviewer
+comments:
+- id: 019e9c15-1924-7d10-a699-6eb3c694ca7a
+  author: joe
+  content: Disposition sweep 2026-06-06 — ARCHIVED (parked, recoverable). Marketing/distribution (publish aida-review GitHub Action) blocked on a not-yet-existing marketplace entry; valid but phase-deferred. Parked.
+  created_at: 2026-06-06T08:38:08.932665249Z
+  modified_at: 2026-06-06T08:38:08.932665249Z
