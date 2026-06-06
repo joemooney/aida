@@ -49143,11 +49143,53 @@ fn render_in_flight_grouped(
             if no_commit.len() == 1 { "" } else { "s" }
         );
         println!("    {} {}", "◐".dimmed(), no_commit.join("  "));
-        println!(
-            "    {} commit the work with `({})` in the message, then open a PR",
-            "▶ Next:".bold(),
-            "SPEC-ID".cyan()
-        );
+        // TASK-671: name the real SPEC-ID (it's the payload the user must type
+        // into the commit trailer — an allowed user-facing id use per TASK-268),
+        // be remote-aware (no "open a PR" for a local-only project with no
+        // origin), and show a literal commit example so the trailer isn't
+        // dropped — the exact mistake that strands a spec in this state.
+        // trace:TASK-671 | ai:claude
+        let has_origin = aida_core::git_ops::has_remote(project_root, "origin");
+        if no_commit.len() == 1 {
+            let id = &no_commit[0];
+            if has_origin {
+                println!(
+                    "    {} commit your change with `({})` in the message, then open a PR — the merge auto-completes it.",
+                    "▶ Next:".bold(),
+                    id.cyan()
+                );
+            } else {
+                println!(
+                    "    {} commit your change with `({})` in the message — that auto-completes it on the next `{}`.",
+                    "▶ Next:".bold(),
+                    id.cyan(),
+                    "aida pull".cyan()
+                );
+            }
+            println!(
+                "            e.g.  {}",
+                format!("git commit -m \"... ({})\"", id).dimmed()
+            );
+        } else {
+            if has_origin {
+                println!(
+                    "    {} commit each with its own `({})` trailer in the message, then open a PR — the merge auto-completes each.",
+                    "▶ Next:".bold(),
+                    "SPEC-ID".cyan()
+                );
+            } else {
+                println!(
+                    "    {} commit each with its own `({})` trailer — that auto-completes each on the next `{}`.",
+                    "▶ Next:".bold(),
+                    "SPEC-ID".cyan(),
+                    "aida pull".cyan()
+                );
+            }
+            println!(
+                "            e.g.  {}",
+                "git commit -m \"... (SPEC-ID)\"".dimmed()
+            );
+        }
     }
 }
 
