@@ -102,7 +102,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:15:28.633295104Z
-modified_at: 2026-05-17T02:14:28.517461505Z
+modified_at: 2026-06-06T08:17:36.262291390Z
 req_type: Story
 tags:
 - advisor
@@ -128,3 +128,19 @@ comments:
     **Revisit trigger**: when a specific recurring activity is observed to slip (e.g., competitive analysis goes 6 months stale, or a friend asks \"when did you last review X?\"), file the specific schedule then. Don't pre-build infrastructure for hypothetical cadences.
   created_at: 2026-05-17T02:14:28.517461505Z
   modified_at: 2026-05-17T02:14:28.517461505Z
+- id: 019e9c02-4a06-7f11-bdc9-8c9d3de41b1f
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Scheduled advisor tasks (recurring TASKs on cadence, fired on aida pull). Build now?
+      a) Build with the no-daemon pull-triggered design (Medium; defer to post-stability)
+      b) Reject — cadence work (incl. refresh-comp-analysis templates) is marketing/maintenance, deferred
+      c) Ship the schedule primitive + CLI only; skip the predefined marketing-cadence template library
+      REC: a as approved-and-parked (sound no-daemon design, but Medium/post-stability).
+    Q2: Sequence vs EPIC-30 (the worker fires REQUEST items)?
+      a) Build standalone first (cadence → queue; works without the worker)
+      b) Fold into EPIC-30 as a child
+      c) Hold until EPIC-30's worker exists
+      REC: a — 'evaluate on pull' makes it usefully standalone; coupling to EPIC-30 (Draft) blocks a simpler win.
+  created_at: 2026-06-06T08:17:36.262291390Z
+  modified_at: 2026-06-06T08:17:36.262291390Z
