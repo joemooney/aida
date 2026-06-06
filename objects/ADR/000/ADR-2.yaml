@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T04:50:12.576842109Z
-modified_at: 2026-06-05T04:55:17.489909747Z
+modified_at: 2026-06-06T04:14:32.268121481Z
 req_type: Decision
 tags:
 - cli-ux
@@ -52,3 +52,8 @@ comments:
     2. AGENT NEW: prompt, don't silently default. `aida agent new` role resolution: --role X → X; else interactive → PROMPT via the shared role picker (TASK-644's component); else non-interactive → default implementer + notice. Do NOT inherit the launcher's AIDA_SESSION_ROLE into the child — the common case is advisor/product spawning an IMPLEMENTER; inheriting clones the wrong hat. Pre-highlight implementer in the picker as the likely pick.
   created_at: 2026-06-05T04:55:17.489909747Z
   modified_at: 2026-06-05T04:55:17.489909747Z
+- id: 019e9b23-c14c-7210-82c7-755d79fac07f
+  author: joe
+  content: 'Triage 2026-06-05: this is a RECORDED decision/principle (adopted + stateless), not open work — completing so it stops sitting in the Approved backlog. The decision/principle stands as the record; any remaining IMPLEMENTATION is tracked under its epic (ADR-2→EPIC-37 onboarding, ADR-3→EPIC-38 MCP-gate-parity, ADR-1 + PRIN-1 already realized in the current architecture).'
+  created_at: 2026-06-06T04:14:32.268121481Z
+  modified_at: 2026-06-06T04:14:32.268121481Z
