@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:12.371919361Z
-modified_at: 2026-06-06T08:33:46.395208472Z
+modified_at: 2026-06-06T23:02:39.994834869Z
 req_type: Story
 tags:
 - codex
@@ -43,3 +43,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Delivers named MCP tool profiles (read-only/coordination/operator/admin/full) gating tools/list — bounded, self-contained, security-improving, no open decision; the conservative-default surface is well-specified and testable.
   created_at: 2026-06-06T08:33:44.292667446Z
   modified_at: 2026-06-06T08:33:44.292667446Z
+- id: 019e9f2c-967a-72b1-8aaa-167c10bc4fe5
+  author: joe
+  content: Commit 9bf484844 references this requirement
+  created_at: 2026-06-06T23:02:39.994834869Z
+  modified_at: 2026-06-06T23:02:39.994834869Z
