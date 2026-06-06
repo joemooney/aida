@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:40:14.110049032Z
-modified_at: 2026-06-04T04:40:14.110049032Z
+modified_at: 2026-06-06T08:30:39.932213996Z
 req_type: Spike
 tags:
 - dev-experience
@@ -41,3 +41,20 @@ tags:
 - needs-design
 - onboarding-flow
 - sandbox
+comments:
+- id: 019e9c0e-3f3c-7090-91fb-d9f93d2c0979
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Build the isolated sandbox store now, or defer past the bugs-before-marketing phase?
+      a) Defer entirely — first-user/tutorial framing is marketing-adjacent, current phase is clear-bugs-then-stability
+      b) Build only the dev-playground slice now (throwaway store for drain-testing — saved real clutter validating STORY-492), defer the first-user/tutorial layer
+      c) Build the full smallest-slice (`aida sandbox` create/seed/reset/destroy) now
+      REC: b — the dev-playground use is on-thesis today (it would have avoided the TASK-639/640/641 clutter); the tutorial framing is the marketing-deferred half. Splits the on-mission part from the deferred part.
+    Q2: Sandbox store mechanism?
+      a) Separate dir + AIDA_STORE env override (reuses validate-resume.sh isolated-$HOME pattern)
+      b) Temp orphan branch
+      c) A new "sandbox" deployment mode
+      REC: a — lowest-machinery, reuses existing throwaway-environment plumbing; avoids daemon-grade infra for a throwaway need.
+  created_at: 2026-06-06T08:30:39.932213996Z
+  modified_at: 2026-06-06T08:30:39.932213996Z
