@@ -3,12 +3,12 @@ spec_id: BUG-460
 agreed_id: BUG-460
 title: Advisor-gate (TASK-647) blocks the orchestrator's OWN auto-queue in headless drains — reviewer phase fails on 'needs advisor authority'
 description: 'Empirical 2026-06-05 (burndown-2). After a headless implementer ships a PR, phase-3''s auto-queue tries to file+queue a Review-story and fails: ''auto-queue: queue add STORY-525 failed: Error: queuing work for execution needs advisor authority (advisor role or an interactive session).'' The TASK-647/ADR-3 gate — meant to stop AGENTS self-advancing specs — also blocks the ORCHESTRATOR''s own system operations because the drain runs as role=implementer, non-TTY. The reviewer phase then exits 1. Net: --no-human=both drains can implement but cannot complete the review/merge handoff. ROOT: the gate doesn''t distinguish ''agent self-advancing'' (block) from ''orchestrator system action'' (allow). FIX (EPIC-38 gate-parity adjacent): the orchestrator''s internal queue/add operations + the reviewer/implementer subprocesses it spawns should carry system/advisor authority (e.g. an internal-authority signal or AIDA_SESSION_ROLE=advisor scoped to orchestrator-spawned ops), so the gate permits orchestrator-internal mutations while still blocking a bare agent. WORKAROUND until fixed: lifecycle:no-review skips the reviewer phase (+ its auto-queue) → implementer→CI→merge runs autonomously for crisp work. Reliability-critical → keyboard.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T05:36:30.400890149Z
-modified_at: 2026-06-06T05:51:08.098605972Z
+modified_at: 2026-06-06T05:58:36.672382357Z
 req_type: Bug
 tags:
 - autonomy
@@ -25,3 +25,7 @@ comments:
   content: Commit e0c062e62 references this requirement
   created_at: 2026-06-06T05:51:08.098605972Z
   modified_at: 2026-06-06T05:51:08.098605972Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T05:58:36.672382357Z
+  completion_sha: ad8ee1eb1f22201d1b521b1dafc941f57b3f2259
