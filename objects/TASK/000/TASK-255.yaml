@@ -2,7 +2,7 @@ id: 019e2e34-bf49-7213-af67-7f5f918d7ca8
 spec_id: TASK-255
 agreed_id: TASK-255
 title: 'TUI mission-control empty state: queue + leases + PRs + suggested actions, not just keybindings'
-description: |-
+description: |
   Follow-up to BUG-109. BUG-109 ships the *minimal* empty-state fix — a welcome panel with keybindings + a relaunch-with-scope banner — so first-time `aida tui` users aren't stranded on a black screen.
 
   The bigger vision: the empty TUI should be a mission-control dashboard, not just a key cheatsheet. When no session is hosted, show the user what's actionable:
@@ -12,12 +12,16 @@ description: |-
   - Suggested next actions (pick up STORY-X, review PR #N, drain queue)
 
   Effectively the `prefix o` status overlay's content, surfaced as the *default* empty-state view rather than a modal you have to know to open. Sequencing (per dialog 2026-05-15): post-alpha enhancement — lands after BUG-110, core CLI alpha-readiness, and ahead of EPIC-27. Not an alpha gate.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  HOLD post-alpha — the spec self-identifies as a post-alpha enhancement ('not an alpha gate'); the bugs-before-marketing phase defers TUI-richness. When it proceeds, start with the thin slice (role-queue head + open-PR count), then add leases/CI-rollup/suggested-actions.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:34:29.321146368Z
-modified_at: 2026-06-06T14:25:56.499214891Z
+modified_at: 2026-06-06T14:25:57.884629244Z
 req_type: Task
 tags:
 - empty-state
