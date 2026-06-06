@@ -14263,5 +14263,18 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER post-stability (with STORY-363) — no subsystem-scoped advisors exist yet to consume --focus, so the loading filter has no live consumer. Revisit when SPIKE-10 subsystems actually emerge. (If built: backward-compatible subsystem: frontmatter tag, untagged = universal.)
-clock: 1507
+- id: 019e9d37-bd97-7d72-b650-e4ccb8b8c931
+  target_id: 019e4854-b289-76e3-ac72-6d5b47752ee7
+  author: aida
+  node_id: '1'
+  lamport: 1508
+  timestamp: 2026-06-06T13:55:36.471741665Z
+  kind: !SetDescription
+    description: |
+      Per SPIKE-10 strategic doc, Gap 2 implementation: `aida advisor handoff --to <project-path> --focus <topic>` generates a checked-in brief at `<child>/docs/<date>-advisor-handoff.md`. Five sections: parent identity (auto), vision (operator), decided things (auto-suggested + operator-pruned), substrate slice (auto-filtered by --focus), latitude (operator). Template under `aida-core/templates/advisor-handoff.md`. Composes with the `--focus` mechanism from the sibling story.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER post-stability — net-new strategic multi-project surface, off the current phase; no second-project demand pulling it. Keep as a backlog marker; build is speculative until a real handoff need appears.
+clock: 1508
 node_id: '1'
