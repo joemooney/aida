@@ -13,12 +13,12 @@ description: |-
   DEDUP: when init commits, skip enqueuing the onboarding 'Commit AIDA scaffolding' task (TASK-510/TASK-007 family) — or mark it done — so the first-user isn't told to do an already-done step.
 
   COMPLEMENTARY to BUG-433 (detect store from .aida-store even without committed config) — do both: this fixes the root (durable scaffolding), BUG-433 is the belt-and-suspenders. Commit message: 'chore: scaffold AIDA' (the existing suggested form).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T02:25:24.896723449Z
-modified_at: 2026-06-06T08:30:08.818403309Z
+modified_at: 2026-06-06T21:44:03.438845187Z
 req_type: Task
 tags:
 - aida:init
@@ -35,3 +35,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). init commits its own scaffolding — auto when non-TTY, prompt default-Y on TTY, scoped to init's own paths (never git add .), dedup the onboarding commit task; decision already taken (operator+advisor 2026-06-01), well-specified, on-phase root-cause fix.
   created_at: 2026-06-06T08:30:07.073434644Z
   modified_at: 2026-06-06T08:30:07.073434644Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T21:44:03.438845187Z
+  completion_sha: a10570d2280ea430df8c560e7a648aa6708c8e24
