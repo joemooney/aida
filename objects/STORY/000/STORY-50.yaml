@@ -7,12 +7,12 @@ description: |
   - Agents (Claude, Codex) working on an old branch automatically see the right store version (via the trailer + auto-checkout on session-enter)
   - Release tags carry both code SHA + store SHA so git checkout v1.2.0 reproducibly gives you code v1.2.0 + the store as it was at v1.2.0
   - Branch-aware: feature branches can have their own store snapshot diverging from main; merge resolves both
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:31:19.205259100Z
-modified_at: 2026-06-06T08:38:26.711847965Z
+modified_at: 2026-06-06T08:38:29.089804613Z
 req_type: Story
 relationships:
 - rel_type: Child
