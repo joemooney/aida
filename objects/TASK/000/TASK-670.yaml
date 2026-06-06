@@ -44,15 +44,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T18:57:35.377758546Z
-modified_at: 2026-06-06T08:14:36.976789532Z
+modified_at: 2026-06-06T08:14:39.667386867Z
 req_type: Task
 tags:
-- aida:list
-- cli-ux
-- from-product
-- from-user-direction
-- glyph
-- work-routing
+- ready-to-implement
 comments:
 - id: 019e9bff-8db0-7553-b497-ffeef476856d
   author: joe
