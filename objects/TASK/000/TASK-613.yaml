@@ -8,9 +8,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:18:44.270782271Z
-modified_at: 2026-05-31T22:18:44.270782271Z
+modified_at: 2026-06-06T04:19:15.298196177Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e71a8-6312-7d62-a24e-b0a6dafc2e7f
   created_at: 2026-05-31T22:18:52.153464632Z
+archived: true
+archived_at: 2026-06-06T04:19:15.298196177Z
