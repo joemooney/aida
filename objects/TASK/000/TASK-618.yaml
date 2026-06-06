@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:25:37.597664669Z
-modified_at: 2026-06-06T15:14:53.130576316Z
+modified_at: 2026-06-06T15:14:55.314285878Z
 req_type: Task
 tags:
 - aida:queue
@@ -21,6 +21,7 @@ tags:
 - from-advisor
 - kind:observation
 - needs-human-input
+- ready-to-implement
 comments:
 - id: 019e9c0e-ceb3-7bf0-a1ec-6343d39ebe98
   author: joe
