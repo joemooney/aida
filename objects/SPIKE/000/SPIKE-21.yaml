@@ -14,9 +14,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:22:20.490198910Z
-modified_at: 2026-05-29T03:22:20.490198910Z
+modified_at: 2026-06-06T08:38:35.395856466Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
 - claude-code-2.1.154
 - goal-tracking
+comments:
+- id: 019e9c15-8083-70f3-a9e2-a848a0d627d8
+  author: joe
+  content: Disposition sweep 2026-06-06 — REJECTED. OBE — researched /goal parity, but aida goal already shipped (TASK-242) with composing clauses + verification; output never written.
+  created_at: 2026-06-06T08:38:35.395856466Z
+  modified_at: 2026-06-06T08:38:35.395856466Z
