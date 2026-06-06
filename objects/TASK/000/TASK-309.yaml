@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:37:48.249754232Z
-modified_at: 2026-05-19T05:22:57.791526306Z
+modified_at: 2026-06-06T08:38:21.792415690Z
 req_type: Task
 tags:
 - changelog
@@ -64,3 +64,8 @@ comments:
     Net: TASK-309 collapses to 'salvage the README.md positioning polish, drop the stash' — the version-bump half is handled by release.sh + BUG-111. Sharpens the existing 'restore the README polish separately' acceptance bullet.
   created_at: 2026-05-19T05:22:57.791526306Z
   modified_at: 2026-05-19T05:22:57.791526306Z
+- id: 019e9c15-4b60-7a91-8aec-7d864cc3fec9
+  author: joe
+  content: Disposition sweep 2026-06-06 — REJECTED. Stale — version is 0.11.0 so the v0.7→v0.8 bump is moot; only a one-word README tweak remains, not worth a tracked TASK.
+  created_at: 2026-06-06T08:38:21.792415690Z
+  modified_at: 2026-06-06T08:38:21.792415690Z
