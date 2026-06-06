@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T05:06:01.183127589Z
-modified_at: 2026-05-31T03:16:17.454525491Z
+modified_at: 2026-06-06T08:33:30.295159407Z
 req_type: Story
 tags:
 - agent-discipline
@@ -26,3 +26,15 @@ comments:
   content: 'Guard-5 idea (folded in from TASK-116, blocked-queue sweep 2026-05-30): ''aida session start refuses a spec that is NOT in the active briefed batch when an overnight drain is active'' — a session-start gate that is substrate-aware of operator intent boundaries. Origin: agy1 picked up STORY-465 outside its briefed batch:overnight-orthogonal; EPIC-28 shelving caught the failure and BUG-379 now refuses fresh sessions without --force-claim, but nothing prevented the unauthorized pickup upstream. Complements Guard 2 (sketch-first before Edit/Write) and Guard 3 (local-vs-substrate reality check).'
   created_at: 2026-05-31T03:16:17.454525491Z
   modified_at: 2026-05-31T03:16:17.454525491Z
+- id: 019e9c10-d8b7-7f93-af4f-0b3b4664d6fe
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Three composing guards are proposed but the project is in a bugs-then-stability phase and most originate from multi-agent dispatch friction (2026-05-25). Which guards to build now?
+      a) All three guards (trailer spec-ID validation, sketch-first Edit/Write gate, status local-vs-substrate divergence)
+      b) Guard 1 only (trailer spec-ID validation at `pr ship`/`queue done` — cheapest, highest-value, catches hallucinated spec IDs before they hit git history)
+      c) Guards 1 + 3 (validation + status drift surface); defer Guard 2 (Edit/Write tool-call gate is the heaviest, needs a PreToolUse hook + substrate sketch-comment lookup)
+      d) Reject/shelve — the agent-discipline failures driving this are now covered by AGY dispatch policy + sketch-first sign-off conventions
+      REC: c — Guard 1 is a bounded substrate-as-bouncer win aligned with the bugs/stability phase; Guard 3 reuses existing status surface (STORY-385/465); Guard 2's tool-call gate is real infrastructure better deferred until the multi-agent failure rate justifies it.
+  created_at: 2026-06-06T08:33:30.295159407Z
+  modified_at: 2026-06-06T08:33:30.295159407Z
