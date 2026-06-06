@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-06-06T08:33:42.600458918Z
+modified_at: 2026-06-06T14:01:05.827853856Z
 req_type: Story
 tags:
 - audit
@@ -50,3 +50,8 @@ comments:
       REC: a — opening a network transport with auth is exactly the kind of new surface to defer until stability is reached and a real remote/cloud-agent need is concrete; high priority tag predates the bugs-first phase decision.
   created_at: 2026-06-06T08:33:41.438433776Z
   modified_at: 2026-06-06T08:33:41.438433776Z
+- id: 019e9d3c-c423-7b20-9cea-b7d7b6002185
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): DEFER until post-stability + a concrete remote/cloud-agent need — opening a network transport with token auth + audit log is exactly the new security surface to hold during the bugs-first phase (the High-priority tag predates that decision). When built, pair with STORY-474 profiles so a read-only profile is the default exposed over HTTP.'
+  created_at: 2026-06-06T14:01:05.827853856Z
+  modified_at: 2026-06-06T14:01:05.827853856Z
