@@ -3,12 +3,12 @@ spec_id: TASK-1-105
 agreed_id: TASK-130
 title: /aida-pickup has no SPIKE-aware path. When queue head is a Spike, the implement…
 description: '/aida-pickup has no SPIKE-aware path. When queue head is a Spike, the implementer skill tries to treat it as heads-down implementation work — but a SPIKE is by definition time-boxed research with operator-judgment decisions (candidate selection, experimental design, rubric evaluation, report writing). The implementer agent has to bail or fabricate work. Empirical 2026-05-27: implementer picked up SPIKE-8 (the /ultraplan output-quality SPIKE), correctly recognized the mismatch, and stopped to ask. Operator confusion: ''looks like aida-pickup is not going to prompt me to invoke it?'' Two design options: (1) skill auto-sets human_only on type=Spike unless explicitly overridden (cheapest, errs toward ''humans drive research''); (2) skill detects type=Spike and routes to a research playbook (aida ultraplan, experimental-design walkthrough, no immediate branch creation). The recently-shipped human_only field (STORY-333) is the substrate primitive — option 1 is just ''auto-set human_only on Spike type unless overridden''.'
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:46:38.055787185Z
-modified_at: 2026-06-06T14:25:49.458595001Z
+modified_at: 2026-06-06T14:25:51.483438760Z
 req_type: Task
 tags:
 - aida-pickup-gap
