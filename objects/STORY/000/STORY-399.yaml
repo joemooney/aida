@@ -29,12 +29,12 @@ description: |-
   ## Origin
 
   Filed 2026-05-22 as the explicit Path B follow-up that the advisor's TASK-440 verdict prescribed. Composes with STORY-398 (Codex empirical roundtrip) — STORY-398's verdict tells us whether Path B is needed now or later.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:22:09.952652268Z
-modified_at: 2026-06-06T08:35:10.589054116Z
+modified_at: 2026-06-06T22:27:50.081689660Z
 req_type: Story
 tags:
 - agent-agnostic
@@ -50,3 +50,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). outputSchema descriptors shipped (Path A/TASK-440) but responses still emit text-envelope only; deliver the additive structuredContent matching declared schemas for the 21 tools (option (a) already pre-decided in the spec). Bounded, no open decision.
   created_at: 2026-06-06T08:35:08.861471165Z
   modified_at: 2026-06-06T08:35:08.861471165Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T22:27:50.081689660Z
+  completion_sha: 3be947e5de6180c077cf9c4d829536aec9cdc1d2
