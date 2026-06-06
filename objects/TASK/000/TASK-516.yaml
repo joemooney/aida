@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:06:37.039775930Z
-modified_at: 2026-05-25T07:42:06.408358992Z
+modified_at: 2026-06-06T08:34:10.673791878Z
 req_type: Task
 tags:
 - advisor
@@ -119,3 +119,14 @@ comments:
     — master advisor
   created_at: 2026-05-24T15:46:35.787609578Z
   modified_at: 2026-05-24T15:46:35.787609578Z
+- id: 019e9c11-7671-7a92-a427-b842a262f679
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: This adds a plan-review handshake (sentinel + queue-work gate + `aida plan-review approve/revise/decline` + status surface). Single-master assumption holds, but it introduces a new gate/state on the plan-archival path. Worth the surface in the bugs→stability phase?
+      a) Ship full shape: --request-review flag, sentinel under `.aida/plan-reviews/pending/`, queue-work warn-with-override, `aida status` line, three plan-review verbs, docs.
+      b) Ship Phase-1-only minimal slice: --request-review writes a `plan-review:pending` tag + comment + queue-work warning; skip the dedicated approve/revise/decline verbs (master just edits the tag/comment) and the status pane.
+      c) Defer — solo workaround ("accept first, master sweeps docs/plans/ later") is adequate for one operator; revisit when subsystem advisors / multiple plan-reviewers exist.
+      REC: c — single-operator + single-master makes the gate mostly ceremony today; the friction it solves (implementer picks up an unreviewed plan in the accept→review window) is rare with one operator and well-covered by the existing workaround.
+  created_at: 2026-06-06T08:34:10.673791878Z
+  modified_at: 2026-06-06T08:34:10.673791878Z
