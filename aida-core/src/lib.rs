@@ -1,3 +1,72 @@
+//! # aida-core — the AIDA engine
+//!
+//! `aida-core` is the requirement-graph engine that every other AIDA crate is
+//! built on. It owns the data model ([`Requirement`], [`RequirementsStore`]),
+//! the storage backends (git-canonical [`CachedGitBackend`], the [`Cache`]
+//! read-projection, legacy [`SqliteBackend`]/[`YamlBackend`]), the distributed
+//! ID system ([`node`]/[`dispenser`]/[`hlc`]), the cross-spec graph queries
+//! ([`graph_walk`], [`pickability`]), and the supporting subsystems (AI
+//! evaluation, integrations, scaffolding, telemetry, …).
+//!
+//! ## Public API surface (STORY-266)
+//!
+//! The intended public API surface — the load-bearing types/functions that the
+//! in-tree consumers depend on — is documented item-by-item in
+//! [`docs/api/aida-core.md`](https://github.com/joemooney/aida/blob/main/docs/api/aida-core.md).
+//! That file is the authoritative contract: it lists each consumed type/fn with
+//! a one-line description and marks which modules are intended-public vs.
+//! incidentally-`pub` internals.
+//!
+//! **Who consumes this crate as a Rust library:** `aida-cli` (the `aida` binary,
+//! which also hosts the MCP server in `aida-cli/src/mcp.rs`) and `aida-server`
+//! (the REST/gRPC service). Note that `aida-tui` — the PTY-hosting terminal
+//! shell (EPIC-26) — does **not** link against `aida-core`; it talks to the
+//! `aida` CLI subprocess + status files instead. The API contract therefore
+//! serves the CLI/MCP/server consumers, not the TUI.
+//!
+//! ### The stable core (always-on, no feature gate)
+//!
+//! - [`Requirement`], [`RequirementsStore`] — the data model. A `Requirement`
+//!   is a single spec node; a `RequirementsStore` is the in-memory graph of all
+//!   of them plus relationships, queue entries, and config.
+//! - [`models`] — the rest of the domain enums/structs: [`RequirementType`],
+//!   [`RequirementStatus`], [`RequirementPriority`], [`RelationshipType`],
+//!   [`Relationship`], [`Comment`], [`QueueEntry`], [`ImplementationInfo`],
+//!   [`HistoryEntry`], etc.
+//! - [`graph_walk`] — transitive cross-spec queries (`walk`, `walk_union`,
+//!   `status_rollup`, [`graph_walk::Direction`]).
+//! - [`pickability`] — "is this spec workable now?" given blocked-by edges.
+//! - [`node`], [`dispenser`] — the distributed ID system (block allocation +
+//!   counters) that lets multiple machines mint unique spec IDs offline.
+//! - [`hlc`] — the hybrid logical clock underpinning conflict-free ordering.
+//!
+//! ### The `native` surface (default feature, filesystem + git)
+//!
+//! - [`db`] — the storage backends and the [`DatabaseBackend`] trait they
+//!   implement. [`CachedGitBackend`] (git-canonical + SQLite cache) is the
+//!   default; [`create_backend`]/[`open_or_create`] are the entry points.
+//! - [`storage`], [`object_store`] — the lower-level YAML object store and the
+//!   higher-level [`Storage`] facade (locking, save/add results).
+//! - [`scaffolding`], [`templates`], [`registry`], [`project`] — `aida init`
+//!   machinery and embedded templates.
+//! - [`report`], [`workspace`], [`user_prefs`] — reporting + per-user config.
+//!
+//! ### Feature-gated surfaces
+//!
+//! - `github` / `gitlab` / `jira` — issue-tracker [`integrations`] (clients +
+//!   config types).
+//! - `postgres` — `db::PostgresBackend` and its migration helpers.
+//!
+//! ## What is NOT public API
+//!
+//! Many modules are `pub` only because `aida-cli` reaches into them as a
+//! same-workspace sibling; they are **internal** and may change without notice.
+//! See `docs/api/aida-core.md` for the explicit internal-vs-public split. As a
+//! rule of thumb: anything not re-exported at the crate root and not listed in
+//! that doc should be treated as internal.
+//!
+//! trace:STORY-266 | ai:claude
+
 pub mod ai;
 pub mod analytics;
 pub mod block_allocation;
