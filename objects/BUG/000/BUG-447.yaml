@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:28:27.752140615Z
-modified_at: 2026-06-05T19:38:52.421756719Z
+modified_at: 2026-06-06T07:05:52.049837819Z
 req_type: Bug
 tags:
 - aida:queue:work
@@ -47,3 +47,8 @@ comments:
   content: 'Reproduced again 2026-06-05 in ~/work/dummy1: queue work still offers the stale 019e992c session (from the deleted ~/ai project, still in ~/.claude/projects/-home-joe-ai-task-007/). User picked ''start a fresh session''. Confirms the global-spec-id-match diagnosis exactly — a brand-new isolated project on a different path still surfaces the old project''s TASK-007 session.'
   created_at: 2026-06-05T19:38:52.421756719Z
   modified_at: 2026-06-05T19:38:52.421756719Z
+- id: 019e9bc0-9cb1-7fb3-a45c-45035e700901
+  author: joe
+  content: Commit 9a62eb6ff references this requirement
+  created_at: 2026-06-06T07:05:52.049837819Z
+  modified_at: 2026-06-06T07:05:52.049837819Z
