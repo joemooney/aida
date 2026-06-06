@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:08:56.912838543Z
-modified_at: 2026-05-14T06:07:11.354171892Z
+modified_at: 2026-06-06T08:38:17.094545972Z
 req_type: Task
 tags:
 - cluster
@@ -53,3 +53,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T07:09:00.134802002Z
+comments:
+- id: 019e9c15-3906-7062-8cb2-c6ce9ef14bed
+  author: joe
+  content: Disposition sweep 2026-06-06 — REJECTED. Superseded by TASK-229 (tag-drain, Completed); the residual composes-with edge type never earned its keep — custom rel types cover the rare case, no demand in a year.
+  created_at: 2026-06-06T08:38:17.094545972Z
+  modified_at: 2026-06-06T08:38:17.094545972Z
