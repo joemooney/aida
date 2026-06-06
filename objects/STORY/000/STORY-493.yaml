@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:54:54.211726236Z
-modified_at: 2026-05-31T15:36:00.819931963Z
+modified_at: 2026-06-06T08:31:20.421623701Z
 req_type: Story
 tags:
 - competitive-parity
@@ -23,3 +23,14 @@ comments:
   content: "P3 FUNCTIONALLY COMPLETE — slices 1-3 shipped: pure core (TASK-602), .aida/ local store + aida mailbox CLI (TASK-603), send_message/read_inbox MCP tools (TASK-604). Agents can message each other now (local layer).\n\nSLICE 4 (git-canonical digest) — fully scoped, the differentiator layer, the LARGE canonical-store-write slice. Build plan (mechanics traced):\n- CANONICAL WRITE: digest writes message JSON to the orphan worktree at <store_root>/mailbox/<id>.json, then git_ops::add(root, ['mailbox']) + git_ops::commit(root, msg) + push — mirrors git_backend::auto_commit's add_all('objects')+commit. store_root = the orphan worktree (.aida-store), reachable via the backend.\n- CANONICAL READ + MERGE-ON-READ: inbox/thread read .aida-store/mailbox/*.json AND .aida/mailbox/ (local), reconcile via the existing merge_dedup (canonical wins on id collision). \n- aida mailbox sync: digest local→canonical (append-only/id-keyed; idempotent — skip ids already in canonical).\n- AUTO-TRIGGERS (operator decision needed — flagged for veto): batched digest on session-end + drain phase-boundaries, NOT per-message (avoids the coarse-git trap). \n- doc-consistency: no new MCP tool (sync is CLI), but document aida mailbox sync.\nDeserves focused care (writes+commits+pushes to the canonical store, like P1's re-entry). STORY-493 stays open for slice 4."
   created_at: 2026-05-31T15:36:00.819931963Z
   modified_at: 2026-05-31T15:36:00.819931963Z
+- id: 019e9c0e-dd65-76a3-a29b-43aef08bec0a
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: The mailbox core + .aida local store + CLI (send/inbox/thread/sync) + MCP tools already shipped (mailbox.rs/mailbox_store.rs/mcp.rs traced, `aida mailbox` works). What remains is the git-canonical durable digest's trigger + consistency model, which the spec says needs sign-off. How to proceed?
+      a) Sign off the digest design and build slice 4 (the git-canonical digest is the round-2 differentiator vs competitors' ephemeral mailboxes)
+      b) Treat the shipped local layer as sufficient for now and defer the durable digest until a concrete cross-clone replay/audit need appears
+      c) Reduce scope — verify exactly which slices landed, then re-spec only the genuinely-remaining digest work
+      REC: c then a — confirm the landed-vs-remaining split first (most slices appear done), then sign off the digest trigger/consistency model the spec explicitly parks for approval. The digest is the moat-relevant differentiator, so worth finishing rather than dropping.
+  created_at: 2026-06-06T08:31:20.421623701Z
+  modified_at: 2026-06-06T08:31:20.421623701Z
