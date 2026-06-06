@@ -28599,11 +28599,140 @@ fn effective_force_claim_for_session_start(
 #[cfg(test)]
 mod preflight_spec_status_tests {
     use super::{
-        effective_force_claim_for_session_start, preflight_spec_status,
+        dup_pickup_recheck, effective_force_claim_for_session_start, preflight_spec_status,
         preflight_spec_status_review_aware, session_start_status_bump_preconditions_met,
-        PreflightDecision, RequirementStatus,
+        DupPickupDecision, PreflightDecision, RequirementStatus,
     };
     use tempfile::TempDir;
+
+    // TASK-619: cross-machine duplicate-pickup re-check. trace:TASK-619 |
+    // ai:claude
+    #[test]
+    fn dup_pickup_refuses_when_approved_became_in_progress_under_us() {
+        // Headline case: we planned a pickup on an Approved spec, pulled, and
+        // it's now InProgress — another machine grabbed it. Refuse.
+        let d = dup_pickup_recheck(
+            "TASK-619",
+            Some(&RequirementStatus::Approved),
+            Some(&RequirementStatus::InProgress),
+            false, // force_claim
+            false, // orchestrator_corroborated
+            false, // is_review
+        );
+        match d {
+            DupPickupDecision::Refuse(m) => {
+                assert!(m.contains("TASK-619"), "{m}");
+                assert!(m.contains("force-claim"), "{m}");
+                assert!(m.contains("machine"), "{m}");
+            }
+            other => panic!("expected Refuse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dup_pickup_refuses_when_planned_became_done_or_completed() {
+        // Shipped-elsewhere variants also count as claimed-under-us.
+        assert!(matches!(
+            dup_pickup_recheck(
+                "STORY-1",
+                Some(&RequirementStatus::Planned),
+                Some(&RequirementStatus::Done),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Refuse(_)
+        ));
+        assert!(matches!(
+            dup_pickup_recheck(
+                "STORY-1",
+                Some(&RequirementStatus::Approved),
+                Some(&RequirementStatus::Completed),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn dup_pickup_proceeds_when_status_unchanged() {
+        // No transition under us → nothing to refuse; the normal preflight runs.
+        assert_eq!(
+            dup_pickup_recheck(
+                "TASK-619",
+                Some(&RequirementStatus::Approved),
+                Some(&RequirementStatus::Approved),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Proceed
+        );
+    }
+
+    #[test]
+    fn dup_pickup_proceeds_when_already_in_progress_at_plan_time() {
+        // A resume/force flow: the spec was already InProgress when we planned,
+        // so a stable InProgress is NOT a cross-machine grab — leave it to the
+        // existing preflight (and --force-claim / --resume), don't double-refuse.
+        assert_eq!(
+            dup_pickup_recheck(
+                "TASK-619",
+                Some(&RequirementStatus::InProgress),
+                Some(&RequirementStatus::InProgress),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Proceed
+        );
+    }
+
+    #[test]
+    fn dup_pickup_bypassed_by_force_claim_orchestrator_and_review() {
+        // The deliberate-takeover / orchestrator-child / review escapes all
+        // proceed even on an Approved → InProgress transition.
+        for (force, orch, review) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            assert_eq!(
+                dup_pickup_recheck(
+                    "TASK-619",
+                    Some(&RequirementStatus::Approved),
+                    Some(&RequirementStatus::InProgress),
+                    force,
+                    orch,
+                    review,
+                ),
+                DupPickupDecision::Proceed,
+                "force={force} orch={orch} review={review}"
+            );
+        }
+    }
+
+    #[test]
+    fn dup_pickup_proceeds_when_status_unknown() {
+        // Scope isn't a plain spec (cluster / PR) → no status to compare → no-op.
+        assert_eq!(
+            dup_pickup_recheck("EPIC-20", None, None, false, false, false),
+            DupPickupDecision::Proceed
+        );
+        assert_eq!(
+            dup_pickup_recheck(
+                "TASK-1",
+                Some(&RequirementStatus::Approved),
+                None,
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Proceed
+        );
+    }
 
     // BUG-436: a review session must be allowed to start against a Done /
     // Completed spec (reviewing a PR is not implementing the spec); a non-review
@@ -29084,6 +29213,90 @@ fn preflight_spec_status_review_aware(
         return PreflightDecision::Allow;
     }
     preflight_spec_status(owns, status, force_claim)
+}
+
+/// TASK-619: outcome of the pull-then-re-check guard that runs immediately
+/// before `aida queue work` claims a spec. Session leases live under
+/// `.aida/sessions/` and are machine-local (gitignored), so they cannot stop
+/// a *second machine* from grabbing the same spec — the only shared "someone
+/// is on this" signal is the git-canonical status flip, which is
+/// eventually-consistent. `handle_queue_work` already pulls the orphan store
+/// before claiming; this guard re-reads the spec's status from that freshly
+/// pulled view and refuses if the spec was grabbed (or shipped) elsewhere in
+/// the window between when we planned the pickup and now. trace:TASK-619 |
+/// ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum DupPickupDecision {
+    /// Nothing claimed it under us — let the existing preflight take over.
+    Proceed,
+    /// The status changed under us to a "claimed/shipped elsewhere" state —
+    /// refuse with the given operator-facing message.
+    Refuse(String),
+}
+
+/// TASK-619: pure decision for the cross-machine duplicate-pickup guard.
+///
+/// Fires only when the spec was *pickable* at plan time (i.e. not already
+/// owned by us / mid-flight) but the post-pull status says it is now claimed
+/// or shipped somewhere else. That transition-under-us is the cross-machine
+/// dup-pickup signal. Resuming a spec that was *already* InProgress at plan
+/// time is a legitimate flow (the operator/orchestrator knows the state and
+/// `--force-claim`/`--resume` cover it), so a stable InProgress → InProgress
+/// is left to the existing `preflight_spec_status` gate, not refused here.
+///
+/// Bypassed entirely when `--force-claim` is set, when the orchestrator
+/// corroborated this child (the parent already flipped status before spawning
+/// us), or for review sessions (reviewing a Done/Completed PR is the normal
+/// pre-review state). trace:TASK-619 | ai:claude
+fn dup_pickup_recheck(
+    spec_id: &str,
+    status_at_plan: Option<&RequirementStatus>,
+    status_after_pull: Option<&RequirementStatus>,
+    force_claim: bool,
+    orchestrator_corroborated: bool,
+    is_review: bool,
+) -> DupPickupDecision {
+    if force_claim || orchestrator_corroborated || is_review {
+        return DupPickupDecision::Proceed;
+    }
+    // Only act on real specs we can compare.
+    let (Some(before), Some(after)) = (status_at_plan, status_after_pull) else {
+        return DupPickupDecision::Proceed;
+    };
+
+    // "Pickable at plan time" = a state where starting fresh implementer work
+    // is the normal intent. If the spec was already InProgress/Done/etc. when
+    // we planned, the existing preflight (and --force-claim/--resume) owns that
+    // case — don't double-refuse here.
+    let was_pickable = matches!(
+        before,
+        RequirementStatus::Approved | RequirementStatus::Planned | RequirementStatus::Draft
+    );
+    if !was_pickable {
+        return DupPickupDecision::Proceed;
+    }
+
+    // A "claimed or shipped elsewhere" post-pull state means another machine
+    // flipped the git-canonical status in the window we were planning.
+    let claimed_elsewhere = matches!(
+        after,
+        RequirementStatus::InProgress
+            | RequirementStatus::Done
+            | RequirementStatus::Completed
+            | RequirementStatus::NeedsAttention
+    );
+    if !claimed_elsewhere {
+        return DupPickupDecision::Proceed;
+    }
+
+    DupPickupDecision::Refuse(format!(
+        "spec `{spec_id}` was {before} when this pickup was planned but is now {after} \
+         after pulling the latest store — another machine or session most likely claimed \
+         it in between (session leases are machine-local, so the git-canonical status flip \
+         is the only cross-machine signal). Refusing to double-claim. \
+         Re-run `aida queue work` to pick the next free item, or pass `--force-claim` to \
+         take it over deliberately."
+    ))
 }
 
 fn session_start_status_bump_preconditions_met(
@@ -79304,6 +79517,17 @@ fn handle_queue_work(
         }
     }
 
+    // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
+    // view so we can detect whether the pull below reveals that another
+    // machine claimed the spec under us. Best-effort + read-only — a load
+    // failure just yields None, which makes the guard a no-op.
+    // trace:TASK-619 | ai:claude
+    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+        store
+            .get_requirement_by_spec_id(&plan.scope)
+            .map(|r| r.status.clone())
+    });
+
     // Pull the orphan store before resolving the worktree — keeps the
     // queue + req view fresh for the new session. Best-effort: a
     // failed pull (offline, divergent) prints a note and continues
@@ -79315,6 +79539,45 @@ fn handle_queue_work(
                 "⚠".yellow().bold(),
                 format!("pre-pickup pull failed; proceeding with local view: {}", e).yellow()
             );
+        }
+    }
+
+    // TASK-619: cross-machine duplicate-pickup guard. Session leases are
+    // machine-local (.aida/sessions/, gitignored), so the only shared
+    // "someone is on this" signal across machines is the git-canonical
+    // status flip — which is eventually-consistent. Now that we've pulled
+    // the latest store, re-read the anchor spec's status and refuse if it
+    // was claimed/shipped elsewhere in the window between planning this
+    // pickup and now. The existing BUG-379 preflight in `session_start`
+    // catches stuck-InProgress-without-lease; this guard specifically names
+    // the cross-machine dup-pickup case with a recovery hint and respects
+    // --force-claim / orchestrator-corroboration / review sessions.
+    // trace:TASK-619 | ai:claude
+    if !no_pull {
+        let status_after_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+            store
+                .get_requirement_by_spec_id(&plan.scope)
+                .map(|r| r.status.clone())
+        });
+        let orchestrator_corroborated = {
+            let root = project_root_for_config
+                .clone()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            orchestrator::detect(&root).is_orchestrated()
+        };
+        let is_review_session = plan.review_target.is_some()
+            || role == "reviewer"
+            || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
+        if let DupPickupDecision::Refuse(msg) = dup_pickup_recheck(
+            &plan.anchor_display,
+            status_before_pull.as_ref(),
+            status_after_pull.as_ref(),
+            force_claim,
+            orchestrator_corroborated,
+            is_review_session,
+        ) {
+            anyhow::bail!("{}", msg);
         }
     }
 
