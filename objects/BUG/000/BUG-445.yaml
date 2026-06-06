@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:20.867633023Z
-modified_at: 2026-06-06T15:20:25.345890742Z
+modified_at: 2026-06-06T15:20:27.621467047Z
 req_type: Bug
 tags:
 - aida:init
@@ -38,6 +38,11 @@ tags:
 - queue
 - ready-to-implement
 - worktree
+relationships:
+- rel_type: BlockedBy
+  target_id: 019e8626-69a0-7eb1-9bca-eb5de80d86ce
+  created_at: 2026-06-06T15:20:27.621458609Z
+  created_by: joe
 comments:
 - id: 019e994b-a103-7623-9e21-98558ac550b5
   author: joe
