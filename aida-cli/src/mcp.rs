@@ -1772,6 +1772,25 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        // TASK-681 (EPIC-38) caller-parity audit: promoting a finding sets it
+        // `Approved`, which is the advisor's triage decision — exactly the
+        // transition `mcp_status_gate_message` refuses on the
+        // update_requirement path (BUG-449). Without this gate,
+        // `triage_finding promote` was a one-tool bypass that let an untrusted
+        // MCP caller self-grant Approved status on a draft finding. Apply the
+        // same gate before mutating; `dismiss` (Rejected) is implementer-
+        // legitimate and stays allowed. The gate is keyed off the target
+        // status so it stays in lockstep if the gated-status set ever changes.
+        // trace:TASK-681 | ai:claude
+        let new_status = match action.to_ascii_lowercase().as_str() {
+            "promote" => RequirementStatus::Approved,
+            "dismiss" => RequirementStatus::Rejected,
+            other => return Err(format!("unknown action '{}'", other)),
+        };
+        if let Some(msg) = mcp_status_gate_message(&new_status) {
+            return Err(msg);
+        }
+
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
         let req = store
             .get_requirement_by_spec_id_mut(id)
@@ -1781,26 +1800,17 @@ impl<'a> McpServer<'a> {
             return Err(format!("{} is not a finding (no from-* tag)", id));
         }
 
-        match action.to_ascii_lowercase().as_str() {
-            "promote" => {
-                req.status = RequirementStatus::Approved;
-                if let Some(r) = reason {
-                    req.add_comment(Comment::new(
-                        "mcp".to_string(),
-                        format!("promoted via MCP: {}", r),
-                    ));
-                }
-            }
-            "dismiss" => {
-                req.status = RequirementStatus::Rejected;
-                if let Some(r) = reason {
-                    req.add_comment(Comment::new(
-                        "mcp".to_string(),
-                        format!("dismissed via MCP: {}", r),
-                    ));
-                }
-            }
-            other => return Err(format!("unknown action '{}'", other)),
+        let verb = if new_status == RequirementStatus::Approved {
+            "promoted"
+        } else {
+            "dismissed"
+        };
+        req.status = new_status;
+        if let Some(r) = reason {
+            req.add_comment(Comment::new(
+                "mcp".to_string(),
+                format!("{} via MCP: {}", verb, r),
+            ));
         }
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
@@ -3045,7 +3055,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "triage_finding",
-            "description": "Triage a finding, either promoting it to an approved active task or dismissing it.",
+            "description": "Triage a finding by dismissing it (sets Rejected). Promotion to an approved active task is the advisor's triage decision and is refused via MCP (run the CLI as the advisor, or let the advisor promote it).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4390,6 +4400,201 @@ mod tests {
         assert_eq!(req.status, RequirementStatus::Done);
     }
 
+    // ===================================================================
+    // TASK-681 (EPIC-38): authority/lifecycle gate parity audit across
+    // every mutating MCP tool. The audit found one bypass —
+    // `triage_finding promote` self-granted Approved — now gated below.
+    // The remaining mutating tools carry no spec-status/lifecycle
+    // invariant for an MCP caller to bypass (they either always land a
+    // safe status, or write coordination state the orchestrator/CLI
+    // re-derives); these guard tests assert that property so a future
+    // edit that adds a status mutation trips a red test.
+    // trace:TASK-681 | ai:claude
+    // ===================================================================
+
+    /// THE FIX: `triage_finding promote` sets a finding `Approved`, which is
+    /// the advisor's triage decision (same invariant `update_requirement`
+    /// gates under BUG-449). It must be refused for an MCP caller.
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_triage_finding_promote_is_advisor_gated() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let filed = server
+            .tool_file_finding(&json!({
+                "title": "Promote bypass attempt",
+                "description": "finding body",
+                "source": "review",
+                "pr": 681,
+            }))
+            .unwrap();
+        let finding_id = filed
+            .strip_prefix("Finding filed: ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap()
+            .to_string();
+
+        let err = server
+            .tool_triage_finding(&json!({
+                "id": finding_id,
+                "action": "promote",
+                "reason": "I want this approved",
+            }))
+            .expect_err("triage_finding promote must be advisor-gated via MCP");
+        assert!(err.contains("advisor"), "{err}");
+
+        // The finding never reached Approved — it stays Draft as filed.
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&finding_id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Draft);
+
+        // `dismiss` (Rejected) is implementer-legitimate and still works.
+        server
+            .tool_triage_finding(&json!({ "id": finding_id, "action": "dismiss" }))
+            .expect("dismiss is implementer-legitimate and stays allowed");
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&finding_id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Rejected);
+    }
+
+    /// `file_finding` is the findings analogue of `add_requirement`: it must
+    /// always land `Draft` regardless of any status the caller might try to
+    /// smuggle in (it accepts no `status` arg today; this pins that).
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_file_finding_always_lands_draft() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let filed = server
+            .tool_file_finding(&json!({
+                "title": "Intake finding",
+                "description": "body",
+                "source": "implementer",
+                "spec_id": "TASK-681",
+                // a status arg, if it ever leaks in, must be ignored:
+                "status": "approved",
+            }))
+            .unwrap();
+        let id = filed
+            .strip_prefix("Finding filed: ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap()
+            .to_string();
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Draft);
+    }
+
+    /// `add_comment` carries no status/lifecycle mutation — confirm it leaves
+    /// the spec's status untouched no matter what.
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_add_comment_does_not_touch_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Comment-only target",
+                "description": "body",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        server
+            .tool_add_comment(&json!({ "id": id, "text": "a note" }))
+            .unwrap();
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Draft);
+    }
+
+    /// `add_relationship` links specs and (correctly) guards adding children
+    /// to a terminal parent, but it must not mutate either spec's status.
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_add_relationship_does_not_touch_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let parent = server
+            .tool_add_requirement(&json!({
+                "title": "Parent",
+                "description": "p",
+                "type": "epic",
+            }))
+            .unwrap();
+        let parent_id = added_spec_id(&parent).to_string();
+        let child = server
+            .tool_add_requirement(&json!({
+                "title": "Child",
+                "description": "c",
+                "type": "task",
+            }))
+            .unwrap();
+        let child_id = added_spec_id(&child).to_string();
+        server
+            .tool_add_relationship(&json!({
+                "spec_id": child_id,
+                "target_spec_id": parent_id,
+                "relationship_type": "parent",
+            }))
+            .unwrap();
+        let store = server.storage.load().unwrap();
+        for id in [&parent_id, &child_id] {
+            assert_eq!(
+                store.get_requirement_by_spec_id(id).unwrap().status,
+                RequirementStatus::Draft,
+                "{id} status must be untouched by add_relationship"
+            );
+        }
+    }
+
+    /// The coordination-channel writers (`post_punt`/`resolve_punt`/
+    /// `escalate_punt`/`post_directive`/`ack_brief`/`send_message`) write
+    /// runtime files the orchestrator/CLI consume; none of them touch spec
+    /// status in the store. Exercise the punt + directive writers and assert
+    /// the requirement store is never mutated by them. (Status transitions
+    /// for punted work are applied by the orchestrator, not the MCP writer.)
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_coordination_writers_do_not_touch_spec_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Coordination target",
+                "description": "body",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        server
+            .tool_post_punt(&json!({
+                "spec_id": id,
+                "detail": "which approach?",
+                "category": "design-fork",
+            }))
+            .unwrap();
+        server
+            .tool_resolve_punt(&json!({
+                "spec_id": id,
+                "answer": "approach A",
+                "reasoning": "simpler",
+            }))
+            .unwrap();
+        server
+            .tool_post_directive(&json!({ "verb": "pause" }))
+            .unwrap();
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(
+            req.status,
+            RequirementStatus::Draft,
+            "coordination writers must not mutate spec status"
+        );
+    }
+
     // trace:BUG-377 TASK-550 | ai:codex
     #[test]
     fn mcp_add_comment_persists_text_as_comment_content() {
@@ -4439,11 +4644,14 @@ mod tests {
             .unwrap()
             .to_string();
 
+        // TASK-681: `promote` is now advisor-gated (it sets Approved), so the
+        // reason-persistence path is exercised via `dismiss` (Rejected stays
+        // an implementer-legitimate transition).
         server
             .tool_triage_finding(&json!({
                 "id": finding_id,
-                "action": "promote",
-                "reason": "verified high priority",
+                "action": "dismiss",
+                "reason": "not actually a problem",
             }))
             .unwrap();
 
@@ -4451,12 +4659,12 @@ mod tests {
         let req = store
             .get_requirement_by_spec_id(&finding_id)
             .expect("finding should exist");
-        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(req.status, RequirementStatus::Rejected);
         assert_eq!(req.comments.len(), 1);
         assert_eq!(req.comments[0].author, "mcp");
         assert_eq!(
             req.comments[0].content,
-            "promoted via MCP: verified high priority"
+            "dismissed via MCP: not actually a problem"
         );
     }
 
