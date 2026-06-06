@@ -38592,6 +38592,22 @@ mod statusline_tests {
 
     /// TASK-645: the read-side role default. Unset/blank → implementer
     /// (flagged as default); any explicit value passes through canonicalized
+    /// BUG-460: advisor authority is granted by advisor role, a TTY, OR a
+    /// live-orchestrator-corroborated op — but a bare non-advisor headless agent
+    /// (no TTY, not orchestrated) is still gated.
+    #[test]
+    fn advisor_authority_grants_orchestrated_ops_but_gates_bare_agents() {
+        use super::advisor_authority_from;
+        // bare headless implementer/reviewer: no authority
+        assert!(!advisor_authority_from("implementer", false, false));
+        assert!(!advisor_authority_from("reviewer", false, false));
+        // the three authority sources
+        assert!(advisor_authority_from("advisor", false, false)); // advisor role
+        assert!(advisor_authority_from("implementer", true, false)); // interactive TTY
+        assert!(advisor_authority_from("implementer", false, true)); // under a live orchestrator
+        assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
+    }
+
     /// and unflagged. `dialog` canonicalizes to `advisor` (TASK-586).
     #[test]
     fn effective_role_defaults_to_implementer_when_unset() {
@@ -47349,8 +47365,38 @@ fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
 /// NB: the MCP server runs non-TTY but may inherit an advisor `AIDA_SESSION_ROLE`
 /// from the launching shell — it therefore does NOT use this helper and gates
 /// unconditionally (see `tool_add_requirement`).
+/// Pure core of [`has_advisor_authority`] (BUG-460): advisor authority is held
+/// by an advisor role, an interactive (TTY) session, OR an operation that is
+/// corroborated as running under a live orchestrator. The orchestrator case is
+/// the fix: the drain's own auto-queue and its headless implementer/reviewer
+/// phases are *workflow system actions* (advancing a spec through its
+/// lifecycle), not a bare agent self-advancing — and corroboration requires a
+/// token matching the live drain-state run, which a bare agent cannot forge, so
+/// the TASK-647/ADR-3 gate still blocks an un-orchestrated agent.
+/// trace:BUG-460 trace:TASK-647 | ai:claude
+fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
+    role == "advisor" || is_tty || orchestrated
+}
+
 fn has_advisor_authority() -> bool {
-    effective_role() == "advisor" || std::io::stdin().is_terminal()
+    // BUG-460: a CLI op spawned by (or under) a live --auto-complete drain
+    // inherits AIDA_AUTO_COMPLETE + the run token, so `orchestrator::detect`
+    // corroborates it against the drain-state file. Grant it authority so
+    // --no-human drains can auto-queue the review + let the phase children
+    // mutate; a bare headless agent (no live orchestrator) stays gated.
+    let orchestrated = find_main_worktree_root()
+        .map(|root| {
+            matches!(
+                orchestrator::detect(&root),
+                orchestrator::OrchestratorContext::Orchestrated
+            )
+        })
+        .unwrap_or(false);
+    advisor_authority_from(
+        &effective_role(),
+        std::io::stdin().is_terminal(),
+        orchestrated,
+    )
 }
 
 /// they disagree — and the warning is enabled — both are shown with a
@@ -80822,6 +80868,41 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => {
+                // BUG-459: substrate-as-bouncer for the "implementer committed
+                // its work but asked 'want me to push + open a PR?' instead of
+                // acting" headless no-op. The skill already forbids this, but a
+                // confident model still does it occasionally — so don't depend on
+                // model compliance: if the branch has real commits ahead of main,
+                // the work IS there and recoverable, so the ORCHESTRATOR opens the
+                // PR itself (reusing the forge-routed pr_ship_create_pr) rather
+                // than failing/punting. trace:BUG-459 | ai:claude
+                let ahead = branch_commits_ahead_main(&self.project_root, &branch).unwrap_or(0);
+                if ahead > 0 {
+                    match pr_ship_create_pr(&self.project_root, &branch) {
+                        Ok(pr) => {
+                            if !self.json {
+                                eprintln!(
+                                    "  {} implementer left {} commit(s) with no PR — opened PR-{} \
+                                     for it (BUG-459 recovery)",
+                                    "ⓘ".cyan(),
+                                    ahead,
+                                    pr
+                                );
+                            }
+                            self.pr_number = Some(pr as u32);
+                            return Ok(auto_complete::ImplementerOutcome::PrOpened);
+                        }
+                        Err(e) => {
+                            if !self.json {
+                                eprintln!(
+                                    "  {} could not auto-open a PR for the committed work \
+                                     ({e:#}) — falling back to punt/fail",
+                                    "⚠".yellow()
+                                );
+                            }
+                        }
+                    }
+                }
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
                     return Ok(auto_complete::ImplementerOutcome::Punted { reason });
                 }
