@@ -41653,6 +41653,47 @@ mod bug_354_text_question_classifier_tests {
     }
 
     #[test]
+    fn plan_specs_parses_header_line() {
+        // STORY-265: the Specs: header, comma + space separated.
+        let content = "# Plan: thing\n\nDate: 2026-06-06\nSpecs: STORY-265, BUG-12 TASK-1-097\nStatus: Draft\n\n## Body\nSpecs: NOT-THIS-ONE\n";
+        assert_eq!(
+            parse_plan_specs(content),
+            vec!["STORY-265", "BUG-12", "TASK-1-097"]
+        );
+        assert!(parse_plan_specs("# no specs line here\n").is_empty());
+    }
+
+    #[test]
+    fn find_plan_file_matches_spec_and_skips_template() {
+        // STORY-265: finds the plan whose Specs: lists the spec (case-insensitive),
+        // skips _TEMPLATE.md, ignores non-matching plans, newest date-prefix wins.
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        std::fs::write(
+            dir.join("_TEMPLATE.md"),
+            "Specs: STORY-265\n", // template must be ignored even if it mentions the spec
+        )
+        .unwrap();
+        std::fs::write(dir.join("2026-06-01-other.md"), "Specs: BUG-99\n").unwrap();
+        std::fs::write(
+            dir.join("2026-06-05-early.md"),
+            "# Plan\nSpecs: story-265\n", // case-insensitive match
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("2026-06-06-late.md"),
+            "# Plan\nSpecs: STORY-265, TASK-2\n",
+        )
+        .unwrap();
+
+        let found = find_plan_file_for_spec(dir, "STORY-265").unwrap();
+        assert_eq!(found.file_name().unwrap(), "2026-06-06-late.md"); // newest wins
+        assert!(find_plan_file_for_spec(dir, "STORY-999").is_none());
+        // a spec only present in the template is NOT matched
+        assert!(find_plan_file_for_spec(dir, "BUG-99").is_some()); // (real plan)
+    }
+
+    #[test]
     fn single_project_has_no_unmanaged_nested_repos() {
         // BUG-446: a normal single project — plain subdirs, no nested repos.
         let tmp = tempfile::tempdir().unwrap();
@@ -48249,7 +48290,165 @@ fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
     match cmd {
         PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
         PlanCommand::Helpers { spec, append } => plan_helpers(spec, append.as_deref()),
+        PlanCommand::Promote { spec, all, dry_run } => {
+            plan_promote(spec.as_deref(), *all, *dry_run)
+        }
     }
+}
+
+/// STORY-265: the SPEC-IDs listed on a plan file's `Specs:` header line
+/// (`Specs: STORY-N, BUG-M`). Comma- or whitespace-separated; only the first
+/// `Specs:` line (the header) is read. trace:STORY-265 | ai:claude
+fn parse_plan_specs(content: &str) -> Vec<String> {
+    for line in content.lines() {
+        let t = line.trim();
+        let rest = t
+            .strip_prefix("Specs:")
+            .or_else(|| t.strip_prefix("specs:"));
+        if let Some(rest) = rest {
+            return rest
+                .split([',', ' ', '\t'])
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// STORY-265: find the plan file under `plans_dir` whose `Specs:` header lists
+/// `spec_id` (case-insensitive). Skips `_`-prefixed files (e.g. `_TEMPLATE.md`)
+/// and only scans the header region. Returns the lexicographically-last match
+/// so the newest date-prefixed plan wins. trace:STORY-265 | ai:claude
+fn find_plan_file_for_spec(
+    plans_dir: &std::path::Path,
+    spec_id: &str,
+) -> Option<std::path::PathBuf> {
+    let mut matches: Vec<std::path::PathBuf> = Vec::new();
+    for entry in std::fs::read_dir(plans_dir).ok()?.flatten() {
+        let p = entry.path();
+        if p.extension().and_then(|x| x.to_str()) != Some("md") {
+            continue;
+        }
+        let name = p.file_name().and_then(|x| x.to_str()).unwrap_or("");
+        if name.starts_with('_') {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let head: String = content.lines().take(30).collect::<Vec<_>>().join("\n");
+        if parse_plan_specs(&head)
+            .iter()
+            .any(|s| s.eq_ignore_ascii_case(spec_id))
+        {
+            matches.push(p);
+        }
+    }
+    matches.sort();
+    matches.pop()
+}
+
+/// STORY-265: promote Approved spec(s) to Planned when a plan file exists.
+/// Reads the store read-only to find eligible specs (status Approved AND a
+/// `docs/plans/` file listing the SPEC-ID), then performs the transition via
+/// the proven `aida edit --status planned` path (history + write-through +
+/// the ADR-3 authority gate). trace:STORY-265 | ai:claude
+fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
+    use colored::Colorize;
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let plans_dir = project_root.join("docs").join("plans");
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the requirement store"))?;
+
+    let targets: Vec<String> = if let Some(s) = spec {
+        vec![s.to_string()]
+    } else if all {
+        store
+            .requirements
+            .iter()
+            .filter(|r| r.status == aida_core::RequirementStatus::Approved)
+            .filter_map(|r| r.spec_id.clone())
+            .collect()
+    } else {
+        anyhow::bail!("specify a SPEC-ID to promote, or pass --all to sweep every Approved spec");
+    };
+
+    let (mut eligible, mut promoted, mut skipped) = (0usize, 0usize, 0usize);
+    for sid in targets {
+        let Some(req) = store.requirements.iter().find(|r| {
+            r.spec_id
+                .as_deref()
+                .map(|x| x.eq_ignore_ascii_case(&sid))
+                .unwrap_or(false)
+        }) else {
+            eprintln!("  {} {} not found", "⚠".yellow(), sid);
+            continue;
+        };
+        let real_id = req.spec_id.clone().unwrap_or(sid);
+        if req.status != aida_core::RequirementStatus::Approved {
+            // Only narrate skips for an explicitly-named spec, not the --all sweep.
+            if spec.is_some() {
+                println!(
+                    "  {} {} is {:?}, not Approved — skipped",
+                    "↷".dimmed(),
+                    real_id,
+                    req.status
+                );
+            }
+            skipped += 1;
+            continue;
+        }
+        match find_plan_file_for_spec(&plans_dir, &real_id) {
+            Some(plan) => {
+                eligible += 1;
+                let rel = plan.strip_prefix(&project_root).unwrap_or(&plan);
+                if dry_run {
+                    println!(
+                        "  {} {} → Planned (plan: {})",
+                        "✓".green(),
+                        real_id,
+                        rel.display()
+                    );
+                } else {
+                    let status = std::process::Command::new(std::env::current_exe()?)
+                        .args(["edit", &real_id, "--status", "planned"])
+                        .status()?;
+                    if status.success() {
+                        println!(
+                            "  {} {} → Planned (plan: {})",
+                            "✓".green(),
+                            real_id,
+                            rel.display()
+                        );
+                        promoted += 1;
+                    } else {
+                        eprintln!("  {} {} — status edit failed", "✗".red(), real_id);
+                    }
+                }
+            }
+            None => {
+                if spec.is_some() {
+                    println!(
+                        "  {} {} has no plan file in {} (a plan's `Specs:` header must list {}) — skipped",
+                        "↷".dimmed(),
+                        real_id,
+                        plans_dir.display(),
+                        real_id
+                    );
+                }
+                skipped += 1;
+            }
+        }
+    }
+
+    if dry_run {
+        println!("(dry-run) {eligible} eligible for promotion, {skipped} skipped");
+    } else {
+        println!("{promoted} promoted to Planned, {skipped} skipped");
+    }
+    Ok(())
 }
 
 /// Dispatch `aida changelog <generate|refresh|preview>`. The whole engine
