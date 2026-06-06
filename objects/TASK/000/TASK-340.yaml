@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:32:59.072455559Z
-modified_at: 2026-05-23T17:24:50.964819167Z
+modified_at: 2026-06-06T08:34:29.802892938Z
 req_type: Task
 comments:
 - id: 019e55de-4694-7642-b0e3-5fb1795c55df
@@ -66,3 +66,14 @@ comments:
   content: "WIP preserved on branch task-340-2 at commit f7a2bc10 (origin). Antigravity started autonomy.rs module + cli.rs/drain_state.rs/main.rs \n  modifications (4 files, +376 lines) during 2026-05-23 morning. Resumable via: `git worktree add /home/joe/ai/aida-task-340 task-340-2`. Design call pending: \n  drain-state persistence at exit (per cast #1's prior implementer analysis)."
   created_at: 2026-05-23T17:24:50.964819167Z
   modified_at: 2026-05-23T17:24:50.964819167Z
+- id: 019e9c11-c12a-7081-adbb-2218e0f6c2a5
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Autonomy metric (autonomous-duration fraction + intervention-count per drain, drain-end summary, dated history). Verified `aida autonomy` namespace exists but ONLY carries `calibration`; the metric is explicitly not built ("broader autonomy-report views land alongside the autonomy-metric work that owns them"). Dependencies STORY-325 (punt-ledger timestamps) / STORY-301 (drain-state total) gate it. Build now?
+      a) Ship the full roll-up: compute fraction + intervention-count from punt-ledger paused_at/resolved_at + drain-state wall-clock, print drain-end summary, add `aida autonomy report` history view, scaffolding-pack.
+      b) Ship intervention-count only (the spec's own "cleaner maturity signal" — count of escalate-to-human punt records per drain); skip the availability-polluted duration fraction until wanted.
+      c) Defer — it's a visibility/morale metric, not a reliability bug; lower value in the bugs-before-marketing phase, and it's a roll-up that gets cheaper once STORY-325/301 timestamps are confirmed populated.
+      REC: b — the intervention-count is the honest maturity signal, is a thin roll-up over data the punt ledger should already carry, and lands the `aida autonomy report` surface the namespace was reserved for, without the noisy duration math.
+  created_at: 2026-06-06T08:34:29.802892938Z
+  modified_at: 2026-06-06T08:34:29.802892938Z
