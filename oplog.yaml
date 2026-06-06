@@ -12800,5 +12800,13 @@ operations:
 
       ## Relationships
       - Builds on STORY-306 (advisor tier / escalation), `--escalate-defaults`. Symmetric with ADR-3 (intake inbox). Reduces the recovery-latency metric (EPIC-36). Out-of-band channel: STORY-493 (mailbox). The human-facing rung of the autonomy ladder (docs/architecture/autonomy-and-escalation.md).
-clock: 1410
+- id: 019e9b1f-fdb0-77b3-b077-eaca25643557
+  target_id: 019e996e-a694-7be0-8678-03d74bb6a525
+  author: aida
+  node_id: '1'
+  lamport: 1411
+  timestamp: 2026-06-06T04:10:25.584366839Z
+  kind: !SetStatus
+    status: Done
+clock: 1411
 node_id: '1'
