@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:34.128826874Z
-modified_at: 2026-05-21T02:19:34.128826874Z
+modified_at: 2026-06-06T04:16:17.145792825Z
 req_type: Story
 tags:
 - advisor
@@ -17,3 +17,5 @@ tags:
 - multi-project
 - ongoing-relationship
 - track-b
+archived: true
+archived_at: 2026-06-06T04:16:17.145792825Z
