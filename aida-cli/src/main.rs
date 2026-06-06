@@ -4710,10 +4710,13 @@ fn complete_init_scaffolding(
         "advisor".cyan(),
         "reviewer".cyan()
     );
+    // trace:TASK-667 — under the shell wrapper the bare `aida role enter`
+    // is correct; raw, the `eval "$(...)"` form is. eval_subcommand_hint
+    // picks based on AIDA_SHELL_WRAPPER instead of hardcoding one form.
     println!(
         "    {} Switch any time: {}",
         "·".dimmed(),
-        "eval \"$(aida role enter <role>)\"".cyan()
+        eval_subcommand_hint("role enter <role>").cyan()
     );
 
     if !verbose {
@@ -17712,14 +17715,15 @@ fn handle_role_add(
     global: bool,
 ) -> Result<()> {
     if let Ok((existing, path)) = load_role(project_root, name) {
+        // trace:TASK-667 — emit the wrapper-correct enter form.
         anyhow::bail!(
             "Role '{}' already exists at {}.\n\
-             Resume it with: `aida role enter {}`\n\
+             Resume it with: `{}`\n\
              See its details with: `aida role show {}`\n\
              ({})",
             name,
             path.display(),
-            name,
+            eval_subcommand_hint(&format!("role enter {name}")),
             name,
             if existing.global {
                 "currently a global role"
@@ -18402,7 +18406,11 @@ fn handle_role_scaffold() -> Result<()> {
             }
         );
         println!();
-        println!("Try them: {}", "aida role enter implementer".cyan());
+        // trace:TASK-667 — wrapper-correct enter form.
+        println!(
+            "Try them: {}",
+            eval_subcommand_hint("role enter implementer").cyan()
+        );
         println!("List all: {}", "aida role list".cyan());
     }
     Ok(())
@@ -52279,9 +52287,13 @@ fn handle_dev_status() -> Result<()> {
         if active {
             "ACTIVE".green().to_string()
         } else {
-            "(not active — `eval \"$(aida dev activate)\"` to enable)"
-                .yellow()
-                .to_string()
+            // trace:TASK-667 — wrapper-correct activate form.
+            format!(
+                "(not active — `{}` to enable)",
+                eval_subcommand_hint("dev activate")
+            )
+            .yellow()
+            .to_string()
         }
     );
     if active {
@@ -52414,6 +52426,31 @@ fn handle_dev_status() -> Result<()> {
     Ok(())
 }
 
+/// TASK-667: render a runtime hint for one of the shell-modifying subcommands
+/// (`role enter <role>`, `role end`, `role add <name>`, `session start`,
+/// `session end`, `dev activate`, `dev deactivate`) in the form the caller's
+/// shell will actually honor.
+///
+/// The `aida()` wrapper installed by `aida dev shell-init` auto-evals these
+/// subcommands, so under the wrapper the BARE form (`aida role enter <role>`)
+/// is correct — the function evals the binary's stdout. Printing
+/// `eval "$(aida role enter <role>)"` there double-evals (the inner eval runs
+/// in a subshell) and the shell change is silently lost — the long-standing
+/// double-eval footgun.
+///
+/// Without the wrapper (raw binary on PATH), the bare form would just print
+/// shell code that never executes, so the `eval "$(...)"` form is required.
+///
+/// The wrapper signals its presence via `AIDA_SHELL_WRAPPER` (exported from
+/// SHELL_HELPERS), which is how we branch.
+fn eval_subcommand_hint(subcommand: &str) -> String {
+    if std::env::var_os("AIDA_SHELL_WRAPPER").is_some() {
+        format!("aida {subcommand}")
+    } else {
+        format!("eval \"$(aida {subcommand})\"")
+    }
+}
+
 /// Shell helpers emitted by `aida dev shell-init`. A single `aida()` wrapper
 /// function — pyenv/rbenv style. For most subcommands it just delegates to
 /// the binary. For the handful of eval-only subcommands (dev activate, dev
@@ -52431,6 +52468,15 @@ const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # automatically eval'd so they take effect here, not in the subprocess.
 #
 # Bypass the wrapper with `command aida ...` if you need raw stdout.
+
+# trace:TASK-667 — signal the wrapper's presence so the binary tailors its
+# auto-eval hints. When this is set, the `aida()` function below auto-evals
+# the shell-modifying subcommands, so the binary prints the BARE form
+# (`aida role enter <role>`); printing `eval "$(...)"` would double-eval and
+# lose the effect. The value lists the auto-evaled verb groups for any future
+# wrapper-aware decisions.
+export AIDA_SHELL_WRAPPER='role,session,dev'
+
 aida() {
     # Take the first two positional words verbatim — that's enough to
     # disambiguate every eval-required subcommand we have.
@@ -53071,9 +53117,11 @@ fn handle_dev_release(bump: &str) -> Result<()> {
                 .filter(|p| is_aida_repo(p))
         })
         .ok_or_else(|| {
+            // trace:TASK-667 — wrapper-correct activate form.
             anyhow::anyhow!(
                 "Not in an aida repo. cd into the aida checkout, set AIDA_DEV_REPO, \
-                 or run `eval \"$(aida dev activate)\"` first."
+                 or run `{}` first.",
+                eval_subcommand_hint("dev activate")
             )
         })?;
 
@@ -58694,6 +58742,49 @@ mod queue_rework_tests {
         ] {
             // Just confirm the function doesn't panic on any variant.
             let _ = rework_smart_target(s);
+        }
+    }
+}
+
+#[cfg(test)]
+mod eval_subcommand_hint_tests {
+    //! TASK-667: the shell wrapper exports AIDA_SHELL_WRAPPER; the binary
+    //! must then emit the BARE auto-eval hint (the `aida()` function evals
+    //! the binary's stdout, so `eval "$(...)"` would double-eval). Without
+    //! the wrapper, the `eval "$(...)"` form is required. trace:TASK-667
+    use super::eval_subcommand_hint;
+
+    // Single test (not split) so the two branches mutate AIDA_SHELL_WRAPPER
+    // sequentially — env vars are process-global and tests run in parallel.
+    #[test]
+    fn bare_when_wrapper_set_eval_form_when_unset() {
+        let prev = std::env::var_os("AIDA_SHELL_WRAPPER");
+
+        // Wrapper present → bare form (no eval wrapping).
+        std::env::set_var("AIDA_SHELL_WRAPPER", "role,session,dev");
+        assert_eq!(
+            eval_subcommand_hint("role enter advisor"),
+            "aida role enter advisor"
+        );
+        // Even an empty value counts as present (var set by the wrapper).
+        std::env::set_var("AIDA_SHELL_WRAPPER", "");
+        assert_eq!(eval_subcommand_hint("dev activate"), "aida dev activate");
+
+        // Wrapper absent → eval "$(...)" form (raw binary on PATH).
+        std::env::remove_var("AIDA_SHELL_WRAPPER");
+        assert_eq!(
+            eval_subcommand_hint("role enter advisor"),
+            "eval \"$(aida role enter advisor)\""
+        );
+        assert_eq!(
+            eval_subcommand_hint("session end"),
+            "eval \"$(aida session end)\""
+        );
+
+        // Restore whatever the test environment had.
+        match prev {
+            Some(v) => std::env::set_var("AIDA_SHELL_WRAPPER", v),
+            None => std::env::remove_var("AIDA_SHELL_WRAPPER"),
         }
     }
 }
