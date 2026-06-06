@@ -15592,5 +15592,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Close via BOTH: (1) ROOT CAUSE — land TASK-631 (init commits its own scaffolding), which dissolves the 'commit scaffolding' onboarding task in the common path; (2) DURABLE GUARDRAIL — flag setup/scaffolding-commit tasks as primary-worktree-only so they never route through queue-work worktree isolation (protects any future such task). BUG-445 closes once both land. Never emit a bare 'git add .' without .gitignore present.
-clock: 1553
+- id: 019e9d95-d6bf-7783-8386-52f03514c956
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  author: aida
+  node_id: '1'
+  lamport: 1554
+  timestamp: 2026-06-06T15:38:23.295096458Z
+  kind: !SetStatus
+    status: Planned
+clock: 1554
 node_id: '1'
