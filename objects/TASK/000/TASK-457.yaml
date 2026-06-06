@@ -2,7 +2,7 @@ id: 019e508f-06a6-7132-900a-224044cf0300
 spec_id: TASK-457
 agreed_id: TASK-457
 title: 'aida init: scaffold .antigravity/ directory + integration files (mirrors .codex/ pattern)'
-description: |-
+description: |
   ## Background
 
   \`aida init\` currently scaffolds \`.codex/\` with Codex agent integration files (\`AGENTS.md\`, etc.). With Antigravity CLI as a second supported agent (STORY-407), the same scaffolding pattern extends to \`.antigravity/\`.
@@ -25,12 +25,16 @@ description: |-
 
   - STORY-407 — empirical integration produces the content this task scaffolds.
   - The original \`.codex/\` integration that informs the pattern.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  ALWAYS scaffold .antigravity/ alongside .codex/ (no new flag) — --no-skills skips both consistently. Low-blast-radius onboarding parity for a second supported agent (NOT marketing). A selective --agents= flag is speculative until a user asks for selectivity. Mirror the .codex/ template structure + reference docs/agents/antigravity-mcp-setup.md.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:11.174903400Z
-modified_at: 2026-06-06T15:12:24.683359255Z
+modified_at: 2026-06-06T15:12:25.953581053Z
 req_type: Task
 tags:
 - agent-integration
