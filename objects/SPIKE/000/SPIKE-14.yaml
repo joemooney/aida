@@ -9,12 +9,12 @@ description: |-
 
   Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/01-dynamic-workflows.md
   Acceptance: source-quoted findings, AIDA equivalent named, compete/compose/ignore classification with rationale, concrete proposal (if compose: prototype shape; if compete: differentiator to harden; if ignore: why).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:21:28.386557757Z
-modified_at: 2026-06-06T08:37:59.146422311Z
+modified_at: 2026-06-06T08:38:01.768958389Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
