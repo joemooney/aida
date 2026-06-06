@@ -121,7 +121,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:18:18.917955429Z
-modified_at: 2026-05-24T06:38:09.396595682Z
+modified_at: 2026-06-06T08:18:48.215728601Z
 req_type: Epic
 tags:
 - aida:tui
@@ -160,3 +160,18 @@ comments:
     EPIC-29 itself stays at Approved as a captured architectural commitment; just don't execute the children until post-alpha.
   created_at: 2026-05-17T02:14:49.313085125Z
   modified_at: 2026-05-17T02:14:49.313085125Z
+- id: 019e9c03-6317-70c3-ba35-88da294e1fbe
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input. LINCHPIN for the whole EPIC-29 cluster (STORY-266/267/268/269/270).
+    Q1: Split aida-tui into a standalone companion repo — proceed or reject?
+      a) REJECT the split — keep aida-tui in the monorepo. Current strategy makes the TUI 'the product' (EPIC-26, shipped default-on since STORY-137); demoting it to a companion repo + removing the tui feature from aida-cli (STORY-268) directly contradicts that. Multi-repo coordination cost lands against the bugs-first phase.
+      b) Proceed with the full 5-story split as specified
+      c) Defer until post-stability and re-decide
+      REC: a — strong tension with the shipped 'TUI is the product' positioning; reject the split. BUT salvage STORY-266 (define/freeze aida-core's public API) as standalone API-hygiene work — it's worth doing (TUI + MCP both consume aida-core) regardless of any split.
+    Q2: If rejecting the split, what happens to STORY-266 (public-API audit/freeze)?
+      a) Reject it with the epic
+      b) Rescope as a decoupled 'document aida-core public API' hygiene TASK
+      REC: b.
+  created_at: 2026-06-06T08:18:48.215728601Z
+  modified_at: 2026-06-06T08:18:48.215728601Z
