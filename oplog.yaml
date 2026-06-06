@@ -14652,5 +14652,22 @@ operations:
   timestamp: 2026-06-06T14:03:54.192564639Z
   kind: !SetStatus
     status: Rejected
-clock: 1519
+- id: 019e9d3f-69d1-7861-b153-3f3541a1d208
+  target_id: 019e0fb9-1c08-79a3-b65b-efd9bdf0bd4f
+  author: aida
+  node_id: '1'
+  lamport: 1520
+  timestamp: 2026-06-06T14:03:59.313454117Z
+  kind: !SetDescription
+    description: |
+      Pulled out of EPIC-21's body. v1 records the pairing trailer; v2 actually USES it.
+
+      aida store checkout HEAD reads the current commit's Aida-Store: trailer and resets .aida-store/ to that SHA. Read-only mode while time-traveled (writes from a rewound store would create branches the canonical orphan never sees). aida store reset returns the worktree to canonical HEAD.
+
+      aida status integration: warn when code/store are misaligned, suggest aida store checkout HEAD.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Build the DRIFT-WARNING slice only: aida status warns when the store/code SHAs diverge (cheap, high-signal). DEFER the full read-only worktree checkout (aida store checkout/reset) — it carries rewound-store write hazards the spec itself flags and has no concrete caller. The v1 pairing trailer already records linkage for forensic lookup.
+clock: 1520
 node_id: '1'
