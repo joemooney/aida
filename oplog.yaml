@@ -14669,5 +14669,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Build the DRIFT-WARNING slice only: aida status warns when the store/code SHAs diverge (cheap, high-signal). DEFER the full read-only worktree checkout (aida store checkout/reset) — it carries rewound-store write hazards the spec itself flags and has no concrete caller. The v1 pairing trailer already records linkage for forensic lookup.
-clock: 1520
+- id: 019e9d3f-888a-7673-b581-7d3e7b14ec27
+  target_id: 019e14f8-4f8f-7333-af6a-bde98499053d
+  author: aida
+  node_id: '1'
+  lamport: 1521
+  timestamp: 2026-06-06T14:04:07.178821251Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1521
 node_id: '1'
