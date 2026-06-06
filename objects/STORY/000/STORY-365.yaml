@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:37.412677248Z
-modified_at: 2026-05-21T02:19:37.412677248Z
+modified_at: 2026-06-06T04:16:20.023776887Z
 req_type: Story
 tags:
 - advisor
@@ -17,3 +17,5 @@ tags:
 - governance
 - substrate-propagation
 - track-b
+archived: true
+archived_at: 2026-06-06T04:16:20.023776887Z
