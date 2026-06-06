@@ -117,12 +117,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:15:02.335601702Z
-modified_at: 2026-06-06T15:18:32.594623610Z
+modified_at: 2026-06-06T15:18:34.248478514Z
 req_type: Spike
 tags:
 - deferred:post-stability
 - evidence
-- needs-human-input
 - no-human-amortized
 - plan-quality
 - research
