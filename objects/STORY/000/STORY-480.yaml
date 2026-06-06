@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:33:06.599909026Z
-modified_at: 2026-05-28T16:33:06.599909026Z
+modified_at: 2026-06-06T08:33:36.726110069Z
 req_type: Story
 tags:
 - aida:init
@@ -27,3 +27,15 @@ tags:
 - monorepo
 - path-gated-rules
 - scaffolding
+comments:
+- id: 019e9c10-f1d6-7c43-8b64-ae09cf93377e
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Path-gated `.claude/rules/<glob>.md` scaffolding for per-folder conventions is monorepo-targeted, but AIDA today is a single-crate-workspace dogfood project with no monorepo users, and `aida init` does not scaffold a `rules/` dir or a `--with-rules` flag. Build it now?
+      a) Reject — speculative monorepo feature; no users need it, over-engineering caution applies in the stability phase
+      b) Minimal slice — `aida init` scaffolds `.claude/rules/README.md` documenting path-gating semantics only; skip the `--with-rules` starter templates and the `aida list --tag rules` surface
+      c) Full story as written (README + `--with-rules` templates + discipline-pack docs + `aida list --tag rules`)
+      REC: a — pure scaffolding for a use case (monorepo per-folder rules) that no current project hits; revisit when a real multi-feature/monorepo AIDA user appears. (Note: `.claude/rules/aida-specs/` already exists in this repo but is unrelated spec-markdown, not this feature.)
+  created_at: 2026-06-06T08:33:36.726110069Z
+  modified_at: 2026-06-06T08:33:36.726110069Z
