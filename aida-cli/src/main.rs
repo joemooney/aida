@@ -36964,6 +36964,39 @@ fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
     pr_ship::workflow_files_indicate_ci(names.iter().map(String::as_str))
 }
 
+/// Run a `Command` to completion, retrying transient `ETXTBSY`
+/// ("Text file busy", `os error 26`) spawn failures.
+///
+/// BUG-463: on Linux, `exec`ing a file fails with `ETXTBSY` while *any*
+/// process still holds that file open for writing. In a parallel test
+/// runner (or any multi-threaded program), one thread that writes an
+/// executable script can have its still-open writable fd transiently
+/// inherited by an unrelated child process a sibling thread `fork`/`exec`s
+/// between that fd's `open` and `close`. The borrowing child keeps the
+/// file "busy" until it exits, so the writer's own `exec` of the
+/// just-written script races and flakes with `ETXTBSY`. The condition is
+/// short-lived (the borrowing child exits in milliseconds), so a bounded
+/// retry-with-backoff turns the flake into a deterministic success. This
+/// also hardens the real `gh` exec (e.g. a freshly-written `gh` wrapper)
+/// at negligible cost.
+/// trace:BUG-463 | ai:claude
+fn command_output_retrying_etxtbsy(
+    cmd: &mut std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    const MAX_ATTEMPTS: u32 = 50;
+    let mut attempt = 0u32;
+    loop {
+        match cmd.output() {
+            Ok(out) => return Ok(out),
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && attempt < MAX_ATTEMPTS => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 fn wait_for_pr_checks_to_register(project_root: &std::path::Path, pr_number: u64) -> Result<()> {
     wait_for_pr_checks_to_register_with_gh(
         project_root,
@@ -36985,10 +37018,13 @@ fn wait_for_pr_checks_to_register_with_gh(
     let deadline = std::time::Instant::now() + timeout;
     loop {
         let pr = pr_number.to_string();
-        let out = std::process::Command::new(gh_bin)
+        // BUG-463: retry transient `ETXTBSY` so a just-written `gh` wrapper
+        // (or a fake one in the parallel test runner) doesn't flake the exec.
+        let mut command = std::process::Command::new(gh_bin);
+        command
             .current_dir(project_root)
-            .args(["pr", "checks", &pr])
-            .output()
+            .args(["pr", "checks", &pr]);
+        let out = command_output_retrying_etxtbsy(&mut command)
             .with_context(|| format!("could not invoke `gh pr checks {pr_number}`"))?;
         let stdout = String::from_utf8_lossy(&out.stdout);
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -37765,6 +37801,13 @@ mod pr_ship_environment_tests {
         git(path, &["commit", "--allow-empty", "-m", "base", "--quiet"]);
     }
 
+    // BUG-463: each test owns its own `tempfile::tempdir()`, so the fake `gh`
+    // scripts are already path-isolated. The residual CI flake came from
+    // `ETXTBSY` when exec'ing a just-written script while a sibling test's
+    // child transiently held the writable fd; the exec path now retries on
+    // `ETXTBSY` (see `command_output_retrying_etxtbsy`), so writing the
+    // script here stays a plain write + chmod.
+    // trace:BUG-463 | ai:claude
     fn make_executable(path: &std::path::Path, body: &str) {
         std::fs::write(path, body).unwrap();
         let mut perms = std::fs::metadata(path).unwrap().permissions();
