@@ -3959,6 +3959,19 @@ pub enum AutonomyCommand {
     // trace:STORY-439 | ai:claude
     #[clap(subcommand)]
     Calibration(CalibrationSubcommand),
+    /// Human-intervention maturity report: how many times drains had to stop
+    /// and ask a human, rolled up per day so the trend is readable. The
+    /// count trending toward zero as the autonomy machinery matures is the
+    /// honest maturity signal.
+    // trace:TASK-340 | ai:claude
+    Report {
+        /// Cap the number of dated rows printed (newest first). Default 30.
+        #[clap(long, value_name = "N", default_value_t = 30)]
+        last: usize,
+        /// Emit a machine-readable JSON object instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Subcommands under `aida autonomy calibration`.
