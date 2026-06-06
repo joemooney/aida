@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-05-27T07:32:47.955510316Z
+modified_at: 2026-06-06T08:33:41.438433776Z
 req_type: Story
 tags:
 - audit
@@ -38,3 +38,14 @@ comments:
     Open question for master: should HTTP transport bind default be disabled unless --transport http is passed (recommended), or should a config file enable it per-project?
   created_at: 2026-05-27T07:32:47.955510316Z
   modified_at: 2026-05-27T07:32:47.955510316Z
+- id: 019e9c11-043e-7831-b046-74ae3579bc8d
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Remote HTTP/auth MCP transport (today `aida mcp-serve` is stdio-only) is a marketplace/cloud-adoption feature with real security surface (bind address, token auth, audit log). Build during the bugs/stability phase?
+      a) Reject/defer — adoption feature for the post-stability marketing phase; new network+auth surface is a stability risk, not a bug fix
+      b) Build now, full scope (HTTP transport + token auth on write tools + audit log + docs)
+      c) Build now but pair tightly with STORY-474 (profiles) so the conservative read-only profile is the default exposed over HTTP
+      REC: a — opening a network transport with auth is exactly the kind of new surface to defer until stability is reached and a real remote/cloud-agent need is concrete; high priority tag predates the bugs-first phase decision.
+  created_at: 2026-06-06T08:33:41.438433776Z
+  modified_at: 2026-06-06T08:33:41.438433776Z
