@@ -8,5 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:10:09.656748240Z
-modified_at: 2026-06-06T08:06:42.849283727Z
+modified_at: 2026-06-06T08:06:49.157720489Z
 req_type: Term
+comments:
+- id: 019e9bf8-6a45-7fe1-bd1c-98a86ccc2809
+  author: joe
+  content: 'Resolved (disposition sweep 2026-06-06): glossary term in active use — the TYPE-NODE-SEQ node-aware ID scheme is implemented (dispenser/node/merge-gate). Stateless definition — recording as Completed/defined.'
+  created_at: 2026-06-06T08:06:49.157720489Z
+  modified_at: 2026-06-06T08:06:49.157720489Z
