@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:26:22.306439170Z
-modified_at: 2026-06-06T08:34:39.498188764Z
+modified_at: 2026-06-06T13:58:55.345035905Z
 req_type: Story
 tags:
 - brief
@@ -105,3 +105,8 @@ comments:
       REC: c — the strategic container has delivered its load-bearing slice (Level 1); keeping an open umbrella for explicitly-post-alpha Levels 2/3 invites scope creep, cleaner to close and re-file the remaining levels on demand.
   created_at: 2026-06-06T08:34:36.376064289Z
   modified_at: 2026-06-06T08:34:36.376064289Z
+- id: 019e9d3a-c671-75a1-bc57-356ac50b815a
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): CLOSE the container — Level 1 (brief-as-file, aida brief; TASK-492/STORY-426) delivered the load-bearing cut-n-paste friction fix. Re-file Level 2 (per-agent pickup skill + for:agent: tag) and Level 3 (autonomous per-agent drain wrapping, explicitly post-alpha) as their own specs when non-Claude autonomy becomes a priority.'
+  created_at: 2026-06-06T13:58:55.345035905Z
+  modified_at: 2026-06-06T13:58:55.345035905Z
