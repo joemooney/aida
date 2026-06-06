@@ -19,10 +19,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T07:16:36.357077926Z
-modified_at: 2026-06-06T08:15:15.673649340Z
+modified_at: 2026-06-06T08:16:10.686177318Z
 req_type: Task
 tags:
+- ci
+- competitive-analysis
+- from:SPIKE-50
 - ready-to-implement
+- scaffolding
+- template-drift
 comments:
 - id: 019e9c00-19de-7ce3-a0e5-70f0fca7e049
   author: joe
