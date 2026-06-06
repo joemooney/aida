@@ -2,7 +2,7 @@ id: 019e4115-7ee3-7cd1-a137-9871d589b6a9
 spec_id: STORY-335
 agreed_id: STORY-335
 title: 'Deferred batch integration: a resumable integrate pass for --auto-complete + a selectable accumulation strategy'
-description: |-
+description: |
   A workflow gap (user request, 2026-05-19): work a batch of queue items **without merging**, accumulate them, then run one command to rebase-land the batch onto main — and let the *accumulation strategy* be a user-selected option, not a baked-in choice.
 
   ## What exists / what's missing
@@ -59,12 +59,16 @@ description: |-
   ## Origin
 
   2026-05-19 user request: "a lot of items in the queue I could work out on a branch... work the items but do not merge... a rebase command, or a command to continue the flow to get them onto main." On the accumulation model the user asked that the strategy itself be a user-selectable option rather than a baked-in choice — hence `--strategy`.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  KEEP DEFERRED to post-stability — the new rebase step touches the orchestrator lifecycle being stabilized; this reliability-class machinery ships best at-keyboard after the floor is solid. If/when built, the --dry-run cross-batch rebase-conflict forecast is the safest first slice.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:33:08.323277210Z
-modified_at: 2026-06-06T13:55:17.741284134Z
+modified_at: 2026-06-06T13:55:19.636502653Z
 req_type: Story
 tags:
 - autonomous-drain

@@ -14182,5 +14182,73 @@ operations:
   timestamp: 2026-06-06T13:53:35.782697308Z
   kind: !SetStatus
     status: Approved
-clock: 1505
+- id: 019e9d37-7be4-78c3-b864-df3c1d39988f
+  target_id: 019e4115-7ee3-7cd1-a137-9871d589b6a9
+  author: aida
+  node_id: '1'
+  lamport: 1506
+  timestamp: 2026-06-06T13:55:19.652618750Z
+  kind: !SetDescription
+    description: |
+      A workflow gap (user request, 2026-05-19): work a batch of queue items **without merging**, accumulate them, then run one command to rebase-land the batch onto main — and let the *accumulation strategy* be a user-selected option, not a baked-in choice.
+
+      ## What exists / what's missing
+
+      `aida queue work batch:NAME --auto-complete=through-ci` is the **implement pass** — each member implemented, CI-green, PR opened, **not merged**. That works today.
+
+      Missing is the **integrate pass**: there is no inverse of `through-ci`. `--auto-complete` always starts at phase 1, and the lifecycle has **no rebase step** — it assumes each spec fully lands before the next starts. A deferred batch has every branch cut from the same stale main, so integration must rebase each onto the advancing main.
+
+      ## The integrate pass
+
+      Add `--auto-complete=from-review` (symmetric with `through-ci`): resume the lifecycle at review for a batch already taken through `through-ci`, and drive **review → rebase-onto-current-main → merge → pull → build** for each member, in order.
+
+      - The **rebase step is new** — before merging member N, rebase its branch onto current main (predecessors have landed).
+      - The integrate pass is review + deterministic phases (no implementer) → it is **fully `--no-human`-able today**. Implement at the keyboard under `--zen` by day; integrate `--no-human` overnight.
+      - A rebase conflict = `kind:design-fork`: `--zen` pauses for the advisor; `--no-human` punts it (STORY-332 `/aida-punt`) — that member → NeedsAttention, the drain continues with the rest.
+      - `--dry-run` on the integrate pass **forecasts cross-batch rebase conflicts before you start** — turns "hope the rebase isn't too bad" into a checkable preview.
+
+      ## The strategy selector
+
+      `--strategy {per-item | one-branch | stacked}` — the accumulation shape, orthogonal to the `--auto-complete` phase-range:
+
+      - **`per-item`** (default; this STORY's MVP) — branch + PR per item; integrate rebases + merges them in order. N *small sequential* rebases (each against a near-current main) — easier than one big-bang rebase. The implement half is today's `through-ci`.
+      - **`one-branch`** — all items as commits on one branch; one rebase, one PR. *Follow-up.*
+      - **`stacked`** — each item builds on the previous; integrate rebases the stack as a unit; intra-batch conflicts resolve during implementation. *Follow-up — gated on STORY-248.*
+
+      The flag accepts all three values from day one; `one-branch`/`stacked` error cleanly ("not built yet — see <followup>") until implemented — the established `--no-human=both` pattern. Settable as a project default in `.aida/config.toml`; the flag overrides per-run.
+
+      ## Acceptance (MVP — `per-item`)
+
+      - [ ] `--auto-complete=from-review` resumes the lifecycle at review for a `through-ci`'d batch — review → rebase → merge → pull → build per member, in order
+      - [ ] Each member's branch is rebased onto current main before merge; a clean rebase proceeds, a conflict is surfaced
+      - [ ] `--strategy` flag defined with all three values; `per-item` works; `one-branch`/`stacked` error cleanly, pointing at the follow-up
+      - [ ] `--zen`: a rebase conflict pauses for the advisor. `--no-human`: it punts (member → NeedsAttention), the drain continues
+      - [ ] `--dry-run` on the integrate pass prints a cross-batch rebase-conflict forecast without acting
+      - [ ] A member failing review or rebase is left un-integrated with a clear reason; the rest still land
+      - [ ] Tests: `through-ci` then `from-review` lands a 3-member batch on main; a conflicting member punts under `--no-human` while the others land; `--dry-run` forecast
+
+      ## Out of scope
+
+      - `one-branch` and `stacked` strategies — see Followups
+      - Headless implementer — the implement pass stays `--zen`-at-keyboard until `--no-human=both` ships
+
+      ## Followups
+
+      - `one-branch` accumulation strategy — all batch items on a single branch, one rebase + one PR
+      - `stacked` accumulation strategy — wire the integrate pass to consume STORY-248's stacked branches
+
+      ## Composes with
+
+      - **STORY-248** (stacked-branch awareness — the `stacked` strategy consumes it; STORY-248's auto-rebase machinery feeds the integrate pass's rebase step)
+      - **STORY-287 / STORY-332 / STORY-333** (autonomy taxonomy — a rebase conflict is a design-fork: `--zen` pauses, `--no-human` punts)
+      - **TASK-310** (`--batches` chaining), **BUG-241** (orchestrator outcome model), the `/aida-rebase` skill
+
+      ## Origin
+
+      2026-05-19 user request: "a lot of items in the queue I could work out on a branch... work the items but do not merge... a rebase command, or a command to continue the flow to get them onto main." On the accumulation model the user asked that the strategy itself be a user-selectable option rather than a baked-in choice — hence `--strategy`.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      KEEP DEFERRED to post-stability — the new rebase step touches the orchestrator lifecycle being stabilized; this reliability-class machinery ships best at-keyboard after the floor is solid. If/when built, the --dry-run cross-batch rebase-conflict forecast is the safest first slice.
+clock: 1506
 node_id: '1'
