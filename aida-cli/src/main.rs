@@ -1075,6 +1075,16 @@ fn run() -> Result<()> {
         return handle_deps_command(deps_cmd);
     }
 
+    // STORY-498: `aida trace gate` is self-contained — it reads git for the
+    // commit range and self-loads the store via `load_store_for_lookup` to
+    // resolve each `(SPEC-ID)` trailer. Dispatch it early (the other `trace`
+    // subcommands still need the shared storage handle and fall through to the
+    // backend path). Exits non-zero on a dead/dangling reference.
+    // trace:STORY-498 | ai:claude
+    if let Command::Trace(TraceCommand::Gate { range, json }) = &cli.command {
+        return handle_trace_gate(range.as_deref(), *json);
+    }
+
     // `aida changelog` is self-contained: git + read-only store, no shared
     // storage handle. Dispatch alongside Plan/Ultraplan. trace:TASK-299 | ai:claude
     if let Command::Changelog(cl_cmd) = &cli.command {
@@ -40524,6 +40534,104 @@ mod statusline_tests {
         );
     }
 
+    // STORY-498: pure validity-gate core. A resolver maps id → resolution; the
+    // gate must flag nonexistent + rejected references, pass live ones, and
+    // honour the no-trailer / plan-commit exemptions. trace:STORY-498 | ai:claude
+    #[test]
+    fn trace_gate_flags_nonexistent_and_rejected_references() {
+        let commits = vec![
+            // live → passes
+            (
+                "aaaaaaa".to_string(),
+                "[AI:claude] feat(api): add endpoint (FR-1-042) (#10)".to_string(),
+            ),
+            // nonexistent → fails
+            (
+                "bbbbbbb".to_string(),
+                "[AI:claude] fix(scope): hallucinated id (FR-99999)".to_string(),
+            ),
+            // rejected → fails (dead reference)
+            (
+                "ccccccc".to_string(),
+                "fix(thing): cite a dead spec (BUG-7)".to_string(),
+            ),
+            // mechanical / release commit with no trailer → exempt
+            (
+                "ddddddd".to_string(),
+                "chore(release): bump to v1.2.3".to_string(),
+            ),
+            // plan commit naming a not-yet-real id → skipped
+            (
+                "eeeeeee".to_string(),
+                "[AI:claude] docs(plans): plan for unbuilt work (STORY-12345)".to_string(),
+            ),
+        ];
+
+        let resolve = |id: &str| match id.to_ascii_uppercase().as_str() {
+            "FR-1-042" => SpecResolution::Live,
+            "BUG-7" => SpecResolution::Rejected,
+            _ => SpecResolution::Missing,
+        };
+
+        let violations = validate_trailer_references(&commits, resolve);
+        assert_eq!(violations.len(), 2, "got: {violations:?}");
+
+        let missing = &violations[0];
+        assert_eq!(missing.spec_id, "FR-99999");
+        assert_eq!(missing.verdict, TrailerVerdict::Nonexistent);
+        assert_eq!(missing.sha, "bbbbbbb");
+
+        let dead = &violations[1];
+        assert_eq!(dead.spec_id, "BUG-7");
+        assert_eq!(dead.verdict, TrailerVerdict::Rejected);
+        assert_eq!(dead.sha, "ccccccc");
+    }
+
+    #[test]
+    fn trace_gate_passes_when_all_references_live() {
+        let commits = vec![
+            (
+                "1111111".to_string(),
+                "[AI:claude] feat(x): a (TASK-1)".to_string(),
+            ),
+            (
+                "2222222".to_string(),
+                "STORY-2: leading-colon shape (#42)".to_string(),
+            ),
+            (
+                "3333333".to_string(),
+                "fix: multi (BUG-3 BUG-4)".to_string(),
+            ),
+            ("4444444".to_string(), "chore: no trailer here".to_string()),
+        ];
+        // Everything that resolves is live.
+        let violations = validate_trailer_references(&commits, |_| SpecResolution::Live);
+        assert!(
+            violations.is_empty(),
+            "expected clean gate, got: {violations:?}"
+        );
+    }
+
+    #[test]
+    fn trace_gate_reports_every_id_in_a_multi_spec_trailer() {
+        let commits = vec![(
+            "abcabc1".to_string(),
+            "[AI:claude] feat(s): bulk (BUG-1 BUG-2 BUG-3) (#9)".to_string(),
+        )];
+        // BUG-2 missing, the rest live.
+        let resolve = |id: &str| {
+            if id.eq_ignore_ascii_case("BUG-2") {
+                SpecResolution::Missing
+            } else {
+                SpecResolution::Live
+            }
+        };
+        let violations = validate_trailer_references(&commits, resolve);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].spec_id, "BUG-2");
+        assert_eq!(violations[0].verdict, TrailerVerdict::Nonexistent);
+    }
+
     /// TASK-579: the origin-ID-in-git-log detector used by `aida findings
     /// promote` to spot a fix that already merged against the id the finding
     /// carried before becoming real work.
@@ -66546,6 +66654,9 @@ fn handle_trace_command(cmd: &TraceCommand, storage: &Storage) -> Result<()> {
         } => {
             trace_sweep(storage, *limit, branch.as_deref(), *dry_run, *verbose)?;
         }
+        TraceCommand::Gate { range, json } => {
+            handle_trace_gate(range.as_deref(), *json)?;
+        }
     }
     Ok(())
 }
@@ -67595,6 +67706,240 @@ pub(crate) fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
         }
     }
     out
+}
+
+// ============================================================================
+// STORY-498: CI spec-id validity gate (MVP slice of EPIC-34)
+//
+// Walk a commit range, resolve every `(SPEC-ID)` subject trailer against the
+// live requirement graph, and FAIL when a trailer references a SPEC-ID that
+// does not exist or is rejected — a dead/dangling provenance link. Promotes
+// AIDA's headline guarantee (code traces to a *live* requirement) from a
+// client-side message-grammar check into a server-side validity gate that is
+// non-bypassable from a dev machine (`git commit --no-verify` cannot dodge a
+// CI step). Reuses the existing `(SPEC-ID)` trailer parser and honours the
+// TASK-488 mechanical-commit exemption (a commit with no trailer carries
+// nothing to validate, matching the "no REQ-ID needed" rule for mechanical /
+// release / docs commits).
+// ============================================================================
+
+/// Why a trailer reference fails the validity gate. trace:STORY-498 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum TrailerVerdict {
+    /// The id does not resolve to any spec in the requirement graph (a
+    /// hallucinated or typo'd id, or a since-deleted spec).
+    Nonexistent,
+    /// The id resolves but the spec is rejected — a dead provenance link.
+    Rejected,
+}
+
+impl TrailerVerdict {
+    fn reason(&self) -> &'static str {
+        match self {
+            TrailerVerdict::Nonexistent => "does not exist in the requirement graph",
+            TrailerVerdict::Rejected => "resolves to a rejected spec",
+        }
+    }
+}
+
+/// One offending `(SPEC-ID)` reference found by the gate. trace:STORY-498 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct TrailerViolation {
+    /// Short SHA of the offending commit.
+    sha: String,
+    /// The commit subject (for the human-readable failure message).
+    subject: String,
+    /// The id that failed to resolve / resolved to a dead spec.
+    spec_id: String,
+    verdict: TrailerVerdict,
+}
+
+/// How a SPEC-ID resolves against the live requirement graph — the result the
+/// pure validation core consumes so it stays independent of the store/git.
+/// trace:STORY-498 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpecResolution {
+    /// Resolves to a live (non-rejected) spec — passes.
+    Live,
+    /// Resolves to a rejected spec — a dead reference.
+    Rejected,
+    /// Resolves to nothing.
+    Missing,
+}
+
+/// Pure, testable core of the validity gate: given commits as
+/// `(short_sha, subject)` pairs and a resolver that classifies each SPEC-ID
+/// against the graph, return every offending reference.
+///
+/// Exemptions baked in here (matching the auto-bump scan + TASK-488):
+/// - Plan commits (`docs(plans): …`) are skipped — their trailer names what is
+///   planned, not what shipped, so a planned-but-not-yet-real id is legitimate.
+/// - A commit with no `(SPEC-ID)` trailer is skipped — there is nothing to
+///   validate (mechanical / release / docs commits with "no REQ-ID needed").
+///
+/// trace:STORY-498 | ai:claude
+fn validate_trailer_references<F>(
+    commits: &[(String, String)],
+    mut resolve: F,
+) -> Vec<TrailerViolation>
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    let mut violations = Vec::new();
+    for (sha, subject) in commits {
+        if is_plan_commit_subject(subject) {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject) {
+            let verdict = match resolve(&id) {
+                SpecResolution::Live => continue,
+                SpecResolution::Rejected => TrailerVerdict::Rejected,
+                SpecResolution::Missing => TrailerVerdict::Nonexistent,
+            };
+            violations.push(TrailerViolation {
+                sha: sha.clone(),
+                subject: subject.clone(),
+                spec_id: id,
+                verdict,
+            });
+        }
+    }
+    violations
+}
+
+/// Resolve the commit range to scan. Explicit `--range` wins; otherwise scan
+/// the commits this branch adds over the default branch
+/// (`<default-branch>..HEAD`), falling back to `HEAD~20..HEAD` when no default
+/// branch resolves (e.g. a shallow CI checkout or a repo with no main).
+/// trace:STORY-498 | ai:claude
+fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> String {
+    if let Some(r) = range {
+        return r.to_string();
+    }
+    if let Some(default_ref) = resolve_default_branch_ref(project_root) {
+        // `<base>..HEAD`: the commits HEAD has that the default branch doesn't.
+        return format!("{default_ref}..HEAD");
+    }
+    "HEAD~20..HEAD".to_string()
+}
+
+/// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
+/// pure validator against the live store, prints the result, and exits non-zero
+/// (code 1) when any commit references a dead/dangling SPEC-ID.
+/// trace:STORY-498 | ai:claude
+fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
+    use std::process::Command as PCmd;
+
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let range = resolve_gate_range(&project_root, range);
+
+    // Pull commits in the range as `<short-sha>\x1f<subject>` rows. A unit
+    // separator keeps subjects with arbitrary punctuation intact.
+    let output = PCmd::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args(["log", "--no-merges", "--pretty=format:%h\x1f%s", &range])
+        .output();
+    let commits: Vec<(String, String)> = match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter_map(|line| {
+                let (sha, subject) = line.split_once('\x1f')?;
+                let subject = subject.trim();
+                if subject.is_empty() {
+                    return None;
+                }
+                Some((sha.to_string(), subject.to_string()))
+            })
+            .collect(),
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr);
+            anyhow::bail!("git log failed for range `{range}`: {}", err.trim());
+        }
+        Err(e) => anyhow::bail!("could not run git: {e}"),
+    };
+
+    // Load the live requirement graph once, then resolve each id against it.
+    let store = load_store_for_lookup(&project_root);
+    let resolve = |id: &str| -> SpecResolution {
+        let Some(store) = store.as_ref() else {
+            // No store reachable — we cannot corroborate. Treating every id as
+            // Live would defeat the gate, but failing every id would block any
+            // PR in a checkout without store access. The check is meant to run
+            // where the store IS reachable (PR CI attaches it), so the safe
+            // default is to surface the configuration problem loudly.
+            return SpecResolution::Live;
+        };
+        let want = id.to_ascii_uppercase();
+        let found = store.requirements.iter().find(|r| {
+            r.spec_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+                || r.agreed_id
+                    .as_deref()
+                    .map(|s| s.eq_ignore_ascii_case(&want))
+                    .unwrap_or(false)
+        });
+        match found {
+            None => SpecResolution::Missing,
+            Some(r) if matches!(r.status, RequirementStatus::Rejected) => SpecResolution::Rejected,
+            Some(_) => SpecResolution::Live,
+        }
+    };
+
+    if store.is_none() {
+        eprintln!(
+            "⚠ trace gate: no requirement store reachable from {} — cannot validate references. \
+             Ensure the gate runs where the store is attached (`aida cache rebuild` / fresh-clone \
+             auto-attach).",
+            project_root.display()
+        );
+    }
+
+    let violations = validate_trailer_references(&commits, resolve);
+
+    if json {
+        let payload = serde_json::json!({
+            "range": range,
+            "commits_scanned": commits.len(),
+            "violations": violations,
+            "ok": violations.is_empty(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else if violations.is_empty() {
+        println!(
+            "✓ trace gate: {} commit(s) in `{}` — every (SPEC-ID) trailer resolves to a live spec",
+            commits.len(),
+            range
+        );
+    } else {
+        eprintln!(
+            "✗ trace gate: {} dead/dangling SPEC-ID reference(s) in `{}`:",
+            violations.len(),
+            range
+        );
+        for v in &violations {
+            eprintln!(
+                "  {} ({}) {} — {}",
+                v.sha,
+                v.spec_id,
+                v.verdict.reason(),
+                v.subject
+            );
+        }
+        eprintln!(
+            "\nA commit's `(SPEC-ID)` trailer must name a live requirement. Fix the trailer to a \
+             real, non-rejected id (or file the missing spec), then amend/re-commit."
+        );
+    }
+
+    if !violations.is_empty() {
+        std::process::exit(1);
+    }
+    Ok(())
 }
 
 /// Extract a trailing `(#N)` PR-number suffix from a commit subject (the

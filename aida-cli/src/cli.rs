@@ -165,6 +165,23 @@ pub enum TraceCommand {
         #[clap(long, short = 'v')]
         verbose: bool,
     },
+
+    /// CI spec-id validity gate: walk a commit range, resolve every
+    /// `(SPEC-ID)` subject trailer against the live requirement graph, and
+    /// exit non-zero when any commit references a SPEC-ID that does not exist
+    /// or is rejected (a dead/dangling provenance link). Mechanical/release
+    /// commits with no trailer are exempt; plan commits are skipped.
+    Gate {
+        /// Git revision range to scan (e.g. `origin/main..HEAD`). Defaults to
+        /// `<default-branch>..HEAD` (the commits this branch adds), falling
+        /// back to `HEAD~20..HEAD` when no default branch resolves.
+        #[clap(long)]
+        range: Option<String>,
+
+        /// Emit machine-readable JSON instead of human text.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Commands for generating reports

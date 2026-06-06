@@ -82,6 +82,25 @@ jobs:
       - name: Run MCP doc-consistency test
         run: bash tests/test_mcp_doc_consistency.sh
 
+      # STORY-498: CI spec-id validity gate (MVP slice of EPIC-34). Walk the
+      # commits this PR adds, resolve every `(SPEC-ID)` subject trailer against
+      # the live requirement graph, and FAIL the PR when a trailer references a
+      # nonexistent or rejected spec — a dead/dangling provenance link. This is
+      # the server-side, non-bypassable half: a `git commit --no-verify`'d local
+      # commit that dodges the message-grammar hook is still caught here. The
+      # store lives on the orphan `aida-store` branch; fetch it so the binary's
+      # fresh-clone auto-attach can build the read cache. Mechanical/release
+      # commits with no trailer are exempt by the existing audited rule.
+      # trace:STORY-498 | ai:claude
+      - name: Validate commit SPEC-ID references (trace gate)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags origin aida-store:aida-store || \
+            echo "::warning::could not fetch aida-store branch — trace gate may not resolve ids"
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags origin "${{ github.base_ref }}" || true
+          ./target/release/aida trace gate --range "${BASE}..HEAD"
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
