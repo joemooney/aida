@@ -277,7 +277,7 @@ blocks:
   type_prefix: STORY
   range_start: 341
   range_end: 640
-  next: 524
+  next: 525
   allocated_at: 2026-05-18T05:41:19.938863534Z
 - node_id: '1'
   owner: joe
