@@ -58586,6 +58586,73 @@ mod queue_work_tests {
         assert_eq!(resolve_autonomy_mode(true, true), AutonomyMode::NoHuman);
     }
 
+    // --- resolve_drain_alias (TASK-578) -----------------------------------
+
+    /// `--drain` off is a pure identity map — the operator's flags pass through
+    /// untouched. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_off_is_identity() {
+        let r = resolve_drain_alias(
+            false,
+            Some("through-ci"),
+            Some("reviewer-only"),
+            Some(3),
+            10,
+        );
+        assert_eq!(r.auto_complete.as_deref(), Some("through-ci"));
+        assert_eq!(r.no_human.as_deref(), Some("reviewer-only"));
+        assert_eq!(r.max, Some(3));
+
+        let empty = resolve_drain_alias(false, None, None, None, 10);
+        assert_eq!(empty.auto_complete, None);
+        assert_eq!(empty.no_human, None);
+        assert_eq!(empty.max, None);
+    }
+
+    /// Bare `--drain` expands to the full headless drain bounded by the queue
+    /// size. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_bare_expands_to_full_headless_queue_sized() {
+        let r = resolve_drain_alias(true, None, None, None, 7);
+        assert_eq!(r.auto_complete.as_deref(), Some("full"));
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert_eq!(r.max, Some(7));
+    }
+
+    /// An unknown / empty queue size falls back to the spec's `--max 99`.
+    /// trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_unknown_queue_size_falls_back_to_99() {
+        let r = resolve_drain_alias(true, None, None, None, 0);
+        assert_eq!(r.max, Some(99));
+    }
+
+    /// Explicit flags always win over the `--drain` defaults — the alias never
+    /// overwrites an operator-supplied value. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_explicit_flags_override_defaults() {
+        let r = resolve_drain_alias(
+            true,
+            Some("through-merge"),
+            Some("reviewer-only"),
+            Some(2),
+            50,
+        );
+        assert_eq!(r.auto_complete.as_deref(), Some("through-merge"));
+        assert_eq!(r.no_human.as_deref(), Some("reviewer-only"));
+        assert_eq!(r.max, Some(2));
+    }
+
+    /// Mixed: `--drain --max 3` keeps the explicit cap but still defaults the
+    /// autonomy fields. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_partial_override_keeps_other_defaults() {
+        let r = resolve_drain_alias(true, None, None, Some(3), 50);
+        assert_eq!(r.auto_complete.as_deref(), Some("full"));
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert_eq!(r.max, Some(3));
+    }
+
     // --- TASK-306: --no-human kickoff gate --------------------------------
 
     /// STORY-276: the gate keys purely off acknowledgement — ack'd → proceed
@@ -73122,6 +73189,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             list_sessions,
             session_id,
             auto_complete,
+            drain,
             json,
             max,
             max_failures,
@@ -73146,6 +73214,34 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             effort,
             strict,
         } => {
+            let user_id = get_user(user);
+            // TASK-578: expand the `--drain` discoverability alias into the
+            // underlying `--auto-complete --no-human=both --max <queue-size>`
+            // state before anything downstream reads those flags. `--drain` only
+            // sets state — every guard, dispatch, and orchestrator path below
+            // behaves exactly as if the operator had typed the long form. The
+            // drivable queue size feeds the `--max` default (the bare-queue
+            // drain N); a best-effort `0` falls back to 99 inside the resolver.
+            // Explicit flags always win. trace:TASK-578 | ai:claude
+            let drain_queue_size = if *drain {
+                drivable_queued_count(storage, &user_id).unwrap_or(0)
+            } else {
+                0
+            };
+            let drain_resolution = resolve_drain_alias(
+                *drain,
+                auto_complete.as_deref(),
+                no_human.as_deref(),
+                *max,
+                drain_queue_size,
+            );
+            // Shadow the raw flags with their drain-resolved values. `max` is
+            // only re-applied on routes where it is meaningful (the bare-queue
+            // nextN drain and a batch drain); on the single-spec path the
+            // existing `--max` rejection still applies, so keep `max` itself the
+            // operator-supplied value there. trace:TASK-578 | ai:claude
+            let auto_complete = &drain_resolution.auto_complete;
+            let no_human = &drain_resolution.no_human;
             // TASK-560: reject --resume + --auto-complete with a message that
             // explains the conflict and names both recovery paths, instead of
             // clap's terse "cannot be used with". trace:TASK-560 | ai:claude
@@ -73154,7 +73250,6 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             {
                 anyhow::bail!(msg);
             }
-            let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
             // `--zen` propagates via `AIDA_ZEN` — set the env var once at
             // the top and every downstream child (the direct headless
@@ -73481,6 +73576,31 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             *max_failures,
                         );
                     }
+                }
+                // TASK-578: a bare `--drain` (no batch, no positional spec, no
+                // `nextN` keyword) drains the whole drivable queue. It expands to
+                // a `nextN` drain where N is the resolved drain `--max` (the
+                // queue size, an explicit `--max`, or the 99 fallback). Routing
+                // through the existing nextN orchestrator gives us the
+                // skip-undrivable + per-member-lifecycle behaviour for free.
+                // trace:TASK-578 | ai:claude
+                if *drain && effective_id.is_none() {
+                    let n = drain_resolution.max.unwrap_or(99).max(1);
+                    handle_auto_complete_next_n(
+                        storage,
+                        &user_id,
+                        n,
+                        variant,
+                        *json,
+                        permission_mode.as_deref(),
+                        no_human_mode,
+                        escalate_mode,
+                        *steal,
+                        *force_claim,
+                        *allow_stale_base,
+                        *no_auto_rebase,
+                        *max_failures,
+                    );
                 }
                 // `--max` only bounds a batch drain — reject it on the
                 // single-spec path so the flag never silently no-ops.
@@ -83678,6 +83798,53 @@ fn resolve_autonomy_mode(zen_flag: bool, no_human: bool) -> AutonomyMode {
         (true, _) => AutonomyMode::NoHuman,
         (false, true) => AutonomyMode::Zen,
         (false, false) => AutonomyMode::Default,
+    }
+}
+
+/// Resolved flag values after expanding the `aida queue work --drain` alias
+/// (TASK-578). `--drain` is pure discoverability sugar: it sets the same
+/// internal state that `--auto-complete --no-human=both --max <queue-size>`
+/// already produced. Explicit flags always win, so `--drain
+/// --no-human=reviewer-only` keeps `reviewer-only`,
+/// `--drain --auto-complete=through-ci` keeps the early stop, and an explicit
+/// `--max N` caps the drain instead of using the queue size.
+/// trace:TASK-578 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DrainResolution {
+    auto_complete: Option<String>,
+    no_human: Option<String>,
+    max: Option<usize>,
+}
+
+/// Expand the `--drain` alias into the underlying auto-complete / no-human / max
+/// state. When `drain` is false this is an identity map over the caller's flags.
+/// When `drain` is true the unset fields take the drain defaults — full
+/// auto-complete, fully-headless (`both`), and a `--max` of the drivable queue
+/// size (falling back to 99 when the size is unknown / zero, per the spec). An
+/// explicitly-supplied flag is never overwritten. `queue_size` is the number of
+/// drivable queued items the caller has already resolved (0 ⇒ unknown). The
+/// function is pure so the expansion can be unit-tested without a live queue.
+/// trace:TASK-578 | ai:claude
+fn resolve_drain_alias(
+    drain: bool,
+    auto_complete: Option<&str>,
+    no_human: Option<&str>,
+    max: Option<usize>,
+    queue_size: usize,
+) -> DrainResolution {
+    if !drain {
+        return DrainResolution {
+            auto_complete: auto_complete.map(str::to_string),
+            no_human: no_human.map(str::to_string),
+            max,
+        };
+    }
+    DrainResolution {
+        auto_complete: Some(auto_complete.unwrap_or("full").to_string()),
+        no_human: Some(no_human.unwrap_or("both").to_string()),
+        // Explicit --max wins; otherwise bound the drain to the queue size, or
+        // fall back to 99 when the size is unknown (the spec's "--max 99").
+        max: Some(max.unwrap_or(if queue_size > 0 { queue_size } else { 99 })),
     }
 }
 
