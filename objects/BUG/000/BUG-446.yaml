@@ -12,12 +12,12 @@ description: |-
   Suggested detection (triage, not a spec): refuse-by-default when the target contains >=1 nested .git below it (excluding the target's own), or an unusually high subdir/entry count; print guidance to init inside an actual project subdir instead.
 
   NOTE (out of scope for this bug): recovery from the current state is destructive -- remove /home/joe/ai/.git + .aida + .aida-store + the init-written files (.gitignore, .mcp.json, AGENTS.md, CLAUDE.md, .codex/, etc.) + the /home/joe/ai-task-007 worktree, after ending the live session/lease -- and is left for the operator to decide; not done here.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:33.794990413Z
-modified_at: 2026-06-06T06:50:45.767182106Z
+modified_at: 2026-06-06T06:56:21.474623020Z
 req_type: Bug
 tags:
 - aida:init
@@ -32,3 +32,7 @@ comments:
   content: Commit 26946a929 references this requirement
   created_at: 2026-06-06T06:50:45.767182106Z
   modified_at: 2026-06-06T06:50:45.767182106Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T06:56:21.474623020Z
+  completion_sha: c3ac2bec4ea0c3c540339d6b621fa7e8b4bb5d46
