@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-06-06T08:34:00.984753283Z
+modified_at: 2026-06-06T08:34:02.772413062Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -70,6 +70,7 @@ tags:
 - from-user-direction
 - load-balancing
 - multi-agent
+- needs-human-input
 - role
 - scaling-pattern
 comments:
