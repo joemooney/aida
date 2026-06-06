@@ -41,12 +41,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   PROTOTYPE the watch-loop as a SCRIPT first (confirm BUG-444 phase-1 NoPr status before relying on the merge phase) — validate the load-bearing PR-detection/merge loop cheaply; promote to a first-class 'integrator' role + producer/consumer split ONLY if the loop proves out. Avoids committing reversible-expensive role taxonomy/scaffolding up front.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T17:36:44.160363907Z
-modified_at: 2026-06-06T14:13:17.005070263Z
+modified_at: 2026-06-06T14:13:19.649572887Z
 req_type: Story
 tags:
 - drain
