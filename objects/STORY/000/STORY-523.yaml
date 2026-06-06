@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:46:29.087785646Z
-modified_at: 2026-06-06T08:17:20.656570559Z
+modified_at: 2026-06-06T14:13:33.256567333Z
 req_type: Story
 tags:
 - backlog-sweep
@@ -69,3 +69,8 @@ comments:
       REC: b — 522's value (lower human-recovery latency) is a reliability concern that fits; the proactive sweep (523) is throughput, can wait.
   created_at: 2026-06-06T08:17:18.590067122Z
   modified_at: 2026-06-06T08:17:18.590067122Z
+- id: 019e9d48-2bc8-7943-831a-36977eb7b6fd
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): DEFER behind STORY-522 — 522 defines the DecisionRequest artifact + inbox this producer feeds; producing questions before that format/inbox exists is wasted. Also: the proactive whole-backlog sweep is THROUGHPUT (defer) vs 522''s human-recovery-latency RELIABILITY value (allow). Sequence strictly after 522. Recorded blocked-by STORY-522.'
+  created_at: 2026-06-06T14:13:33.256567333Z
+  modified_at: 2026-06-06T14:13:33.256567333Z
