@@ -76,7 +76,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:41.299481463Z
-modified_at: 2026-06-06T08:35:03.817288364Z
+modified_at: 2026-06-06T13:39:14.469646408Z
 req_type: Epic
 tags:
 - agent-collaboration
@@ -106,3 +106,8 @@ comments:
       REC: a — EPIC-as-tracker stays Approved, but during the bug-clearing phase only the in-flight children advance; the 30-tool fan-out is exactly the over-engineering the phase guidance warns against. Note many channels (findings/claim/directive/brief tools) already exist beyond the original 7, so the audit's gap count is stale.
   created_at: 2026-06-06T08:35:02.315605102Z
   modified_at: 2026-06-06T08:35:02.315605102Z
+- id: 019e9d28-c1a5-76c3-a686-ed96afa642d7
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Advance ONLY the in-flight children now — STORY-82 (modernize the 7 existing tools), STORY-399 (structuredContent), STORY-401 (stable error shapes). RE-SCOPE the 30-new-tool fan-out as deferred post-stability (it''s the over-engineering the phase warns against). EPIC stays open as tracker. Refresh the gap count first: many channels (findings/claim/directive/brief tools) already exist beyond the original 7.'
+  created_at: 2026-06-06T13:39:14.469646408Z
+  modified_at: 2026-06-06T13:39:14.469646408Z
