@@ -52,13 +52,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:23:58.751815087Z
-modified_at: 2026-06-06T14:26:10.610451152Z
+modified_at: 2026-06-06T14:26:13.292922114Z
 req_type: Task
 tags:
 - aesthetics
 - catppuccin
 - deferred:post-stability
-- needs-human-input
 - nord
 - polish
 - ratatui-styles
