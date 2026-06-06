@@ -83,7 +83,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:19:54.642684973Z
-modified_at: 2026-06-06T08:35:51.679982471Z
+modified_at: 2026-06-06T13:53:06.522677444Z
 req_type: Story
 tags:
 - block
@@ -110,3 +110,8 @@ comments:
       REC: a — the orchestrator delivered the outcome this STORY was chasing (no cold-start across the review loop) via a different mechanism; the standalone block/unblock primitive is now largely redundant and adds pinned-lease/polling cost. If hand-driven sessions need it, (c) keeps the option open.
   created_at: 2026-06-06T08:35:50.339111875Z
   modified_at: 2026-06-06T08:35:50.339111875Z
+- id: 019e9d35-73da-70f1-b4c3-5620f1d9b968
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): REJECT — the --auto-complete orchestrator (STORY-246+) already eliminated the implementer→reviewer cold-start tax this story chased, via a different mechanism. A standalone block/unblock primitive now duplicates it and adds pinned-lease/polling cost. Re-file if hand-driven separate-session ping-pong demand reappears.'
+  created_at: 2026-06-06T13:53:06.522677444Z
+  modified_at: 2026-06-06T13:53:06.522677444Z
