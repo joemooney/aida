@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-05-24T04:59:09.142023431Z
+modified_at: 2026-06-06T08:34:15.008515571Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -318,3 +318,14 @@ comments:
     — master advisor
   created_at: 2026-05-24T04:59:09.142023431Z
   modified_at: 2026-05-24T04:59:09.142023431Z
+- id: 019e9c11-8760-7263-a6bc-65922af02187
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Resilient dependency-aware drain is largely SHIPPED — STORY-446/448/449 Completed, shelve/skip-dependent/max-failures live in auto_complete.rs. Only STORY-450 (optional phase-7 patch-release after each spec) and STORY-447 (deps sweep, separately triaged) remain open. How to dispose of the EPIC container?
+      a) Mark EPIC scope as effectively delivered; let it ride until STORY-450 + STORY-447 land, then close — no new work on the EPIC itself.
+      b) Re-scope: drop STORY-450 (per-spec auto-patch-release is a power-user/post-alpha convenience that conflicts with the current bugs-before-marketing phase) and close the EPIC once STORY-447 lands.
+      c) Keep fully open including STORY-450 as a near-term target.
+      REC: b — the resilient-drain core (the actual value) is shipped; STORY-450's per-spec release loop is exactly the "running 50+ specs overnight" power-user layer the EPIC itself marks post-alpha, so defer it and let the EPIC close on the remaining inference work.
+  created_at: 2026-06-06T08:34:15.008515571Z
+  modified_at: 2026-06-06T08:34:15.008515571Z
