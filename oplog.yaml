@@ -15396,5 +15396,122 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER to the marketing/adoption phase — one-way external issue refs (linear:/jira:/github:) are a PM-integration feature, not a bug/stability item; consistent with deferring STORY-475. When built: the generic provider:id ref field (render via configured base URLs + MCP search, NO bidirectional sync) is the right bounded shape.
-clock: 1548
+- id: 019e9d83-a50b-7333-9c3c-4bb9def02799
+  target_id: 019e34c9-d23f-7ef1-b543-24ff376fbca8
+  author: aida
+  node_id: '1'
+  lamport: 1549
+  timestamp: 2026-06-06T15:18:30.923856957Z
+  kind: !SetDescription
+    description: |
+      ## Hypothesis
+
+      \`/ultraplan\` (local + web variants) produces planning-grade output that yields **measurably better implementations** than direct \`aida queue work SPEC\` (implementer-plans-as-it-goes). Until proven, AIDA's plan-archival + plan-brief-on-pickup conventions are being designed around an untested assumption.
+
+      ## Why now
+
+      - TASK-304 (\`/ultraplan\` cadence config) needs evidence-backed defaults for its \`mode = "suggested"\` heuristic threshold
+      - TASK-305 (web /ultraplan plan archival) is worth building only if web /ultraplan is empirically valuable
+      - \`--no-human\` autopilot drain time (Max-bundled, otherwise-idle) is the cheapest research budget available — fold the SPIKE into overnight drain windows
+      - Mirrors SPIKE-7's pattern: evidence-first before committing to an integrated workflow assumption
+
+      ## Experimental design
+
+      ### Three conditions, same spec(s), branch-isolated
+
+      | Condition | Pipeline | What runs |
+      |---|---|---|
+      | **A: no-plan** | \`aida queue work SPEC\` | 1 implementer session only |
+      | **B: local /ultraplan** | \`aida ultraplan SPEC\` → local /ultraplan → \`/aida-import-plan\` → \`aida queue work SPEC\` | 1 planning + 1 implementer session |
+      | **C: web /ultraplan** | \`aida ultraplan SPEC\` → web /ultraplan approve | 1 cloud session (end-to-end) |
+
+      Each condition runs on its own branch (\`spike-8/<spec>-cond-{A,B,C}\`) off the same base commit. PRs opened as \`--draft\`. Cleanup: tagged \`spike:ultraplan-comparison\`; only the winning condition (if any) cherry-picked / re-implemented onto a real branch.
+
+      ### Spec selection criteria
+
+      - **Similar complexity** across the candidate set (same \`type\`, similar acceptance bullet count, similar feature touched)
+      - **Low-stakes** (cosmetic fixes, doc work, small refactors — NOT load-bearing features)
+      - **Not currently in the implementer queue** (avoid colliding with real drain work)
+      - Ideally **chunky enough** that planning *could* matter (so the "B/C better than A" hypothesis is testable; testing on a trivial spec just shows planning is overkill, which we already know)
+
+      ### Candidate specs (to be confirmed at SPIKE kickoff)
+
+      - 2–3 specs from \`batch:alpha-docs\` if they're sized similarly (doc work surfaces planning decisions explicitly — scope, ordering, examples-to-include)
+      - Or 2–3 sibling refactor TASKs that touch overlapping code (so plan-vs-implementation divergence is visible)
+      - Specifically AVOID: BUG specs (too fix-shaped — planning doesn't add much), specs with hard external deps, specs blocking other queue items
+
+      Aim for **2 specs minimum, 3 if Max usage budget allows** (each spec = 3 conditions = 3 PRs).
+
+      ### Measurable rubric
+
+      Per PR produced:
+
+      1. **Reviewer verdict** — headless reviewer (STORY-263) verdict: Approved / NeedsChanges / Rejected
+      2. **Findings count + severity** — major / minor / cosmetic distribution from the reviewer's PR comment
+      3. **Diff metrics** — \`git diff --stat\`: lines added, files touched; smaller + more focused = better planning
+      4. **Test density** — # new test cases / # acceptance bullets covered by tests (planned testing vs ad-hoc)
+      5. **Followups filed** — # TASKs/BUGs filed within 24h of merge that reference this spec (planning gaps surface as followups)
+      6. **Wall-clock** — kickoff timestamp → PR-open timestamp
+      7. **Token cost** — \`/cost\` after each Claude Code session where visible; web /ultraplan cost is opaque (record "n/a, bundled")
+      8. **Plan-vs-implementation divergence** (B + C only) — % of plan bullets that landed unchanged vs modified / dropped / added during implementation
+      9. **Re-use discovery** — did the plan (B + C) or implementer (A) identify existing helpers (from trace-graph analysis), or reinvent? Count of net-new helpers introduced.
+
+      Scoring: per-spec relative rank (1st/2nd/3rd) per metric, then aggregate. Look for **consistent winner across specs and metrics**, not single-metric wins (those are noise).
+
+      ## Acceptance
+
+      - [ ] Candidate spec set selected (2–3 specs, similarity-matched, non-load-bearing) and recorded in SPIKE report
+      - [ ] All three conditions run on each candidate spec, on isolated branches, draft PRs opened
+      - [ ] Rubric metrics collected per PR (script preferred; manual recording acceptable for v1)
+      - [ ] Findings tabulated per condition per spec; aggregate rank computed
+      - [ ] SPIKE report written to \`docs/spikes/2026-05-NN-spike-8-ultraplan-comparison.md\` (mirror SPIKE-7's format)
+      - [ ] Report includes: hypothesis verdict (supported / refuted / mixed), per-condition strengths/weaknesses, specific recommendations for TASK-304 \`mode\` defaults
+      - [ ] Cleanup: all SPIKE branches closed without merging to main (or, the winning implementation cherry-picked deliberately onto a real branch with attribution)
+      - [ ] Findings comment added to TASK-304 and TASK-305 referencing this SPIKE's recommendations
+      - [ ] If /ultraplan is empirically not-better: file follow-up TASK to either deprecate the integration or scope it tightly (the negative result is as valuable as the positive)
+
+      ## Cost budget
+
+      - Condition A: 1 implementer-grade session per spec
+      - Condition B: 1 small planning session + 1 implementer-grade session per spec
+      - Condition C: 1 web-/ultraplan session per spec (bundled but real time)
+
+      Total for 2 specs: ~6 sessions. For 3 specs: ~9 sessions. Bundled under Max; **the SPIKE consumes a usage-limit budget rather than a dollar budget**.
+
+      Time investment: ~6–10 hours of orchestrator wall-clock + ~2 hours of human analysis (write-up).
+
+      ## Risks + cleanup discipline
+
+      - **PR pollution**: 6–9 draft PRs that aren't real work. All branches tagged \`spike:ultraplan-comparison\`; all PRs labeled \`spike\` and closed (not merged) when scoring complete. Branches deleted post-scoring.
+      - **Web /ultraplan auto-merge**: web flow may try to merge its PR. Use \`--draft\` and a non-default base branch (e.g., \`spike-base\` cut from main, never merged forward) to prevent accidental landing.
+      - **Confounders**: 2–3 specs is small; results are directional, not statistically robust. SPIKE report must call this out explicitly. If results are ambiguous, recommend running on more specs vs over-claiming.
+      - **Bias**: I (dialog role) am the one scoring rubric items — same risk as SPIKE-7. Where possible, use mechanical measurements (diff stats, reviewer verdict bits) over judgment calls.
+
+      ## Out of scope
+
+      - **Building auto-comparison tooling** — SPIKE is exploratory; manual scoring fine. Tooling becomes a follow-up TASK only if the SPIKE outcome is "we should keep running this comparison."
+      - **Comparing to non-Claude planners** (e.g., GPT-based) — different problem
+      - **Cross-project plan quality** — single repo
+      - **Long-term tracking of plan quality drift** — that's a different concern
+
+      ## Composes with
+
+      - **SPIKE-7** (headless Claude empirical-evidence pattern — this SPIKE mirrors its design)
+      - **TASK-304** (cadence config — this SPIKE produces the evidence for its \`mode\` defaults)
+      - **TASK-305** (plan-archival reconciliation — only worth building if web /ultraplan is empirically valuable)
+      - **STORY-263 + STORY-276** (headless reviewer + implementer — autopilot mode is what makes this SPIKE cheap to run)
+      - **STORY-278** (concrete recent web /ultraplan case — already-running data point we can fold in as a C-condition for an additional spec without re-running)
+      - \`feedback_self_test_via_dogfood_merge.md\` — this SPIKE itself dogfoods the comparison infrastructure it wants to evaluate
+      - \`feedback_pushback_on_overengineering.md\` — SPIKE-first before integrating a workflow tool is the canonical "evidence before scope" application
+
+      ## Origin
+
+      2026-05-17 user observation: AIDA's \`aida ultraplan\` + \`/aida-import-plan\` + plan-brief-on-pickup convention is built on the assumption that \`/ultraplan\` (local + web) yields superior output. The assumption is untested. Autopilot drain time (Max-bundled, otherwise-idle) is the cheap research budget. User: *"We have time (especially if we are in autopilot no-human mode) to test that hypothesis and perform a local and web based plan?"*
+
+      Negative result (planning doesn't help, or only marginally) is as valuable as positive — it would let us simplify the AIDA flow, drop TASK-305, and set TASK-304's default to \`mode = "never"\` for projects that don't actively opt in.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      KEEP DEFERRED (deferred:post-stability) — honor the tag + bugs-first phase. The spike's own framing (autopilot/--no-human time is the cheap research budget) argues it costs little to wait. Revisit at phase change; when run, a 1-spec directional probe is a fine first step before the full 2-3 spec comparison.
+clock: 1549
 node_id: '1'
