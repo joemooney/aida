@@ -14725,5 +14725,47 @@ operations:
   timestamp: 2026-06-06T14:07:53.430855664Z
   kind: !SetStatus
     status: Approved
-clock: 1525
+- id: 019e9d47-bfa6-7b42-ba20-86438822f967
+  target_id: 019e986c-e86b-77f1-9057-e8de02c47adc
+  author: aida
+  node_id: '1'
+  lamport: 1526
+  timestamp: 2026-06-06T14:13:05.574229488Z
+  kind: !SetDescription
+    description: |
+      ## Why (operator, 2026-06-05)
+
+      Operator wants to speed backlog burn-down via parallel agents producing a "first draft / design available for reference when the time comes." Diagnosis (BUG-444): the DRAIN's bottleneck is orchestrator misclassification, not agent throughput — so parallelizing the drain multiplies false-failures + merge contention. The safe, durable form of the operator's idea is to parallelize PLANNING, not draft-code, and not the drain.
+
+      ## Sequencing (hard dependency)
+
+      Phase 0 = BUG-444 (orchestrator PR-detection). One reliable loop at ~90% beats N loops at 56% that race each other. This story is the PARALLEL-PLANNING layer, valuable AFTER (or alongside) BUG-444 — it does not touch the drain.
+
+      ## What this is
+
+      Parallelize STORY-265's `--plan-only` mode across the backlog:
+      - Coordinator (advisor) selects the WORKABLE set (approved + high/medium priority; NOT the low-priority tail — avoid speculative slop on tasks that shouldn't be built) and partitions it by epic / batch / file-cluster into non-overlapping scopes.
+      - Fan out N planner agents, ONE LEASE PER SCOPE (existing lease mechanism → no overlap, cross-spec awareness via the trace-graph reusable-helpers).
+      - Each planner produces the 11-section plan (`aida plan` + `aida plan helpers --append`) and moves the spec Approved → Planned (STORY-265). Planners NEVER merge / implement — pure pre-work, so zero merge contention (unlike parallel draining: BUG-431 epic-contention, lease-ownership traps).
+      - The single reliable implementer loop later consumes the plans — the plan "rides into the session" (TASK-95), giving the implementer a durable design reference.
+
+      ## Why plans, not draft patches
+
+      Plans (approach/critical-files/helpers/risks/tests) survive `main` moving — only line refs drift, repaired by `aida plan verify --fix`. Draft patches go stale and can be net-negative to reconcile. Illustrative code snippets live INSIDE the plan's Approach section (reference), not as a literal patch.
+
+      ## Acceptance (sketch — master refines)
+
+      - [ ] A coordinator command partitions the approved/near-term/workable backlog into non-overlapping scopes and dispatches N plan-only planners, each leased to a scope.
+      - [ ] Planners produce plans (Approved → Planned) and never merge/implement; no two planners plan the same spec.
+      - [ ] Low-priority-tail / archive-candidate specs are excluded from speculative planning.
+      - [ ] Plans verify (`aida plan verify`) and ride into the later implement session (TASK-95).
+      - [ ] Staleness handling: `aida plan verify --fix` refreshes line refs at implement time; plan is reference, not auto-applied.
+
+      ## Relationships
+      - Builds on STORY-265 (`--plan-only` / Approved→Planned). Hard-sequenced after BUG-444 (drain reliability). Uses the lease + batch + trace-graph-helpers primitives. Sibling of the metrics work (EPIC-36) which would measure whether parallel pre-planning actually speeds eventual implementation.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      BUILD (planning is merge-contention-free, independent of drain reliability), GATED on STORY-265's --plan-only mode landing first. Scope discipline: fan out over the WORKABLE set only (exclude the low-priority tail) to control plan-slop. Recorded blocked-by STORY-265.
+clock: 1526
 node_id: '1'
