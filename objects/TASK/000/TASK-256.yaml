@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:23:58.751815087Z
-modified_at: 2026-06-06T08:35:42.629710010Z
+modified_at: 2026-06-06T14:26:06.209821004Z
 req_type: Task
 tags:
 - aesthetics
@@ -75,3 +75,8 @@ comments:
       REC: a — it is self-described polish and the phase guidance defers demo/visibility work; theming pays off most when paired with marketing. Keep Approved as the post-stability polish marker.
   created_at: 2026-06-06T08:35:40.038838204Z
   modified_at: 2026-06-06T08:35:40.038838204Z
+- id: 019e9d53-a901-7dd3-8c3a-7705956b28f7
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): DEFER to the marketing/first-impression phase — self-described polish; theming pays off most paired with visibility work, not during bug-clearing. When built: Theme struct + route hardcoded colors + 2-3 themes (one Catppuccin default) is the right first slice; defer the full 7-theme matrix + picker/persistence.'
+  created_at: 2026-06-06T14:26:06.209821004Z
+  modified_at: 2026-06-06T14:26:06.209821004Z
