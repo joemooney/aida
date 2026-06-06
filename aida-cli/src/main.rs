@@ -11427,6 +11427,63 @@ mod parse_requirement_type_tests {
 /// Initialize distributed mode using an orphan branch + worktree.
 /// This is the default for single-repo projects.
 /// Store lives at .aida-store/ (worktree of orphan branch 'aida-store').
+/// BUG-446: immediate-child directories of `cwd` that are their OWN git repos
+/// (a `.git` directory = nested repo, or a `.git` file = gitlink/submodule
+/// worktree) and are NOT registered submodules. A non-empty result means `cwd`
+/// is a workspace-of-projects, not a single project.
+///
+/// We deliberately test for a child's own `.git` entry rather than calling
+/// `git_ops::is_git_repo` (which shells out to `git rev-parse`): from inside
+/// `cwd` — itself a git repo by the time this runs — `rev-parse` resolves to
+/// `cwd`'s git-dir for EVERY subdirectory, so it would flag plain subdirs too.
+/// Dotted children (`.git`, `.aida-store`, …) and `.gitmodules`-declared
+/// submodules are intentional and excluded. trace:BUG-446 | ai:claude
+fn unmanaged_nested_git_repos(cwd: &std::path::Path) -> Vec<String> {
+    let submodule_paths = gitmodule_child_paths(cwd);
+    let mut found = Vec::new();
+    let Ok(entries) = std::fs::read_dir(cwd) else {
+        return found;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || submodule_paths.contains(&name) {
+            continue;
+        }
+        if path.join(".git").exists() {
+            found.push(name);
+        }
+    }
+    found.sort();
+    found
+}
+
+/// First path component of each `path = …` entry in the top-level `.gitmodules`
+/// — enough to exclude an immediate-child submodule directory from the
+/// workspace-of-projects guard. trace:BUG-446 | ai:claude
+fn gitmodule_child_paths(cwd: &std::path::Path) -> std::collections::HashSet<String> {
+    let mut paths = std::collections::HashSet::new();
+    let Ok(content) = std::fs::read_to_string(cwd.join(".gitmodules")) else {
+        return paths;
+    };
+    for line in content.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("path") {
+            if let Some(value) = rest.split('=').nth(1) {
+                if let Some(first) = value.trim().split('/').next() {
+                    if !first.is_empty() {
+                        paths.insert(first.to_string());
+                    }
+                }
+            }
+        }
+    }
+    paths
+}
+
 fn handle_init_distributed_worktree(
     force: bool,
     no_skills: bool,
@@ -11447,6 +11504,48 @@ fn handle_init_distributed_worktree(
         anyhow::bail!(
             "Not a git repository. Run 'git init' first, or use --sibling for a separate repo."
         );
+    }
+
+    // BUG-446: refuse to initialize over a workspace-of-projects. A fresh
+    // `aida init` (no `.aida/config.toml` yet) whose directory contains nested,
+    // non-submodule git repos would capture the whole tree as untracked entries
+    // (nested repos becoming gitlinks) and root the orphan store at the
+    // workspace level — every `aida` command from a future project subdirectory
+    // would then climb UP to this workspace-wide store. Gate on not-yet-init'd
+    // so re-running in a set-up project (handled below) keeps its own message;
+    // bypass with --force. trace:BUG-446 | ai:claude
+    if !force && !aida_dir.join("config.toml").exists() {
+        let nested = unmanaged_nested_git_repos(&cwd);
+        if !nested.is_empty() {
+            let preview = nested
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            let more = if nested.len() > 5 {
+                format!(", … (+{} more)", nested.len() - 5)
+            } else {
+                String::new()
+            };
+            anyhow::bail!(
+                "This directory looks like a workspace of projects, not a single project: \
+                 it contains {} nested git {} ({}{}).\n\n\
+                 `aida init` here would capture the entire tree and root the requirement \
+                 store at the workspace level — every `aida` command from a project \
+                 subdirectory would then operate on this workspace-wide store.\n\n\
+                 Run `aida init` inside an actual project directory instead, \
+                 or pass --force to initialize here anyway.",
+                nested.len(),
+                if nested.len() == 1 {
+                    "repository"
+                } else {
+                    "repositories"
+                },
+                preview,
+                more,
+            );
+        }
     }
 
     // Post-clone detection (EPIC-1-052 Phase 4): if origin already has the
@@ -41528,6 +41627,54 @@ mod bug_354_text_question_classifier_tests {
     fn no_question_mark_does_not_classify() {
         let text = "My recommendation is B first. I will proceed with that path.";
         assert!(pending_text_question_from_result_text(text).is_none());
+    }
+
+    #[test]
+    fn detects_unmanaged_nested_repos_excluding_submodules_and_dotdirs() {
+        // BUG-446: a workspace-of-projects — two sibling project repos.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("projA/.git")).unwrap();
+        std::fs::create_dir_all(root.join("projB/.git")).unwrap();
+        // a plain subdir (no own .git) must NOT count
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        // a dotted child repo (e.g. .aida-store worktree) must be skipped
+        std::fs::create_dir_all(root.join(".aida-store/.git")).unwrap();
+        // a registered submodule is intentional → excluded
+        std::fs::create_dir_all(root.join("vendored/.git")).unwrap();
+        std::fs::write(
+            root.join(".gitmodules"),
+            "[submodule \"vendored\"]\n\tpath = vendored\n\turl = https://example/x\n",
+        )
+        .unwrap();
+
+        let found = unmanaged_nested_git_repos(root);
+        assert_eq!(found, vec!["projA".to_string(), "projB".to_string()]);
+    }
+
+    #[test]
+    fn single_project_has_no_unmanaged_nested_repos() {
+        // BUG-446: a normal single project — plain subdirs, no nested repos.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("tests")).unwrap();
+        assert!(unmanaged_nested_git_repos(root).is_empty());
+    }
+
+    #[test]
+    fn gitlink_file_counts_as_nested_repo() {
+        // BUG-446: a submodule worktree NOT registered in .gitmodules has a
+        // `.git` FILE (gitlink) — still a separate project, must be detected.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("stray")).unwrap();
+        std::fs::write(
+            root.join("stray/.git"),
+            "gitdir: /elsewhere/.git/modules/stray\n",
+        )
+        .unwrap();
+        assert_eq!(unmanaged_nested_git_repos(root), vec!["stray".to_string()]);
     }
 
     #[test]
