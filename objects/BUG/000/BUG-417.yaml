@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:36:20.728144498Z
-modified_at: 2026-05-31T15:36:20.728144498Z
+modified_at: 2026-06-06T08:14:58.463503250Z
 req_type: Bug
 tags:
 - base-branch
@@ -24,3 +24,9 @@ tags:
 - no-workflows
 - pr-ship
 - quizdom
+comments:
+- id: 019e9bff-e19f-7d82-86d2-7584a1c22ffe
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). aida pr ship must resolve PR base from origin default branch (gh repo view defaultBranchRef) not assume main, AND detect no-CI/honor lifecycle:no-ci-wait to skip the CI wait. On-phase bug, reproducible, no fork.
+  created_at: 2026-06-06T08:14:58.463503250Z
+  modified_at: 2026-06-06T08:14:58.463503250Z
