@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:47:39.776233643Z
-modified_at: 2026-06-06T08:34:42.042582101Z
+modified_at: 2026-06-06T13:58:46.684030566Z
 req_type: Story
 tags:
 - agent-agnostic
@@ -76,3 +76,8 @@ comments:
       REC: a — the propagation + AGENTS.md-honesty sub-tracks are bounded and directly back AIDA's strongest positioning claim at first contact, while the opt-in-vs-default and memory-path-rethink pieces are genuine design forks better split into their own specs (the spec already lists TASK-C/SPIKE-X as separable).
   created_at: 2026-06-06T08:34:40.645043162Z
   modified_at: 2026-06-06T08:34:40.645043162Z
+- id: 019e9d3a-a49c-7de3-affe-1042578a028c
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Ship the BOUNDED doc-honesty + propagation sub-tracks now: (A) propagate docs/agents/ via aida init, (B) reconcile AGENTS.md against the CLAUDE.md reference, (D) agent-agnostic-vs-claude discipline doc. These back AIDA''s agent-agnostic positioning at first contact. SPLIT the genuine design forks (opt-in vs default-on per-agent scaffolding; memory-pack path-independence) into their own specs — out of scope here.'
+  created_at: 2026-06-06T13:58:46.684030566Z
+  modified_at: 2026-06-06T13:58:46.684030566Z
