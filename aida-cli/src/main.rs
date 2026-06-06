@@ -32073,6 +32073,18 @@ fn session_end(
         emit_session_end_unshipped_warning(&work);
     }
 
+    // STORY-127 detector (4): leaving this role's session while a DIFFERENT
+    // role's queue has work waiting. Warn (don't block) so the user can
+    // switch role first instead of walking away from queued work.
+    // trace:STORY-127 | ai:claude
+    {
+        let role_counts = read_queue_role_counts(&project_root);
+        let waiting = cross_role_queue_waiting(target.role.as_deref(), &role_counts);
+        if let Some(msg) = session_end_cross_role_warning(&waiting) {
+            eprintln!("  {} {}", "Warning:".yellow().bold(), msg);
+        }
+    }
+
     // TASK-111: CI awareness. Probe the branch for an open PR's CI state
     // and surface info / prompt / warn based on the state. --skip-ci and
     // --force both bypass the probe (force already gets a noisy override
@@ -49844,6 +49856,210 @@ fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
     .unwrap_or(0)
 }
 
+// ─── STORY-127: Scope-B runtime anti-pattern detectors ──────────────────
+//
+// Each surface the user TYPES (`aida pull`, `git pull` (via the code leg),
+// `aida dev release`, `aida session end`) detects when its precondition is
+// not met and emits a one-line WARNING (never a block — the user/agent
+// always proceeds). The detection is a single git/queue/lease query.
+//
+// The detection LOGIC is a set of pure, unit-tested predicates so the
+// warning conditions are testable without process/git/forge I/O. The call
+// sites do the cheap query and feed the result to the predicate.
+// trace:STORY-127 | ai:claude
+
+/// Detector (1) + (2): `aida pull` / `git pull` (code leg) no-op.
+///
+/// `pull_was_noop` — the code-leg `git pull --ff-only` advanced nothing
+/// (local branch already at origin). When that coincides with the user
+/// holding an active **reviewer** lease on an **unmerged** PR, the no-op is
+/// almost certainly the PR-27-style mistake: running catch-up commands
+/// BEFORE the merge has happened. Warn so the user waits for the merge.
+///
+/// When there is no such reviewer lease the no-op is unremarkable — a plain
+/// one-line note still helps ("Already up to date — nothing to pull") but is
+/// not the same alarm. The two callers distinguish via the second arg.
+/// trace:STORY-127 | ai:claude
+fn pull_noop_warning(pull_was_noop: bool, reviewer_unmerged_pr: Option<&str>) -> Option<String> {
+    if !pull_was_noop {
+        return None;
+    }
+    match reviewer_unmerged_pr {
+        Some(pr) => Some(format!(
+            "No new commits on origin. You hold a reviewer lease on {pr}, which is \
+             not merged yet — did you mean to wait for {pr} to merge first? \
+             (catch-up before the merge is a no-op)"
+        )),
+        None => Some("Already up to date — origin had no new commits.".to_string()),
+    }
+}
+
+/// Detector (2): cheap "local main already at origin/main" check, expressed
+/// as a pure predicate over the two SHAs so it is testable. `None` for
+/// either SHA (couldn't resolve a ref) means "can't tell" → no warning.
+/// trace:STORY-127 | ai:claude
+fn local_main_already_at_origin(local_sha: Option<&str>, origin_sha: Option<&str>) -> bool {
+    match (local_sha, origin_sha) {
+        (Some(a), Some(b)) => !a.is_empty() && a == b,
+        _ => false,
+    }
+}
+
+/// Detector (3): `aida dev release` (→ `scripts/release.sh`) with unmerged
+/// PRs. Returns a one-line warning naming every open PR — a release tag cut
+/// now will NOT include their changes. Pure over the already-collected
+/// open-PR numbers. trace:STORY-127 | ai:claude
+fn release_unmerged_pr_warning(open_pr_numbers: &[u64]) -> Option<String> {
+    if open_pr_numbers.is_empty() {
+        return None;
+    }
+    let mut nums: Vec<u64> = open_pr_numbers.to_vec();
+    nums.sort_unstable();
+    nums.dedup();
+    let list = nums
+        .iter()
+        .map(|n| format!("PR-{n}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let (verb, subj) = if nums.len() == 1 {
+        ("is", "PR")
+    } else {
+        ("are", "PRs")
+    };
+    Some(format!(
+        "{} open {} ({}) — the release {} not merged, so the tag will NOT include \
+         their changes. Merge first if they belong in this release.",
+        nums.len(),
+        subj,
+        list,
+        verb,
+    ))
+}
+
+/// Detector (4): `aida session end` while a DIFFERENT role has queued work
+/// waiting. `ending_role` is the role of the lease being torn down;
+/// `role_counts` is the per-role queue depth for the current user. Returns
+/// the `(role, count)` pairs for every OTHER role with at least one waiting
+/// item, sorted by role name for stable output. Pure over the inputs.
+/// trace:STORY-127 | ai:claude
+fn cross_role_queue_waiting(
+    ending_role: Option<&str>,
+    role_counts: &std::collections::HashMap<String, usize>,
+) -> Vec<(String, usize)> {
+    let mut out: Vec<(String, usize)> = role_counts
+        .iter()
+        .filter(|(role, &count)| {
+            count > 0 && ending_role.map(|er| er != role.as_str()).unwrap_or(true)
+        })
+        .map(|(role, &count)| (role.clone(), count))
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// Render the detector-(4) warning body from the cross-role pairs. `None`
+/// when nothing is waiting elsewhere. trace:STORY-127 | ai:claude
+fn session_end_cross_role_warning(waiting: &[(String, usize)]) -> Option<String> {
+    if waiting.is_empty() {
+        return None;
+    }
+    let list = waiting
+        .iter()
+        .map(|(role, count)| {
+            format!(
+                "{} has {} item{}",
+                role,
+                count,
+                if *count == 1 { "" } else { "s" }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "About to end this session, but another role's queue has work waiting \
+         ({list}). Switch role first (`aida role enter <role>`) if you meant to \
+         pick that up."
+    ))
+}
+
+/// STORY-127: per-role queue depth for the current user. Reads the same
+/// queue YAML `aida queue list` / `read_queue_depth` consult (keyed off
+/// `current_user_id`). Returns an empty map on any read/parse failure —
+/// the detectors degrade to silent. trace:STORY-127 | ai:claude
+fn read_queue_role_counts(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, usize> {
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let user = current_user_id(None);
+    let queue_path = project_root
+        .join(".aida-store/registry/queues")
+        .join(format!("{}.yaml", user));
+    let Ok(content) = std::fs::read_to_string(&queue_path) else {
+        return counts;
+    };
+    let Ok(entries) = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&content) else {
+        return counts;
+    };
+    for e in &entries {
+        let role = e
+            .get("for_role")
+            .and_then(serde_yaml::Value::as_str)
+            .unwrap_or("implementer");
+        *counts.entry(role.to_string()).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// STORY-127: does the current user hold an active **reviewer** lease whose
+/// scope is a PR (`PR-N` / `MR-N`) that is still open (unmerged)? Returns
+/// the PR label for the warning, else `None`. Cheap: walks the local lease
+/// set, then a single forge open-PR snapshot keyed by number. The PR is
+/// "unmerged" iff its number appears in the open-PR snapshot.
+/// trace:STORY-127 | ai:claude
+fn active_reviewer_unmerged_pr(project_root: &std::path::Path) -> Option<String> {
+    let leases = list_leases(project_root);
+    // Reviewer leases scope to a PR/MR; the scope string is e.g. "PR-27".
+    let reviewer_pr_scopes: Vec<String> = leases
+        .iter()
+        .filter(|l| {
+            l.role
+                .as_deref()
+                .map(|r| canonical_role_name(r) == "reviewer")
+                .unwrap_or(false)
+        })
+        .filter(|l| pr_number_from_scope(&l.scope).is_some())
+        .map(|l| l.scope.clone())
+        .collect();
+    if reviewer_pr_scopes.is_empty() {
+        return None;
+    }
+    let open_numbers: std::collections::HashSet<u64> = collect_open_prs(project_root)
+        .by_branch
+        .values()
+        .map(|p| p.number)
+        .collect();
+    for scope in reviewer_pr_scopes {
+        if let Some(n) = pr_number_from_scope(&scope) {
+            if open_numbers.contains(&n) {
+                return Some(format!("PR-{n}"));
+            }
+        }
+    }
+    None
+}
+
+/// Parse a PR/MR number out of a lease scope like `PR-27` / `MR-3` / `pr-27`.
+/// trace:STORY-127 | ai:claude
+fn pr_number_from_scope(scope: &str) -> Option<u64> {
+    let s = scope.trim();
+    let rest = s
+        .strip_prefix("PR-")
+        .or_else(|| s.strip_prefix("pr-"))
+        .or_else(|| s.strip_prefix("MR-"))
+        .or_else(|| s.strip_prefix("mr-"))?;
+    rest.parse::<u64>().ok()
+}
+
 fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Option<usize> {
     // BUG-89: route through the canonical helper so the statusline depth
     // counts the same queue file `aida queue list` reads from in this
@@ -55601,6 +55817,21 @@ fn handle_dev_release(bump: &str) -> Result<()> {
         println!();
     }
 
+    // STORY-127 detector (3): warn (don't block) when there are open PRs the
+    // release tag will not include. A single batched `gh pr list` snapshot.
+    // trace:STORY-127 | ai:claude
+    {
+        let open_numbers: Vec<u64> = collect_open_prs(&repo)
+            .by_branch
+            .values()
+            .map(|p| p.number)
+            .collect();
+        if let Some(msg) = release_unmerged_pr_warning(&open_numbers) {
+            eprintln!("  {} {}", "Warning:".yellow().bold(), msg);
+            println!();
+        }
+    }
+
     // ── Step 2/5: run release.sh ─────────────────────────────────────────
     println!(
         "{}",
@@ -57416,6 +57647,23 @@ fn handle_pull_command(
                         (Some(a), Some(b)) => a == b,
                         _ => false,
                     };
+                    // STORY-127 detectors (1)+(2): a no-op code pull. If the
+                    // user holds a reviewer lease on an unmerged PR, this is
+                    // the PR-27-style "ran catch-up before the merge happened"
+                    // mistake — warn so they wait for the merge. Otherwise a
+                    // quiet one-liner. Suppressed in --quiet (orchestrator /
+                    // scripted) runs. trace:STORY-127 | ai:claude
+                    if pull_was_noop && !quiet {
+                        let reviewer_pr = active_reviewer_unmerged_pr(&project_root);
+                        if let Some(msg) = pull_noop_warning(true, reviewer_pr.as_deref()) {
+                            let tag = if reviewer_pr.is_some() {
+                                "Warning:".yellow().bold()
+                            } else {
+                                "Note:".dimmed()
+                            };
+                            eprintln!("  {} {}", tag, msg);
+                        }
+                    }
                     let scan_pre: Option<&str> = if pull_was_noop {
                         None
                     } else {
@@ -58152,6 +58400,21 @@ fn handle_fetch_command(
                             pre.as_deref(),
                             post.as_deref(),
                         );
+                        // STORY-127 detector (2): now that the remote ref is
+                        // fresh, a cheap local-vs-origin SHA compare. If they
+                        // already match, a subsequent `git pull` / `aida pull`
+                        // would be a no-op — say so in one line so the user
+                        // doesn't run catch-up commands expecting changes.
+                        // trace:STORY-127 | ai:claude
+                        let local = git_ops::head_sha(&project_root).ok();
+                        if local_main_already_at_origin(local.as_deref(), post.as_deref()) {
+                            println!(
+                                "  {} local {} already at origin/{} — `aida pull` would be a no-op.",
+                                "Note:".dimmed(),
+                                branch,
+                                branch
+                            );
+                        }
                     }
                 }
                 Err(e) => {
@@ -89202,5 +89465,153 @@ mod story_255_discipline_pack_tests {
             "expected most rows to carry a description, {with_desc}/{}",
             report.rows.len()
         );
+    }
+}
+
+/// STORY-127: unit tests for the Scope-B runtime anti-pattern detector
+/// predicates. Each predicate is pure over its inputs so the warning
+/// conditions are exercised without git/forge/queue I/O.
+/// trace:STORY-127 | ai:claude
+#[cfg(test)]
+mod story_127_antipattern_detectors {
+    use super::*;
+    use std::collections::HashMap;
+
+    // ── Detector (1): aida pull no-op with a pending review ──────────────
+    #[test]
+    fn pull_noop_warns_loudly_when_reviewer_lease_on_unmerged_pr() {
+        let msg = pull_noop_warning(true, Some("PR-27"))
+            .expect("a no-op with a pending review should warn");
+        assert!(msg.contains("PR-27"), "warning should name the PR: {msg}");
+        assert!(
+            msg.to_lowercase().contains("wait"),
+            "warning should suggest waiting: {msg}"
+        );
+    }
+
+    #[test]
+    fn pull_noop_quiet_note_when_no_pending_review() {
+        let msg = pull_noop_warning(true, None).expect("a no-op still gets a one-liner");
+        assert!(
+            msg.to_lowercase().contains("up to date"),
+            "plain note should say up to date: {msg}"
+        );
+        // No PR alarm when there's no reviewer lease.
+        assert!(!msg.contains("PR-"));
+    }
+
+    #[test]
+    fn pull_that_advanced_never_warns() {
+        assert!(pull_noop_warning(false, Some("PR-27")).is_none());
+        assert!(pull_noop_warning(false, None).is_none());
+    }
+
+    // ── Detector (2): git pull no-op (local main == origin/main) ─────────
+    #[test]
+    fn local_main_at_origin_is_true_only_when_shas_match() {
+        assert!(local_main_already_at_origin(Some("abc123"), Some("abc123")));
+        assert!(!local_main_already_at_origin(
+            Some("abc123"),
+            Some("def456")
+        ));
+    }
+
+    #[test]
+    fn local_main_at_origin_is_false_when_a_sha_is_unknown_or_empty() {
+        assert!(!local_main_already_at_origin(None, Some("abc123")));
+        assert!(!local_main_already_at_origin(Some("abc123"), None));
+        assert!(!local_main_already_at_origin(None, None));
+        assert!(!local_main_already_at_origin(Some(""), Some("")));
+    }
+
+    // ── Detector (3): release with unmerged PRs ──────────────────────────
+    #[test]
+    fn release_warns_for_a_single_unmerged_pr() {
+        let msg = release_unmerged_pr_warning(&[27]).expect("one open PR should warn");
+        assert!(msg.contains("PR-27"), "should name the PR: {msg}");
+        assert!(msg.contains("1 open PR "), "singular phrasing: {msg}");
+        assert!(msg.contains(" is "), "singular verb: {msg}");
+    }
+
+    #[test]
+    fn release_warns_for_multiple_unmerged_prs_sorted_and_deduped() {
+        let msg = release_unmerged_pr_warning(&[31, 27, 27, 5]).expect("open PRs should warn");
+        // sorted ascending + deduped
+        assert!(msg.contains("PR-5, PR-27, PR-31"), "sorted+deduped: {msg}");
+        assert!(msg.contains("3 open PRs"), "plural count: {msg}");
+        assert!(msg.contains(" are "), "plural verb: {msg}");
+    }
+
+    #[test]
+    fn release_does_not_warn_with_no_open_prs() {
+        assert!(release_unmerged_pr_warning(&[]).is_none());
+    }
+
+    // ── Detector (4): session end with cross-role queue waiting ──────────
+    fn counts(pairs: &[(&str, usize)]) -> HashMap<String, usize> {
+        pairs.iter().map(|(r, c)| (r.to_string(), *c)).collect()
+    }
+
+    #[test]
+    fn cross_role_lists_other_roles_with_waiting_work() {
+        let c = counts(&[("reviewer", 3), ("implementer", 2), ("advisor", 0)]);
+        let waiting = cross_role_queue_waiting(Some("reviewer"), &c);
+        // reviewer (the ending role) and advisor (zero) excluded; implementer left.
+        assert_eq!(waiting, vec![("implementer".to_string(), 2)]);
+    }
+
+    #[test]
+    fn cross_role_excludes_only_the_ending_role() {
+        let c = counts(&[("reviewer", 1), ("implementer", 4)]);
+        let waiting = cross_role_queue_waiting(Some("implementer"), &c);
+        assert_eq!(waiting, vec![("reviewer".to_string(), 1)]);
+    }
+
+    #[test]
+    fn cross_role_is_sorted_by_role_name() {
+        let c = counts(&[("reviewer", 1), ("advisor", 2)]);
+        let waiting = cross_role_queue_waiting(Some("implementer"), &c);
+        assert_eq!(
+            waiting,
+            vec![("advisor".to_string(), 2), ("reviewer".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn cross_role_with_unknown_ending_role_includes_all_waiting() {
+        let c = counts(&[("reviewer", 1), ("implementer", 2)]);
+        let waiting = cross_role_queue_waiting(None, &c);
+        assert_eq!(
+            waiting,
+            vec![("implementer".to_string(), 2), ("reviewer".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn session_end_warning_renders_singular_and_plural() {
+        let one = session_end_cross_role_warning(&[("reviewer".to_string(), 1)]).unwrap();
+        assert!(one.contains("reviewer has 1 item"), "singular: {one}");
+        assert!(!one.contains("1 items"));
+        let many = session_end_cross_role_warning(&[("implementer".to_string(), 3)]).unwrap();
+        assert!(many.contains("implementer has 3 items"), "plural: {many}");
+    }
+
+    #[test]
+    fn session_end_warning_is_none_when_nothing_waiting() {
+        assert!(session_end_cross_role_warning(&[]).is_none());
+        let empty = cross_role_queue_waiting(Some("reviewer"), &counts(&[("reviewer", 5)]));
+        assert!(session_end_cross_role_warning(&empty).is_none());
+    }
+
+    // ── PR-scope parsing for the reviewer-lease query ────────────────────
+    #[test]
+    fn pr_number_from_scope_parses_pr_and_mr_forms() {
+        assert_eq!(pr_number_from_scope("PR-27"), Some(27));
+        assert_eq!(pr_number_from_scope("pr-3"), Some(3));
+        assert_eq!(pr_number_from_scope("MR-12"), Some(12));
+        assert_eq!(pr_number_from_scope(" PR-99 "), Some(99));
+        assert_eq!(pr_number_from_scope("STORY-127"), None);
+        assert_eq!(pr_number_from_scope("PR-abc"), None);
+        assert_eq!(pr_number_from_scope(""), None);
     }
 }
