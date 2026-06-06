@@ -2,7 +2,7 @@ id: 019e9935-3243-7dd3-86bb-cc0b2babaa17
 spec_id: BUG-445
 agreed_id: BUG-445
 title: Onboarding first-task 'Commit AIDA scaffolding' breaks under 'aida queue work' worktree isolation — scaffolding absent + git add . embeds gitlink/symlinks
-description: |-
+description: |
   REPRO (fresh aida init, then the natural first action): "aida queue work" picks up the auto-seeded onboarding task TASK-007 "Commit AIDA scaffolding (initial setup)" (for:implementer, auto-queued by init). queue-work ISOLATES it into a new git worktree on branch task-007, checked out from the initial commit (which contains only .gitkeep -- scaffolding is uncommitted on master; see TASK-631).
 
   In that worktree the task cannot be completed correctly and is actively dangerous:
@@ -17,12 +17,16 @@ description: |-
   (c) The task instruction should never be a bare "git add ." without the .gitignore present.
 
   Relates-to TASK-631 (root-cause fix), BUG-433 (worktree symlink + no committed config -> wrong data).
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Close via BOTH: (1) ROOT CAUSE — land TASK-631 (init commits its own scaffolding), which dissolves the 'commit scaffolding' onboarding task in the common path; (2) DURABLE GUARDRAIL — flag setup/scaffolding-commit tasks as primary-worktree-only so they never route through queue-work worktree isolation (protects any future such task). BUG-445 closes once both land. Never emit a bare 'git add .' without .gitignore present.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:20.867633023Z
-modified_at: 2026-06-06T15:20:17.662260018Z
+modified_at: 2026-06-06T15:20:19.480865992Z
 req_type: Bug
 tags:
 - aida:init
