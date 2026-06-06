@@ -60,12 +60,12 @@ description: |-
   ## Origin
 
   2026-05-17 user discussion: floated "never/sometimes/frequently" cadence; recognized "frequently" is incompatible with \`--no-human\` because /ultraplan requires claude.ai web approval. This TASK codifies the realistic surface (never / on-demand / suggested).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:55.350844429Z
-modified_at: 2026-06-06T04:52:55.568844872Z
+modified_at: 2026-06-06T04:53:39.398882991Z
 req_type: Task
 tags:
 - alpha-readiness
