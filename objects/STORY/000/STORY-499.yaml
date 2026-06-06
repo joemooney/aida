@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:53.171836263Z
-modified_at: 2026-06-06T14:07:57.422030357Z
+modified_at: 2026-06-06T14:07:58.552764030Z
 req_type: Story
 tags:
 - ci-gate
@@ -32,6 +32,10 @@ relationships:
 - rel_type: Child
   target_id: 019e8bfe-8dbc-7493-8cbe-5324878590c3
   created_at: 2026-06-03T05:40:57.628241583Z
+- rel_type: BlockedBy
+  target_id: 019e8bff-738c-76b1-8c09-accca88f3f77
+  created_at: 2026-06-06T14:07:58.552754604Z
+  created_by: joe
 comments:
 - id: 019e9c03-c1b6-7fc1-83e6-f1e170a62e10
   author: joe
