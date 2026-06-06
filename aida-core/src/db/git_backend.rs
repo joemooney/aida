@@ -1252,6 +1252,7 @@ mod tests {
                 for_role: None,
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             })
             .unwrap();
         backend
@@ -1265,6 +1266,7 @@ mod tests {
                 for_role: None,
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             })
             .unwrap();
         let before = backend.queue_list(user, true).unwrap();
@@ -1316,6 +1318,7 @@ mod tests {
                 for_role: None,
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             })
             .unwrap();
 
