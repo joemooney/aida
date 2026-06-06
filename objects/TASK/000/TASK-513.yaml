@@ -85,7 +85,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T02:40:23.036367547Z
-modified_at: 2026-05-24T02:40:23.036367547Z
+modified_at: 2026-06-06T04:18:51.612322996Z
 req_type: Task
 tags:
 - advisor
@@ -98,3 +98,5 @@ tags:
 - ultraplan
 - ultrareview
 - workflow
+archived: true
+archived_at: 2026-06-06T04:18:51.612322996Z
