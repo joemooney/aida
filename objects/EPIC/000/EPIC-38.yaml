@@ -13,13 +13,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:07:39.591015455Z
-modified_at: 2026-06-06T08:30:02.621727524Z
+modified_at: 2026-06-06T08:30:05.755644188Z
 req_type: Epic
 tags:
 - batch:mcp-gate-parity
 - caller-parity
 - epic
 - mcp
+- needs-human-input
 - substrate-as-bouncer
 relationships:
 - rel_type: Parent
