@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T07:16:36.357077926Z
-modified_at: 2026-06-06T08:20:48.510467490Z
+modified_at: 2026-06-06T17:36:04.078171259Z
 req_type: Task
 tags:
 - ci
@@ -34,3 +34,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). cargo test asserting every embedded/scaffolded template source path exists + no two sources map to one destination; fails build on drift. Guards AIDA's dual-copy template-drift risk (SPIKE-50 outcome).
   created_at: 2026-06-06T08:15:12.862876330Z
   modified_at: 2026-06-06T08:15:12.862876330Z
+- id: 019e9e01-93ee-7293-82c9-a94dae96108c
+  author: joe
+  content: Commit bc70ccca3 references this requirement
+  created_at: 2026-06-06T17:36:04.078171259Z
+  modified_at: 2026-06-06T17:36:04.078171259Z
