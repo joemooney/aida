@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:54:49.466065320Z
-modified_at: 2026-05-24T03:54:49.466065320Z
+modified_at: 2026-06-06T08:34:27.150154420Z
 req_type: Spike
 tags:
 - advisor-discipline
@@ -19,3 +19,15 @@ tags:
 - from-user-direction
 - multi-agent
 - sibling-of-EPIC-31
+comments:
+- id: 019e9c11-b6ce-7840-928e-fef76e40689b
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Investigation spike into budget-aware multi-agent dispatch surfaces. Spec itself says "defer pickup until we have more data points than today's 2 observations." Pure investigation, no implementation. Dispose how?
+      a) Keep approved-but-parked as an explicit backlog observation; revisit when budget-pause events recur (≥3-5 data points) — honors the spec's own deferral and the project phase.
+      b) Pick up the spike now to produce the evidence-based recommendation + drafted follow-up specs.
+      c) Reject — the manual discipline (feedback_multi_agent_budget_dispatching memory) is captured; per-provider budget APIs are non-portable and coupling-prone, and there's no current pressure.
+      REC: a — the spec explicitly self-defers on thin evidence and the bugs-before-marketing phase argues against burning a spike session on multi-agent dispatch ergonomics now; let recurrence trigger it.
+  created_at: 2026-06-06T08:34:27.150154420Z
+  modified_at: 2026-06-06T08:34:27.150154420Z
