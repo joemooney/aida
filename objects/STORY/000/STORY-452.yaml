@@ -81,7 +81,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:17.799198527Z
-modified_at: 2026-05-24T04:49:17.799198527Z
+modified_at: 2026-06-06T08:34:20.029925779Z
 req_type: Story
 tags:
 - agents
@@ -95,3 +95,15 @@ tags:
 - re-filed-from-rebase-loss
 - registry
 - remote
+comments:
+- id: 019e9c11-9afd-7c31-b5ac-a380c33ec6c4
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Remote-aware agent registry (cloud /ultraplan + cross-machine sessions in `aida status`). Verified `aida agent register` exists but is PID-local; no `--remote` flag, no "Recent remote activity" section — unbuilt. Strategic multi-agent cluster, four mechanism options (A inference / B explicit / C branch-presence / D store-sync). Which scope?
+      a) Phase-1 recommended-in-spec: Options A+B (commit-tag inference + explicit `aida agent register --remote/--end --remote`); defer C/D.
+      b) Inference-only (Option A): "Recent remote activity" section from [AI:codex]/[AI:antigravity] trailers on lease-less branches — zero new manual verbs, cheapest.
+      c) Defer entire STORY post-stability with the EPIC-31 cluster.
+      REC: c — this is strategic autonomy/multi-agent scope and the operator is the only consumer of the aggregation today; sequence it with EPIC-31's registry design rather than shipping a remote-registration verb in the bugs phase.
+  created_at: 2026-06-06T08:34:20.029925779Z
+  modified_at: 2026-06-06T08:34:20.029925779Z
