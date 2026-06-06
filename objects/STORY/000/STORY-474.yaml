@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:12.371919361Z
-modified_at: 2026-05-27T07:32:36.445625465Z
+modified_at: 2026-06-06T08:33:44.292667446Z
 req_type: Story
 tags:
 - codex
@@ -37,3 +37,8 @@ comments:
     Open question for master: should the marketplace Claude plugin switch immediately to read-only once this lands, or coordination? My recommendation: read-only until remote/auth work lands, coordination for supervised local aida agent new sessions.
   created_at: 2026-05-27T07:32:36.445625465Z
   modified_at: 2026-05-27T07:32:36.445625465Z
+- id: 019e9c11-0f64-72b2-8d00-85ca7bf0e4c3
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Delivers named MCP tool profiles (read-only/coordination/operator/admin/full) gating tools/list — bounded, self-contained, security-improving, no open decision; the conservative-default surface is well-specified and testable.
+  created_at: 2026-06-06T08:33:44.292667446Z
+  modified_at: 2026-06-06T08:33:44.292667446Z
