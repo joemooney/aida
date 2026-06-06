@@ -24,12 +24,12 @@ description: |-
   - Sub-block math + sister-branch-per-session is a lift; v1 wanted to land in 1-2 hours
   - Symlinks have a small race window in practice (two adds in the same second from two sessions is rare for solo developers)
   - v1 unblocks the EPIC-19 doctor work today; v2 can replace the underlying mechanism without the user-facing surface changing.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T01:16:36.229167719Z
-modified_at: 2026-06-06T08:38:12.010058079Z
+modified_at: 2026-06-06T08:38:14.004309643Z
 req_type: Story
 comments:
 - id: 019e0f7a-c163-7f51-af9b-c77e97377015
