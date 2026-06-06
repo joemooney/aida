@@ -5,6 +5,7 @@ pub mod conflict;
 #[cfg(all(unix, feature = "native"))]
 pub mod daemon;
 pub mod db;
+pub mod deps_sweep;
 pub mod dispenser;
 pub mod docs_review;
 pub mod export;
