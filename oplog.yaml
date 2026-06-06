@@ -13871,5 +13871,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       COMMISSION the audit (see new child task): one bounded pass auditing every mutating MCP tool (add_relationship/add_comment/punt/update_relationship/…) for the same authority/lifecycle gates BUG-449 added to update_requirement. The substrate-as-bouncer invariant must hold at every MCP surface; security-relevant (agent self-completion on uncommitted code was the BUG-449 failure mode). EPIC stays open until the audit lands.
-clock: 1499
+- id: 019e9d35-7cde-75c2-9bdd-034dcd20f732
+  target_id: 019e2524-4592-7250-95fc-07656cb3e0a1
+  author: aida
+  node_id: '1'
+  lamport: 1500
+  timestamp: 2026-06-06T13:53:08.830523973Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1500
 node_id: '1'
