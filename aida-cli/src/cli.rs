@@ -1834,6 +1834,17 @@ pub enum NodeCommand {
         // trace:STORY-43 | ai:claude
         #[clap(long, value_name = "ID", conflicts_with = "id")]
         hijack: Option<String>,
+
+        /// Backfill a node entry into the shared registry for some OTHER
+        /// (typically legacy) clone, then push — WITHOUT touching this
+        /// clone's own identity. The running clone keeps its `.aida/node.toml`
+        /// untouched and no blocks are allocated. Requires explicit `--id`,
+        /// `--hostname`, and `--email` (nothing is inferred from the local
+        /// environment, since the entry is not about this clone). Mutually
+        /// exclusive with `--hijack` and `--force`.
+        // trace:FR-265 | ai:claude
+        #[clap(long, conflicts_with_all = ["hijack", "force"])]
+        remote_only: bool,
     },
 
     /// Remove a node entry from the shared registry. Does not invalidate

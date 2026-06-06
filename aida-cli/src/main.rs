@@ -16096,7 +16096,48 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             force,
             yes,
             hijack,
+            remote_only,
         } => {
+            // FR-265 remote-only path: backfill a registry entry for some
+            // OTHER (legacy) clone and push, without touching this clone's
+            // identity. Requires explicit --id/--hostname/--email since the
+            // entry isn't about the local clone. trace:FR-265 | ai:claude
+            if *remote_only {
+                let id = requested_id.clone().ok_or_else(|| {
+                    anyhow::anyhow!("--remote-only requires --id <NODE_ID> (explicit; nothing is inferred from this clone)")
+                })?;
+                let hn = hn_override.clone().ok_or_else(|| {
+                    anyhow::anyhow!("--remote-only requires --hostname <HOST> (explicit; nothing is inferred from this clone)")
+                })?;
+                let email = email_override.clone().ok_or_else(|| {
+                    anyhow::anyhow!("--remote-only requires --email <EMAIL> (explicit; nothing is inferred from this clone)")
+                })?;
+                if let Err(msg) = aida_core::node::validate_node_id(&id) {
+                    anyhow::bail!("Invalid node id: {}", msg);
+                }
+                let user_id = 1;
+                println!(
+                    "Backfilling registry entry for node {} (hostname={}, email={}) — local identity untouched...",
+                    id, hn, email
+                );
+                let registered = aida_core::git_ops::register_node_remote_only(
+                    store_path, id, user_id, &hn, email,
+                )?;
+                println!(
+                    "{} Backfilled node id {} into registry/nodes.toml. This clone's identity ({}) is unchanged.",
+                    "".green().bold(),
+                    registered,
+                    if node_config_path.exists() {
+                        aida_core::NodeConfig::load(&node_config_path)
+                            .map(|c| c.node_id)
+                            .unwrap_or_else(|_| "-".to_string())
+                    } else {
+                        "none".to_string()
+                    }
+                );
+                return Ok(());
+            }
+
             // STORY-43 hijack path: re-claim an existing node id.
             if let Some(target_id) = hijack {
                 let hn = hn_override.clone().unwrap_or_else(hostname);
