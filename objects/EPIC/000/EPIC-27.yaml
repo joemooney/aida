@@ -76,7 +76,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:41.299481463Z
-modified_at: 2026-05-22T06:43:56.866035593Z
+modified_at: 2026-06-06T08:35:02.315605102Z
 req_type: Epic
 tags:
 - agent-collaboration
@@ -94,3 +94,14 @@ comments:
   content: 'Refinement 2026-05-22 from sibling agent (Codex) empirical work: ''Do not modernize only the STORY-361 tools. Codex will see all 21 as one surface. Even if structured outputs are deferred, schema style, descriptions, required fields, and error behavior should be consistent across all tools.'' Acceptance addition: ALL 21 tools (original 7 + 14 coordination) must end up with consistent: (a) inputSchema style, (b) outputSchema descriptors (TASK-440), (c) error shape conventions (per the just-filed stable-error-shapes story), (d) description voice. STORY-82''s modernization of the original 7 must hit this consistency bar.'
   created_at: 2026-05-22T06:43:56.866035593Z
   modified_at: 2026-05-22T06:43:56.866035593Z
+- id: 019e9c12-402b-7632-baba-ab8a8b72e79a
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Phase says "clear bugs → stability → THEN marketing"; this EPIC is a 3-4 week, 30+-tool MCP expansion. How much of EPIC-27 do we commit to now vs defer?
+      a) Ship only the smallest child STORYs that already have momentum (STORY-82 modernize-7, STORY-399/401 error+structured shapes) and re-scope the EPIC's 30-new-tools backlog as deferred post-stability
+      b) Commit the whole EPIC now as a strategic push (it directly backs the OVERVIEW "highest-leverage agent surface" thesis and TUI-hosted Claude sessions)
+      c) Trim to the highest-leverage agent tools only (the 9 queue tools + session lifecycle) and defer role/plan/ultraplan/rebase tools
+      REC: a — EPIC-as-tracker stays Approved, but during the bug-clearing phase only the in-flight children advance; the 30-tool fan-out is exactly the over-engineering the phase guidance warns against. Note many channels (findings/claim/directive/brief tools) already exist beyond the original 7, so the audit's gap count is stale.
+  created_at: 2026-06-06T08:35:02.315605102Z
+  modified_at: 2026-06-06T08:35:02.315605102Z
