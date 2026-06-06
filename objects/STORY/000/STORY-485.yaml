@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:58:49.827434711Z
-modified_at: 2026-06-06T08:03:13.467221298Z
+modified_at: 2026-06-06T08:03:15.611912350Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 019e6f6e-f2b9-7e93-a670-803da07f4255
   created_at: 2026-05-29T03:58:59.420918398Z
   created_by: joe
+comments:
+- id: 019e9bf5-281b-7da3-a726-a1b356bf6b75
+  author: joe
+  content: 'Rejected (disposition sweep 2026-06-06): auto-drafted review task for PR-347, which has already merged/closed. The review is moot.'
+  created_at: 2026-06-06T08:03:15.611912350Z
+  modified_at: 2026-06-06T08:03:15.611912350Z
