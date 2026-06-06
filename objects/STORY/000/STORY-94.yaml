@@ -37,9 +37,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:58:04.123959190Z
-modified_at: 2026-05-11T02:58:04.123959190Z
+modified_at: 2026-06-06T04:16:37.504226103Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-11T02:58:05.213571680Z
+archived: true
+archived_at: 2026-06-06T04:16:37.504226103Z
