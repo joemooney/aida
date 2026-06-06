@@ -103,11 +103,11 @@ use crate::cli::{
     BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
     DbCommand, DepsCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
     FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand,
-    MailboxCommand, McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand,
-    PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand,
-    RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand,
-    SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand, StackCommand,
-    TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
+    MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand, PlanCommand,
+    PrCommand, PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
+    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
+    ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand,
+    StackCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -976,6 +976,13 @@ fn run() -> Result<()> {
         return handle_upgrade_command(*check, version.as_deref(), *yes, target.as_deref(), *diff);
     }
 
+    // STORY-410: `aida memories check` compares the local Claude Code memory
+    // pack to the binary's embedded master — no store access needed, so handle
+    // it before storage resolution (like init/upgrade). trace:STORY-410
+    if let Command::Memories(MemoriesCommand::Check { verbose, json }) = &cli.command {
+        return handle_memories_check(*verbose, *json);
+    }
+
     // Handle skill commands before storage resolution — needs no DB.
     if let Command::Skill(skill_cmd) = &cli.command {
         match skill_cmd {
@@ -1722,6 +1729,7 @@ fn run() -> Result<()> {
             );
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
+        Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -4390,6 +4398,360 @@ fn scaffold_memory_pack(refresh: bool) -> Result<()> {
     Ok(())
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// STORY-410: existing-project substrate-drift discovery.
+//
+// `aida init --with-memories --refresh` (STORY-255) lets a project overlay
+// newer scaffolding-pack memories onto its existing dir, preserving user
+// edits via body-checksum. But the user has to KNOW the pack is stale to run
+// it. `aida memories check` is the discoverability surface: it compares the
+// local memory dir against the binary's embedded master pack and reports
+// drift, without writing anything. `aida status` surfaces a one-line summary
+// when the pack is significantly behind.
+// trace:STORY-410 | ai:claude
+// ──────────────────────────────────────────────────────────────────────────
+
+/// One pack member's relationship to the binary's embedded master.
+/// trace:STORY-410 | ai:claude
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum MemoryDriftState {
+    /// The master ships this memory; the local dir doesn't have it.
+    /// `--refresh` would write it fresh.
+    Missing,
+    /// Present locally and pristine but byte-different from the current
+    /// embedded version — `--refresh` would overlay the newer master.
+    Stale,
+    /// Present locally, pristine, and byte-identical to the master.
+    UpToDate,
+    /// Present locally, scaffolded, but the body no longer matches its
+    /// recorded checksum — the user edited it. `--refresh` keeps the edit.
+    Edited,
+    /// Present locally with no `aida-scaffold` marker — the user's own file
+    /// shadowing a pack name. `--refresh` never touches it.
+    UserOwned,
+}
+
+/// One row of `aida memories check` output.
+/// trace:STORY-410 | ai:claude
+#[derive(Debug)]
+struct MemoryDriftRow {
+    /// Pack-member filename (e.g. `feedback_advocate_not_be_passive.md`).
+    name: String,
+    /// `name:` frontmatter label, falling back to the filename.
+    label: String,
+    /// One-line `description:` from the master template, when present.
+    description: String,
+    state: MemoryDriftState,
+}
+
+/// The full drift report: every embedded pack member classified against the
+/// local memory dir. Pure data — printing lives in `print_memory_drift`.
+/// trace:STORY-410 | ai:claude
+#[derive(Debug, Default)]
+struct MemoryDriftReport {
+    rows: Vec<MemoryDriftRow>,
+}
+
+impl MemoryDriftReport {
+    fn count(&self, state: MemoryDriftState) -> usize {
+        self.rows.iter().filter(|r| r.state == state).count()
+    }
+    fn missing(&self) -> usize {
+        self.count(MemoryDriftState::Missing)
+    }
+    fn stale(&self) -> usize {
+        self.count(MemoryDriftState::Stale)
+    }
+    fn up_to_date(&self) -> usize {
+        self.count(MemoryDriftState::UpToDate)
+    }
+    fn edited(&self) -> usize {
+        self.count(MemoryDriftState::Edited)
+    }
+    fn user_owned(&self) -> usize {
+        self.count(MemoryDriftState::UserOwned)
+    }
+    /// How many master-pack members `--refresh` would land (write or overlay).
+    /// This is the number that matters for "how behind am I?".
+    fn behind(&self) -> usize {
+        self.missing() + self.stale()
+    }
+}
+
+/// Compute the embedded `name:` label + `description:` for a master template.
+fn master_memory_meta(template: &str) -> (String, String) {
+    let template = normalize_line_endings(template);
+    let (fm, _) = split_md_frontmatter(&template).unwrap_or(("", ""));
+    let label = frontmatter_field(fm, "name").unwrap_or("").to_string();
+    let desc = frontmatter_field(fm, "description")
+        .unwrap_or("")
+        .trim_matches('"')
+        .to_string();
+    (label, desc)
+}
+
+/// Classify every embedded scaffolding-pack memory against an on-disk memory
+/// dir. The pure core of `aida memories check` — takes the dir directly so it
+/// is testable without touching the real `$HOME`. Mirrors the marker-driven
+/// selection in `scaffold_memory_pack_into` so the two surfaces never diverge.
+/// trace:STORY-410 | ai:claude
+fn compute_memory_drift_into(mem_dir: &std::path::Path) -> Result<MemoryDriftReport> {
+    use aida_core::templates::EMBEDDED_TEMPLATES;
+
+    let mut files: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
+        .iter()
+        .filter_map(|(k, v)| {
+            k.strip_prefix("memories/")
+                .filter(|n| *n != "MEMORY.md")
+                .map(|n| (n, *v))
+        })
+        .collect();
+    if files.is_empty() {
+        anyhow::bail!("no starter memories are embedded in this build");
+    }
+    files.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut report = MemoryDriftReport::default();
+    for (name, template) in &files {
+        let scaffolded = build_scaffolded_memory(template)
+            .with_context(|| format!("malformed starter memory template: {name}"))?;
+        let (fm_label, description) = master_memory_meta(template);
+        let label = if fm_label.is_empty() {
+            name.to_string()
+        } else {
+            fm_label
+        };
+
+        let dest = mem_dir.join(name);
+        let state = if !dest.exists() {
+            MemoryDriftState::Missing
+        } else {
+            let existing = std::fs::read_to_string(&dest)?;
+            match memory_refresh_disposition(&existing) {
+                MemoryDisposition::UserOwned => MemoryDriftState::UserOwned,
+                MemoryDisposition::Edited => MemoryDriftState::Edited,
+                MemoryDisposition::Pristine => {
+                    if normalize_line_endings(&existing) == scaffolded {
+                        MemoryDriftState::UpToDate
+                    } else {
+                        MemoryDriftState::Stale
+                    }
+                }
+            }
+        };
+
+        report.rows.push(MemoryDriftRow {
+            name: name.to_string(),
+            label,
+            description,
+            state,
+        });
+    }
+    Ok(report)
+}
+
+/// Resolve the Claude Code project memory dir for the current working
+/// directory (same slug rule as `scaffold_memory_pack`).
+fn project_memory_dir() -> Result<std::path::PathBuf> {
+    let cwd = std::env::current_dir()?;
+    let home =
+        dirs::home_dir().context("cannot resolve home directory for the starter memory pack")?;
+    let slug = process_probe::encode_cwd_for_projects(&cwd);
+    Ok(home
+        .join(".claude")
+        .join("projects")
+        .join(&slug)
+        .join("memory"))
+}
+
+/// `aida memories check`: compare the local memory pack against the binary's
+/// embedded master and report drift. Reads only — never writes. The
+/// recommendation (`aida init --with-memories --refresh`) is exact and
+/// paste-ready. trace:STORY-410 | ai:claude
+fn handle_memories_check(verbose: bool, json: bool) -> Result<()> {
+    let mem_dir = project_memory_dir()?;
+    let report = compute_memory_drift_into(&mem_dir)?;
+
+    if json {
+        let rows: Vec<serde_json::Value> = report
+            .rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name,
+                    "label": r.label,
+                    "description": r.description,
+                    "state": match r.state {
+                        MemoryDriftState::Missing => "missing",
+                        MemoryDriftState::Stale => "stale",
+                        MemoryDriftState::UpToDate => "up-to-date",
+                        MemoryDriftState::Edited => "edited",
+                        MemoryDriftState::UserOwned => "user-owned",
+                    },
+                })
+            })
+            .collect();
+        let out = serde_json::json!({
+            "memory_dir": mem_dir.display().to_string(),
+            "aida_version": current_version(),
+            "master_total": report.rows.len(),
+            "behind": report.behind(),
+            "missing": report.missing(),
+            "stale": report.stale(),
+            "up_to_date": report.up_to_date(),
+            "edited": report.edited(),
+            "user_owned": report.user_owned(),
+            "rows": rows,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
+    print_memory_drift(&mem_dir, &report, verbose);
+    Ok(())
+}
+
+/// Render the human-readable `aida memories check` report. Default mode caps
+/// each category at 5 entries; `--verbose` lists them all.
+/// trace:STORY-410 | ai:claude
+fn print_memory_drift(mem_dir: &std::path::Path, report: &MemoryDriftReport, verbose: bool) {
+    let max = if verbose { usize::MAX } else { 5 };
+
+    println!();
+    println!("  {}: {}", "Memory pack".bold(), mem_dir.display());
+    println!(
+        "  {} (in this aida binary): {} master memories",
+        "Master pack".bold(),
+        report.rows.len()
+    );
+    println!();
+
+    if !mem_dir.exists() {
+        println!(
+            "  {} no local memory pack yet — all {} master memories are missing.",
+            "Note:".yellow(),
+            report.rows.len()
+        );
+        print_memory_drift_recommendation();
+        return;
+    }
+
+    let print_category = |heading: colored::ColoredString,
+                          state: MemoryDriftState,
+                          with_desc: bool| {
+        let rows: Vec<&MemoryDriftRow> = report.rows.iter().filter(|r| r.state == state).collect();
+        if rows.is_empty() {
+            return;
+        }
+        println!("  {} ({}):", heading, rows.len());
+        for row in rows.iter().take(max) {
+            if with_desc && !row.description.is_empty() {
+                println!("    {} — {}", row.label.cyan(), row.description.dimmed());
+            } else {
+                println!("    {}", row.label.cyan());
+            }
+        }
+        if rows.len() > max {
+            println!(
+                "    {} (run {} to see all)",
+                format!("... {} more", rows.len() - max).dimmed(),
+                "aida memories check --verbose".cyan()
+            );
+        }
+        println!();
+    };
+
+    print_category(
+        "Missing from local".yellow(),
+        MemoryDriftState::Missing,
+        true,
+    );
+    print_category(
+        "Stale (newer version in master)".yellow(),
+        MemoryDriftState::Stale,
+        true,
+    );
+    print_category(
+        "Edited locally (kept by --refresh)".blue(),
+        MemoryDriftState::Edited,
+        false,
+    );
+    print_category(
+        "Your own (no scaffold marker; never overwritten)".dimmed(),
+        MemoryDriftState::UserOwned,
+        false,
+    );
+
+    println!("  {} up to date.", report.up_to_date().to_string().green());
+    println!();
+
+    if report.behind() == 0 {
+        println!(
+            "  {} memory pack is current with this aida binary.",
+            "✓".green()
+        );
+        println!();
+    } else {
+        println!(
+            "  {} {} behind master.",
+            report.behind().to_string().yellow().bold(),
+            if report.behind() == 1 {
+                "memory is"
+            } else {
+                "memories are"
+            }
+        );
+        print_memory_drift_recommendation();
+    }
+}
+
+/// The exact, paste-ready refresh command. trace:STORY-410 | ai:claude
+fn print_memory_drift_recommendation() {
+    println!();
+    println!(
+        "  To pull missing/updated memories (keeps your edits):\n    {}",
+        "aida init --with-memories --refresh".cyan()
+    );
+    println!();
+}
+
+/// STORY-410 Phase 2: the `aida status` one-liner. Silent unless a local
+/// memory pack exists AND is behind the binary's master — so a project that
+/// never opted into `--with-memories` is never nagged, and a current pack
+/// stays quiet (the line appearing is itself the signal). Best-effort: any
+/// error (no $HOME, no embedded pack) degrades to silence rather than
+/// breaking the status surface. trace:STORY-410 | ai:claude
+fn print_status_memory_drift_section() {
+    let Ok(mem_dir) = project_memory_dir() else {
+        return;
+    };
+    // A project that never scaffolded the pack has no memory dir — don't nag.
+    if !mem_dir.exists() {
+        return;
+    }
+    let Ok(report) = compute_memory_drift_into(&mem_dir) else {
+        return;
+    };
+    let behind = report.behind();
+    if behind == 0 {
+        return;
+    }
+    // Only surface when the pack is actually adopted (some scaffolded files
+    // present). An all-missing dir means the user keeps their own memories
+    // there but never took the pack — leave them alone.
+    if report.up_to_date() + report.stale() + report.edited() == 0 {
+        return;
+    }
+    println!(
+        "  {} {} memor{} behind master — run {} for details",
+        "Memory pack:".bold().yellow(),
+        behind,
+        if behind == 1 { "y" } else { "ies" },
+        "aida memories check".cyan()
+    );
+    println!();
+}
+
 /// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
 /// new entry was written (so callers can echo "updated .gitignore"); `false`
 /// if everything was already covered or the file had to be created from
@@ -5888,6 +6250,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             );
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
+        Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
@@ -64260,6 +64623,13 @@ fn handle_status_command_distributed(
     let wt_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
     print_status_working_tree_section(&wt_root);
 
+    // STORY-410: one-line substrate-drift notice. The opt-in memory pack
+    // grows inside the aida binary; a project that scaffolded it months ago
+    // has no other signal that it's behind. Only shown when the pack EXISTS
+    // locally and is behind — a project that never opted into `--with-memories`
+    // stays quiet (no nag to adopt a feature they declined). trace:STORY-410
+    print_status_memory_drift_section();
+
     println!("{}", "─── Project ───".bold());
     let name = if store.name.is_empty() {
         "(unnamed)"
@@ -88695,6 +89065,142 @@ mod story_255_discipline_pack_tests {
             memory_refresh_disposition(&crlf_scaffolded),
             MemoryDisposition::Pristine,
             "a CRLF copy of a pristine scaffold must still be Pristine"
+        );
+    }
+
+    // ── STORY-410: existing-project substrate-drift discovery ──────────────
+
+    /// A fresh dir that never scaffolded the pack reports every master member
+    /// as Missing — `behind()` equals the full master count and nothing is
+    /// up-to-date / edited / user-owned. trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_empty_dir_reports_all_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory"); // does not exist
+        let report = compute_memory_drift_into(&mem).unwrap();
+
+        assert!(
+            report.rows.len() >= 10,
+            "sanity: a populated master pack, got {}",
+            report.rows.len()
+        );
+        assert_eq!(report.missing(), report.rows.len());
+        assert_eq!(report.behind(), report.rows.len());
+        assert_eq!(report.up_to_date(), 0);
+        assert_eq!(report.stale(), 0);
+        assert_eq!(report.edited(), 0);
+        assert_eq!(report.user_owned(), 0);
+    }
+
+    /// A freshly-scaffolded dir is fully up to date: zero drift, every member
+    /// matches the master byte-for-byte. trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_freshly_scaffolded_dir_is_current() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        let written = scaffold_memory_pack_into(&mem, false).unwrap();
+        assert!(written.written >= 10);
+
+        let report = compute_memory_drift_into(&mem).unwrap();
+        assert_eq!(report.behind(), 0, "a fresh scaffold must not be behind");
+        assert_eq!(report.missing(), 0);
+        assert_eq!(report.stale(), 0);
+        assert_eq!(
+            report.up_to_date(),
+            report.rows.len(),
+            "every member matches master"
+        );
+    }
+
+    /// The three drift dispositions are classified correctly: a deleted file
+    /// → Missing, a body-edited file → Edited (kept by refresh), an unmarked
+    /// user file → UserOwned, a benign-frontmatter-mutated pristine file →
+    /// Stale (refresh would overlay it). trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_classifies_missing_stale_edited_and_user_owned() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        scaffold_memory_pack_into(&mem, false).unwrap();
+
+        // (a) Missing: delete one scaffolded file.
+        let missing = mem.join("feedback_run_help_before_suggesting_flags.md");
+        std::fs::remove_file(&missing).unwrap();
+
+        // (b) Edited: change a scaffolded file's body → checksum mismatch.
+        let edited = mem.join("feedback_verify_before_filing.md");
+        let mut body = std::fs::read_to_string(&edited).unwrap();
+        body.push_str("\n\nUSER EDIT.\n");
+        std::fs::write(&edited, &body).unwrap();
+
+        // (c) UserOwned: replace a file with an unmarked one.
+        let user_owned = mem.join("feedback_goal_prompt_phrasing.md");
+        std::fs::write(&user_owned, "---\nname: mine\n---\n\nmine\n").unwrap();
+
+        // (d) Stale: pristine body, but a benign extra frontmatter line makes
+        //     the on-disk bytes differ from the current master scaffold.
+        let stale = mem.join("feedback_pause_for_design_input.md");
+        let stale_v1 =
+            std::fs::read_to_string(&stale)
+                .unwrap()
+                .replacen("---\n", "---\nstaleField: x\n", 1);
+        std::fs::write(&stale, &stale_v1).unwrap();
+
+        let report = compute_memory_drift_into(&mem).unwrap();
+
+        let find = |name: &str| {
+            report
+                .rows
+                .iter()
+                .find(|r| r.name == name)
+                .unwrap_or_else(|| panic!("row {name} present"))
+                .state
+        };
+        assert_eq!(
+            find("feedback_run_help_before_suggesting_flags.md"),
+            MemoryDriftState::Missing
+        );
+        assert_eq!(
+            find("feedback_verify_before_filing.md"),
+            MemoryDriftState::Edited
+        );
+        assert_eq!(
+            find("feedback_goal_prompt_phrasing.md"),
+            MemoryDriftState::UserOwned
+        );
+        assert_eq!(
+            find("feedback_pause_for_design_input.md"),
+            MemoryDriftState::Stale
+        );
+
+        // behind() counts only missing + stale; edited/user-owned are kept.
+        assert_eq!(report.missing(), 1);
+        assert_eq!(report.stale(), 1);
+        assert_eq!(report.edited(), 1);
+        assert_eq!(report.user_owned(), 1);
+        assert_eq!(report.behind(), 2);
+    }
+
+    /// Every drift row carries a label + (usually) a description sourced from
+    /// the master template's frontmatter, so the report is human-readable.
+    /// trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_rows_carry_labels_and_descriptions() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory"); // empty → all missing
+        let report = compute_memory_drift_into(&mem).unwrap();
+
+        // Labels are never empty (fall back to filename).
+        assert!(report.rows.iter().all(|r| !r.label.is_empty()));
+        // The bundled memories carry descriptions, so most rows have one.
+        let with_desc = report
+            .rows
+            .iter()
+            .filter(|r| !r.description.is_empty())
+            .count();
+        assert!(
+            with_desc >= report.rows.len() / 2,
+            "expected most rows to carry a description, {with_desc}/{}",
+            report.rows.len()
         );
     }
 }
