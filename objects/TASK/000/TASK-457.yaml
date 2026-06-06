@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:11.174903400Z
-modified_at: 2026-06-06T08:29:58.718667217Z
+modified_at: 2026-06-06T15:12:24.683359255Z
 req_type: Task
 tags:
 - agent-integration
@@ -70,3 +70,8 @@ comments:
       REC: a — scaffolding a second supported agent is low-blast-radius onboarding parity, not marketing; the selective flag (b) is speculative until a user asks for selectivity. The open product question (introduce a flag surface or not) is what makes this human, not ready.
   created_at: 2026-06-06T08:29:56.352152451Z
   modified_at: 2026-06-06T08:29:56.352152451Z
+- id: 019e9d7e-0e6b-7141-b747-fdd826ed9a0d
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): ALWAYS scaffold .antigravity/ alongside .codex/ (no new flag) — --no-skills skips both consistently. Low-blast-radius onboarding parity for a second supported agent (NOT marketing). A selective --agents= flag is speculative until a user asks for selectivity. Mirror the .codex/ template structure + reference docs/agents/antigravity-mcp-setup.md.'
+  created_at: 2026-06-06T15:12:24.683359255Z
+  modified_at: 2026-06-06T15:12:24.683359255Z
