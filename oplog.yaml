@@ -13767,5 +13767,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DECOMPOSE into the 5 named child stories (treat in-flight PR-497 as a partial slice — do NOT trailer the EPIC on its merge). Worker mechanism: build the MINIMAL long-running loop + graceful stop + crash-recovery state file; DEFER the Unix-socket control plane and the new REQUEST spec-type until a real need appears (no daemon-grade infra yet).
-clock: 1490
+- id: 019e9d2e-1307-7aa2-8f63-18eec7ed05b6
+  target_id: 019e33a9-31b3-7943-8162-b2157e93e7f7
+  author: aida
+  node_id: '1'
+  lamport: 1491
+  timestamp: 2026-06-06T13:45:02.983481039Z
+  kind: !SetStatus
+    status: Approved
+clock: 1491
 node_id: '1'
