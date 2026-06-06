@@ -45,13 +45,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:45:39.551220261Z
-modified_at: 2026-06-06T08:34:48.023785631Z
+modified_at: 2026-06-06T08:34:49.390829337Z
 req_type: Task
 tags:
 - auto-complete
 - cli-ux
 - from-user-friction
 - orchestrator
+- ready-to-implement
 - recovery
 comments:
 - id: 019e50e9-ec74-7410-918a-0003cc75f70f
