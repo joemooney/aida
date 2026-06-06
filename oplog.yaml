@@ -14063,5 +14063,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       BUILD with the no-daemon pull-triggered design (evaluate cadence on aida pull; cadence→queue, standalone — do NOT couple to EPIC-30). DEFERRED to post-stability per phase. Skip shipping marketing-cadence templates (e.g. refresh-comp-analysis) until the marketing phase; the scheduling primitive is the on-thesis core.
-clock: 1502
+- id: 019e9d35-bef1-7681-9cd5-e0f21f476e65
+  target_id: 019e3312-c4f9-7c81-ac28-9b3f88115a25
+  author: aida
+  node_id: '1'
+  lamport: 1503
+  timestamp: 2026-06-06T13:53:25.745113278Z
+  kind: !SetStatus
+    status: Approved
+clock: 1503
 node_id: '1'
