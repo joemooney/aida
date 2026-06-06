@@ -20,9 +20,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:08:40.656743203Z
-modified_at: 2026-05-06T06:08:40.656743203Z
+modified_at: 2026-06-06T08:14:48.272487192Z
 req_type: Functional
 tags:
 - EPIC-1-052-followup
 - multi-repo
 - node-identity
+comments:
+- id: 019e9bff-b9d0-7510-942a-8c68d77f7356
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). aida node acquire --remote-only (requires explicit --id/--hostname/--email) to backfill a legacy node into registry/nodes.toml + push without touching local identity. Confirmed not yet implemented.
+  created_at: 2026-06-06T08:14:48.272487192Z
+  modified_at: 2026-06-06T08:14:48.272487192Z
