@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:08:40.655917409Z
-modified_at: 2026-06-06T08:21:04.064398152Z
+modified_at: 2026-06-06T19:55:19.226188124Z
 req_type: Functional
 tags:
 - git-backend
@@ -34,3 +34,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). aida trace scan/list + MCP show_requirement resolve spec IDs against a sibling store in aida init --sibling workspaces (cross-repo relationships out of scope). Sibling plumbing exists; trace resolution is the gap.
   created_at: 2026-06-06T08:14:44.964883130Z
   modified_at: 2026-06-06T08:14:44.964883130Z
+- id: 019e9e81-113a-7ef0-8fdb-a5919d954170
+  author: joe
+  content: Commit 5ef10babd references this requirement
+  created_at: 2026-06-06T19:55:19.226188124Z
+  modified_at: 2026-06-06T19:55:19.226188124Z
