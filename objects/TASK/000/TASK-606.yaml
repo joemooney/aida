@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T16:15:10.142566784Z
-modified_at: 2026-05-31T16:15:10.142566784Z
+modified_at: 2026-06-06T04:19:09.730679317Z
 req_type: Task
 tags:
 - auto-trigger
@@ -16,3 +16,5 @@ tags:
 - inter-agent-mailbox
 - needs-design-signoff
 - parent:STORY-493
+archived: true
+archived_at: 2026-06-06T04:19:09.730679317Z
