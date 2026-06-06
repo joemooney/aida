@@ -151,6 +151,30 @@ pub fn pickability(req: &Requirement, store: &RequirementsStore) -> Pickability 
     Pickability::Pickable
 }
 
+/// TASK-670: is `req` blocked purely by the dependency graph — i.e. it carries
+/// a `BlockedBy` edge to a target that is NOT Completed (an in-progress, draft,
+/// rejected, or dangling/unknown blocker)?
+///
+/// This is the *work-routing* "blocked behind a blocker" axis used by the
+/// `aida list --blocked` leading ⊘ glyph. Unlike [`pickability`], it
+/// deliberately ignores `human_only` and `NeedsAttention` — those are already
+/// surfaced on the status axis (the status glyph `⚠`), and TASK-670's overlay
+/// must not duplicate status. trace:TASK-670 | ai:claude
+pub fn blocked_by_incomplete(req: &Requirement, store: &RequirementsStore) -> bool {
+    req.relationships
+        .iter()
+        .filter(|r| matches!(r.rel_type, RelationshipType::BlockedBy))
+        .any(|rel| {
+            match store.requirements.iter().find(|r| r.id == rel.target_id) {
+                // Resolvable blocker that hasn't reached Completed → blocked.
+                Some(target) => !matches!(target.status, RequirementStatus::Completed),
+                // Dangling edge: a blocker we can't resolve is treated as
+                // unsatisfied (defensive — don't silently un-block).
+                None => true,
+            }
+        })
+}
+
 /// Render a `BlockedReason` as a single line suitable for the
 /// `aida queue list` Blocked section, `aida queue next` skip hints, and
 /// the head-pickup banner. The label leads with the *reason kind*, then
@@ -238,6 +262,46 @@ mod tests {
         add_blocked_by(&mut dependent, blocker.id);
         let store = store_with(vec![blocker, dependent.clone()]);
         assert_eq!(pickability(&dependent, &store), Pickability::Pickable);
+    }
+
+    /// TASK-670: `blocked_by_incomplete` is the graph-only blocked axis for the
+    /// `aida list --blocked` ⊘ glyph — true for an incomplete/dangling blocker,
+    /// false once every blocker is Completed, and (unlike `pickability`) it
+    /// ignores human_only / NeedsAttention so it never duplicates the status
+    /// axis. trace:TASK-670 | ai:claude
+    #[test]
+    fn blocked_by_incomplete_axis() {
+        // No edges → not blocked.
+        let lone = make_req("STORY-X", RequirementStatus::Approved);
+        let store = store_with(vec![lone.clone()]);
+        assert!(!blocked_by_incomplete(&lone, &store));
+
+        // Incomplete blocker → blocked.
+        let blocker = make_req("STORY-B", RequirementStatus::InProgress);
+        let mut dep = make_req("STORY-A", RequirementStatus::Approved);
+        add_blocked_by(&mut dep, blocker.id);
+        let store = store_with(vec![blocker, dep.clone()]);
+        assert!(blocked_by_incomplete(&dep, &store));
+
+        // Blocker Completed → not blocked.
+        let done = make_req("STORY-B", RequirementStatus::Completed);
+        let mut dep2 = make_req("STORY-A", RequirementStatus::Approved);
+        add_blocked_by(&mut dep2, done.id);
+        let store = store_with(vec![done, dep2.clone()]);
+        assert!(!blocked_by_incomplete(&dep2, &store));
+
+        // Dangling blocker (target absent) → blocked (defensive).
+        let mut dep3 = make_req("STORY-A", RequirementStatus::Approved);
+        add_blocked_by(&mut dep3, Uuid::new_v4());
+        let store = store_with(vec![dep3.clone()]);
+        assert!(blocked_by_incomplete(&dep3, &store));
+
+        // human_only / NeedsAttention with no BlockedBy edge → NOT graph-blocked
+        // (those belong to the status axis, not this overlay).
+        let mut na = make_req("STORY-N", RequirementStatus::NeedsAttention);
+        na.human_only = true;
+        let store = store_with(vec![na.clone()]);
+        assert!(!blocked_by_incomplete(&na, &store));
     }
 
     #[test]

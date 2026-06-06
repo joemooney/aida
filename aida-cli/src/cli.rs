@@ -4567,6 +4567,28 @@ pub enum Command {
         // trace:TASK-569 | ai:claude
         #[clap(long)]
         show_tags: bool,
+
+        /// Also walk BlockedBy edges and mark specs blocked behind an
+        /// incomplete blocker with a leading ⊘ glyph. Off by default —
+        /// it needs a one-shot full-store load (the cheap queued ↑ /
+        /// in-flight ▶ overlay is always on).
+        // trace:TASK-670 | ai:claude
+        #[clap(long)]
+        blocked: bool,
+
+        /// Drop the leading work-routing glyph column (↑ queued / ▶
+        /// in-flight / ⊘ blocked) but keep the status glyphs. "Show me
+        /// the list without the routing overlay."
+        // trace:TASK-670 | ai:claude
+        #[clap(long)]
+        no_flow: bool,
+
+        /// Strip ALL glyphs (status + work-routing) for plain-text
+        /// output — scripting, grep, non-Unicode terminals,
+        /// accessibility. Glyphs are on by default; this is the opt-out.
+        // trace:TASK-670 | ai:claude
+        #[clap(long)]
+        no_glyph: bool,
     },
 
     /// Show details for a specific requirement

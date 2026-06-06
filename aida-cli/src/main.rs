@@ -5904,6 +5904,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             json,
             tree,
             show_tags,
+            blocked,
+            no_flow,
+            no_glyph,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -6006,6 +6009,72 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
 
+            // TASK-670: compute the leading work-routing overlay (↑ queued /
+            // ▶ in-flight / ⊘ blocked) once for the visible row set, then map
+            // each row to a glyph. Two cheap reads are always on (a queues
+            // dir scan + a live-lease probe); the blocked axis needs a graph
+            // walk so it's gated behind --blocked. `--no-glyph` short-circuits
+            // ALL of it (restores the pure-cache fast path); `--no-flow` keeps
+            // the cheap probes off too since the column is dropped anyway.
+            // trace:TASK-670 | ai:claude
+            let show_flow = !*no_glyph && !*no_flow;
+            // The routing sets feed BOTH the flow-glyph column AND the JSON
+            // routing fields. The display-suppression flags (`--no-glyph` /
+            // `--no-flow`) hide the COLUMN but must not blank the machine
+            // fields, so compute the cheap probes whenever we render glyphs OR
+            // emit JSON. trace:TASK-670 | ai:claude
+            let need_routing = show_flow || *json;
+            // project root = the parent of the `.aida-store` worktree.
+            let routing_root = store_path.parent().map(|p| p.to_path_buf());
+            let queued_ids: HashSet<Uuid> = if need_routing {
+                routing_root
+                    .as_deref()
+                    .map(all_queued_requirement_ids)
+                    .unwrap_or_default()
+            } else {
+                HashSet::new()
+            };
+            let in_flight_scopes: HashSet<String> = if need_routing {
+                routing_root
+                    .as_deref()
+                    .map(in_flight_lease_scopes)
+                    .unwrap_or_default()
+            } else {
+                HashSet::new()
+            };
+            // Blocked axis: only when --blocked. Needs the relationships array,
+            // which the cache projection drops, so load the full store once and
+            // resolve BlockedBy edges per row.
+            let blocked_ids: HashSet<Uuid> = if need_routing && *blocked {
+                match backend.load() {
+                    Ok(store) => store
+                        .requirements
+                        .iter()
+                        .filter(|r| aida_core::pickability::blocked_by_incomplete(r, &store))
+                        .map(|r| r.id)
+                        .collect(),
+                    Err(_) => HashSet::new(),
+                }
+            } else {
+                HashSet::new()
+            };
+            // Per-row routing classifier. A row is in-flight when a live lease's
+            // scope matches its canonical or origin id (case-insensitive); the
+            // in-flight set is empty unless a live lease exists.
+            let row_routing = |r: &aida_core::RequirementSummary| -> (bool, bool, bool) {
+                let queued = queued_ids.contains(&r.id);
+                let blocked = blocked_ids.contains(&r.id);
+                let in_flight = if in_flight_scopes.is_empty() {
+                    false
+                } else {
+                    [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|id| in_flight_scopes.contains(&id.to_ascii_lowercase()))
+                };
+                (in_flight, blocked, queued)
+            };
+
             // STORY-441: count of archived rows that would have surfaced if
             // `--all` was set. Cheap second query, used only to render the
             // "(N archived hidden — pass --all …)" footer hint. Skipped when
@@ -6029,6 +6098,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // human chrome (banner / footer count / colours).
             // trace:STORY-244 | ai:claude
             if *json {
+                // TASK-670: carry the work-routing axis as machine fields
+                // (glyphs are display-only). `blocked` reflects the graph walk
+                // only when --blocked was passed; otherwise it's always false.
+                // trace:TASK-670 | ai:claude
                 #[derive(serde::Serialize)]
                 struct ListJsonRow<'a> {
                     spec_id: &'a str,
@@ -6036,19 +6109,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     req_type: &'a str,
                     status: &'a str,
                     tags: &'a [String],
+                    queued: bool,
+                    in_flight: bool,
+                    blocked: bool,
                 }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
-                    .map(|r| ListJsonRow {
-                        spec_id: r
-                            .agreed_id
-                            .as_deref()
-                            .or(r.spec_id.as_deref())
-                            .unwrap_or(""),
-                        title: r.title.as_str(),
-                        req_type: r.req_type.as_str(),
-                        status: r.status.as_str(),
-                        tags: &r.tags,
+                    .map(|r| {
+                        let (in_flight, blocked, queued) = row_routing(r);
+                        ListJsonRow {
+                            spec_id: r
+                                .agreed_id
+                                .as_deref()
+                                .or(r.spec_id.as_deref())
+                                .unwrap_or(""),
+                            title: r.title.as_str(),
+                            req_type: r.req_type.as_str(),
+                            status: r.status.as_str(),
+                            tags: &r.tags,
+                            queued,
+                            in_flight,
+                            blocked,
+                        }
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&out)?);
@@ -6194,19 +6276,49 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // terminals; chip set itself is truncated to 3 with a
                 // "+N more" suffix. trace:TASK-569 | ai:claude
                 let title_max = if *show_tags { 50 } else { usize::MAX };
+                // TASK-670: the leading work-routing column. `flow_prefix` is
+                // "<glyph> " (2 visible cols) per row when the column is shown,
+                // else "". `flow_header` reserves the same 2 cols in the header
+                // + divider so the ID column stays aligned. `render_status`
+                // drops the status glyph under --no-glyph for plain-text output.
+                // trace:TASK-670 | ai:claude
+                let flow_header = if show_flow { "  " } else { "" };
+                let flow_width = flow_header.len();
+                let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
+                    if !show_flow {
+                        return String::new();
+                    }
+                    let (in_flight, blocked, queued) = row_routing(r);
+                    format!(
+                        "{} ",
+                        status_display::flow_glyph(in_flight, blocked, queued)
+                    )
+                };
+                let render_status = |status: &str| -> String {
+                    if *no_glyph {
+                        // 13 cols = the glyph(1)+space(1)+11-label width the
+                        // glyph cell occupies, so columns line up either way.
+                        status_display::status_cell_no_glyph(status, 13)
+                    } else {
+                        status_display::status_cell(status, 11)
+                    }
+                };
                 if *show_origin {
                     if *show_tags {
                         println!(
-                            "{:<12} {:<14} {:<12} {:<13} {:<50} {}",
-                            "ID", "Origin ID", "Type", "Status", "Title", "Tags"
+                            "{}{:<12} {:<14} {:<12} {:<13} {:<50} {}",
+                            flow_header, "ID", "Origin ID", "Type", "Status", "Title", "Tags"
                         );
                     } else {
                         println!(
-                            "{:<12} {:<14} {:<12} {:<13} {}",
-                            "ID", "Origin ID", "Type", "Status", "Title"
+                            "{}{:<12} {:<14} {:<12} {:<13} {}",
+                            flow_header, "ID", "Origin ID", "Type", "Status", "Title"
                         );
                     }
-                    println!("{}", "─".repeat(if *show_tags { 113 } else { 81 }));
+                    println!(
+                        "{}",
+                        "─".repeat(flow_width + if *show_tags { 113 } else { 81 })
+                    );
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -6230,12 +6342,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         // trace:TASK-269 | ai:claude
                         // TASK-315: glyph + colour in the Status column (cell is
                         // 13 visible cols: glyph + space + 11-wide label).
-                        let status_cell = status_display::status_cell(&req.status, 11);
+                        let status_cell = render_status(&req.status);
+                        let flow = flow_prefix(req);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
                             println!(
-                                "{:<12} {}{:<12} {} {:<50} {}",
+                                "{}{:<12} {}{:<12} {} {:<50} {}",
+                                flow,
                                 display_id,
                                 origin_cell,
                                 req.req_type,
@@ -6245,24 +6359,27 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             );
                         } else {
                             println!(
-                                "{:<12} {}{:<12} {} {}",
-                                display_id, origin_cell, req.req_type, status_cell, req.title,
+                                "{}{:<12} {}{:<12} {} {}",
+                                flow, display_id, origin_cell, req.req_type, status_cell, req.title,
                             );
                         }
                     }
                 } else {
                     if *show_tags {
                         println!(
-                            "{:<14} {:<12} {:<13} {:<10} {:<50} {}",
-                            "ID", "Type", "Status", "Priority", "Title", "Tags"
+                            "{}{:<14} {:<12} {:<13} {:<10} {:<50} {}",
+                            flow_header, "ID", "Type", "Status", "Priority", "Title", "Tags"
                         );
                     } else {
                         println!(
-                            "{:<14} {:<12} {:<13} {:<10} {}",
-                            "ID", "Type", "Status", "Priority", "Title"
+                            "{}{:<14} {:<12} {:<13} {:<10} {}",
+                            flow_header, "ID", "Type", "Status", "Priority", "Title"
                         );
                     }
-                    println!("{}", "─".repeat(if *show_tags { 111 } else { 77 }));
+                    println!(
+                        "{}",
+                        "─".repeat(flow_width + if *show_tags { 111 } else { 77 })
+                    );
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -6273,12 +6390,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         // keeps the column aligned. trace:TASK-269 | ai:claude
                         // TASK-315: glyph + colour in the Status column (cell is
                         // 13 visible cols: glyph + space + 11-wide label).
-                        let status_cell = status_display::status_cell(&req.status, 11);
+                        let status_cell = render_status(&req.status);
+                        let flow = flow_prefix(req);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
                             println!(
-                                "{:<14} {:<12} {} {:<10} {:<50} {}",
+                                "{}{:<14} {:<12} {} {:<10} {:<50} {}",
+                                flow,
                                 display_id,
                                 req.req_type,
                                 status_cell,
@@ -6288,8 +6407,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             );
                         } else {
                             println!(
-                                "{:<14} {:<12} {} {:<10} {}",
-                                display_id, req.req_type, status_cell, req.priority, req.title,
+                                "{}{:<14} {:<12} {} {:<10} {}",
+                                flow,
+                                display_id,
+                                req.req_type,
+                                status_cell,
+                                req.priority,
+                                req.title,
                             );
                         }
                     }
@@ -25576,6 +25700,65 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     }
     out.sort_by_key(|l| l.started_at);
     out
+}
+
+/// TASK-670: the set of requirement UUIDs that sit in *some* role queue
+/// (across every user's queue file), for the leading ↑ work-routing glyph on
+/// `aida list`. Cheap by design — one `read_dir` over
+/// `.aida-store/registry/queues/` + a YAML parse per file, no Storage::load().
+/// Work-routing is a project-global axis (not the current shell's queue), so we
+/// union across all queue files. Returns an empty set when the dir is absent.
+/// trace:TASK-670 | ai:claude
+fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
+    let mut out = HashSet::new();
+    let dir = project_root.join(".aida-store/registry/queues");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        if let Ok(items) = serde_yaml::from_str::<Vec<aida_core::QueueEntry>>(&content) {
+            for item in items {
+                out.insert(item.requirement_id);
+            }
+        }
+    }
+    out
+}
+
+/// TASK-670: the set of scope strings held by *live* session leases — the input
+/// for the in-flight ▶ work-routing glyph. "Live" means a running claude was
+/// found inside the lease's worktree (the same probe `aida session leases` uses
+/// for its `live` state); dormant / stale / reaped leases are excluded so a
+/// dead session never shows ▶ (cf. STORY-496). Scopes are lowercased for a
+/// case-insensitive match against a row's spec/agreed id. trace:TASK-670 | ai:claude
+fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
+    let leases = list_leases(project_root);
+    if leases.is_empty() {
+        return HashSet::new();
+    }
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    leases
+        .iter()
+        .filter_map(|l| {
+            let worktree_exists = l.worktree_path.exists();
+            let has_live_claude = live.iter().any(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            let age_hours = now.signed_duration_since(l.started_at).num_hours();
+            match classify_lease_state(worktree_exists, has_live_claude, age_hours) {
+                LeaseState::Live => Some(l.scope.to_ascii_lowercase()),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 /// BUG-98: cheap lease count for the `aida session list` footer hint.
