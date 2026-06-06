@@ -25,12 +25,12 @@ description: |-
 
   - STORY-407 — empirical integration produces the content this task scaffolds.
   - The original \`.codex/\` integration that informs the pattern.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:11.174903400Z
-modified_at: 2026-06-06T06:02:17.998160113Z
+modified_at: 2026-06-06T06:06:23.460904085Z
 req_type: Task
 tags:
 - agent-integration
@@ -53,3 +53,11 @@ comments:
     Until resolved, the scaffolding shape is unknown. Tag as needing-research before implementation can proceed. Compose with STORY-407's setup doc (docs/agents/antigravity-mcp-setup.md) which now has empirical evidence of Antigravity's directory expectations.
   created_at: 2026-05-22T18:45:40.495966442Z
   modified_at: 2026-05-22T18:45:40.495966442Z
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: no-pr
+  detail: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting
+  recovery_hint: 'The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work TASK-457 --resume 019e9b86b050`'
+  shelved_by: implementer
+  shelved_at: 2026-06-06T06:06:23.460904085Z
