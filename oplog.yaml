@@ -14420,5 +14420,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Ship the BOUNDED doc-honesty + propagation sub-tracks now: (A) propagate docs/agents/ via aida init, (B) reconcile AGENTS.md against the CLAUDE.md reference, (D) agent-agnostic-vs-claude discipline doc. These back AIDA's agent-agnostic positioning at first contact. SPLIT the genuine design forks (opt-in vs default-on per-agent scaffolding; memory-pack path-independence) into their own specs — out of scope here.
-clock: 1511
+- id: 019e9d3a-cb75-7130-99a3-e7186e092184
+  target_id: 019e534c-7d62-7a73-baa3-f004020b30ff
+  author: aida
+  node_id: '1'
+  lamport: 1512
+  timestamp: 2026-06-06T13:58:56.629680134Z
+  kind: !SetStatus
+    status: Completed
+clock: 1512
 node_id: '1'
