@@ -20,12 +20,12 @@ description: |-
   Hypothesis: the status/cache counter is counting non-requirement or template/history/META rows as draft requirements, OR a stale/pre-seed count is reported before the first real list query. Either way 'status' and 'list --all' disagree on a fresh store, which erodes trust in the counts.
 
   Repro: aida init a fresh distributed project, then compare 'aida status' vs 'aida list --all' immediately. Reported by an external project (quizdom) dogfooding AIDA as a substrate.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:39:13.301040728Z
-modified_at: 2026-06-06T19:08:06.082991817Z
+modified_at: 2026-06-06T19:29:43.395696326Z
 req_type: Bug
 tags:
 - cache
@@ -45,3 +45,7 @@ comments:
   content: Commit 8e4abed9b references this requirement
   created_at: 2026-06-06T19:08:06.082991817Z
   modified_at: 2026-06-06T19:08:06.082991817Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T19:29:43.395696326Z
+  completion_sha: 5eb6f2c6c34bc5e7cc9c0d4b0ef93ef7a24764ec
