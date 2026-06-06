@@ -15,9 +15,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:36:20.728144498Z
-modified_at: 2026-06-06T08:15:01.347806504Z
+modified_at: 2026-06-06T08:16:18.474914487Z
 req_type: Bug
 tags:
+- base-branch
+- ci-wait
+- external-report
+- no-workflows
+- pr-ship
+- quizdom
 - ready-to-implement
 comments:
 - id: 019e9bff-e19f-7d82-86d2-7584a1c22ffe
