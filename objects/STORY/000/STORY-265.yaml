@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:03:43.330261877Z
-modified_at: 2026-05-17T02:14:33.340265641Z
+modified_at: 2026-06-06T08:17:32.071987827Z
 req_type: Story
 tags:
 - advisor-vision
@@ -129,3 +129,19 @@ comments:
     - A specific class of spec (EPIC-shaped?) consistently benefits from the split
   created_at: 2026-05-17T02:14:33.340265641Z
   modified_at: 2026-05-17T02:14:33.340265641Z
+- id: 019e9c02-39a7-7c70-8777-5ab96c571477
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: High-priority parent of the parallel-pipelining cluster — full three-mode spec or a slice?
+      a) Ship all three modes (--plan-only/--implement/--with-plan) + Approved→Planned wiring + glyph changes
+      b) Ship --plan-only + Approved→Planned first (unblocks STORY-519); defer the rest
+      c) Reject — aida queue work already does plan+implement; the gain is throughput, deferrable
+      REC: b — --plan-only + Planned-status is the dependency 519/520 actually need; the bundled default + glyphs are follow-on polish.
+    Q2: Acceptance proposes type-based default modes (STORY/EPIC→with-plan, TASK/BUG→direct). Bake in?
+      a) Adopt the type defaults
+      b) No implicit default — require an explicit mode flag
+      c) Keep current bundled behavior as default; modes opt-in
+      REC: c — changing the daily-driver aida queue work's default by spec-type is a UX surprise during a stability phase.
+  created_at: 2026-06-06T08:17:32.071987827Z
+  modified_at: 2026-06-06T08:17:32.071987827Z
