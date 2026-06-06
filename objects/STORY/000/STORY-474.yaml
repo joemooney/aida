@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:12.371919361Z
-modified_at: 2026-06-06T23:14:20.330913777Z
+modified_at: 2026-06-06T23:14:21.469729769Z
 req_type: Story
 tags:
 - blocked
@@ -48,3 +48,8 @@ comments:
   content: Commit 9bf484844 references this requirement
   created_at: 2026-06-06T23:02:39.994834869Z
   modified_at: 2026-06-06T23:02:39.994834869Z
+- id: 019e9f37-4a9d-7411-b5f7-f9fb96733bce
+  author: joe
+  content: "PARKED (autonomous churn 2026-06-06): PR-593 CI failed (main green → branch-specific). Build (ubuntu-latest)\tRun tests\t2026-06-06T23:06:49.2683853Z error: The following untracked working tree files would be overwritte\nBuild (ubuntu-latest)\tRun tests\t2026-06-06T23:06:53.4746923Z thread 'pr_ship_environment_tests::waits_for_ci_checks_to_register_be. Needs a rebase + fix; reopen after."
+  created_at: 2026-06-06T23:14:21.469729769Z
+  modified_at: 2026-06-06T23:14:21.469729769Z
