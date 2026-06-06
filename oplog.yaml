@@ -14997,5 +14997,57 @@ operations:
   timestamp: 2026-06-06T14:26:00.321198333Z
   kind: !SetStatus
     status: Approved
-clock: 1537
+- id: 019e9d53-aec0-7192-880e-32e49026552b
+  target_id: 019e2f06-da1f-7e41-a73f-3c23b689e835
+  author: aida
+  node_id: '1'
+  lamport: 1538
+  timestamp: 2026-06-06T14:26:07.680369369Z
+  kind: !SetDescription
+    description: |
+      The TUI uses ratatui's default Styles — functional but visually unremarkable. Add a small theme system so AIDA's TUI can render with popular dev-aesthetic palettes (Catppuccin variants, Nord) and Light/Dark base themes. Theming is the polish layer that makes first-impression first-users *want* to use the TUI.
+
+      ## Acceptance
+
+      - [ ] Theme system: a \`Theme\` struct in \`aida-tui/src/theme.rs\` with named color slots (bg, fg, accent, dim, border, selected, error, warn, info)
+      - [ ] Built-in themes:
+        - **Catppuccin Mocha** (dark, soft pastels — the default reference)
+        - **Catppuccin Macchiato** (slightly less dark)
+        - **Catppuccin Frappé** (mid-dark)
+        - **Catppuccin Latte** (light)
+        - **Dark** (standard high-contrast dark — alpha default)
+        - **Light** (standard light)
+        - **Nord** (popular dev theme)
+      - [ ] All ratatui Styles in the codebase route through \`Theme\` lookups (no hardcoded Color::Red etc.)
+      - [ ] Config: \`[tui] theme = \"catppuccin-mocha\"\` in \`.aida/config.toml\`; defaults to \"dark\"
+      - [ ] Runtime switch: \`Ctrl-A T\` opens a theme picker (live preview as you cursor through)
+      - [ ] Theme choice persists to \`.aida/config.toml\` on selection
+      - [ ] All four regions of the workflow-loop layout (STORY-241) honor the theme: top tabs, left nav, middle list, right preview, status strip, overlays
+      - [ ] Tests: golden-image-style snapshot test for each theme rendering a fixed dashboard state
+
+      ## Composes with
+
+      - **STORY-241** (workflow loop) — the four-region layout is what theming makes shine. Theming is meaningless on a flat keybinding card; it's transformative on a structured layout.
+      - **STORY-242** (persistent dialog tab) — themed dialog tab indicators (idle/active/error)
+      - **STORY-133** (status overlay, shipped) — overlay should also honor theme
+      - **STORY-135** (crash recovery) — re-attach prompts honor theme
+
+      ## Out of scope
+
+      - **Custom user themes** — user-defined palettes via \`.aida/themes/<name>.toml\`. Follow-up.
+      - **Auto-detect terminal background** — pick light vs dark based on terminal bg. Follow-up.
+      - **24-bit vs 256-color fallback** — auto-detect terminal capability; degrade gracefully. Follow-up.
+
+      ## Why this matters for alpha
+
+      User reference image (Catppuccin email client) made the gap obvious: a polished TUI is *visibly different* from a functional TUI. First-users-in-days will form opinions in the first 10 seconds; theming is high-leverage polish for low effort.
+
+      ## Origin
+
+      User shared a Catppuccin-themed email client reference and asked for *"a sexier interface"* 2026-05-15. Theming is the cheapest way to deliver on that impression while STORY-241's structural work lands.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER to the marketing/first-impression phase — self-described polish; theming pays off most paired with visibility work, not during bug-clearing. When built: Theme struct + route hardcoded colors + 2-3 themes (one Catppuccin default) is the right first slice; defer the full 7-theme matrix + picker/persistence.
+clock: 1538
 node_id: '1'

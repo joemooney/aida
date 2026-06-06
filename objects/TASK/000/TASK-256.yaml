@@ -2,7 +2,7 @@ id: 019e2f06-da1f-7e41-a73f-3c23b689e835
 spec_id: TASK-256
 agreed_id: TASK-256
 title: 'TUI theming: Catppuccin (mocha/macchiato/frappe/latte) + Dark + Light + Nord palettes'
-description: |-
+description: |
   The TUI uses ratatui's default Styles — functional but visually unremarkable. Add a small theme system so AIDA's TUI can render with popular dev-aesthetic palettes (Catppuccin variants, Nord) and Light/Dark base themes. Theming is the polish layer that makes first-impression first-users *want* to use the TUI.
 
   ## Acceptance
@@ -43,12 +43,16 @@ description: |-
   ## Origin
 
   User shared a Catppuccin-themed email client reference and asked for *"a sexier interface"* 2026-05-15. Theming is the cheapest way to deliver on that impression while STORY-241's structural work lands.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER to the marketing/first-impression phase — self-described polish; theming pays off most paired with visibility work, not during bug-clearing. When built: Theme struct + route hardcoded colors + 2-3 themes (one Catppuccin default) is the right first slice; defer the full 7-theme matrix + picker/persistence.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T04:23:58.751815087Z
-modified_at: 2026-06-06T14:26:06.209821004Z
+modified_at: 2026-06-06T14:26:07.659231422Z
 req_type: Task
 tags:
 - aesthetics
