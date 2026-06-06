@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:30.825157935Z
-modified_at: 2026-06-06T13:55:42.199090662Z
+modified_at: 2026-06-06T13:55:44.565394558Z
 req_type: Story
 tags:
 - advisor
@@ -21,7 +21,6 @@ tags:
 - from-spike
 - handoff
 - multi-project
-- needs-human-input
 - sibling-initiation
 - track-a
 comments:
