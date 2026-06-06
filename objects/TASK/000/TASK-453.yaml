@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T07:36:28.836854407Z
-modified_at: 2026-05-22T07:36:38.206201083Z
+modified_at: 2026-06-06T08:34:56.027429688Z
 req_type: Task
 tags:
 - ci
@@ -33,3 +33,9 @@ relationships:
   target_id: 019e4e6c-fd35-7852-ac94-4e704c74ae92
   created_at: 2026-05-22T07:36:38.206193078Z
   created_by: joe
+comments:
+- id: 019e9c12-279b-7e51-aebb-c3a787f81d9b
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Verified BUG-310 is Completed but the CI step still runs `tests/test_mcp_stdio.sh` without `--require-mcp-write-roundtrip` (gate still staged); fully bounded mechanical follow-up — add the flag to ci.yml, confirm green, optionally flip the script default — now unblocked.
+  created_at: 2026-06-06T08:34:56.027429688Z
+  modified_at: 2026-06-06T08:34:56.027429688Z
