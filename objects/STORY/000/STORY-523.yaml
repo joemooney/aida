@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:46:29.087785646Z
-modified_at: 2026-06-06T14:13:43.122843724Z
+modified_at: 2026-06-06T14:13:47.446547334Z
 req_type: Story
 tags:
 - backlog-sweep
@@ -56,6 +56,11 @@ tags:
 - human-in-the-loop
 - parent:STORY-522
 - producer-consumer
+relationships:
+- rel_type: BlockedBy
+  target_id: 019e9af8-9aa2-7913-b29e-60c9ef204038
+  created_at: 2026-06-06T14:13:47.446538091Z
+  created_by: joe
 comments:
 - id: 019e9c02-04fe-7d12-a011-619ccfd29f84
   author: joe
