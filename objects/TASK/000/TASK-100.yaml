@@ -33,12 +33,12 @@ description: |-
   - [ ] Shows diverged file paths so user can judge risk
   - [ ] Bypassable via --no-fetch or AIDA_QUEUE_DONE_PRECHECK=skip env
   - [ ] queue done summary line reports the result inline
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:42:34.664586913Z
-modified_at: 2026-06-06T14:25:43.183349191Z
+modified_at: 2026-06-06T14:25:44.381091423Z
 req_type: Task
 tags:
 - base-freshness
