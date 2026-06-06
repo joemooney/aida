@@ -8623,6 +8623,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_load_command(load_cmd, &storage)?;
         }
+        // FR-267: trace commands must resolve spec ids against the resolved
+        // git store — including a SIBLING store in an `aida init --sibling`
+        // workspace. Previously `Command::Trace` fell through to the
+        // "not yet supported for git backend" catch-all, so `aida trace
+        // scan` / `aida trace list` only worked when the store lived inside
+        // the current repo. `store_path` here is whatever
+        // `detect_distributed_store` resolved (the sibling `../aida-store`
+        // for sibling-mode configs), and `Storage::new(<dir>)` delegates
+        // load/save to GitBackend — so the same store-resolution that
+        // already backs `aida add` / `aida show` now backs trace-id
+        // resolution too, regardless of which code repo's CWD invoked it.
+        // (MCP `show_requirement` already routed through the resolved
+        // store_path, so it needed no change.)
+        // trace:FR-267 | ai:claude
+        Command::Trace(trace_cmd) => {
+            let storage = Storage::new(store_path);
+            handle_trace_command(trace_cmd, &storage)?;
+        }
         // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
         // `load` alias for quantitative effort summaries.
         Command::Backlog(backlog_cmd) => {
@@ -8839,6 +8857,15 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
         // STORY-444: `aida backlog groom` writes (queue + tag); list /
         // analyze are read-only. trace:STORY-444 | ai:claude
         Command::Backlog(cmd) => matches!(cmd, BacklogCommand::Groom { .. }),
+        // FR-267: trace add/remove always mutate the store; `trace scan`
+        // only writes with `--update`. scan/list/gate/sweep without a write
+        // are read-only. trace:FR-267 | ai:claude
+        Command::Trace(cmd) => matches!(
+            cmd,
+            TraceCommand::Add { .. }
+                | TraceCommand::Remove { .. }
+                | TraceCommand::Scan { update: true, .. }
+        ),
         Command::Findings(cmd) => !matches!(cmd, FindingsCommand::List { .. }),
         Command::Config(cmd) => matches!(
             cmd,
@@ -43511,6 +43538,64 @@ mod store_walkup_tests {
         // `<nested>/.aida-store/` which doesn't exist.
         let resolved = detect_distributed_store_from(&nested).unwrap();
         assert_eq!(resolved, root.join(".aida-store"));
+    }
+
+    /// FR-267: in an `aida init --sibling` workspace the code repo's
+    /// `.aida/config.toml` points `store_path` OUTSIDE the repo (e.g.
+    /// `../aida-store`). Store resolution must follow that pointer to the
+    /// SIBLING directory — this is the same resolution that now backs
+    /// `aida trace scan` / `aida trace list` (they route through the
+    /// resolved `store_path` in `handle_git_backend_command`). Resolving
+    /// from a nested subdir of the code repo must still land on the sibling.
+    /// trace:FR-267 | ai:claude
+    #[test]
+    fn detect_distributed_store_resolves_sibling_store_outside_repo() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        // workspace/
+        //   code-a/.aida/config.toml  (store_path = "../aida-store")
+        //   aida-store/               (the shared sibling store)
+        let code_a = ws.join("code-a");
+        fs::create_dir_all(code_a.join(".aida")).unwrap();
+        fs::write(
+            code_a.join(".aida/config.toml"),
+            "[deployment]\nmode = \"distributed\"\nstore_path = \"../aida-store\"\nstore_type = \"sibling\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(ws.join("aida-store")).unwrap();
+
+        // Invoked from a nested source dir inside the code repo.
+        let nested = code_a.join("src/foo");
+        fs::create_dir_all(&nested).unwrap();
+
+        let resolved = detect_distributed_store_from(&nested).expect("sibling store must resolve");
+        // Compare canonicalized paths so the `../` segment is normalized.
+        assert_eq!(
+            resolved.canonicalize().unwrap(),
+            ws.join("aida-store").canonicalize().unwrap(),
+            "store must resolve to the SIBLING aida-store, not inside code-a"
+        );
+    }
+
+    /// FR-267: the resolution-path selector that backs trace commands must
+    /// also declare distributed mode for a sibling-store config — so a
+    /// sibling workspace never falls through to the legacy YAML/SQLite
+    /// fallback. trace:FR-267 | ai:claude
+    #[test]
+    fn sibling_store_config_declares_distributed_mode() {
+        let tmp = TempDir::new().unwrap();
+        let code_a = tmp.path().join("code-a");
+        fs::create_dir_all(code_a.join(".aida")).unwrap();
+        fs::write(
+            code_a.join(".aida/config.toml"),
+            "[deployment]\nmode = \"distributed\"\nstore_path = \"../aida-store\"\nstore_type = \"sibling\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            distributed_mode_declared_from(&code_a),
+            Some(code_a.clone()),
+            "sibling config must declare distributed mode"
+        );
     }
 
     /// No `.aida/config.toml` anywhere up the tree → returns None (caller
