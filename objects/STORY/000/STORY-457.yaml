@@ -36,12 +36,12 @@ description: |-
   Source: STORY-385 comments at 2026-05-22 10:51 + 10:59 (priority-bumped, recurring pattern).
 
   trace:STORY-385
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:50:45.603434149Z
-modified_at: 2026-06-06T08:32:17.450101163Z
+modified_at: 2026-06-06T08:32:19.548014602Z
 req_type: Story
 tags:
 - aida:status
