@@ -60,11 +60,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:57.919405229Z
-modified_at: 2026-06-06T08:35:26.376361090Z
+modified_at: 2026-06-06T08:35:28.018366049Z
 req_type: Task
 tags:
 - archival
 - docs-plans
+- needs-human-input
 - plans
 - pr-extraction
 - ultraplan
