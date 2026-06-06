@@ -20,12 +20,12 @@ description: |-
   IMPACT: an operator who groups existing specs under an epic via `aida rel add` (the documented way to relate existing specs) gets an epic whose rollup looks EMPTY -- it reads as "this epic has no children" when it has four. Trust/correctness gap in a headline graph feature. Surfaced while building the EPIC-37 onboarding-hardening umbrella.
 
   FIX SPACE (triage, do not implement): make the parent field and the Parent edge ONE source of truth -- either (a) `rel add --type parent` also sets the child's parent field (and `rel remove` clears it), or (b) `graph --tree` walks Parent relationship edges (like `--follow parent`) rather than a separate field, or (c) add `aida edit --parent` so existing specs can be reparented and have the field set. Whichever, `show`, `--tree`, and `--follow parent` must agree.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:35:56.677371121Z
-modified_at: 2026-06-06T06:35:35.288240233Z
+modified_at: 2026-06-06T06:41:18.099861487Z
 req_type: Bug
 tags:
 - aida:graph
@@ -46,3 +46,7 @@ comments:
   content: 'GROUND-TRUTH CORRECTION (2026-06-05): the ''parent FIELD vs Parent EDGE'' hypothesis was wrong about mechanism. There is no parent field in play — BOTH paths store an OUTGOING edge on the epic, differing only in TYPE: add --parent → Child edge; rel add --type parent → Parent edge (inverted, duplicated, no reciprocal on child). Fixed by unioning Child+Parent outgoing in --tree (PR forthcoming). Data-model normalization split to follow-up.'
   created_at: 2026-06-06T06:35:35.288240233Z
   modified_at: 2026-06-06T06:35:35.288240233Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T06:41:18.099861487Z
+  completion_sha: f7cf37380697daf87d236f6cc39e3030d70e702c
