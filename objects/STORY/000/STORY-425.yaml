@@ -83,7 +83,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T05:26:22.306439170Z
-modified_at: 2026-05-23T05:26:22.306439170Z
+modified_at: 2026-06-06T08:34:36.376064289Z
 req_type: Story
 tags:
 - brief
@@ -92,3 +92,15 @@ tags:
 - multi-agent
 - routing
 - strategic
+comments:
+- id: 019e9c11-dad8-7f43-a0e0-95a23055c109
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Multi-agent communication model (replace cut-n-paste briefs). Level 1 (brief-as-file, `aida brief`) is SHIPPED per CLAUDE.md (TASK-492/STORY-426). This STORY is now a strategic container for Level 2 (per-agent /aida-pickup skill + `for:agent:<name>` queue tag) and Level 3 (`aida queue work --agent <name>` autonomous drain wrapping). What's the disposition of the container?
+      a) Decompose + ship Level 2 only (per-agent pickup skill + for:agent: tag) — the medium step that reduces operator round-trips without subprocess-wrapping each agent CLI.
+      b) Defer Levels 2+3 post-stability; Level 1 already removed the immediate cut-n-paste friction, and Level 3 is explicitly post-alpha (Claude-only alpha).
+      c) Close this container STORY (Level 1 delivered the friction fix) and re-file Levels 2/3 as their own specs when non-Claude autonomy becomes a priority.
+      REC: c — the strategic container has delivered its load-bearing slice (Level 1); keeping an open umbrella for explicitly-post-alpha Levels 2/3 invites scope creep, cleaner to close and re-file the remaining levels on demand.
+  created_at: 2026-06-06T08:34:36.376064289Z
+  modified_at: 2026-06-06T08:34:36.376064289Z
