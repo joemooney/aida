@@ -331,6 +331,37 @@ pub fn gh_pr_checks_output_is_unregistered(stdout: &str, stderr: &str) -> bool {
         || lower.contains("no checks have been reported")
 }
 
+/// BUG-417: parse the PR base branch from `gh repo view --json
+/// defaultBranchRef -q .defaultBranchRef.name`. `gh` prints the bare branch
+/// name on its own line (e.g. `master\n`). Returns the first non-empty trimmed
+/// line, or `None` when the output is empty / unusable — the caller then falls
+/// back to the local origin/HEAD probe and finally `main`. Pure so the parse
+/// contract is unit-testable without invoking `gh`. trace:BUG-417 | ai:claude
+pub fn parse_gh_default_branch(stdout: &str) -> Option<String> {
+    stdout
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .map(|l| l.to_string())
+}
+
+/// BUG-417: true when the repository has at least one GitHub Actions workflow
+/// file configured (a `.yml`/`.yaml` under `.github/workflows/`). When this is
+/// false, `aida pr ship` skips the blocking CI-wait instead of hanging for the
+/// full timeout waiting for checks that will never register. Pure over the file
+/// names so the "is this a CI workflow file?" rule is unit-testable without a
+/// real directory. trace:BUG-417 | ai:claude
+pub fn workflow_files_indicate_ci<I, S>(file_names: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    file_names.into_iter().any(|name| {
+        let lower = name.as_ref().to_ascii_lowercase();
+        lower.ends_with(".yml") || lower.ends_with(".yaml")
+    })
+}
+
 /// Format the dry-run plan: one line per resolved step, in execution
 /// order, prefixed by an arrow. Pure so the contract-visible output is
 /// pinned by tests — drift here is what makes the CLI feel inconsistent
@@ -739,6 +770,51 @@ mod tests {
     fn gh_checks_failed_line_still_means_registered() {
         let stdout = "test\tfail\t1\thttps://github.com/joemooney/aida/actions/runs/2\n";
         assert!(gh_pr_checks_output_has_registered_checks(stdout, ""));
+    }
+
+    // BUG-417: PR base resolves from origin's default branch, not hardcoded main.
+    #[test]
+    fn parse_gh_default_branch_reads_bare_name() {
+        assert_eq!(
+            parse_gh_default_branch("master\n").as_deref(),
+            Some("master")
+        );
+        assert_eq!(parse_gh_default_branch("main").as_deref(), Some("main"));
+        assert_eq!(
+            parse_gh_default_branch("  develop  \n").as_deref(),
+            Some("develop")
+        );
+    }
+
+    #[test]
+    fn parse_gh_default_branch_none_on_empty() {
+        assert_eq!(parse_gh_default_branch(""), None);
+        assert_eq!(parse_gh_default_branch("   \n\n"), None);
+    }
+
+    #[test]
+    fn parse_gh_default_branch_takes_first_nonempty_line() {
+        assert_eq!(
+            parse_gh_default_branch("\n\nmaster\nextra").as_deref(),
+            Some("master")
+        );
+    }
+
+    // BUG-417: no .github/workflows YAML ⇒ no CI configured ⇒ skip CI-wait.
+    #[test]
+    fn workflow_files_indicate_ci_true_for_yaml() {
+        assert!(workflow_files_indicate_ci(["ci.yml"]));
+        assert!(workflow_files_indicate_ci(["release.yaml"]));
+        assert!(workflow_files_indicate_ci(["README.md", "ci.yml"]));
+        assert!(workflow_files_indicate_ci(["CI.YML"])); // case-insensitive
+    }
+
+    #[test]
+    fn workflow_files_indicate_ci_false_when_no_yaml() {
+        let empty: [&str; 0] = [];
+        assert!(!workflow_files_indicate_ci(empty));
+        assert!(!workflow_files_indicate_ci(["README.md", "notes.txt"]));
+        assert!(!workflow_files_indicate_ci([".gitkeep"]));
     }
 
     #[test]

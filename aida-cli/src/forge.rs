@@ -1388,7 +1388,32 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
     }
 }
 
-fn default_branch_of(project_root: &Path) -> String {
+pub(crate) fn default_branch_of(project_root: &Path) -> String {
+    // BUG-417: ask the forge for origin's live default branch first. `gh repo
+    // view --json defaultBranchRef` is authoritative even on a fresh clone where
+    // `refs/remotes/origin/HEAD` was never set (the quizdom `master`-default
+    // case that produced a GraphQL base-ref error when AIDA assumed `main`).
+    // Fall back to the local origin/HEAD probe, then `main`. trace:BUG-417 | ai:claude
+    if let Ok(out) = Command::new("gh")
+        .current_dir(project_root)
+        .args([
+            "repo",
+            "view",
+            "--json",
+            "defaultBranchRef",
+            "-q",
+            ".defaultBranchRef.name",
+        ])
+        .output()
+    {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if let Some(name) = crate::pr_ship::parse_gh_default_branch(&stdout) {
+                return name;
+            }
+        }
+    }
+
     // Prefer origin/HEAD; fall back to current branch ∈ {main, master}; else main.
     if let Ok(out) = Command::new("git")
         .arg("-C")

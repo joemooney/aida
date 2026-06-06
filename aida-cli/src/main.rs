@@ -33528,42 +33528,60 @@ fn pr_ship_handler(
     // user sees live progress — capture-output via the retry wrapper
     // would swallow the streaming output, which is the whole point of
     // `--watch`. CI failures are real (not transient), so no retry.
-    eprintln!("  step 2: watching CI for PR-{}", pr_number);
-    wait_for_pr_checks_to_register(&project_root, pr_number)?;
-    // STORY-516: route the blocking CI watch through the Forge trait (streams
-    // live; GitHub `gh pr checks <N> --watch`). trace:STORY-516 | ai:claude
-    let watch_change = crate::forge::ChangeRef {
-        id: pr_number,
-        url: String::new(),
-        branch: branch.clone(),
-        base: String::new(),
-        title: None,
-    };
-    let ci_result = crate::forge::forge_for(&project_root).watch_ci(&watch_change);
-    let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
-    if ci_failed {
-        let detail = match &ci_result {
-            Err(e) => format!("{e:#}"),
-            _ => format!("CI did not pass for PR-{pr_number}"),
-        };
+    //
+    // BUG-417: a repo with no `.github/workflows` will never register checks, so
+    // the register-wait below would block for the full timeout and then bail.
+    // Detect that (or an explicit `AIDA_PR_SHIP_NO_CI_WAIT` / `lifecycle:no-ci-wait`
+    // opt-out) and skip straight to merge. trace:BUG-417 | ai:claude
+    if let Some(reason) = pr_ship_ci_wait_skip_reason(&project_root) {
+        eprintln!(
+            "  step 2: {} — skipping CI wait for PR-{}",
+            reason, pr_number
+        );
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &ShipStep::WatchCi,
-            &StepOutcome::Failed(detail),
+            &StepOutcome::Skipped(reason),
         );
-        let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
-        eprintln!("{} CI failed for PR-{}", "✗".red().bold(), pr_number);
-        eprintln!("  {}", hint);
-        anyhow::bail!("CI did not pass for PR-{pr_number}");
+    } else {
+        eprintln!("  step 2: watching CI for PR-{}", pr_number);
+        wait_for_pr_checks_to_register(&project_root, pr_number)?;
+        // STORY-516: route the blocking CI watch through the Forge trait (streams
+        // live; GitHub `gh pr checks <N> --watch`). trace:STORY-516 | ai:claude
+        let watch_change = crate::forge::ChangeRef {
+            id: pr_number,
+            url: String::new(),
+            branch: branch.clone(),
+            base: String::new(),
+            title: None,
+        };
+        let ci_result = crate::forge::forge_for(&project_root).watch_ci(&watch_change);
+        let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
+        if ci_failed {
+            let detail = match &ci_result {
+                Err(e) => format!("{e:#}"),
+                _ => format!("CI did not pass for PR-{pr_number}"),
+            };
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &ShipStep::WatchCi,
+                &StepOutcome::Failed(detail),
+            );
+            let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
+            eprintln!("{} CI failed for PR-{}", "✗".red().bold(), pr_number);
+            eprintln!("  {}", hint);
+            anyhow::bail!("CI did not pass for PR-{pr_number}");
+        }
+        eprintln!("  {} CI green for PR-{}", "✓".green(), pr_number);
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::WatchCi,
+            &StepOutcome::Ok,
+        );
     }
-    eprintln!("  {} CI green for PR-{}", "✓".green(), pr_number);
-    log_ship_activity(
-        &main_worktree,
-        Some(pr_number),
-        &ShipStep::WatchCi,
-        &StepOutcome::Ok,
-    );
 
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
@@ -33985,9 +34003,14 @@ fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64
     // the prior inferred head, and what makes a GitLab/pure-git repo open its
     // own change. Returns ChangeRef{id} (id == 0 on an unparseable URL, which we
     // treat as the prior "no PR number found" bail). trace:STORY-516 | ai:claude
+    // BUG-417: resolve the PR base from origin's default branch instead of
+    // assuming `main`. A repo whose default is `master` (or anything else) made
+    // `gh pr create --base main` fail with a GraphQL base-ref error. trace:BUG-417 | ai:claude
+    let base = crate::forge::default_branch_of(project_root);
+    eprintln!("  base branch: {}", base);
     let req = crate::forge::OpenChange {
         branch: branch.to_string(),
-        base: "main".to_string(),
+        base,
         title: title.clone(),
         body,
         draft: false,
@@ -34166,6 +34189,56 @@ fn fetch_pr_ship_metadata_via_gh(project_root: &std::path::Path, n: u64) -> Resu
             .unwrap_or("")
             .to_string(),
     })
+}
+
+/// BUG-417: return `Some(reason)` when `aida pr ship` should skip the blocking
+/// CI wait rather than hang on a repo that will never register checks. Two
+/// triggers: (1) an explicit opt-out env (`AIDA_PR_SHIP_NO_CI_WAIT=1` or the
+/// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) no GitHub Actions
+/// workflow files configured (`.github/workflows/*.{yml,yaml}` absent or empty)
+/// — the quizdom "no `.github/workflows` at all" case. `None` ⇒ wait normally.
+/// trace:BUG-417 | ai:claude
+fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Option<String> {
+    // Explicit opt-out (env-level honoring of lifecycle:no-ci-wait, which the
+    // direct `pr ship` path does not otherwise read from a spec).
+    let env_optout = std::env::var("AIDA_PR_SHIP_NO_CI_WAIT")
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !v.is_empty() && v != "0" && v != "false"
+        })
+        .unwrap_or(false);
+    let tag_optout = std::env::var("AIDA_LIFECYCLE_TAGS")
+        .map(|v| {
+            v.split(',')
+                .any(|t| t.trim().eq_ignore_ascii_case("lifecycle:no-ci-wait"))
+        })
+        .unwrap_or(false);
+    if env_optout || tag_optout {
+        return Some("CI wait disabled (lifecycle:no-ci-wait)".to_string());
+    }
+
+    // No workflows configured ⇒ checks will never register.
+    if !repo_has_ci_workflows(project_root) {
+        return Some("no CI workflows configured (.github/workflows)".to_string());
+    }
+    None
+}
+
+/// BUG-417: true when the project has at least one GitHub Actions workflow file
+/// (`.github/workflows/*.{yml,yaml}`). The pure file-name rule lives in
+/// `pr_ship::workflow_files_indicate_ci`; this only does the directory read.
+/// trace:BUG-417 | ai:claude
+fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
+    let dir = project_root.join(".github").join("workflows");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return false;
+    };
+    let names: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    pr_ship::workflow_files_indicate_ci(names.iter().map(String::as_str))
 }
 
 fn wait_for_pr_checks_to_register(project_root: &std::path::Path, pr_number: u64) -> Result<()> {
