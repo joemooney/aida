@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:46:29.087785646Z
-modified_at: 2026-06-06T08:17:18.590067122Z
+modified_at: 2026-06-06T08:17:20.656570559Z
 req_type: Story
 tags:
 - backlog-sweep
@@ -49,6 +49,7 @@ tags:
 - from-product
 - from-user-direction
 - human-in-the-loop
+- needs-human-input
 - parent:STORY-522
 - producer-consumer
 comments:
