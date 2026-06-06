@@ -9,12 +9,12 @@ description: |-
 
   Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/06-background-sessions.md
   Acceptance: enumerated 'what persists' field list, AIDA session-state diff.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:22:05.908885261Z
-modified_at: 2026-06-06T08:38:43.424782425Z
+modified_at: 2026-06-06T08:38:45.445646752Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
