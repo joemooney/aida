@@ -16,12 +16,12 @@ description: |-
     • Existing --auto-complete behavior unchanged (--drain is sugar)
 
   Source: operator empirical 2026-05-28 in the TASK-570 session.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:38:03.402773762Z
-modified_at: 2026-06-06T08:30:15.459341182Z
+modified_at: 2026-06-06T18:32:00.285895548Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -41,3 +41,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Add a `--drain` convenience alias on `aida queue work` expanding to --auto-complete --no-human=both --max <queue-size> (composes with --batch/--tag/--priority/--max-failures) — behavior already exists, this is bounded discoverability sugar.
   created_at: 2026-06-06T08:30:14.171968708Z
   modified_at: 2026-06-06T08:30:14.171968708Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T18:32:00.285895548Z
+  completion_sha: 8b3a779c41aa30890c407045ebf94ed95f9d0185
