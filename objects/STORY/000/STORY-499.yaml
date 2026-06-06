@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:53.171836263Z
-modified_at: 2026-06-06T08:19:15.260760864Z
+modified_at: 2026-06-06T14:07:49.802132259Z
 req_type: Story
 tags:
 - ci-gate
@@ -40,3 +40,8 @@ comments:
       REC: a — the spec correctly self-blocks on SPIKE-47; the next action is dispositioning the spike, not the story. (SPIKE-47 is in the approved set — its own disposition is pending in this sweep.)
   created_at: 2026-06-06T08:19:12.438904303Z
   modified_at: 2026-06-06T08:19:12.438904303Z
+- id: 019e9d42-ee2a-7e72-bbc3-fdb79491d27b
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): KEEP GATED on SPIKE-47 — building the diff-level trace-coverage CI gate before the coverage DEFINITION exists risks false-positives on every test/refactor PR. SPIKE-47 (ready-to-run) must land its definition + exemption list first; then 499 becomes implementable. Recorded blocked-by SPIKE-47.'
+  created_at: 2026-06-06T14:07:49.802132259Z
+  modified_at: 2026-06-06T14:07:49.802132259Z
