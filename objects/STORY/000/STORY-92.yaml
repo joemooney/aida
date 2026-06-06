@@ -50,12 +50,12 @@ description: |
   - [ ] User confirmation required (Y/n) — never silent spawn
   - [ ] `--no-auto-spawn` flag and `AIDA_AUTO_SPAWN=false` env var to skip prompt
   - [ ] Tested: PR open + merge + session end → prompt fires. PR unopened → no prompt. Queue empty → no prompt.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:57:58.159777765Z
-modified_at: 2026-06-06T14:04:05.905144762Z
+modified_at: 2026-06-06T14:04:07.161495635Z
 req_type: Story
 tags:
 - needs-human-input
