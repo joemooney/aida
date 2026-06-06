@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:11.174903400Z
-modified_at: 2026-06-06T15:12:28.813920907Z
+modified_at: 2026-06-06T15:12:30.855597225Z
 req_type: Task
 tags:
 - agent-integration
@@ -43,6 +43,7 @@ tags:
 - init
 - needs-human-input
 - onboarding
+- ready-to-implement
 - scaffold
 comments:
 - id: 019e5101-ea0f-7892-a3a8-33aa30c68e22
