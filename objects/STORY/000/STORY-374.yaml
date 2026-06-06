@@ -44,7 +44,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T06:18:12.367638695Z
-modified_at: 2026-05-22T05:55:39.905998113Z
+modified_at: 2026-06-06T04:16:21.190820902Z
 req_type: Story
 tags:
 - aida-worker
@@ -58,3 +58,5 @@ comments:
   content: 'Re-evaluation 2026-05-22, paired with STORY-377: the watch-batch-NAME directive presumes someone is using aida-worker. User''s actual workflow uses shell for-loops, which don''t have this need. Deprioritize until a real use case surfaces.'
   created_at: 2026-05-22T05:55:38.374694871Z
   modified_at: 2026-05-22T05:55:38.374694871Z
+archived: true
+archived_at: 2026-06-06T04:16:21.190820902Z
