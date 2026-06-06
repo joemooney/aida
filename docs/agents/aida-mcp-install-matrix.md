@@ -4,14 +4,30 @@
 **Owner**: AIDA ecosystem watch / Codex  
 **Purpose**: track how AIDA should be exposed to each major coding-agent client without relying on memory or stale setup snippets.
 
-This matrix is operational, not marketing. It records how to connect each client to `aida mcp-serve`, what instruction file or marketplace surface the client expects, and which AIDA MCP profile should be safe by default once tool profiles ship.
+This matrix is operational, not marketing. It records how to connect each client to `aida mcp-serve`, what instruction file or marketplace surface the client expects, and which AIDA MCP profile should be safe by default.
 
-Until `aida mcp-serve --profile` exists, treat the profile column as the target posture. Today the local stdio server exposes the full tool set to a trusted local client.
+## Tool profiles (STORY-474)
+
+`aida mcp-serve` now gates its tool surface behind a named **profile** — a capability tier where each higher tier is a strict superset of the one below:
+
+| Profile | Exposes | Use for |
+|---|---|---|
+| `read-only` | pure reads only (`list_*`/`show_*`/`search_*`/`query_graph`/`history`/`read_*`) — **no write tools at all** | untrusted / marketplace / exploratory / remote clients (the recommended safe default) |
+| `coordination` | read-only + drain-coordination writes (punts, findings, task claims, directives, brief acks, comments, relationships, messages) — no spec create/edit | trusted agents participating in a drain |
+| `operator` | coordination + spec-graph writes (`add_requirement`, `update_requirement`) | trusted local day-to-day work |
+| `admin` / `full` | every tool | fully-trusted local operator (the built-in backwards-compatible default) |
+
+Select the profile (first match wins):
+
+1. `AIDA_MCP_PROFILE=read-only` in the MCP server's environment (set it in the client's `.mcp.json`/`mcpServers` env block), or
+2. `[mcp]\nprofile = "read-only"` in `.aida/config.toml`.
+
+The default is `full` so existing trusted local installs are unchanged. **Marketplace and any non-local/untrusted install should set `read-only` (or `coordination`) explicitly.** The profile is a real boundary: an out-of-profile tool is both hidden from `tools/list` and rejected at `tools/call` with a `permission_denied` envelope, even if the client calls it by name. The active profile is printed on the server's stderr startup banner.
 
 ## Recommended Defaults
 
 - Default to local stdio for solo/local agents.
-- Default to read-mostly or coordination-scoped MCP once profiles exist.
+- Default to `read-only` or `coordination`-scoped MCP for any untrusted/remote/marketplace context (set `AIDA_MCP_PROFILE` / `[mcp] profile`).
 - Keep write-capable tools off for cloud/remote agents until auth, project scoping, and audit logs exist.
 - Prefer client-native package/marketplace channels for discovery, but keep `aida init` as the source of repo-local scaffolding.
 - Keep a "last verified" date on every row; do not silently assume client setup stays stable.
