@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:31:02.682757847Z
-modified_at: 2026-06-06T13:49:39.796979518Z
+modified_at: 2026-06-06T13:49:40.870977377Z
 req_type: Epic
 tags:
 - batch:user-driven-substrate
@@ -198,3 +198,5 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): HOLD — honor TASK-546''s graduation trigger: prove the query/canned-answer/skill-prompt schema in aida-chat''s local SQLite first; graduate to the shared substrate only when 2+ consumers want it. WHEN it proceeds, it must clear a schema-sketch + advisor verdict (sketch-first sign-off) before code. Parked until the TASK-546 trigger.'
   created_at: 2026-06-06T13:49:38.272243764Z
   modified_at: 2026-06-06T13:49:38.272243764Z
+archived: true
+archived_at: 2026-06-06T13:49:40.870977377Z
