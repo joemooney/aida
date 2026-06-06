@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:46:38.055787185Z
-modified_at: 2026-06-06T08:18:17.256891859Z
+modified_at: 2026-06-06T08:18:21.072754111Z
 req_type: Task
 tags:
 - aida-pickup-gap
@@ -16,6 +16,7 @@ tags:
 - from-user-friction
 - kind:observation
 - linked:SPIKE-8
+- needs-human-input
 - severity:observation
 - spike-handling
 comments:
