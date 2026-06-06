@@ -9902,6 +9902,112 @@ mod task_492_brief_tests {
         assert!(read_last_status_at(root).is_none());
     }
 
+    /// TASK-662: the first run (no prior snapshot) yields no delta — there's
+    /// no baseline to diff against, so consumers see `null`, not an all-new
+    /// burst.
+    #[test]
+    fn findings_delta_first_run_is_none() {
+        use super::compute_findings_delta;
+        let current = vec!["TASK-1".to_string(), "TASK-2".to_string()];
+        assert!(compute_findings_delta(None, &current).is_none());
+    }
+
+    /// TASK-662: a prior run with zero findings is distinct from "no prior
+    /// run" — `Some(empty)` produces a real delta where everything current is
+    /// new.
+    #[test]
+    fn findings_delta_empty_baseline_counts_all_as_new() {
+        use super::compute_findings_delta;
+        let prev: Vec<String> = vec![];
+        let current = vec!["TASK-3".to_string(), "TASK-1".to_string()];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.previous_total, 0);
+        assert_eq!(d.current_total, 2);
+        assert_eq!(d.new_count, 2);
+        // new_ids is sorted regardless of input order.
+        assert_eq!(d.new_ids, vec!["TASK-1".to_string(), "TASK-3".to_string()]);
+        assert_eq!(d.resolved_count, 0);
+    }
+
+    /// TASK-662: a steady state (same set both runs) reports no new and no
+    /// resolved findings — the common quiet case.
+    #[test]
+    fn findings_delta_unchanged_is_quiet() {
+        use super::compute_findings_delta;
+        let prev = vec!["TASK-1".to_string(), "TASK-2".to_string()];
+        let current = vec!["TASK-2".to_string(), "TASK-1".to_string()];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.new_count, 0);
+        assert!(d.new_ids.is_empty());
+        assert_eq!(d.resolved_count, 0);
+        assert_eq!(d.previous_total, 2);
+        assert_eq!(d.current_total, 2);
+    }
+
+    /// TASK-662: a mixed run — one finding filed, one triaged away — reports
+    /// both the new and the resolved counts independently.
+    #[test]
+    fn findings_delta_mixed_new_and_resolved() {
+        use super::compute_findings_delta;
+        let prev = vec!["TASK-1".to_string(), "TASK-2".to_string()];
+        let current = vec!["TASK-2".to_string(), "TASK-9".to_string()];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.new_count, 1);
+        assert_eq!(d.new_ids, vec!["TASK-9".to_string()]);
+        assert_eq!(d.resolved_count, 1); // TASK-1 gone
+        assert_eq!(d.previous_total, 2);
+        assert_eq!(d.current_total, 2);
+    }
+
+    /// TASK-662: duplicate IDs in either snapshot can't fabricate a delta —
+    /// the diff is set-based, so a doubled entry collapses.
+    #[test]
+    fn findings_delta_is_dedup_safe() {
+        use super::compute_findings_delta;
+        let prev = vec!["TASK-1".to_string(), "TASK-1".to_string()];
+        let current = vec![
+            "TASK-1".to_string(),
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+        ];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.previous_total, 1);
+        assert_eq!(d.current_total, 2);
+        assert_eq!(d.new_count, 1);
+        assert_eq!(d.new_ids, vec!["TASK-2".to_string()]);
+        assert_eq!(d.resolved_count, 0);
+    }
+
+    /// TASK-662: the findings snapshot round-trips through
+    /// `.aida/last-findings.toml`, sorts/dedups on write, and is a no-op
+    /// (None) when `.aida/` is absent.
+    #[test]
+    fn last_findings_round_trip_and_noop() {
+        use super::{read_last_findings, write_last_findings};
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+
+        // No file yet → None (no prior run).
+        assert!(read_last_findings(root).is_none());
+
+        // No `.aida/` dir → write is a no-op, still None.
+        write_last_findings(root, &["TASK-2".to_string()]);
+        assert!(read_last_findings(root).is_none());
+
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        write_last_findings(
+            root,
+            &[
+                "TASK-2".to_string(),
+                "TASK-1".to_string(),
+                "TASK-2".to_string(),
+            ],
+        );
+        let read = read_last_findings(root).expect("recorded snapshot");
+        // Sorted + deduped on write.
+        assert_eq!(read, vec!["TASK-1".to_string(), "TASK-2".to_string()]);
+    }
+
     /// STORY-446: `--blocked-by` (repeatable) + the `--depends-on` alias parse
     /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
     #[test]
@@ -29041,6 +29147,92 @@ fn write_last_status_at(root: &std::path::Path, now: chrono::DateTime<chrono::Ut
     if let Ok(txt) = toml::to_string(&rec) {
         let _ = std::fs::write(status_last_path(root), txt);
     }
+}
+
+/// TASK-662: per-clone snapshot of the finding IDs seen on the previous
+/// `aida status` run, persisted under `.aida/last-findings.toml` (gitignored by
+/// the deny-by-default `.aida/*` rule — no .gitignore change needed). Drives the
+/// `findings.delta` block in `aida status --json` (new-since-last-run). All I/O
+/// is best-effort: a missing/unreadable file reads as "no prior run" so the
+/// first delta is suppressed, and a write failure never breaks `aida status`.
+/// trace:TASK-662 | ai:claude
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct LastFindingsRecord {
+    /// Sorted-unique finding display IDs (e.g. `TASK-5`) seen last run.
+    #[serde(default)]
+    ids: Vec<String>,
+}
+
+fn status_last_findings_path(root: &std::path::Path) -> std::path::PathBuf {
+    root.join(".aida").join("last-findings.toml")
+}
+
+/// Read the finding IDs recorded on the previous run. `None` distinguishes
+/// "no prior run recorded" (suppress the delta entirely on a first run) from
+/// "prior run had zero findings" (`Some(empty)`). trace:TASK-662 | ai:claude
+fn read_last_findings(root: &std::path::Path) -> Option<Vec<String>> {
+    let txt = std::fs::read_to_string(status_last_findings_path(root)).ok()?;
+    let rec: LastFindingsRecord = toml::from_str(&txt).ok()?;
+    Some(rec.ids)
+}
+
+/// Record the current finding IDs as the new baseline (best-effort; no-op when
+/// `.aida/` is absent, i.e. not an initialized project). trace:TASK-662
+fn write_last_findings(root: &std::path::Path, ids: &[String]) {
+    if !root.join(".aida").is_dir() {
+        return;
+    }
+    let mut ids = ids.to_vec();
+    ids.sort();
+    ids.dedup();
+    let rec = LastFindingsRecord { ids };
+    if let Ok(txt) = toml::to_string(&rec) {
+        let _ = std::fs::write(status_last_findings_path(root), txt);
+    }
+}
+
+/// The delta between the previous run's findings snapshot and the current set.
+/// Serialized into `findings.delta` of `aida status --json`. trace:TASK-662
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+struct FindingsDelta {
+    /// Total findings recorded on the previous run.
+    previous_total: usize,
+    /// Total findings now.
+    current_total: usize,
+    /// Findings present now but absent last run (newly filed since last run).
+    new_count: usize,
+    /// IDs of the new findings (sorted), so consumers can name them.
+    new_ids: Vec<String>,
+    /// Findings present last run but gone now (triaged / promoted / dismissed).
+    resolved_count: usize,
+}
+
+/// Pure core of the delta-since-last-run: compare the persisted snapshot
+/// (`previous`, `None` = no prior run) against the `current` finding IDs.
+/// `None` ⇒ `None` (first run has no baseline to diff). Order-insensitive and
+/// dedup-safe so a reordered or duplicated snapshot can't fabricate a delta.
+/// trace:TASK-662 | ai:claude
+fn compute_findings_delta(
+    previous: Option<&[String]>,
+    current: &[String],
+) -> Option<FindingsDelta> {
+    let previous = previous?;
+    let prev_set: std::collections::HashSet<&str> = previous.iter().map(|s| s.as_str()).collect();
+    let cur_set: std::collections::HashSet<&str> = current.iter().map(|s| s.as_str()).collect();
+    let mut new_ids: Vec<String> = cur_set
+        .iter()
+        .filter(|id| !prev_set.contains(*id))
+        .map(|id| id.to_string())
+        .collect();
+    new_ids.sort();
+    let resolved_count = prev_set.iter().filter(|id| !cur_set.contains(*id)).count();
+    Some(FindingsDelta {
+        previous_total: prev_set.len(),
+        current_total: cur_set.len(),
+        new_count: new_ids.len(),
+        new_ids,
+        resolved_count,
+    })
 }
 
 /// Load → upsert (first-observed = `now` for new paths) → prune (drop paths no
@@ -60360,6 +60552,7 @@ fn print_status_json(
     ctx: &UserStatusContext,
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
+    project_root: &std::path::Path,
     queue_only: bool,
     ci_only: bool,
     awaiting: &awaiting_you::AwaitingReport,
@@ -60504,10 +60697,12 @@ fn print_status_json(
                 );
                 let total = crate::findings::count_findings(&sections);
                 let mut items = Vec::new();
+                let mut current_ids: Vec<String> = Vec::new();
                 for section in &sections {
                     let source = section.source.label();
                     for group in &section.groups {
                         for row in &group.rows {
+                            current_ids.push(row.display_id.clone());
                             items.push(json!({
                                 "id": row.display_id,
                                 "source": source,
@@ -60520,9 +60715,20 @@ fn print_status_json(
                         }
                     }
                 }
+                // TASK-662: delta-since-last-run. Diff the current finding IDs
+                // against the snapshot persisted on the previous `aida status`
+                // run, then re-baseline. `delta` is null on the very first run
+                // (no prior snapshot to diff). trace:TASK-662 | ai:claude
+                let previous = read_last_findings(project_root);
+                let delta = compute_findings_delta(previous.as_deref(), &current_ids);
+                write_last_findings(project_root, &current_ids);
+                let delta_json = match &delta {
+                    Some(d) => serde_json::to_value(d).unwrap_or(serde_json::Value::Null),
+                    None => serde_json::Value::Null,
+                };
                 out.insert(
                     "findings".to_string(),
-                    json!({ "pending": total, "items": items }),
+                    json!({ "pending": total, "items": items, "delta": delta_json }),
                 );
             }
         }
@@ -62114,10 +62320,15 @@ fn handle_status_command_distributed(
 
     if json {
         let awaiting_report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
+        // TASK-662: persist the findings-delta snapshot against the main
+        // worktree root so the baseline is consistent regardless of cwd —
+        // same root the text path's `last-status.toml` uses. trace:TASK-662
+        let delta_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
         return print_status_json(
             &user_ctx,
             backend,
             store_path,
+            &delta_root,
             queue_only,
             ci_only,
             &awaiting_report,
