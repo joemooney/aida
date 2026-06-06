@@ -471,6 +471,10 @@ pub struct ScaffoldConfig {
     pub generate_skills: bool,
     /// Generate .codex/skills/ directory with Codex-compatible skills
     pub generate_codex_skills: bool,
+    /// Generate .antigravity/skills/ directory with Antigravity-compatible
+    /// skills. Mirrors the `.codex/skills/` pattern so a second supported
+    /// agent inherits the same onboarding parity. trace:TASK-457 | ai:claude
+    pub generate_antigravity_skills: bool,
     /// Include aida-req skill for requirement creation
     pub include_aida_req_skill: bool,
     /// Include aida-plan skill for implementation planning
@@ -553,6 +557,8 @@ impl Default for ScaffoldConfig {
             generate_commands: true,
             generate_skills: true,
             generate_codex_skills: true,
+            // trace:TASK-457 | ai:claude
+            generate_antigravity_skills: true,
             include_aida_req_skill: true,
             include_aida_plan_skill: true,
             include_aida_implement_skill: true,
@@ -1598,6 +1604,73 @@ impl Scaffolder {
                     path.clone(),
                     self.generate_codex_skill(name),
                     format!("Codex-compatible skill {}", name),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+        }
+
+        // .antigravity/skills/ directory — mirrors the .codex/skills/ block
+        // so a second supported agent (Antigravity CLI) inherits the same
+        // onboarding parity. The skill bodies are agent-agnostic markdown,
+        // so they share generate_codex_skill content. See
+        // docs/agents/antigravity-mcp-setup.md for the MCP-server reference.
+        // trace:TASK-457 | ai:claude
+        if self.config.generate_antigravity_skills {
+            new_dirs.insert(PathBuf::from(".antigravity/skills"));
+
+            let antigravity_skill_defs = [
+                ("aida-req", self.config.include_aida_req_skill),
+                ("aida-plan", self.config.include_aida_plan_skill),
+                ("aida-implement", self.config.include_aida_implement_skill),
+                ("aida-capture", self.config.include_aida_capture_skill),
+                ("aida-docs", self.config.include_aida_docs_skill),
+                (
+                    "aida-docs-review",
+                    self.config.include_aida_docs_review_skill,
+                ),
+                ("aida-release", self.config.include_aida_release_skill),
+                ("aida-evaluate", self.config.include_aida_evaluate_skill),
+                ("aida-commit", self.config.include_aida_commit_skill),
+                ("aida-sync", self.config.include_aida_sync_skill),
+                ("aida-test", self.config.include_aida_test_skill),
+                ("aida-review", self.config.include_aida_review_skill),
+                ("aida-onboard", self.config.include_aida_onboard_skill),
+                ("aida-sprint", self.config.include_aida_sprint_skill),
+                ("aida-search", self.config.include_aida_search_skill),
+                ("aida-standup", self.config.include_aida_standup_skill),
+                (
+                    "aida-import-plan",
+                    self.config.include_aida_import_plan_skill,
+                ),
+                ("aida-digest", self.config.include_aida_digest_skill),
+                (
+                    "aida-backlog-groom",
+                    self.config.include_aida_backlog_groom_skill,
+                ),
+            ];
+
+            for (name, enabled) in antigravity_skill_defs {
+                if !enabled {
+                    continue;
+                }
+                let path = PathBuf::from(format!(".antigravity/skills/{}/SKILL.md", name));
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_codex_skill(name),
+                    format!("Antigravity-compatible skill {}", name),
                     false,
                 );
 
@@ -2722,6 +2795,17 @@ mod tests {
                 skill_path.display()
             );
         }
+        // TASK-457: .antigravity/skills/ is scaffolded alongside .codex/skills/.
+        assert!(temp_dir.path().join(".antigravity/skills").exists());
+        for entry in std::fs::read_dir(temp_dir.path().join(".antigravity/skills")).unwrap() {
+            let skill_path = entry.unwrap().path().join("SKILL.md");
+            let content = std::fs::read_to_string(&skill_path).unwrap();
+            assert!(
+                content.starts_with("---\nname:"),
+                "{} should start with agent-readable YAML frontmatter",
+                skill_path.display()
+            );
+        }
         assert!(temp_dir
             .path()
             .join("docs/agents/cross-agent-onboarding.md")
@@ -2801,6 +2885,39 @@ mod tests {
         assert!(paths.contains(&PathBuf::from("docs/extending-skills.md")));
         assert!(paths.contains(&PathBuf::from(".aida/reserved-paths.toml")));
         assert!(paths.contains(&PathBuf::from(".aida/agents.toml")));
+        // TASK-457: .antigravity/skills/ mirrors .codex/skills/.
+        assert!(paths.contains(&PathBuf::from(".antigravity/skills/aida-req/SKILL.md")));
+    }
+
+    /// TASK-457: when `generate_antigravity_skills` is off (the `--no-skills`
+    /// path turns it off alongside `.codex/skills/`), no `.antigravity/`
+    /// artifacts are scaffolded.
+    /// trace:TASK-457 | ai:claude
+    #[test]
+    fn antigravity_skills_skipped_when_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = ScaffoldConfig::default();
+        // Mirror what `--no-skills` does to both agent-skill dirs.
+        config.generate_skills = false;
+        config.generate_commands = false;
+        config.generate_codex_skills = false;
+        config.generate_antigravity_skills = false;
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+
+        let paths: Vec<PathBuf> = preview.artifacts.iter().map(|a| a.path.clone()).collect();
+        assert!(
+            !paths.iter().any(|p| p.starts_with(".antigravity")),
+            "no .antigravity artifacts should be scaffolded when disabled"
+        );
+        assert!(
+            !paths.iter().any(|p| p.starts_with(".codex")),
+            "no .codex artifacts should be scaffolded when disabled"
+        );
+
+        scaffolder.apply(&preview).expect("scaffolding apply");
+        assert!(!temp_dir.path().join(".antigravity").exists());
     }
 
     /// STORY-305: `aida scaffold apply` must create `.claude/skills/local/`

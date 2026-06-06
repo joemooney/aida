@@ -3883,6 +3883,73 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
                 Ok(())
             }
         },
+        // Human-intervention maturity report: count of escalate-to-human punt
+        // records, rolled up per day. The honest maturity signal — the count
+        // trending toward zero shows the autonomy investment paying off.
+        // (Operator decision 2026-06-06: ship the intervention-count only;
+        // the availability-polluted duration fraction is skipped.)
+        // trace:TASK-340 | ai:claude
+        AutonomyCommand::Report { last, json } => {
+            let project_root = find_project_root()?;
+            let records = punt::read_ledger(&project_root);
+            let days = punt::human_interventions_by_day(&records);
+            let total = punt::total_human_interventions(&records);
+
+            if *json {
+                let capped: Vec<&punt::AutonomyDay> = days.iter().take(*last).collect();
+                let payload = serde_json::json!({
+                    "total_human_interventions": total,
+                    "days": capped,
+                });
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+                return Ok(());
+            }
+
+            println!("{}", "Autonomy maturity — human interventions".bold());
+            println!(
+                "  {}",
+                "count of escalate-to-human punt decisions, per day (newest first)".dimmed()
+            );
+            println!();
+
+            if days.is_empty() {
+                println!(
+                    "  {}",
+                    "No human interventions recorded — no drain has escalated to a human yet."
+                        .green()
+                );
+                println!(
+                    "  {}",
+                    "interventions are escalate-to-human records in .aida/punts.jsonl".dimmed()
+                );
+                return Ok(());
+            }
+
+            println!("  {:<12} {}", "DATE".dimmed(), "INTERVENTIONS".dimmed());
+            for day in days.iter().take(*last) {
+                println!(
+                    "  {:<12} {}",
+                    day.date,
+                    day.interventions.to_string().bold()
+                );
+            }
+            println!();
+            println!(
+                "  {} {} across {} day{}",
+                "Total:".bold(),
+                total.to_string().bold(),
+                days.len(),
+                if days.len() == 1 { "" } else { "s" },
+            );
+            println!(
+                "  {}",
+                "the count trending toward zero is the maturity signal; \
+                 it is NOT polluted by human-availability latency the way a \
+                 raw duration fraction would be"
+                    .dimmed()
+            );
+            Ok(())
+        }
     }
 }
 /// Add a promoted finding to a role's work queue.
@@ -4920,6 +4987,8 @@ fn init_scaffold_candidate_paths() -> &'static [&'static str] {
         "AGENTS.md",
         ".claude",
         ".codex",
+        // trace:TASK-457 | ai:claude
+        ".antigravity",
         "docs/plans",
         "docs/aida",
         "docs/agents",
@@ -5063,6 +5132,9 @@ fn complete_init_scaffolding(
         "claude" => {
             config.generate_agents_md = false;
             config.generate_codex_skills = false;
+            // .antigravity/ mirrors the non-Claude .codex/ dir; the
+            // Claude-only profile skips both. trace:TASK-457 | ai:claude
+            config.generate_antigravity_skills = false;
         }
         "codex" => {
             config.generate_claude_md = false;
@@ -5083,6 +5155,9 @@ fn complete_init_scaffolding(
         config.generate_skills = false;
         config.generate_commands = false;
         config.generate_codex_skills = false;
+        // --no-skills skips every agent-skill dir consistently, including
+        // the new .antigravity/skills/. trace:TASK-457 | ai:claude
+        config.generate_antigravity_skills = false;
         config.include_aida_req_skill = false;
         config.include_aida_plan_skill = false;
         config.include_aida_implement_skill = false;
@@ -5248,6 +5323,14 @@ fn complete_init_scaffolding(
                 "    {}{}Workflow skills (Codex-compatible)",
                 ".codex/skills/".white().bold(),
                 " ".repeat(24)
+            );
+        }
+        // trace:TASK-457 | ai:claude
+        if config_for_output.generate_antigravity_skills {
+            println!(
+                "    {}{}Workflow skills (Antigravity-compatible)",
+                ".antigravity/skills/".white().bold(),
+                " ".repeat(18)
             );
         }
         if !no_hooks && config_for_output.generate_claude_code_hooks {
@@ -36881,6 +36964,39 @@ fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
     pr_ship::workflow_files_indicate_ci(names.iter().map(String::as_str))
 }
 
+/// Run a `Command` to completion, retrying transient `ETXTBSY`
+/// ("Text file busy", `os error 26`) spawn failures.
+///
+/// BUG-463: on Linux, `exec`ing a file fails with `ETXTBSY` while *any*
+/// process still holds that file open for writing. In a parallel test
+/// runner (or any multi-threaded program), one thread that writes an
+/// executable script can have its still-open writable fd transiently
+/// inherited by an unrelated child process a sibling thread `fork`/`exec`s
+/// between that fd's `open` and `close`. The borrowing child keeps the
+/// file "busy" until it exits, so the writer's own `exec` of the
+/// just-written script races and flakes with `ETXTBSY`. The condition is
+/// short-lived (the borrowing child exits in milliseconds), so a bounded
+/// retry-with-backoff turns the flake into a deterministic success. This
+/// also hardens the real `gh` exec (e.g. a freshly-written `gh` wrapper)
+/// at negligible cost.
+/// trace:BUG-463 | ai:claude
+fn command_output_retrying_etxtbsy(
+    cmd: &mut std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    const MAX_ATTEMPTS: u32 = 50;
+    let mut attempt = 0u32;
+    loop {
+        match cmd.output() {
+            Ok(out) => return Ok(out),
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && attempt < MAX_ATTEMPTS => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 fn wait_for_pr_checks_to_register(project_root: &std::path::Path, pr_number: u64) -> Result<()> {
     wait_for_pr_checks_to_register_with_gh(
         project_root,
@@ -36902,10 +37018,13 @@ fn wait_for_pr_checks_to_register_with_gh(
     let deadline = std::time::Instant::now() + timeout;
     loop {
         let pr = pr_number.to_string();
-        let out = std::process::Command::new(gh_bin)
+        // BUG-463: retry transient `ETXTBSY` so a just-written `gh` wrapper
+        // (or a fake one in the parallel test runner) doesn't flake the exec.
+        let mut command = std::process::Command::new(gh_bin);
+        command
             .current_dir(project_root)
-            .args(["pr", "checks", &pr])
-            .output()
+            .args(["pr", "checks", &pr]);
+        let out = command_output_retrying_etxtbsy(&mut command)
             .with_context(|| format!("could not invoke `gh pr checks {pr_number}`"))?;
         let stdout = String::from_utf8_lossy(&out.stdout);
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -37682,6 +37801,13 @@ mod pr_ship_environment_tests {
         git(path, &["commit", "--allow-empty", "-m", "base", "--quiet"]);
     }
 
+    // BUG-463: each test owns its own `tempfile::tempdir()`, so the fake `gh`
+    // scripts are already path-isolated. The residual CI flake came from
+    // `ETXTBSY` when exec'ing a just-written script while a sibling test's
+    // child transiently held the writable fd; the exec path now retries on
+    // `ETXTBSY` (see `command_output_retrying_etxtbsy`), so writing the
+    // script here stays a plain write + chmod.
+    // trace:BUG-463 | ai:claude
     fn make_executable(path: &std::path::Path, body: &str) {
         std::fs::write(path, body).unwrap();
         let mut perms = std::fs::metadata(path).unwrap().permissions();
