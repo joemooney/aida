@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T13:39:28.816721682Z
-modified_at: 2026-06-06T13:39:28.816721682Z
+modified_at: 2026-06-06T20:32:45.962864529Z
 req_type: Task
 tags:
 - aida:doc
@@ -16,3 +16,9 @@ tags:
 - doc-coverage
 - from:EPIC-25
 - ready-to-implement
+comments:
+- id: 019e9ea3-598a-7982-a2f5-a1fdd83df74c
+  author: joe
+  content: Commit 708bdebd8 references this requirement
+  created_at: 2026-06-06T20:32:45.962864529Z
+  modified_at: 2026-06-06T20:32:45.962864529Z
