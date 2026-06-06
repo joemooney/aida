@@ -2,7 +2,7 @@ id: 019e986c-e86b-77f1-9057-e8de02c47adc
 spec_id: STORY-519
 agreed_id: STORY-519
 title: 'Parallel plan-only fan-out: speculative DESIGN pre-work over the partitioned approved backlog (durable refs, no merge contention)'
-description: |-
+description: |
   ## Why (operator, 2026-06-05)
 
   Operator wants to speed backlog burn-down via parallel agents producing a "first draft / design available for reference when the time comes." Diagnosis (BUG-444): the DRAIN's bottleneck is orchestrator misclassification, not agent throughput — so parallelizing the drain multiplies false-failures + merge contention. The safe, durable form of the operator's idea is to parallelize PLANNING, not draft-code, and not the drain.
@@ -33,12 +33,16 @@ description: |-
 
   ## Relationships
   - Builds on STORY-265 (`--plan-only` / Approved→Planned). Hard-sequenced after BUG-444 (drain reliability). Uses the lease + batch + trace-graph-helpers primitives. Sibling of the metrics work (EPIC-36) which would measure whether parallel pre-planning actually speeds eventual implementation.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  BUILD (planning is merge-contention-free, independent of drain reliability), GATED on STORY-265's --plan-only mode landing first. Scope discipline: fan out over the WORKABLE set only (exclude the low-priority tail) to control plan-slop. Recorded blocked-by STORY-265.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:35:34.763436046Z
-modified_at: 2026-06-06T14:13:04.292569741Z
+modified_at: 2026-06-06T14:13:05.558001397Z
 req_type: Story
 tags:
 - advisor-vision
