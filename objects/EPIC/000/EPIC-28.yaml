@@ -99,7 +99,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-06-06T08:34:18.720334400Z
+modified_at: 2026-06-06T13:44:48.387403656Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -330,3 +330,8 @@ comments:
       REC: b — the resilient-drain core (the actual value) is shipped; STORY-450's per-spec release loop is exactly the "running 50+ specs overnight" power-user layer the EPIC itself marks post-alpha, so defer it and let the EPIC close on the remaining inference work.
   created_at: 2026-06-06T08:34:15.008515571Z
   modified_at: 2026-06-06T08:34:15.008515571Z
+- id: 019e9d2d-da03-7783-865b-0e298c204ce0
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Re-scope: the resilient-drain core (shelve/skip-dependent/max-failures) is SHIPPED. DROP STORY-450 (per-spec auto-patch-release is a post-alpha power-user layer, conflicts with bugs-before-marketing). EPIC closes once STORY-447 (deps sweep) lands. No new EPIC-level work.'
+  created_at: 2026-06-06T13:44:48.387403656Z
+  modified_at: 2026-06-06T13:44:48.387403656Z
