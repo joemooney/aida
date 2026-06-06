@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T19:08:19.795760812Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-06-06T07:23:54.562360150Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -106,6 +106,11 @@ comments:
   content: "Manually flipped to Completed 2026-05-13. The auto-bump shipped in PR-21 (commit 8ae5d5bd) did not fire because STORY-86.yaml was unreadable (BUG-96 deletion) at the time that commit was first pulled \n  in. After 3 restoration cycles and the BUG-96 fix in 0.5.2, the spec is recoverable but the auto-bump's now-or-never scan window has passed."
   created_at: 2026-05-14T01:37:26.389412078Z
   modified_at: 2026-05-14T01:37:26.389412078Z
+- id: 019e9bd1-2142-7001-b775-bc99721fcaa6
+  author: joe
+  content: Commit 595110e4a references this requirement
+  created_at: 2026-06-06T07:23:54.562360150Z
+  modified_at: 2026-06-06T07:23:54.562360150Z
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z
 implementation_info:
