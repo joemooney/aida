@@ -28,22 +28,24 @@
 //! MCP-speaking agent (Codex, Cursor, …) can use to participate in the
 //! same drains. See `docs/architecture/mcp-coordination-surface.md`.
 //!
-//! # Output schemas (TASK-440 — Path A: descriptor-only)
+//! # Output schemas (TASK-440 Path A + STORY-399 Path B)
 //!
 //! Every tool descriptor in `tool_descriptors()` carries an `outputSchema`
-//! that documents the **MCP text-envelope** shape its responses take today
-//! plus a per-tool `description` summarizing what the text payload conveys.
+//! that documents the **MCP text-envelope** shape its responses take plus a
+//! per-tool `description` summarizing what the text payload conveys.
 //! Schema-driven clients (Codex, Cursor, …) get useful discoverability
 //! instead of opaque-shape responses.
 //!
-//! **Runtime behavior is unchanged.** Every tool still returns the
-//! `{ content: [{ type: "text", text: "..." }] }` envelope it returned
-//! before. This is the **Path A** scope: declare the schema, do not yet
-//! emit `structuredContent` matching it. Reshaping tool responses to emit
-//! structured payloads alongside (or instead of) the text envelope is
-//! tracked separately as **STORY-399** — the Path B follow-up. That story
-//! owns the backward-compatibility call for clients that consume today's
-//! text envelopes.
+//! **Path A (TASK-440)** declared those schemas. **Path B (STORY-399)** makes
+//! successful responses *also* emit a `structuredContent` object matching the
+//! declared schema, so schema-driven clients get a machine-readable result
+//! without parsing the human text. The decision is **additive** (acceptance
+//! option (a)): the `{ content: [{ type: "text", text: "..." }] }` text
+//! envelope is preserved byte-for-byte for legacy text consumers (Claude
+//! Code), and `structuredContent` is layered alongside it. Error responses
+//! keep the STORY-401 `{ isError: true, structuredError: { … } }` shape and do
+//! not carry `structuredContent`. See `handle_tools_call` and
+//! `text_envelope_output_schema`.
 
 use std::cmp::Ordering;
 use std::ffi::OsString;
@@ -739,15 +741,27 @@ impl<'a> McpServer<'a> {
         };
 
         match result {
-            Ok(content) => JsonRpcResponse::success(
-                id.clone(),
-                json!({
-                    "content": [{
-                        "type": "text",
-                        "text": content
-                    }]
-                }),
-            ),
+            // STORY-399 (Path B): emit `structuredContent` matching the declared
+            // `outputSchema` alongside the text envelope. Additive — the text
+            // `content` array is preserved verbatim so legacy text consumers
+            // (Claude Code) keep working; schema-driven clients (Codex, Cursor)
+            // read the same logical payload out of `structuredContent` without
+            // parsing the human string. trace:STORY-399 | ai:claude
+            Ok(content) => {
+                let content_array = json!([{
+                    "type": "text",
+                    "text": content
+                }]);
+                JsonRpcResponse::success(
+                    id.clone(),
+                    json!({
+                        "content": content_array,
+                        "structuredContent": {
+                            "content": content_array
+                        }
+                    }),
+                )
+            }
             // STORY-401: render the free-form tool error into a stable,
             // machine-readable envelope — `isError: true`, a short
             // `<tool>: <code>: <message>` text, and a `structuredError`
@@ -2807,36 +2821,61 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 // ============================================================================
 
 // trace:TASK-440 | ai:claude
+// trace:STORY-399 | ai:claude
 /// Build the `outputSchema` for a tool that returns the MCP text envelope.
 ///
-/// Path A — the schema describes the wire shape every tool returns today
-/// (`{ content: [{ type: "text", text: "..." }], isError?: bool }`) and
-/// uses `payload_description` to tell schema-driven clients what the `text`
-/// string conveys for *this* tool. Per-tool structured payloads (Path B,
-/// STORY-399) will replace this with concrete `structuredContent` schemas.
+/// Path A (TASK-440) shipped the descriptor-level schema describing the wire
+/// shape every tool returns (`{ content: [{ type: "text", text: "..." }],
+/// isError?: bool }`). Path B (STORY-399) makes successful responses *also*
+/// carry a `structuredContent` object that mirrors this same envelope shape,
+/// so schema-driven MCP clients (Codex, Cursor, …) get a machine-readable
+/// result without parsing the human text.
+///
+/// The decision is **additive** (acceptance option (a)): the text `content`
+/// array is preserved byte-for-byte, and `structuredContent` is layered
+/// alongside it — legacy text consumers (Claude Code) keep working unchanged.
+/// `structuredContent` is declared optional in the schema because it is absent
+/// on error responses (those carry the `structuredError` payload from
+/// STORY-401 instead). `payload_description` still tells clients what the
+/// `text` string — mirrored verbatim into `structuredContent.content` —
+/// conveys for *this* tool.
 fn text_envelope_output_schema(payload_description: &str) -> Value {
+    // The single text-content array shape, reused by both the top-level
+    // `content` property and the Path-B `structuredContent.content` mirror.
+    let text_content_array = || {
+        json!({
+            "type": "array",
+            "description": "A single text item carrying this tool's response.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "const": "text" },
+                    "text": { "type": "string" }
+                },
+                "required": ["type", "text"]
+            }
+        })
+    };
     json!({
         "type": "object",
         "description": format!(
-            "MCP text envelope. The `text` field contains: {}",
+            "MCP text envelope (additive structuredContent per STORY-399). \
+             The `text` field contains: {}",
             payload_description
         ),
         "properties": {
-            "content": {
-                "type": "array",
-                "description": "Always a single text item under Path A.",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": { "type": "string", "const": "text" },
-                        "text": { "type": "string" }
-                    },
-                    "required": ["type", "text"]
-                }
-            },
+            "content": text_content_array(),
             "isError": {
                 "type": "boolean",
                 "description": "Present and true when the tool returned an error; absent on success."
+            },
+            "structuredContent": {
+                "type": "object",
+                "description": "Path B (STORY-399): machine-readable mirror of the text envelope, present on success. Absent on error (see `structuredError`).",
+                "properties": {
+                    "content": text_content_array()
+                },
+                "required": ["content"]
             }
         },
         "required": ["content"]
@@ -4119,6 +4158,70 @@ mod tests {
         assert!(text.contains("Unknown tool"), "text was: {text}");
     }
 
+    // STORY-399 (Path B): a successful tools/call must carry `structuredContent`
+    // whose `content` array mirrors the legacy text envelope verbatim, so both
+    // legacy text consumers and schema-driven clients see the same logical
+    // result. Error responses must NOT carry structuredContent (they carry the
+    // STORY-401 `structuredError` payload instead). trace:STORY-399 | ai:claude
+    #[test]
+    fn mcp_dispatch_success_emits_structured_content_mirroring_text() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        // `list_active_leases` takes no args and never errors on an empty store —
+        // a clean success-path probe of the dispatch envelope.
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({"name": "list_active_leases", "arguments": {}}),
+        );
+        let result = resp
+            .result
+            .expect("tools/call should return a result object");
+
+        // Legacy text envelope preserved.
+        assert!(
+            result.get("isError").is_none(),
+            "success must not set isError"
+        );
+        let text = result["content"][0]["text"]
+            .as_str()
+            .expect("success must carry a text content item");
+        assert_eq!(result["content"][0]["type"], json!("text"));
+
+        // Path B: structuredContent mirrors the same payload.
+        let structured = result
+            .get("structuredContent")
+            .expect("success must carry structuredContent (STORY-399)");
+        assert_eq!(
+            structured["content"][0]["type"],
+            json!("text"),
+            "structuredContent.content must hold a text item"
+        );
+        assert_eq!(
+            structured["content"][0]["text"].as_str(),
+            Some(text),
+            "structuredContent must mirror the text envelope verbatim"
+        );
+    }
+
+    #[test]
+    fn mcp_dispatch_error_has_no_structured_content() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({"name": "definitely_not_a_tool", "arguments": {}}),
+        );
+        let result = resp
+            .result
+            .expect("tools/call should return a result object");
+        assert_eq!(result["isError"], json!(true));
+        assert!(
+            result.get("structuredContent").is_none(),
+            "error responses carry structuredError, not structuredContent: {result}"
+        );
+        assert!(result.get("structuredError").is_some());
+    }
+
     #[test]
     fn handle_request_touches_agent_registry() {
         let dir = tempdir().unwrap();
@@ -4360,6 +4463,35 @@ mod tests {
             assert!(
                 properties.contains_key("content"),
                 "tool '{}' outputSchema must declare a `content` property (Path A — text envelope wraps every response)",
+                name
+            );
+
+            // STORY-399 (Path B): the outputSchema must also declare the
+            // additive `structuredContent` object, and that object must itself
+            // require a `content` array — the machine-readable mirror.
+            // trace:STORY-399 | ai:claude
+            let structured = properties
+                .get("structuredContent")
+                .and_then(|v| v.as_object())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "tool '{}' outputSchema must declare a `structuredContent` object (Path B — STORY-399)",
+                        name
+                    )
+                });
+            assert_eq!(
+                structured.get("type").and_then(|v| v.as_str()),
+                Some("object"),
+                "tool '{}' structuredContent schema must be an object",
+                name
+            );
+            assert!(
+                structured
+                    .get("properties")
+                    .and_then(|v| v.as_object())
+                    .map(|p| p.contains_key("content"))
+                    .unwrap_or(false),
+                "tool '{}' structuredContent must declare a `content` property",
                 name
             );
         }
