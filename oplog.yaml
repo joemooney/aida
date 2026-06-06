@@ -14767,5 +14767,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       BUILD (planning is merge-contention-free, independent of drain reliability), GATED on STORY-265's --plan-only mode landing first. Scope discipline: fan out over the WORKABLE set only (exclude the low-priority tail) to control plan-slop. Recorded blocked-by STORY-265.
-clock: 1526
+- id: 019e9d47-cb97-7a62-b073-25ca81c6c4de
+  target_id: 019e986c-e86b-77f1-9057-e8de02c47adc
+  author: aida
+  node_id: '1'
+  lamport: 1527
+  timestamp: 2026-06-06T14:13:08.631487972Z
+  kind: !SetStatus
+    status: Approved
+clock: 1527
 node_id: '1'
