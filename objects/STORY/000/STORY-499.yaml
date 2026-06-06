@@ -14,12 +14,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   KEEP GATED on SPIKE-47 — building the diff-level trace-coverage CI gate before the coverage DEFINITION exists risks false-positives on every test/refactor PR. SPIKE-47 (ready-to-run) must land its definition + exemption list first; then 499 becomes implementable. Recorded blocked-by SPIKE-47.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:53.171836263Z
-modified_at: 2026-06-06T14:07:51.051064735Z
+modified_at: 2026-06-06T14:07:53.413308387Z
 req_type: Story
 tags:
 - ci-gate
