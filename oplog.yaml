@@ -15309,5 +15309,20 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Have queue-work / pickup PULL then re-check the spec's status immediately before claiming — closes most of the cross-machine duplicate-pickup window cheaply, without a new shared-state artifact. An advisory orphan-branch claim file is heavier coordination infra, gated on real multi-machine collaboration scaling.
-clock: 1544
+- id: 019e9d80-94a2-70e0-9089-d8bbd9f504b5
+  target_id: 019e8655-f14e-7420-83fe-ae9d8143d258
+  author: aida
+  node_id: '1'
+  lamport: 1545
+  timestamp: 2026-06-06T15:15:10.114695807Z
+  kind: !SetDescription
+    description: |
+      The highest-leverage slice of SPIKE-41's hook-bundle. Claude Code fires WorktreeCreate when a worktree is provisioned via --worktree or isolation:'worktree' (Workflow/subagent fan-out), and WorktreeRemove on teardown — and these 'replace default git behavior', so AIDA can OWN the provisioning. Wire: WorktreeCreate hook → register an AIDA lease for the new worktree (scope from the spec/branch if derivable, else a generic 'harness-worktree' lease); WorktreeRemove hook → release it. Net: a Claude Code Workflow's parallel worktree-isolated agents become LEASE-TRACKED in the AIDA substrate — closing the exact gap quizdom's bypass exposed (BUG-431 → fell back to the Workflow tool, shipped code, populated zero substrate). Scaffold into the 'aida init' hook bundle.
+
+      GATED on SPIKE-41 confirming the events behave as documented (fire timing, payload shape — does WorktreeCreate carry the worktree path + can the hook influence/record it?). SCOPE: substrate-CAPTURE only (register/release the lease) — NOT substrate-driven orchestration (the Workflow still decides what to do; the hook just records the worktree as a lease). Pure-testable core: given a WorktreeCreate payload {path, branch?} → the lease record to write. trace:SPIKE-41
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Build the PURE-TESTABLE CORE now (hook payload {path, branch?} → the lease record to write/clear); DEFER the live WorktreeCreate/WorktreeRemove hook wiring + aida init scaffold until SPIKE-41 confirms the Claude Code event timing/payload. De-risks while honoring the SPIKE-41 gate — don't wire against unverified harness behavior (instrument-don't-infer).
+clock: 1545
 node_id: '1'
