@@ -2,7 +2,7 @@ id: 019e98db-d480-7e51-95b6-f9b1fe14a006
 spec_id: STORY-520
 agreed_id: STORY-520
 title: 'Integrator role + producer/consumer drain split: parallel implementers produce PRs, a single integrator serializes phases 2-6 (consumes the Done→open-PR signal)'
-description: |-
+description: |
   ## Idea (operator, 2026-06-05)
 
   Make `integrator` a first-class role: a single loop that watches for open PRs (the "ready for integration" set) and drives the back-end phases on each in turn — decoupling PR PRODUCTION (implementers, parallel) from PR INTEGRATION (one integrator, serial). The optional division of labor that makes parallel activity safe.
@@ -37,12 +37,16 @@ description: |-
 
   ## Relationships
   - Builds on TASK-405 (PR-only mechanism). BUG-444 lives in the integrator (single-locus). Sibling parallelism: STORY-519 (parallel planning), parallel implementers. Concurrency principle: ADR-3 / TASK-661 (singular authority over a shared resource). Out-of-band comms: STORY-493 (mailbox). Loop container: EPIC-30.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  PROTOTYPE the watch-loop as a SCRIPT first (confirm BUG-444 phase-1 NoPr status before relying on the merge phase) — validate the load-bearing PR-detection/merge loop cheaply; promote to a first-class 'integrator' role + producer/consumer split ONLY if the loop proves out. Avoids committing reversible-expensive role taxonomy/scaffolding up front.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T17:36:44.160363907Z
-modified_at: 2026-06-06T14:13:14.911908399Z
+modified_at: 2026-06-06T14:13:17.005070263Z
 req_type: Story
 tags:
 - drain
