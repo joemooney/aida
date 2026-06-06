@@ -16,12 +16,12 @@ description: |-
   - The ECC run (SPIKE-50) is the documented first instance.
 
   Out of scope (follow-ups, do NOT build here): a /aida-panel-review skill wrapper; templatizing into aida-core/templates/ for scaffolding; the live Agent-Teams front-end; the daemon/control-plane version (that is EPIC-30 territory).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:27:07.218907040Z
-modified_at: 2026-06-06T08:31:49.046695484Z
+modified_at: 2026-06-06T08:31:52.032575046Z
 req_type: Story
 tags:
 - aida:workflow
