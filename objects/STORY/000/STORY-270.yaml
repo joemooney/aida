@@ -29,12 +29,12 @@ description: |-
   ## Depends on
 
   - All previous STORYs (1-4) shipped
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:51.042943699Z
-modified_at: 2026-06-06T13:45:30.850785272Z
+modified_at: 2026-06-06T13:45:33.425918491Z
 req_type: Story
 tags:
 - companion-project
