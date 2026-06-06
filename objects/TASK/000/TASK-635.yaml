@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T03:17:56.115691596Z
-modified_at: 2026-06-06T08:30:53.604108337Z
+modified_at: 2026-06-06T08:30:54.918947113Z
 req_type: Task
 tags:
 - aida:release
@@ -29,6 +29,7 @@ tags:
 - from-advisor
 - propagate-fix
 - quizdom
+- ready-to-implement
 - release
 comments:
 - id: 019e9c0e-74a4-74d3-8da1-3744379fd4ec
