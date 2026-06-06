@@ -13815,5 +13815,36 @@ operations:
   timestamp: 2026-06-06T13:45:33.441691041Z
   kind: !SetStatus
     status: Rejected
-clock: 1496
+- id: 019e9d2e-9eb0-72a3-87a5-5d2eef98a8eb
+  target_id: 019e3385-356b-7fd3-8f1e-8a719b93c30b
+  author: aida
+  node_id: '1'
+  lamport: 1497
+  timestamp: 2026-06-06T13:45:38.736990887Z
+  kind: !SetDescription
+    description: |
+      First child STORY of EPIC-29 (aida-tui split). Audit aida-tui's current consumption of aida-core; mark required types/methods explicitly `pub`; document the API surface; verify a separate Rust crate can implement a minimal TUI against this API alone (no reach-into-internals).
+
+      ## Acceptance
+
+      - [ ] Audit aida-tui/src/ for all aida-core imports
+      - [ ] For each consumed type/method: ensure it's `pub` and re-exported from aida-core's lib.rs
+      - [ ] Write `docs/api/aida-core.md` listing the public API surface with one-line description per item
+      - [ ] Smoke test: a separate Rust crate (in /tmp/aida-tui-test) depending only on aida-core can call each documented API and compile
+      - [ ] No new functionality — pure API surface curation
+      - [ ] Internal types stay internal; document what's intentionally NOT public
+
+      ## Why first
+
+      Everything else in EPIC-29 depends on the API surface being stable + documented. The extraction (STORY 2) can't happen cleanly without knowing what's stable; the feature removal (STORY 3) needs the contract for what aida-tui depends on; specs migration (STORY 4) is downstream.
+
+      ## Composes with
+
+      - **EPIC-27** (MCP modernization) — the MCP server also consumes aida-core; the audit should consider its needs too for consistency
+      - **`aida ultraplan` / plan tooling** — already public API; this audit just formalizes
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      RESCOPE as standalone API-hygiene (decoupled from the rejected EPIC-29 split): audit + document aida-core's public API surface that both the TUI and the MCP server consume. NOT a repo-split prerequisite — just a documented/stable pub surface. Reparent off EPIC-29.
+clock: 1497
 node_id: '1'
