@@ -15,12 +15,12 @@ description: |-
   ## Related
 
   - EPIC-1-052 Phase 4 (post-clone bootstrap) handles the new-clone case; this handles the legacy-clone case from the other side
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:08:40.656743203Z
-modified_at: 2026-06-06T19:27:37.088032785Z
+modified_at: 2026-06-06T20:05:14.570478332Z
 req_type: Functional
 tags:
 - EPIC-1-052-followup
@@ -38,3 +38,7 @@ comments:
   content: Commit 5c7d322dc references this requirement
   created_at: 2026-06-06T19:27:37.088032785Z
   modified_at: 2026-06-06T19:27:37.088032785Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T20:05:14.570478332Z
+  completion_sha: f4dfe620a8ac6fa07998f8b5b80ffa08092737d0
