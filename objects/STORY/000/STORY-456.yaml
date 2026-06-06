@@ -26,12 +26,12 @@ description: |-
   Source: STORY-385 comments at 2026-05-22 10:45 + 12:17.
 
   trace:STORY-385
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:50:38.005547744Z
-modified_at: 2026-06-06T08:34:05.336904758Z
+modified_at: 2026-06-06T20:10:43.229864903Z
 req_type: Story
 tags:
 - aida:status
@@ -52,3 +52,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded `aida status` enhancement (worktrees + open-PRs + recently-merged panes), child TASK-665 already carved for the core worktree pane, partial code surface exists (print_status_worktrees_section), composes on shipped STORY-385/STORY-431; clear acceptance, no open decision.
   created_at: 2026-06-06T08:34:03.961225429Z
   modified_at: 2026-06-06T08:34:03.961225429Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T20:10:43.229864903Z
+  completion_sha: 6bb1dc322f1d08514bfb135885d9c781c82d0c75
