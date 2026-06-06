@@ -3,12 +3,12 @@ spec_id: TASK-680
 agreed_id: TASK-680
 title: 'Release-time doc-coverage gate: flag specs completed since last tag that lack an aida doc entry'
 description: 'Salvaged slice from EPIC-25 (operator decision 2026-06-06: rejected the release-composite/documenter-role machinery, kept this). At release time (scripts/release.sh / aida changelog), list or warn on requirements that reached Completed since the previous tag but have no associated ''aida doc'' entry (aida doc add --about <ID>). The insight: gate docs at RELEASE time, not PR time, now that ''aida doc'' exists. Bounded: a read over the spec graph + git tag range + doc-relationship check; warn-only (non-blocking) first. Out of scope: the documenter role, auto-decomposition, Release spec-type.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T13:39:28.816721682Z
-modified_at: 2026-06-06T20:32:45.962864529Z
+modified_at: 2026-06-06T20:55:33.482673414Z
 req_type: Task
 tags:
 - aida:doc
@@ -22,3 +22,7 @@ comments:
   content: Commit 708bdebd8 references this requirement
   created_at: 2026-06-06T20:32:45.962864529Z
   modified_at: 2026-06-06T20:32:45.962864529Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T20:55:33.482673414Z
+  completion_sha: 7c3476bcc3d3fefc5a71eb43b665f8c8e55abc6a
