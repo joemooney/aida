@@ -1426,6 +1426,10 @@ fn run() -> Result<()> {
             blocked_by: _, // STORY-446: blocked-by edges land on the git-backend path
             force_parent,
             interactive,
+            // STORY-333: legacy centralized backend does not persist the
+            // human-only marker; ignore the flags here. trace:TASK-130 | ai:claude
+            human_only: _,
+            no_human_only: _,
             effort: _,
         } => {
             // trace:BUG-17 | ai:claude — resolve description from inline,
@@ -6455,6 +6459,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             force_parent,
             interactive,
             effort,
+            human_only,
+            no_human_only,
             ..
         } => {
             // BUG-45 + interactive expansion: when the user doesn't pass
@@ -6619,6 +6625,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 req.req_type = rt;
             }
+            // TASK-130: a Spike is time-boxed research with operator-judgment
+            // decisions (candidate selection, experimental design, rubric
+            // evaluation, report writing) — not heads-down implementation. So
+            // a Spike is born human-only by default (the orchestrator's
+            // pre-pickup gate then skips it instead of an implementer agent
+            // mis-treating research as coding). `--no-human-only` opts a Spike
+            // back into auto-pickup; `--human-only` sets the marker on any
+            // type. Reuses the STORY-333 human_only primitive.
+            // trace:TASK-130 | ai:claude
+            req.human_only = resolve_human_only(&req.req_type, *human_only, *no_human_only);
             if let Some(o) = owner {
                 req.owner = o.clone();
             }
@@ -39505,6 +39521,38 @@ mod statusline_tests {
         assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
     }
 
+    /// TASK-130: a Spike is born human-only (research is human-driven) unless
+    /// `--no-human-only` opts it back into auto-pickup; every other type
+    /// defaults to NOT human-only; `--human-only` flips any type on. The flags
+    /// always win over the per-type default.
+    #[test]
+    fn resolve_human_only_spike_defaults_human_only_override_respected() {
+        use super::resolve_human_only;
+        use aida_core::RequirementType;
+
+        // Spike → human-only by default (no flags).
+        assert!(resolve_human_only(&RequirementType::Spike, false, false));
+        // Spike + --no-human-only → opted back into auto-pickup.
+        assert!(!resolve_human_only(&RequirementType::Spike, false, true));
+        // Spike + --human-only → still human-only (flag agrees with default).
+        assert!(resolve_human_only(&RequirementType::Spike, true, false));
+
+        // Non-Spike types default to NOT human-only.
+        assert!(!resolve_human_only(&RequirementType::Task, false, false));
+        assert!(!resolve_human_only(&RequirementType::Bug, false, false));
+        assert!(!resolve_human_only(&RequirementType::Story, false, false));
+        assert!(!resolve_human_only(
+            &RequirementType::Functional,
+            false,
+            false
+        ));
+
+        // --human-only flips any type on regardless of its default.
+        assert!(resolve_human_only(&RequirementType::Task, true, false));
+        // --no-human-only is a no-op for a type that already defaults off.
+        assert!(!resolve_human_only(&RequirementType::Task, false, true));
+    }
+
     /// and unflagged. `dialog` canonicalizes to `advisor` (TASK-586).
     #[test]
     fn effective_role_defaults_to_implementer_when_unset() {
@@ -48445,6 +48493,33 @@ fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
             | RequirementStatus::Done
             | RequirementStatus::Completed
     )
+}
+
+/// TASK-130: resolve the `human_only` marker for a freshly-added spec from its
+/// type plus the explicit `--human-only` / `--no-human-only` flags.
+///
+/// A Spike is, by definition, time-boxed research driven by operator judgment
+/// (candidate selection, experimental design, rubric evaluation, report
+/// writing) — not heads-down implementation. So a Spike defaults to
+/// `human_only = true`, which the orchestrator's pre-pickup gate honors by
+/// skipping it rather than handing it to an implementer agent that would have
+/// to bail or fabricate work. Every other type defaults to `false`.
+///
+/// The flags always win, and they are mutually exclusive at the CLI layer
+/// (`conflicts_with`), so at most one is set:
+/// - `--human-only`     → `true`  (opt any type in)
+/// - `--no-human-only`  → `false` (opt a Spike back out into auto-pickup)
+/// - neither            → the per-type default above
+///
+/// trace:TASK-130 | ai:claude
+fn resolve_human_only(req_type: &RequirementType, human_only: bool, no_human_only: bool) -> bool {
+    if human_only {
+        return true;
+    }
+    if no_human_only {
+        return false;
+    }
+    matches!(req_type, RequirementType::Spike)
 }
 
 /// TASK-647 (ADR-3): "advisor authority" — permission to produce approved+

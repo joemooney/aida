@@ -4472,6 +4472,19 @@ pub enum Command {
         #[clap(long)]
         interactive: bool,
 
+        /// Mark this spec human-only so the orchestrator never auto-picks it.
+        /// Spikes default to human-only automatically (research is human-driven);
+        /// pass this on a non-Spike to opt in explicitly.
+        // trace:TASK-130 | ai:claude
+        #[clap(long, conflicts_with = "no_human_only")]
+        human_only: bool,
+
+        /// Force this spec to NOT be human-only even when its type would default
+        /// to it (use on a Spike that is genuinely heads-down implementation).
+        // trace:TASK-130 | ai:claude
+        #[clap(long, conflicts_with = "human_only")]
+        no_human_only: bool,
+
         /// Open-time effort estimate: 15m, 1h, 4h, 1d, or 1w. Captured
         /// to `.aida/effort-calibration/<SPEC>.yaml` and stamped as an
         /// `effort:open:<value>` tag. `1d` means 8 work-hours; `1w`
