@@ -131,7 +131,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-06-06T08:18:06.683196375Z
+modified_at: 2026-06-06T13:44:59.111310050Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
@@ -214,3 +214,8 @@ comments:
       REC: b — per over-engineering caution, the socket plane + new REQUEST type is daemon-grade; a stoppable loop + state file delivers the 'works overnight' value with far less surface.
   created_at: 2026-06-06T08:18:04.628347182Z
   modified_at: 2026-06-06T08:18:04.628347182Z
+- id: 019e9d2e-03e7-7421-9f89-ef6fc67d010b
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): DECOMPOSE into the 5 named child stories (treat in-flight PR-497 as a partial slice — do NOT trailer the EPIC on its merge). Worker mechanism: build the MINIMAL long-running loop + graceful stop + crash-recovery state file; DEFER the Unix-socket control plane and the new REQUEST spec-type until a real need appears (no daemon-grade infra yet).'
+  created_at: 2026-06-06T13:44:59.111310050Z
+  modified_at: 2026-06-06T13:44:59.111310050Z
