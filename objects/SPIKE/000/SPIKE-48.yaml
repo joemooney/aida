@@ -2,7 +2,7 @@ id: 019e90ee-901e-7d61-bb88-8857174330d7
 spec_id: SPIKE-48
 agreed_id: SPIKE-48
 title: Isolated sandbox store for play/test scenarios (first-user learning + dev drain-testing)
-description: |-
+description: |
   Idea (operator, 2026-06-03): give new users (and ourselves) a throwaway store to run scenarios against WITHOUT polluting the project's real graph.
 
   ## The real need is ISOLATION, not bundling
@@ -28,12 +28,16 @@ description: |-
 
   ## Timing
   Bugs-before-marketing phase — the first-user/tutorial framing is marketing-adjacent (defer). BUT the dev-playground use is on-thesis now (it would have saved us today). Revisit trigger: bug backlog clears, OR next time we need a throwaway drain. trace:STORY-492
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Build the DEV-PLAYGROUND slice now: a throwaway sandbox store for drain-testing (on-thesis — would have avoided the TASK-639/640/641 clutter validating STORY-492). Mechanism: separate dir + AIDA_STORE env override (reuses the validate-resume.sh isolated-$HOME pattern — lowest machinery, no daemon-grade infra). DEFER the first-user/tutorial-framing layer to the marketing phase.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:40:14.110049032Z
-modified_at: 2026-06-06T15:20:07.837221292Z
+modified_at: 2026-06-06T15:20:10.412151227Z
 req_type: Spike
 tags:
 - dev-experience
