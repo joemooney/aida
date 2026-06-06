@@ -14428,5 +14428,37 @@ operations:
   timestamp: 2026-06-06T13:58:56.629680134Z
   kind: !SetStatus
     status: Completed
-clock: 1512
+- id: 019e9d3a-e55f-7f80-80a2-4f9f1a8e9d9f
+  target_id: 019e582b-7527-7de0-82f0-eafc5e9f67db
+  author: aida
+  node_id: '1'
+  lamport: 1513
+  timestamp: 2026-06-06T13:59:03.263059303Z
+  kind: !SetDescription
+    description: |
+      EPIC-28 STORY 2: a *population* mechanism for the dependency graph. STORY 1 lets a human declare blocked-by; this STORY lets the advisor (or a one-shot CLI run) surface likely dependencies the human can confirm.
+
+      Scope:
+      - New command `aida deps sweep [--apply] [--for-spec SPEC]` — walks the requirement graph and harvests likely dependency signals:
+        - **File overlap** — specs whose `// trace:` comments touch the same files (high-confidence signal).
+        - **Trace graph** — specs that share function/symbol targets (medium-confidence; similar to `aida plan helpers`).
+        - **Same parent (EPIC/STORY)** — siblings in a feature cluster (low-confidence; often spurious — surface but mark as weak).
+        - **Plan content** — specs whose plans reference each other's spec IDs explicitly (high-confidence).
+      - Default output: a per-spec ranked list of 'Likely depends on: TASK-N (high)' suggestions.
+      - `--apply` prompts `[y/N/skip]` per suggestion and uses the STORY-1 `--blocked-by` flag under the hood.
+      - Scheduled-task variant: `aida deps sweep --as-advisor-activity` (composes with STORY-262 if/when scheduled tasks land) — runs on a 14d cadence and files the suggestions to the advisor's findings list rather than prompting interactively.
+
+      Out of scope: full graph-walk visualization (that's a  future feature).
+
+      Acceptance:
+      - [ ] `aida deps sweep` lists likely dependencies without writing anything.
+      - [ ] `aida deps sweep --apply` interactively confirms each suggestion.
+      - [ ] File-overlap signal correctly identifies overlap from `trace_links` even when the touched files exist outside the spec's stated 'feature'.
+      - [ ] Same-parent suggestions are marked 'weak' so they don't drown out the high-confidence signals.
+      - [ ] Integration test: file two specs touching the same file, run `aida deps sweep`, assert the suggestion surfaces with confidence 'high'.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Ship the READ-ONLY slice: aida deps sweep (+ --for-spec) lists ranked likely-dependencies from trace_links file-overlap + same-parent (weak signal). NO --apply write-back. Gives a 'did I miss a dependency before an overnight drain?' check. GATE the --apply interactive write-back + --as-advisor-activity variant until suggestion quality is observed.
+clock: 1513
 node_id: '1'
