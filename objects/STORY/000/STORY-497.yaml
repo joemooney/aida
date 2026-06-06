@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T06:56:21.392043137Z
-modified_at: 2026-06-01T14:14:58.955592386Z
+modified_at: 2026-06-06T08:31:03.491463168Z
 req_type: Story
 tags:
 - buy-in
@@ -46,3 +46,14 @@ comments:
   content: 'Deck edit 2026-06-01 (operator): removed the explicit ''**The ask:** <resources>'' placeholder line from the ''Where we are'' slide. The numbered list now stands alone as the roadmap/what''s-next; the resource ask is spoken aloud, not on the slide. The earlier acceptance criterion to ''fill the <resources> placeholder'' is OBE — drop it. Also pending operator decision: whether to retitle the slide from ''Where we are — and the ask'' to ''— and what''s next''.'
   created_at: 2026-06-01T14:14:58.955592386Z
   modified_at: 2026-06-01T14:14:58.955592386Z
+- id: 019e9c0e-9b43-7940-9de9-4ad072e197ac
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: The product-seat core (Marp deck + runbook) is drafted; the remaining acceptance is operator-only physical work (fill the resources/ask number, refresh proof numbers, render, record backup cast, retire slideshow.html, rehearse). How to dispose?
+      a) Operator owns the remaining items directly (they are operator-only — the headcount/time ask number cannot be filled by an agent); close the spec's agent-actionable scope
+      b) Split off the one agent-doable item (retire/redirect docs/slideshow.html, which is still discoverable and actively misleading) as a tiny TASK; leave the rest to the operator
+      c) Defer the whole thing
+      REC: b — slideshow.html retirement is concrete, agent-doable, and called out as actively misleading; the deck/ask items are operator-only and demo-dated. Note: this is an internal buy-in demo the operator explicitly ruled overrides the defer-marketing posture, so it is not blocked by phase.
+  created_at: 2026-06-06T08:31:03.491463168Z
+  modified_at: 2026-06-06T08:31:03.491463168Z
