@@ -2,7 +2,7 @@ id: 019e4af8-532a-7061-8edf-a563c61aad9d
 spec_id: STORY-384
 agreed_id: STORY-384
 title: aida queue recover <id> — interactive wizard for failed-phase-1 spec recovery
-description: |-
+description: |
   ## Problem
 
   After a failed phase-1 implementer session (Anthropic 529, commit-and-exit-without-PR, partial work, etc.), recovery today is a manual sequence of git/gh/aida commands. The advisor walks the user through it interactively, varying by state — *\"check if commits exist; if yes, push + PR; if uncommitted work, commit-WIP first; if neither, end the lease and re-queue.\"*
@@ -69,12 +69,16 @@ description: |-
   2026-05-21 ~02:30. User direction: *\"these commands seem like they belong in a condensed single command like \`aida queue recover <item>\` and it would interactively step-by-step perform the operations ... Unless you think we will get to a point where this is never likely to happen?\"*
 
   Advisor's answer: the frequency drops sharply after BUG-285 but not to zero; the dance is recurrent enough to deserve a verb.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER until TASK-405 (PR-only orchestrator) + TASK-406 (worktree-aware merge) ship — the wizard's most-common branch (drive phases 3-6) depends on them; shipping first risks a wizard recommending paths its primitives can't execute. Urgency also dropped (BUG-285 + --resume-drain resumability landed).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:37:28.746765756Z
-modified_at: 2026-06-06T13:55:48.241195688Z
+modified_at: 2026-06-06T13:55:49.768297448Z
 req_type: Story
 tags:
 - automation

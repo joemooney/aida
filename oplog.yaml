@@ -14276,5 +14276,83 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER post-stability — net-new strategic multi-project surface, off the current phase; no second-project demand pulling it. Keep as a backlog marker; build is speculative until a real handoff need appears.
-clock: 1508
+- id: 019e9d37-f199-7ad2-b17f-7d4efb8f54b5
+  target_id: 019e4af8-532a-7061-8edf-a563c61aad9d
+  author: aida
+  node_id: '1'
+  lamport: 1509
+  timestamp: 2026-06-06T13:55:49.785121702Z
+  kind: !SetDescription
+    description: |
+      ## Problem
+
+      After a failed phase-1 implementer session (Anthropic 529, commit-and-exit-without-PR, partial work, etc.), recovery today is a manual sequence of git/gh/aida commands. The advisor walks the user through it interactively, varying by state — *\"check if commits exist; if yes, push + PR; if uncommitted work, commit-WIP first; if neither, end the lease and re-queue.\"*
+
+      This has run **5-6 times across 2 days** (TASK-358, TASK-389, BUG-249, TASK-284, TASK-346, TASK-413, TASK-416, BUG-238). Each time costs ~5 minutes, has risk of user error (the \`git branch -D\` mistake on task-281 earlier today), and depends on the advisor being available to walk through it.
+
+      BUG-285 will reduce the frequency dramatically (probably from ~25%/spec tonight to ~5%/spec), but not to zero — external crashes, partial work, edge-case design forks will persist. On a year of drains that's hundreds of recoveries. The dance is mechanical enough to automate.
+
+      ## Approach
+
+      \`aida queue recover <SPEC-ID>\` (or \`aida queue recover\` with no args = use last failed phase 1 in the current project). Inspects state, presents a recommended recovery path, and steps through it interactively.
+
+      ## Acceptance
+
+      - **Inspection step** — gathers state and prints:
+        - Spec status (\`In Progress\` / \`Done\` / etc.)
+        - Lease state (active / dormant / stale; UUID; mtime)
+        - Branch state (exists locally? pushed? remote tracking? commits ahead of \`origin/main\`?)
+        - Worktree state (present? clean? uncommitted changes?)
+        - PR state (none / open / closed / merged + number)
+        - Recent commits on the branch (1-3 most recent, oneline)
+      - **Recommendation step** — derives the recovery path from state, presents it as the default. Cases:
+        - \`commits_ahead > 0\` + \`pushed == false\` + \`pr == none\` → **push + open PR + drive phases 3-6** (most common case, TASK-389/TASK-413/TASK-416 pattern)
+        - \`commits_ahead > 0\` + uncommitted changes → **WIP-commit + push + PR**, or **WIP-commit-and-park-for-resumption** (operator chooses)
+        - \`commits_ahead == 0\` + uncommitted changes → **WIP-commit-and-park-for-resumption** (TASK-346 pattern)
+        - \`commits_ahead == 0\` + clean worktree → **end lease + re-queue** (TASK-281 nothing-shipped pattern)
+        - \`pr == open\` (already pushed) → **drive phases 3-6** (TASK-336 pattern — needs TASK-405 to compose properly)
+        - \`pr == merged\` → **already-shipped; end lease + auto-bump status**
+      - **Execution step** — runs each command with feedback, asks for confirmation on destructive ones (push, force, branch delete). Non-destructive ops (status read, lease inspection) run silently.
+      - **\`--yes\` / \`--auto\` flag** — skips all confirmations; for scripted/headless use. NOT the default.
+      - **\`--dry-run\` flag** — prints the recovery plan without executing. Useful for verifying state before acting.
+      - **Output is structured** — operator sees the inspection result, the recommended path with rationale, the per-step result. Failed steps leave the state visible so the operator can resume manually.
+
+      ## Composition with existing commands
+
+      This is an interactive front-end to existing primitives, not new functionality:
+      - \`aida session leases\` (inspection)
+      - \`aida show <spec> --no-git\` (status)
+      - \`git log\`, \`git status\` (branch/worktree)
+      - \`gh pr list --head\`, \`gh pr view\` (PR state)
+      - \`git push\`, \`gh pr create\`, \`gh pr merge\` (execution)
+      - \`aida session end\` (lease + worktree cleanup)
+      - \`aida pull\` (sync + auto-bump)
+
+      The wizard's value is in the **decision tree + per-step feedback**, not new mechanism.
+
+      ## Out of scope
+
+      - Automating the recovery without confirmation (default; \`--auto\` opts in).
+      - Recovery for failed phases 2-6 (different shape; this is phase-1 recovery specifically).
+      - Multi-spec batch recovery (sequence \`aida queue recover\` per spec; batch is a follow-up).
+      - Replacing \`aida queue work --resume\` (the resume path is its own primitive; the wizard chooses between resume and push-existing).
+
+      ## Composes with
+
+      - **BUG-285** — fixes the queue-done gate hole; reduces frequency of the case this wizard handles. Compose: the wizard still exists for the residual cases.
+      - **TASK-402** — resume-after-failure UX cluster; same problem space. The wizard subsumes most of that cluster's frictions by hiding them.
+      - **TASK-405** — PR-only orchestrator invocation; the \`pr == open → drive phases 3-6\` path of the wizard uses it.
+      - **TASK-406** — worktree-aware merge sequence; the wizard's merge step uses this.
+      - Memory \`feedback_check_orchestrator_before_manual_steps\` — the wizard's inspection step knows the orchestrator state, eliminating the manual check.
+
+      ## Origin
+
+      2026-05-21 ~02:30. User direction: *\"these commands seem like they belong in a condensed single command like \`aida queue recover <item>\` and it would interactively step-by-step perform the operations ... Unless you think we will get to a point where this is never likely to happen?\"*
+
+      Advisor's answer: the frequency drops sharply after BUG-285 but not to zero; the dance is recurrent enough to deserve a verb.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER until TASK-405 (PR-only orchestrator) + TASK-406 (worktree-aware merge) ship — the wizard's most-common branch (drive phases 3-6) depends on them; shipping first risks a wizard recommending paths its primitives can't execute. Urgency also dropped (BUG-285 + --resume-drain resumability landed).
+clock: 1509
 node_id: '1'
