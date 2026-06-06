@@ -277,6 +277,169 @@ struct JsonRpcError {
     data: Option<Value>,
 }
 
+// ============================================================================
+// Stable MCP error shapes (STORY-401)
+// ============================================================================
+//
+// MCP clients (Codex, Cursor, future agents) need predictable, machine-readable
+// errors instead of free-form text. Every tool error path now renders into:
+//
+//   {
+//     "content": [{ "type": "text", "text": "<tool>: <code>: <message>" }],
+//     "isError": true,
+//     "structuredError": { "code", "message", "tool", "recoverable" }
+//   }
+//
+// `code` is a stable enum (`invalid_arg`, `not_found`, `conflict`, `io_error`,
+// `permission_denied`, `internal`) so clients can branch on it. The text
+// envelope stays additive and back-compatible — it's still `isError: true` with
+// a human-readable string that contains the underlying message.
+//
+// Tool functions keep returning `Result<String, String>`; the dispatch boundary
+// (`handle_tools_call`) classifies the error string into an `McpError` using the
+// `McpError::classify` heuristics. Centralizing here means a single, audited
+// mapping rather than 30 hand-edited error sites. trace:STORY-401 | ai:claude
+
+/// Stable, machine-readable error code shared across all MCP tools.
+///
+/// The string form is what lands in the `structuredError.code` field and in the
+/// `<tool>: <code>: <message>` text envelope, so these values are a contract —
+/// add new variants, never rename existing ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum McpErrorCode {
+    /// The caller passed a missing/blank/malformed argument. Recoverable: fix
+    /// the input and retry.
+    InvalidArg,
+    /// A referenced entity (spec, finding, lease, brief, tool, resource) does
+    /// not exist. Recoverable: the caller may retry with a valid identifier.
+    NotFound,
+    /// The request conflicts with current state (already exists, gated
+    /// transition, duplicate claim). Not recoverable by retrying the same input.
+    Conflict,
+    /// Permission/authority denied (e.g. MCP may not self-advance an
+    /// advisor-gated status). Not recoverable by retrying the same input.
+    PermissionDenied,
+    /// Filesystem / IO failure while reading or writing the substrate.
+    /// Not recoverable by the caller without operator intervention.
+    IoError,
+    /// Anything we could not classify — treated as a server-side fault.
+    Internal,
+}
+
+impl McpErrorCode {
+    /// Stable string identifier emitted in the envelope.
+    fn as_str(self) -> &'static str {
+        match self {
+            McpErrorCode::InvalidArg => "invalid_arg",
+            McpErrorCode::NotFound => "not_found",
+            McpErrorCode::Conflict => "conflict",
+            McpErrorCode::PermissionDenied => "permission_denied",
+            McpErrorCode::IoError => "io_error",
+            McpErrorCode::Internal => "internal",
+        }
+    }
+
+    /// Whether a client can plausibly retry after correcting its input.
+    /// `invalid_arg` / `not_found` are caller-fixable; the rest are structural.
+    fn recoverable(self) -> bool {
+        matches!(self, McpErrorCode::InvalidArg | McpErrorCode::NotFound)
+    }
+}
+
+/// A structured MCP tool error: a stable `code`, a one-line `message`, the
+/// originating `tool`, and a `recoverable` hint. trace:STORY-401 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct McpError {
+    code: McpErrorCode,
+    message: String,
+    tool: String,
+}
+
+impl McpError {
+    fn new(tool: &str, code: McpErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            tool: tool.to_string(),
+        }
+    }
+
+    /// Classify a free-form error string (as produced by the tool functions)
+    /// into a stable `McpError`. The heuristics key off the well-known phrases
+    /// the tool functions use (`Missing required parameter`, `not found`,
+    /// `already exists`, gate-refusal text, …). Unknown shapes fall back to
+    /// `internal` so the envelope is always well-formed.
+    fn classify(tool: &str, raw: &str) -> Self {
+        let lower = raw.to_lowercase();
+        let code = if lower.contains("missing required parameter")
+            || lower.contains("cannot be empty")
+            || lower.contains("must be a string")
+            || lower.contains("must not contain")
+            || lower.starts_with("invalid ")
+            || lower.contains("invalid punt category")
+            || lower.contains("invalid brief path")
+            || lower.starts_with("unknown source")
+            || lower.starts_with("unknown action")
+        {
+            McpErrorCode::InvalidArg
+        } else if lower.contains("unknown tool")
+            || lower.contains("unknown resource")
+            || lower.contains("not found")
+        {
+            McpErrorCode::NotFound
+        } else if lower.contains("already exists")
+            || lower.contains("already acked")
+            || lower.contains("already claimed")
+            || lower.contains("conflict")
+        {
+            McpErrorCode::Conflict
+        } else if lower.contains("not advisor authority")
+            || lower.contains("advisor-gated")
+            || lower.contains("must not self-advance")
+            || lower.contains("refus")
+            || lower.contains("permission denied")
+            || lower.contains("not permitted")
+            || lower.contains("forbidden")
+        {
+            McpErrorCode::PermissionDenied
+        } else if lower.contains("io error")
+            || lower.contains("no such file")
+            || lower.contains("permission")
+            || lower.contains("os error")
+        {
+            McpErrorCode::IoError
+        } else {
+            McpErrorCode::Internal
+        };
+        Self::new(tool, code, raw.to_string())
+    }
+
+    /// Short, machine-friendly one-line text: `<tool>: <code>: <message>`.
+    /// This is what lands on the `content` text array (back-compatible: still a
+    /// string that contains the underlying message).
+    fn envelope_text(&self) -> String {
+        format!("{}: {}: {}", self.tool, self.code.as_str(), self.message)
+    }
+
+    /// The full MCP tools/call result value with `isError: true`, the text
+    /// content array, and the additive `structuredError` payload.
+    fn to_result_value(&self) -> Value {
+        json!({
+            "content": [{
+                "type": "text",
+                "text": self.envelope_text()
+            }],
+            "isError": true,
+            "structuredError": {
+                "code": self.code.as_str(),
+                "message": self.message,
+                "tool": self.tool,
+                "recoverable": self.code.recoverable()
+            }
+        })
+    }
+}
+
 impl JsonRpcResponse {
     fn success(id: Value, result: Value) -> Self {
         Self {
@@ -530,15 +693,13 @@ impl<'a> McpServer<'a> {
                     }]
                 }),
             ),
+            // STORY-401: render the free-form tool error into a stable,
+            // machine-readable envelope — `isError: true`, a short
+            // `<tool>: <code>: <message>` text, and a `structuredError`
+            // payload clients can branch on. trace:STORY-401 | ai:claude
             Err(e) => JsonRpcResponse::success(
                 id.clone(),
-                json!({
-                    "content": [{
-                        "type": "text",
-                        "text": format!("Error: {}", e)
-                    }],
-                    "isError": true
-                }),
+                McpError::classify(tool_name, &e).to_result_value(),
             ),
         }
     }
@@ -3407,6 +3568,92 @@ mod tests {
             .strip_prefix("Requirement added: ")
             .and_then(|rest| rest.split_whitespace().next())
             .unwrap_or_else(|| panic!("unexpected add_requirement response: {response}"))
+    }
+
+    // ===================================================================
+    // STORY-401: stable structured error shapes
+    // ===================================================================
+
+    #[test]
+    fn mcp_error_classify_invalid_arg() {
+        let e = McpError::classify("post_punt", "Missing required parameter: spec_id");
+        assert_eq!(e.code, McpErrorCode::InvalidArg);
+        assert!(e.code.recoverable());
+        assert_eq!(e.tool, "post_punt");
+        // short machine-friendly text shape `<tool>: <code>: <message>`
+        assert_eq!(
+            e.envelope_text(),
+            "post_punt: invalid_arg: Missing required parameter: spec_id"
+        );
+    }
+
+    #[test]
+    fn mcp_error_classify_not_found() {
+        let e = McpError::classify("show_requirement", "Requirement 'TASK-999' not found");
+        assert_eq!(e.code, McpErrorCode::NotFound);
+        assert!(e.code.recoverable());
+
+        let unknown = McpError::classify(
+            "definitely_not_a_tool",
+            "Unknown tool: definitely_not_a_tool",
+        );
+        assert_eq!(unknown.code, McpErrorCode::NotFound);
+    }
+
+    #[test]
+    fn mcp_error_classify_conflict_and_permission() {
+        let conflict = McpError::classify("claim_task", "lease already claimed by another agent");
+        assert_eq!(conflict.code, McpErrorCode::Conflict);
+        assert!(!conflict.code.recoverable());
+
+        let denied = McpError::classify(
+            "update_requirement",
+            "MCP is not advisor authority; cannot self-advance to Planned",
+        );
+        assert_eq!(denied.code, McpErrorCode::PermissionDenied);
+        assert!(!denied.code.recoverable());
+    }
+
+    #[test]
+    fn mcp_error_classify_falls_back_to_internal() {
+        let e = McpError::classify("history", "something totally unexpected happened");
+        assert_eq!(e.code, McpErrorCode::Internal);
+        assert!(!e.code.recoverable());
+    }
+
+    #[test]
+    fn mcp_error_result_value_is_back_compatible_envelope() {
+        let e = McpError::classify("post_punt", "Missing required parameter: spec_id");
+        let v = e.to_result_value();
+        // Back-compatible: isError:true + a text content array.
+        assert_eq!(v["isError"], json!(true));
+        let text = v["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Missing required parameter: spec_id"));
+        assert_eq!(v["content"][0]["type"], json!("text"));
+        // Additive structured payload.
+        let se = &v["structuredError"];
+        assert_eq!(se["code"], json!("invalid_arg"));
+        assert_eq!(se["message"], json!("Missing required parameter: spec_id"));
+        assert_eq!(se["tool"], json!("post_punt"));
+        assert_eq!(se["recoverable"], json!(true));
+    }
+
+    #[test]
+    fn mcp_dispatch_unknown_tool_yields_structured_error() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({"name": "definitely_not_a_tool", "arguments": {}}),
+        );
+        let result = resp
+            .result
+            .expect("tools/call should return a result object");
+        assert_eq!(result["isError"], json!(true));
+        // Stable code + the legacy "Unknown tool" phrase the stdio suite asserts.
+        assert_eq!(result["structuredError"]["code"], json!("not_found"));
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Unknown tool"), "text was: {text}");
     }
 
     #[test]
