@@ -52,9 +52,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:58:01.060106484Z
-modified_at: 2026-05-11T02:58:01.060106484Z
+modified_at: 2026-06-06T08:36:12.333616022Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-11T02:58:02.170613723Z
+comments:
+- id: 019e9c13-51ad-7251-9303-b8cfe47da271
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: `aida watch` polling daemon is unimplemented (no subcommand) and is explicitly daemon-grade autonomy — the over-engineering caution flag. The orchestrator/--auto-complete drain has since become the project's autonomy engine without a daemon. Build, shelve, or reject?
+      a) Reject — the autonomous-drain orchestrator (one-shot, no-daemon, headless variants) is the deliberate non-daemon answer to "automate the post-merge spawn cycle"; a persistent watcher is ops weight the project chose to avoid.
+      b) Keep parked as a long-term option for triggers that genuinely need out-of-band PR-merge observation (origin-side events git hooks can't see).
+      c) Build a minimal `aida watch status`-only poll (no auto-actions) for visibility.
+      REC: a — the project repeatedly chose no-daemon simplicity (headless advisor is cold-boot per-punt by design); a polling daemon contradicts that architectural stance. Reject unless a concrete origin-event trigger emerges that the orchestrator demonstrably can't cover.
+  created_at: 2026-06-06T08:36:12.333616022Z
+  modified_at: 2026-06-06T08:36:12.333616022Z
