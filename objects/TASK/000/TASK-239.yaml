@@ -74,7 +74,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:31:03.358659728Z
-modified_at: 2026-05-15T01:31:40.873767354Z
+modified_at: 2026-06-06T04:16:46.902498950Z
 req_type: Task
 tags:
 - ascii-fallback
@@ -89,3 +89,5 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-15T01:31:05.693610814Z
+archived: true
+archived_at: 2026-06-06T04:16:46.902498950Z
