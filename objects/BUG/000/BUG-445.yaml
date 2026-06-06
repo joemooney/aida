@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:20.867633023Z
-modified_at: 2026-06-06T15:20:22.350722922Z
+modified_at: 2026-06-06T15:20:25.345890742Z
 req_type: Bug
 tags:
 - aida:init
@@ -34,7 +34,6 @@ tags:
 - batch:onboarding-hardening
 - first-run
 - from-self-test
-- needs-human-input
 - onboarding
 - queue
 - ready-to-implement
