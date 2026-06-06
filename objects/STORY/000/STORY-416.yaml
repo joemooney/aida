@@ -2,7 +2,7 @@ id: 019e5216-6480-76b2-a69b-7aee894f42c7
 spec_id: STORY-416
 agreed_id: STORY-416
 title: 'Cross-agent scaffolding: maximize universal gates, scaffold per-agent docs into new projects'
-description: |-
+description: |
   AIDA's strategic claim is 'agent-agnostic substrate' — empirically validated 2026-05-22 by Codex + Antigravity contributing ~12 PRs alongside Claude. But the SCAFFOLDING is Claude-shaped: `aida init` creates `.claude/skills/*`, `.claude/commands/*`, `.claude/hooks/*`, `.claude/settings.json`, and the starter memory pack lives at `~/.claude/projects/<slug>/memory/` — none of which reach Codex or Antigravity users.
 
   ## Today's empirical evidence
@@ -49,12 +49,16 @@ description: |-
   ## Why high priority
 
   The agent-agnostic positioning is AIDA's strongest strategic claim post-today. If a new user picks up AIDA with Codex or Antigravity as their primary agent, the current scaffolding gives them nothing. That undermines the claim at first contact. The audit + propagation is foundational for the post-alpha cycle.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Ship the BOUNDED doc-honesty + propagation sub-tracks now: (A) propagate docs/agents/ via aida init, (B) reconcile AGENTS.md against the CLAUDE.md reference, (D) agent-agnostic-vs-claude discipline doc. These back AIDA's agent-agnostic positioning at first contact. SPLIT the genuine design forks (opt-in vs default-on per-agent scaffolding; memory-pack path-independence) into their own specs — out of scope here.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:47:39.776233643Z
-modified_at: 2026-06-06T13:58:46.684030566Z
+modified_at: 2026-06-06T13:58:47.935489531Z
 req_type: Story
 tags:
 - agent-agnostic
