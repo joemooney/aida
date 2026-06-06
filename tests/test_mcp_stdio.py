@@ -485,13 +485,30 @@ def test_spec_graph_round_trips(client: McpClient, spec: str, strict: bool) -> N
     searched = content_text(client.tool("search_requirements", {"query": "visibility probe"}))
     require(spec in searched, f"search_requirements missing {spec}:\n{searched}")
 
-    updated = client.tool("update_requirement", {"id": spec, "status": "planned"})
+    # BUG-449: use an implementer-legitimate transition (Planned is advisor-gated
+    # via MCP — asserted negatively below).
+    updated = client.tool("update_requirement", {"id": spec, "status": "in-progress"})
     require_structured_content_if_requested(updated, "update_requirement", strict)
     shown_after = content_text(client.tool("show_requirement", {"id": spec}))
     require(
-        "Planned" in shown_after or "planned" in shown_after,
+        "In Progress" in shown_after or "in-progress" in shown_after or "InProgress" in shown_after,
         f"show_requirement did not reflect status update:\n{shown_after}",
     )
+
+    # BUG-449: MCP must not self-advance a spec into an advisor-gated
+    # (Planned/Approved) or merge-driven (Completed) status — the
+    # add-then-update bypass. Use the raw request path since client.tool()
+    # raises on the isError envelope we expect here.
+    for gated_status in ("planned", "completed"):
+        resp = client.request(
+            "tools/call",
+            {"name": "update_requirement", "arguments": {"id": spec, "status": gated_status}},
+        )
+        result = resp.get("result")
+        require(
+            isinstance(result, dict) and result.get("isError") is True,
+            f"update_requirement should refuse {gated_status} via MCP (BUG-449): {resp}",
+        )
 
 
 def test_coordination_round_trips(client: McpClient, strict: bool) -> None:
