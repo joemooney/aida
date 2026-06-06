@@ -31147,35 +31147,32 @@ fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt
     if !trimmed.contains('?') {
         return None;
     }
-    let question = first_question_sentence(trimmed)?;
-    let question_lower = question.to_ascii_lowercase();
-    const QUESTION_FORK_MARKERS: &[&str] = &[
-        "which path",
-        "which option",
-        "which approach",
-        "which one",
-        "do you want me to",
-        "would you like me to",
-        "should i",
-        "should we",
-        "want me to",
-        "how would you like",
-        "need you to choose",
-        "please confirm",
-        "confirm and i'll proceed",
-        "confirm and i’ll proceed",
-        "confirm and i will proceed",
-        "confirm this path",
-        "confirm the path",
-        "confirm option",
-        "confirm approach",
-    ];
-    if !QUESTION_FORK_MARKERS
+    // BUG-462: scan EVERY question sentence (not just the first `?`) for
+    // decision-fork phrasing. A confident headless implementer phrases its
+    // "which path?" infinitely many ways and routinely buries the operative
+    // question after an options block, so the first `?` in the text is often a
+    // rhetorical aside. An exact-phrase allowlist checked against only the first
+    // question is the wrong shape — it let "Which way do you want to go?" (the
+    // TASK-457 drain) fall through to a misleading phase-1 NoPr failure instead
+    // of advisor-tier routing. trace:BUG-462 | ai:claude
+    let questions = all_question_sentences(trimmed);
+    let question = questions
         .iter()
-        .any(|marker| question_lower.contains(marker))
-    {
-        return None;
-    }
+        .find(|q| question_has_fork_marker(&q.to_ascii_lowercase()))
+        .cloned()
+        // Options-block fallback: even when no phrase marker matches, an
+        // enumerated multi-option block (`A)`/`B)`, `1.`/`2.`, `Option A/B`)
+        // paired with a trailing question is an unambiguous decision fork. Bias
+        // toward punt here: a spec parked and routed to the headless advisor
+        // beats a hard phase-1 NoPr failure with a misleading `/aida-pr` hint —
+        // "a paused spec beats a guessed one". trace:BUG-462 | ai:claude
+        .or_else(|| {
+            if has_options_block(trimmed) {
+                questions.last().cloned()
+            } else {
+                None
+            }
+        })?;
     let recommendation = recommendation_line(trimmed).unwrap_or_else(|| {
         "review the punted analysis and choose the implementation path".to_string()
     });
@@ -31188,14 +31185,103 @@ fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt
     })
 }
 
-fn first_question_sentence(text: &str) -> Option<String> {
+/// Decision-fork phrasing markers for a single (already lowercased) question
+/// sentence. Broadened under BUG-462 beyond the original BUG-354/BUG-374 set so
+/// novel phrasings ("which way", "do you want", "would you like") still route to
+/// the advisor tier. Kept narrow enough that an ordinary summary question
+/// ("does the parser handle aliases?") does not match. trace:BUG-462 | ai:claude
+fn question_has_fork_marker(question_lower: &str) -> bool {
+    const QUESTION_FORK_MARKERS: &[&str] = &[
+        "which path",
+        "which option",
+        "which approach",
+        "which one",
+        "which way",
+        "which direction",
+        "do you want",
+        "would you like",
+        "want me to",
+        "should i",
+        "should we",
+        "how would you like",
+        "how should",
+        "need you to choose",
+        "go with",
+        "do you prefer",
+        "your call",
+        "please confirm",
+        "confirm and i'll proceed",
+        "confirm and i’ll proceed",
+        "confirm and i will proceed",
+        "confirm this path",
+        "confirm the path",
+        "confirm option",
+        "confirm approach",
+    ];
+    QUESTION_FORK_MARKERS
+        .iter()
+        .any(|marker| question_lower.contains(marker))
+}
+
+/// Every `?`-terminated sentence in `text`, whitespace-collapsed. Splits on
+/// `.`/`!`/`?` so a fork question buried after rhetorical asides is still
+/// surfaced (BUG-462 scans all of them, not just the first). trace:BUG-462
+fn all_question_sentences(text: &str) -> Vec<String> {
     let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let question_idx = collapsed.find('?')?;
-    let start = collapsed[..question_idx]
-        .rfind(['.', '!', '\n'])
-        .map(|i| i + 1)
-        .unwrap_or(0);
-    Some(collapsed[start..=question_idx].trim().to_string()).filter(|s| !s.is_empty())
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    // `?`/`.`/`!` are ASCII, so every index used here is a char boundary.
+    for (i, b) in collapsed.bytes().enumerate() {
+        match b {
+            b'?' => {
+                let sentence = collapsed[start..=i]
+                    .trim_start_matches(['.', '!', '?', ' '])
+                    .trim();
+                if !sentence.is_empty() {
+                    out.push(sentence.to_string());
+                }
+                start = i + 1;
+            }
+            b'.' | b'!' => start = i + 1,
+            _ => {}
+        }
+    }
+    out
+}
+
+/// True when `text` presents an enumerated *choice* — two or more lines that
+/// start with a letter-labelled option (`Option A`, `A)`, `B:`). Deliberately
+/// LETTER-only (not `1.`/`2.`): digit labels far more often enumerate completed
+/// *steps* in a summary than mutually-exclusive choices, and the fallback fires
+/// only when no phrase marker matched, so a numbered accomplishments list with a
+/// trailing rhetorical question must not read as a fork. Line-anchored so inline
+/// version strings like `v1.2.0` don't count. trace:BUG-462 | ai:claude
+fn has_options_block(text: &str) -> bool {
+    let mut enumerated = 0usize;
+    for raw in text.lines() {
+        // strip a leading markdown bold/bullet so "- **A)** ..." still counts
+        let line = raw
+            .trim_start()
+            .trim_start_matches(['-', '*', ' '])
+            .trim_start_matches("**");
+        if line.to_ascii_lowercase().starts_with("option ") || starts_with_letter_label(line) {
+            enumerated += 1;
+        }
+    }
+    enumerated >= 2
+}
+
+/// A single letter (`A`–`H`, any case) followed by `)`, `.`, or `:` — the start
+/// of a letter-labelled option line. trace:BUG-462 | ai:claude
+fn starts_with_letter_label(line: &str) -> bool {
+    let mut chars = line.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    let Some(sep) = chars.next() else {
+        return false;
+    };
+    matches!(first, 'A'..='H' | 'a'..='h') && matches!(sep, ')' | '.' | ':')
 }
 
 fn recommendation_line(text: &str) -> Option<String> {
@@ -41428,6 +41514,61 @@ mod bug_354_text_question_classifier_tests {
     fn no_question_mark_does_not_classify() {
         let text = "My recommendation is B first. I will proceed with that path.";
         assert!(pending_text_question_from_result_text(text).is_none());
+    }
+
+    #[test]
+    fn which_way_do_you_want_to_go_classifies_as_punt() {
+        // BUG-462: the TASK-457 validation drain — the headless implementer hit
+        // a real strategic fork, presented two options, and ended with "Which
+        // way do you want to go?". The pre-BUG-462 marker list (which path /
+        // do you want me to / want me to) missed this exact phrasing, so the
+        // run fell through to a phase-1 NoPr failure instead of advisor routing.
+        let text = "This is onboarding feature work during the bugs-before-marketing phase. \
+                    A: implement the .antigravity scaffolding now. B: capture the corrected \
+                    understanding and revisit when onboarding is in-season. \
+                    I recommend B. Which way do you want to go?";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("'which way do you want to go' fork must classify (BUG-462)");
+        assert!(punt.detail.contains("Which way do you want to go?"));
+        assert!(punt.lean.contains("recommend"));
+    }
+
+    #[test]
+    fn fork_question_after_a_rhetorical_aside_classifies() {
+        // BUG-462: scan ALL question sentences, not just the first `?`. Here the
+        // first question is a rhetorical aside; the operative fork question comes
+        // later and must still be found.
+        let text = "Does that make sense? There are two paths. Should we split this \
+                    into two passes or do it in one? I lean toward one pass.";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("buried fork question must classify (BUG-462)");
+        assert!(punt.detail.contains("Should we split this"));
+    }
+
+    #[test]
+    fn novel_question_with_letter_options_block_classifies() {
+        // BUG-462: options-block fallback — even when the question dodges every
+        // phrase marker, a letter-labelled choice block makes the fork explicit.
+        let text = "Two ways to model this.\nA) inline the helper\nB) extract a module\n\nHow do we land it?";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("letter-option block + question must classify (BUG-462)");
+        assert!(punt.detail.contains("How do we land it?"));
+    }
+
+    #[test]
+    fn numbered_summary_with_rhetorical_question_does_not_classify() {
+        // BUG-462 false-positive guard: a numbered ACCOMPLISHMENTS list (steps,
+        // not choices) with a trailing self-answered question must NOT punt.
+        // Digit labels are excluded from the options-block fallback for exactly
+        // this reason.
+        let text = "Done. Implemented:\n1. parser fix\n2. test added\nDoes everything pass? Yes, all green.";
+        assert!(pending_text_question_from_result_text(text).is_none());
+    }
+
+    #[test]
+    fn all_question_sentences_splits_on_terminators() {
+        let qs = all_question_sentences("First. Is this one? Then more! And another?");
+        assert_eq!(qs, vec!["Is this one?", "And another?"]);
     }
 }
 
