@@ -33,12 +33,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:40:14.110049032Z
-modified_at: 2026-06-06T08:30:39.932213996Z
+modified_at: 2026-06-06T08:30:42.485097175Z
 req_type: Spike
 tags:
 - dev-experience
 - from-advisor
 - needs-design
+- needs-human-input
 - onboarding-flow
 - sandbox
 comments:
