@@ -8,5 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:10:12.292863475Z
-modified_at: 2026-06-06T08:06:36.010733285Z
+modified_at: 2026-06-06T08:06:40.136020446Z
 req_type: Constraint
+comments:
+- id: 019e9bf8-4708-78a1-8e33-0d12ce40b19a
+  author: joe
+  content: 'Resolved (disposition sweep 2026-06-06): adopted + satisfied. AIDA is git-canonical + local-cache with no required SaaS dependency (PostgreSQL/remote are opt-in). Standing constraint, stateless — recording as Completed/adopted.'
+  created_at: 2026-06-06T08:06:40.136020446Z
+  modified_at: 2026-06-06T08:06:40.136020446Z
