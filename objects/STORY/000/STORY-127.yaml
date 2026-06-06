@@ -73,12 +73,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   Build SCOPE B only — the 4 runtime anti-pattern detectors (aida pull no-op, git pull no-op, release-with-unmerged-PR, session-end-with-cross-role-queue). Each is a single git/queue/lease query. DEFER Scope A (audit every skill's next-steps block) — handle incrementally via the existing child point-fixes. Split accordingly.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T01:00:30.611818790Z
-modified_at: 2026-06-06T13:53:20.505263565Z
+modified_at: 2026-06-06T21:43:38.754466044Z
 req_type: Story
 tags:
 - cognitive-overhead
@@ -109,3 +109,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): Build SCOPE B only — the 4 runtime anti-pattern detectors (aida pull no-op, git pull no-op, release-with-unmerged-PR, session-end-with-cross-role-queue). Each is a single git/queue/lease query. DEFER Scope A (audit every skill''s next-steps block) — handle incrementally via the existing child point-fixes. Split accordingly.'
   created_at: 2026-06-06T13:53:11.413484408Z
   modified_at: 2026-06-06T13:53:11.413484408Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T21:43:38.754466044Z
+  completion_sha: b63403f2e73569673839d4d867b0a5119b236147
