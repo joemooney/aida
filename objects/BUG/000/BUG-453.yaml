@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T23:39:40.321213715Z
-modified_at: 2026-06-05T23:39:40.321213715Z
+modified_at: 2026-06-06T03:45:08.105299649Z
 req_type: Bug
 tags:
 - autonomy
@@ -29,3 +29,9 @@ tags:
 - reliability
 - severity:major
 - watchdog
+comments:
+- id: 019e9b08-d609-7961-b953-39b8ab535253
+  author: joe
+  content: Commit a3b3f00e9 references this requirement
+  created_at: 2026-06-06T03:45:08.105299649Z
+  modified_at: 2026-06-06T03:45:08.105299649Z
