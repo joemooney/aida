@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:11.174903400Z
-modified_at: 2026-06-06T06:09:37.341656200Z
+modified_at: 2026-06-06T06:09:40.733711794Z
 req_type: Task
 tags:
 - agent-integration
@@ -53,3 +53,8 @@ comments:
     Until resolved, the scaffolding shape is unknown. Tag as needing-research before implementation can proceed. Compose with STORY-407's setup doc (docs/agents/antigravity-mcp-setup.md) which now has empirical evidence of Antigravity's directory expectations.
   created_at: 2026-05-22T18:45:40.495966442Z
   modified_at: 2026-05-22T18:45:40.495966442Z
+- id: 019e9b8d-2b7d-7ed2-bd1c-20ebf059e1d2
+  author: joe
+  content: 'Validation-drain disposition (2026-06-05): headless implementer correctly hesitated — this is onboarding FEATURE work during the bugs-before-marketing phase (project_bugs_before_marketing_phase). Not a defect; deferring until onboarding work is in-season. Unparked Needs Attention -> Approved. The drain exposed BUG-462 (advisor-tier not consulted on clean-exit-with-question).'
+  created_at: 2026-06-06T06:09:40.733711794Z
+  modified_at: 2026-06-06T06:09:40.733711794Z
