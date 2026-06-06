@@ -15345,5 +15345,43 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Normalize to a SINGLE CANONICAL edge: 'rel add --type parent FROM TO' writes FROM--Child-->TO (matching 'aida add --parent'), dedup edges, and FIX the contradicting RelationshipType doc comments so stored direction matches the docs. Then --tree walks one edge type and BUG-448's view-layer union can retire. Architecture-adjacent — keep the GitHub-argv/behavior stable; add migration/back-compat for existing inverted Parent edges (or a one-time normalize pass).
-clock: 1546
+- id: 019e9d83-5923-7412-b6cd-563080301b31
+  target_id: 019e1fdb-9656-79d1-8c4e-5e858c69279b
+  author: aida
+  node_id: '1'
+  lamport: 1547
+  timestamp: 2026-06-06T15:18:11.491069937Z
+  kind: !SetDescription
+    description: |
+      Today aida queue work --help describes its pre-pickup pull as: 'By default queue work pulls the orphan-store branch first.' Only the orphan store. The code branch (main / default) is NOT pulled, so the new worktree branches off whatever local main was at the time queue work ran — potentially stale by N commits from origin.
+
+      This is Pattern B in the 2026-05-13 divergent-branches retrospective (see feedback_fetch_before_commit memory):
+
+      - Pattern A: local main diverged from origin/main → recovery handled by TASK-97 (aida pull --autorebase) and TASK-98 (/aida-commit precheck).
+      - Pattern B: session's branch has stale base; main moved forward while session ran (or before session started). NOT diverged from origin — just behind. PRs eventually flag 'N commits behind main'; integration risk grows over session lifetime.
+
+      Closing the start-of-session half of Pattern B: when aida queue work creates a new worktree, pull code first too.
+
+      Implementation sketch:
+
+      1. Before creating the worktree, run git pull (with rebase or ff-only — see TASK-97's --autorebase work) on the default branch in the main repo
+      2. THEN create the worktree off the freshly-updated HEAD
+      3. Surface 'pulled N new commits from origin/main' in the queue-work pre-launch summary
+      4. Honor existing --no-pull flag to skip both store AND code pulls (today --no-pull only skips store)
+      5. If the code pull fails (divergent — Pattern A), abort queue work with the recovery hint and don't create a worktree on a stale base
+
+      Composes with TASK-97 (aida pull --autorebase): once that lands, queue work's code pull benefits from autorebase too.
+
+      ## Acceptance
+
+      - [ ] aida queue work pulls the code branch in addition to the orphan store
+      - [ ] --no-pull skips both pulls (today it only skips store)
+      - [ ] Pre-launch summary reports 'pulled N commits from origin/<branch>'
+      - [ ] On code-pull failure (divergence): abort with recovery hint, don't create worktree
+      - [ ] aida queue work --help text updated to reflect the new behavior
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Build the MINIMAL slice: a 'base is N behind origin/main' WARNING at worktree creation (no auto-pull), pointing at 'aida rebase'. Closes the visibility half of the original 2026-05-13 pain cheaply. Do NOT auto-pull (risks surprising the worktree) — the orchestrator drain (fresh main per-phase) + the rebase verb already own divergence handling.
+clock: 1547
 node_id: '1'
