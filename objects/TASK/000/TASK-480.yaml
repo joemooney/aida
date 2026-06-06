@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:00:19.174364070Z
-modified_at: 2026-05-24T06:37:46.427655684Z
+modified_at: 2026-06-06T08:34:08.013073102Z
 req_type: Task
 tags:
 - aida:review
@@ -47,3 +47,9 @@ tags:
 - gitignored-paths
 - reviewer
 - substrate-as-bouncer
+comments:
+- id: 019e9c11-6c0d-77c1-b76e-faf987e758a2
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded substrate-as-bouncer reviewer gate — classify changed paths SOURCE vs INTERMEDIATE and refuse intermediate-only diffs; precise acceptance incl. regression tests, aligns with phase priority (reliability gate), no open decision.
+  created_at: 2026-06-06T08:34:08.013073102Z
+  modified_at: 2026-06-06T08:34:08.013073102Z
