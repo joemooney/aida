@@ -82,7 +82,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:37:15.060027836Z
-modified_at: 2026-05-31T04:45:21.380883916Z
+modified_at: 2026-06-06T08:31:27.470166769Z
 req_type: Task
 tags:
 - advisor-discipline
@@ -102,4 +102,9 @@ comments:
   content: 'Triaged 2026-05-30 (blocked-queue sweep): the filing-time discipline is now captured as the advisor memory feedback_verify_acceptance_matches_primary_caller (''name the primary caller, walk each acceptance criterion against that environment before filing''), with the 4 documented instances. Immediate value delivered. The remaining slice — propagating it into the scaffolding-pack discipline templates (TASK-311 is tagged scaffolding-pack) — is a build/commit task, deferred per the bugs-first phase; revisit when next touching the discipline pack. Dequeued from the active queue; kept as Approved backlog for the propagation slice.'
   created_at: 2026-05-31T04:45:15.653321692Z
   modified_at: 2026-05-31T04:45:15.653321692Z
+- id: 019e9c0e-f8ee-7f51-bf4b-40ee351ce1fb
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded advisor-discipline codification (deferred:post-stability, but the work itself is well-specified and non-design-open) — add a "name primary caller(s), verify each criterion against their environment" step to the aida-req skill template, create the scaffolding-pack memory feedback_spec_criteria_environment_check.md, extend the spec-shaping discipline doc, and cross-reference the four origin specs; all four acceptance items are concrete file edits, no decision pending.
+  created_at: 2026-06-06T08:31:27.470166769Z
+  modified_at: 2026-06-06T08:31:27.470166769Z
 human_only: true
