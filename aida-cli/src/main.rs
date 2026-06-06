@@ -4900,6 +4900,147 @@ fn has_aida_runtime_deny_pattern(content: &str) -> bool {
     content.lines().any(|line| line.trim() == ".aida/*")
 }
 
+/// The canonical set of top-level paths `aida init` writes as scaffolding.
+/// This is the ALLOW-LIST for the init self-commit (TASK-631) — the commit
+/// stages exactly these and NEVER a bare `git add .`, so an `aida init` run
+/// inside an existing repo with unrelated WIP can't sweep the user's changes
+/// into the "chore: scaffold AIDA" commit.
+///
+/// Out of scope by design: user content, the `.aida-store/` worktree (it's a
+/// separate orphan branch with its own commits), `.aida/cache.db` and other
+/// runtime state (gitignored by the deny-by-default `.aida/*` rule). Only
+/// `.aida/config.toml` is the tracked exception under `.aida/`.
+/// trace:TASK-631 | ai:claude
+fn init_scaffold_candidate_paths() -> &'static [&'static str] {
+    &[
+        ".gitignore",
+        ".aida/config.toml",
+        ".mcp.json",
+        "CLAUDE.md",
+        "AGENTS.md",
+        ".claude",
+        ".codex",
+        "docs/plans",
+        "docs/aida",
+        "docs/agents",
+        "docs/extending-skills.md",
+        "docs/competitive-analysis",
+    ]
+}
+
+/// Filter [`init_scaffold_candidate_paths`] to the ones that actually exist
+/// on disk under `root`. Pure (modulo filesystem reads) so it can be unit
+/// tested against a temp dir. Returns paths relative to `root`, suitable for
+/// passing straight to `git add`. trace:TASK-631 | ai:claude
+fn init_scaffold_commit_paths(root: &std::path::Path) -> Vec<String> {
+    init_scaffold_candidate_paths()
+        .iter()
+        .filter(|p| root.join(p).exists())
+        .map(|p| p.to_string())
+        .collect()
+}
+
+/// Decide whether init should auto-commit its scaffolding (`Some(true)`),
+/// never commit (`Some(false)`), or prompt the operator (`None`). Pure so the
+/// auto-vs-prompt branch is unit-testable without a real TTY.
+///
+/// Auto when non-interactive (no TTY: orchestrator / agent / CI / piped) —
+/// same non-TTY-fast-path discipline as BUG-422/BUG-407. On a TTY we return
+/// `None` so the caller prompts (default-Y) and an operator with unrelated
+/// WIP can decline. An explicit `AIDA_INIT_COMMIT_SCAFFOLD` env override wins
+/// over the TTY heuristic in both directions (`1`/`true`/`yes`/`on` → auto,
+/// `0`/`false`/`no`/`off` → never). trace:TASK-631 | ai:claude
+fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -> Option<bool> {
+    if let Some(raw) = env_override {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => return Some(true),
+            "0" | "false" | "no" | "off" => return Some(false),
+            _ => {}
+        }
+    }
+    if stdin_is_tty {
+        // TTY → caller should prompt (default-Y), not auto-commit.
+        None
+    } else {
+        // Non-interactive → auto-commit.
+        Some(true)
+    }
+}
+
+/// After scaffolding is on disk, commit init's OWN created paths so a fresh
+/// clone / session worktree inherits the scaffolding without the operator
+/// having to remember the manual `git add . && git commit` step (BUG-445,
+/// BUG-433, BUG-73 family). Auto-commits when non-interactive; prompts
+/// (default-Y) on a TTY after printing the exact paths it will stage.
+///
+/// Scoped to [`init_scaffold_commit_paths`] — never `git add .`. Returns
+/// `Ok(true)` when a commit was made (so the caller can dedup the onboarding
+/// "commit scaffolding" task), `Ok(false)` otherwise. Best-effort: a git
+/// failure here is a soft note, not a fatal init error. trace:TASK-631 | ai:claude
+fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
+    use aida_core::git_ops;
+
+    let paths = init_scaffold_commit_paths(root);
+    if paths.is_empty() {
+        return Ok(false);
+    }
+
+    let stdin_is_tty = std::io::stdin().is_terminal();
+    let env_override = std::env::var("AIDA_INIT_COMMIT_SCAFFOLD").ok();
+    let decision = should_auto_commit_scaffold(stdin_is_tty, env_override.as_deref());
+
+    let proceed = match decision {
+        Some(true) => true,
+        Some(false) => false,
+        None => {
+            // TTY: show what will be staged, then prompt default-Y.
+            println!();
+            println!(
+                "  {} will stage these AIDA scaffolding paths:",
+                "init".bold()
+            );
+            for p in &paths {
+                println!("    {}", p.dimmed());
+            }
+            prompt_yes_no("  Commit the AIDA scaffolding now? [Y/n] ", true).unwrap_or(false)
+        }
+    };
+
+    if !proceed {
+        println!(
+            "  {} scaffolding left uncommitted — commit it with `git add {} && git commit -m 'chore: scaffold AIDA'`.",
+            "Note:".dimmed(),
+            paths.join(" "),
+        );
+        return Ok(false);
+    }
+
+    let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+    if let Err(e) = git_ops::add(root, &path_refs) {
+        eprintln!(
+            "  {} could not stage scaffolding paths: {}",
+            "Note:".dimmed(),
+            e
+        );
+        return Ok(false);
+    }
+    match git_ops::commit(root, "chore: scaffold AIDA") {
+        Ok(true) => {
+            println!(
+                "  {} committed AIDA scaffolding (chore: scaffold AIDA)",
+                "Done".green()
+            );
+            Ok(true)
+        }
+        // Nothing staged was new (already tracked + unchanged). Not an error.
+        Ok(false) => Ok(false),
+        Err(e) => {
+            eprintln!("  {} could not commit scaffolding: {}", "Note:".dimmed(), e);
+            Ok(false)
+        }
+    }
+}
+
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
 /// commands, hooks, MCP integration, etc. Called by both centralized and
 /// distributed init paths after their respective storage setup is complete.
@@ -5240,13 +5381,26 @@ fn complete_init_scaffolding(
     }
     println!();
 
+    // TASK-631: commit init's OWN scaffolding now that every scaffolded path
+    // is on disk — auto when non-interactive, prompt default-Y on a TTY,
+    // scoped to init-created paths (never `git add .`). This dissolves the
+    // onboarding "remember to commit the scaffolding" footgun (BUG-445) and
+    // the downstream "fresh clone / session worktree lacks the scaffolding"
+    // failure (BUG-433, BUG-73 family). trace:TASK-631 | ai:claude
+    let scaffolding_committed = commit_init_scaffolding(root).unwrap_or(false);
+
     // trace:TASK-510 | ai:antigravity
-    if let Err(e) = enqueue_initial_scaffold_task(root, &db_path) {
-        eprintln!(
-            "  {} could not enqueue initial scaffolding task: {}",
-            "Note:".dimmed(),
-            e
-        );
+    // DEDUP (TASK-631): when init committed the scaffolding itself, skip
+    // enqueuing the "Commit AIDA scaffolding" onboarding task — the first
+    // user shouldn't be told to do an already-done step.
+    if !scaffolding_committed {
+        if let Err(e) = enqueue_initial_scaffold_task(root, &db_path) {
+            eprintln!(
+                "  {} could not enqueue initial scaffolding task: {}",
+                "Note:".dimmed(),
+                e
+            );
+        }
     }
 
     Ok(())
@@ -5287,7 +5441,7 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
     let (requirement_uuid, spec_id_display) = if let Some(last) = store.requirements.last_mut() {
         let spec_id = last.spec_id.as_deref().unwrap_or("TASK-1").to_string();
         last.description = format!(
-            "After aida init, the scaffolded files are untracked. Run: git add . && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) ensure only the right files get committed. Run 'aida queue done {}' after the commit lands.",
+            "After aida init, the scaffolded files are untracked. Stage only AIDA's own paths (never `git add .` in a repo with unrelated work): git add .gitignore .aida/config.toml .mcp.json CLAUDE.md AGENTS.md .claude docs/plans docs/aida && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) keep runtime state out. Run 'aida queue done {}' after the commit lands.",
             spec_id
         );
 
@@ -5386,6 +5540,96 @@ mod task_510_init_scaffold_task_tests {
             1,
             "Idempotency failed: task was duplicated"
         );
+    }
+}
+
+// trace:TASK-631 | ai:claude
+#[cfg(test)]
+mod task_631_init_self_commit_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn commit_paths_filters_to_existing_only_and_never_bare_dot() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        // Nothing written yet → empty list.
+        assert!(init_scaffold_commit_paths(root).is_empty());
+
+        // Write a representative subset of init-owned paths.
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".aida/config.toml"), "x").unwrap();
+        std::fs::write(root.join(".gitignore"), "x").unwrap();
+        std::fs::write(root.join("CLAUDE.md"), "x").unwrap();
+        std::fs::create_dir_all(root.join(".claude/skills")).unwrap();
+        std::fs::write(root.join(".claude/skills/foo.md"), "x").unwrap();
+        std::fs::create_dir_all(root.join("docs/aida")).unwrap();
+
+        // An UNRELATED user file must NOT appear in the staged set.
+        std::fs::write(root.join("user_wip.rs"), "x").unwrap();
+
+        let paths = init_scaffold_commit_paths(root);
+        assert!(paths.contains(&".aida/config.toml".to_string()));
+        assert!(paths.contains(&".gitignore".to_string()));
+        assert!(paths.contains(&"CLAUDE.md".to_string()));
+        assert!(paths.contains(&".claude".to_string()));
+        assert!(paths.contains(&"docs/aida".to_string()));
+
+        // Candidates that were never written are filtered out.
+        assert!(!paths.contains(&"AGENTS.md".to_string()));
+        assert!(!paths.contains(&".codex".to_string()));
+
+        // CRITICAL invariant: never a bare "." and never the user's WIP.
+        assert!(!paths.iter().any(|p| p == "."));
+        assert!(!paths.iter().any(|p| p == "user_wip.rs"));
+
+        // Every staged path is one of the known candidates.
+        let candidates = init_scaffold_candidate_paths();
+        for p in &paths {
+            assert!(
+                candidates.contains(&p.as_str()),
+                "staged path {p} is not in the init allow-list"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_vs_prompt_decision() {
+        // Non-interactive (no TTY) → auto-commit.
+        assert_eq!(should_auto_commit_scaffold(false, None), Some(true));
+        // Interactive (TTY) → prompt (None).
+        assert_eq!(should_auto_commit_scaffold(true, None), None);
+
+        // Env override forces auto even on a TTY.
+        assert_eq!(
+            should_auto_commit_scaffold(true, Some("1")),
+            Some(true),
+            "env=1 should force auto"
+        );
+        assert_eq!(should_auto_commit_scaffold(true, Some("true")), Some(true));
+        assert_eq!(should_auto_commit_scaffold(true, Some("YES")), Some(true));
+        assert_eq!(should_auto_commit_scaffold(true, Some(" on ")), Some(true));
+
+        // Env override forces never even when non-interactive.
+        assert_eq!(
+            should_auto_commit_scaffold(false, Some("0")),
+            Some(false),
+            "env=0 should force never"
+        );
+        assert_eq!(
+            should_auto_commit_scaffold(false, Some("false")),
+            Some(false)
+        );
+        assert_eq!(should_auto_commit_scaffold(false, Some("no")), Some(false));
+        assert_eq!(should_auto_commit_scaffold(false, Some("off")), Some(false));
+
+        // Unrecognized env value falls through to the TTY heuristic.
+        assert_eq!(
+            should_auto_commit_scaffold(false, Some("maybe")),
+            Some(true)
+        );
+        assert_eq!(should_auto_commit_scaffold(true, Some("maybe")), None);
     }
 }
 
