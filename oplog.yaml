@@ -13521,5 +13521,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Advance ONLY the in-flight children now — STORY-82 (modernize the 7 existing tools), STORY-399 (structuredContent), STORY-401 (stable error shapes). RE-SCOPE the 30-new-tool fan-out as deferred post-stability (it's the over-engineering the phase warns against). EPIC stays open as tracker. Refresh the gap count first: many channels (findings/claim/directive/brief tools) already exist beyond the original 7.
-clock: 1487
+- id: 019e9d28-eeba-7230-b94e-4520884785d5
+  target_id: 019e1ccf-363a-7271-ac43-9543f61613a1
+  author: aida
+  node_id: '1'
+  lamport: 1488
+  timestamp: 2026-06-06T13:39:26.010272620Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1488
 node_id: '1'
