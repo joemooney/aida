@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:20:04.332126651Z
-modified_at: 2026-06-05T14:20:04.332126651Z
+modified_at: 2026-06-06T08:14:07.333282617Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e582b-2ed1-7b23-9358-dafcb36f73ce
   created_at: 2026-06-05T14:20:08.103016300Z
+comments:
+- id: 019e9bff-19e5-72c0-96ee-e36a24a33fa0
+  author: joe
+  content: Disposition sweep 2026-06-06 — ARCHIVED (parked, recoverable). STORY-446 polish (shelved count -> aida usage telemetry). Low value, no demand. Parked.
+  created_at: 2026-06-06T08:14:07.333282617Z
+  modified_at: 2026-06-06T08:14:07.333282617Z
