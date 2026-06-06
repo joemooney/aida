@@ -95,6 +95,7 @@ aida fetch                             # Read-only two-leg refresh of remote ref
 aida fetch --code-only --quiet         # Background-safe code-leg-only refresh
 aida db reconcile-status [--spec ID] [--since REF] [--dry-run]  # Replay Done→Completed bumps the pull missed (TASK-226)
 aida cache status                      # Compare cache HEAD vs git HEAD
+aida memories check [--verbose] [--json]   # Drift between local memory pack and binary's embedded master; fix via init --with-memories --refresh (STORY-410)
 aida plan verify <file> [--fix]        # Lint a plan: drifted refs, missing files/sections (--fix rewrites refs) (TASK-93)
 aida plan helpers <spec> [--append <file>]  # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
 aida ultraplan <spec> [--stdout|--json]     # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
@@ -241,6 +242,8 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 ### MCP server
 
 `aida mcp-serve` exposes requirements as MCP tools and resources for native Claude Code integration via `.mcp.json`. Tools: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `add_relationship`, `query_graph`, `list_features`, `history`. Resources: `aida://project/summary`, `aida://requirements/tree`. The MCP server is the highest-leverage surface for the agent-context vision.
+
+The **7 core tool schemas mirror the current CLI surface** (STORY-82): the status/type enums are the full taxonomy; `list_requirements` filters on `tags`/`batch`/`parent`/`role`(`for`)/`in_flight` like `aida list`; `show_requirement` appends git linkage by default (`include_git`/`verbose`, matching `aida show`); `add_requirement` accepts `parent`/`feature`/`owner`; `update_requirement` edits `title`/`type`/`priority`/`tags`/`parent` (status transitions stay gated — approved/planned are advisor-only, completed is merge-driven); `search_requirements` narrows by `type`/`status`. When you add a new CLI filter or field, mirror it onto the matching MCP tool schema + handler so the two surfaces don't drift. trace:STORY-82
 
 Long-running MCP servers self-respawn after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA for the same version. The current MCP response is flushed first; the next request runs on the new binary. If a client still appears stale, kill that agent's `aida mcp-serve` process and let the MCP client respawn it.
 

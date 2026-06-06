@@ -101,6 +101,34 @@ Based on the evaluation, offer:
 - **Link**: Suggest relationships to existing requirements
 - **Accept**: Keep as-is and approve
 
+### Step 6: Verify Acceptance Criteria Against the Primary Caller(s)
+
+Before treating a spec's acceptance criteria as done, **name the primary
+caller(s)** — the feature's top 1-3 invocation paths:
+
+- user-typed CLI in an interactive terminal (TTY)
+- a skill invoked via Claude Code's Bash tool (**always non-TTY**)
+- a git or Claude Code hook (non-interactive)
+- the MCP server (a different surface than the CLI)
+- a headless drive (`claude -p`) vs an interactive session
+
+For **each acceptance criterion**, ask: *does this criterion hold in those
+caller environments?* A criterion is **environment-coupled** when its truth
+depends on the runtime context — TTY vs piped stdout, headless vs
+interactive, first-time vs returning user, solo vs multi-node, same vs
+cross-worktree. If a criterion would *degrade the feature in its primary
+caller's environment*, the criterion is wrong — fix it **before filing**, not
+at implementer design-checkpoint.
+
+Worked failure: a criterion reading *"non-TTY mode degrades to a single-line
+summary"* on a feature whose primary caller is a skill (always non-TTY) would
+make the feature never render in its own main use case. Naming the caller
+first catches that at filing time.
+
+See `docs/aida/discipline/session-discipline.md` →
+"Verify acceptance criteria against the primary caller" for the full rule and
+the four worked examples that surfaced it.
+
 ## CLI Reference
 
 ```bash

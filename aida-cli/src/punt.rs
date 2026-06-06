@@ -250,6 +250,76 @@ pub fn read_ledger(project_root: &Path) -> Vec<PuntRecord> {
         .collect()
 }
 
+// --- Autonomy maturity roll-up (TASK-340) -----------------------------------
+//
+// The honest maturity signal the operator asked for: how often a drain had to
+// stop and ask a human. A `resolution_path == "escalated-to-human"` punt record
+// is exactly one such intervention. The COUNT trending toward zero as the
+// autonomy machinery matures (--zen, headless implementer, orchestrator
+// hardening) is the clean signal — unlike a raw duration fraction, it is NOT
+// polluted by human-availability latency (an overnight wait inflates "waiting"
+// without the system being any less mature).
+//
+// Punt records carry no explicit drain id, so we roll up by the UTC calendar
+// day the escalation was raised — the "rolled up per day" view the spec calls
+// for, and the dated grain that makes the across-drains trend readable. This
+// is a deliberate approximation (one day ≈ one drain session for the typical
+// overnight/at-keyboard cadence); the duration fraction is skipped entirely
+// (operator decision 2026-06-06) until it is actually wanted.
+// trace:TASK-340 | ai:claude
+
+/// `resolution_path` slug for a punt that the headless advisor tier could not
+/// resolve and handed back to a human — the unit of "human intervention" the
+/// autonomy-maturity metric counts. trace:TASK-340 | ai:claude
+pub const RESOLUTION_ESCALATED_TO_HUMAN: &str = "escalated-to-human";
+
+/// One day's worth of human-intervention activity, derived from the punt
+/// ledger. `date` is the UTC calendar day; `interventions` is the number of
+/// escalate-to-human punt records raised that day. trace:TASK-340 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AutonomyDay {
+    /// UTC calendar day, `YYYY-MM-DD`.
+    pub date: String,
+    /// Count of escalate-to-human punt records raised that day.
+    pub interventions: usize,
+}
+
+/// Whether a punt record represents a human intervention (an escalation a
+/// human had to resolve). Both the `resolution_path` slug and STORY-325's
+/// `decision == "escalated"` field are honored so older and newer record
+/// shapes both count. trace:TASK-340 | ai:claude
+pub fn is_human_intervention(r: &PuntRecord) -> bool {
+    r.resolution_path == RESOLUTION_ESCALATED_TO_HUMAN || r.decision.as_deref() == Some("escalated")
+}
+
+/// Roll up escalate-to-human punt records into a per-day intervention count,
+/// newest day first. Pure over a slice of records so it is unit-testable
+/// against fixture data. Days with zero escalations are omitted (the ledger
+/// only records decisions, not idle time). trace:TASK-340 | ai:claude
+pub fn human_interventions_by_day(records: &[PuntRecord]) -> Vec<AutonomyDay> {
+    use std::collections::BTreeMap;
+    let mut by_day: BTreeMap<String, usize> = BTreeMap::new();
+    for r in records.iter().filter(|r| is_human_intervention(r)) {
+        let day = r.timestamp.format("%Y-%m-%d").to_string();
+        *by_day.entry(day).or_insert(0) += 1;
+    }
+    // BTreeMap iterates oldest-first by string date; reverse for newest-first.
+    by_day
+        .into_iter()
+        .rev()
+        .map(|(date, interventions)| AutonomyDay {
+            date,
+            interventions,
+        })
+        .collect()
+}
+
+/// Total escalate-to-human interventions across all supplied records.
+/// trace:TASK-340 | ai:claude
+pub fn total_human_interventions(records: &[PuntRecord]) -> usize {
+    records.iter().filter(|r| is_human_intervention(r)).count()
+}
+
 // --- Orchestrator punt-signal handshake (STORY-276) -------------------------
 //
 // A headless `--auto-complete --no-human=both` implementer that hits a
@@ -540,6 +610,82 @@ mod tests {
             err.contains("design-fork"),
             "error should list valid: {err}"
         );
+    }
+
+    // --- Autonomy maturity roll-up (TASK-340) ---------------------------
+
+    /// Build a minimal punt record on `day` (`YYYY-MM-DD`) with the given
+    /// resolution path.
+    fn rec(day: &str, resolution_path: &str) -> PuntRecord {
+        use chrono::TimeZone;
+        let parts: Vec<u32> = day.split('-').map(|p| p.parse().unwrap()).collect();
+        let ts = Utc
+            .with_ymd_and_hms(parts[0] as i32, parts[1], parts[2], 12, 0, 0)
+            .unwrap();
+        PuntRecord {
+            timestamp: ts,
+            spec: "TASK-1".to_string(),
+            category: PuntCategory::DesignFork,
+            detail: "fixture".to_string(),
+            lean: None,
+            raised_by: Some("implementer".to_string()),
+            resolution_path: resolution_path.to_string(),
+            classification: None,
+            escalation_reason: None,
+            answer: None,
+            answered_by: None,
+            decision: None,
+            principle_link: None,
+            calibration_pair: None,
+            paused_at: None,
+            resolved_at: None,
+        }
+    }
+
+    #[test]
+    fn human_interventions_roll_up_per_day_newest_first() {
+        let records = vec![
+            rec("2026-06-01", "escalated-to-human"),
+            rec("2026-06-01", "advisor-resolved"), // not an intervention
+            rec("2026-06-01", "escalated-to-human"),
+            rec("2026-06-03", "escalated-to-human"),
+            rec("2026-06-02", "punted"), // not an intervention
+        ];
+        let days = human_interventions_by_day(&records);
+        assert_eq!(
+            days,
+            vec![
+                AutonomyDay {
+                    date: "2026-06-03".to_string(),
+                    interventions: 1,
+                },
+                AutonomyDay {
+                    date: "2026-06-01".to_string(),
+                    interventions: 2,
+                },
+            ],
+            "newest day first; only escalate-to-human counts; \
+             zero-escalation days omitted"
+        );
+        assert_eq!(total_human_interventions(&records), 3);
+    }
+
+    #[test]
+    fn decision_escalated_also_counts_as_intervention() {
+        // STORY-325 record shape: resolution_path may not be the slug but
+        // decision == "escalated" still marks a human intervention.
+        let mut r = rec("2026-06-04", "");
+        r.decision = Some("escalated".to_string());
+        assert!(is_human_intervention(&r));
+        let days = human_interventions_by_day(std::slice::from_ref(&r));
+        assert_eq!(days.len(), 1);
+        assert_eq!(days[0].interventions, 1);
+    }
+
+    #[test]
+    fn empty_ledger_has_no_interventions() {
+        assert!(human_interventions_by_day(&[]).is_empty());
+        assert_eq!(total_human_interventions(&[]), 0);
     }
 
     #[test]

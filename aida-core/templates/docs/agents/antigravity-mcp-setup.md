@@ -96,11 +96,11 @@ PASS doc-vs-MCP consistency
 
 ## Response Shape
 
-Current AIDA MCP responses are Path A:
+AIDA MCP responses ship both Path A and Path B (STORY-399):
 - Tools advertise `inputSchema`.
-- Tools advertise `outputSchema`.
-- Runtime tool results return MCP text content envelopes: `content: [{type: "text", text: "..."}]`.
-- Runtime tool results do not yet emit `structuredContent` (STORY-399 tracks Path B).
+- Tools advertise `outputSchema` (Path A, TASK-440).
+- Successful tool results return MCP text content envelopes: `content: [{type: "text", text: "..."}]` (preserved for back-compat).
+- Successful tool results also emit `structuredContent` matching the declared `outputSchema` (Path B, STORY-399).
 
 ## Empirical Tool Invocations by Cluster
 
@@ -174,12 +174,12 @@ As an **Experimental-tier** agent (per STORY-408):
 - **Read operations** via MCP are completely supported and preferred over shell commands: `show_requirement`, `list_requirements`, `list_active_leases`, `list_findings`.
 - **Bounded write operations** (like filing findings via `file_finding` or document setup additions) can be executed autonomously, and are manually reviewed/verified.
 - **Architecture-impacting changes** (e.g. altering CLI protocols, files under `.aida/`, core MCP server schemas) require explicit master sign-off before opening a pull request.
-- Defensively parse text-based envelopes, as Path B structured content is still in progress.
+- Both text envelopes and Path B `structuredContent` are emitted on success (STORY-399); parse either, but text remains the back-compat floor.
 
 ## Current Known Constraints
 
-- `structuredContent` is not emitted yet (STORY-399).
-- Error payloads are human-readable text envelopes rather than structured error schemas (STORY-401).
+- `structuredContent` is emitted on success (Path B, STORY-399) alongside the text envelope.
+- Error payloads carry both a text envelope and a structured `structuredError` object (STORY-401).
 - Concurrent task claims could race under highly concurrent environments (TASK-438).
 
 ## Phase 2: Bounded Writes

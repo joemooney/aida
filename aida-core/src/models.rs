@@ -7015,4 +7015,15 @@ pub struct QueueEntry {
     /// trace:STORY-57 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub for_session: Option<String>,
+    /// Machine fingerprint (hostname) of the clone that added this entry.
+    /// Stamped by the `aida queue add` CLI path. Used to detect the silent
+    /// cross-machine collision hazard when two clones share the BUG-89
+    /// "default" user_id and therefore write the SAME
+    /// `registry/queues/default.yaml` (concurrent commits → orphan-branch
+    /// merge conflict on sync). Optional + serde-default so entries written
+    /// before this field, and entries added through non-CLI paths, round-trip
+    /// cleanly as `None`.
+    // trace:TASK-618 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by_machine: Option<String>,
 }

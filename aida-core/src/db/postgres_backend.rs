@@ -1381,6 +1381,7 @@ impl DatabaseBackend for PostgresBackend {
                 for_role: None,
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             })
             .collect();
 

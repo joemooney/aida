@@ -207,6 +207,32 @@ pub enum ReportCommand {
     },
 }
 
+/// Starter-memory-pack substrate-drift discovery.
+///
+/// The opt-in memory pack (`aida init --with-memories`) ships generic
+/// AIDA-using discipline as Claude Code project memories. The pack grows
+/// over time inside the `aida` binary, but a project that scaffolded it
+/// months ago has no way to learn it's behind — `--refresh` only helps if
+/// you already KNOW to run it. These commands close that discoverability gap.
+// trace:STORY-410 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum MemoriesCommand {
+    /// Compare the local memory pack to this binary's embedded master and
+    /// report drift (missing, stale, edited, up-to-date). Reads only — never
+    /// writes. The fix it recommends is `aida init --with-memories --refresh`.
+    // trace:STORY-410 | ai:claude
+    Check {
+        /// List every item in each category. Default summarizes (max 5 per
+        /// category).
+        #[clap(long, short = 'v')]
+        verbose: bool,
+
+        /// Emit a machine-readable JSON report instead of the text summary.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// Commands for scaffolding management
 #[derive(Subcommand, Debug)]
 pub enum ScaffoldCommand {
@@ -1439,6 +1465,65 @@ pub enum CacheCommand {
     Status,
 }
 
+/// Throwaway sandbox store for drain-testing and scenario play.
+/// The sandbox is an ordinary git-canonical store living under a temp dir; it
+/// is targeted via the `AIDA_STORE` env override, so it never touches the
+/// project's real `aida-store` orphan branch.
+// trace:SPIKE-48 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum SandboxCommand {
+    /// Create a fresh throwaway store and print the `AIDA_STORE=...` export to
+    /// activate it. Idempotent unless `--force` (refuses to clobber a populated
+    /// existing sandbox without it).
+    Create {
+        /// Where to create the sandbox store. Default: a stable per-user temp
+        /// dir (`$TMPDIR/aida-sandbox-<user>`), so re-running points at the
+        /// same playground.
+        #[clap(long)]
+        path: Option<PathBuf>,
+
+        /// Seed a few curated scenario specs (a lifecycle walk + a blocked-by
+        /// chain) so there's something to play with immediately.
+        #[clap(long)]
+        seed: bool,
+
+        /// Recreate even if the target already holds a populated sandbox store.
+        #[clap(long)]
+        force: bool,
+    },
+
+    /// Wipe the sandbox store's contents and re-initialize it empty (or seeded
+    /// with `--seed`). The directory itself is reused.
+    Reset {
+        /// Sandbox store dir (default: the per-user temp sandbox).
+        #[clap(long)]
+        path: Option<PathBuf>,
+
+        /// Re-seed curated scenario specs after the reset.
+        #[clap(long)]
+        seed: bool,
+    },
+
+    /// Delete the sandbox store directory entirely.
+    Destroy {
+        /// Sandbox store dir (default: the per-user temp sandbox).
+        #[clap(long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Print the path of the (default or `--path`) sandbox store and whether it
+    /// exists. With `--export`, print the `AIDA_STORE=...` line to eval.
+    Path {
+        /// Sandbox store dir (default: the per-user temp sandbox).
+        #[clap(long)]
+        path: Option<PathBuf>,
+
+        /// Print a shell `export AIDA_STORE=...` line instead of the bare path.
+        #[clap(long)]
+        export: bool,
+    },
+}
+
 /// Inter-agent mailbox — peer↔peer messaging between agents (distinct from
 /// operator→agent briefs and top-down directives). Hybrid storage: a fast
 /// local layer now, a git-canonical durable digest in a later slice.
@@ -1632,6 +1717,23 @@ pub enum DocCommand {
     Show {
         /// Doc spec id, or any other spec id to walk `--about` references.
         id: String,
+    },
+
+    /// Release-time doc-coverage gate. List specs that reached Completed
+    /// since the previous git tag but have no `aida doc` entry about them
+    /// (no Doc that References them). Warn-only — exits 0 even when gaps
+    /// exist — so it can be wired into the release flow without blocking.
+    // trace:TASK-680 | ai:claude
+    Coverage {
+        /// Treat everything after this git ref/tag as "this release". When
+        /// absent, the most recent `v*` tag is used; if there is no tag, the
+        /// full history is scanned.
+        #[clap(long, value_name = "REF")]
+        since: Option<String>,
+
+        /// Emit the gap list as JSON instead of a human warning block.
+        #[clap(long)]
+        json: bool,
     },
 }
 
@@ -1851,6 +1953,17 @@ pub enum NodeCommand {
         // trace:STORY-43 | ai:claude
         #[clap(long, value_name = "ID", conflicts_with = "id")]
         hijack: Option<String>,
+
+        /// Backfill a node entry into the shared registry for some OTHER
+        /// (typically legacy) clone, then push — WITHOUT touching this
+        /// clone's own identity. The running clone keeps its `.aida/node.toml`
+        /// untouched and no blocks are allocated. Requires explicit `--id`,
+        /// `--hostname`, and `--email` (nothing is inferred from the local
+        /// environment, since the entry is not about this clone). Mutually
+        /// exclusive with `--hijack` and `--force`.
+        // trace:FR-265 | ai:claude
+        #[clap(long, conflicts_with_all = ["hijack", "force"])]
+        remote_only: bool,
     },
 
     /// Remove a node entry from the shared registry. Does not invalidate
@@ -3856,6 +3969,19 @@ pub enum AutonomyCommand {
     // trace:STORY-439 | ai:claude
     #[clap(subcommand)]
     Calibration(CalibrationSubcommand),
+    /// Human-intervention maturity report: how many times drains had to stop
+    /// and ask a human, rolled up per day so the trend is readable. The
+    /// count trending toward zero as the autonomy machinery matures is the
+    /// honest maturity signal.
+    // trace:TASK-340 | ai:claude
+    Report {
+        /// Cap the number of dated rows printed (newest first). Default 30.
+        #[clap(long, value_name = "N", default_value_t = 30)]
+        last: usize,
+        /// Emit a machine-readable JSON object instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Subcommands under `aida autonomy calibration`.
@@ -4994,6 +5120,14 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Cache(CacheCommand),
 
+    /// Throwaway sandbox store for drain-testing / scenario play. Creates a
+    /// discardable git-canonical store under a temp dir; point `aida` at it
+    /// with the printed `AIDA_STORE=...` export so drains and test specs never
+    /// touch the project's real store. `reset` re-seeds, `destroy` removes it.
+    // trace:SPIKE-48 | ai:claude
+    #[clap(subcommand)]
+    Sandbox(SandboxCommand),
+
     /// Inter-agent mailbox: peer↔peer messaging (send / inbox / thread).
     // trace:STORY-493 | ai:claude
     #[clap(subcommand)]
@@ -5677,7 +5811,8 @@ pub enum Command {
 
     /// Initialize AIDA in the current project
     Init {
-        /// Skip generating agent skills and commands (.claude/* and .codex/skills/*)
+        /// Skip generating agent skills and commands (.claude/*, .codex/skills/*, and .antigravity/skills/*)
+        // trace:TASK-457 | ai:claude
         #[clap(long)]
         no_skills: bool,
 
@@ -5752,6 +5887,11 @@ pub enum Command {
         #[clap(long)]
         refresh: bool,
     },
+
+    /// Starter-memory-pack drift discovery (`aida memories check`)
+    // trace:STORY-410 | ai:claude
+    #[clap(subcommand)]
+    Memories(MemoriesCommand),
 
     /// Scaffolding management commands
     #[clap(subcommand, hide = true)]
@@ -6306,6 +6446,27 @@ pub enum PlanCommand {
         /// Report what would be promoted without writing.
         #[clap(long)]
         dry_run: bool,
+    },
+
+    /// Synthesize a `docs/plans/` file from a merged/open PR's description
+    /// and commit log. For plans authored via the web `/ultraplan` flow
+    /// that land a PR directly without ever writing a local plan file —
+    /// this reconciles them back into AIDA's plan-archival convention.
+    /// Reads `gh pr view <PR> --json title,body,commits,number` plus
+    /// `gh pr diff <PR> --name-only`, fills the 11-section template, and
+    /// writes `docs/plans/<date>-<slug>-from-pr-<N>.md`. Idempotent —
+    /// re-running overwrites the same file deterministically. The output
+    /// is shaped to pass `aida plan verify`.
+    // trace:TASK-305 | ai:claude
+    Capture {
+        /// PR number to capture (e.g. `65`). Accepts a bare number or a
+        /// `PR-65` / `#65` form.
+        pr: String,
+
+        /// Print the synthesized plan to stdout instead of writing a file
+        /// under `docs/plans/`.
+        #[clap(long)]
+        stdout: bool,
     },
 }
 

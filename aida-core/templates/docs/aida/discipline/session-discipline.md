@@ -56,6 +56,55 @@ acceptance bullet — edit the acceptance list, or file a follow-up that
 supersedes the original. Comments are background context; the acceptance
 list is the contract.
 
+## Verify acceptance criteria against the primary caller
+
+Before declaring a spec's acceptance criteria done, **name the primary
+caller(s)** — the feature's top 1-3 invocation paths — and verify each
+criterion holds *in their environment*. A criterion is **environment-coupled**
+when its truth depends on the runtime context the feature runs in:
+
+- TTY vs piped stdout
+- headless (`claude -p`) vs interactive Claude Code
+- a user-typed CLI vs a skill invoked through the Bash tool (**always
+  non-TTY**) vs a git/Claude Code hook vs the MCP server
+- first-time vs returning user (memory + state)
+- solo node vs multi-node sync
+- same worktree vs cross-worktree
+
+When an environment-coupled criterion contradicts the primary caller's
+reality, the criterion is wrong even though it reads as internally
+consistent. Fix it at filing time, before the implementer hits the
+contradiction at the design-checkpoint pause. Walk *each* criterion against
+the named caller — do not stop at "the spec is logically coherent."
+
+Four instances surfaced this discipline (the implementer caught all four at
+the design-checkpoint pause — the pushback discipline worked, but the
+filing-time check would have caught them earlier):
+
+| Spec | The criterion | The contradiction |
+|---|---|---|
+| TASK-260 | refinement to Path/Action/Why glyphs | lived in a comment, not acceptance — implementer correctly shipped the original glyphs |
+| TASK-267 | "use the Path/Action/Why table format" | TASK-267 was sequential-steps, not parallel-choices — wrong UI shape |
+| BUG-224 | leaned toward relocating a doc | rested on a flawed mental model of the scaffolding propagation channel |
+| TASK-265 | "non-TTY mode degrades to a single-line summary" | the primary caller (`/aida-pickup` via the Bash tool) is **always** non-TTY, so the card would never appear in its own use case |
+
+Before / after, using TASK-265: *before* — "non-TTY mode degrades to a
+single-line summary" (named no caller; the rule kills the feature for its own
+main caller). *After* — "the primary caller is the `/aida-pickup` skill, which
+runs non-TTY through the Bash tool; the card must render fully there, so there
+is no non-TTY degradation path." Naming the caller first turns an abstract
+mode-toggle into a check the feature must pass.
+
+This composes with the sibling rule above ("Refinements must be acceptance
+criteria"): that rule says criterion fixes *belong in acceptance, not
+comments*; this rule adds the upstream check — *don't file flawed criteria in
+the first place*. It also reduces (without replacing) the implementer-side
+"Pause for design input" pattern, which remains the last line of defense.
+
+Origin: 2026-05-17 advisor session, captured as TASK-311 after the fourth
+instance in 36 hours. Memory:
+`feedback_verify_acceptance_matches_primary_caller.md`.
+
 ## Dated historical artifacts stay frozen
 
 When refactoring across the codebase, dated historical artifacts stay

@@ -151,23 +151,18 @@ PASS doc-vs-MCP consistency
 
 ## Response Shape
 
-Current AIDA MCP responses are Path A:
+AIDA MCP responses ship both Path A and Path B (STORY-399):
 
 - Tools advertise `inputSchema`.
-- Tools advertise `outputSchema`.
-- Runtime tool results return MCP text content envelopes: `content: [{type: "text", text: "..."}]`.
-- Runtime tool results do not yet emit `structuredContent`.
+- Tools advertise `outputSchema` (Path A, TASK-440).
+- Successful tool results return MCP text content envelopes: `content: [{type: "text", text: "..."}]` (preserved for back-compat).
+- Successful tool results also emit `structuredContent` matching the declared `outputSchema` (Path B, STORY-399) — a machine-readable mirror of the text envelope.
+- Error results keep the text envelope plus a structured `structuredError` object (STORY-401); they do not carry `structuredContent`.
 
-Strict structured-output validation is expected to fail until STORY-399 ships:
+Strict structured-output validation passes:
 
 ```bash
-tests/test_mcp_stdio.sh --skip-agent-contract --require-structured-content
-```
-
-Observed failure:
-
-```text
-FAIL show_requirement missing structuredContent in strict mode
+tests/test_mcp_stdio.sh --require-structured-content
 ```
 
 ## Operational Expectations for Codex
@@ -223,8 +218,8 @@ Before relying on the wrapper in a new environment, read the five-bug arc that h
 
 ## Current Known Constraints
 
-- `structuredContent` is not emitted yet. STORY-399 tracks Path B.
-- Error bodies are text-first rather than structured error objects. STORY-401 tracks richer error shape.
+- `structuredContent` is emitted on success (Path B, STORY-399) alongside the text envelope; parse either.
+- Error bodies carry both a text envelope and a structured `structuredError` object (STORY-401).
 - `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
 - Project-local automatic Codex registration is not scaffolded by `aida init` yet. Manual `codex mcp add aida -- aida mcp-serve` is the working path.
