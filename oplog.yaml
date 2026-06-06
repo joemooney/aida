@@ -14362,5 +14362,63 @@ operations:
   timestamp: 2026-06-06T13:58:43.299788685Z
   kind: !SetStatus
     status: Rejected
-clock: 1510
+- id: 019e9d3a-a98f-7af1-ba8e-1dbb38668c54
+  target_id: 019e5216-6480-76b2-a69b-7aee894f42c7
+  author: aida
+  node_id: '1'
+  lamport: 1511
+  timestamp: 2026-06-06T13:58:47.951736735Z
+  kind: !SetDescription
+    description: |
+      AIDA's strategic claim is 'agent-agnostic substrate' — empirically validated 2026-05-22 by Codex + Antigravity contributing ~12 PRs alongside Claude. But the SCAFFOLDING is Claude-shaped: `aida init` creates `.claude/skills/*`, `.claude/commands/*`, `.claude/hooks/*`, `.claude/settings.json`, and the starter memory pack lives at `~/.claude/projects/<slug>/memory/` — none of which reach Codex or Antigravity users.
+
+      ## Today's empirical evidence
+
+      The cross-agent docs that DO exist (`docs/agents/cross-agent-onboarding.md`, `docs/agents/codex-mcp-setup.md`, `docs/agents/antigravity-mcp-setup.md`) live in THIS repo. They are NOT propagated to new AIDA projects via `aida init`. A new project using Codex or Antigravity inherits no cross-agent setup guidance.
+
+      `AGENTS.md` is referenced in CLAUDE.md as scaffolded by `aida init` (for Codex), but the file does NOT exist in this repo today. Either documentation drift or never-implemented.
+
+      ## Strategic principle (from feedback_substrate_as_bouncer_not_rules addendum)
+
+      Maximize universal gates, minimize per-agent template surface area:
+
+      - **Universal gates** (write once, enforce forever, every agent): pre-commit hook (TASK-481), reviewer-phase gate (TASK-480), auto-bump scanner, `aida pr ship` wrapper validation, trace-comment convention, commit-subject convention
+      - **Per-agent templates** (linear cost, drift risk): Claude's `.claude/skills/*`, Codex's hypothetical `.codex/*`, Antigravity's brain-directory expectations
+
+      The discipline distribution should be:
+      - Discipline that MUST hold: gate (in code, enforced)
+      - Discipline that aids onboarding: docs scaffolded universally + per-agent setup pointers
+
+      ## Acceptance
+
+      - [ ] `docs/agents/` directory propagates to new projects via `aida init` (cross-agent-onboarding.md + per-agent setup docs land in the new project)
+      - [ ] `AGENTS.md` either exists (as Codex's CLAUDE.md equivalent) OR the CLAUDE.md reference to it is removed (documentation honesty)
+      - [ ] `aida init` scaffolds per-agent SETUP-pointer docs minimally; Claude is the default (current behavior preserved); Codex/Antigravity require explicit opt-in (`--with-agent codex` style flag, OR all-by-default if cheap)
+      - [ ] The discipline-pack docs (`docs/aida-discipline/`) gain a section on agent-agnostic conventions vs Claude-specific patterns — readers (including future Codex/Antigravity users) understand which discipline is universal vs Claude-specific
+      - [ ] The starter memory pack (`--with-memories`) gets a path-independence rethink: today it writes to `~/.claude/projects/<slug>/memory/` (Claude-specific path). Either: scaffold to per-agent memory paths when those agents are selected, OR ship the memories as a project-local `docs/memories/` directory that any agent can ingest
+
+      ## Sub-decomposition (sub-tracks to file when this STORY is groomed)
+
+      - TASK-A: Audit docs/agents/ + scaffold them into new projects via aida init
+      - TASK-B: Restore AGENTS.md (or remove the CLAUDE.md reference)
+      - TASK-C: Decide opt-in vs default-on for per-agent setup scaffolding; implement
+      - TASK-D: docs/aida-discipline/agent-agnostic-vs-claude-specific.md
+      - SPIKE-X: starter memory pack path-independence (per-agent paths vs project-local)
+
+      ## Composes with
+
+      - feedback_substrate_as_bouncer_not_rules (the principle that motivates this)
+      - TASK-480 + TASK-481 (universal gates already in flight)
+      - STORY-407 (Antigravity MCP roundtrip — operational evidence for the agent-agnostic claim)
+      - STORY-398 (Codex MCP roundtrip — same)
+      - The external co-worker observation 2026-05-22 (a non-AIDA user experiencing the universal-gate pain — the persona AIDA's positioning targets)
+
+      ## Why high priority
+
+      The agent-agnostic positioning is AIDA's strongest strategic claim post-today. If a new user picks up AIDA with Codex or Antigravity as their primary agent, the current scaffolding gives them nothing. That undermines the claim at first contact. The audit + propagation is foundational for the post-alpha cycle.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Ship the BOUNDED doc-honesty + propagation sub-tracks now: (A) propagate docs/agents/ via aida init, (B) reconcile AGENTS.md against the CLAUDE.md reference, (D) agent-agnostic-vs-claude discipline doc. These back AIDA's agent-agnostic positioning at first contact. SPLIT the genuine design forks (opt-in vs default-on per-agent scaffolding; memory-pack path-independence) into their own specs — out of scope here.
+clock: 1511
 node_id: '1'
