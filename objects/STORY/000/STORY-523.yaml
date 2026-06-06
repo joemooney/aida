@@ -1,0 +1,53 @@
+id: 019e9b0a-125f-7d40-8570-1a60e3d8c48a
+spec_id: STORY-523
+agreed_id: STORY-523
+title: 'Decision-question PRODUCER: sweep the scoped backlog, detect human-decision-needed specs, formulate + attach DecisionRequests (feeds aida questions)'
+description: |-
+  ## Idea (operator, 2026-06-05)
+
+  STORY-522 is the CONSUMER (DecisionRequest format + `aida questions` answer + loop pickup) and the REACTIVE producer (drain hits a fork → emit a question). Missing: the PROACTIVE producer — a sweep over the EXISTING queue/backlog that identifies specs that will need a human decision and attaches the question AHEAD of time, so `aida questions` has something to list and the human can BATCH-answer before the drain reaches the spec (no mid-drain stall).
+
+  Producer/consumer split (same shape as the integrator, STORY-520): producers emit DecisionRequests onto specs; the human consumes via STORY-522. Decoupled through the substrate.
+
+  ## Why a separate story
+
+  - Producer vs consumer — independent, decoupled via the DecisionRequest artifact on the spec.
+  - Different work type: answering (STORY-522) is mostly DETERMINISTIC; detect-and-formulate is LLM-DRIVEN ANALYSIS (different cost profile — a Tier-2 op per EPIC-36).
+  - Sequences independently of STORY-522.
+
+  ## Design (scoped so it doesn't cost a fortune over 281 specs)
+
+  1. **Cheap deterministic pre-filter (Tier-1):** flag candidates likely to need a human decision — missing/ambiguous acceptance criteria, design-fork markers in the body, contradictory comments, `BlockedBy` an ambiguous/rejected spec, "should this even be built?" signals.
+  2. **LLM formulation (Tier-2, ONLY on flagged candidates):** run `/aida-grill` / `/aida-evaluate` to surface the ambiguity; where it is a genuine human decision (NOT advisor-resolvable from a recorded principle — those the advisor tier handles), formulate the DecisionRequest (question + enumerated choices + recommended default + per-choice consequences) and attach it to the spec.
+  3. **Scoped** to the approved/near-term/workable set (NOT the low-priority/archive tail — avoid speculative question slop), like STORY-519's planning scope.
+  4. **Surfaces:** standalone `aida questions sweep [<scope>]` AND the NEEDS-HUMAN branch of the EPIC-30 pre-flight triage loop.
+
+  ## Why the sweep matters (vs reactive-only)
+
+  Reactive producer surfaces a question only at the stall (human in the loop mid-drain, one at a time). The sweep FRONT-LOADS questions, so the human batch-answers ahead, and the drain finds the answer already present → no stall. The sweep is what makes the batching batch.
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] `aida questions sweep [<scope>]` runs the cheap pre-filter over the scoped backlog and, for flagged candidates, formulates + attaches a DecisionRequest (STORY-522's format).
+  - [ ] Pre-filter is deterministic + cheap; LLM formulation runs ONLY on flagged candidates (cost control).
+  - [ ] Advisor-resolvable forks (recorded principle/preference) are NOT turned into human questions — they go to the advisor tier; only genuine human decisions become questions.
+  - [ ] Idempotent: re-sweeping does not duplicate questions on a spec that already has an open DecisionRequest.
+  - [ ] Scope excludes the low-priority/archive tail.
+
+  ## Relationships
+  - Feeds STORY-522 (the answer surface). Reuses /aida-grill + /aida-evaluate (per-spec analysis). Is the NEEDS-HUMAN branch of the EPIC-30 pre-flight triage. Tier-1/Tier-2 cost model from EPIC-36. Scope discipline mirrors STORY-519 (planning).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-06T03:46:29.087785646Z
+modified_at: 2026-06-06T03:46:29.087785646Z
+req_type: Story
+tags:
+- backlog-sweep
+- decision-questions
+- from-product
+- from-user-direction
+- human-in-the-loop
+- parent:STORY-522
+- producer-consumer
