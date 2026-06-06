@@ -3,12 +3,12 @@ spec_id: TASK-682
 agreed_id: TASK-682
 title: Retire/redirect docs/slideshow.html — the OBE 2025-12 deck is still discoverable and actively misleading
 description: 'Split from STORY-497 (operator decision 2026-06-06). The old docs/slideshow.html (Dec-2025 positioning) is out-of-date and actively misleading but still discoverable. Retire it: delete or replace with a redirect/notice pointing at current positioning (README + the Marp deck once rendered). Agent-doable, bounded. The rest of STORY-497 (deck content, ask number, render, rehearse) is operator-owned.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T14:07:33.502077841Z
-modified_at: 2026-06-06T16:49:30.437122459Z
+modified_at: 2026-06-06T17:16:38.758629857Z
 req_type: Task
 tags:
 - cleanup
@@ -22,3 +22,7 @@ comments:
   content: Commit d0585fd07 references this requirement
   created_at: 2026-06-06T16:49:30.437122459Z
   modified_at: 2026-06-06T16:49:30.437122459Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T17:16:38.758629857Z
+  completion_sha: 001b4484d5712c13313c30033e280c636781e9df
