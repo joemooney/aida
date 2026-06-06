@@ -8,13 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:58:25.820595517Z
-modified_at: 2026-06-06T08:33:48.658634040Z
+modified_at: 2026-06-06T08:33:49.962881491Z
 req_type: Story
 tags:
 - agent-lift
 - codex
 - marketplace
 - metrics
+- needs-human-input
 - telemetry
 relationships:
 - rel_type: Child
