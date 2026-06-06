@@ -8,12 +8,12 @@ description: |-
   BUG-459 fixed the commits-exist-but-no-PR sub-case (orchestrator auto-opens the PR). This is the sibling: no-commits + clean-exit + conversational-question. Substrate-as-bouncer fix: under --no-human=both, a phase-1 clean exit with no PR AND no commits should be treated as an IMPLICIT punt -> route to the headless advisor tier, instead of hard-failing. The implementer asking a question and exiting is functionally identical to a punt; the orchestrator must not require the exact sentinel to trigger the advisor cascade.
 
   Evidence: .aida/drain-logs/task-457-validation.log; task-457 branch empty (no commits); TASK-457 landed Needs Attention but advisor was never consulted. trace:BUG-459
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T06:08:58.224236855Z
-modified_at: 2026-06-06T06:18:43.380918817Z
+modified_at: 2026-06-06T06:24:16.885946042Z
 req_type: Bug
 tags:
 - batch:autonomy-floor
@@ -27,3 +27,7 @@ comments:
   content: Commit 28d506b40 references this requirement
   created_at: 2026-06-06T06:18:43.380918817Z
   modified_at: 2026-06-06T06:18:43.380918817Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T06:24:16.885946042Z
+  completion_sha: 468dfe31b6dbed335fcf46fedf87f46265ecb8de
