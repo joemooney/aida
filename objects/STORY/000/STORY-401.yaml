@@ -48,12 +48,12 @@ description: |-
   ## Origin
 
   User-relayed sibling-agent (Codex) recommendation 2026-05-22.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T06:43:53.413717316Z
-modified_at: 2026-06-06T08:35:06.288759541Z
+modified_at: 2026-06-06T18:33:09.336422646Z
 req_type: Story
 tags:
 - agent-agnostic
@@ -69,3 +69,7 @@ comments:
   content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Phase 1 (isError:true on all error paths) already shipped; remaining bounded slice = machine-friendly `<tool>: <code>: <msg>` text format + Phase-2 structuredError {code,message,tool,recoverable}. No structuredError field exists yet; well-specified, no open decision.'
   created_at: 2026-06-06T08:35:05.009517694Z
   modified_at: 2026-06-06T08:35:05.009517694Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T18:33:09.336422646Z
+  completion_sha: f1379faa233af8cb768806f2946207e6c6db5384
