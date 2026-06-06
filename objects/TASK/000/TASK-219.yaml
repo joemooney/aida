@@ -35,12 +35,12 @@ description: |-
   - [ ] aida queue work TASK-X surfaces composes-with neighbors and offers batch pickup
   - [ ] Backfill: convert this session's 'Composes with: ...' comments into real composes-with edges
   - [ ] Documentation in docs/session-lifecycle.md (or new docs/clusters-and-batches.md) names the distinction between tag-based batches (TASK-229) and edge-based composition (this TASK)
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:08:56.912838543Z
-modified_at: 2026-06-06T08:38:17.094545972Z
+modified_at: 2026-06-06T08:38:19.076034374Z
 req_type: Task
 tags:
 - cluster
