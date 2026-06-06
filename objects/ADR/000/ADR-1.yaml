@@ -8,5 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:10:08.298638987Z
-modified_at: 2026-05-09T18:10:08.298638987Z
+modified_at: 2026-06-06T04:14:25.948424595Z
 req_type: Decision
+comments:
+- id: 019e9b23-a89c-74b3-a1e4-c9fa83cbe6f9
+  author: joe
+  content: 'Triage 2026-06-05: this is a RECORDED decision/principle (adopted + stateless), not open work — completing so it stops sitting in the Approved backlog. The decision/principle stands as the record; any remaining IMPLEMENTATION is tracked under its epic (ADR-2→EPIC-37 onboarding, ADR-3→EPIC-38 MCP-gate-parity, ADR-1 + PRIN-1 already realized in the current architecture).'
+  created_at: 2026-06-06T04:14:25.948424595Z
+  modified_at: 2026-06-06T04:14:25.948424595Z
