@@ -6095,6 +6095,27 @@ pub enum PlanCommand {
         #[clap(long)]
         append: Option<PathBuf>,
     },
+
+    /// Promote Approved spec(s) to Planned when a plan file exists for them
+    /// under `docs/plans/` — a file whose `Specs:` header line lists the
+    /// SPEC-ID. Formalizes the Approved -> Planned lifecycle step so
+    /// plan-ahead work (plan now, implement later — the parallel-pipelining
+    /// workflow) is visible in the queue. Pass a SPEC-ID to promote one, or
+    /// `--all` to sweep every Approved spec that has a matching plan.
+    // trace:STORY-265 | ai:claude
+    Promote {
+        /// SPEC-ID to promote. Omit and pass `--all` to sweep every
+        /// Approved spec that has a plan file.
+        spec: Option<String>,
+
+        /// Promote every Approved spec that has a matching plan file.
+        #[clap(long, conflicts_with = "spec")]
+        all: bool,
+
+        /// Report what would be promoted without writing.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 /// Auto-generated changelog tooling. Mirrors `PlanCommand`'s shape.
