@@ -27,6 +27,21 @@ export const PRIORITY_CONFIG: Record<RequirementPriority, { color: string; icon:
   Low:    { color: 'text-gray-400',  icon: 'ArrowDown', label: 'Low' },
 };
 
+// TASK-225: every RequirementType owns its own Tailwind hue family, so no two
+// type badges are ever the same color in the type dropdown, kanban cards, or
+// filter legend. The six doc-layer types (Principle/Vision/Constraint/Decision/
+// Term/Doc — EPIC-24 living docs) form a distinct "knowledge/narrative" band:
+//   - Principle (sky)   foundational north-star — airy blue
+//   - Vision (violet)   aspirational horizon
+//   - Constraint (rose) a guardrail/limit — warm, distinct from Bug's red
+//   - Decision (amber)  a settled, deliberate choice — gold
+//   - Term (emerald)    glossary anchor — a distinct green, off the neutrals
+//   - Doc (stone)       prose/paper — a warm neutral
+// The three neutral families are reserved for the three structural types:
+// Task (slate, cool), Folder (gray, pure), Doc (stone, warm) — maximally
+// spread so they stay separable. Term was pulled off zinc to avoid blurring
+// with that trio; Decision moved off emerald to keep its hue out of the
+// Completed-status echo. These replace PR-21's stub placeholders.
 export const TYPE_CONFIG: Record<RequirementType, { color: string; bg: string; label: string }> = {
   Functional:    { color: 'text-blue-300',    bg: 'bg-blue-500/10',    label: 'Functional' },
   NonFunctional: { color: 'text-purple-300',  bg: 'bg-purple-500/10',  label: 'Non-Functional' },
@@ -41,11 +56,12 @@ export const TYPE_CONFIG: Record<RequirementType, { color: string; bg: string; l
   Sprint:        { color: 'text-pink-300',    bg: 'bg-pink-500/10',    label: 'Sprint' },
   Folder:        { color: 'text-gray-300',    bg: 'bg-gray-500/10',    label: 'Folder' },
   Meta:          { color: 'text-fuchsia-300', bg: 'bg-fuchsia-500/10', label: 'Meta' },
+  // trace:TASK-225 | ai:claude — doc-layer "knowledge/narrative" palette band
   Principle:     { color: 'text-sky-300',     bg: 'bg-sky-500/10',     label: 'Principle' },
   Vision:        { color: 'text-violet-300',  bg: 'bg-violet-500/10',  label: 'Vision' },
   Constraint:    { color: 'text-rose-300',    bg: 'bg-rose-500/10',    label: 'Constraint' },
-  Decision:      { color: 'text-emerald-300', bg: 'bg-emerald-500/10', label: 'Decision' },
-  Term:          { color: 'text-zinc-300',    bg: 'bg-zinc-500/10',    label: 'Term' },
+  Decision:      { color: 'text-amber-300',   bg: 'bg-amber-500/10',   label: 'Decision' },
+  Term:          { color: 'text-emerald-300', bg: 'bg-emerald-500/10', label: 'Term' },
   Doc:           { color: 'text-stone-300',   bg: 'bg-stone-500/10',   label: 'Doc' },
 };
 
