@@ -82,12 +82,12 @@ description: |-
   ## Origin
 
   User question 2026-05-22 during a substrate audit that found 22 scaffolding-pack memories missing from master templates. The new-project gap was closed via PR-193. The existing-project gap (no discoverability of drift) needs this story.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:51:58.444865860Z
-modified_at: 2026-06-06T20:49:19.345926698Z
+modified_at: 2026-06-06T20:56:11.767167554Z
 req_type: Story
 tags:
 - discoverability
@@ -107,3 +107,7 @@ comments:
   content: Commit 7fd784624 references this requirement
   created_at: 2026-06-06T20:49:19.345926698Z
   modified_at: 2026-06-06T20:49:19.345926698Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T20:56:11.767167554Z
+  completion_sha: 71773f0f01d4593ee3fd8ea5a788178ffb5f3346
