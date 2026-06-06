@@ -14071,5 +14071,108 @@ operations:
   timestamp: 2026-06-06T13:53:25.745113278Z
   kind: !SetStatus
     status: Approved
-clock: 1503
+- id: 019e9d35-db1b-76b3-b8c9-114de67638d6
+  target_id: 019e3375-dee2-7032-9f95-327b44c474b3
+  author: aida
+  node_id: '1'
+  lamport: 1504
+  timestamp: 2026-06-06T13:53:32.955217118Z
+  kind: !SetDescription
+    description: |
+      \`aida queue work <SPEC>\` today does design + code in one implementer phase. AIDA's lifecycle already supports a \`Planned\` status (Draft → Approved → **Planned** → InProgress → Done → Completed), but the Planned step is informal — no formal transition wires plan files to it.
+
+      This STORY decouples the plan and implement phases into three orchestrator modes:
+
+      | Mode | Phases run | Spec transition | Use case |
+      |---|---|---|---|
+      | \`--plan-only\` | Plan phase, no code | Approved → **Planned** | Plan ahead while other work is in flight |
+      | \`--implement\` | Implementation phase, reads existing plan | Planned → InProgress → Done | Pick up a pre-planned spec; fast start |
+      | \`--with-plan\` (default for STORY/EPIC) | Both phases bundled | Approved → Planned → InProgress → Done | Single-spec start-to-finish |
+
+      \`--auto-complete --with-plan\` becomes the canonical \"plan + ship\" autonomous form.
+
+      ## Why decouple
+
+      **Parallel forward motion without wasted effort:**
+
+      \`\`\`
+      Session 1: TASK-X --implement  (blocking the implementer worktree)
+      Session 2: TASK-Y --plan-only  (parallel; touches no code; transitions Y to Planned)
+      Session 3: TASK-Z --plan-only  (parallel; transitions Z to Planned)
+
+      [TASK-X finishes]
+
+      Session 4: TASK-Y --implement  (reads pre-existing plan; no design lag)
+      Session 5: TASK-Z --implement  (same)
+      \`\`\`
+
+      40-min savings per 5-spec batch in measured runs (plan ~5min, implementation ~15min vs bundled ~25min when plan is fresh).
+
+      ## Acceptance
+
+      ### CLI / orchestrator
+
+      - [ ] \`aida queue work <SPEC> --plan-only\` runs ONLY a plan phase
+        - Spawns implementer Claude with a planning-focused skill (e.g., \`/aida-plan\` extending \`/aida-pickup\`)
+        - Produces \`docs/plans/<date>-<spec-slug>.md\` via the AIDA plan template
+        - Optionally invokes \`aida ultraplan <SPEC>\` for richer prompt assembly
+        - Transitions spec Approved → Planned on success
+        - Exits without code changes
+      - [ ] \`aida queue work <SPEC> --implement\` requires a plan file to exist; refuses with hint if missing
+        - Reads the plan; surfaces Critical Files / Followups / Verification (TASK-95 integration)
+        - Implements the plan; opens PR; transitions Planned → InProgress → Done
+      - [ ] \`aida queue work <SPEC> --with-plan\` = \`--plan-only\` then \`--implement\` sequentially
+      - [ ] No flag (default) for STORY/EPIC types: \`--with-plan\` recommended; user can override
+      - [ ] No flag (default) for TASK/BUG types: direct-implement (no plan phase) — heuristic, override with explicit \`--with-plan\`
+
+      ### Plan-phase skill / role
+
+      - [ ] No new role needed — uses implementer role with planning skill
+      - [ ] \`/aida-plan <SPEC>\` skill assembles + writes the plan
+      - [ ] Composes with \`aida ultraplan <SPEC>\` (assembled prompt) — \`/aida-plan\` invokes it
+      - [ ] Composes with \`/aida-import-plan\` (round-trip from /ultraplan) — if user prefers /ultraplan over Claude Code's plan generation
+      - [ ] Verifies plan against \`docs/plans/_TEMPLATE.md\` structure before declaring success
+
+      ### Lifecycle wiring
+
+      - [ ] Approved → Planned transition fires when a plan file exists at \`docs/plans/<date>-<spec-slug>.md\` AND its frontmatter \`Specs:\` includes the SPEC-ID
+      - [ ] \`aida show <SPEC>\` displays plan-file path when Planned
+      - [ ] \`aida queue list\` distinguishes Planned items visually (status glyph: ▷ Approved, ▶ Planned, ◐ InProgress)
+
+      ### Composition with --auto-complete
+
+      - [ ] \`--auto-complete --with-plan\` is a 7-phase orchestrator: plan → (optional) plan-review → implement → CI → review → merge → pull → build
+      - [ ] \`--auto-complete --plan-only\` runs the plan phase alone, then exits 0 (no implementer phase)
+      - [ ] Composes with STORY-263 \`--no-human\` for full autonomy: \`--auto-complete --with-plan --no-human\`
+      - [ ] Composes with TASK-285 \`--batch\` for batch planning: \`aida queue work --batch X --plan-only --no-human\` plans every batch member in parallel
+
+      ## Out of scope (separate STORYs)
+
+      - **Plan review as a separate phase** — could be added as a sub-phase before implement; design fork. This STORY ships without it; plan trustworthy on first pass.
+      - **Queue dependency sweep** — separate STORY (filed under EPIC-28 as a child child)
+      - **Stacked-branch parallelism for code** — STORY-248
+      - **Multi-spec bundle planning** — see EPIC-N planning (already handled by \`aida ultraplan EPIC-N\` today); arbitrary bundle planning is a follow-up
+
+      ## Composes with
+
+      - **STORY-263** (\`--no-human\`) — composes for full autonomy
+      - **TASK-285** (\`--batch + --auto-complete\`) — composes for parallel planning across a batch
+      - **STORY-248** (stacked branches) — composes for parallel implementation after parallel planning
+      - **EPIC-28** (dependency-aware drain) — knowing plans = knowing dependencies; the queue sweep STORY (child of EPIC-28) feeds this
+      - **TASK-95** (plan brief integration with \`aida queue work\`) — already shipped; this STORY uses its surfacing
+      - **\`aida ultraplan\` (TASK-113)** — already shipped; this STORY makes ultraplan a callable step
+      - **\`/aida-import-plan\` skill** — round-trip from /ultraplan stays available; users can manually plan via /ultraplan then \`--implement\` from the imported plan
+
+      ## Why this matters for alpha
+
+      Alpha users start with TASK-shaped work (direct implement, no plan needed). As they tackle STORY-shaped or EPIC-shaped work, the design lag becomes painful. \`--with-plan\` integrates planning into the workflow naturally; \`--plan-only\` unlocks parallel forward motion.
+
+      ## Origin
+
+      User asked 2026-05-16: *\"is --with-plan a step to just plan and not implement? I am thinking that I could start work provisionally on a new task if I just plan and then once a task that is implemented completes we could proceed to work that plan.\"* — surfaced the pipelining opportunity AIDA's lifecycle already supports informally; this STORY formalizes it.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Ship the SLICE first: --plan-only mode + the Approved→Planned lifecycle wiring (this is the dependency STORY-519/520 actually need). KEEP the current 'aida queue work' default behavior unchanged — new modes are OPT-IN, NO type-based default-mode change (that would be a UX surprise mid-stability). Defer --with-plan bundling + queue-list glyph changes as follow-ons.
+clock: 1504
 node_id: '1'
