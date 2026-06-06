@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T04:46:38.055787185Z
-modified_at: 2026-05-28T04:46:38.055787185Z
+modified_at: 2026-06-06T08:18:17.256891859Z
 req_type: Task
 tags:
 - aida-pickup-gap
@@ -18,3 +18,15 @@ tags:
 - linked:SPIKE-8
 - severity:observation
 - spike-handling
+comments:
+- id: 019e9c02-ea28-7a13-9f9f-51652ca040e3
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: /aida-pickup has no SPIKE-aware path — when the queue head is a Spike, the implementer skill mis-treats research as heads-down coding. Fix how?
+      a) Auto-set human_only on type=Spike unless overridden (cheapest; reuses the STORY-333 primitive; errs toward 'humans drive research')
+      b) Route Spikes to a dedicated research playbook (aida ultraplan + experimental-design walkthrough, no auto-branch)
+      c) Both: auto-set human_only AND offer the research playbook when a human picks it up
+      REC: a — minimal, reuses existing human_only substrate, matches the empirical 'implementer correctly bailed' behavior; (b) can follow if demand appears.
+  created_at: 2026-06-06T08:18:17.256891859Z
+  modified_at: 2026-06-06T08:18:17.256891859Z
