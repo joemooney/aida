@@ -64114,6 +64114,19 @@ fn print_scaffolding_freshness(
             matches += 1;
             continue;
         }
+        // .claude/AIDA.md's `## Claude Code skills` section is gated by
+        // generate_skills, but this drift check always regenerates with the
+        // default (skills-on) config — it has no record of an `aida init
+        // --no-skills`. A raw byte compare would therefore flag a clean
+        // --no-skills init as STALE-on-arrival. Use the section-tolerant
+        // matcher for AIDA.md instead. trace:TASK-125 | ai:claude
+        if artifact.path.file_name().and_then(|s| s.to_str()) == Some("AIDA.md") {
+            let on_disk_str = String::from_utf8_lossy(&on_disk);
+            if aida_core::scaffolding::aida_md_matches(&on_disk_str, &artifact.content) {
+                matches += 1;
+                continue;
+            }
+        }
         match FileCategory::from_path(&artifact.path) {
             FileCategory::Template => template_drift.push(artifact.path.clone()),
             FileCategory::Seed | FileCategory::ManagedMerge => {
