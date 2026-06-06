@@ -32,12 +32,16 @@ description: |
   ## Acceptance for the EPIC
 
   The aida ↔ aida-tutor pair stops needing a manual "sync ritual" in CLAUDE.md. When AIDA ships a new EPIC, a release-time hook (or simple `aida projects sync-tutor-coverage` command) files the corresponding TASKs in aida-tutor's store automatically.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Build the REGISTRY FOUNDATION slice only — STORY-74: 'aida projects register/list/forget' + the ~/.aida/projects.toml schema/validation. DEFER cross-project queue routing, relationships, search, and the release-hook tutor-sync until a real multi-repo workspace (beyond aida↔aida-tutor) creates recurring manual-sync pain. EPIC scoped to the registry primitive; other children stay parked.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:11.398984315Z
-modified_at: 2026-06-06T13:38:59.105529688Z
+modified_at: 2026-06-06T13:39:00.398438768Z
 req_type: Epic
 tags:
 - needs-human-input

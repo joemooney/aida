@@ -13392,5 +13392,46 @@ operations:
   timestamp: 2026-06-06T08:38:45.531451429Z
   kind: !SetStatus
     status: Rejected
-clock: 1484
+- id: 019e9d28-8abe-7a10-81a8-92e7bd49a7b6
+  target_id: 019e10a7-78a6-7750-bfc7-d1a34532da4d
+  author: aida
+  node_id: '1'
+  lamport: 1485
+  timestamp: 2026-06-06T13:39:00.414661206Z
+  kind: !SetDescription
+    description: |
+      Today AIDA is single-project: each repo has its own `.aida-store/`, and the only cross-project surface is the global queue (`aida queue add --global`) keyed by role. There's no native primitive for "queue work in *that* other project's local queue," "show me the relationship between an EPIC here and a STORY there," or "search across projects."
+
+      Surfaced 2026-05-10 from the aida ↔ aida-tutor relationship: AIDA ships features, aida-tutor needs corresponding exercises, but coordination flows through the user's head not the tooling.
+
+      ## Pragmatic shortcut shipped today
+
+      `~/.aida/projects.toml` exists with `aida` + `aida-tutor` entries and a free-form `[[relation]]` table. It is *not* yet read by `aida` — it documents the boundary while this EPIC is unimplemented. aida-tutor's CLAUDE.md gained a manual "sync ritual" section. When this EPIC lands, that file becomes the canonical registry and the manual ritual becomes automated.
+
+      ## Children (proposed)
+
+      1. **STORY: project registry foundation** — `aida projects register/list/forget`, schema for `~/.aida/projects.toml`, validation, used by all subsequent stories
+      2. **STORY: cross-project queue routing** — `aida queue add --to-project <name> <id>` resolves via registry, opens that project's store, adds entry; consumer side: `aida queue list --from-project <name>` to see incoming items routed to your role
+      3. **STORY: cross-project relationships** — extend `aida rel add` to accept `<project>:<id>` syntax. Edge stored on both sides (write-back to remote project's store on add)
+      4. **STORY: cross-project search** — `aida search "<query>" --all-projects` walks registry, queries each project's cache, merges results
+      5. **STORY (optional): release-hook tutor sync** — when `aida` cuts a release, walk a manifest in registered "teaches"-related projects and file TASKs for any uncovered EPIC
+
+      ## Why staged
+
+      Registry is the bottleneck primitive — everything else builds on it. STORY 2 (queue routing) is the highest-leverage next step (closes the manual aida↔aida-tutor sync). 3-5 are nice-to-haves that compose later.
+
+      ## Non-goals
+
+      - Federated git syncing across project stores (each project's store remains its own authoritative writer)
+      - Conflict resolution for shared identity across projects (UUIDs are global — no merge needed; SPEC-IDs are project-local — no merge required)
+      - Cross-machine registry (this is a single-machine convenience, not a distributed system)
+
+      ## Acceptance for the EPIC
+
+      The aida ↔ aida-tutor pair stops needing a manual "sync ritual" in CLAUDE.md. When AIDA ships a new EPIC, a release-time hook (or simple `aida projects sync-tutor-coverage` command) files the corresponding TASKs in aida-tutor's store automatically.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Build the REGISTRY FOUNDATION slice only — STORY-74: 'aida projects register/list/forget' + the ~/.aida/projects.toml schema/validation. DEFER cross-project queue routing, relationships, search, and the release-hook tutor-sync until a real multi-repo workspace (beyond aida↔aida-tutor) creates recurring manual-sync pain. EPIC scoped to the registry primitive; other children stay parked.
+clock: 1485
 node_id: '1'
