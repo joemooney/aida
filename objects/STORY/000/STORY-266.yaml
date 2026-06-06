@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:28.523267521Z
-modified_at: 2026-06-06T08:19:10.792990549Z
+modified_at: 2026-06-06T13:45:37.195271709Z
 req_type: Story
 tags:
 - aida-core
@@ -46,3 +46,8 @@ comments:
   content: '🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input. Part of the EPIC-29 cluster (see EPIC-29 linchpin packet). UNLIKE its siblings, this one has STANDALONE value: a documented/frozen aida-core public API benefits both the TUI and the MCP server even if the repo split is rejected. Recommendation: rescope as a decoupled ''document aida-core public API surface'' hygiene TASK rather than a split prerequisite.'
   created_at: 2026-06-06T08:19:08.849595576Z
   modified_at: 2026-06-06T08:19:08.849595576Z
+- id: 019e9d2e-98ab-77f2-8b2f-9c44296b7e97
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): RESCOPE as standalone API-hygiene (decoupled from the rejected EPIC-29 split): audit + document aida-core''s public API surface that both the TUI and the MCP server consume. NOT a repo-split prerequisite — just a documented/stable pub surface. Reparent off EPIC-29.'
+  created_at: 2026-06-06T13:45:37.195271709Z
+  modified_at: 2026-06-06T13:45:37.195271709Z
