@@ -2292,7 +2292,13 @@ fn handle_findings_command(
             println!("Dismissed finding {id} — status → Rejected.");
         }
 
-        FindingsCommand::Promote { id, r#for, reason } => {
+        FindingsCommand::Promote {
+            id,
+            r#for,
+            reason,
+            auto_complete,
+            force,
+        } => {
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -2302,6 +2308,87 @@ fn handle_findings_command(
                     "{id} is not a finding (no `from-review:`/`from-implementer:`/`from-advisor:` tag) — \
                      `aida findings` only triages real findings. \
                      Use `aida edit {id} --status approved` for a general status change."
+                );
+            }
+
+            // TASK-579: a finding's underlying fix may have already merged
+            // referencing the id the finding carried *before* it became real
+            // work (its origin-ID — `spec_id` here, distinct from a later
+            // `agreed_id`). Promoting it as fresh work then strands it In
+            // Progress / Approved forever, because the auto-bump scan finds no
+            // commit referencing the *new* id. Scan the default branch for a
+            // merged commit referencing any of the finding's ids; warn, or
+            // (`--auto-complete`) bump straight to Completed instead of
+            // queueing a no-op. `--force` skips the check entirely (reopen /
+            // extend). trace:TASK-579 | ai:claude
+            let project_root = store_path
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("cannot resolve project root from store path"))?;
+            let mut candidate_ids: Vec<String> = Vec::new();
+            if let Some(s) = req.spec_id.as_deref() {
+                candidate_ids.push(s.to_string());
+            }
+            if let Some(a) = req.agreed_id.as_deref() {
+                if !candidate_ids.iter().any(|c| c.eq_ignore_ascii_case(a)) {
+                    candidate_ids.push(a.to_string());
+                }
+            }
+            let already_merged = if *force {
+                None
+            } else {
+                find_merged_commit_referencing_ids(project_root, &candidate_ids)
+            };
+
+            if let Some((sha, subject)) = &already_merged {
+                if *auto_complete {
+                    let now = chrono::Utc::now();
+                    let author = get_default_author();
+                    let display_id = req.display_id();
+                    req.comments.push(Comment {
+                        id: Uuid::now_v7(),
+                        content: format!(
+                            "Auto-completed on promote {date}: origin-ID fix already \
+                             merged ({sha} \"{subject}\"). No fresh work to queue.",
+                            date = now.format("%Y-%m-%d")
+                        ),
+                        author: author.clone(),
+                        created_at: now,
+                        modified_at: now,
+                        parent_id: None,
+                        replies: Vec::new(),
+                        reactions: Vec::new(),
+                    });
+                    if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                        req.comments.push(Comment {
+                            id: Uuid::now_v7(),
+                            content: format!(
+                                "Promoted by {author} {date}: {text}",
+                                date = now.format("%Y-%m-%d")
+                            ),
+                            author,
+                            created_at: now,
+                            modified_at: now,
+                            parent_id: None,
+                            replies: Vec::new(),
+                            reactions: Vec::new(),
+                        });
+                    }
+                    req.status = RequirementStatus::Completed;
+                    req.modified_at = now;
+                    backend.update_requirement(&req)?;
+                    record_role_activity(&display_id, "auto-complete");
+                    println!(
+                        "Promoted finding {id} — origin-ID fix already merged ({sha}), \
+                         status → Completed (no queue). Re-run with --force to queue anyway."
+                    );
+                    return Ok(());
+                }
+                eprintln!(
+                    "Warning: {id}'s origin-ID fix appears already merged on the default \
+                     branch ({sha} \"{subject}\"). Promoting it as fresh work may strand \
+                     it open — the Done→Completed auto-bump can't fire with no commit \
+                     referencing the promoted id. Re-run with --auto-complete to bump it \
+                     straight to Completed, or --force to queue it anyway."
                 );
             }
 
@@ -39899,6 +39986,57 @@ mod statusline_tests {
         );
     }
 
+    /// TASK-579: the origin-ID-in-git-log detector used by `aida findings
+    /// promote` to spot a fix that already merged against the id the finding
+    /// carried before becoming real work.
+    #[test]
+    fn commit_subject_references_id_matches_origin_id() {
+        let ids = vec!["TASK-1-097".to_string(), "TASK-124".to_string()];
+
+        // The real trigger from the spec: the fix shipped referencing the
+        // origin-ID in a trailing paren.
+        assert!(commit_subject_references_id(
+            "fix(init): push onboarding task onto implementer queue (TASK-1-097)",
+            &ids
+        ));
+
+        // Case-insensitive match.
+        assert!(commit_subject_references_id(
+            "fix(init): tweak (task-1-097)",
+            &ids
+        ));
+
+        // Leading SPEC-ID: prefix shape also counts.
+        assert!(commit_subject_references_id(
+            "TASK-124: do the thing (#42)",
+            &ids
+        ));
+
+        // An unrelated spec id does NOT match.
+        assert!(!commit_subject_references_id(
+            "fix(scope): something else (BUG-999)",
+            &ids
+        ));
+
+        // A plan commit naming the id is NOT a completion signal.
+        assert!(!commit_subject_references_id(
+            "docs(plans): plan for (TASK-1-097)",
+            &ids
+        ));
+
+        // No reference at all → no match.
+        assert!(!commit_subject_references_id(
+            "chore: bump dep version",
+            &ids
+        ));
+
+        // Empty id list never matches.
+        assert!(!commit_subject_references_id(
+            "fix(init): tweak (TASK-1-097)",
+            &[]
+        ));
+    }
+
     /// TASK-93: `locate_symbol_line` finds a definition's 1-based line and,
     /// crucially, is NOT thrown off by a preceding blank line (the `^\s*`
     /// vs `^[ \t]*` off-by-one).
@@ -66523,6 +66661,81 @@ pub(crate) fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64
         return None;
     }
     digits.parse::<u64>().ok()
+}
+
+/// True when `subject` references any of `ids` as a real spec-completion
+/// reference — i.e. the id appears in the commit's trailing `(REQ-ID)` group
+/// or leading `SPEC-ID:` prefix, the same shapes the auto-bump scan honours
+/// (`extract_spec_ids_from_commit`). Plan commits (`docs(plans): …`) are NOT a
+/// completion signal, so they never count even when they name the id.
+///
+/// This is the testable core of TASK-579: when a finding is promoted, its
+/// origin-ID may already have a merged fix referencing it (the fix shipped
+/// against the id the finding carried *before* it became real work). Matching
+/// is case-insensitive so `task-1-097` in a subject matches `TASK-1-097`.
+/// trace:TASK-579 | ai:claude
+fn commit_subject_references_id(subject: &str, ids: &[String]) -> bool {
+    if is_plan_commit_subject(subject) {
+        return false;
+    }
+    let referenced = extract_spec_ids_from_commit(subject);
+    ids.iter().any(|wanted| {
+        referenced
+            .iter()
+            .any(|got| got.eq_ignore_ascii_case(wanted))
+    })
+}
+
+/// Scan the default branch's recent git log for a merged commit that references
+/// any of `ids` (a finding's spec-id + agreed-id). Returns the first matching
+/// `(short_sha, subject)` — first as in newest-first git-log order, so the most
+/// recent landing wins. Returns `None` when no merged commit references the ids,
+/// when there's no resolvable default branch, or when git is unavailable.
+///
+/// Used by `aida findings promote` so a finding whose underlying fix already
+/// shipped against its origin-ID can warn / auto-complete instead of being
+/// queued as fresh (no-op) work. trace:TASK-579 | ai:claude
+fn find_merged_commit_referencing_ids(
+    project_root: &std::path::Path,
+    ids: &[String],
+) -> Option<(String, String)> {
+    use std::process::Command as ProcessCommand;
+
+    if ids.is_empty() {
+        return None;
+    }
+
+    // Resolve a default-branch ref to scan. Reuse the shared resolver so this
+    // matches `aida db reconcile-status` / auto-bump branch semantics: prefer
+    // origin/HEAD, fall back to origin/main|master then local main|master.
+    let branch_ref = resolve_default_branch_ref(project_root)?;
+
+    let log_out = ProcessCommand::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "log",
+            "--max-count=500",
+            "--pretty=format:%h%x09%s",
+            &branch_ref,
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    let log_str = String::from_utf8_lossy(&log_out.stdout);
+
+    for line in log_str.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let sha = parts.next().unwrap_or("").trim();
+        let subject = parts.next().unwrap_or("").trim();
+        if sha.is_empty() || subject.is_empty() {
+            continue;
+        }
+        if commit_subject_references_id(subject, ids) {
+            return Some((sha.to_string(), subject.to_string()));
+        }
+    }
+    None
 }
 
 /// Parse the PR number out of a review-story title. Titles are filed by
