@@ -9,19 +9,27 @@ description: |-
 
   ## Today (the gap)
 
-  The punt/escalation (STORY-306) carries an `escalation_reason` (string) + `resolution_path: "escalated-to-human"` — i.e. "here's why I'm stuck, go investigate," NOT a structured question+choices. The human must drop into an agent and re-context per item. That per-item human-recovery latency IS the burn-down gap (the multi-hour commit-log holes).
+  The punt/escalation (STORY-306) carries an `escalation_reason` (string) + `resolution_path: "escalated-to-human"` — "go investigate," NOT a structured question+choices. The human must drop into an agent and re-context per item. That per-item human-recovery latency IS the burn-down gap.
 
   ## The protocol
 
-  1. **Question artifact (extends the punt).** When the advisor can't resolve a fork, it emits a DecisionRequest on the spec: { question, choices[] (enumerated, each maps to a concrete resolution), recommended-default, per-choice consequences, rationale }. The AskUserQuestion shape, PERSISTED to the substrate. The advisor DISTILLS the fork so the question is self-contained (the human needs no spec re-read).
-  2. **Decision inbox.** `aida questions` (or `aida decisions`) lists all pending DecisionRequests across specs — the human's batch. Status: NeedsAttention / pending-answer.
-  3. **Plain-CLI answer, NO agent.** `aida answer <spec> <choice>` (or interactive: prints spec + question + choices, accepts a/b/c). Pure data op — no LLM, no session. Records the choice, flips status pending → answered. Batchable, scriptable; git-backed → eventually a web/mobile form (answer from a phone).
-  4. **Loop pickup.** Next automation pass: the advisor reads answered specs, applies the chosen resolution (deterministic next step), the spec flows again. NeedsAttention → advisor-decides-from-human-answer.
+  1. **Question artifact (extends the punt).** When the advisor can't resolve a fork, it emits a DecisionRequest on the spec: { question, choices[] (enumerated, each maps to a concrete resolution), recommended-default, per-choice consequences, rationale }. AskUserQuestion shape, PERSISTED to the substrate. The advisor DISTILLS so the question is self-contained (no spec re-read).
+  2. **Decision inbox + plain-CLI answer (NO agent).** Pure data op — no LLM, no session. Records the choice, flips status pending → answered. Batchable, scriptable; git-backed → eventually a web/mobile form.
+  3. **Loop pickup.** Next pass: the advisor reads answered specs, applies the chosen resolution (deterministic next step), the spec flows again.
+
+  ## CLI surface (operator-refined 2026-06-05)
+
+  AIDA convention is bare-subcommand-group = help; `questions` deliberately deviates to be useful. Read-first, opt-in mutation (no auto-loop surprise):
+  - `aida questions` — show the decision inbox (list); if TTY + pending, offer "Answer N now? [Y/n]" → enter the answer loop on yes. Non-TTY (piped) → list only, no prompt.
+  - `aida questions list` — pure list, no prompt (scripting/scanning).
+  - `aida questions answer` — enter the interactive answer loop directly.
+  - `aida questions answer <spec> <choice>` — single NON-INTERACTIVE answer (the agent-free data op; scriptable/web/batch).
+  - `aida questions answer --all-defaults` — confirm every recommended default in one shot (the trusting batch).
 
   ## Make-or-break design requirements
 
-  - **Self-contained questions** — human answers with only question+choices+rationale; the advisor must distill (state / deciding factor / options + per-option consequences / recommended default). This is the finish-checkpoint-clarity discipline, persisted.
-  - **Recommended default + "confirm all defaults" batch op** — human confirms-or-overrides fast; trusting case is one keystroke.
+  - **Self-contained questions** — the advisor distills (state / deciding factor / options + per-option consequences / recommended default). Finish-checkpoint-clarity discipline, persisted.
+  - **Recommended default + --all-defaults** — confirm-or-override fast.
   - **Choices enumerated + actionable** — each maps to a resolution the loop applies; never free-form.
   - **Async/batch** — human-answer-time decouples from agent-run-time.
 
@@ -33,24 +41,24 @@ description: |-
 
   ## Why now
 
-  Directly attacks the diagnosed bottleneck (human-recovery latency). Compounds with BUG-444 (fewer false-stops → fewer questions) and the advisor tier (auto-resolves principled forks → fewer escalations) so residual human involvement is minimal + pleasant.
+  Attacks the diagnosed bottleneck (human-recovery latency). Compounds with BUG-444 (fewer false-stops → fewer questions) and the advisor tier (auto-resolves principled forks → fewer escalations) so residual human involvement is minimal + pleasant.
 
   ## Acceptance (sketch — master refines; likely EPIC-promotable)
 
   - [ ] A fork the advisor can't resolve emits a structured DecisionRequest (question + enumerated choices + default + consequences) on the spec, not just a reason string.
-  - [ ] `aida questions` lists all pending DecisionRequests across specs (the human decision inbox).
-  - [ ] `aida answer <spec> <choice>` records the human's choice WITHOUT any agent/LLM and flips status pending → answered; a "confirm all defaults" batch path exists.
+  - [ ] `aida questions` lists the inbox and, at a TTY with pending items, offers to enter the answer loop; `aida questions list` is the pure read.
+  - [ ] `aida questions answer [<spec> <choice>]` records answers WITHOUT any agent/LLM (interactive loop with no args; single non-interactive with spec+choice) and flips status pending → answered; `--all-defaults` confirms recommended defaults in bulk.
   - [ ] The next drain/advisor loop applies the answered choice and resumes the spec.
   - [ ] Questions are self-contained (no spec re-read needed) — enforced by the distillation template.
 
   ## Relationships
-  - Builds on STORY-306 (advisor tier / escalation), `--escalate-defaults`. Symmetric with ADR-3 (intake inbox). Reduces the load measured by EPIC-36 (recovery-latency metric). Out-of-band channel: STORY-493 (mailbox). The human-facing rung of the autonomy ladder (docs/architecture/autonomy-and-escalation.md).
+  - Builds on STORY-306 (advisor tier / escalation), `--escalate-defaults`. Symmetric with ADR-3 (intake inbox). Reduces the recovery-latency metric (EPIC-36). Out-of-band channel: STORY-493 (mailbox). The human-facing rung of the autonomy ladder (docs/architecture/autonomy-and-escalation.md).
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:27:24.322241773Z
-modified_at: 2026-06-06T03:27:24.322241773Z
+modified_at: 2026-06-06T03:32:31.043614835Z
 req_type: Story
 tags:
 - async-decision
