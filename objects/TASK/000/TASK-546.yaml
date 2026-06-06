@@ -8,8 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:30:30.158627774Z
-modified_at: 2026-06-06T08:13:37.518682768Z
+modified_at: 2026-06-06T08:13:38.941385147Z
 req_type: Task
 tags:
 - aida-chat-followup
 - graduation-candidate
+comments:
+- id: 019e9bfe-aafd-7712-b38a-1111dae58856
+  author: joe
+  content: 'Disposition sweep 2026-06-06 — REJECTED. Reject: a deferred tickler gated on an external trigger (aida-chat shipping + 2wk data / 2+ consumers), not actionable work; the graduation decision now lives in the EPIC-32 disposition.'
+  created_at: 2026-06-06T08:13:38.941385147Z
+  modified_at: 2026-06-06T08:13:38.941385147Z
