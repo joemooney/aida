@@ -5222,6 +5222,15 @@ pub enum Command {
         #[clap(long)]
         force: bool,
 
+        /// Exempt specs completed before this point from the
+        /// completed-without-commit integrity check (a git ref/tag whose
+        /// commit date is the cutoff, or an ISO date). Quiets noise on
+        /// legacy history predating trace conventions. Falls back to the
+        /// AIDA_DOCTOR_COMPLETED_SINCE env var.
+        // trace:TASK-673 | ai:claude
+        #[clap(long, value_name = "REF_OR_DATE")]
+        since: Option<String>,
+
         /// Legacy maintenance subcommand or focused doctor action.
         #[clap(subcommand)]
         cmd: Option<DoctorCommand>,

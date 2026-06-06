@@ -1031,6 +1031,7 @@ fn run() -> Result<()> {
         category,
         json,
         force,
+        since,
         cmd,
     } = &cli.command
     {
@@ -1040,6 +1041,7 @@ fn run() -> Result<()> {
             category.as_deref(),
             *json,
             *force,
+            since.as_deref(),
             cmd.as_ref(),
         );
     }
@@ -18369,6 +18371,7 @@ fn handle_doctor_command(
     category: Option<&str>,
     json: bool,
     force: bool,
+    since: Option<&str>,
     cmd: Option<&cli::DoctorCommand>,
 ) -> Result<()> {
     let Some(cmd) = cmd else {
@@ -18378,6 +18381,7 @@ fn handle_doctor_command(
             category: category.map(str::to_string),
             json,
             force,
+            since: since.map(str::to_string),
         });
     };
     match cmd {
@@ -18387,6 +18391,7 @@ fn handle_doctor_command(
             category: Some(category.clone()),
             json: *json,
             force,
+            since: since.map(str::to_string),
         }),
         cli::DoctorCommand::Heal {
             category,
@@ -18399,6 +18404,7 @@ fn handle_doctor_command(
             category: Some(category.clone()),
             json: *json,
             force: *force,
+            since: since.map(str::to_string),
         }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
@@ -18434,6 +18440,9 @@ struct DoctorRunOptions {
     category: Option<String>,
     json: bool,
     force: bool,
+    /// TASK-673: cutoff for the completed-without-commit integrity check —
+    /// specs completed before this ref/date are exempt (legacy history).
+    since: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -18478,11 +18487,29 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let store = Storage::new(&store_path)
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
-    let mut report = DoctorReport::from_findings(collect_doctor_findings(
-        &project_root,
-        &store,
-        opts.category.as_deref(),
-    )?);
+    let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+
+    // TASK-673: the completed-without-commit integrity check runs git scans
+    // (a default-branch `git log` + `git grep`) so it is kept OUT of the hot
+    // `collect_doctor_findings` path (which `aida status` calls on every
+    // invocation) and appended here, where only `aida doctor` reaches it.
+    // It honours the same `--category` filter as the built-in categories.
+    // trace:TASK-673 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "completed-without-commit")? {
+        let since = opts
+            .since
+            .clone()
+            .or_else(|| std::env::var("AIDA_DOCTOR_COMPLETED_SINCE").ok())
+            .filter(|s| !s.trim().is_empty());
+        findings.extend(scan_completed_without_commit(
+            &project_root,
+            &store,
+            since.as_deref(),
+        ));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    let mut report = DoctorReport::from_findings(findings);
 
     if opts.heal {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
@@ -18850,15 +18877,223 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // STORY-496: dead-PID agent-registry entries (corpses under
         // `.aida/agents/`). trace:STORY-496 | ai:claude
         "dead-agent" | "dead-agents" | "stale-agent" | "stale-agents" | "agents" => "dead-agents",
+        // TASK-673: Completed specs git can't corroborate. trace:TASK-673 | ai:claude
+        "completed-without-commit"
+        | "completed-without-commits"
+        | "completed-no-commit"
+        | "uncorroborated-completed"
+        | "integrity" => "completed-without-commit",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, orphan-queue-entries, stale-reviewer-leases, stale-locks, \
-             dead-agents, OBE-briefs)",
+             dead-agents, OBE-briefs, completed-without-commit)",
             other
         ),
     };
     Ok(normalized.to_string())
+}
+
+/// Whether `category` (a normalized doctor category) is in scope given the
+/// user's `--category` filter. `None` filter selects everything. Errors only
+/// if the filter itself is an unknown category. trace:TASK-673 | ai:claude
+fn doctor_category_selected(filter: Option<&str>, category: &str) -> Result<bool> {
+    match filter {
+        None => Ok(true),
+        Some(raw) => Ok(normalize_doctor_category(raw)? == category),
+    }
+}
+
+/// TASK-673: spec-graph ⟂ git tripwire. Returns a `completed-without-commit`
+/// finding for every spec in `Completed` status that NO commit on the default
+/// CODE branch references (by `(SPEC-ID)` subject/trailer) and that NO tracked
+/// file at that branch carries a `// trace:SPEC-ID`. A Completed spec with zero
+/// corroboration means the requirement graph is asserting work git has never
+/// seen — the defense-in-depth companion to the BUG-449 MCP gate.
+///
+/// CRITICAL: scans the default CODE branch only (resolved via
+/// `resolve_default_branch_ref`), never the orphan `aida-store` branch — whose
+/// `update SPEC-NNN` bookkeeping commits mention the bare id and would mask
+/// every violation. Plan commits are skipped (their trailer names planned, not
+/// delivered, specs). `Done` specs are deliberately excluded: that is the
+/// queue's "awaiting commit" transient, surfaced separately, so this check
+/// targets only the harder Completed-without-corroboration case. Read-only.
+///
+/// `since` (a git ref/tag or ISO date) exempts specs last modified before that
+/// point, quieting noise on legacy history predating trace conventions. The
+/// reference scan itself always walks the FULL default-branch history so an old
+/// corroborating commit is never missed. trace:TASK-673 | ai:claude
+fn scan_completed_without_commit(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    since: Option<&str>,
+) -> Vec<DoctorFinding> {
+    use std::process::Command as PCmd;
+
+    let completed: Vec<&aida_core::models::Requirement> = store
+        .requirements
+        .iter()
+        .filter(|r| matches!(r.status, RequirementStatus::Completed))
+        .filter(|r| r.spec_id.is_some() || r.agreed_id.is_some())
+        .collect();
+    if completed.is_empty() {
+        return Vec::new();
+    }
+
+    // No resolvable default branch (e.g. a store with no code repo) → we cannot
+    // corroborate, so stay silent rather than flag every Completed spec.
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+
+    // ---- Reference set: spec ids named by commits on the default branch. ----
+    // Full history (no --max-count) so an old corroborating commit is never
+    // missed — the `since` cutoff bounds *flagging*, not the reference scan.
+    let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Some(log) = git(&["log", "--pretty=format:%s", &default_ref]) {
+        for subject in log.lines() {
+            let subject = subject.trim();
+            if subject.is_empty() || is_plan_commit_subject(subject) {
+                continue;
+            }
+            for id in extract_spec_ids_from_commit(subject) {
+                referenced.insert(id.to_ascii_uppercase());
+            }
+        }
+    }
+
+    // ---- Reference set, second source: `// trace:SPEC-ID` in tracked files. ----
+    // `git grep <ref>` scans only tracked blobs at the default branch tree —
+    // exactly "a tracked file carries the trace". Unioning trace hits keeps the
+    // reference set as complete as possible so the check stays conservative
+    // (false positives erode trust faster than the rare miss).
+    if let Some(grep) = git(&[
+        "grep",
+        "-hoI",
+        "-E",
+        r"trace:[A-Za-z]+-[0-9]+(-[0-9]+)?",
+        &default_ref,
+    ]) {
+        for line in grep.lines() {
+            if let Some(id) = parse_trace_id_token(line) {
+                referenced.insert(id);
+            }
+        }
+    }
+
+    // ---- Optional legacy-exemption cutoff. ----
+    let cutoff = since.and_then(|s| resolve_completed_since_cutoff(project_root, s));
+
+    let mut findings = Vec::new();
+    for req in completed {
+        if let Some(cut) = cutoff {
+            if req.modified_at < cut {
+                continue; // legacy spec, exempt from the check
+            }
+        }
+        let spec_id = req.spec_id.as_deref().or(req.agreed_id.as_deref());
+        let Some(spec_id) = spec_id else { continue };
+        let referenced_by_id = referenced.contains(&spec_id.to_ascii_uppercase())
+            || req
+                .agreed_id
+                .as_deref()
+                .map(|a| referenced.contains(&a.to_ascii_uppercase()))
+                .unwrap_or(false)
+            || req
+                .spec_id
+                .as_deref()
+                .map(|s| referenced.contains(&s.to_ascii_uppercase()))
+                .unwrap_or(false);
+        if referenced_by_id {
+            continue;
+        }
+        findings.push(DoctorFinding {
+            category: "completed-without-commit".to_string(),
+            id: spec_id.to_string(),
+            summary: format!(
+                "Completed spec {spec_id} has no commit referencing it on {default_ref} \
+                 (and no tracked trace comment) — git cannot corroborate the completion"
+            ),
+            action: format!(
+                "land a commit carrying `({spec_id})` then `aida pull`, or re-open for triage \
+                 (`aida doctor --heal --category completed-without-commit --yes --force`)"
+            ),
+            // Re-opening a Completed spec is a real status mutation, never a
+            // "safe" auto-fix — gated behind --yes --force like branch deletion.
+            safe_heal: false,
+        });
+    }
+    findings.sort_by(|a, b| a.id.cmp(&b.id));
+    findings
+}
+
+/// Parse the spec id out of a `git grep -o` hit on the trace regex. The line is
+/// the matched text (`trace:SPEC-ID`), possibly carrying a `ref:file:` prefix
+/// git adds when grepping a tree; we locate the last `trace:` and read the id
+/// after it. Returns the id upper-cased, or None if the token is malformed.
+/// trace:TASK-673 | ai:claude
+fn parse_trace_id_token(line: &str) -> Option<String> {
+    let idx = line.rfind("trace:")?;
+    let rest = &line[idx + "trace:".len()..];
+    let end = rest
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .unwrap_or(rest.len());
+    let tok = &rest[..end];
+    // Shape: <ALPHA>+ '-' <DIGITS> (optional '-<DIGITS>'). Guard against a bare
+    // word or a leading digit so non-spec `trace:` strings don't pollute the set.
+    let first_alpha = tok.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+    if first_alpha && tok.contains('-') {
+        Some(tok.to_ascii_uppercase())
+    } else {
+        None
+    }
+}
+
+/// Resolve a `--since` value to a UTC cutoff: first try it as a git ref/tag and
+/// take that commit's committer date; failing that, parse it as an RFC-3339
+/// datetime or a bare `YYYY-MM-DD` date. None if it resolves to neither.
+/// trace:TASK-673 | ai:claude
+fn resolve_completed_since_cutoff(
+    project_root: &std::path::Path,
+    since: &str,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    use std::process::Command as PCmd;
+    let out = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-1", "--format=%cI", since])
+        .output()
+        .ok();
+    if let Some(o) = out {
+        if o.status.success() {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&s) {
+                return Some(dt.with_timezone(&chrono::Utc));
+            }
+        }
+    }
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(since) {
+        return Some(dt.with_timezone(&chrono::Utc));
+    }
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(since, "%Y-%m-%d") {
+        let naive = d.and_hms_opt(0, 0, 0)?;
+        return Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
+            naive,
+            chrono::Utc,
+        ));
+    }
+    None
 }
 
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
@@ -19003,6 +19238,12 @@ fn heal_doctor_finding(
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
         }
+        // TASK-673: re-open an uncorroborated Completed spec to Done so it
+        // surfaces in the queue's "awaiting commit" lane for triage rather than
+        // silently asserting work git never saw. Force-gated (see heal_doctor_findings).
+        "completed-without-commit" if opts.force && opts.yes => {
+            heal_doctor_completed_without_commit(project_root, finding)
+        }
         _ => Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -19142,6 +19383,50 @@ fn heal_doctor_spec_status(
         category: finding.category.clone(),
         id: finding.id.clone(),
         action: action.unwrap_or_else(|| "no automatic status change applied".to_string()),
+        status: if changed { "healed" } else { "skipped" }.to_string(),
+        detail: None,
+    })
+}
+
+/// TASK-673: re-open a Completed-without-corroboration spec to Done. Done is the
+/// "finished on a branch, awaiting merge" state, so the spec lands in the
+/// queue's "awaiting commit" lane where the missing corroboration is visible and
+/// actionable — far better than a Completed row git can't back up. Re-checks the
+/// status is still Completed (a concurrent `aida pull` may have legitimately
+/// corroborated it since the scan). The finding id matches either spec_id or
+/// agreed_id. trace:TASK-673 | ai:claude
+fn heal_doctor_completed_without_commit(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let mut store = storage.load()?;
+    let mut action = None;
+    for req in &mut store.requirements {
+        let matches_id = req.spec_id.as_deref() == Some(finding.id.as_str())
+            || req.agreed_id.as_deref() == Some(finding.id.as_str());
+        if !matches_id {
+            continue;
+        }
+        if matches!(req.status, RequirementStatus::Completed) {
+            req.status = RequirementStatus::Done;
+            req.modified_at = chrono::Utc::now();
+            action = Some(format!(
+                "re-opened {} from Completed to Done (no corroborating commit) for triage",
+                finding.id
+            ));
+        }
+        break;
+    }
+    if action.is_some() {
+        storage.save(&store)?;
+    }
+    let changed = action.is_some();
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: action
+            .unwrap_or_else(|| "spec is no longer Completed — nothing to re-open".to_string()),
         status: if changed { "healed" } else { "skipped" }.to_string(),
         detail: None,
     })
@@ -19352,6 +19637,7 @@ mod story_462_doctor_tests {
             category,
             json,
             force,
+            since,
             cmd,
         } = cli.command
         else {
@@ -19362,6 +19648,7 @@ mod story_462_doctor_tests {
         assert_eq!(category.as_deref(), Some("stale-leases"));
         assert!(json);
         assert!(!force);
+        assert!(since.is_none());
         assert!(cmd.is_none());
     }
 
@@ -19476,6 +19763,259 @@ mod story_462_doctor_tests {
         assert!(normalize_doctor_category("not-a-category").is_err());
     }
 
+    // ---- TASK-673: completed-without-commit integrity tripwire ----
+
+    #[test]
+    fn normalize_doctor_category_accepts_completed_without_commit() {
+        for alias in [
+            "completed-without-commit",
+            "completed-no-commit",
+            "uncorroborated-completed",
+            "integrity",
+        ] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                "completed-without-commit"
+            );
+        }
+    }
+
+    #[test]
+    fn doctor_category_selected_honours_filter() {
+        // No filter selects everything.
+        assert!(doctor_category_selected(None, "completed-without-commit").unwrap());
+        // Matching (including via alias) selects.
+        assert!(doctor_category_selected(Some("integrity"), "completed-without-commit").unwrap());
+        // Non-matching filter excludes.
+        assert!(
+            !doctor_category_selected(Some("stale-leases"), "completed-without-commit").unwrap()
+        );
+        // Unknown filter is an error, not a silent false.
+        assert!(doctor_category_selected(Some("bogus"), "completed-without-commit").is_err());
+    }
+
+    #[test]
+    fn parse_trace_id_token_extracts_spec_id() {
+        assert_eq!(
+            parse_trace_id_token("trace:TASK-673"),
+            Some("TASK-673".into())
+        );
+        // git grep on a ref may keep a `ref:file:` prefix — take the last trace:.
+        assert_eq!(
+            parse_trace_id_token("main:src/a.rs:trace:STORY-86"),
+            Some("STORY-86".into())
+        );
+        // Hierarchical ids (FR-1-042) survive.
+        assert_eq!(
+            parse_trace_id_token("trace:FR-1-042"),
+            Some("FR-1-042".into())
+        );
+        // Lower-case input normalizes up.
+        assert_eq!(parse_trace_id_token("trace:task-9"), Some("TASK-9".into()));
+        // Malformed (no hyphen / leading digit) → None.
+        assert_eq!(parse_trace_id_token("trace:nope"), None);
+        assert_eq!(parse_trace_id_token("no trace here"), None);
+    }
+
+    /// Helper: a code repo on `main` plus an attached `.aida-store` whose specs
+    /// are saved through `Storage`. Returns (project_root tempdir, storage).
+    fn integrity_fixture() -> (tempfile::TempDir, Storage) {
+        fn g(root: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .expect("git");
+            assert!(out.status.success(), "git {:?} failed", args);
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        g(root, &["init", "-q", "-b", "main"]);
+        g(root, &["config", "user.email", "t@t.t"]);
+        g(root, &["config", "user.name", "t"]);
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        let storage = Storage::new(root.join(".aida-store"));
+        (tmp, storage)
+    }
+
+    fn completed_spec(spec_id: &str) -> Requirement {
+        let mut req = Requirement::new(format!("work for {spec_id}"), String::new());
+        req.spec_id = Some(spec_id.to_string());
+        req.status = RequirementStatus::Completed;
+        req
+    }
+
+    #[test]
+    fn integrity_flags_completed_spec_without_any_reference() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        // A real commit corroborates TASK-100; TASK-200 has no commit at all.
+        std::fs::write(root.join("a.txt"), "x").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-qm", "feat: do the thing (TASK-100)"]);
+
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-100"), completed_spec("TASK-200")];
+        storage.save(&store).unwrap();
+
+        let findings = scan_completed_without_commit(root, &store, None);
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["TASK-200"],
+            "only the uncorroborated spec flagged"
+        );
+        assert_eq!(findings[0].category, "completed-without-commit");
+        assert!(!findings[0].safe_heal, "re-open is never a safe auto-fix");
+    }
+
+    #[test]
+    fn integrity_trace_comment_corroborates() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        // No (SPEC-ID) in the subject, but a tracked file carries the trace.
+        std::fs::write(
+            root.join("lib.rs"),
+            "// trace:TASK-300 | ai:claude\nfn f() {}\n",
+        )
+        .unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-qm", "chore: scaffold"]);
+
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-300")];
+        storage.save(&store).unwrap();
+
+        let findings = scan_completed_without_commit(root, &store, None);
+        assert!(
+            findings.is_empty(),
+            "a tracked // trace:SPEC-ID is corroboration, expected no findings, got {findings:?}"
+        );
+    }
+
+    #[test]
+    fn integrity_ignores_aida_store_bookkeeping_commits() {
+        // The orphan-store-style bare "update TASK-NNN" subject must NOT count
+        // as a reference — it always exists and would mask every violation.
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        std::fs::write(root.join("a.txt"), "x").unwrap();
+        g(&["add", "."]);
+        // Bare "update TASK-400" — no parenthesized trailer.
+        g(&["commit", "-qm", "update TASK-400"]);
+
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-400")];
+        storage.save(&store).unwrap();
+
+        let findings = scan_completed_without_commit(root, &store, None);
+        assert_eq!(
+            findings.len(),
+            1,
+            "bare 'update TASK-NNN' must not corroborate"
+        );
+        assert_eq!(findings[0].id, "TASK-400");
+    }
+
+    #[test]
+    fn integrity_done_specs_are_not_flagged() {
+        // Done is the queue's "awaiting commit" transient, surfaced elsewhere —
+        // this check targets only Completed-without-corroboration.
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["commit", "--allow-empty", "-qm", "init"])
+            .output()
+            .unwrap();
+
+        let mut done = completed_spec("TASK-500");
+        done.status = RequirementStatus::Done;
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![done];
+        storage.save(&store).unwrap();
+
+        assert!(scan_completed_without_commit(root, &store, None).is_empty());
+    }
+
+    #[test]
+    fn integrity_since_exempts_legacy_specs() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["commit", "--allow-empty", "-qm", "init"])
+            .output()
+            .unwrap();
+
+        let mut legacy = completed_spec("TASK-600");
+        legacy.modified_at = "2020-01-01T00:00:00Z".parse().unwrap();
+        let mut recent = completed_spec("TASK-601");
+        recent.modified_at = chrono::Utc::now();
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![legacy, recent];
+        storage.save(&store).unwrap();
+
+        // No cutoff → both flagged.
+        assert_eq!(scan_completed_without_commit(root, &store, None).len(), 2);
+        // Cutoff after the legacy spec → only the recent one flagged.
+        let findings = scan_completed_without_commit(root, &store, Some("2023-01-01"));
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["TASK-601"]);
+    }
+
+    #[test]
+    fn integrity_heal_reopens_completed_to_done() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-700")];
+        storage.save(&store).unwrap();
+
+        let finding = DoctorFinding {
+            category: "completed-without-commit".to_string(),
+            id: "TASK-700".to_string(),
+            summary: "Completed spec TASK-700 has no commit ...".to_string(),
+            action: "re-open".to_string(),
+            safe_heal: false,
+        };
+        let result = heal_doctor_completed_without_commit(root, &finding).unwrap();
+        assert_eq!(result.status, "healed");
+        let reloaded = storage.load().unwrap();
+        assert_eq!(reloaded.requirements[0].status, RequirementStatus::Done);
+
+        // Idempotent: a second heal is a no-op (spec already left Completed).
+        let again = heal_doctor_completed_without_commit(root, &finding).unwrap();
+        assert_eq!(again.status, "skipped");
+    }
+
     /// BUG-407: `confirm_doctor_category` must NOT block on stdin in a
     /// non-interactive shell (the `aida doctor --heal` hang). Under `cargo
     /// test` stdin is non-interactive, so this returns Ok(false) immediately
@@ -19525,6 +20065,7 @@ mod story_462_doctor_tests {
                 category: Some("stale-locks".to_string()),
                 json: false,
                 force: false,
+                since: None,
             },
         )
         .unwrap();
@@ -19562,6 +20103,7 @@ mod story_462_doctor_tests {
                 category: Some("spec-status-drift".to_string()),
                 json: false,
                 force: false,
+                since: None,
             },
         )
         .unwrap();
@@ -19605,6 +20147,7 @@ mod story_462_doctor_tests {
                 category: Some("spec-status-drift".to_string()),
                 json: false,
                 force: false,
+                since: None,
             },
         )
         .unwrap();
@@ -19695,6 +20238,7 @@ mod story_462_doctor_tests {
             category: Some("orphan-queue-entries".to_string()),
             json: false,
             force: false,
+            since: None,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
         assert_eq!(result.status, "healed");
@@ -59940,7 +60484,18 @@ fn print_status_hygiene_section(
         });
     }
 
-    if findings.is_empty() {
+    // TASK-673: a one-line count of Completed specs git can't corroborate. The
+    // full listing + remediation lives in `aida doctor`; here we just surface
+    // the integrity tripwire so the substrate polices its own completion claim
+    // even on a quick `aida status`. Honors AIDA_DOCTOR_COMPLETED_SINCE for the
+    // legacy-history exemption. trace:TASK-673 | ai:claude
+    let integrity_since = std::env::var("AIDA_DOCTOR_COMPLETED_SINCE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let uncorroborated =
+        scan_completed_without_commit(project_root, store, integrity_since.as_deref()).len();
+
+    if findings.is_empty() && uncorroborated == 0 {
         return Ok(());
     }
 
@@ -59977,6 +60532,16 @@ fn print_status_hygiene_section(
     if total > limit {
         let overflow = total - limit;
         println!("    • +{} more (run aida doctor)", overflow);
+    }
+
+    if uncorroborated > 0 {
+        println!(
+            "  {} {} Completed spec{} with no corroborating commit (run {})",
+            "⚠".yellow(),
+            uncorroborated,
+            if uncorroborated == 1 { "" } else { "s" },
+            "aida doctor --category completed-without-commit".cyan()
+        );
     }
     println!();
 
