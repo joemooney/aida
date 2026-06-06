@@ -14,12 +14,12 @@ description: |-
   FIX OPTIONS: (a) have the headless implementer commit incrementally / commit-before-deep-refine; (b) count Edit/Write tool file-changes (not just commits) in the watchdog's progress signal; (c) make the window configurable + larger default for big-file tasks; (d) reset the watchdog on any tool-use that mutates the worktree. Verify by re-draining TASK-673 (its work is patch-recoverable) and confirming it ships.
 
   RELIABILITY-CRITICAL (autonomy keystone) → fix at the keyboard, not via the broken drain.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T23:39:40.321213715Z
-modified_at: 2026-06-06T03:45:08.105299649Z
+modified_at: 2026-06-06T03:49:35.716092339Z
 req_type: Bug
 tags:
 - autonomy
@@ -35,3 +35,7 @@ comments:
   content: Commit a3b3f00e9 references this requirement
   created_at: 2026-06-06T03:45:08.105299649Z
   modified_at: 2026-06-06T03:45:08.105299649Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T03:49:35.716092339Z
+  completion_sha: dcec52b5996079dc2e3e9280e0f4c2edf49260d7
