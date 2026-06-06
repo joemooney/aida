@@ -46,12 +46,12 @@ description: |
   ## Acceptance (EPIC-level)
 
   When mostly shipped, a developer asking "when should I use `aida queue work --steal`?" gets a clean tutorial answer in `docs/tutorials/` or `aida doc show TASK-81` instead of grepping commit history. A new contributor can read the auto-generated book index and find conceptual chapters that reflect AIDA's actual feature landscape.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-06-06T13:39:08.680791150Z
+modified_at: 2026-06-06T13:39:10.127548255Z
 req_type: Epic
 tags:
 - needs-human-input
