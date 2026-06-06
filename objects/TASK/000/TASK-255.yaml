@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:34:29.321146368Z
-modified_at: 2026-06-06T08:18:14.207344313Z
+modified_at: 2026-06-06T14:25:56.499214891Z
 req_type: Task
 tags:
 - empty-state
@@ -37,3 +37,8 @@ comments:
       REC: a — park per its own sequencing; when it proceeds, (c) is the right entry. Timing is the human call.
   created_at: 2026-06-06T08:18:12.068056355Z
   modified_at: 2026-06-06T08:18:12.068056355Z
+- id: 019e9d53-8313-7ae2-b079-d7d717f7c9b2
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): HOLD post-alpha — the spec self-identifies as a post-alpha enhancement (''not an alpha gate''); the bugs-before-marketing phase defers TUI-richness. When it proceeds, start with the thin slice (role-queue head + open-PR count), then add leases/CI-rollup/suggested-actions.'
+  created_at: 2026-06-06T14:25:56.499214891Z
+  modified_at: 2026-06-06T14:25:56.499214891Z
