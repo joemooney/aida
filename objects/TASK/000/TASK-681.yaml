@@ -3,12 +3,12 @@ spec_id: TASK-681
 agreed_id: TASK-681
 title: Audit all mutating MCP tools for authority/lifecycle gate parity (EPIC-38)
 description: 'Operator decision 2026-06-06 (EPIC-38): audit EVERY mutating MCP tool in aida-cli/src/mcp.rs for the authority/lifecycle gates that BUG-449 added to update_requirement and TASK-647 added to add_requirement. Enumerate the mutating tools (add_relationship, add_comment, update_relationship?, punt/add_punt, ack/brief writers, queue mutators if exposed, …), and for each verify: does it let an untrusted MCP caller self-grant approved+ status, self-complete, or otherwise bypass an invariant the CLI enforces? Fix any gap with the same pattern (refuse with a clear message; mcp_status_gate_message-style). Add a regression test per fixed tool + extend tests/test_mcp_stdio.py. Out of scope: read-only tools.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T13:49:51.094112186Z
-modified_at: 2026-06-06T13:49:51.094112186Z
+modified_at: 2026-06-06T20:10:51.354191718Z
 req_type: Task
 tags:
 - from:EPIC-38
@@ -18,3 +18,7 @@ tags:
 - ready-to-implement
 - security
 - substrate-as-bouncer
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T20:10:51.354191718Z
+  completion_sha: bdcafa9afd9ca26a2b51c779cd5f63055e00b594
