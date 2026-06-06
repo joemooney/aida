@@ -81,7 +81,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:17.799198527Z
-modified_at: 2026-06-06T08:34:20.029925779Z
+modified_at: 2026-06-06T08:34:21.463152358Z
 req_type: Story
 tags:
 - agents
@@ -90,6 +90,7 @@ tags:
 - from-self-test
 - from-user-direction
 - multi-machine
+- needs-human-input
 - parent:EPIC-31
 - phase-followup
 - re-filed-from-rebase-loss
