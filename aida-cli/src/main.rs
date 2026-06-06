@@ -12990,8 +12990,22 @@ fn handle_graph_command(
             "follow",
         )
     } else {
+        // BUG-448: the epic rollup must union BOTH parenthood edge types stored
+        // on the parent. `aida add --parent` records a `Child` edge on the
+        // parent; `aida rel add --type parent` records a `Parent` edge on the
+        // parent (inverted-but-displayed-as "is parent of") and writes nothing
+        // on the child. Both are OUTGOING from the epic and both mean "this is a
+        // child", so `--tree` walked over only `Child` reported "(no related
+        // specs)" for any epic whose children were grouped post-hoc via
+        // `rel add`. Walking both types (deduped by the visited/seen sets) makes
+        // `show`, `--follow parent`, and `--tree` agree. The underlying
+        // edge-semantics divergence is a separate data-model normalization
+        // (follow-up). trace:BUG-448 | ai:claude
         (
-            vec![(vec![RelationshipType::Child], Direction::Outgoing)],
+            vec![(
+                vec![RelationshipType::Child, RelationshipType::Parent],
+                Direction::Outgoing,
+            )],
             "tree",
         )
     };
