@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:34.828606283Z
-modified_at: 2026-06-03T05:40:34.828606283Z
+modified_at: 2026-06-06T08:30:44.538825490Z
 req_type: Spike
 tags:
 - foundations
@@ -34,3 +34,9 @@ relationships:
 - rel_type: Child
   target_id: 019e8bfe-8dbc-7493-8cbe-5324878590c3
   created_at: 2026-06-03T05:40:46.350754052Z
+comments:
+- id: 019e9c0e-513a-7563-b3c1-5d54712bb8f3
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Spike with crisp acceptance — produce a written, deterministically-implementable definition of "trace coverage" for a diff + exemption list + measurement approach + go/no-go; it is the gating research for STORY-499 and is bounded research output, not an open product decision.
+  created_at: 2026-06-06T08:30:44.538825490Z
+  modified_at: 2026-06-06T08:30:44.538825490Z
