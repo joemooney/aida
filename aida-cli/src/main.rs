@@ -3905,6 +3905,7 @@ fn queue_promoted_finding(
         for_role: Some(role.clone()),
         for_scope: None,
         for_session: None,
+        added_by_machine: None,
     };
     storage.queue_add(entry).with_context(|| {
         format!(
@@ -4955,6 +4956,7 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
         for_role: Some("implementer".to_string()),
         for_scope: None,
         for_session: None,
+        added_by_machine: None,
     };
     // Best-effort queue_add — the spec exists either way; queue-add failure
     // is a softer error than the substrate write being unrecoverable.
@@ -21321,6 +21323,7 @@ mod story_462_doctor_tests {
             for_role: Some("reviewer".into()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         storage.queue_add(entry).unwrap();
 
@@ -21361,6 +21364,7 @@ mod story_462_doctor_tests {
             for_role: Some("reviewer".into()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         storage.queue_add(entry).unwrap();
 
@@ -40611,6 +40615,7 @@ mod statusline_tests {
             for_role: None,
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         let err = classify_queue_move_target(
             target,
@@ -40657,6 +40662,7 @@ mod statusline_tests {
             for_role: None,
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         classify_queue_move_target(
             target,
@@ -42549,6 +42555,7 @@ reason = "reserved by docs build"
             for_role: Some("implementer".into()),
             for_scope: scope.map(|s| s.to_string()),
             for_session: sess.map(|s| s.to_string()),
+            added_by_machine: None,
         };
         let lease = SessionLease {
             id: "abcdef123456".into(),
@@ -43756,6 +43763,64 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn current_user_id_override_wins() {
         assert_eq!(current_user_id(Some("alice")), "alice");
+    }
+
+    // ---- TASK-618: default-queue cross-machine collision predicate ----
+
+    /// Non-"default" user_ids shard cleanly per user, so a foreign
+    /// fingerprint there is NOT a collision (alice.yaml vs bob.yaml never
+    /// share a file). The predicate must stay silent regardless.
+    #[test]
+    fn collision_predicate_ignores_non_default_user() {
+        assert_eq!(
+            default_queue_collision_fingerprint("alice", "host-a", [Some("host-b")]),
+            None
+        );
+    }
+
+    /// "default" + an existing entry from a DIFFERENT machine = the hazard:
+    /// return the foreign fingerprint to name in the warning.
+    #[test]
+    fn collision_predicate_flags_default_foreign_machine() {
+        assert_eq!(
+            default_queue_collision_fingerprint(
+                "default",
+                "host-a",
+                [Some("host-a"), Some("host-b")]
+            ),
+            Some("host-b".to_string())
+        );
+    }
+
+    /// "default" but every recorded fingerprint is THIS machine = no
+    /// collision (the common single-machine-unconfigured case).
+    #[test]
+    fn collision_predicate_silent_when_all_same_machine() {
+        assert_eq!(
+            default_queue_collision_fingerprint(
+                "default",
+                "host-a",
+                [Some("host-a"), Some("host-a")]
+            ),
+            None
+        );
+    }
+
+    /// Entries with no recorded fingerprint (pre-TASK-618 / non-CLI writers)
+    /// and empty strings are ignored — they can't be attributed to a machine,
+    /// so they never raise a false alarm.
+    #[test]
+    fn collision_predicate_ignores_unknown_fingerprints() {
+        assert_eq!(
+            default_queue_collision_fingerprint("default", "host-a", [None, Some("")]),
+            None
+        );
+        // An empty on-disk file (no entries) is silent too.
+        let empty: [Option<&str>; 0] = [];
+        assert_eq!(
+            default_queue_collision_fingerprint("default", "host-a", empty),
+            None
+        );
     }
 
     /// BUG-90: with no override, `AIDA_USER` is the highest-precedence env
@@ -59501,6 +59566,7 @@ mod queue_work_tests {
             for_role: for_role.map(String::from),
             for_scope: for_scope.map(String::from),
             for_session: None,
+            added_by_machine: None,
         }
     }
 
@@ -60636,6 +60702,7 @@ mod queue_work_tests {
                 for_role: Some("reviewer".into()),
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             })
             .unwrap();
     }
@@ -62579,6 +62646,7 @@ mod task_490_status_in_progress_tests {
                 for_role: Some("implementer".into()),
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             };
             backend.queue_add(entry).unwrap();
             store.requirements.push(r);
@@ -62597,6 +62665,7 @@ mod task_490_status_in_progress_tests {
             for_role: Some("implementer".into()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         backend.queue_add(buried_entry).unwrap();
         store.requirements.push(buried);
@@ -72203,6 +72272,54 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     })
 }
 
+/// TASK-618: detect the silent cross-machine queue-collision hazard.
+///
+/// The distributed queue shards per `user_id`: each writes
+/// `registry/queues/<user_id>.yaml` inside the orphan `aida-store` branch.
+/// Distinct users (`alice.yaml` / `bob.yaml`) never collide — that's the
+/// intended sharding. The hazard is when *two different machines* resolve
+/// to the SAME `user_id` and therefore write the SAME file: their
+/// concurrent commits produce a merge conflict on the next `aida db sync`
+/// rebase (or a rejected non-ff push). This is acute for the BUG-89
+/// `"default"` fallback — common in CI/containers where `$USER` /
+/// `$AIDA_USER` / `$USERNAME` are all unset, so multiple unconfigured
+/// clones silently share one `default.yaml`.
+///
+/// Per the operator decision on TASK-618 we only WARN (cheap, targets the
+/// actual silent case) rather than building conflict-tolerant YAML merges.
+/// The warning fires only for the genuinely dangerous shape: the resolved
+/// id is the `"default"` fallback AND the existing `default.yaml` already
+/// carries at least one entry stamped with a DIFFERENT machine fingerprint
+/// than this clone's.
+///
+/// Pure over its inputs so it's directly unit-testable: pass the resolved
+/// `user_id`, this machine's fingerprint, and the iterator of
+/// already-on-disk `added_by_machine` values. Returns the foreign
+/// fingerprint to name in the warning, or `None` when no warning is due.
+/// Entries with no recorded fingerprint (`None` — pre-TASK-618 or non-CLI
+/// writers) are ignored: we can't attribute them to a machine, so they
+/// never trigger a false alarm.
+/// trace:TASK-618 | ai:claude
+fn default_queue_collision_fingerprint<'a, I>(
+    user_id: &str,
+    this_machine: &str,
+    existing_fingerprints: I,
+) -> Option<String>
+where
+    I: IntoIterator<Item = Option<&'a str>>,
+{
+    if user_id != "default" {
+        return None;
+    }
+    existing_fingerprints.into_iter().flatten().find_map(|fp| {
+        if !fp.is_empty() && fp != this_machine {
+            Some(fp.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 /// Resolve `--for <role>` / `--all` / active-session-role into the
 /// effective queue role filter. Returns `(role_filter, only_unrouted)`:
 /// `only_unrouted=true` means filter to entries with no `for_role`
@@ -73713,6 +73830,32 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // trace:STORY-333 | ai:claude
             warn_if_queued_ahead_of_blocker(req, position, &store, &storage, &user_id);
 
+            // TASK-618: warn on the silent cross-machine collision hazard.
+            // When the queue user_id is the BUG-89 "default" fallback and a
+            // remote default.yaml already carries entries from a DIFFERENT
+            // machine, two clones are about to write the same orphan-branch
+            // file → merge conflict on the next sync rebase. Stamp this
+            // clone's fingerprint so the next add can make the same check.
+            // trace:TASK-618 | ai:claude
+            let this_machine = hostname();
+            if let Ok(existing) = storage.queue_list(&user_id, true) {
+                if let Some(other) = default_queue_collision_fingerprint(
+                    &user_id,
+                    &this_machine,
+                    existing.iter().map(|e| e.added_by_machine.as_deref()),
+                ) {
+                    eprintln!(
+                        "{} This queue is using the shared '{}' user id and already has \
+                         entries from another machine ('{}'). Two machines writing the \
+                         same queue can collide on the next sync. Set a distinct user id \
+                         per machine (export AIDA_USER=<name>) to keep queues separate.",
+                        "warning:".yellow().bold(),
+                        "default".bold(),
+                        other.bold(),
+                    );
+                }
+            }
+
             let entry = aida_core::QueueEntry {
                 user_id: user_id.clone(),
                 requirement_id: req.id,
@@ -73723,6 +73866,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 for_role: r#for.clone(),
                 for_scope: for_scope_routing.clone(),
                 for_session: for_session_routing.clone(),
+                added_by_machine: Some(this_machine),
             };
             storage.queue_add(entry)?;
             // BUG-65: bump role activity on queue-add so statusline tracks
@@ -76546,6 +76690,7 @@ fn handle_queue_rework(
         for_role: for_role_resolved.clone(),
         for_scope: None,
         for_session: None,
+        added_by_machine: None,
     };
     storage.queue_add(entry)?;
     record_role_activity(&spec_id, "queue-add");
@@ -76726,6 +76871,7 @@ fn resolve_queue_work_plan(
                     for_role: Some(role.clone()),
                     for_scope: None,
                     for_session: None,
+                    added_by_machine: None,
                 };
                 storage.queue_add(entry)?;
                 let display_id = req

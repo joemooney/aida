@@ -1684,6 +1684,7 @@ impl DatabaseBackend for SqliteBackend {
                     for_role: None,
                     for_scope: None,
                     for_session: None,
+                    added_by_machine: None,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;

@@ -665,6 +665,7 @@ fn handle_groom(
                 .filter(|s| !s.is_empty()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         storage
             .queue_add(entry)
