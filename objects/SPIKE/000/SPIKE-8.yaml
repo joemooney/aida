@@ -2,7 +2,7 @@ id: 019e34c9-d23f-7ef1-b543-24ff376fbca8
 spec_id: SPIKE-8
 agreed_id: SPIKE-8
 title: 'SPIKE: /ultraplan output quality — local vs web vs no-plan empirical comparison'
-description: |-
+description: |
   ## Hypothesis
 
   \`/ultraplan\` (local + web variants) produces planning-grade output that yields **measurably better implementations** than direct \`aida queue work SPEC\` (implementer-plans-as-it-goes). Until proven, AIDA's plan-archival + plan-brief-on-pickup conventions are being designed around an untested assumption.
@@ -108,12 +108,16 @@ description: |-
   2026-05-17 user observation: AIDA's \`aida ultraplan\` + \`/aida-import-plan\` + plan-brief-on-pickup convention is built on the assumption that \`/ultraplan\` (local + web) yields superior output. The assumption is untested. Autopilot drain time (Max-bundled, otherwise-idle) is the cheap research budget. User: *"We have time (especially if we are in autopilot no-human mode) to test that hypothesis and perform a local and web based plan?"*
 
   Negative result (planning doesn't help, or only marginally) is as valuable as positive — it would let us simplify the AIDA flow, drop TASK-305, and set TASK-304's default to \`mode = "never"\` for projects that don't actively opt in.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  KEEP DEFERRED (deferred:post-stability) — honor the tag + bugs-first phase. The spike's own framing (autopilot/--no-human time is the cheap research budget) argues it costs little to wait. Revisit at phase change; when run, a 1-spec directional probe is a fine first step before the full 2-3 spec comparison.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:15:02.335601702Z
-modified_at: 2026-06-06T15:18:28.185865475Z
+modified_at: 2026-06-06T15:18:30.906724209Z
 req_type: Spike
 tags:
 - deferred:post-stability
