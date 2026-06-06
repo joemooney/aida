@@ -2,7 +2,7 @@ id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
 spec_id: EPIC-28
 agreed_id: EPIC-28
 title: 'Dependency-aware autonomous drain: shelve failures, skip dependents, continue independents (full --auto-complete batch)'
-description: |-
+description: |
   The natural evolution of \`--auto-complete\` + \`--batch\`: instead of halting the entire batch on the first phase failure, **shelve the failed spec, skip its dependents, continue processing independents**, and surface the shelved set at the end for triage. Combined with **dependency declaration/inference** so the orchestrator knows what \"depends on\" means, and an optional **patch-release integration** so each successful spec can ship to a tagged version.
 
   ## Why this matters
@@ -94,12 +94,16 @@ description: |-
   User articulated 2026-05-16 after seeing two orchestrator failures today (BUG-114, BUG-217): *\"if we get autocomplete to work reliably, then we could have a batch autocomplete where each task would run through the complete cycle through build (possibly with patch release). Any failure along the way could be shelved and we could move onto the next task assuming it did not depend on the task that failed. Do we check for implementation dependencies between specs?\"*
 
   The honest answer: AIDA has no formal dependency model today. This EPIC fills that gap and unlocks the resilient-drain workflow on top.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Re-scope: the resilient-drain core (shelve/skip-dependent/max-failures) is SHIPPED. DROP STORY-450 (per-spec auto-patch-release is a post-alpha power-user layer, conflicts with bugs-before-marketing). EPIC closes once STORY-447 (deps sweep) lands. No new EPIC-level work.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-06-06T13:44:48.387403656Z
+modified_at: 2026-06-06T13:44:51.486282358Z
 req_type: Epic
 tags:
 - advisor-vision

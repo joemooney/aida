@@ -13529,5 +13529,108 @@ operations:
   timestamp: 2026-06-06T13:39:26.010272620Z
   kind: !SetStatus
     status: Rejected
-clock: 1488
+- id: 019e9d2d-e62e-7ed1-b052-30461cc33b76
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  author: aida
+  node_id: '1'
+  lamport: 1489
+  timestamp: 2026-06-06T13:44:51.502159212Z
+  kind: !SetDescription
+    description: |
+      The natural evolution of \`--auto-complete\` + \`--batch\`: instead of halting the entire batch on the first phase failure, **shelve the failed spec, skip its dependents, continue processing independents**, and surface the shelved set at the end for triage. Combined with **dependency declaration/inference** so the orchestrator knows what \"depends on\" means, and an optional **patch-release integration** so each successful spec can ship to a tagged version.
+
+      ## Why this matters
+
+      Today's autonomous drain is fragile: ONE failed phase halts everything. Real workflows want resilience — let the orchestrator drive overnight, accept some failures, return in the morning to triage a small shelved-set rather than re-discover the whole batch's state.
+
+      This is the difference between AIDA being \"autonomous one-spec-at-a-time\" (today) and \"autonomous batch-processor with graceful failure handling\" (this EPIC). The dependency awareness is what makes \"let it run overnight\" a viable production pattern.
+
+      ## Current state (the gap this EPIC closes)
+
+      AIDA has:
+      - ✅ \`--auto-complete\` orchestrator (single-spec, 6 phases — STORY-246)
+      - ✅ \`--batch <NAME>\` filter for queue work
+      - ⚠️ \`--batch + --auto-complete\` composition not yet wired (TASK-285)
+      - ❌ Formal \`blocks\` / \`depends-on\` relationship type — doesn't exist
+      - ❌ Shelving — no status / mechanism for \"failed; needs attention; keep going\"
+      - ❌ Dependency-aware skip logic — when X fails, can Y still proceed?
+      - ❌ Inferred dependencies — file overlap, trace-graph signals exist but aren't consulted
+      - ❌ Patch-release integration in \`--auto-complete\`
+
+      ## Candidate child STORYs
+
+      ### STORY 1 — Formal \`depends-on\` / \`blocks\` relationship type + CLI
+
+      - New relation type alongside parent/child/covers/supersedes
+      - \`aida add --depends-on TASK-N\` declares dependency at file-time
+      - \`aida edit X --depends-on Y\` adds retroactively
+      - \`aida show X\` displays: \"Depends on: TASK-N (Completed) ✓, TASK-M (In Progress) ◐\"
+      - \`aida queue work X\` refuses pickup if dependencies aren't Completed (override with \`--ignore-deps\`)
+
+      ### STORY 2 — Dependency inference from signals
+
+      - File overlap from \`// trace:\` comments
+      - Symbol overlap from trace graph (similar to \`aida plan helpers\`)
+      - Same parent (EPIC/STORY) — weak signal but worth surfacing
+      - Stacked branches (composes with STORY-248)
+      - \`aida add --infer-deps\` mode suggests likely dependencies; user confirms
+
+      ### STORY 3 — Shelving mechanism
+
+      - New status flow: in-progress + \"blocked\" or \"needs-attention\" metadata
+      - Possibly a new status \`Shelved\` (sibling to Rejected, but recoverable)
+      - \`aida queue list --shelved\` shows the recovery-needed set
+      - Each shelved spec records: what phase failed, what error, what recovery the orchestrator suggested
+      - \`aida queue unshelve <spec>\` re-queues with status flipped back to Approved/Planned
+
+      ### STORY 4 — Dependency-aware batch drain
+
+      - \`aida queue work --batch X --auto-complete --skip-blocked\` (or default behavior post-shelving)
+      - On phase-N failure for spec S:
+        1. Shelve S with failure context (phase, error, recovery hint)
+        2. Scan remaining batch for specs depending on S (via STORY-1's declarations + STORY-2's inferences) → also shelve those
+        3. Continue processing the rest
+      - End-of-batch summary: \"Shipped: 7. Shelved: 2. Skipped (blocked): 1. Use \`aida queue list --shelved\` to triage.\"
+
+      ### STORY 5 — Patch-release integration
+
+      - \`--auto-complete\` gains a phase 7 (optional): \`make release-patch YES=1\`
+      - Each successful spec → own patch release (v0.8.1, v0.8.2, ...)
+      - Configurable: per-spec releases OR aggregate-then-release-after-batch
+      - Composes with the cross-platform CI freshness check (TASK-257) so releases gate on green nightly
+      - Composes with the BUG-217 fix (subprocess PATH) — release subprocess invocation needs the same correctness
+
+      ## Acceptance (EPIC-level)
+
+      - [ ] All 5 child STORYs filed with concrete scope
+      - [ ] Each STORY tests independently; integration test verifies the full pipeline
+      - [ ] Documentation: \`docs/aida-discipline/autonomous-drain.md\` explains the dependency model + shelving lifecycle
+      - [ ] Updated CLAUDE.md / OVERVIEW.md reference this capability as the canonical \"autonomous overnight drain\" pattern
+      - [ ] First end-to-end dogfood: an actual batch drain with intentional failure injection, verify the right specs shelve, the right independents proceed
+
+      ## Composes with
+
+      - **EPIC-23** (Session orchestration & autonomy) — natural sibling; could be a STORY-cluster under EPIC-23 instead of its own EPIC depending on modeling choice. Recommend: sibling EPIC; the scope is broad enough to warrant its own EPIC-level identity (formal relationship type, new status, new orchestrator behavior — three load-bearing primitives)
+      - **STORY-246** (\`--auto-complete\` orchestrator) — this EPIC extends it
+      - **TASK-285** (\`--batch + --auto-complete\` composition) — subsumed by this EPIC's child STORY-4
+      - **TASK-266** (orchestrator failure telemetry) — shelving leverages the telemetry's failure-recording infrastructure
+      - **TASK-249** (\`/aida-drain-queue\` skill) — when this EPIC ships, the skill is a thin wrapper over the new primitives
+      - **BUG-114, BUG-217, BUG-218** (orchestrator reliability bugs) — must be fixed before resilient-drain is meaningful
+
+      ## Why post-alpha
+
+      Alpha audience is tech-savvy friends/colleagues running 1-5 specs sequentially. This EPIC is for the \"running 50+ specs overnight\" power-user workflow that emerges after alpha shakes out the basic loop.
+
+      But: filing now while the vision is fresh. The child STORYs can be shipped incrementally — STORY-1 (relationship type) is small and useful immediately even without the full pipeline.
+
+      ## Origin
+
+      User articulated 2026-05-16 after seeing two orchestrator failures today (BUG-114, BUG-217): *\"if we get autocomplete to work reliably, then we could have a batch autocomplete where each task would run through the complete cycle through build (possibly with patch release). Any failure along the way could be shelved and we could move onto the next task assuming it did not depend on the task that failed. Do we check for implementation dependencies between specs?\"*
+
+      The honest answer: AIDA has no formal dependency model today. This EPIC fills that gap and unlocks the resilient-drain workflow on top.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Re-scope: the resilient-drain core (shelve/skip-dependent/max-failures) is SHIPPED. DROP STORY-450 (per-spec auto-patch-release is a post-alpha power-user layer, conflicts with bugs-before-marketing). EPIC closes once STORY-447 (deps sweep) lands. No new EPIC-level work.
+clock: 1489
 node_id: '1'
