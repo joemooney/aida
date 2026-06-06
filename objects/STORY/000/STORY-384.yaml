@@ -74,7 +74,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T14:37:28.746765756Z
-modified_at: 2026-06-06T08:35:13.114877882Z
+modified_at: 2026-06-06T13:55:48.241195688Z
 req_type: Story
 tags:
 - automation
@@ -112,3 +112,8 @@ comments:
       REC: b — the wizard's most-common branch (drive phases 3-6) depends on TASK-405; shipping it first risks a wizard that recommends paths its primitives can't execute. Frequency-of-need has also dropped (BUG-285 + resumability landed), so it is no longer urgent.
   created_at: 2026-06-06T08:35:11.744651537Z
   modified_at: 2026-06-06T08:35:11.744651537Z
+- id: 019e9d37-eb91-74e2-838e-3cd05a24e69e
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): DEFER until TASK-405 (PR-only orchestrator) + TASK-406 (worktree-aware merge) ship — the wizard''s most-common branch (drive phases 3-6) depends on them; shipping first risks a wizard recommending paths its primitives can''t execute. Urgency also dropped (BUG-285 + --resume-drain resumability landed).'
+  created_at: 2026-06-06T13:55:48.241195688Z
+  modified_at: 2026-06-06T13:55:48.241195688Z
