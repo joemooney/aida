@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:19:56.729132571Z
-modified_at: 2026-06-05T14:19:56.729132571Z
+modified_at: 2026-06-06T08:14:04.040086061Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e582b-2ed1-7b23-9358-dafcb36f73ce
   created_at: 2026-06-05T14:20:00.147590185Z
+comments:
+- id: 019e9bff-0d08-7ee2-a5a4-031b41fd51ef
+  author: joe
+  content: Disposition sweep 2026-06-06 — ARCHIVED (parked, recoverable). STORY-446 polish (findings list --shelved-only/--punts-only). Bounded but no demand yet. Parked — revisit on triage-volume pain.
+  created_at: 2026-06-06T08:14:04.040086061Z
+  modified_at: 2026-06-06T08:14:04.040086061Z
