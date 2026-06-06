@@ -1,0 +1,19 @@
+id: 019e9f38-2a4d-7690-a298-4b7cc3676a95
+spec_id: BUG-463
+agreed_id: BUG-463
+title: 'Flaky pr_ship_environment_tests in CI: ''untracked working tree files would be overwritten by merge'' + panic on branch PRs'
+description: 'RECURRING (2026-06-06, hit 2 otherwise-good PRs: TASK-480/#579, STORY-474/#593): the pr_ship_environment_tests module (e.g. ci_startup_timeout_has_configuration_message, waits_for_ci_checks_to_register_before_polling) fails in CI with ''error: The following untracked working tree files would be overwritten by merge'' followed by a test panic — but ONLY on branch PRs; main is green. Strongly suggests a test that (a) shells out to git merge/checkout in a shared/parallel fixture and trips on untracked files left by another test or the worktree, or (b) is environment/order-dependent under cargo''s parallel test runner. Fix: isolate the test''s git fixture (unique temp dir per test, no shared CWD/HOME, no real-repo git ops), or serialize/guard it. Repro: re-run CI on a fresh branch a few times, or run the module with --test-threads=high. This is silently costing ~15% of the autonomous-churn PRs — high value to fix.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-06T23:15:18.733920137Z
+modified_at: 2026-06-06T23:15:18.733920137Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+- from-autonomous-churn
+- pr-ship
+- ready-to-implement
+- severity:major
