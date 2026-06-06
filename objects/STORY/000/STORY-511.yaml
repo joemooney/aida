@@ -8,13 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:54:21.039341210Z
-modified_at: 2026-06-06T08:30:23.447218792Z
+modified_at: 2026-06-06T08:30:24.736621390Z
 req_type: Story
 tags:
 - forge-provider
 - from-product
 - gitlab
 - parent:EPIC-35
+- ready-to-implement
 - slice:5
 - validation
 relationships:
