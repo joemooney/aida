@@ -15283,5 +15283,18 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER — with one operator + one master the plan-review handshake is mostly ceremony; the friction (implementer picks up an unreviewed plan in the accept→review window) is rare and covered by the existing 'accept first, master sweeps docs/plans/ later' workaround. Revisit when subsystem advisors / multiple plan-reviewers exist.
-clock: 1542
+- id: 019e9d80-4b43-73b0-a105-5407c5fc9f26
+  target_id: 019e816e-1c3d-7d00-88e8-589a5a354e82
+  author: aida
+  node_id: '1'
+  lamport: 1543
+  timestamp: 2026-06-06T15:14:51.331048668Z
+  kind: !SetDescription
+    description: |
+      VERIFIED 2026-05-31 (advisor, answering operator's 'what if different people queue on different machines'). The default 'aida queue add' writes registry/queues/<user_id>.yaml INSIDE the orphan aida-store branch (git_backend.rs queue_add commits it; 'update queue' commits are on origin/aida-store), sharded per user_id. Distinct users (alice.yaml / bob.yaml) never collide — clean rebase, mutually visible after sync (this is the intended sharding design). HAZARD: two machines using the SAME user_id (both 'joe', or both unconfigured → the BUG-89 'default' fallback when $USER/$AIDA_USER/$USERNAME are all unset, common in CI/containers) write the SAME <user>.yaml → concurrent commits → merge conflict in the queue YAML on 'aida db sync' rebase (store leg uses --rebase), or a rejected non-ff push. Options to consider: (a) warn when the resolved user_id is 'default' and a remote queue file for 'default' already exists with a different machine fingerprint; (b) make queue YAML merges conflict-tolerant (append-merge by entry uuid rather than line-merge); (c) document distinct-user_id-per-machine as a hard requirement for shared-branch collaboration. Not urgent (sharding works for distinct users); file so it's captured before multi-machine collaboration scales.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      WARN when the resolved user_id is 'default' AND a remote 'default' queue file already exists with a different machine fingerprint — targets the actual silent collision hazard (acute for the BUG-89 CI/container fallback) cheaply. Sharding already works for distinct users, so conflict-tolerant YAML merges (heavier) are premature.
+clock: 1543
 node_id: '1'
