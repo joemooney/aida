@@ -16,12 +16,12 @@ description: |-
   ## Out of scope
 
   - Cross-repo *relationships* (e.g., FR in repo A linked to STORY in repo B's store) — that's a separate, larger problem
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:08:40.655917409Z
-modified_at: 2026-06-06T19:55:19.226188124Z
+modified_at: 2026-06-06T20:05:21.580437495Z
 req_type: Functional
 tags:
 - git-backend
@@ -39,3 +39,7 @@ comments:
   content: Commit 5ef10babd references this requirement
   created_at: 2026-06-06T19:55:19.226188124Z
   modified_at: 2026-06-06T19:55:19.226188124Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T20:05:21.580437495Z
+  completion_sha: 6d1766a4ea688fefb1e245a2667fc676140bd7a8
