@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:57.919405229Z
-modified_at: 2026-05-17T15:46:28.672037443Z
+modified_at: 2026-06-06T08:35:26.376361090Z
 req_type: Task
 tags:
 - archival
@@ -80,3 +80,14 @@ comments:
   content: 'Sibling gap surfaced 2026-05-17: web /ultraplan PRs don''t trigger `aida session end`''s `auto-queue-review` either, since the cloud session bypasses AIDA''s session lifecycle entirely. Concretely: PR-65 (STORY-278) needed manual `aida pr auto-queue-review` after rebase to enter the reviewer queue. TASK-305''s `aida plan capture <PR>` is the same shape — both need a ''post-web-flow reconciliation'' step. Consider whether a unified `aida pr adopt <N>` command (captures plan + queues review + sets spec linkage) belongs above both, or whether they ship separately.'
   created_at: 2026-05-17T15:46:28.672037443Z
   modified_at: 2026-05-17T15:46:28.672037443Z
+- id: 019e9c12-9e28-7812-8d20-6b8ace33fd77
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: `aida plan capture <PR>` extracts a docs/plans file from a web-/ultraplan PR. The spec pre-recommends Option B (explicit command first). Build it, or has the web-flow dependency faded?
+      a) Build Option B now (explicit `aida plan capture <PR>` synthesizing the 11-section file from PR description + commit log) — bounded, plan-tooling-adjacent
+      b) Defer — the web /ultraplan flow is intermittent; the coherence gap is real but low-frequency, and it is feature work during a bug-clear phase
+      c) Reject — if the team rarely uses the remote web /ultraplan flow now, the no-plan-file gap it patches may not be worth the extraction-quality risk
+      REC: b — legitimate coherence work but it is feature-add, not bug/stability, and frequency is low. Keep Approved; revisit when web-flow PRs recur.
+  created_at: 2026-06-06T08:35:26.376361090Z
+  modified_at: 2026-06-06T08:35:26.376361090Z
