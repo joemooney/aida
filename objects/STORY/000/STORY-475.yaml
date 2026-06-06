@@ -2,13 +2,18 @@ id: 019e6838-7414-7f41-8c2c-03144fbcff1f
 spec_id: STORY-475
 agreed_id: STORY-475
 title: Remote/auth-capable AIDA MCP transport
-description: 'Add a remote HTTP MCP mode suitable for local loopback clients and future cloud-agent workflows. Acceptance: aida mcp-serve can run with HTTP transport on an explicit bind address; local token auth or equivalent protects write tools; audit log records tool name, caller identity if known, project, spec IDs touched, and result; docs explain stdio vs HTTP tradeoffs and safe deployment boundaries.'
+description: |
+  Add a remote HTTP MCP mode suitable for local loopback clients and future cloud-agent workflows. Acceptance: aida mcp-serve can run with HTTP transport on an explicit bind address; local token auth or equivalent protects write tools; audit log records tool name, caller identity if known, project, spec IDs touched, and result; docs explain stdio vs HTTP tradeoffs and safe deployment boundaries.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER until post-stability + a concrete remote/cloud-agent need — opening a network transport with token auth + audit log is exactly the new security surface to hold during the bugs-first phase (the High-priority tag predates that decision). When built, pair with STORY-474 profiles so a read-only profile is the default exposed over HTTP.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-06-06T14:01:05.827853856Z
+modified_at: 2026-06-06T14:01:07.135868507Z
 req_type: Story
 tags:
 - audit
