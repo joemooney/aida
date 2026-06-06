@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 137-ai-workflow
 created_at: 2025-12-11T00:37:49.408596726Z
-modified_at: 2026-06-06T08:13:46.435971931Z
+modified_at: 2026-06-06T08:13:47.850053569Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -28,3 +28,9 @@ relationships:
 - rel_type: Parent
   target_id: a96d81eb-8ba7-45d1-afc1-333760012b78
   created_at: 2025-12-11T00:39:04.295154865Z
+comments:
+- id: 019e9bfe-cdca-7ad3-a311-f3c33917bd67
+  author: joe
+  content: 'Disposition sweep 2026-06-06 — REJECTED. Superseded: the two-phase plan/implement workflow is delivered by shipped plan tooling (aida plan / ultraplan / plan helpers / plan verify) and reworked in STORY-265; its parent relations are all dangling (deleted specs). Abandoned early-numbering epic.'
+  created_at: 2026-06-06T08:13:47.850053569Z
+  modified_at: 2026-06-06T08:13:47.850053569Z
