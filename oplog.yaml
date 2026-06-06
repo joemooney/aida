@@ -14698,5 +14698,24 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       CONFIRM the landed-vs-remaining split first (the mailbox core + .aida local layer + CLI send/inbox/thread/sync + MCP tools already shipped), THEN sign off + build the remaining git-canonical durable DIGEST (trigger + consistency model). The digest is the round-2 moat differentiator vs competitors' ephemeral mailboxes — worth finishing, not dropping. Re-spec to only the genuinely-remaining digest work before implementing.
-clock: 1523
+- id: 019e9d42-f31b-7be2-93de-db107f98abb0
+  target_id: 019e8bff-bb33-7440-8339-250e4cec3cb3
+  author: aida
+  node_id: '1'
+  lamport: 1524
+  timestamp: 2026-06-06T14:07:51.067411541Z
+  kind: !SetDescription
+    description: |
+      Gap #1 of EPIC-34: enforce (or report) that a PR's diff actually carries // trace: coverage over the code it changes, per the definition + exemptions settled by the coverage-definition spike. Draft until that spike lands a go decision — building this before the definition is settled would ship a gate that false-positives on every legitimate test/refactor PR.
+
+      ## Acceptance (to be sharpened by the spike)
+      - A PR adding un-traced coverable code (per the spike's definition) is flagged/blocked per the configured posture.
+      - Exempt categories (tests/generated/docs/mechanical) are not flagged.
+      - Default posture matches the spike's recommendation; the block-vs-report dial is per-repo config.
+      trace:self
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      KEEP GATED on SPIKE-47 — building the diff-level trace-coverage CI gate before the coverage DEFINITION exists risks false-positives on every test/refactor PR. SPIKE-47 (ready-to-run) must land its definition + exemption list first; then 499 becomes implementable. Recorded blocked-by SPIKE-47.
+clock: 1524
 node_id: '1'
