@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:46:29.087785646Z
-modified_at: 2026-06-06T03:46:29.087785646Z
+modified_at: 2026-06-06T08:17:18.590067122Z
 req_type: Story
 tags:
 - backlog-sweep
@@ -51,3 +51,20 @@ tags:
 - human-in-the-loop
 - parent:STORY-522
 - producer-consumer
+comments:
+- id: 019e9c02-04fe-7d12-a011-619ccfd29f84
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Build the proactive decision-question PRODUCER now, or sequence it behind STORY-522 (its consumer/DecisionRequest format)?
+      a) Defer until STORY-522 ships the DecisionRequest artifact + inbox (nothing to feed without it)
+      b) Build now alongside STORY-522 as one EPIC
+      c) Reject — proactive sweep over the whole backlog risks the 'question slop' the spec itself warns about; reactive-only is enough
+      REC: a — 522 defines the artifact this story attaches; producing questions before a format/inbox exists is wasted.
+    Q2: This autonomy-feature cluster lands during the declared 'clear bugs → stability → marketing' phase. Does it fit?
+      a) Park all autonomy-feature stories until bugs clear
+      b) Allow autonomy-RELIABILITY work, defer pure-throughput features
+      c) Full speed (operator 'lead/charge-forward' mandate)
+      REC: b — 522's value (lower human-recovery latency) is a reliability concern that fits; the proactive sweep (523) is throughput, can wait.
+  created_at: 2026-06-06T08:17:18.590067122Z
+  modified_at: 2026-06-06T08:17:18.590067122Z
