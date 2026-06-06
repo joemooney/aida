@@ -20,12 +20,12 @@ description: |-
 
   Originating context: PR-21 fix-forward commit (`[AI:claude] fix(ui):
   restore React build broken by Done-status regen`).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T00:58:41.955732157Z
-modified_at: 2026-06-06T08:35:54.472595291Z
+modified_at: 2026-06-06T17:16:44.718284820Z
 req_type: Task
 tags:
 - ready-to-implement
@@ -35,3 +35,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded, unambiguous CI gap — verified ci.yml has zero npm/vite/tsc references; deliver a job running `npm ci && npm run check && npm run build` in aida-web-react/ gated on relevant paths with node_modules caching.
   created_at: 2026-06-06T08:35:53.161461853Z
   modified_at: 2026-06-06T08:35:53.161461853Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T17:16:44.718284820Z
+  completion_sha: 18c4d17cda042a2dcbae3d68e4ea18b4f47927df
