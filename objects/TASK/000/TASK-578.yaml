@@ -21,13 +21,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-28T16:38:03.402773762Z
-modified_at: 2026-06-06T08:30:14.171968708Z
+modified_at: 2026-06-06T08:30:15.459341182Z
 req_type: Task
 tags:
 - aida:queue:work
 - convenience-alias
 - discoverability
 - from-user-friction
+- ready-to-implement
 - ux-papercut
 comments:
 - id: 019e98c1-490d-7111-aa24-37fb89e6c58a
