@@ -15209,5 +15209,79 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       ALWAYS scaffold .antigravity/ alongside .codex/ (no new flag) — --no-skills skips both consistently. Low-blast-radius onboarding parity for a second supported agent (NOT marketing). A selective --agents= flag is speculative until a user asks for selectivity. Mirror the .codex/ template structure + reference docs/agents/antigravity-mcp-setup.md.
-clock: 1541
+- id: 019e9d7e-3997-7573-91b2-fb8d95796cdb
+  target_id: 019e57f2-e66f-7772-82bb-98dffa921535
+  author: aida
+  node_id: '1'
+  lamport: 1542
+  timestamp: 2026-06-06T15:12:35.735717370Z
+  kind: !SetDescription
+    description: |
+      ## Why
+
+      Current /ultraplan flow: web /ultraplan generates a plan, operator clicks accept, /aida-import-plan (or web equivalent) lands the plan under docs/plans/. The plan immediately becomes the canonical brief for whoever picks the spec up — riding into implementer sessions via TASK-95's plan-brief-on-pickup mechanism.
+
+      Gap: operator wants the MASTER ADVISOR to review the plan before it becomes canonical. Today there's no review checkpoint — accept means 'this plan is now load-bearing for implementation.' No third option ('send to master for review') in the web /ultraplan UI; same gap in the local /aida-import-plan path.
+
+      Empirical 2026-05-23: operator running 8 /ultraplans tonight (credit-burn night); wants master to review each before committing to it as the spec's plan-of-record. Solo workaround tonight is 'accept first, master sweeps docs/plans/ later' — works but the plan is briefly canonical between accept-time and review-time. If an implementer picks up the spec in that window, they'd use the unreviewed plan.
+
+      ## Proposed shape
+
+      aida import-plan <file> --request-review
+
+      Behavior:
+      1. Saves plan under docs/plans/YYYY-MM-DD-<slug>.md (current behavior)
+      2. ALSO writes a 'plan-review-pending' marker (sentinel file or spec tag like plan-review:pending)
+      3. Posts a comment on the spec: 'Plan landed for master review: docs/plans/<file>. Master verdict awaited before implementer pickup.'
+      4. aida queue work <SPEC> refuses or warns if plan-review marker is present (gate)
+      5. Master's review verdict either:
+         - APPROVE: removes the marker; spec is now implementer-ready
+         - REVISE: comments specific revision direction on the spec; operator runs another /ultraplan pass with the feedback; new plan replaces the old; cycle repeats
+         - DECLINE: marks the spec as plan-rejected; spec returns to pre-plan state
+
+      ## Sub-decision: how master gets notified
+
+      Three options, can compose:
+      - Add to brief queue: aida brief <agent>:advisor SPEC --kind plan-review (advisor brief variant)
+      - Write to .aida/plan-reviews/pending/ sentinel directory; aida status surfaces 'N plans pending master review'
+      - Post comment on spec; master sees on next aida show SPEC
+
+      The sentinel + aida status surfacing is cheapest (matches TASK-502 sentinel pattern for briefs).
+
+      ## Acceptance
+
+      - [ ] aida import-plan <file> --request-review flag
+      - [ ] plan-review:pending tag or sentinel applied to the spec
+      - [ ] aida queue work warns when picking up a spec with pending plan-review (operator can override with --override-plan-review)
+      - [ ] aida status surfaces 'N plans pending master review' in a new section (or under existing Queue section)
+      - [ ] aida plan-review approve <SPEC> / revise <SPEC> --note '...' / decline <SPEC> commands
+      - [ ] approve removes the marker; revise + decline mark accordingly
+      - [ ] /aida-import-plan slash command honors --request-review flag
+      - [ ] Optional: web /ultraplan integration via /aida-import-plan would benefit, but that's downstream (web /ultraplan ships as black-box; AIDA can only respond to its imports)
+      - [ ] Documentation: docs/aida/plan-review-workflow.md explaining the handshake
+      - [ ] Scaffolding-pack -- every project gets the handshake
+
+      ## Out of scope
+
+      - Auto-approve heuristics (e.g., 'approve plans for TYPE=task automatically') — heuristics-after-evidence, defer to STORY-447 / STORY-439 calibration data
+      - Real-time push notifications to master — operator polls or aida status surfaces
+      - Per-reviewer routing ('this plan goes to advisor-X, not master') — single master assumption holds for now (per feedback_one_master_advisor_until_subsystems memory)
+
+      ## Composes with
+
+      - TASK-114 (/aida-import-plan original — this extends it)
+      - TASK-113 (aida ultraplan prompt-assembly — sibling)
+      - TASK-95 (plan-brief-on-pickup — the mechanism this gates)
+      - TASK-502 (aida brief --notify sentinel — same sentinel pattern applies)
+      - feedback_one_master_advisor_until_subsystems — master IS the reviewer until subsystem advisors exist
+      - feedback_substrate_learning_loop_calibration — review verdicts (approve/revise/decline + actual implementation outcome) become calibration data: 'were master's review verdicts predictive of plan quality?'
+
+      ## Origin
+
+      2026-05-23 user during credit-burn night: 'ultraplan shows a yellow status button and I have clicked before on button accept plan but really I want you to review the plan. what should we do?' Workaround tonight is review-after-accept; this TASK closes the gap.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER — with one operator + one master the plan-review handshake is mostly ceremony; the friction (implementer picks up an unreviewed plan in the accept→review window) is rare and covered by the existing 'accept first, master sweeps docs/plans/ later' workaround. Revisit when subsystem advisors / multiple plan-reviewers exist.
+clock: 1542
 node_id: '1'
