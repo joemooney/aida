@@ -8,12 +8,16 @@ description: |
   aida store checkout HEAD reads the current commit's Aida-Store: trailer and resets .aida-store/ to that SHA. Read-only mode while time-traveled (writes from a rewound store would create branches the canonical orphan never sees). aida store reset returns the worktree to canonical HEAD.
 
   aida status integration: warn when code/store are misaligned, suggest aida store checkout HEAD.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Build the DRIFT-WARNING slice only: aida status warns when the store/code SHAs diverge (cheap, high-signal). DEFER the full read-only worktree checkout (aida store checkout/reset) — it carries rewound-store write hazards the spec itself flags and has no concrete caller. The v1 pairing trailer already records linkage for forensic lookup.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:30:50.120081171Z
-modified_at: 2026-06-06T14:03:57.145762734Z
+modified_at: 2026-06-06T14:03:59.296475393Z
 req_type: Story
 tags:
 - needs-human-input
