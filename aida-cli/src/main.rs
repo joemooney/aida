@@ -9553,6 +9553,33 @@ mod task_492_brief_tests {
     use super::*;
     use aida_core::{Relationship, RelationshipType};
 
+    /// BUG-453: headless_log_len returns the byte length of the session's JSONL
+    /// log (matched by `-<session_id>.jsonl` suffix) and reflects growth — the
+    /// signal the watchdog uses so a reading-but-productive session isn't
+    /// false-killed. None when no matching log exists.
+    #[test]
+    fn headless_log_len_tracks_session_log_growth() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        let dir = root.join(".aida").join("headless-logs");
+        std::fs::create_dir_all(&dir).unwrap();
+        let session = "019e9a07-8e2d-7800-ad4e-73534034f704";
+
+        // No log yet → None.
+        assert_eq!(headless_log_len(root, session), None);
+
+        // A non-matching log (different session) is ignored.
+        std::fs::write(dir.join("task-x-deadbeef-0000.jsonl"), "noise\n").unwrap();
+        assert_eq!(headless_log_len(root, session), None);
+
+        // The matching log → its byte length; appending grows it.
+        let logp = dir.join(format!("task-673-{session}.jsonl"));
+        std::fs::write(&logp, "a").unwrap();
+        assert_eq!(headless_log_len(root, session), Some(1));
+        std::fs::write(&logp, "abcdef").unwrap();
+        assert_eq!(headless_log_len(root, session), Some(6));
+    }
+
     fn req(spec_id: &str, title: &str, description: &str) -> Requirement {
         let mut req = Requirement::new(title.to_string(), description.to_string());
         req.spec_id = Some(spec_id.to_string());
@@ -30107,6 +30134,41 @@ fn read_headless_log_for_session(
         }
     }
     None
+}
+
+/// BUG-453: byte length of the headless session's JSONL log (the newest file
+/// matching `-<session_id>.jsonl` under `.aida/headless-logs/`), or `None`. A
+/// *growing* log means the session is alive and emitting events — reading,
+/// thinking, or editing — even when it hasn't yet changed a worktree file. The
+/// phase watchdog folds this into its progress signal so a productive-but-
+/// currently-reading implementer is not false-killed as "no progress" (the
+/// TASK-673 symptom: it wrote 503 lines, then spent its final window reading
+/// tests in a 20k-line file and the worktree-only signature went static).
+/// trace:BUG-453 | ai:claude
+fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<u64> {
+    let dir = project_root.join(".aida").join("headless-logs");
+    let suffix = format!("-{session_id}.jsonl");
+    let mut newest_len: Option<u64> = None;
+    let mut newest_mtime = std::time::UNIX_EPOCH;
+    for entry in std::fs::read_dir(&dir).ok()?.flatten() {
+        let is_match = entry
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.ends_with(&suffix))
+            .unwrap_or(false);
+        if !is_match {
+            continue;
+        }
+        if let Ok(meta) = entry.metadata() {
+            let m = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+            if m >= newest_mtime {
+                newest_mtime = m;
+                newest_len = Some(meta.len());
+            }
+        }
+    }
+    newest_len
 }
 
 struct TextQuestionPunt {
@@ -78598,7 +78660,22 @@ impl PhaseWatchdog {
         }
         let worktree = self.worktree.clone().unwrap();
 
-        if let Some(sig) = Self::progress_signature(&worktree) {
+        // BUG-453: progress = worktree change OR headless-log growth. The log
+        // grows whenever the session emits events (reads, thoughts, edits), so a
+        // productive-but-currently-reading implementer keeps resetting the timer
+        // and is no longer false-killed; a genuinely hung/crashed session stops
+        // emitting (log static) and the worktree stays static, so the no-progress
+        // check still trips, and the wall-clock ceiling backstops a runaway.
+        // trace:BUG-453 | ai:claude
+        let wt_sig = Self::progress_signature(&worktree);
+        let log_len = headless_log_len(&self.project_root, &self.session_id);
+        let combined = match (wt_sig, log_len) {
+            (Some(w), Some(l)) => Some(format!("{w}|log:{l}")),
+            (Some(w), None) => Some(w),
+            (None, Some(l)) => Some(format!("log:{l}")),
+            (None, None) => None,
+        };
+        if let Some(sig) = combined {
             if self.last_sig.as_deref() != Some(sig.as_str()) {
                 self.last_sig = Some(sig);
                 self.last_progress = now;
