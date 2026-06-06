@@ -1143,9 +1143,10 @@ pub enum PrCommand {
 pub enum RoleCommand {
     /// Enter (resume) an existing role. With no name on an interactive
     /// terminal, shows a picker of the project's roles; non-interactively
-    /// it errors. Outputs shell code:
-    ///   `eval "$(aida role enter advisor)"`
-    /// or via the `aida-role` shell helper.
+    /// it errors. Outputs shell code that must run in the calling shell:
+    ///   raw binary: `eval "$(aida role enter advisor)"`
+    ///   via the shell helper (`aida dev shell-init`): just `aida role enter advisor`
+    /// The helper auto-evals it, so the bare form is correct there.
     Enter {
         /// Role name — picker shown when omitted on a TTY
         name: Option<String>,
