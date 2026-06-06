@@ -15324,5 +15324,26 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Build the PURE-TESTABLE CORE now (hook payload {path, branch?} → the lease record to write/clear); DEFER the live WorktreeCreate/WorktreeRemove hook wiring + aida init scaffold until SPIKE-41 confirms the Claude Code event timing/payload. De-risks while honoring the SPIKE-41 gate — don't wire against unverified harness behavior (instrument-don't-infer).
-clock: 1545
+- id: 019e9d80-b390-7c62-9808-881af86d90f3
+  target_id: 019e9ba4-b915-7781-b0e7-763fd01be3ea
+  author: aida
+  node_id: '1'
+  lamport: 1546
+  timestamp: 2026-06-06T15:15:18.032119135Z
+  kind: !SetDescription
+    description: |
+      Follow-up from BUG-448 (which fixed the --tree VIEW by unioning Child+Parent outgoing). The underlying data model is inconsistent:
+
+      1. 'aida add --parent EPIC' writes a Child edge on the EPIC (epic--Child-->child), nothing on the child.
+      2. 'aida rel add EPIC CHILD --type parent' writes a Parent edge on the EPIC (epic--Parent-->child), DUPLICATED on repeat, nothing on the child.
+      3. RelationshipType doc comments contradict observed walk behaviour: Child = 'this is child of target' / Parent = 'this is parent of target', yet --tree walks Child-OUTGOING from an epic and correctly gets CHILDREN — so the stored direction is inverted vs the doc.
+      4. rel add does not dedup (EPIC-37 had the same Parent target twice).
+      5. No reciprocal edge is written on the child, so the child's own 'show' doesn't reflect the parent unless separately linked.
+
+      Normalize to ONE canonical representation: e.g. rel add --type parent FROM TO should write FROM--Child-->TO (or BUG-448-style both directions) consistently with 'aida add --parent', dedup edges, and align the doc comments with stored semantics. Then --tree could walk a single edge type and the union in BUG-448 becomes unnecessary. Architecture-adjacent (relationship storage) — master sign-off before implementation. trace:BUG-448
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Normalize to a SINGLE CANONICAL edge: 'rel add --type parent FROM TO' writes FROM--Child-->TO (matching 'aida add --parent'), dedup edges, and FIX the contradicting RelationshipType doc comments so stored direction matches the docs. Then --tree walks one edge type and BUG-448's view-layer union can retire. Architecture-adjacent — keep the GitHub-argv/behavior stable; add migration/back-compat for existing inverted Parent edges (or a one-time normalize pass).
+clock: 1546
 node_id: '1'

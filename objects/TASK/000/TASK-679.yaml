@@ -2,7 +2,7 @@ id: 019e9ba4-b915-7781-b0e7-763fd01be3ea
 spec_id: TASK-679
 agreed_id: TASK-679
 title: 'Normalize parent/child relationship edges: rel add --type parent writes inverted+duplicated Parent edge with no reciprocal'
-description: |-
+description: |
   Follow-up from BUG-448 (which fixed the --tree VIEW by unioning Child+Parent outgoing). The underlying data model is inconsistent:
 
   1. 'aida add --parent EPIC' writes a Child edge on the EPIC (epic--Child-->child), nothing on the child.
@@ -12,12 +12,16 @@ description: |-
   5. No reciprocal edge is written on the child, so the child's own 'show' doesn't reflect the parent unless separately linked.
 
   Normalize to ONE canonical representation: e.g. rel add --type parent FROM TO should write FROM--Child-->TO (or BUG-448-style both directions) consistently with 'aida add --parent', dedup edges, and align the doc comments with stored semantics. Then --tree could walk a single edge type and the union in BUG-448 becomes unnecessary. Architecture-adjacent (relationship storage) — master sign-off before implementation. trace:BUG-448
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Normalize to a SINGLE CANONICAL edge: 'rel add --type parent FROM TO' writes FROM--Child-->TO (matching 'aida add --parent'), dedup edges, and FIX the contradicting RelationshipType doc comments so stored direction matches the docs. Then --tree walks one edge type and BUG-448's view-layer union can retire. Architecture-adjacent — keep the GitHub-argv/behavior stable; add migration/back-compat for existing inverted Parent edges (or a one-time normalize pass).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T06:35:24.309912247Z
-modified_at: 2026-06-06T15:15:16.545127294Z
+modified_at: 2026-06-06T15:15:18.015040595Z
 req_type: Task
 tags:
 - aida:rel
