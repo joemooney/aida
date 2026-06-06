@@ -2,7 +2,7 @@ id: 019e9af8-9aa2-7913-b29e-60c9ef204038
 spec_id: STORY-522
 agreed_id: STORY-522
 title: 'Async structured-decision protocol: escalations become batched question+choices the human answers OUTSIDE any agent; the loop resumes from the answer'
-description: |-
+description: |
   ## Idea (operator, 2026-06-05)
 
   Recurring bottleneck: human intervention. Distill it into structured questions+choices the human BATCH-answers OUTSIDE any agent (plain CLI, no LLM session), record the answer on the spec, and let the next automation loop resume from it. Shifts the human from per-item babysitter (re-context + restart) to async batch oracle.
@@ -53,12 +53,16 @@ description: |-
 
   ## Relationships
   - Builds on STORY-306 (advisor tier / escalation), `--escalate-defaults`. Symmetric with ADR-3 (intake inbox). Reduces the recovery-latency metric (EPIC-36). Out-of-band channel: STORY-493 (mailbox). The human-facing rung of the autonomy ladder (docs/architecture/autonomy-and-escalation.md).
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Ship the READ+ANSWER surface first: the DecisionRequest artifact + 'aida questions list/answer' (deterministic, bounded, immediately useful for async batch-answering — exactly today's sweep). DEFER the loop-resume auto-applier (couples to the orchestrator, design risk). HARD RULE: every choice must encode a deterministic resolution (status/tag/param) — never free-form; un-reducible forks stay advisor-tier escalations, not questions. (Do not promote to EPIC yet.)
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:27:24.322241773Z
-modified_at: 2026-06-06T14:13:24.532139172Z
+modified_at: 2026-06-06T14:13:26.470564501Z
 req_type: Story
 tags:
 - async-decision
