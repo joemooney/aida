@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:18:31.709016159Z
-modified_at: 2026-06-05T14:18:31.709016159Z
+modified_at: 2026-06-06T08:14:51.277902218Z
 req_type: Epic
 tags:
 - from-forensics
@@ -55,3 +55,9 @@ tags:
 - orchestrator
 - system-health
 - telemetry
+comments:
+- id: 019e9bff-c58d-7992-a58a-f31bf50b842b
+  author: joe
+  content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). MVP slice is bounded: session_success_rate vs drain_success_rate misclassification-gap metric as a deterministic parser over headless-logs/usage.jsonl, surfaced in aida usage --auto-complete. On-phase (stability/regression guard).'
+  created_at: 2026-06-06T08:14:51.277902218Z
+  modified_at: 2026-06-06T08:14:51.277902218Z
