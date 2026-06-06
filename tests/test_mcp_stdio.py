@@ -615,8 +615,23 @@ def test_finding_round_trip(client: McpClient) -> None:
     findings = content_text(client.tool("list_findings", {"source": "review", "pr": 162}))
     require(spec in findings, f"list_findings missing filed finding {spec}:\n{findings}")
 
-    triaged = content_text(client.tool("triage_finding", {"id": spec, "action": "promote", "reason": "stdio suite"}))
-    require("promote" in triaged.lower(), f"unexpected triage_finding response:\n{triaged}")
+    # TASK-681: `promote` sets the finding Approved — the advisor's triage
+    # decision — so MCP must refuse it (same gate update_requirement applies
+    # under BUG-449). Use the raw request path since client.tool() raises on
+    # the isError envelope we expect here.
+    resp = client.request(
+        "tools/call",
+        {"name": "triage_finding", "arguments": {"id": spec, "action": "promote", "reason": "stdio suite"}},
+    )
+    result = resp.get("result")
+    require(
+        isinstance(result, dict) and result.get("isError") is True,
+        f"triage_finding promote should be advisor-gated via MCP (TASK-681): {resp}",
+    )
+
+    # `dismiss` (Rejected) is implementer-legitimate and stays allowed.
+    dismissed = content_text(client.tool("triage_finding", {"id": spec, "action": "dismiss", "reason": "stdio suite"}))
+    require("dismiss" in dismissed.lower(), f"unexpected triage_finding dismiss response:\n{dismissed}")
 
 
 def run_test(name: str, fn: Callable[[], Any]) -> Any:
