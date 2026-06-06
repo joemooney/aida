@@ -32,12 +32,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   Build the DEV-PLAYGROUND slice now: a throwaway sandbox store for drain-testing (on-thesis — would have avoided the TASK-639/640/641 clutter validating STORY-492). Mechanism: separate dir + AIDA_STORE env override (reuses the validate-resume.sh isolated-$HOME pattern — lowest machinery, no daemon-grade infra). DEFER the first-user/tutorial-framing layer to the marketing phase.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:40:14.110049032Z
-modified_at: 2026-06-06T15:20:15.140017389Z
+modified_at: 2026-06-06T21:43:47.408292565Z
 req_type: Spike
 tags:
 - dev-experience
@@ -68,3 +68,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): Build the DEV-PLAYGROUND slice now: a throwaway sandbox store for drain-testing (on-thesis — would have avoided the TASK-639/640/641 clutter validating STORY-492). Mechanism: separate dir + AIDA_STORE env override (reuses the validate-resume.sh isolated-$HOME pattern — lowest machinery, no daemon-grade infra). DEFER the first-user/tutorial-framing layer to the marketing phase.'
   created_at: 2026-06-06T15:20:07.837221292Z
   modified_at: 2026-06-06T15:20:07.837221292Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T21:43:47.408292565Z
+  completion_sha: 5d7033087f8acd82ef35762124c3050b76e9bd08
