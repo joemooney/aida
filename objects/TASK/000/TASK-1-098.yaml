@@ -28,7 +28,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T20:05:09.898436885Z
-modified_at: 2026-06-06T08:20:53.677982511Z
+modified_at: 2026-06-06T20:41:53.804244736Z
 req_type: Task
 tags:
 - aida:init
@@ -52,3 +52,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). Fresh aida init reports .claude/AIDA.md STALE immediately (init-write vs embedded-template drift); fix the generation/template mismatch. VERIFY the symptom still reproduces first (PR-333 fixed a sibling, not this).
   created_at: 2026-06-06T08:14:33.972213829Z
   modified_at: 2026-06-06T08:14:33.972213829Z
+- id: 019e9eab-b58c-7ee0-83c9-3dfafeaa0f3e
+  author: joe
+  content: Commit 0754e7022 references this requirement
+  created_at: 2026-06-06T20:41:53.804244736Z
+  modified_at: 2026-06-06T20:41:53.804244736Z
