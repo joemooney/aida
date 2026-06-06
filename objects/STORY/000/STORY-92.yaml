@@ -55,7 +55,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:57:58.159777765Z
-modified_at: 2026-06-06T08:36:18.505794648Z
+modified_at: 2026-06-06T14:04:05.905144762Z
 req_type: Story
 tags:
 - needs-human-input
@@ -75,3 +75,8 @@ comments:
       REC: a — the orchestrator drain is the project's chosen mechanism for chaining work; a parallel session-end auto-spawn path adds a second autonomy mechanism to maintain. Confirm the drain covers the interactive user's next-batch need before fully rejecting.
   created_at: 2026-06-06T08:36:16.743096267Z
   modified_at: 2026-06-06T08:36:16.743096267Z
+- id: 019e9d3f-8391-7573-beda-5a905dfa4ce1
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): REJECT — the --auto-complete orchestrator drain is the project''s chosen mechanism for chaining successive specs through the full lifecycle (implementer→CI→reviewer→merge→pull→build), without a manual session-end spawn ritual. A parallel auto-spawn path is a second autonomy mechanism to maintain. The interactive next-batch need is covered by the drain.'
+  created_at: 2026-06-06T14:04:05.905144762Z
+  modified_at: 2026-06-06T14:04:05.905144762Z
