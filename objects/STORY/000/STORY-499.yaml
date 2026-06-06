@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:53.171836263Z
-modified_at: 2026-06-03T05:41:39.069192036Z
+modified_at: 2026-06-06T08:19:12.438904303Z
 req_type: Story
 tags:
 - ci-gate
@@ -27,3 +27,15 @@ relationships:
 - rel_type: Child
   target_id: 019e8bfe-8dbc-7493-8cbe-5324878590c3
   created_at: 2026-06-03T05:40:57.628241583Z
+comments:
+- id: 019e9c03-c1b6-7fc1-83e6-f1e170a62e10
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: STORY-499 (diff-level trace-coverage CI gate) is explicitly gated on SPIKE-47 (defining 'trace coverage' for a diff). Sequence?
+      a) Run SPIKE-47 first; keep 499 Draft (building the gate before the definition risks false-positives on every test/refactor PR)
+      b) Reject both — diff-level trace-coverage enforcement is heavier than the alpha needs
+      c) Reframe 499 as report-only (non-blocking) to ship value without the definition risk
+      REC: a — the spec correctly self-blocks on SPIKE-47; the next action is dispositioning the spike, not the story. (SPIKE-47 is in the approved set — its own disposition is pending in this sweep.)
+  created_at: 2026-06-06T08:19:12.438904303Z
+  modified_at: 2026-06-06T08:19:12.438904303Z
