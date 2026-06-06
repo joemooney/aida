@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T05:36:30.400890149Z
-modified_at: 2026-06-06T05:36:30.400890149Z
+modified_at: 2026-06-06T05:51:08.098605972Z
 req_type: Bug
 tags:
 - autonomy
@@ -19,3 +19,9 @@ tags:
 - orchestrator
 - parent:EPIC-38
 - reliability
+comments:
+- id: 019e9b7c-3142-71a1-a3ef-fa62199aaaea
+  author: joe
+  content: Commit e0c062e62 references this requirement
+  created_at: 2026-06-06T05:51:08.098605972Z
+  modified_at: 2026-06-06T05:51:08.098605972Z
