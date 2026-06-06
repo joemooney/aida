@@ -2,13 +2,18 @@ id: 019e4854-b289-76e3-ac72-6d5b47752ee7
 spec_id: STORY-363
 agreed_id: STORY-363
 title: aida advisor handoff --to <project> --focus <topic> CLI command (SPIKE-10 Track A)
-description: 'Per SPIKE-10 strategic doc, Gap 2 implementation: `aida advisor handoff --to <project-path> --focus <topic>` generates a checked-in brief at `<child>/docs/<date>-advisor-handoff.md`. Five sections: parent identity (auto), vision (operator), decided things (auto-suggested + operator-pruned), substrate slice (auto-filtered by --focus), latitude (operator). Template under `aida-core/templates/advisor-handoff.md`. Composes with the `--focus` mechanism from the sibling story.'
+description: |
+  Per SPIKE-10 strategic doc, Gap 2 implementation: `aida advisor handoff --to <project-path> --focus <topic>` generates a checked-in brief at `<child>/docs/<date>-advisor-handoff.md`. Five sections: parent identity (auto), vision (operator), decided things (auto-suggested + operator-pruned), substrate slice (auto-filtered by --focus), latitude (operator). Template under `aida-core/templates/advisor-handoff.md`. Composes with the `--focus` mechanism from the sibling story.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER post-stability — net-new strategic multi-project surface, off the current phase; no second-project demand pulling it. Keep as a backlog marker; build is speculative until a real handoff need appears.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:30.825157935Z
-modified_at: 2026-06-06T13:55:34.085341932Z
+modified_at: 2026-06-06T13:55:36.455364955Z
 req_type: Story
 tags:
 - advisor
