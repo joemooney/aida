@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T02:25:24.896723449Z
-modified_at: 2026-06-05T19:33:08.495711179Z
+modified_at: 2026-06-06T08:30:07.073434644Z
 req_type: Task
 tags:
 - aida:init
@@ -28,3 +28,9 @@ tags:
 - non-tty
 - onboarding-flow
 - scaffolding
+comments:
+- id: 019e9c0d-bee1-7cb0-ab46-e70b0cb0fd21
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). init commits its own scaffolding — auto when non-TTY, prompt default-Y on TTY, scoped to init's own paths (never git add .), dedup the onboarding commit task; decision already taken (operator+advisor 2026-06-01), well-specified, on-phase root-cause fix.
+  created_at: 2026-06-06T08:30:07.073434644Z
+  modified_at: 2026-06-06T08:30:07.073434644Z
