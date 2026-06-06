@@ -13854,5 +13854,22 @@ operations:
   timestamp: 2026-06-06T13:45:40.623333599Z
   kind: !SetStatus
     status: Approved
-clock: 1498
+- id: 019e9d32-5e11-7c62-92bb-03789ed05407
+  target_id: 019e9966-0147-7a21-9e0c-beac7c0c112e
+  author: aida
+  node_id: '1'
+  lamport: 1499
+  timestamp: 2026-06-06T13:49:44.338029709Z
+  kind: !SetDescription
+    description: |
+      The MCP server is an agent intake surface that, per ADR-3 / TASK-647, cannot be trusted as advisor authority (it may inherit a role from the launching shell but can't verify it). add_requirement correctly enforces this (downgrades any approved+ request to draft). But other mutating MCP tools do NOT, so the gate is bypassable and the substrate-as-bouncer invariant holds only at the CLI, not at the MCP surface.
+
+      This umbrella tracks closing every MCP-vs-CLI caller-parity gap so the gate holds at EVERY surface. Governing policy: ADR-3 (intake-triage model), TASK-647 (CLI-side enforcement).
+
+      Members: BUG-449 (update_requirement bypasses the gate → agent self-completes on uncommitted code). Natural next member (offer): an audit of all mutating MCP tools (update_requirement, add_relationship, add_comment, punt, …) for missing authority/lifecycle gates.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      COMMISSION the audit (see new child task): one bounded pass auditing every mutating MCP tool (add_relationship/add_comment/punt/update_relationship/…) for the same authority/lifecycle gates BUG-449 added to update_requirement. The substrate-as-bouncer invariant must hold at every MCP surface; security-relevant (agent self-completion on uncommitted code was the BUG-449 failure mode). EPIC stays open until the audit lands.
+clock: 1499
 node_id: '1'
