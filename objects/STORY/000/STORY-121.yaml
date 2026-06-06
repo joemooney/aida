@@ -83,7 +83,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:19:54.642684973Z
-modified_at: 2026-05-14T06:19:54.642684973Z
+modified_at: 2026-06-06T08:35:50.339111875Z
 req_type: Story
 tags:
 - block
@@ -97,3 +97,15 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T06:19:57.024105239Z
+comments:
+- id: 019e9c12-fbc3-74c0-a81c-06203e6933bf
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Ping-pong implementer↔reviewer (`aida session block/unblock --until <signal>`) is unimplemented and overlaps the now-shipped `--auto-complete` orchestrator, which already drives implementer→reviewer→merge in one process. Is a separate block/unblock primitive still wanted?
+      a) Reject — the autonomous-drain orchestrator (STORY-246+) already eliminates the cold-start tax for the automated path; a manual block/unblock primitive duplicates it for the rare hand-driven case
+      b) Build a minimal v1 (filesystem-sentinel signal + polling, the spec's pre-decided lean approach) for operators who run implementer/reviewer as separate live sessions outside the orchestrator
+      c) Defer — revisit only if hand-driven ping-pong demand reappears now that orchestrated drains are the default path
+      REC: a — the orchestrator delivered the outcome this STORY was chasing (no cold-start across the review loop) via a different mechanism; the standalone block/unblock primitive is now largely redundant and adds pinned-lease/polling cost. If hand-driven sessions need it, (c) keeps the option open.
+  created_at: 2026-06-06T08:35:50.339111875Z
+  modified_at: 2026-06-06T08:35:50.339111875Z
