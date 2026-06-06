@@ -3,12 +3,12 @@ spec_id: STORY-512
 agreed_id: STORY-512
 title: '[EPIC-35 s1] Forge trait + config + init auto-detect + GitHub & pure-git providers (behavior-preserving refactor)'
 description: Keystone slice (size L). Introduce the Forge trait (see docs/plans/2026-06-04-forge-provider.md), a [forge] provider config auto-detected at aida init from the origin host (github.com->github, gitlab.*->gitlab, else->none), the GitHub provider (wraps existing gh behavior — BYTE-IDENTICAL), and the none/pure-git provider (merge-status via git ancestry; ships pure-git lifecycle for free). Route the ~9 gh operations through the trait; do gh pr merge (29 sites) + gh pr view (19) first. Pure refactor, GitHub unchanged. Architecture-class — master signs off on the trait surface (SPIKE-49) before starting.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:57:35.728179917Z
-modified_at: 2026-06-06T08:31:56.500509924Z
+modified_at: 2026-06-06T08:31:58.380822812Z
 req_type: Story
 tags:
 - forge-provider
