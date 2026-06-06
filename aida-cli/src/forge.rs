@@ -962,9 +962,12 @@ impl Forge for GitHubForge {
 // ─────────────────────────── GitLab provider ───────────────────────────
 
 /// GitLab provider — shells out to `glab` (symmetric with GitHub→`gh`), with a
-/// REST fallback to be added for gaps. Slice-1 scaffold: `open_change` uses
-/// token-free push options (proven live against gitlab.joemooney.com in
-/// SPIKE-49); status/merge are filled in by slice 3.
+/// REST fallback to be added for gaps. `open_change` uses `glab mr create`
+/// (token-free MR creation via push options is proven live in SPIKE-49); slice 3
+/// (STORY-509) fills the open→status→merge→comment→list round-trip via `glab`'s
+/// `--output json` surface, mapped by the pure parsers below. CI status
+/// (`ci_status` / `ci_probe_for_branch` / `watch_ci` / `stream_ci_for_branch`)
+/// stays a slice-4 stub. trace:STORY-509 | ai:claude
 pub struct GitLabForge {
     project_root: PathBuf,
 }
@@ -1038,20 +1041,59 @@ impl Forge for GitLabForge {
         })
     }
 
-    fn change_for_branch(&self, _branch: &str) -> Result<ChangeLookup> {
-        anyhow::bail!("GitLab change_for_branch lands in EPIC-35 slice 3")
+    fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
+        // STORY-509: `glab mr list --source-branch <b> --output json` returns a
+        // JSON array of open MRs for the branch. Symmetric with GitHub's
+        // change_for_branch, but glab has no battle-tested PrLookup helper to
+        // delegate to — we shell out and map the JSON. Preserves the BUG-257
+        // transient (CliMissing / Unreachable) vs definitive (NoChange) split the
+        // orchestrator's phase-1 verdict depends on. trace:STORY-509 | ai:claude
+        let out = self.glab(&["mr", "list", "--source-branch", branch, "--output", "json"]);
+        Ok(glab_lookup_from_list_output(out, branch))
     }
 
-    fn change_for_spec(&self, _spec: &str) -> Result<ChangeLookup> {
-        anyhow::bail!("GitLab change_for_spec lands in EPIC-35 slice 3")
+    fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup> {
+        // STORY-509: the BUG-223 fallback — find the open MR whose title/body
+        // references `spec` when the branch-keyed lookup misses (branch swapped).
+        // `glab mr list --search <spec> --output json`. The branch label is
+        // unknown from a spec search; the parser fills it from the MR's own
+        // source_branch. trace:STORY-509 trace:BUG-223 | ai:claude
+        let out = self.glab(&["mr", "list", "--search", spec, "--output", "json"]);
+        Ok(glab_lookup_from_list_output(out, ""))
     }
 
-    fn merged_change_for_branch(&self, _branch: &str) -> Result<ChangeLookup> {
-        anyhow::bail!("GitLab merged_change_for_branch lands in EPIC-35 slice 3")
+    fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
+        // STORY-509: did the branch's MR already land? `glab mr list
+        // --source-branch <b> --merged --output json`. Same JSON shape +
+        // transient-vs-definitive mapping as change_for_branch.
+        // trace:STORY-509 | ai:claude
+        let out = self.glab(&[
+            "mr",
+            "list",
+            "--source-branch",
+            branch,
+            "--merged",
+            "--output",
+            "json",
+        ]);
+        Ok(glab_lookup_from_list_output(out, branch))
     }
 
-    fn change_status(&self, _c: &ChangeRef) -> Result<ChangeStatus> {
-        anyhow::bail!("GitLab change_status lands in EPIC-35 slice 3")
+    fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
+        // STORY-509: `glab mr view <iid> --output json` returns the GitLab REST
+        // MR object (state / merge_status / approvals / sha). Map it to the
+        // forge-neutral ChangeStatus via the pure parser. trace:STORY-509 | ai:claude
+        let iid = c.id.to_string();
+        let out = self.glab(&["mr", "view", &iid, "--output", "json"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr view failed for !{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let body = String::from_utf8_lossy(&out.stdout);
+        parse_glab_mr_status(&body)
+            .with_context(|| format!("could not parse `glab mr view` JSON for !{}", c.id))
     }
 
     fn ci_status(&self, _target: CiTarget) -> Result<CiStatus> {
@@ -1111,16 +1153,43 @@ impl Forge for GitLabForge {
         })
     }
 
-    fn comment(&self, _c: &ChangeRef, _body: &str) -> Result<()> {
-        anyhow::bail!("GitLab comment lands in EPIC-35 slice 3")
+    fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
+        // STORY-509: `glab mr note <iid> --message <body>` posts a comment on the
+        // MR — the glab equivalent of `gh pr comment`. trace:STORY-509 | ai:claude
+        let out = self.glab(&["mr", "note", &c.id.to_string(), "--message", body])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr note failed for !{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
     }
 
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
         pure_git_checkout(&self.project_root, &c.branch)
     }
 
-    fn list_changes(&self, _filter: ChangeFilter) -> Result<Vec<ChangeRef>> {
-        anyhow::bail!("GitLab list_changes lands in EPIC-35 slice 3")
+    fn list_changes(&self, filter: ChangeFilter) -> Result<Vec<ChangeRef>> {
+        // STORY-509: `glab mr list [--target-branch <base>] [--all] --output
+        // json` → a JSON array of MRs, mapped to ChangeRefs. Mirrors GitHub's
+        // list_changes: a non-success exit degrades to an empty list (a missing
+        // CLI / no project should not abort a caller iterating changes), but a
+        // clean run with bad JSON is surfaced. trace:STORY-509 | ai:claude
+        let mut args: Vec<&str> = vec!["mr", "list", "--output", "json"];
+        if let Some(base) = filter.base.as_deref() {
+            args.push("--target-branch");
+            args.push(base);
+        }
+        if !filter.open_only {
+            args.push("--all");
+        }
+        let out = self.glab(&args)?;
+        if !out.status.success() {
+            return Ok(Vec::new());
+        }
+        let body = String::from_utf8_lossy(&out.stdout);
+        parse_glab_mr_list(&body)
     }
 }
 
@@ -1321,6 +1390,178 @@ impl Forge for PureGitForge {
     fn list_changes(&self, _filter: ChangeFilter) -> Result<Vec<ChangeRef>> {
         Ok(Vec::new())
     }
+}
+
+// ─────────────────────────── glab JSON mapping (STORY-509) ───────────────────────────
+//
+// These are the *pure* mapping fns the GitLabForge trait methods feed `glab`'s
+// `--output json` through. Keeping them separate from the shell-out keeps them
+// unit-testable with captured-fixture JSON — no live GitLab needed (glab's
+// `--output json` emits the GitLab REST object verbatim, so a fixture is
+// faithful). trace:STORY-509 | ai:claude
+
+/// Map a GitLab MR `state` token to the forge-neutral [`ChangeState`].
+/// GitLab uses `opened` / `merged` / `closed` / `locked`. trace:STORY-509
+fn glab_state_from_str(s: &str) -> ChangeState {
+    match s {
+        "merged" => ChangeState::Merged,
+        "closed" | "locked" => ChangeState::Closed,
+        // "opened" and anything unexpected default to Open.
+        _ => ChangeState::Open,
+    }
+}
+
+/// Build a [`ChangeRef`] from one MR JSON object. `branch_hint` supplies the
+/// source-branch label when the JSON omits it (it normally carries
+/// `source_branch`, so the hint is a fallback). trace:STORY-509 | ai:claude
+fn change_ref_from_glab_mr(mr: &serde_json::Value, branch_hint: &str) -> Option<ChangeRef> {
+    let id = mr.get("iid").and_then(|v| v.as_u64())?;
+    let url = mr
+        .get("web_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let branch = mr
+        .get("source_branch")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(branch_hint)
+        .to_string();
+    let base = mr
+        .get("target_branch")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let title = mr
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    Some(ChangeRef {
+        id,
+        url,
+        branch,
+        base,
+        title,
+    })
+}
+
+/// Map the output of a `glab mr list … --output json` invocation to a
+/// [`ChangeLookup`], preserving the BUG-257 transient-vs-definitive distinction
+/// the orchestrator's phase-1 verdict depends on:
+///   - `glab` not on PATH (invoke error)       → `CliMissing`
+///   - non-zero exit, stderr smells transient   → `Unreachable(stderr)`
+///   - non-zero exit otherwise                  → `CliFailed(stderr)`
+///   - clean exit, empty array                  → `NoChange`
+///   - clean exit, ≥1 MR                         → `Found(first)`
+///   - clean exit, unparseable JSON             → `CliFailed(parse-error)`
+/// trace:STORY-509 trace:BUG-257 | ai:claude
+fn glab_lookup_from_list_output(
+    out: Result<std::process::Output>,
+    branch_hint: &str,
+) -> ChangeLookup {
+    let out = match out {
+        Ok(o) => o,
+        // The only Err `glab(...)` produces is "could not invoke glab" — the CLI
+        // is not on PATH. Map to the CliMissing arm so callers print the install
+        // hint rather than treating it as a definitive "no change". | ai:claude
+        Err(_) => return ChangeLookup::CliMissing,
+    };
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if glab_stderr_is_transient(&stderr) {
+            return ChangeLookup::Unreachable(stderr);
+        }
+        return ChangeLookup::CliFailed(stderr);
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() {
+        return ChangeLookup::NoChange;
+    }
+    match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(serde_json::Value::Array(arr)) => match arr.first() {
+            Some(mr) => match change_ref_from_glab_mr(mr, branch_hint) {
+                Some(c) => ChangeLookup::Found(c),
+                None => ChangeLookup::CliFailed("glab MR JSON missing `iid`".to_string()),
+            },
+            None => ChangeLookup::NoChange,
+        },
+        Ok(_) => ChangeLookup::CliFailed("glab mr list JSON was not an array".to_string()),
+        Err(e) => ChangeLookup::CliFailed(format!("could not parse glab mr list JSON: {e}")),
+    }
+}
+
+/// Heuristic: does a `glab` stderr indicate a *transient* network/API outage
+/// (→ `Unreachable`, treated as Inconclusive) rather than a definitive failure
+/// (auth, not-found)? Mirrors the spirit of the gh-side BUG-257 classification.
+/// trace:STORY-509 trace:BUG-257 | ai:claude
+fn glab_stderr_is_transient(stderr: &str) -> bool {
+    let s = stderr.to_ascii_lowercase();
+    s.contains("timeout")
+        || s.contains("timed out")
+        || s.contains("connection refused")
+        || s.contains("could not resolve")
+        || s.contains("dial tcp")
+        || s.contains("no such host")
+        || s.contains("network is unreachable")
+        || s.contains("temporary failure")
+        || s.contains("503")
+        || s.contains("502")
+        || s.contains("504")
+        || s.contains("eof")
+}
+
+/// Map a `glab mr view <iid> --output json` body to a [`ChangeStatus`]. GitLab
+/// review semantics differ from GitHub's single review-decision (approvals are a
+/// separate rule-count API), so slice-3 reports `ReviewDecision::None` — the
+/// merge round-trip the spec targets keys off state + mergeable, not a review
+/// gate. `mergeable` is derived from `detailed_merge_status` (preferred) or the
+/// legacy `merge_status`; `head_sha` from `sha`/`diff_refs.head_sha`.
+/// trace:STORY-509 | ai:claude
+fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
+    let v: serde_json::Value =
+        serde_json::from_str(body.trim()).context("glab mr view did not return valid JSON")?;
+    let state = glab_state_from_str(v.get("state").and_then(|s| s.as_str()).unwrap_or(""));
+    // GitLab's modern field is `detailed_merge_status` ("mergeable" when ready);
+    // older servers use `merge_status` ("can_be_merged"). Accept either.
+    let mergeable = match v.get("detailed_merge_status").and_then(|s| s.as_str()) {
+        Some(d) => d == "mergeable",
+        None => v.get("merge_status").and_then(|s| s.as_str()).unwrap_or("") == "can_be_merged",
+    };
+    let head_sha = v
+        .get("sha")
+        .and_then(|s| s.as_str())
+        .or_else(|| {
+            v.get("diff_refs")
+                .and_then(|d| d.get("head_sha"))
+                .and_then(|s| s.as_str())
+        })
+        .unwrap_or("")
+        .to_string();
+    Ok(ChangeStatus {
+        state,
+        mergeable,
+        review: ReviewDecision::None,
+        head_sha,
+    })
+}
+
+/// Map a `glab mr list --output json` body to a `Vec<ChangeRef>`. A clean run
+/// with non-array JSON or per-row gaps is an error / row-skip respectively (a
+/// non-success exit is handled upstream as an empty list, mirroring GitHub).
+/// trace:STORY-509 | ai:claude
+fn parse_glab_mr_list(body: &str) -> Result<Vec<ChangeRef>> {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    let v: serde_json::Value =
+        serde_json::from_str(trimmed).context("glab mr list did not return valid JSON")?;
+    let arr = v.as_array().context("glab mr list JSON was not an array")?;
+    Ok(arr
+        .iter()
+        .filter_map(|mr| change_ref_from_glab_mr(mr, ""))
+        .collect())
 }
 
 // ─────────────────────────── shared git helpers ───────────────────────────
@@ -1847,5 +2088,210 @@ mod tests {
         // job is the squash *commit* behavior, fully asserted above (base
         // advanced, clean index, file landed, trailer preserved).
         // trace:STORY-516 | ai:claude
+    }
+
+    // ───────────────────── STORY-509: glab JSON mapping ─────────────────────
+    //
+    // `glab … --output json` emits the GitLab REST object verbatim, so these
+    // fixtures (trimmed real-shape MR JSON) faithfully exercise the pure parsers
+    // without a live GitLab. trace:STORY-509 | ai:claude
+
+    /// A trimmed `glab mr view --output json` fixture — the GitLab MR object's
+    /// load-bearing fields.
+    fn mr_view_fixture(state: &str, merge_status: &str, sha: &str) -> String {
+        format!(
+            r#"{{
+              "iid": 7,
+              "web_url": "https://gitlab.example.com/joe/aida/-/merge_requests/7",
+              "source_branch": "feature/x",
+              "target_branch": "main",
+              "title": "feat: the thing (STORY-509)",
+              "state": "{state}",
+              "detailed_merge_status": "{merge_status}",
+              "sha": "{sha}"
+            }}"#
+        )
+    }
+
+    #[test]
+    fn glab_state_maps_gitlab_tokens() {
+        assert_eq!(glab_state_from_str("opened"), ChangeState::Open);
+        assert_eq!(glab_state_from_str("merged"), ChangeState::Merged);
+        assert_eq!(glab_state_from_str("closed"), ChangeState::Closed);
+        assert_eq!(glab_state_from_str("locked"), ChangeState::Closed);
+        assert_eq!(glab_state_from_str("weird"), ChangeState::Open);
+    }
+
+    #[test]
+    fn parse_glab_mr_status_open_mergeable() {
+        let st = parse_glab_mr_status(&mr_view_fixture("opened", "mergeable", "abc123")).unwrap();
+        assert_eq!(st.state, ChangeState::Open);
+        assert!(st.mergeable, "detailed_merge_status=mergeable → mergeable");
+        assert_eq!(st.review, ReviewDecision::None);
+        assert_eq!(st.head_sha, "abc123");
+    }
+
+    #[test]
+    fn parse_glab_mr_status_merged_not_mergeable() {
+        let st = parse_glab_mr_status(&mr_view_fixture("merged", "not_open", "deadbeef")).unwrap();
+        assert_eq!(st.state, ChangeState::Merged);
+        assert!(!st.mergeable);
+        assert_eq!(st.head_sha, "deadbeef");
+    }
+
+    #[test]
+    fn parse_glab_mr_status_legacy_merge_status_field() {
+        // Older GitLab servers emit `merge_status` ("can_be_merged"), no
+        // `detailed_merge_status`. The parser must fall back to it.
+        let body = r#"{"iid":1,"state":"opened","merge_status":"can_be_merged","sha":"f00"}"#;
+        let st = parse_glab_mr_status(body).unwrap();
+        assert!(
+            st.mergeable,
+            "legacy merge_status=can_be_merged → mergeable"
+        );
+        assert_eq!(st.head_sha, "f00");
+    }
+
+    #[test]
+    fn parse_glab_mr_status_head_sha_from_diff_refs() {
+        let body = r#"{"iid":1,"state":"opened","diff_refs":{"head_sha":"diffsha"}}"#;
+        let st = parse_glab_mr_status(body).unwrap();
+        assert_eq!(st.head_sha, "diffsha", "falls back to diff_refs.head_sha");
+        assert!(!st.mergeable, "no merge-status field → not mergeable");
+    }
+
+    #[test]
+    fn parse_glab_mr_status_rejects_garbage() {
+        assert!(parse_glab_mr_status("not json").is_err());
+    }
+
+    #[test]
+    fn parse_glab_mr_list_maps_array() {
+        let body = r#"[
+          {"iid":3,"web_url":"https://gl/mr/3","source_branch":"a","target_branch":"main","title":"A"},
+          {"iid":4,"web_url":"https://gl/mr/4","source_branch":"b","target_branch":"main","title":"B"}
+        ]"#;
+        let refs = parse_glab_mr_list(body).unwrap();
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].id, 3);
+        assert_eq!(refs[0].branch, "a");
+        assert_eq!(refs[0].base, "main");
+        assert_eq!(refs[0].title.as_deref(), Some("A"));
+        assert_eq!(refs[1].id, 4);
+    }
+
+    #[test]
+    fn parse_glab_mr_list_empty_array_and_blank() {
+        assert!(parse_glab_mr_list("[]").unwrap().is_empty());
+        assert!(parse_glab_mr_list("   ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_glab_mr_list_skips_rows_without_iid() {
+        let body = r#"[{"iid":5,"source_branch":"x"},{"web_url":"https://gl/mr/?"}]"#;
+        let refs = parse_glab_mr_list(body).unwrap();
+        assert_eq!(refs.len(), 1, "row without iid is skipped");
+        assert_eq!(refs[0].id, 5);
+    }
+
+    #[test]
+    fn parse_glab_mr_list_non_array_is_error() {
+        assert!(parse_glab_mr_list(r#"{"iid":1}"#).is_err());
+    }
+
+    /// The list→lookup mapping preserves the BUG-257 transient-vs-definitive
+    /// distinction. Synthesize `std::process::Output` values for each arm.
+    fn fake_output(code: i32, stdout: &str, stderr: &str) -> std::process::Output {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::Output {
+            status: std::process::ExitStatus::from_raw((code & 0xff) << 8),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn glab_lookup_found_from_clean_array() {
+        let json = r#"[{"iid":9,"web_url":"https://gl/mr/9","source_branch":"feat","target_branch":"main","title":"T"}]"#;
+        let lk = glab_lookup_from_list_output(Ok(fake_output(0, json, "")), "feat");
+        match lk {
+            ChangeLookup::Found(c) => {
+                assert_eq!(c.id, 9);
+                assert_eq!(c.branch, "feat");
+                assert_eq!(c.title.as_deref(), Some("T"));
+            }
+            other => panic!("expected Found, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn glab_lookup_branch_hint_fills_missing_source_branch() {
+        // change_for_spec passes "" as the hint; a spec search row carries its
+        // own source_branch, so the row wins. But if it's absent, the hint fills.
+        let json = r#"[{"iid":2,"web_url":"https://gl/mr/2"}]"#;
+        let lk = glab_lookup_from_list_output(Ok(fake_output(0, json, "")), "hinted");
+        match lk {
+            ChangeLookup::Found(c) => assert_eq!(c.branch, "hinted"),
+            other => panic!("expected Found, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn glab_lookup_empty_array_is_no_change() {
+        assert_eq!(
+            glab_lookup_from_list_output(Ok(fake_output(0, "[]", "")), "b"),
+            ChangeLookup::NoChange
+        );
+        assert_eq!(
+            glab_lookup_from_list_output(Ok(fake_output(0, "", "")), "b"),
+            ChangeLookup::NoChange
+        );
+    }
+
+    #[test]
+    fn glab_lookup_invoke_error_is_cli_missing() {
+        assert_eq!(
+            glab_lookup_from_list_output(Err(anyhow::anyhow!("not found")), "b"),
+            ChangeLookup::CliMissing
+        );
+    }
+
+    #[test]
+    fn glab_lookup_transient_stderr_is_unreachable() {
+        let lk = glab_lookup_from_list_output(
+            Ok(fake_output(1, "", "dial tcp: connection refused")),
+            "b",
+        );
+        match lk {
+            ChangeLookup::Unreachable(s) => assert!(s.contains("connection refused")),
+            other => panic!("expected Unreachable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn glab_lookup_auth_stderr_is_cli_failed() {
+        // A 401 / auth failure is definitive (NOT transient) → CliFailed, so the
+        // orchestrator does not treat it as Inconclusive.
+        let lk = glab_lookup_from_list_output(
+            Ok(fake_output(1, "", "401 Unauthorized: token invalid")),
+            "b",
+        );
+        match lk {
+            ChangeLookup::CliFailed(s) => assert!(s.contains("401")),
+            other => panic!("expected CliFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn glab_stderr_transient_classification() {
+        assert!(glab_stderr_is_transient(
+            "Get ...: net/http: TLS handshake timeout"
+        ));
+        assert!(glab_stderr_is_transient(
+            "could not resolve host: gitlab.example.com"
+        ));
+        assert!(glab_stderr_is_transient("received 503 Service Unavailable"));
+        assert!(!glab_stderr_is_transient("404 Project Not Found"));
+        assert!(!glab_stderr_is_transient("401 Unauthorized"));
     }
 }
