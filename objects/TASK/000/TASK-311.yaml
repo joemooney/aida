@@ -77,12 +77,12 @@ description: |-
   Pattern observed across 4 specs in 36 hours. The implementer-side pause-for-design pattern caught all 4, but the filing-time discipline that would have prevented the contradiction in the first place isn't yet codified as a checkable step in dialog's workflow. This TASK closes that loop.
 
   Discipline-first approach (no new tooling): the value is in the dialog role's filing habits, not in a programmatic checker. Adding tooling without the habit reproduces the gap one layer down.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T16:37:15.060027836Z
-modified_at: 2026-06-06T23:25:14.979002490Z
+modified_at: 2026-06-06T23:58:33.817068434Z
 req_type: Task
 tags:
 - advisor-discipline
@@ -113,4 +113,8 @@ comments:
   content: Commit ee62ec1b7 references this requirement
   created_at: 2026-06-06T23:25:14.979002490Z
   modified_at: 2026-06-06T23:25:14.979002490Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T23:58:33.817068434Z
+  completion_sha: 7463798e2c0342297cf0dda9f01e7a82221cba80
 human_only: true
