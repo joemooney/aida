@@ -3037,6 +3037,18 @@ pub enum QueueCommand {
         /// resolver.
         #[clap(long)]
         no_launch: bool,
+        /// Plan-only mode: launch a PLANNING session for the spec instead of
+        /// an implementing one. Runs `/aida-plan <SPEC>` (not `/aida-pickup`)
+        /// and defaults the permission mode to `plan` (read-only) so the
+        /// session writes a `docs/plans/` file without touching code. After
+        /// the plan lands, promote the spec with `aida plan promote <SPEC>`
+        /// (Approved -> Planned). Lets you plan work ahead while another spec
+        /// is being implemented (the parallel-pipelining workflow). Headless
+        /// auto-complete plan-phase is separate; this flag is interactive
+        /// only, so it conflicts with --auto-complete for now.
+        // trace:STORY-265 | ai:claude
+        #[clap(long, conflicts_with = "auto_complete")]
+        plan_only: bool,
         /// Override the inferred role. Without this, the role is derived
         /// from the queue items' `for_role` (single-item: that item's
         /// role; cluster: majority with a warning about minority items).
