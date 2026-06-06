@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T17:36:44.160363907Z
-modified_at: 2026-06-05T17:36:44.160363907Z
+modified_at: 2026-06-06T08:17:25.076014486Z
 req_type: Story
 tags:
 - drain
@@ -53,3 +53,20 @@ tags:
 - parent:TASK-405
 - producer-consumer
 - roles
+comments:
+- id: 019e9c02-1e54-7aa2-9ff1-f16cccc78b57
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Integrator role is sequenced behind BUG-444 (phase-1 NoPr race). Proceed?
+      a) Block until BUG-444 ships (parallel merge contention is moot while single-loop detection is unreliable)
+      b) Build now — it's the right single home for the PR-detection/merge logic anyway
+      c) Reject — single sequential drain is adequate for a single-user alpha
+      REC: b, but confirm BUG-444 status first (the integrator's merge phase inherits it if still open).
+    Q2: New first-class 'integrator' role (taxonomy/scaffolding/routing/statusline) — approve the shape?
+      a) Full first-class role
+      b) A MODE of the orchestrator (--integrate loop) — less taxonomy surface
+      c) Prototype the watch-loop as a script first; promote to a role only if proven
+      REC: c — validate the load-bearing watch-loop cheaply before committing reversible-expensive role scaffolding.
+  created_at: 2026-06-06T08:17:25.076014486Z
+  modified_at: 2026-06-06T08:17:25.076014486Z
