@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:34:30.536264117Z
-modified_at: 2026-05-13T05:34:30.536264117Z
+modified_at: 2026-06-06T08:37:38.206066948Z
 req_type: Task
 tags:
 - commit
@@ -47,3 +47,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T05:34:32.547030401Z
+comments:
+- id: 019e9c14-a11e-7343-a948-19814cd712f4
+  author: joe
+  content: Disposition sweep 2026-06-06 — COMPLETED. Covered — aida-commit skill documents aida rebase --dry-run --json before committing on a long-open session; the rebase verb supersedes a bespoke commit-side fetch.
+  created_at: 2026-06-06T08:37:38.206066948Z
+  modified_at: 2026-06-06T08:37:38.206066948Z
