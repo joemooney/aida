@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:20.867633023Z
-modified_at: 2026-06-05T19:38:51.011685443Z
+modified_at: 2026-06-06T07:40:54.465682583Z
 req_type: Bug
 tags:
 - aida:init
@@ -39,3 +39,13 @@ comments:
   content: 'CLEAN STANDALONE REPRO 2026-06-05 (~/work/dummy1, a properly isolated project — NOT the earlier ~/ai workspace-wrap). Confirms BUG-445 is a genuine standalone defect, not an artifact of BUG-446. Same failure: queue-work isolates TASK-007 into worktree dummy1-task-007 off initial commit (caf8cda = .gitkeep only); no .gitignore / no config.toml there; git add . would stage 3 outside-repo symlinks. This is the canonical repro. Verified-safe workaround: the scaffolding commit belongs in the CANONICAL repo (~/work/dummy1) where .gitignore exists — git add . there stages 141 scaffolding files and correctly IGNORES .aida-store/.aida/cache.db/.aida/sessions. The queue-work worktree should never have been created for this task (the BUG-445 fix).'
   created_at: 2026-06-05T19:38:51.011685443Z
   modified_at: 2026-06-05T19:38:51.011685443Z
+- id: 019e9be0-b141-71a2-a94e-06c4a77929b6
+  author: joe
+  content: |-
+    Advisor analysis + recommendation (2026-06-06, autonomous burn-down): this is the one remaining open bug and it needs an OPERATOR product decision — unlike the 8 reliability/onboarding-mechanics bugs cleared this session, the fix space here is an onboarding-UX call coupled to TASK-631.
+
+    Recommended path (root-cause): implement TASK-631 (init commits its own scaffolding — auto when non-interactive, prompt default-Y on TTY, scoped to init's own paths). That dissolves BUG-445: no uncommitted scaffolding, no seeded 'commit scaffolding' task, and a worktree branched off the init commit already has the files. The two band-aids — (b) flag the onboarding task primary-worktree-only / don't seed it as a for:implementer queue item, and (c) never emit a bare 'git add .' without .gitignore — are weaker and partly redundant once TASK-631 lands.
+
+    The UX fork in TASK-631 (auto vs prompt, what exactly to commit) is the operator's to weigh on the Trojan-horse product's most sensitive surface — deferring per feedback_pause_for_design_input + feedback_one_master_advisor_until_subsystems. Leaving BUG-445 Approved, NOT charging a fix unsupervised. Related: BUG-446/447 (shipped this session), BUG-433.
+  created_at: 2026-06-06T07:40:54.465682583Z
+  modified_at: 2026-06-06T07:40:54.465682583Z
