@@ -3692,6 +3692,21 @@ pub enum FindingsCommand {
         // trace:TASK-420 | ai:claude
         #[clap(long, value_name = "TEXT")]
         reason: Option<String>,
+
+        /// When the finding's origin-ID fix has already merged to the default
+        /// branch, bump the promoted spec straight to Completed instead of
+        /// queueing it as fresh work. Without this flag, an already-merged
+        /// origin-ID only prints a warning and the finding still queues.
+        // trace:TASK-579 | ai:claude
+        #[clap(long = "auto-complete")]
+        auto_complete: bool,
+
+        /// Promote (and queue) even when the origin-ID fix already merged —
+        /// for reopening or extending the finding. Suppresses the
+        /// already-merged warning / auto-complete entirely.
+        // trace:TASK-579 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
 
     /// Calibration review surface — list cold-boot vs fork-from-live
