@@ -61,7 +61,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-05-25T07:42:59.661069711Z
+modified_at: 2026-06-06T08:34:00.984753283Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -72,3 +72,15 @@ tags:
 - multi-agent
 - role
 - scaling-pattern
+comments:
+- id: 019e9c11-5098-7632-9c18-9a50f915a1f2
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: The integrator role IDENTIFIER already exists (AGENT_ROLES, AgentRoleInfo, validate_registered_agent_role, --role integrator) but the spec's actual deliverables — role-context template, scaffolding, no `aida-core/templates/roles/` dir exists at all — are unbuilt. Multi-agent load-balancing is a strategic-cluster feature; project phase is bugs→stability→marketing. How to dispose?
+      a) Ship the narrow remaining slice now: write `aida-core/templates/roles/integrator.md` + scaffold `.aida/roles/` via `aida init` + discipline-pack section (the only acceptance items not already met).
+      b) Defer the whole STORY post-stability with the rest of the multi-agent cluster (EPIC-31/STORY-425); the role identifier already validates so nothing is broken meanwhile.
+      c) Reject — the role-context file is low-value scaffolding now that the identifier + queue --for-role routing already work; the "integrator discipline" can live in the discipline-pack without a per-role template.
+      REC: b — the role stub is harmless and the remaining work is real role-scaffolding infra that wants the same design pass as the EPIC-31 launcher/registry cluster, not a standalone bugs-phase ship.
+  created_at: 2026-06-06T08:34:00.984753283Z
+  modified_at: 2026-06-06T08:34:00.984753283Z
