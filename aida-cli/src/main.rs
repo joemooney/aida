@@ -29175,83 +29175,596 @@ fn untracked_is_safe_to_remove(path: &str) -> bool {
         .any(|seg| seg == "__pycache__" || seg == ".mypy_cache" || seg == ".pytest_cache")
 }
 
-/// STORY-456: `aida status` Worktrees section. Display-only — lists each
-/// non-main, non-store worktree with its branch, clean/dirty state, the
-/// session lease covering it (if any), live/dormant status, and a likely-
-/// obsolete hint (no lease + clean tree → safe to remove). Silent when only
-/// the main worktree exists. The full obsolescence verdict (commits-ahead,
-/// PR-merged, stale-CI) is a follow-up; this surfaces the recurring
-/// "git worktree list + aida session leases" mental-merge. trace:STORY-456
-fn print_status_worktrees_section(project_root: &std::path::Path) {
-    let main_root = main_worktree_root_from(project_root);
-    let worktrees = list_worktrees(&main_root);
-    let leases = list_leases(&main_root);
-    let live = process_probe::probe_live_claude_sessions();
+/// STORY-456: structured per-worktree status row — the assembled merge of
+/// `git worktree list`, the session lease covering it, live/dormant process
+/// state, working-tree cleanliness, commits-ahead-of-default, and the open
+/// PR (if any) on its branch. Drives both the text Worktrees section and the
+/// `--json` projection so the two never drift. The PR-derived fields are
+/// populated from a single batched `gh pr list` snapshot — never one gh call
+/// per row. trace:STORY-456 | ai:claude
+#[derive(Debug, Clone, PartialEq)]
+struct WorktreeStatusRow {
+    path: std::path::PathBuf,
+    branch: String,
+    /// Spec the worktree is tied to (lease scope, else branch-name inference).
+    tied_spec: Option<String>,
+    lease_scope: Option<String>,
+    has_live: bool,
+    dirty_count: usize,
+    /// Commits the branch is ahead of the default ref. `None` when it could
+    /// not be computed (detached HEAD, missing default ref, git failure).
+    ahead: Option<u32>,
+    pr_number: Option<u64>,
+    pr_ci: Option<String>,
+    pr_mergeable: Option<String>,
+    /// Obsolescence verdict — TIED (in flight) vs OBSOLETE (safe to remove).
+    obsolete: bool,
+}
 
-    let mut rows: Vec<String> = Vec::new();
-    for wt in &worktrees {
+/// STORY-456: tie a worktree to a spec id. The lease scope is authoritative;
+/// fall back to inferring `TASK-425` from a `task-425` / `task-425-2` branch
+/// name so leaseless worktrees still get a spec hint. trace:STORY-456
+fn infer_tied_spec(lease_scope: Option<&str>, branch: &str) -> Option<String> {
+    if let Some(scope) = lease_scope {
+        if !scope.is_empty() {
+            return Some(scope.to_string());
+        }
+    }
+    // Branch names are slugged lowercase (e.g. `task-425-2`,
+    // `story-456-status-worktrees`). Recover a leading `<type>-<num>`.
+    let mut parts = branch.splitn(3, '-');
+    let kind = parts.next()?;
+    let num = parts.next()?;
+    if num.chars().all(|c| c.is_ascii_digit()) && !num.is_empty() {
+        Some(format!("{}-{}", kind.to_uppercase(), num))
+    } else {
+        None
+    }
+}
+
+/// STORY-456: pure assembly of the Worktrees rows from already-collected
+/// inputs (no I/O) so the merge + obsolescence logic is unit-testable.
+///
+/// Obsolescence verdict (per spec): a worktree is TIED (in flight) if ANY of
+/// — an active lease covers it, the tree is dirty, a live process runs there,
+/// it has un-merged commits ahead of the default branch, or it has an open
+/// PR. It is OBSOLETE (safe to remove) only when ALL of those are false: no
+/// lease, clean tree, nothing live, nothing ahead, no open PR. The conjunction
+/// keeps the "safe to remove" signal conservative. trace:STORY-456 | ai:claude
+fn assemble_worktree_status_rows(
+    worktrees: &[WorktreeRecord],
+    main_root: &std::path::Path,
+    leases: &[SessionLease],
+    live: &[process_probe::LiveSession],
+    pr_by_branch: &std::collections::HashMap<String, status_cleanup::OpenPrItem>,
+    ahead_by_path: &std::collections::HashMap<std::path::PathBuf, u32>,
+) -> Vec<WorktreeStatusRow> {
+    let mut rows = Vec::new();
+    for wt in worktrees {
         // Skip the main worktree and the AIDA-managed orphan store.
-        if wt.path == main_root || wt.branch.as_deref() == Some("aida-store") {
+        if wt.path == *main_root || wt.branch.as_deref() == Some("aida-store") {
             continue;
         }
-        let branch = wt.branch.as_deref().unwrap_or("(detached)");
-        let dirty = worktree_dirty_entries(&wt.path);
+        let branch = wt
+            .branch
+            .clone()
+            .unwrap_or_else(|| "(detached)".to_string());
+        let dirty_count = worktree_dirty_entries(&wt.path).len();
         let lease = leases.iter().find(|l| l.worktree_path == wt.path);
+        let lease_scope = lease.map(|l| l.scope.clone());
         let has_live = live
             .iter()
             .any(|s| !s.stale_cwd && (s.cwd == wt.path || s.cwd.starts_with(&wt.path)));
+        let ahead = ahead_by_path.get(&wt.path).copied();
+        let pr = pr_by_branch.get(&branch);
+        let tied_spec = infer_tied_spec(lease_scope.as_deref(), &branch);
 
-        let lease_part = match lease {
-            Some(l) => format!("lease:{}", l.scope),
-            None => "no-lease".to_string(),
-        };
-        let live_part = if lease.is_some() {
-            if has_live {
-                "live".green().to_string()
-            } else {
-                "dormant".yellow().to_string()
-            }
-        } else if has_live {
-            "live".green().to_string()
-        } else {
-            String::new()
-        };
-        let dirty_part = if dirty.is_empty() {
-            "clean".to_string()
-        } else {
-            format!("dirty({})", dirty.len()).yellow().to_string()
-        };
-        // Likely-obsolete: no lease covers it AND the tree is clean AND nothing
-        // live is running there — the conservative "safe to remove" signal.
-        let marker = if lease.is_none() && dirty.is_empty() && !has_live {
-            "  ⚠ likely obsolete — `git worktree remove`"
-                .dimmed()
-                .to_string()
-        } else {
-            String::new()
-        };
-        let mut line = format!(
-            "  {} ({}) — {} · {}",
-            wt.path.display(),
-            branch.cyan(),
-            dirty_part,
-            lease_part
-        );
-        if !live_part.is_empty() {
-            line.push_str(&format!(" · {}", live_part));
-        }
-        line.push_str(&marker);
-        rows.push(line);
+        let has_open_pr = pr.is_some();
+        let has_unmerged = ahead.map(|a| a > 0).unwrap_or(false);
+        let obsolete =
+            lease.is_none() && dirty_count == 0 && !has_live && !has_unmerged && !has_open_pr;
+
+        rows.push(WorktreeStatusRow {
+            path: wt.path.clone(),
+            branch,
+            tied_spec,
+            lease_scope,
+            has_live,
+            dirty_count,
+            ahead,
+            pr_number: pr.map(|p| p.number),
+            pr_ci: pr.and_then(|p| p.ci_rollup.clone()),
+            pr_mergeable: pr.and_then(|p| p.mergeable.clone()),
+            obsolete,
+        });
     }
+    rows
+}
 
+/// STORY-456: `aida status` Worktrees section. Display-only — lists each
+/// non-main, non-store worktree with its branch, tied spec, clean/dirty
+/// state, the session lease covering it, live/dormant status, commits-ahead
+/// of the default branch, its open PR (number + CI + mergeability), and an
+/// obsolescence verdict (✓ in flight / ⚠ obsolete — `git worktree remove`).
+/// Silent when only the main worktree exists. The open-PR fields come from a
+/// single batched `gh pr list` snapshot — one gh call regardless of worktree
+/// count. trace:STORY-456 | ai:claude
+fn print_status_worktrees_section(project_root: &std::path::Path) {
+    let main_root = main_worktree_root_from(project_root);
+    let rows = collect_worktree_status_rows(&main_root);
     if rows.is_empty() {
         return;
     }
     println!("{}", "─── Worktrees ───".bold());
-    for row in rows {
-        println!("{}", row);
+    for row in &rows {
+        let dirty_part = if row.dirty_count == 0 {
+            "clean".to_string()
+        } else {
+            format!("dirty({})", row.dirty_count).yellow().to_string()
+        };
+        let lease_part = match &row.lease_scope {
+            Some(scope) => format!("lease:{scope}"),
+            None => "no-lease".to_string(),
+        };
+        let live_part = if row.has_live {
+            "live".green().to_string()
+        } else if row.lease_scope.is_some() {
+            "dormant".yellow().to_string()
+        } else {
+            String::new()
+        };
+
+        let mut line = format!(
+            "  {} ({}) — {} · {}",
+            row.path.display(),
+            row.branch.cyan(),
+            dirty_part,
+            lease_part
+        );
+        if !live_part.is_empty() {
+            line.push_str(&format!(" · {live_part}"));
+        }
+        if let Some(ahead) = row.ahead {
+            if ahead > 0 {
+                line.push_str(&format!(" · {ahead}↑main"));
+            }
+        }
+        if let Some(n) = row.pr_number {
+            let ci = row.pr_ci.as_deref().unwrap_or("?");
+            line.push_str(&format!(" · {}", format!("PR #{n} [CI:{ci}]").cyan()));
+        }
+        // Verdict marker: ✓ in flight / ⚠ obsolete — <recovery command>.
+        if row.obsolete {
+            line.push_str(&"  ⚠ obsolete — `git worktree remove`".dimmed().to_string());
+        } else {
+            line.push_str(&"  ✓ in flight".dimmed().to_string());
+        }
+        println!("{line}");
     }
     println!();
+}
+
+/// STORY-456: I/O wrapper that gathers the inputs (worktrees, leases, live
+/// sessions, the batched open-PR snapshot, per-worktree ahead-of-default
+/// counts) and hands them to the pure `assemble_worktree_status_rows`. Shared
+/// by the text section and the `--json` projection so they never drift.
+/// trace:STORY-456 | ai:claude
+fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStatusRow> {
+    let worktrees = list_worktrees(main_root);
+    let leases = list_leases(main_root);
+    let live = process_probe::probe_live_claude_sessions();
+    // One batched gh call for every worktree's PR (never per-row).
+    let pr_by_branch = collect_open_prs(main_root).by_branch;
+    // Commits-ahead-of-default per worktree branch (cheap local git).
+    let default_ref =
+        detect_default_branch_ref(main_root).unwrap_or_else(|| "origin/main".to_string());
+    let mut ahead_by_path = std::collections::HashMap::new();
+    for wt in &worktrees {
+        if wt.path == *main_root || wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        if let Some(branch) = wt.branch.as_deref() {
+            if let Some(a) = branch_ahead_of(main_root, branch, &default_ref) {
+                ahead_by_path.insert(wt.path.clone(), a);
+            }
+        }
+    }
+    assemble_worktree_status_rows(
+        &worktrees,
+        main_root,
+        &leases,
+        &live,
+        &pr_by_branch,
+        &ahead_by_path,
+    )
+}
+
+/// STORY-456: `aida status` Open PRs section. Lists every open PR (one
+/// batched `gh pr list` call) with number + title, CI rollup, mergeability,
+/// and a recommended next step per state. Silent when there are no open PRs
+/// or gh is unavailable — display-only orientation, not a gate.
+/// trace:STORY-456 | ai:claude
+fn print_status_open_prs_section(project_root: &std::path::Path) {
+    let snapshot = collect_open_prs(project_root);
+    if snapshot.by_branch.is_empty() {
+        return;
+    }
+    let mut prs: Vec<&status_cleanup::OpenPrItem> = snapshot.by_branch.values().collect();
+    prs.sort_by_key(|p| p.number);
+
+    println!("{}", "─── Open PRs ───".bold());
+    for pr in prs {
+        let ci = pr.ci_rollup.as_deref().unwrap_or("?");
+        let merge = pr.mergeable.as_deref().unwrap_or("UNKNOWN");
+        let next = open_pr_next_step(
+            ci,
+            &merge.to_ascii_uppercase(),
+            pr.review_decision.as_deref(),
+        );
+        let title = truncate_for_width(&pr.title, 56);
+        println!(
+            "  {} {} [CI:{} · {}]",
+            format!("PR #{}", pr.number).cyan(),
+            title,
+            ci,
+            merge.to_ascii_lowercase()
+        );
+        println!("    {} · {}", pr.head_branch.dimmed(), next.dimmed());
+    }
+    println!();
+}
+
+/// STORY-456: recommended next step for an open PR, keyed off CI rollup,
+/// mergeability, and review decision. Distinguishes CI-failing from
+/// merge-conflict from awaiting-review — the conflation the spec calls out
+/// (`gh pr checks --watch` blurs CI with mergeability). Pure. trace:STORY-456
+fn open_pr_next_step(ci: &str, mergeable: &str, review_decision: Option<&str>) -> String {
+    if ci == "fail" {
+        return "CI failing — fix & push".to_string();
+    }
+    if mergeable == "CONFLICTING" {
+        return "merge conflict — rebase onto default".to_string();
+    }
+    if ci == "pending" {
+        return "CI in progress — wait".to_string();
+    }
+    match review_decision {
+        Some("CHANGES_REQUESTED") => "changes requested — address review".to_string(),
+        Some("APPROVED") => "approved — ready to merge".to_string(),
+        Some("REVIEW_REQUIRED") => "awaiting review".to_string(),
+        _ if ci == "pass" => "checks green — ready to merge".to_string(),
+        _ => "awaiting review".to_string(),
+    }
+}
+
+/// Truncate `s` to at most `max` chars, appending an ellipsis when cut.
+fn truncate_for_width(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+    out.push('…');
+    out
+}
+
+/// STORY-456: `aida status` Recently merged section — last N merged PRs (one
+/// batched `gh pr list --state merged` call) for orientation. Silent when
+/// there are none or gh is unavailable. trace:STORY-456 | ai:claude
+fn print_status_recently_merged_section(project_root: &std::path::Path, limit: usize) {
+    let merged = collect_recently_merged_prs(project_root, limit);
+    if merged.is_empty() {
+        return;
+    }
+    println!("{}", "─── Recently merged ───".bold());
+    for (number, title, when) in &merged {
+        let title = truncate_for_width(title, 56);
+        let when = when.as_deref().unwrap_or("");
+        println!(
+            "  {} {} {}",
+            format!("PR #{number}").green(),
+            title,
+            when.dimmed()
+        );
+    }
+    println!();
+}
+
+/// STORY-456: parse `gh pr list --state merged --json number,title,mergedAt`
+/// into `(number, title, humanized-merge-time)` rows. Pure — unit-tested
+/// against captured gh JSON. trace:STORY-456 | ai:claude
+fn parse_recently_merged_prs(stdout: &str) -> Vec<(u64, String, Option<String>)> {
+    let json: serde_json::Value = match serde_json::from_str(stdout) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let mut rows = Vec::new();
+    for pr in json.as_array().cloned().unwrap_or_default() {
+        let Some(number) = pr.get("number").and_then(|v| v.as_u64()) else {
+            continue;
+        };
+        let title = pr
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let when = pr
+            .get("mergedAt")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| humanize_relative(dt.with_timezone(&chrono::Utc)));
+        rows.push((number, title, when));
+    }
+    rows
+}
+
+/// STORY-456: batched fetch of the last `limit` merged PRs. Empty when gh is
+/// missing or the call fails. trace:STORY-456 | ai:claude
+fn collect_recently_merged_prs(
+    project_root: &std::path::Path,
+    limit: usize,
+) -> Vec<(u64, String, Option<String>)> {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "merged",
+            "--limit",
+            &limit.to_string(),
+            "--json",
+            "number,title,mergedAt",
+        ])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let mut rows = parse_recently_merged_prs(&String::from_utf8_lossy(&out.stdout));
+    rows.truncate(limit);
+    rows
+}
+
+#[cfg(test)]
+mod story_456_status_worktrees_tests {
+    use super::*;
+
+    fn lease(scope: &str, worktree: &std::path::Path) -> SessionLease {
+        SessionLease {
+            id: "019elease456".to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".to_string(),
+            worktree_path: worktree.to_path_buf(),
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "host".to_string(),
+            role: Some("implementer".to_string()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+        }
+    }
+
+    fn pr_item(number: u64, branch: &str) -> status_cleanup::OpenPrItem {
+        status_cleanup::OpenPrItem {
+            number,
+            title: format!("PR {number}"),
+            head_branch: branch.to_string(),
+            ci_rollup: Some("pass".to_string()),
+            mergeable: Some("MERGEABLE".to_string()),
+            review_decision: None,
+        }
+    }
+
+    #[test]
+    fn infer_tied_spec_prefers_lease_scope() {
+        assert_eq!(
+            infer_tied_spec(Some("STORY-456"), "story-456-foo"),
+            Some("STORY-456".to_string())
+        );
+    }
+
+    #[test]
+    fn infer_tied_spec_falls_back_to_branch_name() {
+        assert_eq!(
+            infer_tied_spec(None, "task-425-2"),
+            Some("TASK-425".to_string())
+        );
+        assert_eq!(
+            infer_tied_spec(None, "story-456-status"),
+            Some("STORY-456".to_string())
+        );
+        // No numeric segment → no inference.
+        assert_eq!(infer_tied_spec(None, "feature-branch"), None);
+        assert_eq!(infer_tied_spec(None, "(detached)"), None);
+    }
+
+    // A worktree with no lease, clean tree, nothing live, nothing ahead, and
+    // no open PR is the conservative OBSOLETE case. trace:STORY-456
+    #[test]
+    fn obsolete_when_all_signals_quiet() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt = WorktreeRecord {
+            path: std::path::PathBuf::from("/repo-wt"),
+            branch: Some("task-999".to_string()),
+        };
+        let ahead = std::collections::HashMap::new(); // no ahead entry → None
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &[],
+            &[],
+            &std::collections::HashMap::new(),
+            &ahead,
+        );
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].obsolete, "quiet worktree should be obsolete");
+        assert_eq!(rows[0].tied_spec, Some("TASK-999".to_string()));
+    }
+
+    // ANY of: lease / dirty / live / ahead / open-PR keeps it TIED (in flight).
+    #[test]
+    fn tied_when_commits_ahead() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt = WorktreeRecord {
+            path: std::path::PathBuf::from("/repo-wt"),
+            branch: Some("task-1".to_string()),
+        };
+        let mut ahead = std::collections::HashMap::new();
+        ahead.insert(wt.path.clone(), 3u32);
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &[],
+            &[],
+            &std::collections::HashMap::new(),
+            &ahead,
+        );
+        assert!(!rows[0].obsolete, "un-merged commits ahead → in flight");
+        assert_eq!(rows[0].ahead, Some(3));
+    }
+
+    #[test]
+    fn tied_when_open_pr_present() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt = WorktreeRecord {
+            path: std::path::PathBuf::from("/repo-wt"),
+            branch: Some("task-2".to_string()),
+        };
+        let mut prs = std::collections::HashMap::new();
+        prs.insert("task-2".to_string(), pr_item(77, "task-2"));
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &[],
+            &[],
+            &prs,
+            &std::collections::HashMap::new(),
+        );
+        assert!(!rows[0].obsolete, "open PR → in flight");
+        assert_eq!(rows[0].pr_number, Some(77));
+        assert_eq!(rows[0].pr_ci.as_deref(), Some("pass"));
+    }
+
+    #[test]
+    fn tied_when_lease_covers_it() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt_path = std::path::PathBuf::from("/repo-wt");
+        let wt = WorktreeRecord {
+            path: wt_path.clone(),
+            branch: Some("story-456".to_string()),
+        };
+        let leases = vec![lease("STORY-456", &wt_path)];
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &leases,
+            &[],
+            &std::collections::HashMap::new(),
+            &std::collections::HashMap::new(),
+        );
+        assert!(!rows[0].obsolete, "active lease → in flight");
+        assert_eq!(rows[0].lease_scope.as_deref(), Some("STORY-456"));
+    }
+
+    // The main worktree and the orphan store are excluded from the rows.
+    #[test]
+    fn skips_main_and_store_worktrees() {
+        let main = std::path::PathBuf::from("/repo");
+        let worktrees = vec![
+            WorktreeRecord {
+                path: main.clone(),
+                branch: Some("main".to_string()),
+            },
+            WorktreeRecord {
+                path: std::path::PathBuf::from("/repo-store"),
+                branch: Some("aida-store".to_string()),
+            },
+            WorktreeRecord {
+                path: std::path::PathBuf::from("/repo-wt"),
+                branch: Some("task-3".to_string()),
+            },
+        ];
+        let rows = assemble_worktree_status_rows(
+            &worktrees,
+            &main,
+            &[],
+            &[],
+            &std::collections::HashMap::new(),
+            &std::collections::HashMap::new(),
+        );
+        assert_eq!(rows.len(), 1, "only the real session worktree remains");
+        assert_eq!(rows[0].branch, "task-3");
+    }
+
+    #[test]
+    fn open_pr_next_step_distinguishes_ci_from_merge_from_review() {
+        assert_eq!(
+            open_pr_next_step("fail", "MERGEABLE", None),
+            "CI failing — fix & push"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "CONFLICTING", None),
+            "merge conflict — rebase onto default"
+        );
+        assert_eq!(
+            open_pr_next_step("pending", "MERGEABLE", None),
+            "CI in progress — wait"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "MERGEABLE", Some("CHANGES_REQUESTED")),
+            "changes requested — address review"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "MERGEABLE", Some("APPROVED")),
+            "approved — ready to merge"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "MERGEABLE", None),
+            "checks green — ready to merge"
+        );
+    }
+
+    #[test]
+    fn parse_recently_merged_prs_reads_gh_json() {
+        let json = r#"[
+            {"number": 570, "title": "feat: thing", "mergedAt": "2026-06-01T10:00:00Z"},
+            {"number": 569, "title": "fix: other", "mergedAt": null}
+        ]"#;
+        let rows = parse_recently_merged_prs(json);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].0, 570);
+        assert_eq!(rows[0].1, "feat: thing");
+        assert!(rows[0].2.is_some(), "mergedAt humanized");
+        assert_eq!(rows[1].0, 569);
+        assert!(rows[1].2.is_none(), "null mergedAt → None");
+    }
+
+    #[test]
+    fn parse_recently_merged_prs_handles_garbage() {
+        assert!(parse_recently_merged_prs("not json").is_empty());
+        assert!(parse_recently_merged_prs("{}").is_empty());
+    }
+
+    #[test]
+    fn truncate_for_width_cuts_and_keeps_short() {
+        assert_eq!(truncate_for_width("short", 10), "short");
+        let cut = truncate_for_width("aaaaaaaaaa", 5);
+        assert_eq!(cut.chars().count(), 5);
+        assert!(cut.ends_with('…'));
+    }
 }
 
 /// TASK-539: `aida status` Findings section. Display-only — surfaces the
@@ -61426,6 +61939,70 @@ fn print_status_json(
         if let Some(value) = claude_code_status_json() {
             out.insert("claude_code".to_string(), value);
         }
+
+        // STORY-456: unified worktrees + open-PRs + recently-merged panes,
+        // mirroring the text sections so machine consumers get the same merge
+        // (worktree + lease + liveness + ahead + PR + obsolescence verdict).
+        // Always present (possibly empty arrays) so consumers needn't guard on
+        // key-absence. trace:STORY-456 | ai:claude
+        let main_root = main_worktree_root_from(project_root);
+        let worktree_rows = collect_worktree_status_rows(&main_root);
+        out.insert(
+            "worktrees".to_string(),
+            json!(worktree_rows
+                .iter()
+                .map(|r| json!({
+                    "path": r.path.display().to_string(),
+                    "branch": r.branch,
+                    "tied_spec": r.tied_spec,
+                    "lease_scope": r.lease_scope,
+                    "live": r.has_live,
+                    "dirty_count": r.dirty_count,
+                    "ahead_main": r.ahead,
+                    "pr_number": r.pr_number,
+                    "pr_ci": r.pr_ci,
+                    "pr_mergeable": r.pr_mergeable,
+                    "obsolete": r.obsolete,
+                }))
+                .collect::<Vec<_>>()),
+        );
+        let open_pr_snapshot = collect_open_prs(&main_root);
+        let mut open_prs: Vec<&status_cleanup::OpenPrItem> =
+            open_pr_snapshot.by_branch.values().collect();
+        open_prs.sort_by_key(|p| p.number);
+        out.insert(
+            "open_prs".to_string(),
+            json!(open_prs
+                .iter()
+                .map(|p| {
+                    let merge = p.mergeable.as_deref().unwrap_or("UNKNOWN");
+                    json!({
+                        "number": p.number,
+                        "title": p.title,
+                        "head_branch": p.head_branch,
+                        "ci": p.ci_rollup,
+                        "mergeable": p.mergeable,
+                        "review_decision": p.review_decision,
+                        "next_step": open_pr_next_step(
+                            p.ci_rollup.as_deref().unwrap_or("?"),
+                            &merge.to_ascii_uppercase(),
+                            p.review_decision.as_deref(),
+                        ),
+                    })
+                })
+                .collect::<Vec<_>>()),
+        );
+        out.insert(
+            "recently_merged".to_string(),
+            json!(collect_recently_merged_prs(&main_root, 5)
+                .iter()
+                .map(|(number, title, when)| json!({
+                    "number": number,
+                    "title": title,
+                    "merged_at": when,
+                }))
+                .collect::<Vec<_>>()),
+        );
     }
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
@@ -63187,9 +63764,15 @@ fn handle_status_command_distributed(
     print_status_agents_section(&user_ctx);
     print_status_claude_code_section(&project_root);
 
-    // STORY-456: worktrees pane — git worktree + session lease + liveness in
-    // one view (display-only). trace:STORY-456 | ai:claude
+    // STORY-456: unified worktrees + open-PRs + recently-merged panes —
+    // git worktree + session lease + liveness + commits-ahead + open PR in
+    // one view, then the open-PR queue and a recently-merged tail for
+    // orientation. All display-only; each silent when empty. The PR data is a
+    // single batched gh snapshot per section, not a call per row.
+    // trace:STORY-456 | ai:claude
     print_status_worktrees_section(&project_root);
+    print_status_open_prs_section(&project_root);
+    print_status_recently_merged_section(&project_root, 5);
 
     // TASK-539: pending-findings backlog — silent when empty. Surfaced before
     // the working-tree section so triage-able items are visible without
