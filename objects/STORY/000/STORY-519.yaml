@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:35:34.763436046Z
-modified_at: 2026-06-06T14:13:12.626274073Z
+modified_at: 2026-06-06T14:13:13.746901917Z
 req_type: Story
 tags:
 - advisor-vision
@@ -53,6 +53,11 @@ tags:
 - parent:STORY-265
 - plan-phase
 - ready-to-implement
+relationships:
+- rel_type: BlockedBy
+  target_id: 019e3375-dee2-7032-9f95-327b44c474b3
+  created_at: 2026-06-06T14:13:13.746891807Z
+  created_by: joe
 comments:
 - id: 019e9c02-2c52-7ed3-bfa8-f0a314bf6270
   author: joe
