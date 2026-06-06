@@ -24,12 +24,12 @@ description: |-
 
   ## Relationships
   - Extends ADR-3 (the disposition gate). Builds on SPIKE-10 (subsystem-scoped advisors). Same lease family as the queue/session model (BUG-89 user_id, session leases).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:27:03.920818292Z
-modified_at: 2026-06-06T08:16:08.444533238Z
+modified_at: 2026-06-06T08:20:45.133550553Z
 req_type: Task
 tags:
 - advisor
