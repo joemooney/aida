@@ -62761,6 +62761,88 @@ fn print_status_hygiene_section(
     Ok(())
 }
 
+/// True for summaries that represent real, user-authored requirements — i.e.
+/// the rows `aida list` shows by default. META rows (AI-prompt customization
+/// seeded by `aida init`, e.g. META-001..006) are plumbing, not work, and are
+/// hidden from `aida list`'s default view (BUG-27). The `aida status`
+/// Requirements panel must apply the same exclusion so its Total / per-status
+/// counts reconcile with `aida list` instead of reporting phantom Draft rows
+/// on a fresh store (BUG-415).
+///
+/// `req_type` is the cache's stored Debug form of `RequirementType`
+/// (e.g. "Meta", "Task", "Bug"); the comparison is case-insensitive to be
+/// robust against casing drift in the projection.
+// trace:BUG-415 | ai:claude
+fn is_real_requirement_summary(req_type: &str) -> bool {
+    !req_type.eq_ignore_ascii_case("meta")
+}
+
+#[cfg(test)]
+mod bug415_status_count_tests {
+    use super::is_real_requirement_summary;
+
+    #[test]
+    fn meta_rows_are_excluded_case_insensitively() {
+        // Cache stores the Debug form ("Meta"); guard against casing drift.
+        assert!(!is_real_requirement_summary("Meta"));
+        assert!(!is_real_requirement_summary("meta"));
+        assert!(!is_real_requirement_summary("META"));
+    }
+
+    #[test]
+    fn real_requirement_types_are_counted() {
+        for t in [
+            "Task",
+            "Bug",
+            "Story",
+            "Epic",
+            "Functional",
+            "NonFunctional",
+            "System",
+            "User",
+            "Spike",
+            "Sprint",
+            "Folder",
+            "Doc",
+        ] {
+            assert!(
+                is_real_requirement_summary(t),
+                "{t} should be counted as a real requirement"
+            );
+        }
+    }
+
+    #[test]
+    fn fresh_store_counts_match_list() {
+        // Reproduces BUG-415: a fresh distributed store seeds 6 Draft META
+        // rows (META-001..006) plus the single Approved onboarding TASK.
+        // Counting real rows must yield 1 (matching `aida list --all`), not 7.
+        let fresh_store = [
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Task", "Approved"),
+        ];
+        let real = fresh_store
+            .iter()
+            .filter(|(t, _)| is_real_requirement_summary(t))
+            .count();
+        assert_eq!(real, 1, "fresh store should report 1 real requirement");
+
+        let draft = fresh_store
+            .iter()
+            .filter(|(t, s)| is_real_requirement_summary(t) && *s == "Draft")
+            .count();
+        assert_eq!(
+            draft, 0,
+            "the 6 META Draft rows must not be counted as Draft"
+        );
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
@@ -62952,16 +63034,26 @@ fn handle_status_command_distributed(
     println!("  Store path:   {}", store_path.display());
     println!();
 
-    // Requirement counts grouped by status — count everything including
-    // archived rows so the project total reflects all on-disk specs.
+    // Requirement counts grouped by status. Archived rows are included so
+    // the project total reflects all on-disk specs, but META rows (AI-prompt
+    // customization seeded by `aida init`) are excluded so the Requirements
+    // panel agrees with `aida list`. `aida list` hides META by default
+    // (BUG-27); counting them here made `aida status` report a phantom
+    // "Total 7 / Draft 6" on a fresh store (1 real TASK + 6 Draft META) while
+    // `aida list --all` showed only the single real requirement, eroding
+    // trust in the counts. trace:BUG-415 | ai:claude
     let summaries = backend.list_summaries(&aida_core::ListFilter {
         archive: aida_core::ArchiveFilter::Both,
         ..Default::default()
     })?;
-    let total = summaries.len();
+    let real: Vec<&aida_core::db::RequirementSummary> = summaries
+        .iter()
+        .filter(|s| is_real_requirement_summary(&s.req_type))
+        .collect();
+    let total = real.len();
     let mut by_status: std::collections::BTreeMap<String, usize> =
         std::collections::BTreeMap::new();
-    for s in &summaries {
+    for s in &real {
         *by_status.entry(s.status.clone()).or_insert(0) += 1;
     }
     println!("{}", "─── Requirements ───".bold());
@@ -62971,15 +63063,20 @@ fn handle_status_command_distributed(
     }
     println!();
 
-    // Cache state.
+    // Cache state. This row is a cache-freshness integrity check, so it
+    // compares the cache's raw row count against the store's raw row count —
+    // both include META rows, otherwise a healthy cache would falsely read
+    // "Rows: 7 (store has 1)". The META exclusion above is a display concern
+    // for the Requirements panel only. trace:BUG-415 | ai:claude
     let cache = backend.cache();
     let cached = cache.requirement_count()?;
+    let store_rows = summaries.len();
     let recorded_sha = cache.source_head_sha()?.unwrap_or_default();
     let actual_sha = aida_core::git_ops::head_sha(store_path).unwrap_or_default();
     let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
     println!("{}", "─── Cache ───".bold());
     println!("  Path:         {}", cache.path().display());
-    println!("  Rows:         {} (store has {})", cached, total);
+    println!("  Rows:         {} (store has {})", cached, store_rows);
     println!(
         "  Status:       {}",
         if stale && !actual_sha.is_empty() {
