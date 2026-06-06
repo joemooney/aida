@@ -5,13 +5,13 @@ description: |-
   New users should get name/email from git config if that file exists
 
   If the tool starts up and the user is unknown, try using the USER OR USERNAME environment variable and the ~/.gitconfig
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T19:48:55.967570378Z
 created_by: Unknown User
-modified_at: 2025-12-02T03:56:39.944964766Z
+modified_at: 2026-06-06T08:13:34.029413151Z
 req_type: Functional
 relationships:
 - rel_type: Parent
