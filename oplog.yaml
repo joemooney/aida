@@ -15296,5 +15296,18 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       WARN when the resolved user_id is 'default' AND a remote 'default' queue file already exists with a different machine fingerprint — targets the actual silent collision hazard (acute for the BUG-89 CI/container fallback) cheaply. Sharding already works for distinct users, so conflict-tolerant YAML merges (heavier) are premature.
-clock: 1543
+- id: 019e9d80-71cf-7160-9cf6-9494bf9631b5
+  target_id: 019e816e-9bec-7712-9d11-4cac0a7e7fe9
+  author: aida
+  node_id: '1'
+  lamport: 1544
+  timestamp: 2026-06-06T15:15:01.199295526Z
+  kind: !SetDescription
+    description: |
+      VERIFIED 2026-05-31 (advisor). Session leases live at .aida/sessions/<id>.toml (lease_path → leases_dir, gitignored, machine-local) — NOT in the orphan branch. So 'aida session leases' / the lease-occupancy guard that stops two sessions grabbing the same scope is SINGLE-MACHINE only. Across machines, the only shared 'someone is on this' signal is the spec's status flip to in-progress, which is git-canonical but eventually-consistent: person B can pick up spec X in the window between person A flipping it in-progress (+push) and person B's next 'aida db sync --pull'. Leases don't help because they never leave the machine. For a tool whose thesis is multi-agent coordination over a shared substrate, lease-locality is a real limitation. Options: (a) project a lightweight 'claim' into the orphan branch (registry/claims/<spec>.yaml) on pickup, advisory-locked; (b) have 'queue work'/pickup pull-then-recheck status immediately before claiming; (c) document the dup-work window + recommend pull-before-pickup. Pairs with the same-user_id queue-collision observation.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Have queue-work / pickup PULL then re-check the spec's status immediately before claiming — closes most of the cross-machine duplicate-pickup window cheaply, without a new shared-state artifact. An advisory orphan-branch claim file is heavier coordination infra, gated on real multi-machine collaboration scaling.
+clock: 1544
 node_id: '1'
