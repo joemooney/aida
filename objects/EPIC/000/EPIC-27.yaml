@@ -2,7 +2,7 @@ id: 019e2e08-fc13-7b12-a718-bc49910c1ea1
 spec_id: EPIC-27
 agreed_id: EPIC-27
 title: 'MCP server modernization: mirror the full AIDA CLI surface (queue, session, role, workflow tools)'
-description: |-
+description: |
   AIDA's MCP server (\`aida mcp-serve\`, \`aida-cli/src/mcp.rs\`) is stuck at v0.1-0.2 vocabulary: 7 tools covering basic requirement CRUD only. The entire workflow layer that makes AIDA distinct (queue, session, role, /goal composition, plan tooling, autonomous drains) is INVISIBLE to agents using MCP — they have to fall back to CLI shell-outs.
 
   This is a strategic gap. Per OVERVIEW.md:
@@ -71,12 +71,16 @@ description: |-
   - TASK to follow: \"Add .mcp.json to AIDA dev repo\" (small dogfood task — sister filing)
   - OVERVIEW.md / CLAUDE.md mention MCP as the agent-collaboration surface — needs updating once this EPIC ships
   - EPIC-26 (TUI) — composes naturally; TUI-hosted Claude sessions are the primary near-term MCP consumer
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  Advance ONLY the in-flight children now — STORY-82 (modernize the 7 existing tools), STORY-399 (structuredContent), STORY-401 (stable error shapes). RE-SCOPE the 30-new-tool fan-out as deferred post-stability (it's the over-engineering the phase warns against). EPIC stays open as tracker. Refresh the gap count first: many channels (findings/claim/directive/brief tools) already exist beyond the original 7.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:41.299481463Z
-modified_at: 2026-06-06T13:39:14.469646408Z
+modified_at: 2026-06-06T13:39:15.778168713Z
 req_type: Epic
 tags:
 - agent-collaboration

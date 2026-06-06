@@ -13441,5 +13441,85 @@ operations:
   timestamp: 2026-06-06T13:39:10.143122727Z
   kind: !SetStatus
     status: Completed
-clock: 1486
+- id: 019e9d28-c6d2-7020-a82e-e3b8797da460
+  target_id: 019e2e08-fc13-7b12-a718-bc49910c1ea1
+  author: aida
+  node_id: '1'
+  lamport: 1487
+  timestamp: 2026-06-06T13:39:15.794174552Z
+  kind: !SetDescription
+    description: |
+      AIDA's MCP server (\`aida mcp-serve\`, \`aida-cli/src/mcp.rs\`) is stuck at v0.1-0.2 vocabulary: 7 tools covering basic requirement CRUD only. The entire workflow layer that makes AIDA distinct (queue, session, role, /goal composition, plan tooling, autonomous drains) is INVISIBLE to agents using MCP — they have to fall back to CLI shell-outs.
+
+      This is a strategic gap. Per OVERVIEW.md:
+      > *\"the MCP server is the highest-leverage surface for the agent-context vision\"*
+
+      But today's MCP exposes only CRUD. The Trojan-horse / platform-depth story is undermined when the most-native agent interface is months behind the CLI.
+
+      ## Audit (2026-05-15)
+
+      **Existing 7 tools — out-of-date schemas:**
+
+      - \`list_requirements\` — missing: tags, batch tag, priority, parent, owner, role assignment, in-flight state
+      - \`show_requirement\` — missing: \`--git\` linkage (TASK-241), verbose
+      - \`add_requirement\` — missing: parent, feature, tags, owner, dependencies
+      - \`update_requirement\` — missing: title, type, priority, tags, parent
+      - \`search_requirements\` — missing: type/status filters, FTS5 ranking
+      - Status enum missing: \`planned\`, \`done\` (STORY-86 — months old)
+      - Type enum missing: \`folder\`, \`meta\`, \`doc\`, \`sprint\`
+
+      **~32 tools entirely missing** — the workflow layer:
+
+      - Queue: \`queue_list\`, \`queue_add\`, \`queue_work\`, \`queue_done\`, \`queue_next\`, \`queue_progress\`, \`queue_rework\`, \`queue_move\`, \`queue_remove\`
+      - Session: \`session_start\`, \`session_end\`, \`session_leases\`, \`session_status\`, \`session_manifest\`
+      - Role: \`role_enter\`, \`role_end\`, \`role_show\`, \`role_list\`
+      - PR: \`pr_auto_queue_review\`
+      - DB: \`db_sync\`, \`fetch\`, \`pull\`
+      - Cache: \`cache_status\`
+      - Plan: \`plan_verify\`, \`plan_helpers\`
+      - Other: \`ultraplan_assemble\`, \`rebase_dry_run\`, \`rebase_auto\`, \`goal_derive\`, \`status_unified\`, \`usage_query\`
+
+      **Resources also stale** — only \`aida://project/summary\` and \`aida://requirements/tree\`. Missing: \`aida://queue/in-flight\`, \`aida://session/leases\`, \`aida://pr/N\`, \`aida://batch/N\`, etc.
+
+      ## Why EPIC, not STORY
+
+      - Scope: 30+ new tools + 5-10 new resources + schema modernization for existing 7
+      - Each tool needs: handler function, input schema, output schema, error handling, tests
+      - Estimated 3-4 weeks of focused work
+      - Multiple natural sub-STORYs (modernize existing, add queue tools, add session tools, add resources, add tests, add docs)
+      - Strategic enough to warrant cross-cutting tracking
+
+      ## Candidate child STORYs (planner decides)
+
+      1. **Modernize existing 7 tools** — update enums, add missing params, mirror CLI capabilities. Smallest viable starting STORY.
+      2. **Queue tools** — the 9 queue-related tools. Most-leveraged for agents.
+      3. **Session tools** — lifecycle (start/end/leases/manifest). Composes with EPIC-26 TUI.
+      4. **Role + workflow tools** — role_enter/end, pr_auto_queue, plan_verify/helpers, ultraplan, rebase, goal.
+      5. **Resources expansion** — \`aida://queue/in-flight\`, \`aida://session/leases\`, etc. Read-only structured views.
+      6. **Tests + docs + CLAUDE.md updates** — every new tool documented; agent-side examples in docs.
+
+      ## Composes with EPIC-26 (TUI)
+
+      The TUI hosts Claude sessions. Inside those sessions, an MCP-aware AIDA surface means the TUI's claude children can drive AIDA workflow via structured tool calls rather than CLI shell-outs — faster, more reliable, less brittle. The two EPICs are complementary: TUI = surface, MCP = the API surface CLAUDE-inside-TUI talks to.
+
+      ## Why this matters NOW
+
+      - v0.8.0 ships TUI default-on (EPIC-26). Inside that TUI, Claude sessions will spawn frequently. They should reach AIDA via MCP, not bash-shell-out to \`aida list\` and parse.
+      - Every CLI command added without an MCP equivalent widens the gap. We've added ~30 commands since the MCP server was written.
+      - The agent-collaboration positioning (OVERVIEW.md) is contradicted by current MCP state.
+
+      ## Origin
+
+      User asked 2026-05-15: *\"the larger question is whether what we have is out-of-date and unaware of the current commands and arguments and output that we have available?\"* — confirmed. The MCP server has not kept pace with CLI evolution.
+
+      ## Related
+
+      - TASK to follow: \"Add .mcp.json to AIDA dev repo\" (small dogfood task — sister filing)
+      - OVERVIEW.md / CLAUDE.md mention MCP as the agent-collaboration surface — needs updating once this EPIC ships
+      - EPIC-26 (TUI) — composes naturally; TUI-hosted Claude sessions are the primary near-term MCP consumer
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Advance ONLY the in-flight children now — STORY-82 (modernize the 7 existing tools), STORY-399 (structuredContent), STORY-401 (stable error shapes). RE-SCOPE the 30-new-tool fan-out as deferred post-stability (it's the over-engineering the phase warns against). EPIC stays open as tracker. Refresh the gap count first: many channels (findings/claim/directive/brief tools) already exist beyond the original 7.
+clock: 1487
 node_id: '1'
