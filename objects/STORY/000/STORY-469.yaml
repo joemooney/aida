@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T05:06:01.183127589Z
-modified_at: 2026-06-06T08:33:32.189436428Z
+modified_at: 2026-06-06T14:00:55.520100483Z
 req_type: Story
 tags:
 - agent-discipline
@@ -39,3 +39,8 @@ comments:
       REC: c — Guard 1 is a bounded substrate-as-bouncer win aligned with the bugs/stability phase; Guard 3 reuses existing status surface (STORY-385/465); Guard 2's tool-call gate is real infrastructure better deferred until the multi-agent failure rate justifies it.
   created_at: 2026-06-06T08:33:30.295159407Z
   modified_at: 2026-06-06T08:33:30.295159407Z
+- id: 019e9d3c-9be0-7250-8a87-2c3ec72e521a
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Build GUARDS 1 + 3 now: (1) trailer spec-ID validation at pr ship / queue done (catches hallucinated/dead spec-IDs before they hit git history — bounded substrate-as-bouncer win), (3) status local-vs-substrate divergence surface (reuses STORY-385/465 status surface). DEFER Guard 2 (sketch-first Edit/Write PreToolUse gate) — real infrastructure, build only when the multi-agent failure rate justifies it.'
+  created_at: 2026-06-06T14:00:55.520100483Z
+  modified_at: 2026-06-06T14:00:55.520100483Z
