@@ -10,12 +10,12 @@ description: |-
   2. CI-WAIT: after manually creating PR #2 with base master, 'aida pr ship 2' failed its CI wait because the repo has no .github/workflows at all. Adding 'lifecycle:no-ci-wait' to the spec did NOT change the direct 'pr ship' behavior. 'pr ship' should detect 'no CI configured' (or honor lifecycle:no-ci-wait) and skip the wait instead of blocking.
 
   Workaround used: manually create PR with base master, then 'gh pr merge'.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T15:36:20.728144498Z
-modified_at: 2026-06-06T08:16:18.474914487Z
+modified_at: 2026-06-06T08:20:56.132872397Z
 req_type: Bug
 tags:
 - base-branch
