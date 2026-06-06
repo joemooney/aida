@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:54:54.211726236Z
-modified_at: 2026-06-06T08:31:21.980376909Z
+modified_at: 2026-06-06T14:07:18.410570787Z
 req_type: Story
 tags:
 - competitive-parity
@@ -35,3 +35,8 @@ comments:
       REC: c then a — confirm the landed-vs-remaining split first (most slices appear done), then sign off the digest trigger/consistency model the spec explicitly parks for approval. The digest is the moat-relevant differentiator, so worth finishing rather than dropping.
   created_at: 2026-06-06T08:31:20.421623701Z
   modified_at: 2026-06-06T08:31:20.421623701Z
+- id: 019e9d42-738a-73c3-bbe5-3cd2ba91abad
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): CONFIRM the landed-vs-remaining split first (the mailbox core + .aida local layer + CLI send/inbox/thread/sync + MCP tools already shipped), THEN sign off + build the remaining git-canonical durable DIGEST (trigger + consistency model). The digest is the round-2 moat differentiator vs competitors'' ephemeral mailboxes — worth finishing, not dropping. Re-spec to only the genuinely-remaining digest work before implementing.'
+  created_at: 2026-06-06T14:07:18.410570787Z
+  modified_at: 2026-06-06T14:07:18.410570787Z
