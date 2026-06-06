@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:32:59.072455559Z
-modified_at: 2026-06-06T08:34:32.360504256Z
+modified_at: 2026-06-06T15:12:15.780489492Z
 req_type: Task
 tags:
 - needs-human-input
@@ -79,3 +79,8 @@ comments:
       REC: b — the intervention-count is the honest maturity signal, is a thin roll-up over data the punt ledger should already carry, and lands the `aida autonomy report` surface the namespace was reserved for, without the noisy duration math.
   created_at: 2026-06-06T08:34:29.802892938Z
   modified_at: 2026-06-06T08:34:29.802892938Z
+- id: 019e9d7d-eba4-71f0-9ee1-a4b4c3dd6f7f
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Ship the INTERVENTION-COUNT only — count of escalate-to-human punt records per drain (the honest maturity signal), a thin roll-up over data the punt ledger already carries, landing the ''aida autonomy report'' surface the namespace reserved. SKIP the availability-polluted autonomous-duration fraction until it''s actually wanted. Confirm STORY-325 punt timestamps are populated first.'
+  created_at: 2026-06-06T15:12:15.780489492Z
+  modified_at: 2026-06-06T15:12:15.780489492Z
