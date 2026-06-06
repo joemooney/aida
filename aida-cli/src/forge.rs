@@ -967,7 +967,9 @@ impl Forge for GitHubForge {
 /// (STORY-509) fills the open→status→merge→comment→list round-trip via `glab`'s
 /// `--output json` surface, mapped by the pure parsers below. CI status
 /// (`ci_status` / `ci_probe_for_branch` / `watch_ci` / `stream_ci_for_branch`)
-/// stays a slice-4 stub. trace:STORY-509 | ai:claude
+/// lands in slice 4 (STORY-510) via `glab ci list`/`glab ci status`, mapped by
+/// `glab_ci_state_from_status` + `ci_probe_from_glab_pipelines`.
+/// trace:STORY-509 trace:STORY-510 | ai:claude
 pub struct GitLabForge {
     project_root: PathBuf,
 }
@@ -985,6 +987,17 @@ impl GitLabForge {
             .args(args)
             .output()
             .context("could not invoke `glab` — is the GitLab CLI installed?")
+    }
+
+    /// Best-effort resolve the open MR iid for a branch — used to fill the
+    /// `change` number a [`CiProbeResult`] carries. GitLab pipelines are
+    /// branch-scoped, so a missing MR (no MR opened yet) is not an error: it
+    /// degrades to `0`. trace:STORY-510 | ai:claude
+    fn mr_iid_for_branch(&self, branch: &str) -> u64 {
+        match self.change_for_branch(branch) {
+            Ok(ChangeLookup::Found(c)) => c.id,
+            _ => 0,
+        }
     }
 }
 
@@ -1096,20 +1109,65 @@ impl Forge for GitLabForge {
             .with_context(|| format!("could not parse `glab mr view` JSON for !{}", c.id))
     }
 
-    fn ci_status(&self, _target: CiTarget) -> Result<CiStatus> {
-        anyhow::bail!("GitLab ci_status lands in EPIC-35 slice 4")
+    fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
+        // STORY-510: GitLab CI is pipeline-scoped. `glab ci list -F json -b <ref>`
+        // lists the pipelines for a ref; the newest one's status is the CI state.
+        // A Change target uses its source branch (the orchestrator merges branches,
+        // not commits). The pure mapper degrades a missing CLI / no pipelines to
+        // CiState::None, mirroring GitHubForge::ci_status. trace:STORY-510 | ai:claude
+        let r#ref = match target {
+            CiTarget::Branch(b) => b,
+            CiTarget::Commit(c) => c,
+            CiTarget::Change(c) => c.branch,
+        };
+        let out = self.glab(&["ci", "list", "-F", "json", "-b", &r#ref]);
+        Ok(ci_status_from_glab_pipelines(out))
     }
 
-    fn ci_probe_for_branch(&self, _branch: &str) -> Result<CiProbeResult> {
-        anyhow::bail!("GitLab ci_probe_for_branch lands in EPIC-35 slice 4")
+    fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
+        // STORY-510: branch-keyed pipeline probe for the orchestrator CI-wait.
+        // Resolve the MR iid (for the `change` number callers display) best-effort
+        // — GitLab pipelines are branch-scoped, so the probe is meaningful even
+        // when no MR exists yet (change == 0). Then map the newest pipeline's
+        // status to a CiProbeResult. trace:STORY-510 | ai:claude
+        let change = self.mr_iid_for_branch(branch);
+        let out = self.glab(&["ci", "list", "-F", "json", "-b", branch]);
+        Ok(ci_probe_from_glab_pipelines(out, change))
     }
 
-    fn watch_ci(&self, _change: &ChangeRef) -> Result<CiState> {
-        anyhow::bail!("GitLab watch_ci lands in EPIC-35 slice 4")
+    fn watch_ci(&self, change: &ChangeRef) -> Result<CiState> {
+        // STORY-510: stream the branch's pipeline to a terminal state. `glab ci
+        // status -b <branch>` blocks-and-renders the live pipeline; like the gh
+        // path we inherit stdio (capturing would defeat the live view) and read
+        // the verdict from the exit status. trace:STORY-510 | ai:claude
+        let status = Command::new("glab")
+            .current_dir(&self.project_root)
+            .args(["ci", "status", "-b", &change.branch])
+            .status()
+            .context("could not invoke `glab ci status`")?;
+        Ok(if status.success() {
+            CiState::Success
+        } else {
+            CiState::Failed
+        })
     }
 
-    fn stream_ci_for_branch(&self, _branch: &str, _interactive: bool) -> Result<CiProbeResult> {
-        anyhow::bail!("GitLab stream_ci_for_branch lands in EPIC-35 slice 4")
+    fn stream_ci_for_branch(&self, branch: &str, interactive: bool) -> Result<CiProbeResult> {
+        // STORY-510: the orchestrator / `--watch-ci` path. When interactive and a
+        // TTY, stream the live pipeline view (`glab ci status -b <branch>`), then
+        // re-probe for the structured CiProbeResult the caller consumes. Headless
+        // (or non-TTY) skips the stream and just probes — quiet-polls upstream.
+        // Mirrors GitHubForge::stream_ci_for_branch's stream-then-report shape.
+        // trace:STORY-510 | ai:claude
+        if interactive && std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+            // Best-effort live view; ignore its exit status — the authoritative
+            // verdict is the structured re-probe below.
+            let _ = Command::new("glab")
+                .current_dir(&self.project_root)
+                .args(["ci", "status", "-b", branch])
+                .status();
+        }
+        self.ci_probe_for_branch(branch)
     }
 
     fn merge_change(
@@ -1544,6 +1602,162 @@ fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
         review: ReviewDecision::None,
         head_sha,
     })
+}
+
+// ─────────────────────────── GitLab CI mapping (STORY-510) ───────────────────────────
+//
+// GitLab CI is *pipeline*-scoped, not MR-scoped: `glab ci list -F json` (alias
+// `glab pipeline list`) emits the GitLab REST pipeline objects for a ref. We map
+// the newest pipeline's `status` to the forge-neutral CI types, mirroring the
+// GitHub-Actions mapping in GitHubForge::ci_status / probe_ci_state_for_branch.
+// The status token vocabulary is GitLab's pipeline FSM:
+//   created / waiting_for_resource / preparing / pending / running / scheduled
+//   success / failed / canceled / skipped / manual
+// trace:STORY-510 | ai:claude
+
+/// Map a single GitLab pipeline `status` token to the forge-neutral
+/// [`CiState`]. In-flight states (created/pending/running/…) → `Running`;
+/// `success` → `Success`; `failed`/`canceled` → `Failed` (a canceled pipeline
+/// did not pass, so a CI-wait must treat it as a failure); `skipped`/`manual`
+/// are non-failing terminal states (nothing to block on) → `Success`; an empty
+/// or unknown token → `None` (no signal). trace:STORY-510 | ai:claude
+fn glab_ci_state_from_status(status: &str) -> CiState {
+    match status {
+        "success" => CiState::Success,
+        "failed" | "canceled" | "cancelled" => CiState::Failed,
+        // Non-failing terminal states — the pipeline reached an end without a
+        // failure, so a CI-wait should not block or fail on them.
+        "skipped" | "manual" => CiState::Success,
+        // Every in-flight / queued state.
+        "created" | "waiting_for_resource" | "preparing" | "pending" | "running" | "scheduled" => {
+            CiState::Running
+        }
+        // Empty or an unrecognized token: no usable signal.
+        _ => CiState::None,
+    }
+}
+
+/// Pick the newest pipeline object from a `glab ci list -F json` array — the one
+/// with the highest `id` (GitLab pipeline ids are monotonic; `created_at` is a
+/// tie-breaker only when ids are absent). trace:STORY-510 | ai:claude
+fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value> {
+    arr.iter().max_by(|a, b| {
+        let ai = a.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+        let bi = b.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
+        ai.cmp(&bi).then_with(|| {
+            let ad = a.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
+            let bd = b.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
+            ad.cmp(bd)
+        })
+    })
+}
+
+/// Map a `glab ci list -F json` invocation to a [`CiStatus`]. A non-success exit
+/// or no pipelines degrades to `CiState::None` (no CI / nothing to wait on),
+/// mirroring GitHubForge::ci_status's treatment of an empty check set.
+/// trace:STORY-510 | ai:claude
+fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
+    let none = || CiStatus {
+        state: CiState::None,
+        url: None,
+        failing_checks: Vec::new(),
+    };
+    let out = match out {
+        Ok(o) => o,
+        Err(_) => return none(),
+    };
+    if !out.status.success() {
+        return none();
+    }
+    let body = String::from_utf8_lossy(&out.stdout);
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return none();
+    }
+    let arr = match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(serde_json::Value::Array(a)) => a,
+        _ => return none(),
+    };
+    let pipeline = match newest_glab_pipeline(&arr) {
+        Some(p) => p,
+        None => return none(),
+    };
+    let status = pipeline
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let state = glab_ci_state_from_status(status);
+    let url = pipeline
+        .get("web_url")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    let failing_checks = if state == CiState::Failed {
+        // GitLab's pipeline list does not enumerate failing jobs; name the
+        // pipeline status so the orchestrator's failure summary is non-empty.
+        vec![format!("pipeline {status}")]
+    } else {
+        Vec::new()
+    };
+    CiStatus {
+        state,
+        url,
+        failing_checks,
+    }
+}
+
+/// Map a `glab ci list -F json` invocation to a [`CiProbeResult`] — the
+/// branch-keyed probe the orchestrator's CI-wait phase consumes. `change` is the
+/// resolved MR iid (0 when no MR was found; GitLab pipelines are branch-scoped,
+/// so a probe is still meaningful without an MR). Preserves the
+/// transient-vs-definitive split: a `glab` invocation error → `NoSignal` (couldn't
+/// probe), distinct from "no pipelines" (`NoChecks`). trace:STORY-510 | ai:claude
+fn ci_probe_from_glab_pipelines(out: Result<std::process::Output>, change: u64) -> CiProbeResult {
+    let out = match out {
+        // The only Err `glab(...)` produces is "could not invoke glab".
+        Err(_) => return CiProbeResult::NoSignal("glab not on PATH".to_string()),
+        Ok(o) => o,
+    };
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return CiProbeResult::NoSignal(if stderr.is_empty() {
+            "glab ci list failed".to_string()
+        } else {
+            stderr
+        });
+    }
+    let body = String::from_utf8_lossy(&out.stdout);
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return CiProbeResult::NoChecks { change };
+    }
+    let arr = match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(serde_json::Value::Array(a)) => a,
+        Ok(_) => {
+            return CiProbeResult::NoSignal("glab ci list JSON was not an array".to_string());
+        }
+        Err(e) => {
+            return CiProbeResult::NoSignal(format!("could not parse glab ci list JSON: {e}"));
+        }
+    };
+    let pipeline = match newest_glab_pipeline(&arr) {
+        Some(p) => p,
+        None => return CiProbeResult::NoChecks { change },
+    };
+    let status = pipeline
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    match glab_ci_state_from_status(status) {
+        CiState::Success => CiProbeResult::Green { change },
+        CiState::Failed => CiProbeResult::Failed {
+            change,
+            summary: format!("GitLab pipeline {status}"),
+        },
+        CiState::Running | CiState::Pending => CiProbeResult::InProgress { change },
+        // An unknown/empty status token gives no usable verdict.
+        CiState::None => CiProbeResult::NoChecks { change },
+    }
 }
 
 /// Map a `glab mr list --output json` body to a `Vec<ChangeRef>`. A clean run
@@ -2293,5 +2507,186 @@ mod tests {
         assert!(glab_stderr_is_transient("received 503 Service Unavailable"));
         assert!(!glab_stderr_is_transient("404 Project Not Found"));
         assert!(!glab_stderr_is_transient("401 Unauthorized"));
+    }
+
+    // ───────────────────── STORY-510: glab CI/pipeline mapping ─────────────────────
+    //
+    // `glab ci list -F json` emits the GitLab REST pipeline objects verbatim, so
+    // these fixtures faithfully exercise the pure mappers without a live GitLab.
+    // trace:STORY-510 | ai:claude
+
+    /// A `glab ci list -F json` array fixture with one pipeline of `status` at
+    /// `id`. (`web_url`/`ref`/`sha` are the other load-bearing fields.)
+    fn pipeline_fixture(id: u64, status: &str) -> String {
+        format!(
+            r#"[{{
+              "id": {id},
+              "iid": 1,
+              "status": "{status}",
+              "ref": "feature/x",
+              "sha": "abc123",
+              "web_url": "https://gitlab.example.com/joe/aida/-/pipelines/{id}",
+              "created_at": "2026-06-06T00:00:0{id}Z"
+            }}]"#
+        )
+    }
+
+    #[test]
+    fn glab_ci_state_maps_pipeline_status_tokens() {
+        assert_eq!(glab_ci_state_from_status("success"), CiState::Success);
+        assert_eq!(glab_ci_state_from_status("failed"), CiState::Failed);
+        assert_eq!(glab_ci_state_from_status("canceled"), CiState::Failed);
+        assert_eq!(glab_ci_state_from_status("cancelled"), CiState::Failed);
+        // Non-failing terminal → Success (nothing to block on).
+        assert_eq!(glab_ci_state_from_status("skipped"), CiState::Success);
+        assert_eq!(glab_ci_state_from_status("manual"), CiState::Success);
+        // In-flight / queued → Running.
+        for s in [
+            "created",
+            "waiting_for_resource",
+            "preparing",
+            "pending",
+            "running",
+            "scheduled",
+        ] {
+            assert_eq!(glab_ci_state_from_status(s), CiState::Running, "{s}");
+        }
+        // Unknown / empty → None.
+        assert_eq!(glab_ci_state_from_status(""), CiState::None);
+        assert_eq!(glab_ci_state_from_status("weird"), CiState::None);
+    }
+
+    #[test]
+    fn newest_glab_pipeline_picks_highest_id() {
+        let body = r#"[
+          {"id": 10, "status": "failed"},
+          {"id": 42, "status": "success"},
+          {"id": 7,  "status": "running"}
+        ]"#;
+        let arr = match serde_json::from_str::<serde_json::Value>(body).unwrap() {
+            serde_json::Value::Array(a) => a,
+            _ => unreachable!(),
+        };
+        let newest = newest_glab_pipeline(&arr).unwrap();
+        assert_eq!(newest.get("id").and_then(|v| v.as_u64()), Some(42));
+        assert_eq!(
+            newest.get("status").and_then(|v| v.as_str()),
+            Some("success")
+        );
+    }
+
+    #[test]
+    fn ci_status_from_pipelines_maps_each_state() {
+        let green =
+            ci_status_from_glab_pipelines(Ok(fake_output(0, &pipeline_fixture(5, "success"), "")));
+        assert_eq!(green.state, CiState::Success);
+        assert!(green.failing_checks.is_empty());
+        assert_eq!(
+            green.url.as_deref(),
+            Some("https://gitlab.example.com/joe/aida/-/pipelines/5")
+        );
+
+        let red =
+            ci_status_from_glab_pipelines(Ok(fake_output(0, &pipeline_fixture(6, "failed"), "")));
+        assert_eq!(red.state, CiState::Failed);
+        assert_eq!(red.failing_checks, vec!["pipeline failed".to_string()]);
+
+        let running =
+            ci_status_from_glab_pipelines(Ok(fake_output(0, &pipeline_fixture(7, "running"), "")));
+        assert_eq!(running.state, CiState::Running);
+    }
+
+    #[test]
+    fn ci_status_from_pipelines_no_signal_degrades_to_none() {
+        // CLI missing, non-zero exit, empty array, and blank stdout all degrade
+        // to CiState::None (no CI / nothing to wait on), mirroring the gh path.
+        assert_eq!(
+            ci_status_from_glab_pipelines(Err(anyhow::anyhow!("no glab"))).state,
+            CiState::None
+        );
+        assert_eq!(
+            ci_status_from_glab_pipelines(Ok(fake_output(1, "", "boom"))).state,
+            CiState::None
+        );
+        assert_eq!(
+            ci_status_from_glab_pipelines(Ok(fake_output(0, "[]", ""))).state,
+            CiState::None
+        );
+        assert_eq!(
+            ci_status_from_glab_pipelines(Ok(fake_output(0, "", ""))).state,
+            CiState::None
+        );
+    }
+
+    #[test]
+    fn ci_probe_from_pipelines_maps_each_state() {
+        assert_eq!(
+            ci_probe_from_glab_pipelines(
+                Ok(fake_output(0, &pipeline_fixture(5, "success"), "")),
+                7
+            ),
+            CiProbeResult::Green { change: 7 }
+        );
+        assert_eq!(
+            ci_probe_from_glab_pipelines(
+                Ok(fake_output(0, &pipeline_fixture(5, "running"), "")),
+                7
+            ),
+            CiProbeResult::InProgress { change: 7 }
+        );
+        match ci_probe_from_glab_pipelines(
+            Ok(fake_output(0, &pipeline_fixture(5, "failed"), "")),
+            7,
+        ) {
+            CiProbeResult::Failed { change, summary } => {
+                assert_eq!(change, 7);
+                assert!(
+                    summary.contains("failed"),
+                    "summary names the status: {summary}"
+                );
+            }
+            other => panic!("expected Failed, got {other:?}"),
+        }
+        // canceled is a failure for a CI-wait.
+        assert!(matches!(
+            ci_probe_from_glab_pipelines(
+                Ok(fake_output(0, &pipeline_fixture(5, "canceled"), "")),
+                7
+            ),
+            CiProbeResult::Failed { change: 7, .. }
+        ));
+    }
+
+    #[test]
+    fn ci_probe_from_pipelines_no_pipelines_is_no_checks_not_no_signal() {
+        // The BUG-257-style distinction carried into CI: a clean run with no
+        // pipelines is a definitive "no checks" (NoChecks), NOT "couldn't probe".
+        assert_eq!(
+            ci_probe_from_glab_pipelines(Ok(fake_output(0, "[]", "")), 7),
+            CiProbeResult::NoChecks { change: 7 }
+        );
+        assert_eq!(
+            ci_probe_from_glab_pipelines(Ok(fake_output(0, "", "")), 7),
+            CiProbeResult::NoChecks { change: 7 }
+        );
+    }
+
+    #[test]
+    fn ci_probe_from_pipelines_invoke_or_exit_failure_is_no_signal() {
+        // glab not on PATH → NoSignal (couldn't probe).
+        match ci_probe_from_glab_pipelines(Err(anyhow::anyhow!("missing")), 7) {
+            CiProbeResult::NoSignal(why) => assert!(why.contains("glab")),
+            other => panic!("expected NoSignal, got {other:?}"),
+        }
+        // non-zero exit → NoSignal carrying stderr.
+        match ci_probe_from_glab_pipelines(Ok(fake_output(1, "", "401 Unauthorized")), 7) {
+            CiProbeResult::NoSignal(why) => assert!(why.contains("401")),
+            other => panic!("expected NoSignal, got {other:?}"),
+        }
+        // clean exit, non-array JSON → NoSignal.
+        assert!(matches!(
+            ci_probe_from_glab_pipelines(Ok(fake_output(0, r#"{"id":1}"#, "")), 7),
+            CiProbeResult::NoSignal(_)
+        ));
     }
 }
