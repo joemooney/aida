@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:50:38.005547744Z
-modified_at: 2026-05-25T07:42:46.331248446Z
+modified_at: 2026-06-06T08:34:03.961225429Z
 req_type: Story
 tags:
 - aida:status
@@ -45,3 +45,9 @@ relationships:
 - rel_type: Parent
   target_id: 019e986a-d9c4-71f2-9bb8-b4e688d15395
   created_at: 2026-06-05T15:33:33.196898821Z
+comments:
+- id: 019e9c11-5c39-7b32-a837-233f29b79dce
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded `aida status` enhancement (worktrees + open-PRs + recently-merged panes), child TASK-665 already carved for the core worktree pane, partial code surface exists (print_status_worktrees_section), composes on shipped STORY-385/STORY-431; clear acceptance, no open decision.
+  created_at: 2026-06-06T08:34:03.961225429Z
+  modified_at: 2026-06-06T08:34:03.961225429Z
