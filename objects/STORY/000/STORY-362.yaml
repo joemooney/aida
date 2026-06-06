@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:27.510264617Z
-modified_at: 2026-05-21T02:19:27.510264617Z
+modified_at: 2026-06-06T08:35:18.558691070Z
 req_type: Story
 tags:
 - advisor
@@ -18,3 +18,15 @@ tags:
 - scoping
 - subsystem
 - track-a
+comments:
+- id: 019e9c12-7f9e-7e33-861e-07160e207628
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Subsystem-tagged memory pack + `--focus` loading (SPIKE-10 Track A). Same phase-fit question as STORY-363, plus a design choice on scoping mechanism.
+      a) Defer until post-stability with STORY-363 (both are SPIKE-10 strategic, no current driver)
+      b) Build the backward-compatible `subsystem:` frontmatter tag + `--focus` filter now (low risk, untagged = universal) but defer the `aida memory audit --tag` retro-tooling and TUI focus surfacing as follow-ups
+      c) Reject — single-advisor model (per feedback_one_master_advisor_until_subsystems) means no subsystem advisors exist yet to consume the focus scoping
+      REC: a — there are no subsystem-scoped advisors today to use `--focus`, so the loading filter has no live consumer; defer until SPIKE-10 subsystems actually emerge.
+  created_at: 2026-06-06T08:35:18.558691070Z
+  modified_at: 2026-06-06T08:35:18.558691070Z
