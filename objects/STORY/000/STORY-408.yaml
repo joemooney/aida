@@ -67,7 +67,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:14.511180807Z
-modified_at: 2026-06-06T08:34:53.369735535Z
+modified_at: 2026-06-06T13:58:41.078480059Z
 req_type: Story
 tags:
 - adoption
@@ -89,3 +89,8 @@ comments:
       REC: c — formalizing a public supported-agent tier model is marketing/governance work that the current phase explicitly defers, and it can't be evidence-backed until the Codex/Antigravity verdict specs land; revisit at the marketing phase.
   created_at: 2026-06-06T08:34:51.572760777Z
   modified_at: 2026-06-06T08:34:51.572760777Z
+- id: 019e9d3a-8eb6-7c20-a88d-5cce299c1b9a
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): REJECT as premature governance — a public supported-agent tier model (Verified/Experimental/Unsupported) is marketing/governance surface the bugs-first phase defers, and it can''t be evidence-backed until the Codex/Antigravity verdict specs (STORY-398/407) land. Revisit at the marketing phase.'
+  created_at: 2026-06-06T13:58:41.078480059Z
+  modified_at: 2026-06-06T13:58:41.078480059Z
