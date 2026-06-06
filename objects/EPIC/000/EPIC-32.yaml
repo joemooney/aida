@@ -100,13 +100,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:31:02.682757847Z
-modified_at: 2026-06-06T08:18:07.823363529Z
+modified_at: 2026-06-06T08:18:10.970246077Z
 req_type: Epic
 tags:
 - batch:user-driven-substrate
 - cross-project
 - from-aida-chat
 - from-user-direction
+- needs-human-input
 - substrate-evolution
 - user-driven-vectors
 comments:
