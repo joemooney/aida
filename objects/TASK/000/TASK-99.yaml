@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:42:25.110265092Z
-modified_at: 2026-05-13T05:42:25.110265092Z
+modified_at: 2026-06-06T08:36:02.220941059Z
 req_type: Task
 tags:
 - base-freshness
@@ -46,3 +46,15 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T05:42:27.210642661Z
+comments:
+- id: 019e9c13-2a2c-7be0-b79f-b1a94579c905
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: queue work still only pulls the orphan store, not the code branch (verified in --help). Pulling code before worktree creation is plausibly useful, but the orchestrator/--auto-complete drain and `aida pull --auto` stacked-rebase have reshaped this area. Implement?
+      a) Implement as specced: pull default branch before worktree creation, --no-pull skips both legs, abort-on-divergence with recovery hint.
+      b) Reject — superseded by the orchestrator drain pulling fresh main per-phase and the reviewer stale-base gate; manual queue work is increasingly a rare path.
+      c) Minimal slice: just add a "base is N behind origin/main" warning at worktree creation (no auto-pull), pointing at `aida rebase`.
+      REC: c — closes the visibility half of the original 2026-05-13 pain cheaply without the divergence-handling complexity that the orchestrator/rebase-verb already own; full auto-pull risks surprising the worktree.
+  created_at: 2026-06-06T08:36:02.220941059Z
+  modified_at: 2026-06-06T08:36:02.220941059Z
