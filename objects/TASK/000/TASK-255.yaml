@@ -17,10 +17,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T00:34:29.321146368Z
-modified_at: 2026-05-16T00:34:29.321146368Z
+modified_at: 2026-06-06T08:18:12.068056355Z
 req_type: Task
 tags:
 - empty-state
 - mission-control
 - post-alpha
 - tui
+comments:
+- id: 019e9c02-d5e4-7c90-98b9-589351359f10
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: TUI mission-control empty-state (queue head + leases + open PRs + CI rollup + suggested actions as the default empty view). Self-tagged post-alpha. Build now?
+      a) Hold — spec self-identifies as post-alpha, 'not an alpha gate'; bugs-before-marketing phase defers TUI-richness
+      b) Build now — strengthens the Trojan-horse TUI's 'quiet depth on first dig'; reuses the prefix-o status overlay
+      c) Thin slice — role-queue head + open-PR count only; defer leases/CI-rollup/suggested-actions
+      REC: a — park per its own sequencing; when it proceeds, (c) is the right entry. Timing is the human call.
+  created_at: 2026-06-06T08:18:12.068056355Z
+  modified_at: 2026-06-06T08:18:12.068056355Z
