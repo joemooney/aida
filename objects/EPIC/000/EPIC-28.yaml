@@ -99,13 +99,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-06-06T08:34:15.008515571Z
+modified_at: 2026-06-06T08:34:18.720334400Z
 req_type: Epic
 tags:
 - advisor-vision
 - autonomous-drain
 - batch
 - dependency-graph
+- needs-human-input
 - post-alpha
 - resilient-drain
 - shelving
