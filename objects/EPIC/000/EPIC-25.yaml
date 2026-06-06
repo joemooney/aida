@@ -8,5 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:30:02.426947902Z
-modified_at: 2026-05-12T15:30:02.426947902Z
+modified_at: 2026-06-06T08:36:05.031123386Z
 req_type: Epic
+comments:
+- id: 019e9c13-3527-75f0-9c25-58091616adc1
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Release-as-queueable-composite with a new documenter role is unimplemented (no Release type, no documenter role in code) and is a large strategic lift; current phase is bugs→stability→marketing. Keep, reshape, or shelve?
+      a) Keep open as an aspirational EPIC, defer all children until post-stability.
+      b) Reject the EPIC as over-engineered: scripts/release.sh + `aida changelog refresh` + the existing release pipeline already deliver the practical value; a full role/decomposition engine is daemon-grade complexity for a solo/small-team flow.
+      c) Salvage one bounded slice — a release-time doc-coverage gate (specs since last tag lacking `aida doc` entries) — and reject the rest.
+      REC: c — the genuine insight (docs gate at release, not PR time) is small and valuable now that `aida doc` exists; the documenter-role + auto-decomposition machinery is the over-engineering the project's own caution warns against.
+  created_at: 2026-06-06T08:36:05.031123386Z
+  modified_at: 2026-06-06T08:36:05.031123386Z
