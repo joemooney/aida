@@ -14545,5 +14545,70 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER with the EPIC-31 cluster (parked post-stability) — strategic autonomy/multi-agent scope; the operator is the only consumer of the cross-machine aggregation today. Sequence with EPIC-31's registry design rather than shipping a remote-registration verb mid-bugs-phase.
-clock: 1514
+- id: 019e9d3c-7f28-71f3-9e6c-310b58259324
+  target_id: 019e5abd-6593-7ac3-8612-eed9695bb0c5
+  author: aida
+  node_id: '1'
+  lamport: 1515
+  timestamp: 2026-06-06T14:00:48.168524076Z
+  kind: !SetDescription
+    description: |
+      ## Strategic problem
+
+      With N parallel agents shipping concurrently, the merge-cascade workload grows O(N^2): every PR landing forces stale-base on all open PRs, each requiring a rebase + possible conflict resolution. Today the master advisor does this work, which means:
+
+      - Advisor time is consumed by mechanical work (resolving import-list unions, formatter drift, etc.) that doesn't need design judgment
+      - The strategic work the advisor SHOULD be doing (sketch verdicts, substrate growth, gap detection, multi-agent dispatch) is interrupted by integration churn
+      - Scaling past 3-4 concurrent agents is bottlenecked at the advisor
+
+      ## Proposal: a new 'integrator' role
+
+      A fourth role alongside implementer / reviewer / dialog(advisor):
+
+      **Scope IN**: rebasing PRs, resolving mechanical conflicts (whitespace, import unions, non-overlapping same-file additions, formatter drift), pushing rebased branches, watching CI, merging (squash) when CI-green-and-verdict-present, deleting merged branches, running aida pull post-merge, re-triggering stale CI.
+
+      **Scope OUT (escalate to advisor)**: conflicts where two PRs make semantically different changes to the same lines, PRs lacking reviewer verdict (route to reviewer queue), real (non-flaky) test failures (route brief to original implementer), anything needing a design call.
+
+      ## Smallest valuable slice (this STORY ships)
+
+      1. Role definition in 'aida role list' — 'integrator' as a known role alongside the existing three
+      2. Role-context markdown at 'aida-core/templates/roles/integrator.md' — the discipline above + concrete order-of-operations + escalation handshake
+      3. Scaffolded by 'aida init' under '.aida/roles/integrator.md'
+      4. 'aida queue add --for-role integrator' routing already works (queue knows arbitrary role names)
+      5. Brief surface 'aida brief <agent> <SPEC> --role integrator' optional flag to inject the role-context into the brief note
+      6. CLAUDE.md / discipline-pack section documenting the role
+
+      ## Follow-up specs (separate)
+
+      - **Integrator skill** ('aida-integrate' under .claude/skills/): the procedural recipe (list PRs, dependency-order them, rebase loop, escalation criteria). Could be a code-and-text skill where aida itself does the mechanical loop and the agent makes per-conflict decisions.
+      - **'aida queue integrate'** command: walks open PRs in dependency order, dispatches a per-PR integration task to the integrator queue
+      - **Per-agent dispatch** (STORY-459 + TASK-542 dependencies) — when those land, integrator briefs target specific agent instances
+
+      ## Acceptance
+
+      - [ ] 'aida role list' includes 'integrator'
+      - [ ] 'aida role enter integrator' switches role with appropriate role-context loaded
+      - [ ] 'aida-core/templates/roles/integrator.md' shipped as part of scaffolding
+      - [ ] 'aida init' scaffolds '.aida/roles/integrator.md' alongside existing roles
+      - [ ] CLAUDE.md template + discipline-pack documents the role
+      - [ ] Test: launch agent into integrator role, confirm role-context loads, queue --for-role integrator routes correctly
+
+      ## Composes with
+
+      - STORY-459 (queue --for-agent — composes with --for-role integrator for specific dispatch)
+      - TASK-542 (agent --name + auto-seq — integrator instances get stable names)
+      - TASK-541 (brief --depends-on — integration tasks have explicit pickup order)
+      - EPIC-31 (agent-lifecycle keystone — integrator launches via 'aida agent new <type> --role integrator')
+      - feedback_one_master_advisor_until_subsystems — integrator is a load-balancing role, NOT a subsystem advisor; same advisor still has final say on escalations
+
+      ## Origin
+
+      2026-05-24 user during multi-agent MVP pace: 'with all this parallel work I am worried that merge conflicts will be a big job. I do not want to tie the advisor role up in this and would like it to be able to delegate work to a maybe integrator role.' Empirical evidence: in the last 24h, master has done 4+ multi-PR conflict resolutions during cascade events (PR-268, PR-272, PR-273, PR-267 sequence), each consuming 15-30min of advisor-time on mechanical work.
+
+      trace:STORY-X
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER with the EPIC-31 cluster — the integrator role identifier already validates (nothing broken); the remaining role-scaffolding infra (templates/roles/integrator.md + .aida/roles/ scaffold + discipline section) wants the same design pass as the EPIC-31 launcher/registry cluster, not a standalone bugs-phase ship.
+clock: 1515
 node_id: '1'
