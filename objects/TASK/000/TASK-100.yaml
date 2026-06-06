@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:42:34.664586913Z
-modified_at: 2026-06-06T14:25:46.965275449Z
+modified_at: 2026-06-06T19:04:48.203919026Z
 req_type: Task
 tags:
 - base-freshness
@@ -66,3 +66,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): REJECT — superseded by the reviewer-side stale-base refusal (--allow-stale-base) + the centralized ''aida rebase'' verb (TASK-218/STORY-429 era), which catch a stale base later in the lifecycle. Another interactive prompt at queue-done cuts against the autonomous-drain direction.'
   created_at: 2026-06-06T14:25:43.183349191Z
   modified_at: 2026-06-06T14:25:43.183349191Z
+- id: 019e9e52-d14b-7cb0-b75b-3de2bb8acc66
+  author: joe
+  content: Commit cce61d16e references this requirement
+  created_at: 2026-06-06T19:04:48.203919026Z
+  modified_at: 2026-06-06T19:04:48.203919026Z
