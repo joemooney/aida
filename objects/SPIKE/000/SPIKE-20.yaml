@@ -9,12 +9,12 @@ description: |-
 
   Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/07-worktrees.md
   Acceptance: AIDA's worktree management vs Claude Code's native handling, integration recommendations.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:22:13.162902048Z
-modified_at: 2026-06-06T08:38:30.650719028Z
+modified_at: 2026-06-06T08:38:33.736143699Z
 req_type: Spike
 tags:
 - batch:research-claude-overlap-2026-05-29
