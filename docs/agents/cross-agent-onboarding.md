@@ -85,7 +85,7 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
 
 These are the **agent-coordination primitives**. They're how multiple agents (you, a human, another agent) coordinate on the same spec graph without stepping on each other.
 
-> **Schemas:** all 29 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
+> **Schemas:** all 29 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
 
 ## How to connect (minimum viable)
 
@@ -176,7 +176,7 @@ Specs you'll want to track because they affect your operation:
 | **TASK-438** | Fixes TOCTOU race on `claim_task` (two concurrent claims could both succeed) | Approved |
 | **BUG-310** | MCP-created specs not consistently visible to local CLI | Shipped |
 | **STORY-398** | Empirical Codex roundtrip + `docs/agents/codex-mcp-setup.md` | Shipped |
-| **STORY-399** | Path B — emit `structuredContent` matching `outputSchema` | Approved, deferred until STORY-398 surfaces need |
+| **STORY-399** | Path B — emit `structuredContent` matching `outputSchema` | Shipped (additive: text envelope preserved) |
 | **STORY-82** | Modernize the older spec-graph tools to current CLI vocabulary | Approved, post-STORY-398 |
 | **EPIC-27** | MCP server modernization: mirror the full AIDA CLI surface | Strategic container; ongoing |
 | **BUG-307** | Orchestrator auto-cleans dormant leases (reduces "lease stuck" friction) | Shipped |
