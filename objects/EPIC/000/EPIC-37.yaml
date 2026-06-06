@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:31:00.203994130Z
-modified_at: 2026-06-05T19:32:58.588945283Z
+modified_at: 2026-06-06T08:30:10.274699306Z
 req_type: Epic
 tags:
 - batch:onboarding-hardening
@@ -40,3 +40,9 @@ relationships:
 - rel_type: Parent
   target_id: 019e9950-db51-7391-a7f5-66e654d41c81
   created_at: 2026-06-05T19:44:41.282962775Z
+comments:
+- id: 019e9c0d-cb62-7c93-84f6-b02cd4185e2c
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Active onboarding-hardening umbrella; 3 of 5 children (BUG-446/447/671) already Completed, remaining real work is BUG-445+TASK-631 — drain the rest via --batch onboarding-hardening, no open umbrella-level decision.
+  created_at: 2026-06-06T08:30:10.274699306Z
+  modified_at: 2026-06-06T08:30:10.274699306Z
