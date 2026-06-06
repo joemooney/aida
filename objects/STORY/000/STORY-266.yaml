@@ -27,12 +27,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:28.523267521Z
-modified_at: 2026-06-06T08:19:08.849595576Z
+modified_at: 2026-06-06T08:19:10.792990549Z
 req_type: Story
 tags:
 - aida-core
 - api-contract
 - architecture
+- needs-human-input
 - public-api
 - tui-extraction-prereq
 relationships:
