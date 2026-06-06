@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T15:50:45.603434149Z
-modified_at: 2026-06-05T14:26:38.327482119Z
+modified_at: 2026-06-06T08:32:17.450101163Z
 req_type: Story
 tags:
 - aida:status
@@ -61,3 +61,8 @@ comments:
   content: 'Core working-tree section landed (see sibling task): staged/modified/untracked categorization + safe-to-remove auto-flag in ''aida status''. STILL OPEN for the refinements: (1) mtime recent-vs-stale split via .aida/last-status.toml, (2) .aida/untracked-history.toml first-observed for the stale ≥1d class, (3) content-matches-HEAD ''(safe to clear)'' heuristic on modified-tracked files. These are the persistence/heuristic elaborations; the core categorization shipped first.'
   created_at: 2026-06-05T14:26:38.327482119Z
   modified_at: 2026-06-05T14:26:38.327482119Z
+- id: 019e9c0f-bc2a-7851-b29b-093766d055dc
+  author: joe
+  content: 'Disposition sweep 2026-06-06 — Completed: already implemented — print_status_working_tree_section wired into status (modified/staged/untracked + safe-to-remove + last-status.toml/untracked-history.toml persistence); child TASK-660 Completed.'
+  created_at: 2026-06-06T08:32:17.450101163Z
+  modified_at: 2026-06-06T08:32:17.450101163Z
