@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:27.510264617Z
-modified_at: 2026-06-06T13:55:31.371549453Z
+modified_at: 2026-06-06T13:55:32.841611736Z
 req_type: Story
 tags:
 - advisor
@@ -21,7 +21,6 @@ tags:
 - focus
 - from-spike
 - memory-pack
-- needs-human-input
 - scoping
 - subsystem
 - track-a
