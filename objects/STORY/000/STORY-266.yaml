@@ -2,7 +2,7 @@ id: 019e3385-356b-7fd3-8f1e-8a719b93c30b
 spec_id: STORY-266
 agreed_id: STORY-266
 title: '[EPIC-29 1/5] Define aida-core public API contract — audit + freeze types/methods aida-tui consumes'
-description: |-
+description: |
   First child STORY of EPIC-29 (aida-tui split). Audit aida-tui's current consumption of aida-core; mark required types/methods explicitly `pub`; document the API surface; verify a separate Rust crate can implement a minimal TUI against this API alone (no reach-into-internals).
 
   ## Acceptance
@@ -22,12 +22,16 @@ description: |-
 
   - **EPIC-27** (MCP modernization) — the MCP server also consumes aida-core; the audit should consider its needs too for consistency
   - **`aida ultraplan` / plan tooling** — already public API; this audit just formalizes
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  RESCOPE as standalone API-hygiene (decoupled from the rejected EPIC-29 split): audit + document aida-core's public API surface that both the TUI and the MCP server consume. NOT a repo-split prerequisite — just a documented/stable pub surface. Reparent off EPIC-29.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:28.523267521Z
-modified_at: 2026-06-06T13:45:37.195271709Z
+modified_at: 2026-06-06T13:45:38.720977746Z
 req_type: Story
 tags:
 - aida-core
