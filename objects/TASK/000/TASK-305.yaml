@@ -2,7 +2,7 @@ id: 019e34c6-177f-7e60-b446-94763bc066d6
 spec_id: TASK-305
 agreed_id: TASK-305
 title: 'Plan-archival reconciliation: extract web /ultraplan plan from PR back to docs/plans/'
-description: |-
+description: |
   The local \`/ultraplan\` flow returns a markdown plan that \`/aida-import-plan\` lands at \`docs/plans/YYYY-MM-DD-<slug>.md\`. The **web /ultraplan flow** (initiated from \`aida ultraplan\` clipboard prompt, approved on claude.ai, executed remotely) lands a PR **directly** — no plan file under \`docs/plans/\`, no \`plan_path\` on the spec, no plan brief riding into the implementer session (TASK-95 / TASK-94 patterns go silent for these specs).
 
   This creates a coherence gap: AIDA's plan archival convention is *the* canonical record of how a spec was approached; the web flow leaves a hole.
@@ -55,12 +55,16 @@ description: |-
   ## Origin
 
   2026-05-17 user observation: ran \`aida ultraplan STORY-278\` → pasted into Claude Code → web flow took over → approved → remote session executing → "Results will land as a pull request when the remote session finishes." Recognized this bypasses \`docs/plans/\` archival entirely. AIDA's plan-as-coherence-record convention needs reconciliation with the web flow that produces no markdown plan file.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  BUILD Option B: explicit 'aida plan capture <PR>' that synthesizes the 11-section docs/plans/ file from the PR description + commit log (for plans authored via the web /ultraplan flow that never landed a local plan file). Bounded, plan-tooling-adjacent.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:57.919405229Z
-modified_at: 2026-06-06T15:12:07.975212707Z
+modified_at: 2026-06-06T15:12:09.789510711Z
 req_type: Task
 tags:
 - archival
