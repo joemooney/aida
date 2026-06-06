@@ -15113,5 +15113,67 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       BUILD Option B: explicit 'aida plan capture <PR>' that synthesizes the 11-section docs/plans/ file from the PR description + commit log (for plans authored via the web /ultraplan flow that never landed a local plan file). Bounded, plan-tooling-adjacent.
-clock: 1539
+- id: 019e9d7d-f55e-7df3-86fa-173421b422a3
+  target_id: 019e3e14-4fc0-7293-bff4-7754e998c677
+  author: aida
+  node_id: '1'
+  lamport: 1540
+  timestamp: 2026-06-06T15:12:18.270861391Z
+  kind: !SetDescription
+    description: |
+      Record, per drain (and rolled up per day), how much wall-clock the system worked **autonomously** vs **blocked waiting for human input** — and surface it. As the autonomy machinery matures (--zen, the exit sentinel, STORY-276 headless implementer, the orchestrator-hardening batch), the autonomous fraction should rise and human-intervention count should fall. The metric makes that maturity trend **visible** — it's how you know the autonomy investment is paying off.
+
+      Largely a roll-up of data other specs already capture — not a from-scratch build.
+
+      ## Two metrics, not one (the second fixes the first's crudeness)
+
+      1. **Autonomous-duration fraction** = (total drain wall-clock − Σ human-wait gaps) / total. The headline number the user asked for.
+      2. **Intervention count per drain** = how many times the drain paused for a human. **This is the cleaner maturity signal** — it is NOT polluted by human-availability latency. A raw duration fraction conflates "the system *needed* a human" (maturity signal) with "the human wasn't *available* yet" (scheduling — an overnight wait inflates "waiting" without the system being less mature). The COUNT trending toward zero is the honest maturity case; the duration fraction is the headline but the noisier figure.
+
+      Optionally (3) an "active-window" fraction that excludes long idle gaps — but don't over-engineer the de-noising; record raw timestamps honestly, surface 2-3 views, let the reader judge.
+
+      ## How — composes with STORY-325 + STORY-301
+
+      - **STORY-325 (punt ledger)**: each punt record carries \`paused_at\` + \`resolved_at\` timestamps (a punt record without "when paused / when resolved" is incomplete anyway — see the STORY-325 comment). The gap = the human-wait for that decision point. Σ gaps = total waiting time. Count of escalate-to-human records = intervention count.
+      - **STORY-301 (drain-state file)**: provides the drain's total wall-clock (start → end).
+      - This TASK = the roll-up: total (from STORY-301) − Σ waits (from STORY-325) = autonomous time; + the count; + the surface.
+
+      ## Surface
+
+      - **Drain-end summary line**: e.g. \`drain complete: 82% autonomous · 3 human interventions · 6h12m total\`
+      - **A query**: \`aida autonomy\` (or fold into \`aida usage\` / \`aida punts analyze\`) — per-drain history, dated, so the TREND across drains is visible
+      - **Dated records** — the point is the trend over weeks, as autonomy specs land; one drain's number means little, the slope means everything
+
+      ## Acceptance
+
+      - [ ] Per drain: autonomous-duration fraction + human-intervention count, computed from STORY-325 punt timestamps + STORY-301 drain-state total
+      - [ ] Drain-end summary prints both metrics
+      - [ ] A command surfaces per-drain history, dated, so the maturity trend is readable across drains
+      - [ ] Records are dated + retained (a JSONL roll-up, or derivable on demand from the punt ledger + drain-state history)
+      - [ ] Local-only; never transmitted; opt-out consistent with STORY-122
+      - [ ] Scaffolding-pack — every AIDA project wants its own autonomy-maturity readout
+      - [ ] Docs note the crudeness honestly: the duration fraction is availability-polluted; the intervention count is the cleaner maturity signal
+
+      ## Out of scope
+
+      - **Charts / a dashboard** — a summary line + a command printing the numbers is the MVP; visualization later if wanted
+      - **Elaborate "what counts as real waiting" heuristics** — record raw timestamps, surface 2-3 honest views, stop
+      - **Phoning home** — local-only
+
+      ## Composes with
+
+      - **STORY-325** (punt ledger — the timestamp source; this TASK is largely a roll-up of its timing data. STORY-325's records must carry \`paused_at\`/\`resolved_at\` — flagged on that spec.)
+      - **STORY-301** (drain-state file — total drain wall-clock)
+      - **STORY-122** (usage telemetry — sibling; \`aida usage\` is a candidate surface)
+      - **STORY-318** (ecosystem review — same dated-trend discipline)
+      - **STORY-276 / STORY-287 / batch:orchestrator-hardening** — the autonomy work whose maturity this metric measures; expect the trend to move as they land
+
+      ## Origin
+
+      2026-05-18 user: *"I would like to know how long we are working autonomously as opposed to waiting for user input. Record that so I can gauge how effectively the background-processing machinery is operating. It may be a crude metric but it helps build the case that the system is maturing."* Crude as a raw duration fraction (availability-polluted); the intervention-count companion makes the maturity case honest.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Ship the INTERVENTION-COUNT only — count of escalate-to-human punt records per drain (the honest maturity signal), a thin roll-up over data the punt ledger already carries, landing the 'aida autonomy report' surface the namespace reserved. SKIP the availability-polluted autonomous-duration fraction until it's actually wanted. Confirm STORY-325 punt timestamps are populated first.
+clock: 1540
 node_id: '1'
