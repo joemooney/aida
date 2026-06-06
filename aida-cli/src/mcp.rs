@@ -573,6 +573,61 @@ fn spec_id(r: &Requirement) -> &str {
     r.spec_id.as_deref().unwrap_or("?")
 }
 
+/// STORY-82: render a `## Git linkage` Markdown section for a spec, reusing
+/// the same collection `aida show` walks (referencing commits, feature
+/// branch / worktree, shipped state, PR). `verbose` expands the per-commit
+/// and trace-file lists, matching `aida show --verbose`. Returns an empty
+/// string when there is no git context, so callers can append unconditionally.
+// trace:STORY-82 | ai:claude
+fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> String {
+    let ids = vec![spec_id.to_string()];
+    let linkage = crate::collect_git_linkage(project_root, &ids);
+
+    if linkage.commits.is_empty() && linkage.files.is_empty() {
+        return "\n## Git linkage\n\nNo commits or trace comments reference this spec yet.\n"
+            .to_string();
+    }
+
+    let mut out = String::from("\n## Git linkage\n\n");
+
+    let state = if linkage.shipped {
+        match linkage.shipped_pr {
+            Some(pr) => format!("shipped (merged via PR #{})", pr),
+            None => "shipped (merged to the default branch)".to_string(),
+        }
+    } else if let Some(branch) = &linkage.branch {
+        format!("in flight on branch `{}`", branch)
+    } else {
+        "referenced (not yet on the default branch)".to_string()
+    };
+    out.push_str(&format!("- **State:** {}\n", state));
+
+    if let Some(worktree) = &linkage.worktree {
+        out.push_str(&format!("- **Worktree:** {}\n", worktree));
+    }
+
+    out.push_str(&format!("- **Commits:** {}\n", linkage.commits.len()));
+    if verbose {
+        for (_, short, subject) in &linkage.commits {
+            out.push_str(&format!("  - {} {}\n", short, subject));
+        }
+    } else if let Some((_, short, subject)) = linkage.commits.first() {
+        out.push_str(&format!("  - latest: {} {}\n", short, subject));
+    }
+
+    out.push_str(&format!("- **Traced files:** {}\n", linkage.files.len()));
+    if verbose {
+        for (file, symbol) in &linkage.files {
+            match symbol {
+                Some(sym) => out.push_str(&format!("  - {} ({})\n", file, sym)),
+                None => out.push_str(&format!("  - {}\n", file)),
+            }
+        }
+    }
+
+    out
+}
+
 impl<'a> McpServer<'a> {
     fn new(storage: &'a Storage, project_root: PathBuf) -> Self {
         Self {
@@ -754,6 +809,7 @@ impl<'a> McpServer<'a> {
     // Spec-graph tool implementations
     // ========================================================================
 
+    // trace:STORY-82 | ai:claude
     fn tool_list_requirements(&self, args: &Value) -> Result<String, String> {
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let status_filter = args.get("status").and_then(|v| v.as_str());
@@ -761,6 +817,75 @@ impl<'a> McpServer<'a> {
         let priority_filter = args.get("priority").and_then(|v| v.as_str());
         let feature_filter = args.get("feature").and_then(|v| v.as_str());
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+
+        // STORY-82: tags filter — CSV, AND-match (a row must carry ALL of them),
+        // mirroring the `aida list --tags` semantic.
+        let tag_filters: Vec<String> = args
+            .get("tags")
+            .and_then(|v| v.as_str())
+            .map(|s| {
+                s.split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // STORY-82: batch filter — shorthand for the `batch:<NAME>` tag,
+        // matching `aida list --batch`.
+        let batch_tag = args
+            .get("batch")
+            .and_then(|v| v.as_str())
+            .map(|b| format!("batch:{}", b.trim()))
+            .filter(|b| b != "batch:");
+
+        // STORY-82: role/for filter — requirements don't carry a role field
+        // (that's a queue-routing concept), so we match a `role:<value>` tag
+        // on the spec. `for` is an accepted alias for `role`.
+        let role_tag = args
+            .get("role")
+            .or_else(|| args.get("for"))
+            .and_then(|v| v.as_str())
+            .map(|r| format!("role:{}", r.trim().to_ascii_lowercase()))
+            .filter(|r| r != "role:");
+
+        // STORY-82: parent filter — direct children of <parent>, found via the
+        // parent's outgoing `Parent` relationship edges (mirrors
+        // `aida list --parent`).
+        let parent_child_ids: Option<std::collections::HashSet<uuid::Uuid>> =
+            match args.get("parent").and_then(|v| v.as_str()) {
+                Some(parent_ref) => {
+                    let parent = store
+                        .get_requirement_by_spec_id(parent_ref)
+                        .ok_or_else(|| format!("parent '{}': requirement not found", parent_ref))?;
+                    Some(
+                        parent
+                            .relationships
+                            .iter()
+                            .filter(|rel| rel.rel_type == RelationshipType::Parent)
+                            .map(|rel| rel.target_id)
+                            .collect(),
+                    )
+                }
+                None => None,
+            };
+
+        // STORY-82: in_flight filter — restrict to specs with a live session
+        // or MCP-claim lease. Lease scopes are matched case-insensitively
+        // against the spec id (the lease `scope` records the owned spec/epic).
+        let in_flight_only = args
+            .get("in_flight")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let in_flight_scopes: std::collections::HashSet<String> = if in_flight_only {
+            list_leases(&self.project_root)
+                .into_iter()
+                .map(|l| l.scope.to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
 
         let filtered: Vec<&Requirement> = store
             .requirements
@@ -783,6 +908,34 @@ impl<'a> McpServer<'a> {
                 }
                 if let Some(feature) = feature_filter {
                     if !r.feature.eq_ignore_ascii_case(feature) {
+                        return false;
+                    }
+                }
+                // AND-match every requested tag (case-sensitive, matching the CLI).
+                for want in &tag_filters {
+                    if !r.tags.contains(want) {
+                        return false;
+                    }
+                }
+                if let Some(b) = &batch_tag {
+                    if !r.tags.contains(b) {
+                        return false;
+                    }
+                }
+                if let Some(role) = &role_tag {
+                    let has_role = r.tags.iter().any(|t| t.eq_ignore_ascii_case(role));
+                    if !has_role {
+                        return false;
+                    }
+                }
+                if let Some(child_ids) = &parent_child_ids {
+                    if !child_ids.contains(&r.id) {
+                        return false;
+                    }
+                }
+                if in_flight_only {
+                    let sid = spec_id(r).to_ascii_lowercase();
+                    if sid == "?" || !in_flight_scopes.contains(&sid) {
                         return false;
                     }
                 }
@@ -809,16 +962,29 @@ impl<'a> McpServer<'a> {
         Ok(output)
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_show_requirement(&self, args: &Value) -> Result<String, String> {
         let id = args
             .get("id")
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: id")?;
+        // STORY-82: git linkage on by default, matching `aida show` (the
+        // CLI default; `aida show --no-git` suppresses it). `verbose`
+        // expands the section like `aida show --verbose`.
+        let include_git = args
+            .get("include_git")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let verbose = args
+            .get("verbose")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let req = store
             .get_requirement_by_spec_id(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
+        let canonical_id = spec_id(req).to_string();
 
         let mut output = format!(
             "# {} — {}\n\n\
@@ -874,9 +1040,21 @@ impl<'a> McpServer<'a> {
             }
         }
 
+        // STORY-82: git linkage — reuse the same collection `aida show`
+        // renders so MCP clients see commits / branch / PR / shipped state.
+        // Off when include_git=false (the `aida show --no-git` view).
+        if include_git {
+            output.push_str(&render_git_linkage_md(
+                &self.project_root,
+                &canonical_id,
+                verbose,
+            ));
+        }
+
         Ok(output)
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_add_requirement(&self, args: &Value) -> Result<String, String> {
         let title = args
             .get("title")
@@ -938,10 +1116,46 @@ impl<'a> McpServer<'a> {
             .unwrap_or(RequirementPriority::Medium);
 
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // STORY-82: resolve an optional parent BEFORE allocating the new id,
+        // so a bad/terminal parent fails without leaving an orphan spec.
+        // Mirrors `aida add --parent`'s pre-resolution + terminal guard.
+        let parent_link: Option<(uuid::Uuid, String)> = match args
+            .get("parent")
+            .and_then(|v| v.as_str())
+        {
+            Some(parent_ref) => {
+                let parent = store.get_requirement_by_spec_id(parent_ref).ok_or_else(|| {
+                        format!(
+                            "parent '{}' not found — refusing to create a child without a valid parent",
+                            parent_ref
+                        )
+                    })?;
+                if crate::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                            "parent {} is {} — adding new children to a closed parent is usually a mistake.",
+                            parent.spec_id.as_deref().unwrap_or("?"),
+                            parent.status,
+                        ));
+                }
+                Some((parent.id, parent.spec_id.clone().unwrap_or_default()))
+            }
+            None => None,
+        };
+
         let mut req = Requirement::new(title.to_string(), description.to_string());
         req.req_type = req_type;
         req.status = status;
         req.priority = priority;
+
+        // STORY-82: optional feature category + owner (mirrors `aida add
+        // --feature` / `--owner`).
+        if let Some(feature) = args.get("feature").and_then(|v| v.as_str()) {
+            req.feature = feature.to_string();
+        }
+        if let Some(owner) = args.get("owner").and_then(|v| v.as_str()) {
+            req.owner = owner.to_string();
+        }
 
         // Optional tags
         if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
@@ -960,27 +1174,48 @@ impl<'a> McpServer<'a> {
         })?;
         store.add_requirement_with_id(req, None, Some(type_prefix.as_str()));
 
-        let new_spec_id = store
+        let (new_spec_id, new_id) = store
             .requirements
             .last()
-            .and_then(|r| r.spec_id.clone())
-            .unwrap_or_else(|| "?".to_string());
+            .map(|r| (r.spec_id.clone().unwrap_or_else(|| "?".to_string()), r.id))
+            .unwrap_or_else(|| ("?".to_string(), uuid::Uuid::nil()));
+
+        // STORY-82: link the parent (Parent→child on parent, Child→parent on
+        // the new req via the bidirectional inverse) once the id exists.
+        if let Some((parent_id, _parent_spec)) = &parent_link {
+            store
+                .add_relationship(parent_id, RelationshipType::Parent, &new_id, true)
+                .map_err(|e| e.to_string())?;
+        }
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
+
+        // STORY-82: note the parent link in the result so the agent sees the
+        // edge landed.
+        let parent_note = match &parent_link {
+            Some((_, parent_spec)) if !parent_spec.is_empty() => {
+                format!(" (linked under {})", parent_spec)
+            }
+            _ => String::new(),
+        };
 
         // TASK-647 (ADR-3): if a requested approved+ status was held back, say
         // so in the result so the agent knows it is awaiting advisor triage.
         if intake_downgraded {
             Ok(format!(
-                "Requirement added: {} — {} (filed as draft, queued for advisor triage; \
+                "Requirement added: {} — {}{} (filed as draft, queued for advisor triage; \
                  requested status needs advisor authority)",
-                new_spec_id, title
+                new_spec_id, title, parent_note
             ))
         } else {
-            Ok(format!("Requirement added: {} — {}", new_spec_id, title))
+            Ok(format!(
+                "Requirement added: {} — {}{}",
+                new_spec_id, title, parent_note
+            ))
         }
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_update_requirement(&self, args: &Value) -> Result<String, String> {
         // (see mcp_status_gate_message below for the BUG-449 status gate)
         let id = args
@@ -989,11 +1224,91 @@ impl<'a> McpServer<'a> {
             .ok_or("Missing required parameter: id")?;
 
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // STORY-82: resolve the target req id + (optional) parent up front,
+        // while we still hold a shared borrow, so the parent re-parent edge
+        // can be applied after the mutable field-edit borrow is dropped
+        // (the source and parent are two distinct records).
+        let target_id = store
+            .get_requirement_by_spec_id(id)
+            .ok_or_else(|| format!("Requirement '{}' not found", id))?
+            .id;
+        let parent_link: Option<(uuid::Uuid, String)> = match args
+            .get("parent")
+            .and_then(|v| v.as_str())
+        {
+            Some(parent_ref) => {
+                let parent = store
+                    .get_requirement_by_spec_id(parent_ref)
+                    .ok_or_else(|| format!("parent '{}' not found", parent_ref))?;
+                if crate::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                            "parent {} is {} — re-parenting under a closed parent is usually a mistake.",
+                            parent.spec_id.as_deref().unwrap_or("?"),
+                            parent.status,
+                        ));
+                }
+                if parent.id == target_id {
+                    return Err("a requirement cannot be its own parent".to_string());
+                }
+                Some((parent.id, parent.spec_id.clone().unwrap_or_default()))
+            }
+            None => None,
+        };
+
         let req = store
             .get_requirement_by_spec_id_mut(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
         let mut changes = Vec::new();
+
+        // STORY-82: title.
+        if let Some(title) = args.get("title").and_then(|v| v.as_str()) {
+            if title != req.title {
+                changes.push(format!("title: {} → {}", req.title, title));
+                req.title = title.to_string();
+            }
+        }
+
+        // STORY-82: type. Does not renumber the existing SPEC-ID.
+        if let Some(type_arg) = args.get("type").and_then(|v| v.as_str()) {
+            let new_type = parse_requirement_type(type_arg).ok_or_else(|| {
+                format!(
+                    "Invalid requirement type '{}'. Valid types: {}",
+                    type_arg, VALID_MCP_REQUIREMENT_TYPES
+                )
+            })?;
+            if new_type != req.req_type {
+                changes.push(format!("type: {} → {}", req.req_type, new_type));
+                req.req_type = new_type;
+            }
+        }
+
+        // STORY-82: priority.
+        if let Some(priority_arg) = args.get("priority").and_then(|v| v.as_str()) {
+            let new_priority = parse_priority(priority_arg).ok_or_else(|| {
+                format!(
+                    "Invalid priority '{}'. Valid: high, medium, low",
+                    priority_arg
+                )
+            })?;
+            if new_priority != req.priority {
+                changes.push(format!("priority: {} → {}", req.priority, new_priority));
+                req.priority = new_priority;
+            }
+        }
+
+        // STORY-82: tags — replace the set with the provided list.
+        if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
+            let new_tags: std::collections::HashSet<String> = tag_arr
+                .iter()
+                .filter_map(|t| t.as_str().map(str::to_string))
+                .collect();
+            if new_tags != req.tags {
+                changes.push("tags updated".to_string());
+                req.tags = new_tags;
+            }
+        }
 
         if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
             if let Some(new_status) = parse_status(status) {
@@ -1028,6 +1343,23 @@ impl<'a> McpServer<'a> {
             req.description = desc.to_string();
         }
 
+        // STORY-82: re-parent — the mutable `req` borrow is dropped here, so we
+        // can mutate both the new parent and the target via add_relationship
+        // (Parent→child on parent, Child→parent inverse on the target).
+        if let Some((parent_id, parent_spec)) = &parent_link {
+            store
+                .add_relationship(parent_id, RelationshipType::Parent, &target_id, true)
+                .map_err(|e| e.to_string())?;
+            changes.push(format!(
+                "parent: linked under {}",
+                if parent_spec.is_empty() {
+                    "?"
+                } else {
+                    parent_spec.as_str()
+                }
+            ));
+        }
+
         if changes.is_empty() {
             return Ok(format!("No changes applied to {}", id));
         }
@@ -1036,6 +1368,7 @@ impl<'a> McpServer<'a> {
         Ok(format!("Updated {}: {}", id, changes.join(", ")))
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_search_requirements(&self, args: &Value) -> Result<String, String> {
         let query = args
             .get("query")
@@ -1044,18 +1377,35 @@ impl<'a> McpServer<'a> {
 
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let query_lower = query.to_lowercase();
+        // STORY-82: optional type/status narrowing (mirrors `aida search`).
+        let type_filter = args.get("type").and_then(|v| v.as_str());
+        let status_filter = args.get("status").and_then(|v| v.as_str());
 
         let matches: Vec<&Requirement> = store
             .requirements
             .iter()
             .filter(|r| {
-                r.title.to_lowercase().contains(&query_lower)
+                let text_match = r.title.to_lowercase().contains(&query_lower)
                     || r.description.to_lowercase().contains(&query_lower)
                     || r.spec_id
                         .as_deref()
                         .unwrap_or("")
                         .to_lowercase()
-                        .contains(&query_lower)
+                        .contains(&query_lower);
+                if !text_match {
+                    return false;
+                }
+                if let Some(type_name) = type_filter {
+                    if !mcp_filter_eq(&r.req_type.to_string(), type_name) {
+                        return false;
+                    }
+                }
+                if let Some(status) = status_filter {
+                    if !mcp_filter_eq(&r.status.to_string(), status) {
+                        return false;
+                    }
+                }
+                true
             })
             .collect();
 
@@ -2501,7 +2851,8 @@ pub fn tool_descriptors() -> Value {
         // ---- Spec graph ----
         {
             "name": "list_requirements",
-            "description": "List requirements from the AIDA database, optionally filtered by status, type, or feature category. Returns a summarized list of matching requirements.",
+            // trace:STORY-82 | ai:claude
+            "description": "List requirements from the AIDA database, optionally filtered by status, type, feature category, priority, tags, batch, parent, owner role, or in-flight state. Mirrors the current `aida list` filter surface. Returns a summarized list of matching requirements.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2514,7 +2865,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "Filter by the semantic type of the requirement.",
-                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint"],
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
                         "example": "story"
                     },
                     "priority": {
@@ -2527,6 +2878,37 @@ pub fn tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Filter by feature category name (e.g., auth, backend).",
                         "example": "auth"
+                    },
+                    "tags": {
+                        "type": "string",
+                        "description": "Filter by tags. Comma-separated list; a row matches when it carries ALL of the listed tags (e.g. `batch:scaffolding,papercut`). Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` for surface tags, flat for behavior/severity).",
+                        "example": "mcp,modernization"
+                    },
+                    "batch": {
+                        "type": "string",
+                        "description": "Filter to members of a batch — shorthand for the `batch:<NAME>` tag (e.g. `scaffolding-2026-05-28`). Mirrors `aida list --batch`.",
+                        "example": "scaffolding-2026-05-28"
+                    },
+                    "parent": {
+                        "type": "string",
+                        "description": "Restrict to direct children of this parent SPEC-ID (mirrors `aida list --parent`).",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "EPIC-27"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Filter to requirements routed to a role — matches a `role:<value>` tag on the spec (e.g. implementer, advisor). Alias: `for`.",
+                        "example": "implementer"
+                    },
+                    "for": {
+                        "type": "string",
+                        "description": "Alias for `role` — filter to requirements carrying a `role:<value>` tag.",
+                        "example": "advisor"
+                    },
+                    "in_flight": {
+                        "type": "boolean",
+                        "description": "When true, restrict to requirements with a live session/claim lease (work currently in flight). When false or omitted (default), no in-flight filter is applied.",
+                        "example": true
                     },
                     "limit": {
                         "type": "integer",
@@ -2542,7 +2924,8 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "show_requirement",
-            "description": "Retrieve and display the full markdown details of a specific requirement (description, relationships, comments) by its unique SPEC-ID.",
+            // trace:STORY-82 | ai:claude
+            "description": "Retrieve and display the full markdown details of a specific requirement (description, relationships, comments, and git linkage) by its unique SPEC-ID. Mirrors `aida show`: git linkage (referencing commits, feature branch, PR) is included by default.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2551,17 +2934,28 @@ pub fn tool_descriptors() -> Value {
                         "description": "The unique SPEC-ID of the requirement (e.g., FR-0042). Must follow the canonical spec format.",
                         "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
                         "example": "FR-0042"
+                    },
+                    "include_git": {
+                        "type": "boolean",
+                        "description": "Append the git-linkage section (referencing commits, feature branch / worktree, shipped state, PR number). Defaults to true, matching `aida show`; pass false for the `aida show --no-git` view.",
+                        "example": true
+                    },
+                    "verbose": {
+                        "type": "boolean",
+                        "description": "Expand the git-linkage section with the full per-commit list and trace-tagged files, matching `aida show --verbose`. Defaults to false.",
+                        "example": false
                     }
                 },
                 "required": ["id"]
             },
             "outputSchema": text_envelope_output_schema(
-                "a Markdown rendering of the requirement: H1 `# <SPEC-ID> — <title>`, bold-key/value lines for Status / Priority / Type / Feature / Owner / Tags, a `## Description` body, and optional `## Comments` and `## Relationships` sections."
+                "a Markdown rendering of the requirement: H1 `# <SPEC-ID> — <title>`, bold-key/value lines for Status / Priority / Type / Feature / Owner / Tags, a `## Description` body, optional `## Comments` and `## Relationships` sections, and (unless `include_git` is false) a `## Git linkage` section listing referencing commits, the feature branch, and any PR."
             )
         },
         {
             "name": "add_requirement",
-            "description": "Create and add a new requirement to the AIDA database. Generates a new canonical SPEC-ID automatically based on the type.",
+            // trace:STORY-82 | ai:claude
+            "description": "Create and add a new requirement to the AIDA database. Generates a new canonical SPEC-ID automatically based on the type. Optionally links it under a parent, sets a feature category, and assigns an owner. Note: MCP intake always files as `draft` (approving/planning is the advisor's triage decision), regardless of the requested status.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2583,7 +2977,7 @@ pub fn tool_descriptors() -> Value {
                     },
                     "status": {
                         "type": "string",
-                        "description": "Initial status of the requirement.",
+                        "description": "Requested initial status. MCP intake files everything as `draft` and queues approved+ requests for advisor triage; lower-than-draft values still apply.",
                         "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected"],
                         "example": "draft"
                     },
@@ -2593,10 +2987,26 @@ pub fn tool_descriptors() -> Value {
                         "enum": ["high", "medium", "low"],
                         "example": "medium"
                     },
+                    "feature": {
+                        "type": "string",
+                        "description": "Feature category name (NOT a type), e.g. auth, backend. Matches `aida add --feature`.",
+                        "example": "auth"
+                    },
+                    "owner": {
+                        "type": "string",
+                        "description": "Owner to assign to the new requirement (matches `aida add --owner`).",
+                        "example": "alice"
+                    },
+                    "parent": {
+                        "type": "string",
+                        "description": "SPEC-ID of a parent to link this requirement under (adds a Parent/Child edge, mirroring `aida add --parent`). The parent must exist and not be terminal-status.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "EPIC-27"
+                    },
                     "tags": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Optional list of tags to categorize this requirement.",
+                        "description": "Optional list of tags to categorize this requirement. Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` surface tags; flat behavior/severity/batch tags like `papercut`, `batch:NAME`).",
                         "example": ["auth", "security"]
                     }
                 },
@@ -2608,7 +3018,8 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "update_requirement",
-            "description": "Update specific fields (status, description) of an existing requirement. Fields omitted from parameters remain unchanged.",
+            // trace:STORY-82 | ai:claude
+            "description": "Update fields of an existing requirement (title, type, status, priority, description, tags, parent). Fields omitted from parameters remain unchanged. Note: advisor-authority transitions (approved/planned) and the merge-driven `completed` status are gated and cannot be set via MCP.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2618,16 +3029,45 @@ pub fn tool_descriptors() -> Value {
                         "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
                         "example": "FR-0042"
                     },
+                    "title": {
+                        "type": "string",
+                        "description": "New title for the requirement.",
+                        "example": "Implement OAuth2 + SAML login flow"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "New semantic type. Changing the type does NOT renumber the existing SPEC-ID.",
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "example": "story"
+                    },
                     "status": {
                         "type": "string",
-                        "description": "New status to transition the requirement into.",
+                        "description": "New status to transition the requirement into. approved/planned (advisor triage) and completed (merge-driven) are refused via MCP.",
                         "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected", "needs-attention"],
                         "example": "in-progress"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "New priority level.",
+                        "enum": ["high", "medium", "low"],
+                        "example": "high"
                     },
                     "description": {
                         "type": "string",
                         "description": "Updated detailed description of the requirement.",
                         "example": "Updated detailed implementation checklist for the login interface."
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Replace the requirement's tag set with this list. Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` surface tags; flat behavior/severity/batch tags).",
+                        "example": ["auth", "batch:login-rework"]
+                    },
+                    "parent": {
+                        "type": "string",
+                        "description": "Re-parent the requirement under this SPEC-ID (adds a Parent/Child edge to the new parent; existing parent edges are left in place). The parent must exist and not be terminal-status.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "EPIC-27"
                     }
                 },
                 "required": ["id"]
@@ -2638,7 +3078,8 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "search_requirements",
-            "description": "Perform a case-insensitive keyword search across requirement titles and descriptions in the database.",
+            // trace:STORY-82 | ai:claude
+            "description": "Case-insensitive keyword search across requirement titles, descriptions, and SPEC-IDs, optionally narrowed by type and/or status. Mirrors `aida search`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2646,6 +3087,18 @@ pub fn tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Case-insensitive query string to search for.",
                         "example": "oauth2"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Restrict results to this semantic type.",
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "example": "bug"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Restrict results to this status.",
+                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"],
+                        "example": "in-progress"
                     }
                 },
                 "required": ["query"]
@@ -4173,6 +4626,336 @@ mod tests {
         assert!(!priority_output.contains(&planned_id), "{priority_output}");
     }
 
+    // ===================================================================
+    // STORY-82: modernized filter/field surface on the 7 core tools
+    // ===================================================================
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_list_requirements_filters_by_tags_batch_and_role() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let tagged = server
+            .tool_add_requirement(&json!({
+                "title": "Tagged + batched + roled",
+                "description": "matches all three filters",
+                "type": "task",
+                "tags": ["mcp", "papercut", "batch:fall-cleanup", "role:implementer"],
+            }))
+            .unwrap();
+        let tagged_id = added_spec_id(&tagged).to_string();
+        let other = server
+            .tool_add_requirement(&json!({
+                "title": "Unrelated",
+                "description": "negative control",
+                "type": "task",
+                "tags": ["docs"],
+            }))
+            .unwrap();
+        let other_id = added_spec_id(&other).to_string();
+
+        // tags CSV: AND-match across the listed tags.
+        let out = server
+            .tool_list_requirements(&json!({ "tags": "mcp,papercut" }))
+            .unwrap();
+        assert!(out.contains(&tagged_id), "{out}");
+        assert!(!out.contains(&other_id), "{out}");
+
+        // a tag the row lacks excludes it.
+        let none = server
+            .tool_list_requirements(&json!({ "tags": "mcp,does-not-exist" }))
+            .unwrap();
+        assert!(none.contains("No requirements found"), "{none}");
+
+        // batch shorthand → batch:<name> tag.
+        let batch_out = server
+            .tool_list_requirements(&json!({ "batch": "fall-cleanup" }))
+            .unwrap();
+        assert!(batch_out.contains(&tagged_id), "{batch_out}");
+        assert!(!batch_out.contains(&other_id), "{batch_out}");
+
+        // role / for → role:<name> tag (case-insensitive); `for` is an alias.
+        for key in ["role", "for"] {
+            let role_out = server
+                .tool_list_requirements(&json!({ key: "IMPLEMENTER" }))
+                .unwrap();
+            assert!(role_out.contains(&tagged_id), "{key}: {role_out}");
+            assert!(!role_out.contains(&other_id), "{key}: {role_out}");
+        }
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_list_requirements_filters_by_parent() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let epic = server
+            .tool_add_requirement(&json!({
+                "title": "Parent epic",
+                "description": "has children",
+                "type": "epic",
+            }))
+            .unwrap();
+        let epic_id = added_spec_id(&epic).to_string();
+        let child = server
+            .tool_add_requirement(&json!({
+                "title": "Child story",
+                "description": "linked under the epic",
+                "type": "story",
+                "parent": epic_id,
+            }))
+            .unwrap();
+        let child_id = added_spec_id(&child).to_string();
+        let stray = server
+            .tool_add_requirement(&json!({
+                "title": "Unparented",
+                "description": "not a child",
+                "type": "story",
+            }))
+            .unwrap();
+        let stray_id = added_spec_id(&stray).to_string();
+
+        let out = server
+            .tool_list_requirements(&json!({ "parent": epic_id }))
+            .unwrap();
+        assert!(out.contains(&child_id), "child must show: {out}");
+        assert!(!out.contains(&stray_id), "stray must not show: {out}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_add_requirement_persists_parent_feature_owner() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let epic = server
+            .tool_add_requirement(&json!({
+                "title": "Owner of children",
+                "description": "epic",
+                "type": "epic",
+            }))
+            .unwrap();
+        let epic_id = added_spec_id(&epic).to_string();
+
+        let response = server
+            .tool_add_requirement(&json!({
+                "title": "Full-field child",
+                "description": "feature + owner + parent",
+                "type": "task",
+                "feature": "auth",
+                "owner": "alice",
+                "parent": epic_id,
+            }))
+            .unwrap();
+        assert!(
+            response.contains(&epic_id),
+            "result notes parent: {response}"
+        );
+        let child_id = added_spec_id(&response).to_string();
+
+        let store = server.storage.load().unwrap();
+        let child = store.get_requirement_by_spec_id(&child_id).unwrap();
+        // The legacy YAML test store normalizes feature names on load
+        // (migrate_features prefixes a stable number), so assert containment
+        // rather than exact equality.
+        assert!(child.feature.contains("auth"), "feature: {}", child.feature);
+        assert_eq!(child.owner, "alice");
+        // Child carries a Child→parent edge; parent carries Parent→child.
+        let parent = store.get_requirement_by_spec_id(&epic_id).unwrap();
+        assert!(
+            parent
+                .relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Parent && r.target_id == child.id),
+            "parent should have a Parent edge to the child"
+        );
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_add_requirement_rejects_missing_parent() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let err = server
+            .tool_add_requirement(&json!({
+                "title": "Orphan",
+                "description": "bad parent",
+                "type": "task",
+                "parent": "EPIC-999",
+            }))
+            .expect_err("missing parent should fail");
+        assert!(err.contains("EPIC-999"), "{err}");
+        assert!(err.contains("not found"), "{err}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_update_requirement_sets_title_type_priority_tags_parent() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let epic = server
+            .tool_add_requirement(&json!({
+                "title": "Reparent target",
+                "description": "epic",
+                "type": "epic",
+            }))
+            .unwrap();
+        let epic_id = added_spec_id(&epic).to_string();
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Original title",
+                "description": "to be edited",
+                "type": "task",
+                "priority": "low",
+                "tags": ["old"],
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        let result = server
+            .tool_update_requirement(&json!({
+                "id": id,
+                "title": "New title",
+                "type": "story",
+                "priority": "high",
+                "tags": ["fresh", "batch:x"],
+                "parent": epic_id,
+            }))
+            .unwrap();
+        assert!(result.starts_with(&format!("Updated {}", id)), "{result}");
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.title, "New title");
+        assert_eq!(req.req_type, RequirementType::Story);
+        assert_eq!(req.priority, RequirementPriority::High);
+        assert!(req.tags.contains("fresh") && req.tags.contains("batch:x"));
+        assert!(!req.tags.contains("old"), "tags should be replaced");
+        assert!(
+            req.relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Child),
+            "target should carry a Child edge to the new parent"
+        );
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_update_requirement_rejects_invalid_type() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "T", "description": "d", "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "type": "nonsense" }))
+            .expect_err("invalid type should fail");
+        assert!(err.contains("Invalid requirement type 'nonsense'"), "{err}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_search_requirements_narrows_by_type_and_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let bug = server
+            .tool_add_requirement(&json!({
+                "title": "Login oauth bug",
+                "description": "oauth token refresh fails",
+                "type": "bug",
+            }))
+            .unwrap();
+        let bug_id = added_spec_id(&bug).to_string();
+        let story = server
+            .tool_add_requirement(&json!({
+                "title": "Login oauth story",
+                "description": "oauth happy path",
+                "type": "story",
+            }))
+            .unwrap();
+        let story_id = added_spec_id(&story).to_string();
+
+        // type narrows.
+        let out = server
+            .tool_search_requirements(&json!({ "query": "oauth", "type": "bug" }))
+            .unwrap();
+        assert!(out.contains(&bug_id), "{out}");
+        assert!(!out.contains(&story_id), "{out}");
+
+        // status narrows (both are draft on MCP intake).
+        let drafts = server
+            .tool_search_requirements(&json!({ "query": "oauth", "status": "draft" }))
+            .unwrap();
+        assert!(
+            drafts.contains(&bug_id) && drafts.contains(&story_id),
+            "{drafts}"
+        );
+        let none = server
+            .tool_search_requirements(&json!({ "query": "oauth", "status": "completed" }))
+            .unwrap();
+        assert!(none.contains("No requirements found"), "{none}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_show_requirement_appends_git_linkage_by_default() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Show with git", "description": "d", "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        // Default: git linkage present (no repo/commits → the empty-state line).
+        let with_git = server.tool_show_requirement(&json!({ "id": id })).unwrap();
+        assert!(with_git.contains("## Git linkage"), "{with_git}");
+
+        // include_git=false suppresses it (the `aida show --no-git` view).
+        let no_git = server
+            .tool_show_requirement(&json!({ "id": id, "include_git": false }))
+            .unwrap();
+        assert!(!no_git.contains("## Git linkage"), "{no_git}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn list_requirements_descriptor_advertises_modern_filters() {
+        let desc = tool_descriptors();
+        let arr = desc.as_array().unwrap();
+        let tool = arr
+            .iter()
+            .find(|t| t.get("name").and_then(|v| v.as_str()) == Some("list_requirements"))
+            .unwrap();
+        let props = tool
+            .pointer("/inputSchema/properties")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        for p in ["tags", "batch", "parent", "role", "for", "in_flight"] {
+            assert!(
+                props.contains_key(p),
+                "list_requirements must advertise `{p}`"
+            );
+        }
+        // type enum now covers the full taxonomy.
+        let type_enum = tool
+            .pointer("/inputSchema/properties/type/enum")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        let names: Vec<&str> = type_enum.iter().filter_map(|v| v.as_str()).collect();
+        for t in ["folder", "meta", "doc", "sprint"] {
+            assert!(names.contains(&t), "type enum must include {t}: {names:?}");
+        }
+    }
+
     // trace:STORY-489 | ai:claude
     /// query_graph walks the typed relationship graph: a spec blocked-by
     /// another surfaces that blocker in the `blocked-by` mode result, and the
@@ -4319,6 +5102,8 @@ mod tests {
     }
 
     // trace:BUG-377 TASK-550 | ai:codex
+    // STORY-82: title / priority / tags are now advertised + persisted (they
+    // were ignored before). trace:STORY-82 | ai:claude
     #[test]
     fn mcp_update_requirement_persists_advertised_fields_only() {
         let dir = tempdir().unwrap();
@@ -4339,23 +5124,25 @@ mod tests {
                 // advisor-gated via MCP); this test is about field persistence.
                 "status": "in-progress",
                 "description": "after",
-                "title": "ignored title",
+                "title": "new title",
                 "priority": "high",
-                "tags": ["ignored"],
+                "tags": ["kept"],
             }))
             .unwrap();
         assert!(result.contains("status:"), "{result}");
         assert!(result.contains("description updated"), "{result}");
+        assert!(result.contains("title:"), "{result}");
+        assert!(result.contains("priority:"), "{result}");
 
         let store = server.storage.load().unwrap();
         let req = store
             .get_requirement_by_spec_id(&spec_id)
             .expect("requirement should exist");
-        assert_eq!(req.title, "Update target");
+        assert_eq!(req.title, "new title");
         assert_eq!(req.description, "after");
         assert_eq!(req.status, RequirementStatus::InProgress);
-        assert_eq!(req.priority, RequirementPriority::Medium);
-        assert!(!req.tags.contains("ignored"));
+        assert_eq!(req.priority, RequirementPriority::High);
+        assert!(req.tags.contains("kept"));
     }
 
     // trace:BUG-449 | ai:claude
