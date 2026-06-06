@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:35:56.677371121Z
-modified_at: 2026-06-05T19:35:56.677371121Z
+modified_at: 2026-06-06T06:35:04.333507110Z
 req_type: Bug
 tags:
 - aida:graph
@@ -35,3 +35,9 @@ tags:
 - graph
 - papercut
 - relationships
+comments:
+- id: 019e9ba4-6b0d-7d82-a0c4-8cdd2cbb751a
+  author: joe
+  content: Commit df9a3235e references this requirement
+  created_at: 2026-06-06T06:35:04.333507110Z
+  modified_at: 2026-06-06T06:35:04.333507110Z
