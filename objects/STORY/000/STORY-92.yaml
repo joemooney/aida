@@ -55,10 +55,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:57:58.159777765Z
-modified_at: 2026-06-06T14:04:07.161495635Z
+modified_at: 2026-06-06T14:04:10.155460125Z
 req_type: Story
-tags:
-- needs-human-input
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
