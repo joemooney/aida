@@ -34,12 +34,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:20:45.715685241Z
-modified_at: 2026-06-06T13:45:28.127373335Z
+modified_at: 2026-06-06T13:45:29.591380452Z
 req_type: Story
 tags:
 - cross-repo
 - issue-tracking
-- needs-human-input
 - spec-migration
 - tui-cluster
 relationships:
