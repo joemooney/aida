@@ -43143,6 +43143,109 @@ cargo test -p aida-cli
         );
     }
 
+    /// TASK-305: the pure PR→plan synthesis fills all 11 sections from a PR
+    /// fixture, mines verification commands from the description, lists the
+    /// changed files under Critical Files, and credits the spec ids found in
+    /// the commit log. Then `plan_sections_present` (the same check
+    /// `aida plan verify` runs) accepts the output.
+    #[test]
+    fn plan_capture_synthesizes_verifiable_plan() {
+        let pr = CapturedPr {
+            number: 65,
+            title: "feat(plan): web flow plumbing (STORY-278)".to_string(),
+            body:
+                "## Summary\n\nWire the web /ultraplan flow end to end.\n\n## Testing\n\n```bash\n\
+                   cargo test -p aida-cli --release\naida plan verify docs/plans/x.md\n```\n"
+                    .to_string(),
+            commit_subjects: vec![
+                "[AI:claude] feat(plan): step one (STORY-278)".to_string(),
+                "[AI:claude] feat(plan): step two (STORY-278)".to_string(),
+            ],
+            changed_files: vec![
+                "aida-cli/src/main.rs".to_string(),
+                "aida-cli/src/cli.rs".to_string(),
+            ],
+        };
+
+        let md = synthesize_plan_from_pr(&pr, "2026-06-06");
+
+        // Header carries Date / Specs / Status / Complexity / Source.
+        assert!(md.contains("Date: 2026-06-06"));
+        assert!(md.contains("Specs: STORY-278"));
+        assert!(md.contains("Source: web /ultraplan PR-65"));
+        assert!(md.contains("Status: Completed"));
+        assert!(md.contains("Complexity: 2 commits"));
+
+        // Approach pulls the PR body; Critical Files lists the diff.
+        assert!(md.contains("Wire the web /ultraplan flow end to end."));
+        assert!(md.contains("- `aida-cli/src/main.rs`"));
+        assert!(md.contains("- `aida-cli/src/cli.rs`"));
+
+        // Verification mines the command-shaped lines from the body.
+        assert!(md.contains("cargo test -p aida-cli --release"));
+        assert!(md.contains("aida plan verify docs/plans/x.md"));
+
+        // Commit log becomes the build-order steps.
+        assert!(md.contains("1. [AI:claude] feat(plan): step one (STORY-278)"));
+
+        // The same section check `aida plan verify` runs must pass — every
+        // hard-required section present.
+        for spec in PLAN_SECTIONS {
+            let present = md.lines().any(|l| {
+                let lower = l.to_ascii_lowercase();
+                l.starts_with("##")
+                    && lower.contains(spec.keyword)
+                    && spec.exclude.map(|ex| !lower.contains(ex)).unwrap_or(true)
+            });
+            assert!(present, "captured plan missing section: {}", spec.label);
+        }
+
+        // Idempotent / deterministic: same input → byte-identical output.
+        let md2 = synthesize_plan_from_pr(&pr, "2026-06-06");
+        assert_eq!(md, md2);
+
+        // Slug threads the spec id + PR number for a stable filename.
+        assert_eq!(captured_plan_slug(&pr), "story-278-from-pr-65");
+    }
+
+    /// TASK-305: a PR with no body / no commits / no diff still yields a
+    /// fully-sectioned plan with explicit not-captured markers (so
+    /// `aida plan verify` still passes) and a PR-number-based slug.
+    #[test]
+    fn plan_capture_handles_empty_pr() {
+        let pr = CapturedPr {
+            number: 7,
+            title: String::new(),
+            body: String::new(),
+            commit_subjects: vec![],
+            changed_files: vec![],
+        };
+        let md = synthesize_plan_from_pr(&pr, "2026-06-06");
+        assert!(md.contains("# Plan: PR-7"));
+        assert!(md.contains("Specs: <!-- not captured from PR -->"));
+        assert!(md.contains("<!-- not captured from PR -->"));
+        // All hard-required sections still present.
+        for spec in PLAN_SECTIONS.iter().filter(|s| s.hard) {
+            assert!(
+                md.lines()
+                    .any(|l| l.starts_with("##") && l.to_ascii_lowercase().contains(spec.keyword)),
+                "missing hard section: {}",
+                spec.label
+            );
+        }
+        assert_eq!(captured_plan_slug(&pr), "pr-7");
+    }
+
+    /// TASK-305: PR arg parsing accepts bare / PR- / # forms.
+    #[test]
+    fn plan_capture_parses_pr_arg() {
+        assert_eq!(parse_pr_number("65").unwrap(), 65);
+        assert_eq!(parse_pr_number("PR-65").unwrap(), 65);
+        assert_eq!(parse_pr_number("pr-65").unwrap(), 65);
+        assert_eq!(parse_pr_number("#65").unwrap(), 65);
+        assert!(parse_pr_number("not-a-pr").is_err());
+    }
+
     /// TASK-113: the ultraplan prompt assembler handles a spec with no
     /// acceptance criteria (edge case 1) and no trace-graph helpers (edge
     /// case 3) — placeholder text in the prompt, warnings surfaced — and
@@ -51700,6 +51803,7 @@ fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
         PlanCommand::Promote { spec, all, dry_run } => {
             plan_promote(spec.as_deref(), *all, *dry_run)
         }
+        PlanCommand::Capture { pr, stdout } => plan_capture(pr, *stdout),
     }
 }
 
@@ -52007,6 +52111,396 @@ fn find_plan_file_for_spec(
 /// `docs/plans/` file listing the SPEC-ID), then performs the transition via
 /// the proven `aida edit --status planned` path (history + write-through +
 /// the ADR-3 authority gate). trace:STORY-265 | ai:claude
+// ============================================================================
+// `aida plan capture <PR>` — synthesize a docs/plans/ file from a PR's
+// description + commit log. For plans authored via the web `/ultraplan` flow
+// that land a PR directly, leaving no local plan file (TASK-305). The PR
+// description carries the plan summary; the commit log is the step-by-step
+// execution; `gh pr diff --name-only` is the blast radius. We fill the
+// 11-section template so the captured file passes `aida plan verify`.
+// trace:TASK-305 | ai:claude
+// ============================================================================
+
+/// The structured input `synthesize_plan_from_pr` needs, kept separate from the
+/// `gh` subprocess calls so the synthesis is a pure function (PR data → plan
+/// markdown) that can be unit-tested with a fixture. trace:TASK-305 | ai:claude
+#[derive(Debug, Clone, Default)]
+struct CapturedPr {
+    number: u64,
+    title: String,
+    body: String,
+    /// Commit subjects (message headlines), in chronological order.
+    commit_subjects: Vec<String>,
+    /// Files changed, from `gh pr diff --name-only`.
+    changed_files: Vec<String>,
+}
+
+/// Parse a PR argument that may arrive as `65`, `PR-65`, `pr-65`, or `#65`.
+/// trace:TASK-305 | ai:claude
+fn parse_pr_number(arg: &str) -> Result<u64> {
+    let trimmed = arg.trim();
+    let digits = trimmed
+        .trim_start_matches('#')
+        .trim_start_matches("PR-")
+        .trim_start_matches("pr-")
+        .trim_start_matches("Pr-")
+        .trim();
+    digits.parse::<u64>().map_err(|_| {
+        anyhow::anyhow!("could not parse `{arg}` as a PR number (try a bare number like `65`)")
+    })
+}
+
+/// Scan free text for lines that look like test / verification commands so the
+/// captured plan's `## Verification` section is grounded in what the PR author
+/// actually claimed they ran. Matches fenced-code lines and inline `cargo` /
+/// `aida` / `npm` / `make` / `pytest` / `go test` invocations. Returns the
+/// matched lines verbatim (deduped, order-preserving). trace:TASK-305 | ai:claude
+fn extract_verification_commands(body: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut in_fence = false;
+    for raw in body.lines() {
+        let line = raw.trim();
+        if line.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        // Strip a leading list marker / `$` prompt so the heuristic sees the command.
+        let candidate = line
+            .trim_start_matches("- ")
+            .trim_start_matches("* ")
+            .trim_start_matches("$ ")
+            .trim();
+        let looks_like_cmd = candidate.starts_with("cargo ")
+            || candidate.starts_with("aida ")
+            || candidate.starts_with("npm ")
+            || candidate.starts_with("pnpm ")
+            || candidate.starts_with("yarn ")
+            || candidate.starts_with("make ")
+            || candidate.starts_with("pytest")
+            || candidate.starts_with("go test")
+            || candidate.starts_with("./")
+            || candidate.starts_with("bash ");
+        // Inside a fenced block we keep any command-shaped line; outside, only
+        // ones starting with a recognised tool so prose doesn't leak in.
+        if (in_fence && looks_like_cmd) || looks_like_cmd {
+            if !candidate.is_empty() && !out.iter().any(|c| c == candidate) {
+                out.push(candidate.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// Synthesize the 11-section plan markdown from captured PR data. Pure function
+/// (no I/O) so it is unit-tested against a fixture. `date` is injected so the
+/// header is deterministic in tests. Missing-data sections carry an explicit
+/// `<!-- not captured from PR -->` marker rather than being omitted, so the
+/// output still passes `aida plan verify` (which treats Critical Files /
+/// Verification / Followups as hard-required). trace:TASK-305 | ai:claude
+fn synthesize_plan_from_pr(pr: &CapturedPr, date: &str) -> String {
+    const NOT_CAPTURED: &str = "<!-- not captured from PR -->";
+
+    // Spec ids credited across the title + every commit subject — for the
+    // header `Specs:` line. First-seen order, deduped case-insensitively.
+    let mut specs: Vec<String> = Vec::new();
+    let push_specs = |text: &str, acc: &mut Vec<String>| {
+        for id in extract_spec_ids_from_commit(text) {
+            if !acc.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                acc.push(id);
+            }
+        }
+    };
+    push_specs(&pr.title, &mut specs);
+    for subj in &pr.commit_subjects {
+        push_specs(subj, &mut specs);
+    }
+    let specs_line = if specs.is_empty() {
+        NOT_CAPTURED.to_string()
+    } else {
+        specs.join(", ")
+    };
+
+    let title = if pr.title.trim().is_empty() {
+        format!("PR-{}", pr.number)
+    } else {
+        pr.title.trim().to_string()
+    };
+
+    let body = pr.body.trim();
+    let approach = if body.is_empty() {
+        format!(
+            "{NOT_CAPTURED}\n\nThis plan was reconstructed from PR-{} after the fact; the PR \
+             carried no description.",
+            pr.number
+        )
+    } else {
+        body.to_string()
+    };
+
+    let mut md = String::new();
+
+    // ── Header block (the 11th "section": the metadata preamble). ──
+    md.push_str(&format!("# Plan: {title}\n\n"));
+    md.push_str(&format!("Date: {date}\n"));
+    md.push_str(&format!("Specs: {specs_line}\n"));
+    md.push_str("Status: Completed\n");
+    md.push_str(&format!(
+        "Complexity: {} commits, {} files changed (reconstructed from PR)\n",
+        pr.commit_subjects.len(),
+        pr.changed_files.len()
+    ));
+    md.push_str(&format!("Source: web /ultraplan PR-{}\n\n", pr.number));
+    md.push_str(&format!(
+        "<!--\n  Captured by `aida plan capture {}` from the PR description + commit log.\n  \
+         The web /ultraplan flow lands a PR directly without writing a local plan file;\n  \
+         this reconstructs the AIDA plan-archival record after the fact. trace:TASK-305\n-->\n\n",
+        pr.number
+    ));
+
+    // ── Approach (from PR description). ──
+    md.push_str("## Approach\n\n");
+    md.push_str(&approach);
+    md.push_str("\n\n");
+
+    // ── Decisions. Not separable from a free-form PR body. ──
+    md.push_str("## Decisions\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — decisions are not separable from the PR description above. See the \
+         `## Approach` section (the PR body) for the rationale the author recorded.\n\n"
+    ));
+
+    // ── Files (in build-order) — the commit log is the step-by-step execution. ──
+    md.push_str("## Files (in build-order)\n\n");
+    if pr.commit_subjects.is_empty() {
+        md.push_str(&format!("{NOT_CAPTURED} — no commits found on the PR.\n\n"));
+    } else {
+        md.push_str(
+            "Reconstructed from the PR commit log (chronological — each commit is one step):\n\n",
+        );
+        for (i, subj) in pr.commit_subjects.iter().enumerate() {
+            md.push_str(&format!("{}. {}\n", i + 1, subj.trim()));
+        }
+        md.push('\n');
+    }
+
+    // ── Critical Files (hard-required) — from `gh pr diff --name-only`. ──
+    md.push_str("## Critical Files\n\n");
+    if pr.changed_files.is_empty() {
+        md.push_str(&format!(
+            "{NOT_CAPTURED} — no changed files reported for the PR.\n\n"
+        ));
+    } else {
+        for f in &pr.changed_files {
+            md.push_str(&format!("- `{}`\n", f.trim()));
+        }
+        md.push('\n');
+    }
+
+    // ── Reusable helpers. Cannot be derived from a PR after the fact. ──
+    md.push_str("## Reusable helpers (do not reimplement)\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — reusable-helper analysis runs from the trace graph at plan time. \
+         Run `aida plan helpers <SPEC>` if you need it for follow-up work.\n\n"
+    ));
+
+    // ── Risks + gotchas. ──
+    md.push_str("## Risks + gotchas\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — risks were not recorded separately from the PR description.\n\n"
+    ));
+
+    // ── Tests (named). ──
+    md.push_str("## Tests\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — see the `## Verification` section for any test commands the PR \
+         description mentioned.\n\n"
+    ));
+
+    // ── Verification (hard-required) — mine the PR body for command-shaped lines. ──
+    md.push_str("## Verification\n\n");
+    let verif = extract_verification_commands(body);
+    if verif.is_empty() {
+        md.push_str(&format!(
+            "{NOT_CAPTURED} — the PR description named no test/verification commands.\n\n"
+        ));
+    } else {
+        md.push_str("Commands the PR description named as verification:\n\n");
+        md.push_str("```bash\n");
+        for c in &verif {
+            md.push_str(c);
+            md.push('\n');
+        }
+        md.push_str("```\n\n");
+    }
+
+    // ── Followups (hard-required). ──
+    md.push_str("## Followups\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — no out-of-scope followups were captured from the PR.\n\n"
+    ));
+
+    // ── Related. ──
+    md.push_str("## Related\n\n");
+    if specs.is_empty() {
+        md.push_str(&format!("- Source: web /ultraplan PR-{}\n", pr.number));
+    } else {
+        md.push_str(&format!("- Specs: {}\n", specs.join(", ")));
+        md.push_str(&format!("- Source: web /ultraplan PR-{}\n", pr.number));
+    }
+
+    md
+}
+
+/// Build the output filename slug for a captured plan: prefer the first
+/// credited spec id, else a slug of the PR title, else `pr-<N>`. Always
+/// suffixed with `-from-pr-<N>` so the provenance is in the path and the file
+/// is deterministic (idempotent re-capture overwrites the same path).
+/// trace:TASK-305 | ai:claude
+fn captured_plan_slug(pr: &CapturedPr) -> String {
+    let mut specs: Vec<String> = Vec::new();
+    for id in extract_spec_ids_from_commit(&pr.title) {
+        specs.push(id);
+    }
+    if specs.is_empty() {
+        for subj in &pr.commit_subjects {
+            for id in extract_spec_ids_from_commit(subj) {
+                specs.push(id);
+                break;
+            }
+            if !specs.is_empty() {
+                break;
+            }
+        }
+    }
+    let base = if let Some(first) = specs.first() {
+        slugify_str(first)
+    } else if !pr.title.trim().is_empty() {
+        let s = slugify_str(&pr.title);
+        // Bound the slug length so filenames stay sane.
+        s.split('-').take(6).collect::<Vec<_>>().join("-")
+    } else {
+        String::new()
+    };
+    if base.is_empty() {
+        format!("pr-{}", pr.number)
+    } else {
+        format!("{base}-from-pr-{}", pr.number)
+    }
+}
+
+/// Fetch a PR's title/body/commit-subjects via `gh pr view --json` and the
+/// changed files via `gh pr diff --name-only`. Isolated from the synthesis so
+/// the pure function stays testable. trace:TASK-305 | ai:claude
+fn fetch_captured_pr(project_root: &std::path::Path, number: u64) -> Result<CapturedPr> {
+    let gh = resolve_gh_binary().ok_or_else(|| {
+        anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+    })?;
+    let n_str = number.to_string();
+
+    let view = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args(["pr", "view", &n_str, "--json", "number,title,body,commits"])
+        .output()
+        .with_context(|| format!("`gh pr view {number}` failed to spawn"))?;
+    if !view.status.success() {
+        anyhow::bail!(
+            "`gh pr view {}` exited {} — {}",
+            number,
+            view.status,
+            String::from_utf8_lossy(&view.stderr).trim()
+        );
+    }
+    let json: serde_json::Value = serde_json::from_slice(&view.stdout)
+        .with_context(|| format!("`gh pr view {number}` returned non-JSON output"))?;
+
+    let title = json
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let body = json
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let commit_subjects: Vec<String> = json
+        .get("commits")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| {
+                    c.get("messageHeadline")
+                        .and_then(|m| m.as_str())
+                        .map(|s| s.to_string())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Changed files. A diff failure (e.g. the PR is closed and the branch is
+    // gone) is non-fatal — Critical Files just falls back to not-captured.
+    let changed_files: Vec<String> = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args(["pr", "diff", &n_str, "--name-only"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(CapturedPr {
+        number,
+        title,
+        body,
+        commit_subjects,
+        changed_files,
+    })
+}
+
+/// `aida plan capture <PR>` handler. trace:TASK-305 | ai:claude
+fn plan_capture(pr_arg: &str, stdout: bool) -> Result<()> {
+    use colored::Colorize;
+    let number = parse_pr_number(pr_arg)?;
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let captured = fetch_captured_pr(&project_root, number)?;
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let md = synthesize_plan_from_pr(&captured, &date);
+
+    if stdout {
+        print!("{md}");
+        return Ok(());
+    }
+
+    let plans_dir = project_root.join("docs").join("plans");
+    std::fs::create_dir_all(&plans_dir)
+        .with_context(|| format!("could not create {}", plans_dir.display()))?;
+    let slug = captured_plan_slug(&captured);
+    let filename = format!("{date}-{slug}.md");
+    let path = plans_dir.join(&filename);
+    let existed = path.exists();
+    std::fs::write(&path, &md).with_context(|| format!("could not write {}", path.display()))?;
+
+    let verb = if existed { "overwrote" } else { "wrote" };
+    println!(
+        "{} {} {} from PR-{}",
+        "✓".green(),
+        verb,
+        path.display().to_string().bold(),
+        number
+    );
+    println!(
+        "  {}",
+        "review + edit the synthesized sections, then `aida plan verify` it".dimmed()
+    );
+    Ok(())
+}
+
 fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
     use colored::Colorize;
     let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -55190,6 +55684,14 @@ fn handle_ultraplan_command(
         println!(
             "  {}",
             "paste it into a Claude Code session, prefixed with /ultraplan".dimmed()
+        );
+        // TASK-305: the web /ultraplan flow lands a PR directly without
+        // writing a local plan file. Nudge the user to reconcile it back
+        // into docs/plans/ once that PR lands.
+        println!(
+            "  {}",
+            "web flow? after the PR lands, run `aida plan capture <PR>` to archive the plan"
+                .dimmed()
         );
     } else {
         eprintln!(
