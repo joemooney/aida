@@ -13632,5 +13632,140 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Re-scope: the resilient-drain core (shelve/skip-dependent/max-failures) is SHIPPED. DROP STORY-450 (per-spec auto-patch-release is a post-alpha power-user layer, conflicts with bugs-before-marketing). EPIC closes once STORY-447 (deps sweep) lands. No new EPIC-level work.
-clock: 1489
+- id: 019e9d2e-09ef-7581-a8b6-9b52c3fc477f
+  target_id: 019e33a9-31b3-7943-8162-b2157e93e7f7
+  author: aida
+  node_id: '1'
+  lamport: 1490
+  timestamp: 2026-06-06T13:45:00.655897506Z
+  kind: !SetDescription
+    description: |
+      A persistent **\`aida queue worker\`** process that continuously drains the queue. The user (with the advisor role as their strategic counterpart) directs the worker via control signals; the worker drives \`--auto-complete --no-human\` cycles, handles failures via shelve/punt, and reports progress.
+
+      This is the **autonomy story made operational** — instead of \"user fires one \`--auto-complete\` at a time,\" the worker runs continuously and the advisor advises it.
+
+      ## Mental model
+
+      \`\`\`
+      ┌─ advisor session (Claude in dialog role) ──┐  signals   ┌─ aida queue worker ────┐
+      │ - files specs                              │ ─────────► │ persistent process     │
+      │ - sends control commands                   │   status   │ - polls queue          │
+      │ - reads worker reports                     │ ◄────────  │ - drives --auto-complete│
+      │ - triages NeedsAttention specs             │            │ - shelve/punt failures │
+      └────────────────────────────────────────────┘            └────────────────────────┘
+      \`\`\`
+
+      The advisor advises; the worker executes. Both observe the spec graph + queue; both communicate via well-defined channels.
+
+      ## CLI surface
+
+      \`\`\`bash
+      aida queue worker start [--batch <name>] [--max <n>] [--no-human]
+      aida queue worker status
+      aida queue worker pause [--immediate | --after-current]
+      aida queue worker resume
+      aida queue worker stop --gracefully    # finish current spec, then exit
+      aida queue worker kill                  # immediate, may leave partial state
+      aida queue worker logs [--follow] [--since <duration>]
+      \`\`\`
+
+      ## Communication channels
+
+      | Channel | Direction | Purpose |
+      |---|---|---|
+      | Unix socket at \`.aida/worker.sock\` | User → Worker | Control signals (pause/resume/stop) |
+      | File watch at \`.aida/worker.cmd\` (fallback) | User → Worker | Same, file-based, more portable |
+      | \`REQUEST\`-type queue items | User/Advisor → Worker | Instructions delivered via queue (\"pause until 9am\", \"drain batch:X next\") |
+      | \`.aida/worker.state.toml\` | Worker → User | Current state — running spec, progress, queue depth |
+      | \`.aida/worker.log\` | Worker → User | Activity log (composes with TASK-266 telemetry) |
+      | Dialog session memory | Advisor → User | Strategic context survives across worker runs |
+
+      ## Candidate child STORYs
+
+      ### STORY 1 — Worker process basics
+      - \`aida queue worker start\` launches a background process (PID in \`.aida/worker.pid\`)
+      - Single drain loop: poll queue head, run --auto-complete --no-human, capture result, continue
+      - \`aida queue worker stop\` / \`status\` for basic lifecycle
+      - State persistence in \`.aida/worker.state.toml\` for crash recovery
+      - No control plane yet — start/stop only
+
+      ### STORY 2 — Control plane (pause / resume / graceful shutdown)
+      - Unix socket or file-watching for control signals
+      - \`pause --immediate\` (sleep before next phase) / \`pause --after-current\` (finish current spec, then sleep)
+      - \`resume\` un-pauses
+      - \`stop --gracefully\` finishes current spec then exits; \`kill\` is immediate
+      - Persists pause state across restarts
+
+      ### STORY 3 — REQUEST-type queue items
+      - New spec type \`request\` (alongside task, bug, story, etc.)
+      - REQUEST items aren't work to ship; they're commands for the worker (\"pause until <time>\", \"prioritize batch:X\", \"call /aida-digest\")
+      - Worker consumes REQUEST items in order, executes the command, removes from queue
+      - Composes with STORY-262 (scheduled tasks fire REQUEST items)
+      - Composes with advisor — advisor can file REQUESTs that the worker honors
+
+      ### STORY 4 — Worker ↔ Advisor communication
+      - Advisor reads worker state on session start (\`.aida/worker.state.toml\`)
+      - Advisor can surface worker status in dialog responses (\"the worker is currently shipping TASK-X, queue depth 5\")
+      - Advisor recommends control actions when appropriate (\"the worker punted 3 specs; let me triage\")
+      - Memory entries can be tagged \`worker-relevant\` so worker can read them too (instructions like \"prefer non-Claude review for X-shaped specs\")
+
+      ### STORY 5 — Monitoring, logs, crash recovery
+      - \`aida queue worker logs --follow\` real-time activity stream
+      - \`aida queue worker status\` shows: current spec, current phase, elapsed, queue depth, last-N outcomes (shipped/shelved/punted)
+      - Crash recovery: on next \`start\`, reads \`.aida/worker.state.toml\` and resumes (re-enters --auto-complete on the interrupted spec OR marks it stale)
+      - Composes with TASK-266 telemetry
+
+      ## Acceptance (EPIC-level)
+
+      - [ ] All 5 child STORYs filed with concrete scope
+      - [ ] Single binary capability — no extra daemons; \`aida queue worker\` is just a long-running CLI subcommand
+      - [ ] Single-user, single-machine — multi-user/team scenarios are out of scope for v1
+      - [ ] Composes with all named features (STORY-263, EPIC-28, TASK-285, TASK-266, STORY-262)
+      - [ ] Documented in CLAUDE.md / OVERVIEW.md as the operational pattern for autonomous drain
+      - [ ] First end-to-end dogfood: leave the worker running overnight, drain a batch:alpha-docs cluster, return to triage NeedsAttention specs
+
+      ## Out of scope
+
+      - **Web UI / dashboard** for the worker — terminal-only
+      - **Multi-machine workers** — single machine, single worker
+      - **Concurrent workers** (parallel drain) — single worker draining sequentially; parallelism comes from STORY-248 stacked branches if at all
+      - **Worker auth / authorization** — local-only; no remote control
+      - **Hot-swappable spec definitions** — worker re-reads spec state each iteration; explicit invalidation not needed
+
+      ## Why this matters
+
+      This pattern is the cleanest expression of AIDA's agent-collaboration positioning: **structured queue + autonomous executor + advisor counterpart + well-defined control plane**. The marketplace's swarm orchestrators have many parallel agents but no advisor model. AIDA's worker + advisor is a different shape — fewer, smarter, observable, controllable.
+
+      For alpha: a worker that runs overnight (composes with --no-human + shelving + telemetry) is the headline \"AIDA works while you sleep\" demo. The advisor role's value (strategic counsel, friction-to-spec, queue gardening) is what makes the worker reliable over weeks — without strategic input, the worker drains in queue order without correcting course.
+
+      ## Composes with
+
+      - **STORY-263** (\`--no-human\`) — worker's per-spec drive mode
+      - **TASK-285** (\`--batch + --auto-complete\`) — one scoping option (\`--batch X\` for the worker)
+      - **EPIC-28** (dependency-aware drain + shelving + punting) — worker's failure-handling mechanism; without shelving, worker can't handle non-cohesive batches gracefully
+      - **TASK-266** (orchestrator failure telemetry) — worker's structured log source
+      - **STORY-262** (advisor scheduled tasks) — fires REQUEST items into worker's queue
+      - **\`feedback_dialog_role_responsibilities.md\`** (advisor 6 responsibilities) — advisor ↔ worker pattern; advisor reads worker state, recommends actions
+      - **EPIC-23** (Session orchestration & autonomy) — natural parent; worker IS session orchestration extended
+
+      ## Risks
+
+      | Risk | Mitigation |
+      |---|---|
+      | Worker drives wrong specs in user's absence | Punt/shelve gracefully + telemetry logs why each spec resolved that way |
+      | Resource exhaustion (CPU/disk over hours) | State files + log rotation; cap concurrent subprocess; idle when queue empty |
+      | Worker survives across reboots? | v1: no, user re-starts it. systemd / launchd integration is post-alpha. |
+      | Multiple worker processes accidentally launched | PID file + lockfile pattern; second start refuses |
+      | Stale state on crash | \`.aida/worker.state.toml\` recovery logic; mark interrupted spec as Stale needing manual restart |
+
+      ## Origin
+
+      User proposed 2026-05-16: *\"I am thinking of something like \`aida queue worker\` this is a server loop (like the shell loop with we had in mind for the tui). We can send it messages like pause-immediate (maybe sleep the process), exit-gracefully (after current work has completed its current step) etc. But basically it can be set in motion to drain the queue with/without human involvement. It is the a terminal process or bash loop that receives requests from somewhere, (maybe the queue can have a REQUEST type task). Perhaps it is a mechanism for the advisor to communicate with this worker. This is just a rough idea - a server process/loop.\"*
+
+      The mental model is novel — most autonomous-execution tools either run one-shot (like cron) or as full swarms. The advisor + worker split (one strategic human-paired session + one autonomous executor with clear control plane) is a different shape that fits AIDA's positioning cleanly.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DECOMPOSE into the 5 named child stories (treat in-flight PR-497 as a partial slice — do NOT trailer the EPIC on its merge). Worker mechanism: build the MINIMAL long-running loop + graceful stop + crash-recovery state file; DEFER the Unix-socket control plane and the new REQUEST spec-type until a real need appears (no daemon-grade infra yet).
+clock: 1490
 node_id: '1'

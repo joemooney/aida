@@ -2,7 +2,7 @@ id: 019e33a9-31b3-7943-8162-b2157e93e7f7
 spec_id: EPIC-30
 agreed_id: EPIC-30
 title: aida queue worker — persistent autonomous executor with control plane + advisor communication
-description: |-
+description: |
   A persistent **\`aida queue worker\`** process that continuously drains the queue. The user (with the advisor role as their strategic counterpart) directs the worker via control signals; the worker drives \`--auto-complete --no-human\` cycles, handles failures via shelve/punt, and reports progress.
 
   This is the **autonomy story made operational** — instead of \"user fires one \`--auto-complete\` at a time,\" the worker runs continuously and the advisor advises it.
@@ -126,12 +126,16 @@ description: |-
   User proposed 2026-05-16: *\"I am thinking of something like \`aida queue worker\` this is a server loop (like the shell loop with we had in mind for the tui). We can send it messages like pause-immediate (maybe sleep the process), exit-gracefully (after current work has completed its current step) etc. But basically it can be set in motion to drain the queue with/without human involvement. It is the a terminal process or bash loop that receives requests from somewhere, (maybe the queue can have a REQUEST type task). Perhaps it is a mechanism for the advisor to communicate with this worker. This is just a rough idea - a server process/loop.\"*
 
   The mental model is novel — most autonomous-execution tools either run one-shot (like cron) or as full swarms. The advisor + worker split (one strategic human-paired session + one autonomous executor with clear control plane) is a different shape that fits AIDA's positioning cleanly.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DECOMPOSE into the 5 named child stories (treat in-flight PR-497 as a partial slice — do NOT trailer the EPIC on its merge). Worker mechanism: build the MINIMAL long-running loop + graceful stop + crash-recovery state file; DEFER the Unix-socket control plane and the new REQUEST spec-type until a real need appears (no daemon-grade infra yet).
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-06-06T13:44:59.111310050Z
+modified_at: 2026-06-06T13:45:00.639804207Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
