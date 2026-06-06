@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:57:48.843375306Z
-modified_at: 2026-05-27T06:57:48.843375306Z
+modified_at: 2026-06-06T08:33:51.096997497Z
 req_type: Story
 tags:
 - codex
@@ -21,3 +21,15 @@ relationships:
 - rel_type: Child
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:57:59.100451639Z
+comments:
+- id: 019e9c11-29f8-7c52-bfe6-d66df55a765a
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: One-way external issue refs (linear:/jira:/github: on a spec, rendered as links, searchable) is an integration feature. A feature-gated Jira integration already exists in aida-core; this story is a lighter generic ref-field. Build now and at what scope?
+      a) Reject/defer — PM-integration/adoption feature for the marketing phase; not a bug or stability item
+      b) Build minimal generic ref field (store validated `provider:id` refs + render via configured base URLs + MCP search) — provider-agnostic, no sync
+      c) Build only github: refs first (the forge AIDA already speaks via gh), defer linear:/jira:
+      REC: b — if built, the generic one-way ref field is the right bounded shape and explicitly avoids the bidirectional-sync trap; but timing is the open question given the stability-first phase, so it needs a human go/defer call.
+  created_at: 2026-06-06T08:33:51.096997497Z
+  modified_at: 2026-06-06T08:33:51.096997497Z
