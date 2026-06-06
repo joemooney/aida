@@ -21,10 +21,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T02:57:21.375969787Z
-modified_at: 2026-06-06T08:14:43.907438341Z
+modified_at: 2026-06-06T08:16:14.424363334Z
 req_type: Task
 tags:
+- aida:findings:promote
+- auto-bump
+- from-implementer:TASK-124
+- kind:bug-spotted
 - ready-to-implement
+- severity:minor
 comments:
 - id: 019e9bff-a119-77e2-bf24-45916b3cfad1
   author: joe
