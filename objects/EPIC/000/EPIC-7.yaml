@@ -7,8 +7,14 @@ priority: High
 owner: ''
 feature: 136-traceability
 created_at: 2025-12-11T00:37:47.918542666Z
-modified_at: 2026-06-06T08:13:54.055830254Z
+modified_at: 2026-06-06T08:13:55.638460564Z
 req_type: Epic
+comments:
+- id: 019e9bfe-ec36-7113-8d62-49df70f4b4e5
+  author: joe
+  content: 'Disposition sweep 2026-06-06 — REJECTED. Stale: predates git-canonical storage (names the deprecated YAML+SQLite dual-backend). Most ImplementationInfo fields now exist elsewhere — per-spec YAML history:, aida show git-linkage (commits/PR/branch), trace ai:<tool>:<confidence>. File a fresh small TASK if risk_notes/test-coverage-notes are still wanted.'
+  created_at: 2026-06-06T08:13:55.638460564Z
+  modified_at: 2026-06-06T08:13:55.638460564Z
 trace_links:
 - id: c2bb330c-f8b8-4e5d-900b-9b83ff68ca98
   artifact_type: SourceCode
