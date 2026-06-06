@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:11.398984315Z
-modified_at: 2026-06-06T08:36:21.296343051Z
+modified_at: 2026-06-06T13:38:59.105529688Z
 req_type: Epic
 tags:
 - needs-human-input
@@ -66,3 +66,8 @@ comments:
       REC: b — no evidence the cross-project pain is recurring enough to fund a new primitive now, and it cuts against the stability-first phase; keep the EPIC parked with a clear revisit trigger rather than building speculatively.
   created_at: 2026-06-06T08:36:19.805101789Z
   modified_at: 2026-06-06T08:36:19.805101789Z
+- id: 019e9d28-85a1-7cd0-84b7-8e2e15b4773f
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Build the REGISTRY FOUNDATION slice only — STORY-74: ''aida projects register/list/forget'' + the ~/.aida/projects.toml schema/validation. DEFER cross-project queue routing, relationships, search, and the release-hook tutor-sync until a real multi-repo workspace (beyond aida↔aida-tutor) creates recurring manual-sync pain. EPIC scoped to the registry primitive; other children stay parked.'
+  created_at: 2026-06-06T13:38:59.105529688Z
+  modified_at: 2026-06-06T13:38:59.105529688Z
