@@ -13957,5 +13957,111 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Build SCOPE B only — the 4 runtime anti-pattern detectors (aida pull no-op, git pull no-op, release-with-unmerged-PR, session-end-with-cross-role-queue). Each is a single git/queue/lease query. DEFER Scope A (audit every skill's next-steps block) — handle incrementally via the existing child point-fixes. Split accordingly.
-clock: 1501
+- id: 019e9d35-b98c-7b80-b4db-13f864051d4b
+  target_id: 019e3312-c4f9-7c81-ac28-9b3f88115a25
+  author: aida
+  node_id: '1'
+  lamport: 1502
+  timestamp: 2026-06-06T13:53:24.364749775Z
+  kind: !SetDescription
+    description: |
+      The advisor role (\`role:dialog\`) does proactive work that benefits from cadence — competitive analysis refreshes, signal monitoring, spec graph audits, memory curation, orchestrator telemetry reviews. None of these have a place to live as recurring tasks today. They either get forgotten or surface reactively when something breaks.
+
+      This STORY adds **scheduled tasks** as a primitive: register a recurring task template, AIDA auto-files it as a TASK in the queue when due.
+
+      ## Mechanism
+
+      \`\`\`bash
+      # Register a schedule
+      aida advisor schedule add refresh-comp-analysis --every 90d \\
+          --template \"Refresh competitive analysis\" \\
+          --for advisor
+
+      # List active schedules
+      aida advisor schedule list
+      #   Name                       Cadence  Last fired    Next due       Status
+      #   refresh-comp-analysis      90d      2026-05-16    2026-08-14     pending
+      #   audit-spec-graph           14d      (never)       2026-05-30     pending
+      #   prune-stale-memories       30d      (never)       2026-06-15     pending
+
+      # Manually trigger one (or all due ones)
+      aida advisor schedule run [name]
+      \`\`\`
+
+      When a schedule fires:
+      1. AIDA files a fresh TASK from the template
+      2. Routes to the named role's queue
+      3. Records the fire timestamp in \`.aida/schedules.toml\`
+      4. Computes the next due date
+
+      ## Acceptance
+
+      ### Registration + listing
+
+      - [ ] \`.aida/schedules.toml\` stores: name, cadence (Go-duration-like syntax), template (title + description + tags), target role, last_fired, enabled
+      - [ ] \`aida advisor schedule add\` / \`list\` / \`enable\` / \`disable\` / \`remove\` CLI surface
+      - [ ] Schedules persist across sessions; storage is local (not synced to orphan-store unless project-shared)
+
+      ### Auto-trigger mechanism
+
+      - [ ] \`aida pull\` (or a sibling check) detects due schedules and fires them
+      - [ ] On fire: file a TASK with the template's content + tag \`scheduled:<name>\`
+      - [ ] Route to the target role's queue (default: advisor/dialog)
+      - [ ] Update last_fired + compute next_due
+      - [ ] If a schedule has a pending unfinished TASK from its prior fire (still In Progress / Done / open PR), SKIP this fire and surface a note
+
+      ### Pre-defined schedule templates
+
+      Ship a small library of common templates AIDA-using projects can opt into:
+
+      - [ ] \`refresh-competitive-analysis\` (every 90d) — produce a new dated snapshot per STORY-260
+      - [ ] \`audit-upstream-signals\` (every 30d) — review signals-to-watch.md, file any concerning changes
+      - [ ] \`audit-spec-graph\` (every 14d) — find orphaned specs, stale Drafts (older than N days untouched), unrouted Approved items
+      - [ ] \`review-orchestrator-failures\` (every 7d during alpha; monthly post-alpha) — read TASK-266's telemetry, surface common failure modes
+      - [ ] \`prune-stale-memories\` (every 30d) — list memory files not referenced in any recent dialog, propose for archival
+      - [ ] \`block-claim-preflight\` (every 14d) — check block headroom, claim preemptively if below threshold
+      - [ ] \`aida-digest\` (configurable — daily/weekly/monthly) — fire \`/aida-digest\` automatically (composes with STORY-252)
+
+      ### Templates are user-editable
+
+      - [ ] Templates live in \`.aida/schedule-templates/\` as TOML files
+      - [ ] \`aida init\` scaffolds the directory with the pre-defined templates + a README
+      - [ ] User can edit templates directly OR add new ones
+
+      ### Composition with --auto-complete
+
+      - [ ] Scheduled tasks tagged \`scheduled:<name>\` can be drained autonomously: \`aida queue work --batch scheduled --auto-complete\` (composes with TASK-285)
+      - [ ] User can also pick up individually as normal
+
+      ## Out of scope
+
+      - **Cron daemon** — schedules are evaluated on \`aida pull\` / \`aida queue list\` invocations, not via a separate process. Good enough for daily-use cadence.
+      - **External-event triggers** (GitHub webhooks, etc.) — pure time-cadence for v1
+      - **Schedule sync across team members** — local-only; team-shared schedules are a follow-up
+      - **Smart scheduling** (avoid clustering, etc.) — basic cadence math is enough
+
+      ## Composes with
+
+      - **EPIC-24** (Living docs) — natural parent; scheduled tasks maintain living docs
+      - **STORY-260** (Maintained competitive-analysis doc) — provides a canonical recurring task
+      - **STORY-252** (\`/aida-digest\` skill) — \`aida-digest\` is one of the pre-defined schedule templates
+      - **TASK-266** (orchestrator failure telemetry) — feeds \`review-orchestrator-failures\` schedule
+      - **TASK-281** (block auto-claim) — could be the mechanism behind \`block-claim-preflight\`
+      - **feedback_competitive_analysis_is_living_doc.md** (memory) — provides the cadence discipline this STORY operationalizes
+      - **STORY-255** (scaffolding pack) — pre-defined schedule templates ship via the pack
+
+      ## Why this matters
+
+      The advisor role's proactive responsibilities (strategic gap detection, memory curation, queue gardening) currently happen REACTIVELY — when something breaks or the user notices. Scheduled tasks turn them PROACTIVE. The marketplace's swarm orchestrators don't have an analog; this is uniquely AIDA-advisor-shaped work.
+
+      ## Origin
+
+      User asked 2026-05-16: *\"is there an advisor role task in here, maybe a schedule that periodically lands in the queue every so often to perform a task - a maintenance or research task\"*
+
+      The answer was no — AIDA has reactive queueing only. This STORY fills the gap.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      BUILD with the no-daemon pull-triggered design (evaluate cadence on aida pull; cadence→queue, standalone — do NOT couple to EPIC-30). DEFERRED to post-stability per phase. Skip shipping marketing-cadence templates (e.g. refresh-comp-analysis) until the marketing phase; the scheduling primitive is the on-thesis core.
+clock: 1502
 node_id: '1'
