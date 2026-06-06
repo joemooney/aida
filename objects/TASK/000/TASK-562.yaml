@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T19:45:30.210083394Z
-modified_at: 2026-05-25T19:45:30.210083394Z
+modified_at: 2026-06-06T08:33:54.453428218Z
 req_type: Task
 tags:
 - ecosystem-watch
@@ -16,3 +16,9 @@ tags:
 - operator-clarity
 - scripts/release
 - ux-papercut
+comments:
+- id: 019e9c11-3715-7361-9893-332d34770385
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Delivers a threshold-based smart-default for release.sh's ecosystem-watch prompt (age computation + <14d silent pass / 14-30d warn / 30+d refuse + actionable refresh steps + override flag) — well-specified, bounded, testable, target code confirmed present at scripts/release.sh:111-142.
+  created_at: 2026-06-06T08:33:54.453428218Z
+  modified_at: 2026-06-06T08:33:54.453428218Z
