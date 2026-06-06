@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:20:33.465215952Z
-modified_at: 2026-05-23T16:20:33.465215952Z
+modified_at: 2026-06-06T08:34:33.550417933Z
 req_type: Epic
 tags:
 - agent-launcher
@@ -76,3 +76,15 @@ tags:
 - multi-agent
 - sibling-of-STORY-425
 - strategic
+comments:
+- id: 019e9c11-cfce-7ca1-8b4a-5de4d371bd10
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Agent-lifecycle EPIC (registry + launcher + role-context injection). Phase 1 (STORY-431 registry) is Completed; `aida agent new`/`register` launcher exists. Remaining: per-agent integrations (Codex/Antigravity launchers), MCP heartbeat busy/idle, role-context auto-injection — and the spec itself says phases beyond 1 are tentative and should be reviewed per evidence. How to sequence?
+      a) Pick a single next bounded phase to ship now (e.g. Phase 5 role-context auto-injection on launch, since `aida agent new` already exists and role files are close).
+      b) Hold the whole remaining EPIC until post-stability; the keystone (registry + Claude launcher) already works, and the rest is non-Claude/multi-agent scope that the phase explicitly defers.
+      c) Re-scope: close the EPIC at "registry + Claude launcher shipped" and re-file the remaining per-agent/heartbeat work as standalone specs to be triaged individually on evidence.
+      REC: b — the operationally-needed core is shipped; the remaining phases are exactly the multi-agent/non-Claude expansion the bugs-before-marketing phase says to defer, and the spec flags them tentative-pending-evidence.
+  created_at: 2026-06-06T08:34:33.550417933Z
+  modified_at: 2026-06-06T08:34:33.550417933Z
