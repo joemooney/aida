@@ -36,12 +36,12 @@ description: |-
   ## Origin
 
   2026-05-17 mid-rebase: \`gh pr checkout 65\` autostashed 5 modified files (\`Cargo.toml\`, \`Cargo.lock\`, \`README.md\`, \`aida-cli/Cargo.toml\`, \`aida-crate/Cargo.toml\`); rebase restored them. Investigation showed they were a partial release prep, not part of PR-65. Stashed to keep PR-65 clean; this TASK preserves the recovery path.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T15:37:48.249754232Z
-modified_at: 2026-06-06T08:38:21.792415690Z
+modified_at: 2026-06-06T08:38:24.682710806Z
 req_type: Task
 tags:
 - changelog
