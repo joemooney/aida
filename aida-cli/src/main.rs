@@ -53314,19 +53314,21 @@ fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> 
 /// TASK-241: the git-linkage data for a spec — extracted from
 /// [`print_git_linkage`] so the collection (git-only, never gh) is
 /// unit-testable against a temp repo. trace:TASK-241 | ai:claude
-struct GitLinkage {
+// trace:STORY-82 | ai:claude — `pub(crate)` so the MCP `show_requirement`
+// tool can reuse the same git-linkage collection `aida show` renders.
+pub(crate) struct GitLinkage {
     /// (full_sha, short_sha, subject), newest first.
-    commits: Vec<(String, String, String)>,
+    pub(crate) commits: Vec<(String, String, String)>,
     /// (file, symbol) per trace comment — deduped and sorted.
-    files: Vec<(String, Option<String>)>,
+    pub(crate) files: Vec<(String, Option<String>)>,
     /// The newest referencing commit is an ancestor of main.
-    shipped: bool,
+    pub(crate) shipped: bool,
     /// Feature branch holding the work (in-flight case only).
-    branch: Option<String>,
+    pub(crate) branch: Option<String>,
     /// Worktree path checked out at `branch`, if any.
-    worktree: Option<String>,
+    pub(crate) worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
-    shipped_pr: Option<u64>,
+    pub(crate) shipped_pr: Option<u64>,
 }
 
 /// TASK-241: collect the git linkage for `ids` — commits referencing the
@@ -53334,7 +53336,7 @@ struct GitLinkage {
 /// branch/worktree/shipped state. gh-free by design: the in-flight
 /// open-PR lookup happens later, in [`print_git_linkage`].
 /// trace:TASK-241 | ai:claude
-fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
+pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<String> {
