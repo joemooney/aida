@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:33.794990413Z
-modified_at: 2026-06-05T19:33:03.352609550Z
+modified_at: 2026-06-06T06:50:45.767182106Z
 req_type: Bug
 tags:
 - aida:init
@@ -26,3 +26,9 @@ tags:
 - from-self-test
 - guard
 - project-root
+comments:
+- id: 019e9bb2-c887-79a0-a676-a1a07f57188e
+  author: joe
+  content: Commit 26946a929 references this requirement
+  created_at: 2026-06-06T06:50:45.767182106Z
+  modified_at: 2026-06-06T06:50:45.767182106Z
