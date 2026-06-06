@@ -3,12 +3,12 @@ spec_id: TASK-662
 agreed_id: TASK-662
 title: 'TASK-539 follow-up: findings JSON emission + delta-since-last-run in aida status'
 description: 'Follow-up to the TASK-539 core (text Findings section shipped). Remaining acceptance: (3) include structured findings detail in ''aida status --json'' (print_status_json path), and (1b) the ''delta since last run'' count (needs a per-cwd last-seen-findings persistence, e.g. piggyback on the STORY-457 .aida/last-status.toml when that lands).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:55:30.537606328Z
-modified_at: 2026-06-06T08:30:22.150452565Z
+modified_at: 2026-06-06T18:32:03.579072927Z
 req_type: Task
 tags:
 - ready-to-implement
@@ -25,3 +25,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Add structured findings detail to `aida status --json` (print_status_json path) plus delta-since-last-run — bounded; the STORY-457 last-status.toml persistence it piggybacks on has now landed, so it's unblocked.
   created_at: 2026-06-06T08:30:19.669935754Z
   modified_at: 2026-06-06T08:30:19.669935754Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T18:32:03.579072927Z
+  completion_sha: 9baf8ddcd74514e5fa04026d898b7c815012380c
