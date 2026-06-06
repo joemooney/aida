@@ -2,13 +2,18 @@ id: 019e4854-a596-7d33-a537-ea402f612319
 spec_id: STORY-362
 agreed_id: STORY-362
 title: Subsystem-tagged memory pack + --focus loading (SPIKE-10 Track A)
-description: 'Per SPIKE-10 strategic doc (docs/multi-advisor-coordination.md), Gap 1 implementation: memory frontmatter `subsystem:` tag + advisor session `--focus <subsystem>` flag that filters loading to universal + scope-matching memories. Backward-compatible: untagged = universal. Includes retroactive-tag tooling `aida memory audit --tag`. TUI / status line surfaces active focus.'
+description: |
+  Per SPIKE-10 strategic doc (docs/multi-advisor-coordination.md), Gap 1 implementation: memory frontmatter `subsystem:` tag + advisor session `--focus <subsystem>` flag that filters loading to universal + scope-matching memories. Backward-compatible: untagged = universal. Includes retroactive-tag tooling `aida memory audit --tag`. TUI / status line surfaces active focus.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER post-stability (with STORY-363) — no subsystem-scoped advisors exist yet to consume --focus, so the loading filter has no live consumer. Revisit when SPIKE-10 subsystems actually emerge. (If built: backward-compatible subsystem: frontmatter tag, untagged = universal.)
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:27.510264617Z
-modified_at: 2026-06-06T13:55:24.660575699Z
+modified_at: 2026-06-06T13:55:27.498994922Z
 req_type: Story
 tags:
 - advisor

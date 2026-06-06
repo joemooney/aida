@@ -14250,5 +14250,18 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       KEEP DEFERRED to post-stability — the new rebase step touches the orchestrator lifecycle being stabilized; this reliability-class machinery ships best at-keyboard after the floor is solid. If/when built, the --dry-run cross-batch rebase-conflict forecast is the safest first slice.
-clock: 1506
+- id: 019e9d37-9a9b-7363-8a39-ec1d9fed034d
+  target_id: 019e4854-a596-7d33-a537-ea402f612319
+  author: aida
+  node_id: '1'
+  lamport: 1507
+  timestamp: 2026-06-06T13:55:27.515123847Z
+  kind: !SetDescription
+    description: |
+      Per SPIKE-10 strategic doc (docs/multi-advisor-coordination.md), Gap 1 implementation: memory frontmatter `subsystem:` tag + advisor session `--focus <subsystem>` flag that filters loading to universal + scope-matching memories. Backward-compatible: untagged = universal. Includes retroactive-tag tooling `aida memory audit --tag`. TUI / status line surfaces active focus.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      DEFER post-stability (with STORY-363) — no subsystem-scoped advisors exist yet to consume --focus, so the loading filter has no live consumer. Revisit when SPIKE-10 subsystems actually emerge. (If built: backward-compatible subsystem: frontmatter tag, untagged = universal.)
+clock: 1507
 node_id: '1'
