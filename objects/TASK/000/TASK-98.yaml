@@ -31,12 +31,12 @@ description: |-
   - [ ] Configurable threshold (e.g. AIDA_COMMIT_PRECHECK=fetch|skip|enforce)
   - [ ] Bypassable with --no-fetch / --force for offline work
   - [ ] Push-side TASK-54 and pull-side TASK-97 cross-referenced
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:34:30.536264117Z
-modified_at: 2026-06-06T08:37:38.206066948Z
+modified_at: 2026-06-06T08:37:41.250182142Z
 req_type: Task
 tags:
 - commit
