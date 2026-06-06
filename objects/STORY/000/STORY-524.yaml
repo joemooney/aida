@@ -1,0 +1,26 @@
+id: 019e9b24-3b3d-7293-8de5-a116c3c6b335
+spec_id: STORY-524
+agreed_id: STORY-524
+title: 'Review PR-546: [AI:claude] feat(doctor): flag Completed specs with no corroborating commit (TASK-673)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e9b0f`) for branch `task-673-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/546>
+  - Branch: `task-673-2` → `main`
+
+  ## Covers
+
+  - TASK-673
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 546` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-06T04:15:03.485956219Z
+modified_at: 2026-06-06T04:15:03.485956219Z
+req_type: Story
