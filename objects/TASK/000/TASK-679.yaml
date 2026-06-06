@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T06:35:24.309912247Z
-modified_at: 2026-06-06T06:35:24.309912247Z
+modified_at: 2026-06-06T08:29:53.184796194Z
 req_type: Task
 tags:
 - aida:rel
@@ -26,3 +26,14 @@ tags:
 - graph
 - papercut
 - relationships
+comments:
+- id: 019e9c0d-88a0-7fb0-a23f-96048a142d10
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: What is the canonical parent/child relationship representation — rel add --type parent currently writes an inverted, duplicated, reciprocal-less edge inconsistent with `aida add --parent`?
+      a) Normalize so `rel add --type parent FROM TO` writes FROM--Child-->TO (matching `aida add --parent`), dedup edges, fix the contradicting doc comments; --tree then walks one edge type and BUG-448's union is removable.
+      b) Write BUG-448-style BOTH directions (Child on parent + Parent on child) so each spec's own `show` reflects the link, keep the union, just dedup + fix docs.
+      REC: a — single canonical edge is the smaller, less-redundant data model and lets BUG-448's view-layer union retire; reciprocal-on-show (b) is a nice-to-have layerable later. Architecture-adjacent (relationship storage) — needs master sign-off on the edge direction before implementation, which is why this is a human decision not ready-to-do.
+  created_at: 2026-06-06T08:29:53.184796194Z
+  modified_at: 2026-06-06T08:29:53.184796194Z
