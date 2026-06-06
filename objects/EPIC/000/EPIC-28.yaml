@@ -98,12 +98,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   Re-scope: the resilient-drain core (shelve/skip-dependent/max-failures) is SHIPPED. DROP STORY-450 (per-spec auto-patch-release is a post-alpha power-user layer, conflicts with bugs-before-marketing). EPIC closes once STORY-447 (deps sweep) lands. No new EPIC-level work.
-status: Approved
+status: Planned
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-06-06T13:44:57.332628327Z
+modified_at: 2026-06-06T15:38:23.276893451Z
 req_type: Epic
 tags:
 - advisor-vision
