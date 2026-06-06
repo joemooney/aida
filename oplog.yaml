@@ -13846,5 +13846,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       RESCOPE as standalone API-hygiene (decoupled from the rejected EPIC-29 split): audit + document aida-core's public API surface that both the TUI and the MCP server consume. NOT a repo-split prerequisite — just a documented/stable pub surface. Reparent off EPIC-29.
-clock: 1497
+- id: 019e9d2e-a60f-74b0-be14-e9d3ad473ac3
+  target_id: 019e3385-356b-7fd3-8f1e-8a719b93c30b
+  author: aida
+  node_id: '1'
+  lamport: 1498
+  timestamp: 2026-06-06T13:45:40.623333599Z
+  kind: !SetStatus
+    status: Approved
+clock: 1498
 node_id: '1'
