@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:35:56.677371121Z
-modified_at: 2026-06-06T06:35:04.333507110Z
+modified_at: 2026-06-06T06:35:35.288240233Z
 req_type: Bug
 tags:
 - aida:graph
@@ -41,3 +41,8 @@ comments:
   content: Commit df9a3235e references this requirement
   created_at: 2026-06-06T06:35:04.333507110Z
   modified_at: 2026-06-06T06:35:04.333507110Z
+- id: 019e9ba4-e3f8-7c72-96bc-074656cca941
+  author: joe
+  content: 'GROUND-TRUTH CORRECTION (2026-06-05): the ''parent FIELD vs Parent EDGE'' hypothesis was wrong about mechanism. There is no parent field in play — BOTH paths store an OUTGOING edge on the epic, differing only in TYPE: add --parent → Child edge; rel add --type parent → Parent edge (inverted, duplicated, no reciprocal on child). Fixed by unioning Child+Parent outgoing in --tree (PR forthcoming). Data-model normalization split to follow-up.'
+  created_at: 2026-06-06T06:35:35.288240233Z
+  modified_at: 2026-06-06T06:35:35.288240233Z
