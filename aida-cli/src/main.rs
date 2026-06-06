@@ -10308,6 +10308,407 @@ fn config_path_for_project(project_root: &std::path::Path) -> std::path::PathBuf
     project_root.join(".aida").join("config.toml")
 }
 
+/// TASK-304: `[ultraplan] mode` governs whether AIDA proactively suggests
+/// `aida ultraplan <SPEC>` for chunky specs. /ultraplan is inherently
+/// interactive (claude.ai web approval), so the realistic surface is
+/// `never | on-demand | suggested` — never a "frequently auto-pull" mode.
+/// trace:TASK-304 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UltraplanMode {
+    /// `aida ultraplan` refuses with a configured-off message; no clipboard.
+    Never,
+    /// Default — preserves current behavior: the user runs `aida ultraplan
+    /// SPEC` explicitly, no pickup-time hints.
+    OnDemand,
+    /// Pickup surfaces (`/aida-pickup`, `aida queue work` no-arg head,
+    /// `aida queue list` head row) hint when the head spec is chunky.
+    Suggested,
+}
+
+impl UltraplanMode {
+    fn from_token(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "never" => Some(Self::Never),
+            "on-demand" | "on_demand" | "ondemand" => Some(Self::OnDemand),
+            "suggested" => Some(Self::Suggested),
+            _ => None,
+        }
+    }
+}
+
+/// TASK-304: parsed `[ultraplan]` config. Both fields default safely so a
+/// project with no `[ultraplan]` block (or an unparseable one) keeps the
+/// current opt-in behavior: `mode = on-demand`, threshold `acceptance-bullets>8`.
+/// trace:TASK-304 | ai:claude
+struct UltraplanConfig {
+    mode: UltraplanMode,
+    /// The `acceptance-bullets>N` threshold — the only heuristic supported
+    /// today. A spec triggers a suggestion when its `## Acceptance` checkbox
+    /// count is strictly greater than this.
+    bullet_threshold: usize,
+}
+
+impl Default for UltraplanConfig {
+    fn default() -> Self {
+        Self {
+            mode: UltraplanMode::OnDemand,
+            bullet_threshold: 8,
+        }
+    }
+}
+
+/// TASK-304: read `[ultraplan]` from `.aida/config.toml`. Missing file,
+/// missing block, unparseable TOML, or unknown token values all fall back to
+/// the defaults — the suggestion layer is a soft feature, never load-bearing.
+/// trace:TASK-304 | ai:claude
+fn read_ultraplan_config(project_root: &std::path::Path) -> UltraplanConfig {
+    let mut cfg = UltraplanConfig::default();
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return cfg;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return cfg;
+    };
+    let Some(table) = value.get("ultraplan") else {
+        return cfg;
+    };
+    if let Some(mode) = table
+        .get("mode")
+        .and_then(|v| v.as_str())
+        .and_then(UltraplanMode::from_token)
+    {
+        cfg.mode = mode;
+    }
+    if let Some(n) = table
+        .get("suggest_threshold")
+        .and_then(|v| v.as_str())
+        .and_then(parse_acceptance_bullet_threshold)
+    {
+        cfg.bullet_threshold = n;
+    }
+    cfg
+}
+
+/// TASK-304: parse a `suggest_threshold` token. Only `acceptance-bullets>N`
+/// is honored today (the spec's chosen default heuristic — mechanical, no
+/// NLP, falsifiable); the `N` is extracted. Unknown tokens return `None` so
+/// the caller keeps the default threshold. trace:TASK-304 | ai:claude
+fn parse_acceptance_bullet_threshold(token: &str) -> Option<usize> {
+    token
+        .trim()
+        .to_ascii_lowercase()
+        .strip_prefix("acceptance-bullets>")?
+        .trim()
+        .parse::<usize>()
+        .ok()
+}
+
+/// TASK-304: count the markdown task-list bullets (`- [ ]` / `- [x]`) inside
+/// a spec's `## Acceptance` section — a rough complexity proxy. Returns 0
+/// when there's no Acceptance section. Checked and unchecked items both
+/// count: a long checklist is chunky regardless of how much is already
+/// ticked. Tolerates `*`/`+` bullet markers and `## Acceptance Criteria`
+/// heading variants. trace:TASK-304 | ai:claude
+fn count_acceptance_bullets(description: &str) -> usize {
+    let mut in_section = false;
+    let mut count = 0;
+    for line in description.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix('#') {
+            // A markdown heading at any level — entering or leaving the
+            // Acceptance section resets the counter scope.
+            let heading = rest.trim_start_matches('#').trim().to_ascii_lowercase();
+            in_section = heading.starts_with("acceptance");
+            continue;
+        }
+        if in_section && is_task_bullet(trimmed) {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// TASK-304: is this a markdown task-list item (`- [ ]`, `* [x]`, `+ [X]`)?
+fn is_task_bullet(trimmed: &str) -> bool {
+    let after_marker = trimmed
+        .strip_prefix("- ")
+        .or_else(|| trimmed.strip_prefix("* "))
+        .or_else(|| trimmed.strip_prefix("+ "));
+    match after_marker {
+        Some(rest) => {
+            let r = rest.trim_start();
+            r.starts_with("[ ]") || r.starts_with("[x]") || r.starts_with("[X]")
+        }
+        None => false,
+    }
+}
+
+/// TASK-304: the pickup-time suggestion hint. Returns `Some(message)` only
+/// when `[ultraplan] mode = "suggested"` AND the spec's acceptance checklist
+/// is longer than the configured threshold; `None` otherwise (the common
+/// case — on-demand/never, or a spec that isn't chunky). The message format
+/// is fixed by the spec so downstream surfaces render it identically.
+/// trace:TASK-304 | ai:claude
+fn ultraplan_suggestion_hint(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+) -> Option<String> {
+    let cfg = read_ultraplan_config(project_root);
+    if cfg.mode != UltraplanMode::Suggested {
+        return None;
+    }
+    let bullets = count_acceptance_bullets(&req.description);
+    if bullets <= cfg.bullet_threshold {
+        return None;
+    }
+    let id = req.display_id();
+    Some(format!(
+        "{id} has {bullets} acceptance bullets — `aida ultraplan {id}` to \
+         assemble a planning prompt before implementing."
+    ))
+}
+
+/// TASK-304: render the ultraplan suggestion hint to stdout under the
+/// shared pickup surfaces (queue next / work / list). No-op when the helper
+/// returns `None`. trace:TASK-304 | ai:claude
+fn print_ultraplan_suggestion_hint(project_root: &std::path::Path, req: &aida_core::Requirement) {
+    if let Some(hint) = ultraplan_suggestion_hint(project_root, req) {
+        println!();
+        println!("  {} {}", "⤷".cyan(), hint);
+    }
+}
+
+/// TASK-304: the `[ultraplan]` block `aida init` scaffolds into a new
+/// project's `.aida/config.toml`. Ships `mode = "on-demand"` (preserves
+/// current behavior) plus a comment explaining the never/on-demand/suggested
+/// trade-off and why "frequently/auto-pull" isn't an option. Appended like
+/// the `[forge]` section so all three init paths share one source of truth.
+/// trace:TASK-304 | ai:claude
+fn init_ultraplan_config_section() -> &'static str {
+    "\n# trace:TASK-304 | ai:claude\n\
+     # Whether AIDA proactively suggests `aida ultraplan <SPEC>` for chunky\n\
+     # specs. /ultraplan is interactive (claude.ai web approval), so there is\n\
+     # no \"auto-pull\" mode — only:\n\
+     #   never      — `aida ultraplan` is disabled (refuses with a message)\n\
+     #   on-demand  — current behavior: run `aida ultraplan SPEC` yourself\n\
+     #   suggested  — pickup surfaces (/aida-pickup, queue work/list head)\n\
+     #                hint when the head spec passes suggest_threshold\n\
+     # suggest_threshold only applies in `suggested` mode. The lone heuristic\n\
+     # is `acceptance-bullets>N`: the count of `- [ ]` items in the spec's\n\
+     # `## Acceptance` section (mechanical, no NLP).\n\
+     [ultraplan]\n\
+     mode = \"on-demand\"\n\
+     suggest_threshold = \"acceptance-bullets>8\"\n"
+}
+
+#[cfg(test)]
+mod task_304_ultraplan_cadence_tests {
+    use super::*;
+
+    fn write_config(root: &std::path::Path, body: &str) {
+        let config_dir = root.join(".aida");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("config.toml"), body).unwrap();
+    }
+
+    fn req_with(spec_id: &str, description: &str) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new("chunky spec".to_string(), description.to_string());
+        r.spec_id = Some(spec_id.to_string());
+        r
+    }
+
+    const NINE_BULLETS: &str = "## Why\n\nsome prose\n\n## Acceptance\n\n\
+        - [ ] one\n- [ ] two\n- [ ] three\n- [ ] four\n- [ ] five\n\
+        - [ ] six\n- [ ] seven\n- [ ] eight\n- [ ] nine\n\n## Out of scope\n\n- [ ] not counted\n";
+
+    // ── mode token parsing ──────────────────────────────────────────────
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn mode_tokens_parse() {
+        assert_eq!(
+            UltraplanMode::from_token("never"),
+            Some(UltraplanMode::Never)
+        );
+        assert_eq!(
+            UltraplanMode::from_token("on-demand"),
+            Some(UltraplanMode::OnDemand)
+        );
+        assert_eq!(
+            UltraplanMode::from_token(" Suggested "),
+            Some(UltraplanMode::Suggested)
+        );
+        assert_eq!(UltraplanMode::from_token("frequently"), None);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn threshold_token_parses_and_rejects() {
+        assert_eq!(
+            parse_acceptance_bullet_threshold("acceptance-bullets>8"),
+            Some(8)
+        );
+        assert_eq!(
+            parse_acceptance_bullet_threshold("ACCEPTANCE-BULLETS>3"),
+            Some(3)
+        );
+        assert_eq!(
+            parse_acceptance_bullet_threshold("story-with-design-forks"),
+            None
+        );
+        assert_eq!(
+            parse_acceptance_bullet_threshold("acceptance-bullets>abc"),
+            None
+        );
+    }
+
+    // ── bullet counting ─────────────────────────────────────────────────
+    /// Counts only `## Acceptance` checkbox bullets, both checked and
+    /// unchecked; ignores bullets in other sections. trace:TASK-304 | ai:claude
+    #[test]
+    fn counts_acceptance_bullets_only() {
+        assert_eq!(count_acceptance_bullets(NINE_BULLETS), 9);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn counts_checked_and_unchecked() {
+        let d = "## Acceptance\n- [ ] todo\n- [x] done\n- [X] also done\n";
+        assert_eq!(count_acceptance_bullets(d), 3);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn counts_zero_without_acceptance_section() {
+        let d = "## Why\n- [ ] not acceptance\n- [ ] still not\n";
+        assert_eq!(count_acceptance_bullets(d), 0);
+    }
+
+    /// Tolerates `## Acceptance Criteria` heading variants. trace:TASK-304
+    #[test]
+    fn tolerates_acceptance_criteria_heading() {
+        let d = "## Acceptance Criteria\n- [ ] a\n- [ ] b\n";
+        assert_eq!(count_acceptance_bullets(d), 2);
+    }
+
+    // ── read_ultraplan_config: each mode + threshold ────────────────────
+    /// Absent config → on-demand default, threshold 8. trace:TASK-304
+    #[test]
+    fn config_absent_defaults_on_demand() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = read_ultraplan_config(tmp.path());
+        assert_eq!(cfg.mode, UltraplanMode::OnDemand);
+        assert_eq!(cfg.bullet_threshold, 8);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn config_never_mode_parses() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"never\"\n");
+        assert_eq!(read_ultraplan_config(tmp.path()).mode, UltraplanMode::Never);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn config_suggested_mode_with_custom_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[ultraplan]\nmode = \"suggested\"\nsuggest_threshold = \"acceptance-bullets>3\"\n",
+        );
+        let cfg = read_ultraplan_config(tmp.path());
+        assert_eq!(cfg.mode, UltraplanMode::Suggested);
+        assert_eq!(cfg.bullet_threshold, 3);
+    }
+
+    /// Unknown mode token falls back to the on-demand default rather than
+    /// erroring. trace:TASK-304 | ai:claude
+    #[test]
+    fn config_unknown_mode_falls_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"frequently\"\n");
+        assert_eq!(
+            read_ultraplan_config(tmp.path()).mode,
+            UltraplanMode::OnDemand
+        );
+    }
+
+    // ── ultraplan_suggestion_hint: mode × threshold matrix ──────────────
+    /// on-demand never hints, even for a chunky spec. trace:TASK-304
+    #[test]
+    fn hint_silent_on_demand() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"on-demand\"\n");
+        let r = req_with("STORY-9", NINE_BULLETS);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
+    }
+
+    /// never never hints. trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_silent_never() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"never\"\n");
+        let r = req_with("STORY-9", NINE_BULLETS);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
+    }
+
+    /// suggested + over threshold → hint with the documented format.
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_fires_suggested_over_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        let r = req_with("STORY-9", NINE_BULLETS);
+        let hint = ultraplan_suggestion_hint(tmp.path(), &r).expect("expected a hint");
+        assert_eq!(
+            hint,
+            "STORY-9 has 9 acceptance bullets — `aida ultraplan STORY-9` to \
+             assemble a planning prompt before implementing."
+        );
+    }
+
+    /// suggested but at/under threshold (8 is not > 8) → silent.
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_silent_at_threshold_boundary() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        let eight = "## Acceptance\n- [ ] 1\n- [ ] 2\n- [ ] 3\n- [ ] 4\n\
+            - [ ] 5\n- [ ] 6\n- [ ] 7\n- [ ] 8\n";
+        let r = req_with("STORY-8", eight);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
+    }
+
+    /// A custom lower threshold makes a smaller checklist trip the hint.
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_respects_custom_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[ultraplan]\nmode = \"suggested\"\nsuggest_threshold = \"acceptance-bullets>2\"\n",
+        );
+        let three = "## Acceptance\n- [ ] a\n- [ ] b\n- [ ] c\n";
+        let r = req_with("TASK-3", three);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_some());
+    }
+
+    /// The scaffolded `[ultraplan]` block ships mode = on-demand and parses
+    /// back to the on-demand default. trace:TASK-304 | ai:claude
+    #[test]
+    fn scaffolded_block_is_on_demand() {
+        let section = init_ultraplan_config_section();
+        assert!(section.contains("[ultraplan]"));
+        assert!(section.contains("mode = \"on-demand\""));
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), section);
+        let cfg = read_ultraplan_config(tmp.path());
+        assert_eq!(cfg.mode, UltraplanMode::OnDemand);
+        assert_eq!(cfg.bullet_threshold, 8);
+    }
+}
+
 fn line_for_key(body: &str, section: &str, key: &str) -> Option<usize> {
     let mut in_section = false;
     for (idx, line) in body.lines().enumerate() {
@@ -11360,6 +11761,8 @@ fn handle_init_distributed_worktree(
     );
     // EPIC-35: scaffold the [forge] section with the auto-detected provider.
     let config_content = config_content + &forge::init_forge_config_section(&cwd);
+    // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
+    let config_content = config_content + init_ultraplan_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
@@ -11516,6 +11919,8 @@ fn handle_init_post_clone(
     );
     // EPIC-35: scaffold the [forge] section with the auto-detected provider.
     let config_content = config_content + &forge::init_forge_config_section(&cwd);
+    // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
+    let config_content = config_content + init_ultraplan_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
@@ -11902,7 +12307,9 @@ fn handle_init_distributed_sibling(
          #   [block_allocation.bug]\n\
          #   auto_claim_threshold = 50\n\
          #   auto_claim_size = 200\n";
-    std::fs::write(aida_dir.join("config.toml"), config_content)?;
+    // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
+    let config_content = config_content.to_string() + init_ultraplan_config_section();
+    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
@@ -50511,6 +50918,22 @@ fn handle_ultraplan_command(
     no_comments: bool,
 ) -> Result<()> {
     let project_root = find_project_root()?;
+    // TASK-304: `[ultraplan] mode = "never"` disables the integration for
+    // this project — refuse with a message and write nothing to the
+    // clipboard. Printed to stderr so `--json` / `--stdout` consumers see a
+    // clean (empty) stdout. trace:TASK-304 | ai:claude
+    if read_ultraplan_config(&project_root).mode == UltraplanMode::Never {
+        eprintln!(
+            "{} `aida ultraplan` is disabled for this project \
+             (`[ultraplan] mode = \"never\"` in .aida/config.toml).",
+            "Note:".yellow().bold()
+        );
+        eprintln!(
+            "  {}",
+            "Set mode = \"on-demand\" or \"suggested\" to re-enable.".dimmed()
+        );
+        return Ok(());
+    }
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
     let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
@@ -69554,6 +69977,25 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             } // end of `if !skip_regular_render { ... }` — trace:TASK-222
 
+            // TASK-304: surface the ultraplan suggestion for the head row
+            // (the first pickable entry) under `[ultraplan] mode =
+            // "suggested"`. Mirrors the nudge `aida queue next` / `work`
+            // already print, so all three pickup surfaces agree.
+            // trace:TASK-304 | ai:claude
+            if !skip_regular_render {
+                if let Some(head) = entries.first() {
+                    if let Some(req) = store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == head.requirement_id)
+                    {
+                        if let Ok(root) = find_project_root() {
+                            print_ultraplan_suggestion_hint(&root, req);
+                        }
+                    }
+                }
+            }
+
             // STORY-333: ahead-of-blocker warning. Surface every queued
             // entry (pickable OR blocked) whose blocked-by target is
             // ALSO queued at a later position — the operator queued the
@@ -70864,6 +71306,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         "aida queue done".cyan(),
                         spec_id
                     );
+                    // TASK-304: surface the ultraplan suggestion for a chunky
+                    // head spec under `[ultraplan] mode = "suggested"`. This
+                    // is the surface `/aida-pickup` renders via `aida queue
+                    // next`. trace:TASK-304 | ai:claude
+                    if let Some(r) = req {
+                        if let Ok(root) = find_project_root() {
+                            print_ultraplan_suggestion_hint(&root, r);
+                        }
+                    }
                 }
             }
         }
@@ -73581,6 +74032,22 @@ fn handle_queue_work(
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter, strict)?;
+
+    // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
+    // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
+    // the no-arg form (the operator hasn't already chosen a spec) gets the
+    // nudge; an explicit `aida queue work SPEC` is already a deliberate
+    // choice. Best-effort and read-only — never perturbs the pickup.
+    // trace:TASK-304 | ai:claude
+    if arg.is_none() && !list_sessions {
+        if let Ok(root) = find_project_root() {
+            if let Ok(store) = storage.load() {
+                if let Some(req) = store.get_requirement_by_spec_id(&plan.anchor_display) {
+                    print_ultraplan_suggestion_hint(&root, req);
+                }
+            }
+        }
+    }
 
     // STORY-439: capture pickup-time complexity + assistance estimate
     // ASAP after plan resolution — we know the anchor spec, the project
