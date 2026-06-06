@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-06-06T08:36:10.406543267Z
+modified_at: 2026-06-06T13:39:08.680791150Z
 req_type: Epic
 tags:
 - needs-human-input
@@ -89,3 +89,8 @@ comments:
       REC: a — the load-bearing primitive (`aida doc`) exists and is in use; an open umbrella EPIC with dangling children is graph noise. Re-file the specific projection features that still have a champion as bounded specs.
   created_at: 2026-06-06T08:36:09.114539608Z
   modified_at: 2026-06-06T08:36:09.114539608Z
+- id: 019e9d28-ab08-7ea1-8288-eb2b32bb8261
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): CLOSE as substantially delivered — the load-bearing primitive (aida doc add/show + docs-tree projection) shipped and is in use. Re-file any still-wanted projection features (auto-tutorial generation, book-chapter composition, diff-driven doc prompts) as fresh standalone stories when they have a champion.'
+  created_at: 2026-06-06T13:39:08.680791150Z
+  modified_at: 2026-06-06T13:39:08.680791150Z
