@@ -821,6 +821,7 @@ impl<'a> McpServer<'a> {
     }
 
     fn tool_update_requirement(&self, args: &Value) -> Result<String, String> {
+        // (see mcp_status_gate_message below for the BUG-449 status gate)
         let id = args
             .get("id")
             .and_then(|v| v.as_str())
@@ -835,6 +836,22 @@ impl<'a> McpServer<'a> {
 
         if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
             if let Some(new_status) = parse_status(status) {
+                // BUG-449 (TASK-647/ADR-3 caller parity): MCP is not advisor
+                // authority (the launching shell isn't the advisor seat), so it
+                // must not self-advance a spec into a status that is the
+                // advisor's triage decision (Approved/Planned) or that is
+                // merge-driven (Completed/Released — set by a (SPEC-ID) commit
+                // landing on the default branch, STORY-86). add_requirement
+                // already downgrades these to Draft on intake; without the same
+                // gate here, add-then-update was a one-line bypass that let an
+                // agent self-mark Completed on uncommitted code. Implementer-
+                // legitimate transitions (InProgress/Done/NeedsAttention/Draft/
+                // Rejected) stay allowed. trace:BUG-449 | ai:claude
+                if new_status != req.status {
+                    if let Some(msg) = mcp_status_gate_message(&new_status) {
+                        return Err(msg);
+                    }
+                }
                 if let Some(msg) =
                     aida_core::forbidden_attention_transition(&req.status, &new_status)
                 {
@@ -2078,6 +2095,29 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
         "completed" => Some(RequirementStatus::Completed),
         "rejected" => Some(RequirementStatus::Rejected),
         "needsattention" => Some(RequirementStatus::NeedsAttention),
+        _ => None,
+    }
+}
+
+/// BUG-449: status transitions an MCP caller may NOT make itself, with the
+/// message explaining why. `None` = the transition is allowed. Mirrors the
+/// `add_requirement` intake gate (TASK-647 / ADR-3) on the update path so
+/// `add`-then-`update` isn't a one-line bypass of advisor authority. MCP is
+/// never advisor authority (unlike the CLI, which can be the advisor seat or
+/// orchestrator-corroborated), so this stays strict regardless of context.
+/// trace:BUG-449 | ai:claude
+fn mcp_status_gate_message(new_status: &RequirementStatus) -> Option<String> {
+    match new_status {
+        RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
+            "Cannot set status to {new_status} via MCP: approving or planning a spec is the \
+             advisor's triage decision and needs advisor authority. File the spec and let the \
+             advisor promote it, or run the CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
+        )),
+        RequirementStatus::Completed => Some(format!(
+            "Cannot set status to {new_status} via MCP: this is set automatically when a \
+             (SPEC-ID) commit lands on the default branch (merge-driven auto-bump), not by hand. \
+             Mark the work `done` and let the merge promote it."
+        )),
         _ => None,
     }
 }
@@ -3349,6 +3389,19 @@ mod tests {
         McpServer::new(storage, dir.to_path_buf())
     }
 
+    /// BUG-449: set a gated status directly in the store, bypassing the MCP
+    /// gate — mirrors how the advisor (CLI) or a merge auto-bump sets
+    /// Approved/Planned/Completed out-of-band. Tests use this to reach a
+    /// precondition the MCP caller itself is (correctly) forbidden to set.
+    fn force_status(server: &McpServer<'static>, spec_id: &str, status: RequirementStatus) {
+        let mut store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id_mut(spec_id)
+            .expect("spec should exist for force_status");
+        req.status = status;
+        server.storage.save(&store).unwrap();
+    }
+
     fn added_spec_id(response: &str) -> &str {
         response
             .strip_prefix("Requirement added: ")
@@ -3826,9 +3879,8 @@ mod tests {
             }))
             .unwrap();
         let planned_id = added_spec_id(&planned).to_string();
-        server
-            .tool_update_requirement(&json!({ "id": planned_id, "status": "planned" }))
-            .unwrap();
+        // BUG-449: Planned is advisor-gated via MCP — set it out-of-band.
+        force_status(&server, &planned_id, RequirementStatus::Planned);
         let nfr = server
             .tool_add_requirement(&json!({
                 "title": "Nonfunctional MCP item",
@@ -4026,7 +4078,9 @@ mod tests {
         let result = server
             .tool_update_requirement(&json!({
                 "id": spec_id,
-                "status": "planned",
+                // BUG-449: use an implementer-legitimate transition (Planned is
+                // advisor-gated via MCP); this test is about field persistence.
+                "status": "in-progress",
                 "description": "after",
                 "title": "ignored title",
                 "priority": "high",
@@ -4042,9 +4096,51 @@ mod tests {
             .expect("requirement should exist");
         assert_eq!(req.title, "Update target");
         assert_eq!(req.description, "after");
-        assert_eq!(req.status, RequirementStatus::Planned);
+        assert_eq!(req.status, RequirementStatus::InProgress);
         assert_eq!(req.priority, RequirementPriority::Medium);
         assert!(!req.tags.contains("ignored"));
+    }
+
+    // trace:BUG-449 | ai:claude
+    #[test]
+    fn mcp_update_requirement_gates_advisor_and_merge_driven_statuses() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Gate target",
+                "description": "BUG-449 status gate",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        // The add-then-update bypass must be refused: advisor-triage statuses…
+        for status in ["approved", "planned"] {
+            let err = server
+                .tool_update_requirement(&json!({ "id": id, "status": status }))
+                .expect_err("approved/planned via MCP must be refused");
+            assert!(err.contains("advisor"), "{status}: {err}");
+        }
+        // …and the merge-driven Completed (the headline self-mark-on-uncommitted bypass).
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "status": "completed" }))
+            .expect_err("completed via MCP must be refused");
+        assert!(err.contains("merge") || err.contains("(SPEC-ID)"), "{err}");
+
+        // Implementer-legitimate transitions are still allowed. Ordered to also
+        // satisfy forbidden_attention_transition (NeedsAttention only from
+        // InProgress; leaving it only to Approved/InProgress/Rejected).
+        for status in ["in-progress", "needs-attention", "in-progress", "done"] {
+            server
+                .tool_update_requirement(&json!({ "id": id, "status": status }))
+                .unwrap_or_else(|e| panic!("{status} should be allowed via MCP: {e}"));
+        }
+
+        // Nothing slipped the gate: the spec never reached an advisor/merge status.
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Done);
     }
 
     // trace:BUG-377 TASK-550 | ai:codex
@@ -4243,10 +4339,9 @@ mod tests {
             .unwrap();
         let parent_id = added_spec_id(&parent).to_string();
         // TASK-647 (ADR-3): MCP add lands draft; drive the parent to the
-        // terminal `completed` state (the guard's precondition) via update.
-        server
-            .tool_update_requirement(&json!({ "id": parent_id, "status": "completed" }))
-            .unwrap();
+        // terminal `completed` state (the guard's precondition) out-of-band —
+        // BUG-449 forbids setting Completed via the MCP update tool itself.
+        force_status(&server, &parent_id, RequirementStatus::Completed);
         let child = server
             .tool_add_requirement(&json!({
                 "title": "Child task",
