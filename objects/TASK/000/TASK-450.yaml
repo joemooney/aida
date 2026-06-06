@@ -55,7 +55,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T05:56:36.343278174Z
-modified_at: 2026-05-22T05:56:36.343278174Z
+modified_at: 2026-06-06T04:18:37.730287775Z
 req_type: Task
 tags:
 - from-user-question
@@ -63,3 +63,5 @@ tags:
 - init
 - onboarding
 - scaffold
+archived: true
+archived_at: 2026-06-06T04:18:37.730287775Z
