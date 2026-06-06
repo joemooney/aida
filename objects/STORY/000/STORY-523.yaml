@@ -2,7 +2,7 @@ id: 019e9b0a-125f-7d40-8570-1a60e3d8c48a
 spec_id: STORY-523
 agreed_id: STORY-523
 title: 'Decision-question PRODUCER: sweep the scoped backlog, detect human-decision-needed specs, formulate + attach DecisionRequests (feeds aida questions)'
-description: |-
+description: |
   ## Idea (operator, 2026-06-05)
 
   STORY-522 is the CONSUMER (DecisionRequest format + `aida questions` answer + loop pickup) and the REACTIVE producer (drain hits a fork → emit a question). Missing: the PROACTIVE producer — a sweep over the EXISTING queue/backlog that identifies specs that will need a human decision and attaches the question AHEAD of time, so `aida questions` has something to list and the human can BATCH-answer before the drain reaches the spec (no mid-drain stall).
@@ -36,12 +36,16 @@ description: |-
 
   ## Relationships
   - Feeds STORY-522 (the answer surface). Reuses /aida-grill + /aida-evaluate (per-spec analysis). Is the NEEDS-HUMAN branch of the EPIC-30 pre-flight triage. Tier-1/Tier-2 cost model from EPIC-36. Scope discipline mirrors STORY-519 (planning).
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER behind STORY-522 — 522 defines the DecisionRequest artifact + inbox this producer feeds; producing questions before that format/inbox exists is wasted. Also: the proactive whole-backlog sweep is THROUGHPUT (defer) vs 522's human-recovery-latency RELIABILITY value (allow). Sequence strictly after 522. Recorded blocked-by STORY-522.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:46:29.087785646Z
-modified_at: 2026-06-06T14:13:33.256567333Z
+modified_at: 2026-06-06T14:13:34.911672965Z
 req_type: Story
 tags:
 - backlog-sweep
