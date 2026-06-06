@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:00:19.174364070Z
-modified_at: 2026-06-06T08:34:09.428820623Z
+modified_at: 2026-06-06T20:03:16.424872979Z
 req_type: Task
 tags:
 - aida:review
@@ -54,3 +54,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded substrate-as-bouncer reviewer gate — classify changed paths SOURCE vs INTERMEDIATE and refuse intermediate-only diffs; precise acceptance incl. regression tests, aligns with phase priority (reliability gate), no open decision.
   created_at: 2026-06-06T08:34:08.013073102Z
   modified_at: 2026-06-06T08:34:08.013073102Z
+- id: 019e9e88-5948-7380-8e00-d40c2b52513f
+  author: joe
+  content: Commit 6ca76b3e1 references this requirement
+  created_at: 2026-06-06T20:03:16.424872979Z
+  modified_at: 2026-06-06T20:03:16.424872979Z
