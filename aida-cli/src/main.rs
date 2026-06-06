@@ -15774,9 +15774,190 @@ fn handle_doc_command(
                 }
             }
         }
+
+        // Release-time doc-coverage gate. Warn-only.
+        // trace:TASK-680 | ai:claude
+        DocCommand::Coverage { since, json } => {
+            let store = backend.load()?;
+            let project_root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+
+            // Resolve the release boundary. An explicit `--since` wins; else the
+            // most recent `v*` tag; else `None` (scan all of history).
+            let boundary_ref: Option<String> = match since {
+                Some(s) => Some(s.clone()),
+                None => git_describe_latest_tag(&project_root),
+            };
+            let cutoff: Option<chrono::DateTime<chrono::Utc>> = boundary_ref
+                .as_deref()
+                .and_then(|r| git_ref_commit_time(&project_root, r));
+
+            let gaps = find_uncovered_completed_specs(&store.requirements, cutoff);
+
+            if *json {
+                let rows: Vec<serde_json::Value> = gaps
+                    .iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "id": r.display_id(),
+                            "title": r.title,
+                            "type": r.req_type.to_string(),
+                        })
+                    })
+                    .collect();
+                let payload = serde_json::json!({
+                    "since": boundary_ref,
+                    "uncovered_count": gaps.len(),
+                    "uncovered": rows,
+                });
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+                return Ok(());
+            }
+
+            let window_label = match &boundary_ref {
+                Some(r) => format!("since {}", r),
+                None => "across all history".to_string(),
+            };
+
+            if gaps.is_empty() {
+                println!(
+                    "{} Doc coverage OK — every spec completed {} has a doc entry.",
+                    "✓".green(),
+                    window_label
+                );
+                return Ok(());
+            }
+
+            println!(
+                "{} {} spec(s) completed {} have no doc entry:",
+                "⚠".yellow(),
+                gaps.len(),
+                window_label
+            );
+            for r in &gaps {
+                println!("  {} · {}", r.display_id().cyan(), r.title);
+            }
+            println!();
+            println!("Capture each with: aida doc add --title \"…\" --about <ID>");
+            println!("(warn-only — this gate does not block the release)");
+        }
     }
 
     Ok(())
+}
+
+/// Resolve the commit time of a git ref/tag as a UTC timestamp. Best-effort —
+/// `None` on any git failure or unparseable output.
+/// trace:TASK-680 | ai:claude
+fn git_ref_commit_time(
+    root: &std::path::Path,
+    git_ref: &str,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["log", "-1", "--format=%cI", git_ref])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    chrono::DateTime::parse_from_rfc3339(&s)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+/// Pure selection for the release-time doc-coverage gate (TASK-680).
+///
+/// Returns the requirements that **reached Completed at or after `cutoff`** and
+/// have **no Doc entry referencing them** (no `Doc`-typed requirement carries a
+/// `References` edge pointing at them). When `cutoff` is `None`, every spec that
+/// ever reached Completed is considered (full-history scan — used when the repo
+/// has no tags yet).
+///
+/// "Reached Completed" is read from the spec's transition `history`: any
+/// `HistoryEntry` whose `changes` include a `status` field whose `new_value`
+/// is `Completed`. As a fallback for specs that are currently Completed but
+/// carry no such history row (e.g. imported/legacy data), the spec's
+/// `modified_at` is used as the transition time.
+///
+/// Doc-typed requirements and archived specs are never themselves reported as
+/// gaps (a doc doesn't need a doc about it).
+///
+/// trace:TASK-680 | ai:claude
+fn find_uncovered_completed_specs(
+    requirements: &[aida_core::models::Requirement],
+    cutoff: Option<chrono::DateTime<chrono::Utc>>,
+) -> Vec<aida_core::models::Requirement> {
+    use aida_core::models::{RelationshipType, RequirementStatus, RequirementType};
+
+    // Set of spec uuids that at least one Doc References.
+    let mut documented: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+    for doc in requirements
+        .iter()
+        .filter(|r| r.req_type == RequirementType::Doc)
+    {
+        for rel in &doc.relationships {
+            if rel.rel_type == RelationshipType::References {
+                documented.insert(rel.target_id);
+            }
+        }
+    }
+
+    let completed_str = RequirementStatus::Completed.to_string();
+
+    let mut gaps: Vec<aida_core::models::Requirement> = Vec::new();
+    for req in requirements {
+        // Docs and archived specs are out of scope.
+        if req.req_type == RequirementType::Doc || req.archived {
+            continue;
+        }
+
+        // When did this spec reach Completed (if ever)?
+        let completed_at: Option<chrono::DateTime<chrono::Utc>> = req
+            .history
+            .iter()
+            .filter(|h| {
+                h.changes
+                    .iter()
+                    .any(|c| c.field_name == "status" && c.new_value == completed_str)
+            })
+            .map(|h| h.timestamp)
+            .max()
+            .or_else(|| {
+                // Fallback: currently Completed but no history row recording it.
+                if req.status == RequirementStatus::Completed {
+                    Some(req.modified_at)
+                } else {
+                    None
+                }
+            });
+
+        let Some(reached_at) = completed_at else {
+            continue;
+        };
+
+        // Inside the release window?
+        if let Some(c) = cutoff {
+            if reached_at < c {
+                continue;
+            }
+        }
+
+        // Already documented?
+        if documented.contains(&req.id) {
+            continue;
+        }
+
+        gaps.push(req.clone());
+    }
+
+    gaps.sort_by(|a, b| a.display_id().cmp(&b.display_id()));
+    gaps
 }
 
 /// Print the full detail view for a single Doc entry.
@@ -40921,6 +41102,104 @@ mod statusline_tests {
         let mut task = Requirement::new("T".into(), "No section.".into());
         task.req_type = RequirementType::Task;
         assert!(!requirement_missing_acceptance(&task));
+    }
+
+    /// TASK-680: the release-time doc-coverage selector reports a spec iff it
+    /// reached Completed at/after the cutoff AND no Doc references it. Pins:
+    /// window filtering by completion timestamp, the doc-reference exemption,
+    /// the modified_at fallback for history-less Completed specs, and that
+    /// Docs / archived specs are never themselves reported.
+    /// trace:TASK-680 | ai:claude
+    #[test]
+    fn doc_coverage_selects_completed_since_tag_without_doc() {
+        use aida_core::models::{
+            FieldChange, HistoryEntry, Relationship, RelationshipType, RequirementStatus,
+            RequirementType,
+        };
+        use aida_core::Requirement;
+        use chrono::{Duration, Utc};
+
+        let cutoff = Utc::now() - Duration::days(7);
+        let after = cutoff + Duration::days(1);
+        let before = cutoff - Duration::days(1);
+
+        let status_completed = |ts| HistoryEntry {
+            id: uuid::Uuid::new_v4(),
+            author: "tester".into(),
+            timestamp: ts,
+            changes: vec![FieldChange {
+                field_name: "status".into(),
+                old_value: "Done".into(),
+                new_value: RequirementStatus::Completed.to_string(),
+            }],
+        };
+
+        // (1) Completed after the cutoff, no doc → REPORTED.
+        let mut gap = Requirement::new("Shipped, undocumented".into(), String::new());
+        gap.spec_id = Some("TASK-100".into());
+        gap.req_type = RequirementType::Task;
+        gap.status = RequirementStatus::Completed;
+        gap.history.push(status_completed(after));
+
+        // (2) Completed after the cutoff but documented → exempt.
+        let mut documented = Requirement::new("Shipped, documented".into(), String::new());
+        documented.spec_id = Some("TASK-101".into());
+        documented.req_type = RequirementType::Task;
+        documented.status = RequirementStatus::Completed;
+        documented.history.push(status_completed(after));
+
+        // (3) Completed BEFORE the cutoff → outside the window, not reported.
+        let mut old = Requirement::new("Shipped last release".into(), String::new());
+        old.spec_id = Some("TASK-102".into());
+        old.req_type = RequirementType::Task;
+        old.status = RequirementStatus::Completed;
+        old.history.push(status_completed(before));
+
+        // (4) Still in progress → never reported.
+        let mut wip = Requirement::new("In flight".into(), String::new());
+        wip.spec_id = Some("TASK-103".into());
+        wip.req_type = RequirementType::Task;
+        wip.status = RequirementStatus::InProgress;
+
+        // (5) Currently Completed but no history row; modified_at after cutoff
+        //     → reported via the fallback.
+        let mut legacy = Requirement::new("Legacy completed".into(), String::new());
+        legacy.spec_id = Some("TASK-104".into());
+        legacy.req_type = RequirementType::Task;
+        legacy.status = RequirementStatus::Completed;
+        legacy.modified_at = after;
+
+        // (6) The Doc itself — never reported even if Completed.
+        let mut doc = Requirement::new("Doc about TASK-101".into(), String::new());
+        doc.spec_id = Some("DOC-1".into());
+        doc.req_type = RequirementType::Doc;
+        doc.status = RequirementStatus::Completed;
+        doc.modified_at = after;
+        doc.relationships.push(Relationship {
+            target_id: documented.id,
+            rel_type: RelationshipType::References,
+            created_at: Some(Utc::now()),
+            created_by: None,
+        });
+
+        let all = vec![gap.clone(), documented, old, wip, legacy.clone(), doc];
+
+        let reported = find_uncovered_completed_specs(&all, Some(cutoff));
+        let ids: Vec<String> = reported.iter().map(|r| r.display_id()).collect();
+        assert_eq!(
+            ids,
+            vec!["TASK-100".to_string(), "TASK-104".to_string()],
+            "only the undocumented specs completed since the cutoff are reported"
+        );
+
+        // No cutoff → full-history scan also pulls in the pre-cutoff gap.
+        let all_history = find_uncovered_completed_specs(&all, None);
+        let all_ids: Vec<String> = all_history.iter().map(|r| r.display_id()).collect();
+        assert!(all_ids.contains(&"TASK-102".to_string()));
+        assert!(all_ids.contains(&"TASK-100".to_string()));
+        assert!(all_ids.contains(&"TASK-104".to_string()));
+        assert!(!all_ids.contains(&"DOC-1".to_string()));
+        assert!(!all_ids.contains(&"TASK-101".to_string()));
     }
 
     /// BUG-65 acceptance: shipping 3 specs sequentially via a typical
