@@ -14354,5 +14354,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER until TASK-405 (PR-only orchestrator) + TASK-406 (worktree-aware merge) ship — the wizard's most-common branch (drive phases 3-6) depends on them; shipping first risks a wizard recommending paths its primitives can't execute. Urgency also dropped (BUG-285 + --resume-drain resumability landed).
-clock: 1509
+- id: 019e9d3a-9763-7050-9c5b-fefb90ee07a9
+  target_id: 019e508f-13af-77f3-85a3-9e960875b628
+  author: aida
+  node_id: '1'
+  lamport: 1510
+  timestamp: 2026-06-06T13:58:43.299788685Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1510
 node_id: '1'
