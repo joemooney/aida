@@ -15566,5 +15566,31 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Build the DEV-PLAYGROUND slice now: a throwaway sandbox store for drain-testing (on-thesis — would have avoided the TASK-639/640/641 clutter validating STORY-492). Mechanism: separate dir + AIDA_STORE env override (reuses the validate-resume.sh isolated-$HOME pattern — lowest machinery, no daemon-grade infra). DEFER the first-user/tutorial-framing layer to the marketing phase.
-clock: 1552
+- id: 019e9d85-4d2a-70b0-a134-2051d03ef1d2
+  target_id: 019e9935-3243-7dd3-86bb-cc0b2babaa17
+  author: aida
+  node_id: '1'
+  lamport: 1553
+  timestamp: 2026-06-06T15:20:19.498485516Z
+  kind: !SetDescription
+    description: |
+      REPRO (fresh aida init, then the natural first action): "aida queue work" picks up the auto-seeded onboarding task TASK-007 "Commit AIDA scaffolding (initial setup)" (for:implementer, auto-queued by init). queue-work ISOLATES it into a new git worktree on branch task-007, checked out from the initial commit (which contains only .gitkeep -- scaffolding is uncommitted on master; see TASK-631).
+
+      In that worktree the task cannot be completed correctly and is actively dangerous:
+      - The scaffolding it must commit (.aida/config.toml, .gitignore, .claude/*) is ABSENT -- untracked files on master are not carried into a worktree branched off another commit.
+      - No .gitignore exists in the worktree, so the implied "git add ." would stage: (1) .aida-store -> a nested git worktree, committed as a GITLINK; (2) .aida/cache.db -> a symlink to the primary's cache (outside-repo, machine-specific); (3) .aida/sessions -> symlink outside the repo. All three are wrong and would bake broken absolute-path symlinks + an embedded repo into history.
+
+      The implementer (Opus, /aida-pickup --auto-first) correctly refused to commit and surfaced the contradiction. Verified 2026-06-05 against a real init at /home/joe/ai (initial commit 48cf57a = .gitkeep only; scaffolding untracked on master).
+
+      FIX SPACE (do not implement -- triage only):
+      (a) TASK-631 (commit scaffolding AT init) largely dissolves this -- then there is no "commit scaffolding" task and a worktree off that commit already has the files.
+      (b) Regardless: setup/scaffolding-commit tasks act on the PRIMARY worktree's uncommitted state and must NOT route through queue-work worktree isolation. The seeded first-task should not be a queue-drainable for:implementer item, or should be flagged primary-worktree-only.
+      (c) The task instruction should never be a bare "git add ." without the .gitignore present.
+
+      Relates-to TASK-631 (root-cause fix), BUG-433 (worktree symlink + no committed config -> wrong data).
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Close via BOTH: (1) ROOT CAUSE — land TASK-631 (init commits its own scaffolding), which dissolves the 'commit scaffolding' onboarding task in the common path; (2) DURABLE GUARDRAIL — flag setup/scaffolding-commit tasks as primary-worktree-only so they never route through queue-work worktree isolation (protects any future such task). BUG-445 closes once both land. Never emit a bare 'git add .' without .gitignore present.
+clock: 1553
 node_id: '1'
