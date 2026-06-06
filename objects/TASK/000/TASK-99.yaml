@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:42:25.110265092Z
-modified_at: 2026-06-06T08:36:03.635162796Z
+modified_at: 2026-06-06T15:18:10.155133739Z
 req_type: Task
 tags:
 - base-freshness
@@ -59,3 +59,8 @@ comments:
       REC: c — closes the visibility half of the original 2026-05-13 pain cheaply without the divergence-handling complexity that the orchestrator/rebase-verb already own; full auto-pull risks surprising the worktree.
   created_at: 2026-06-06T08:36:02.220941059Z
   modified_at: 2026-06-06T08:36:02.220941059Z
+- id: 019e9d83-53eb-7641-8154-142605214f1e
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Build the MINIMAL slice: a ''base is N behind origin/main'' WARNING at worktree creation (no auto-pull), pointing at ''aida rebase''. Closes the visibility half of the original 2026-05-13 pain cheaply. Do NOT auto-pull (risks surprising the worktree) — the orchestrator drain (fresh main per-phase) + the rebase verb already own divergence handling.'
+  created_at: 2026-06-06T15:18:10.155133739Z
+  modified_at: 2026-06-06T15:18:10.155133739Z
