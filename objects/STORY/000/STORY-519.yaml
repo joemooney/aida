@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:35:34.763436046Z
-modified_at: 2026-06-06T08:17:30.831712103Z
+modified_at: 2026-06-06T14:13:04.292569741Z
 req_type: Story
 tags:
 - advisor-vision
@@ -66,3 +66,8 @@ comments:
       REC: c — can't proceed until 265's --plan-only lands regardless of phase.
   created_at: 2026-06-06T08:17:28.658977973Z
   modified_at: 2026-06-06T08:17:28.658977973Z
+- id: 019e9d47-baa4-76e1-9a29-22e5b44f2dfe
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): BUILD (planning is merge-contention-free, independent of drain reliability), GATED on STORY-265''s --plan-only mode landing first. Scope discipline: fan out over the WORKABLE set only (exclude the low-priority tail) to control plan-slop. Recorded blocked-by STORY-265.'
+  created_at: 2026-06-06T14:13:04.292569741Z
+  modified_at: 2026-06-06T14:13:04.292569741Z
