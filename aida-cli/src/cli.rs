@@ -6423,6 +6423,27 @@ pub enum PlanCommand {
         #[clap(long)]
         dry_run: bool,
     },
+
+    /// Synthesize a `docs/plans/` file from a merged/open PR's description
+    /// and commit log. For plans authored via the web `/ultraplan` flow
+    /// that land a PR directly without ever writing a local plan file —
+    /// this reconciles them back into AIDA's plan-archival convention.
+    /// Reads `gh pr view <PR> --json title,body,commits,number` plus
+    /// `gh pr diff <PR> --name-only`, fills the 11-section template, and
+    /// writes `docs/plans/<date>-<slug>-from-pr-<N>.md`. Idempotent —
+    /// re-running overwrites the same file deterministically. The output
+    /// is shaped to pass `aida plan verify`.
+    // trace:TASK-305 | ai:claude
+    Capture {
+        /// PR number to capture (e.g. `65`). Accepts a bare number or a
+        /// `PR-65` / `#65` form.
+        pr: String,
+
+        /// Print the synthesized plan to stdout instead of writing a file
+        /// under `docs/plans/`.
+        #[clap(long)]
+        stdout: bool,
+    },
 }
 
 /// Auto-generated changelog tooling. Mirrors `PlanCommand`'s shape.
