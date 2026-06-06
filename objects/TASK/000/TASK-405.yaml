@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T15:45:39.551220261Z
-modified_at: 2026-05-22T18:19:28.244799346Z
+modified_at: 2026-06-06T08:34:48.023785631Z
 req_type: Task
 tags:
 - auto-complete
@@ -59,3 +59,8 @@ comments:
   content: Commit b3a7bbbe references this requirement
   created_at: 2026-05-22T18:19:28.244799346Z
   modified_at: 2026-05-22T18:19:28.244799346Z
+- id: 019e9c12-0857-7710-851a-bc5c60f83d1d
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded recovery verb — `aida queue work` accepts a PR-N form (or `aida pr drive`) to re-engage the orchestrator on phases 3-6 when implementation shipped outside it; state-aware entry + clean refusals, no open decision (spec's a/b is a minor surface choice the implementer can settle), matches reliability phase.
+  created_at: 2026-06-06T08:34:48.023785631Z
+  modified_at: 2026-06-06T08:34:48.023785631Z
