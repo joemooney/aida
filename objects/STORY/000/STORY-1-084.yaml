@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:43.678942829Z
-modified_at: 2026-05-22T06:43:58.203887092Z
+modified_at: 2026-06-06T08:34:58.550369015Z
 req_type: Story
 tags:
 - first-vertical
@@ -49,3 +49,8 @@ comments:
   content: 'Same refinement note (paired with EPIC-27): the modernization of the original 7 tools is not just about adding the new vocabulary — it''s about matching the coordination 14''s schema style, error shape, and description voice. Agent perspective (per Codex 2026-05-22): all 21 are ONE surface; consistency is the load-bearing UX property.'
   created_at: 2026-05-22T06:43:58.203887092Z
   modified_at: 2026-05-22T06:43:58.203887092Z
+- id: 019e9c12-3176-7942-9f0d-8921598bc143
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Enums already modernized; remaining bounded slice = add tags/batch/parent/in_flight filters to list_requirements + include_git/verbose to show_requirement, mirroring current CLI. ~200-400 LOC, no open decision.
+  created_at: 2026-06-06T08:34:58.550369015Z
+  modified_at: 2026-06-06T08:34:58.550369015Z
