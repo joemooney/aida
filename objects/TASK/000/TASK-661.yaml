@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:27:03.920818292Z
-modified_at: 2026-06-06T08:20:45.133550553Z
+modified_at: 2026-06-06T17:14:07.668633228Z
 req_type: Task
 tags:
 - advisor
@@ -46,3 +46,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). Per-scope disposition/triage lease reusing the queue/session lease + reaper; a 2nd advisor disposing the same scope is refused naming the holder. Substrate-as-bouncer pattern already established.
   created_at: 2026-06-06T08:15:03.176369786Z
   modified_at: 2026-06-06T08:15:03.176369786Z
+- id: 019e9ded-7db4-7c60-ab8b-16abf9095ab3
+  author: joe
+  content: Commit 224a1ca65 references this requirement
+  created_at: 2026-06-06T17:14:07.668633228Z
+  modified_at: 2026-06-06T17:14:07.668633228Z
