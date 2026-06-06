@@ -13879,5 +13879,83 @@ operations:
   timestamp: 2026-06-06T13:53:08.830523973Z
   kind: !SetStatus
     status: Rejected
-clock: 1500
+- id: 019e9d35-8fc5-7423-bae1-bb7ca458b2e8
+  target_id: 019e2926-3613-7d81-924d-34a7367ee66d
+  author: aida
+  node_id: '1'
+  lamport: 1501
+  timestamp: 2026-06-06T13:53:13.669237932Z
+  kind: !SetDescription
+    description: |
+      Today's friction repeatedly comes from a single root cause: AIDA's surfaces don't proactively name the workflow state the user is in or the right next action. Users (and agents) have to maintain that state machine in their heads. When the model slips — running catch-up commands before a merge happens, running aida show on a stuck review story, mistaking 'Done' for 'done-done' — the system either silently does the wrong thing or surfaces confusing output.
+
+      ## The principle this STORY encodes
+
+      Every AIDA output should answer three questions:
+      1. **Where am I?** (current state — branch, lease, PR status, queue position)
+      2. **Where can I go from here?** (reachable next states)
+      3. **What's the right action to take me there?** (concrete command, not prose)
+
+      When that triple is missing, the user/agent fills the gap from memory — and the memory is often wrong (different binary version, different role, stale state).
+
+      ## Observed instances (all 2026-05-13/14 same session)
+
+      - PR-27 just opened (not merged) — user instinct said 'git pull; aida pull; make build-release; make build' — would have been no-ops because the merge hadn't happened. No surface said 'wait for merge.'
+      - STORY-124 stuck at Done — user asked 'but I already merged?' — no surface said 'review stories don't auto-bump; manual flip needed.'
+      - aida show STORY-86 returned 'Requirement not found' — actual cause was parse failure, but no surface said 'binary version skew likely.'
+      - aida session end ambiguous when multiple leases active — surface lists them but doesn't say 'this is the one you probably want.'
+      - /aida-pr next-steps block ordered End-session last — no surface noticed the new role couldn't pick up cleanly.
+
+      Each is captured separately (BUG-101, BUG-102, BUG-97, BUG-98, TASK-110, TASK-217, TASK-234, etc.) but the PATTERN deserves its own story so future surface additions get the right framing from the start.
+
+      ## Two scopes of work
+
+      ### Scope A — Audit + enrich every skill's next-steps block
+
+      Every skill output in aida-core/templates/skills/*.md that emits a 'Next steps' block should:
+      - Name the current state explicitly ('PR-N is OPEN with CI green; merge not yet')
+      - List ALL reachable next states ('approve → merge → catch-up' vs 'request changes → fixup loop' vs 'pause → resume later')
+      - Cite concrete commands per transition (not 'usually you would...' prose)
+      - Explicitly warn against premature actions ('do NOT run aida pull yet — origin/main has no new commits')
+
+      ### Scope B — Proactive anti-pattern detection
+
+      Surfaces that the user TYPES (aida show, aida pull, aida session end, git pull, etc.) should detect when their preconditions are not met:
+      - aida pull when origin/main has no new commits AND user has active reviewer lease on unmerged PR → warn 'No new commits. Did you mean to wait for PR-N to merge first?'
+      - git pull when local main is already at origin/main → warn cheaply (single line)
+      - make release-* when there are unmerged PRs touching the workspace → warn 'Active PR-N is not merged. Release will not include its changes.'
+      - aida session end on the only role's lease while a different role has queued work waiting → warn 'You're about to leave reviewer role but implementer queue has 3 items. Switch role first?'
+
+      The detection is cheap (single git query + queue/lease lookup) and runs only on common command entry points.
+
+      ## What this is NOT
+
+      - NOT a giant 'state machine' framework. The reality is simpler: each surface that emits next-steps or accepts user input should be state-aware. Not a unified state-machine library.
+      - NOT a refusal-to-act mechanism. Warnings, not blocks. User/agent always has the choice; we just make sure they're informed.
+      - NOT trying to cover every conceivable user mistake. Curate the top N anti-patterns observed in 2026-05-14 friction (the ones in 'Observed instances' above).
+
+      ## Composes with
+
+      - All the individual fixes already filed (BUG-101, BUG-102, BUG-97, BUG-98, TASK-110, TASK-217, TASK-234): point fixes; this STORY frames them as instances of the pattern
+      - TASK-220 (aida status): provides the 'where am I?' answer; this STORY makes other commands consult it
+      - STORY-122 (aida usage telemetry): track 'warning fired N times, accepted/dismissed' to inform threshold tuning
+      - STORY-125 (integration framework): same pattern — config tells AIDA when to surface guidance
+      - docs/session-lifecycle.md (already updated): the canonical state-machine doc; this STORY pushes the SAME info into runtime surfaces
+
+      ## Acceptance
+
+      - [ ] Audit complete: every skill's 'Next steps' block uses the 3-question template (where am I / where can I go / what action)
+      - [ ] At least 4 anti-pattern detectors implemented (one each for: aida pull no-op, git pull no-op, make release with unmerged PR, aida session end with cross-role queue waiting)
+      - [ ] Anti-patterns surface as warnings (not blocks); user/agent decides
+      - [ ] docs/session-lifecycle.md cross-links to this STORY as the runtime counterpart of its static documentation
+      - [ ] STORY-122 (telemetry) tracks anti-pattern warning fires + dismissals — informs which warnings deserve refinement vs removal
+
+      ## Discovered via
+
+      2026-05-14 — user reflected: 'Going forward I am hoping that I will not get into that situation again whereby I will have clearer next step instructions.' The PR-27 catch-up confusion (running git pull/aida pull/build BEFORE the merge happens) was the specific trigger. The STORY frames the broader principle: AIDA shouldn't require the user/agent to maintain workflow state — every surface should help name it.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      Build SCOPE B only — the 4 runtime anti-pattern detectors (aida pull no-op, git pull no-op, release-with-unmerged-PR, session-end-with-cross-role-queue). Each is a single git/queue/lease query. DEFER Scope A (audit every skill's next-steps block) — handle incrementally via the existing child point-fixes. Split accordingly.
+clock: 1501
 node_id: '1'
