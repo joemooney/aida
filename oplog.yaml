@@ -15049,5 +15049,69 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER to the marketing/first-impression phase — self-described polish; theming pays off most paired with visibility work, not during bug-clearing. When built: Theme struct + route hardcoded colors + 2-3 themes (one Catppuccin default) is the right first slice; defer the full 7-theme matrix + picker/persistence.
-clock: 1538
+- id: 019e9d7d-d44e-7ba2-ba41-82992f7c4c14
+  target_id: 019e34c6-177f-7e60-b446-94763bc066d6
+  author: aida
+  node_id: '1'
+  lamport: 1539
+  timestamp: 2026-06-06T15:12:09.806809121Z
+  kind: !SetDescription
+    description: |
+      The local \`/ultraplan\` flow returns a markdown plan that \`/aida-import-plan\` lands at \`docs/plans/YYYY-MM-DD-<slug>.md\`. The **web /ultraplan flow** (initiated from \`aida ultraplan\` clipboard prompt, approved on claude.ai, executed remotely) lands a PR **directly** — no plan file under \`docs/plans/\`, no \`plan_path\` on the spec, no plan brief riding into the implementer session (TASK-95 / TASK-94 patterns go silent for these specs).
+
+      This creates a coherence gap: AIDA's plan archival convention is *the* canonical record of how a spec was approached; the web flow leaves a hole.
+
+      ## Two possible solutions
+
+      ### Option A: post-PR-land hook (passive recovery)
+
+      After a PR closes/merges with a \`(SPEC-ID)\` linkage AND no \`docs/plans/\` file exists for that spec, automatically run \`aida plan capture <PR>\` (new subcommand) which extracts:
+      - The PR description (often the plan summary from the web /ultraplan session)
+      - Commit messages in order (the step-by-step plan execution)
+      - Files changed (the "Critical Files" section, derived)
+
+      …and synthesizes a \`docs/plans/YYYY-MM-DD-<slug>-from-pr-N.md\` file matching the AIDA 11-section template.
+
+      ### Option B: explicit user command (active recovery)
+
+      User runs \`aida plan capture <PR>\` when they choose. Same extraction logic, no automatic hook.
+
+      ### Recommended: B first, A later
+
+      Option B is bounded and proves the extraction logic works. Add the post-PR hook in a follow-up once we've seen real extracted plans and know they're useful.
+
+      ## Acceptance
+
+      - [ ] \`aida plan capture <PR>\` extracts a docs/plans/-shaped file from a PR's description + commit log
+      - [ ] Output filename: \`docs/plans/YYYY-MM-DD-<spec-id-or-slug>-from-pr-<N>.md\`
+      - [ ] Header carries \`Date / Specs / Status / Complexity / Source: web /ultraplan PR-N\`
+      - [ ] All 11 sections present (the ones AIDA's plan verify requires); missing-data sections show \`<!-- not captured from PR -->\` rather than being omitted
+      - [ ] \`aida plan verify\` passes on the captured file
+      - [ ] \`Critical Files\` section auto-populated from \`gh pr diff --name-only\`
+      - [ ] \`Verification\` section pulls anything in the PR description that looks like test/verification commands; otherwise marked \`<!-- not captured -->\`
+      - [ ] Idempotent: re-running \`aida plan capture <PR>\` overwrites the same file deterministically
+      - [ ] \`aida ultraplan SPEC\` printout hints: *"Web flow detected? Run \`aida plan capture <PR>\` after the PR lands to archive the plan."*
+      - [ ] Test: a known PR (e.g., the eventual STORY-278 PR) extracts to a plan file that \`aida plan verify\` accepts
+
+      ## Out of scope
+
+      - **Auto-trigger on PR merge** — defer to follow-up TASK once extraction quality is proven on real cases
+      - **Re-execute the web /ultraplan logic locally** — that's a different problem (we don't have remote-execution parity)
+      - **Plan brief mid-implementation** — capture is post-merge; TASK-95 pre-session brief only fires for plans that exist at queue-work time
+
+      ## Composes with
+
+      - **TASK-92** (plan template + 11 sections — the shape we're filling)
+      - **TASK-93** (\`aida plan verify\` — the validator the captured file must pass)
+      - **TASK-95** (plan brief in session manifest — captured plans become eligible for this once present)
+      - **STORY-278** (concrete near-term test case — web /ultraplan PR will land soon)
+
+      ## Origin
+
+      2026-05-17 user observation: ran \`aida ultraplan STORY-278\` → pasted into Claude Code → web flow took over → approved → remote session executing → "Results will land as a pull request when the remote session finishes." Recognized this bypasses \`docs/plans/\` archival entirely. AIDA's plan-as-coherence-record convention needs reconciliation with the web flow that produces no markdown plan file.
+
+      ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+      BUILD Option B: explicit 'aida plan capture <PR>' that synthesizes the 11-section docs/plans/ file from the PR description + commit log (for plans authored via the web /ultraplan flow that never landed a local plan file). Bounded, plan-tooling-adjacent.
+clock: 1539
 node_id: '1'
