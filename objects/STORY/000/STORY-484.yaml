@@ -90,12 +90,12 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'docs seems like it is in the wrong place, maybe they should go under .aida and not conflict with any of the projects (user of aida) own docs. Thoughts?' Refined via design discussion: discipline pack is AIDA-owned content that should be namespaced; plans are PROJECT content that belong at the natural docs/plans/ slot. Option F (docs/aida/ + docs/plans/) is the architecturally clean answer given the no-existing-users window.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:56:38.756646757Z
-modified_at: 2026-06-06T08:37:04.891838309Z
+modified_at: 2026-06-06T08:37:06.861971526Z
 req_type: Story
 tags:
 - architecture
