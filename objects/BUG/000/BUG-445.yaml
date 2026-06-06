@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:14:20.867633023Z
-modified_at: 2026-06-06T07:40:54.465682583Z
+modified_at: 2026-06-06T08:29:49.612156216Z
 req_type: Bug
 tags:
 - aida:init
@@ -49,3 +49,14 @@ comments:
     The UX fork in TASK-631 (auto vs prompt, what exactly to commit) is the operator's to weigh on the Trojan-horse product's most sensitive surface — deferring per feedback_pause_for_design_input + feedback_one_master_advisor_until_subsystems. Leaving BUG-445 Approved, NOT charging a fix unsupervised. Related: BUG-446/447 (shipped this session), BUG-433.
   created_at: 2026-06-06T07:40:54.465682583Z
   modified_at: 2026-06-06T07:40:54.465682583Z
+- id: 019e9c0d-7aac-7e11-a9df-73efe6fdccfe
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: How should the onboarding "commit scaffolding" footgun be closed — the worktree-isolation path makes the seeded first-task uncompletable and dangerous (git add . embeds gitlinks/symlinks)?
+      a) Fix only via root cause: land TASK-631 (init commits its own scaffolding), which dissolves the "commit scaffolding" task entirely — close BUG-445 as covered.
+      b) Also (regardless of TASK-631) flag setup/scaffolding-commit tasks as primary-worktree-only so they never route through queue-work worktree isolation.
+      c) Keep the seeded task but never emit a bare "git add ." — scope the staged paths and guard on .gitignore presence.
+      REC: a+b — TASK-631 removes the task in the common path; b is the durable guardrail for any future primary-worktree-only task. (a alone leaves the class of bug; b alone leaves the dead task seeded.)
+  created_at: 2026-06-06T08:29:49.612156216Z
+  modified_at: 2026-06-06T08:29:49.612156216Z
