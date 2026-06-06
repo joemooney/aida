@@ -9,12 +9,12 @@ description: |-
 
   Output: docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/02-agent-view-dispatch.md
   Acceptance: schema of 'claude agents --json' captured, registry primitive named, compete/compose/ignore call.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T03:21:35.939923680Z
-modified_at: 2026-06-06T08:37:53.205248362Z
+modified_at: 2026-06-06T08:37:55.098473438Z
 req_type: Spike
 tags:
 - agent-view
