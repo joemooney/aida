@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:40:14.110049032Z
-modified_at: 2026-06-06T08:30:42.485097175Z
+modified_at: 2026-06-06T15:20:07.837221292Z
 req_type: Spike
 tags:
 - dev-experience
@@ -59,3 +59,8 @@ comments:
       REC: a — lowest-machinery, reuses existing throwaway-environment plumbing; avoids daemon-grade infra for a throwaway need.
   created_at: 2026-06-06T08:30:39.932213996Z
   modified_at: 2026-06-06T08:30:39.932213996Z
+- id: 019e9d85-1f9d-7742-af23-cbecd56fd183
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Build the DEV-PLAYGROUND slice now: a throwaway sandbox store for drain-testing (on-thesis — would have avoided the TASK-639/640/641 clutter validating STORY-492). Mechanism: separate dir + AIDA_STORE env override (reuses the validate-resume.sh isolated-$HOME pattern — lowest machinery, no daemon-grade infra). DEFER the first-user/tutorial-framing layer to the marketing phase.'
+  created_at: 2026-06-06T15:20:07.837221292Z
+  modified_at: 2026-06-06T15:20:07.837221292Z
