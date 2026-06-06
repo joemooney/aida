@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-05-12T15:25:00.112532296Z
+modified_at: 2026-06-06T08:36:09.114539608Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -75,3 +75,15 @@ relationships:
 - rel_type: Parent
   target_id: 019e3312-c4f9-7c81-ac28-9b3f88115a25
   created_at: 2026-05-16T23:15:31.454291568Z
+comments:
+- id: 019e9c13-451a-70c1-b4ce-0818e374ce4c
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: The foundational surface shipped (`aida doc` add/show + docs-tree projection), but the EPIC's larger vision (auto tutorial generation, book-chapter composition, diff-driven doc prompts) is unbuilt and several child edges are dangling/removed. Close as substantially-delivered or keep driving the vision?
+      a) Close the EPIC as substantially delivered; re-file any still-wanted projection features as fresh standalone stories.
+      b) Keep open and prioritize the auto-tutorial/book-projection children (heavy, prose-generation-adjacent work).
+      c) Keep open but parked behind the stability phase; only the proactive-capture children (prompt for WHY at checkpoints) get revisited.
+      REC: a — the load-bearing primitive (`aida doc`) exists and is in use; an open umbrella EPIC with dangling children is graph noise. Re-file the specific projection features that still have a champion as bounded specs.
+  created_at: 2026-06-06T08:36:09.114539608Z
+  modified_at: 2026-06-06T08:36:09.114539608Z
