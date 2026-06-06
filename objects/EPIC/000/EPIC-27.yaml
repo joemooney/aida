@@ -76,12 +76,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T23:46:41.299481463Z
-modified_at: 2026-06-06T08:35:02.315605102Z
+modified_at: 2026-06-06T08:35:03.817288364Z
 req_type: Epic
 tags:
 - agent-collaboration
 - mcp
 - modernization
+- needs-human-input
 - strategic
 - workflow-tools
 relationships:
