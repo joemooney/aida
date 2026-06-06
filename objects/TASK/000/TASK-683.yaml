@@ -1,0 +1,18 @@
+id: 019e9d96-69a6-7a82-b7f1-d9845fb66813
+spec_id: TASK-683
+agreed_id: TASK-683
+title: 'STORY-265 slice 1: aida plan promote — Approved→Planned when a plan file exists'
+description: 'First slice of STORY-265 (operator-scoped 2026-06-06). Adds ''aida plan promote [SPEC|--all] [--dry-run]'': detects a docs/plans/ file whose Specs: header lists the SPEC-ID and transitions Approved→Planned via the proven edit path. Makes the Planned lifecycle step real + automatic — the dependency STORY-519 (parallel plan fan-out) needs to mark specs Planned. Slice 2 (separate): --plan-only launch mode + auto-complete plan-phase + queue-list glyphs.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-06T15:39:00.902237698Z
+modified_at: 2026-06-06T15:39:00.902237698Z
+req_type: Task
+tags:
+- from-disposition-sweep
+- parallel-pipelining
+- parent:STORY-265
+- plan-phase
+- planned-status
