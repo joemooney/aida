@@ -67,7 +67,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T16:40:14.511180807Z
-modified_at: 2026-05-22T16:40:14.511180807Z
+modified_at: 2026-06-06T08:34:51.572760777Z
 req_type: Story
 tags:
 - adoption
@@ -76,3 +76,15 @@ tags:
 - governance
 - supported-agent
 - tier-model
+comments:
+- id: 019e9c12-1634-7370-88ed-29ef74cbbce9
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Define a supported-agent tier model (Verified/Experimental/Unsupported) in docs/agents/SUPPORTED.md. Pure governance/documentation, depends on Codex (STORY-398) + Antigravity (STORY-407) verdict evidence. The spec notes tier-classification IS architecture requiring master sign-off. Build now?
+      a) Ship the framework now: docs/agents/SUPPORTED.md with the three tier definitions + graduation checklist + initial rows for Claude (Verified) / Codex / Antigravity at whatever evidence exists; AGENTS.md + README pointers.
+      b) Defer until STORY-398/407 produce concrete verdicts so the tier rows are evidence-backed (the spec stresses "claims must be evidence-backed"); the framework doc without real verdicts risks overclaiming.
+      c) Reject as premature governance — alpha is Claude-only; a formal tier model is marketing/governance surface deferred by the bugs-before-marketing phase.
+      REC: c — formalizing a public supported-agent tier model is marketing/governance work that the current phase explicitly defers, and it can't be evidence-backed until the Codex/Antigravity verdict specs land; revisit at the marketing phase.
+  created_at: 2026-06-06T08:34:51.572760777Z
+  modified_at: 2026-06-06T08:34:51.572760777Z
