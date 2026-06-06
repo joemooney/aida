@@ -1,0 +1,26 @@
+id: 019e9b5d-66d6-79d3-955e-405ee034ca70
+spec_id: STORY-525
+agreed_id: STORY-525
+title: 'Review PR-547: [AI:claude] feat(queue): id-real, remote-aware ''Awaiting commit'' next-hint (TASK-671)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e9b54`) for branch `task-671`.
+
+  - PR: <https://github.com/joemooney/aida/pull/547>
+  - Branch: `task-671` → `main`
+
+  ## Covers
+
+  - TASK-671
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 547` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-06T05:17:30.198068293Z
+modified_at: 2026-06-06T05:17:30.198068293Z
+req_type: Story
