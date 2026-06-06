@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:33:08.323277210Z
-modified_at: 2026-05-31T04:44:24.923321143Z
+modified_at: 2026-06-06T08:31:30.056270718Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -80,4 +80,15 @@ comments:
   content: 'Deferred 2026-05-30 (blocked-queue triage, operator-approved): off-phase for the current bugs-first → stability phase. Valid work — kept as Approved backlog, dequeued from the active queue, tagged deferred:post-stability. Revisit when the phase shifts. Note: net-new orchestrator feature (resumable integrate pass + rebase step); build when deferred-batch throughput matters.'
   created_at: 2026-05-31T04:43:26.288947182Z
   modified_at: 2026-05-31T04:43:26.288947182Z
+- id: 019e9c0f-0308-7250-9e15-8dbe85853b0c
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: The deferred-batch integrate-pass (`--auto-complete=from-review` + new rebase step + `--strategy` selector) is a sizeable autonomy-machinery story tagged deferred:post-stability. How to dispose?
+      a) Keep deferred — it extends the autonomy keystone the project is currently stabilizing; reliability-class machinery is best built at the keyboard after the floor is solid
+      b) Build the MVP (`per-item` strategy: from-review resume → rebase → merge per member; one-branch/stacked error cleanly) now
+      c) Build only the `--dry-run` cross-batch rebase-conflict forecast slice first (low-risk, immediately useful, de-risks the full rebase pass)
+      REC: a (or c if appetite) — the new rebase step touches the orchestrator lifecycle the project is mid-stabilizing; reliability fixes to the keystone ship best at-keyboard, not as fresh deferred machinery. If building, (c) is the safest first slice. Needs operator call on phase-vs-appetite.
+  created_at: 2026-06-06T08:31:30.056270718Z
+  modified_at: 2026-06-06T08:31:30.056270718Z
 human_only: true
