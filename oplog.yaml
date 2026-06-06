@@ -12742,5 +12742,63 @@ operations:
   timestamp: 2026-06-05T23:22:01.449658636Z
   kind: !SetStatus
     status: Approved
-clock: 1409
+- id: 019e9afd-490f-7890-8bbc-098ece5646cf
+  target_id: 019e9af8-9aa2-7913-b29e-60c9ef204038
+  author: aida
+  node_id: '1'
+  lamport: 1410
+  timestamp: 2026-06-06T03:32:31.119893547Z
+  kind: !SetDescription
+    description: |-
+      ## Idea (operator, 2026-06-05)
+
+      Recurring bottleneck: human intervention. Distill it into structured questions+choices the human BATCH-answers OUTSIDE any agent (plain CLI, no LLM session), record the answer on the spec, and let the next automation loop resume from it. Shifts the human from per-item babysitter (re-context + restart) to async batch oracle.
+
+      ## Today (the gap)
+
+      The punt/escalation (STORY-306) carries an `escalation_reason` (string) + `resolution_path: "escalated-to-human"` — "go investigate," NOT a structured question+choices. The human must drop into an agent and re-context per item. That per-item human-recovery latency IS the burn-down gap.
+
+      ## The protocol
+
+      1. **Question artifact (extends the punt).** When the advisor can't resolve a fork, it emits a DecisionRequest on the spec: { question, choices[] (enumerated, each maps to a concrete resolution), recommended-default, per-choice consequences, rationale }. AskUserQuestion shape, PERSISTED to the substrate. The advisor DISTILLS so the question is self-contained (no spec re-read).
+      2. **Decision inbox + plain-CLI answer (NO agent).** Pure data op — no LLM, no session. Records the choice, flips status pending → answered. Batchable, scriptable; git-backed → eventually a web/mobile form.
+      3. **Loop pickup.** Next pass: the advisor reads answered specs, applies the chosen resolution (deterministic next step), the spec flows again.
+
+      ## CLI surface (operator-refined 2026-06-05)
+
+      AIDA convention is bare-subcommand-group = help; `questions` deliberately deviates to be useful. Read-first, opt-in mutation (no auto-loop surprise):
+      - `aida questions` — show the decision inbox (list); if TTY + pending, offer "Answer N now? [Y/n]" → enter the answer loop on yes. Non-TTY (piped) → list only, no prompt.
+      - `aida questions list` — pure list, no prompt (scripting/scanning).
+      - `aida questions answer` — enter the interactive answer loop directly.
+      - `aida questions answer <spec> <choice>` — single NON-INTERACTIVE answer (the agent-free data op; scriptable/web/batch).
+      - `aida questions answer --all-defaults` — confirm every recommended default in one shot (the trusting batch).
+
+      ## Make-or-break design requirements
+
+      - **Self-contained questions** — the advisor distills (state / deciding factor / options + per-option consequences / recommended default). Finish-checkpoint-clarity discipline, persisted.
+      - **Recommended default + --all-defaults** — confirm-or-override fast.
+      - **Choices enumerated + actionable** — each maps to a resolution the loop applies; never free-form.
+      - **Async/batch** — human-answer-time decouples from agent-run-time.
+
+      ## Two symmetric inboxes (architecture)
+
+      - Intake inbox (drafts) → ADVISOR triages (ADR-3) — new work.
+      - Decision inbox (questions) → HUMAN answers (this) — stuck work.
+      Both async, batched, substrate-resident; the loop consumes both.
+
+      ## Why now
+
+      Attacks the diagnosed bottleneck (human-recovery latency). Compounds with BUG-444 (fewer false-stops → fewer questions) and the advisor tier (auto-resolves principled forks → fewer escalations) so residual human involvement is minimal + pleasant.
+
+      ## Acceptance (sketch — master refines; likely EPIC-promotable)
+
+      - [ ] A fork the advisor can't resolve emits a structured DecisionRequest (question + enumerated choices + default + consequences) on the spec, not just a reason string.
+      - [ ] `aida questions` lists the inbox and, at a TTY with pending items, offers to enter the answer loop; `aida questions list` is the pure read.
+      - [ ] `aida questions answer [<spec> <choice>]` records answers WITHOUT any agent/LLM (interactive loop with no args; single non-interactive with spec+choice) and flips status pending → answered; `--all-defaults` confirms recommended defaults in bulk.
+      - [ ] The next drain/advisor loop applies the answered choice and resumes the spec.
+      - [ ] Questions are self-contained (no spec re-read needed) — enforced by the distillation template.
+
+      ## Relationships
+      - Builds on STORY-306 (advisor tier / escalation), `--escalate-defaults`. Symmetric with ADR-3 (intake inbox). Reduces the recovery-latency metric (EPIC-36). Out-of-band channel: STORY-493 (mailbox). The human-facing rung of the autonomy ladder (docs/architecture/autonomy-and-escalation.md).
+clock: 1410
 node_id: '1'
