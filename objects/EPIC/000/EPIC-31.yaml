@@ -66,7 +66,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:20:33.465215952Z
-modified_at: 2026-06-06T13:49:34.614615909Z
+modified_at: 2026-06-06T13:49:35.788541369Z
 req_type: Epic
 tags:
 - agent-launcher
@@ -93,3 +93,5 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): HOLD the remainder post-stability — the operational core (registry + Claude launcher) is shipped; the rest (per-agent Codex/Antigravity launchers, MCP busy/idle heartbeat, role-context auto-injection) is multi-agent/non-Claude expansion the bugs-before-marketing phase defers and the spec itself flags tentative-pending-evidence. Parked (unarchive to resume when multi-agent scale justifies it).'
   created_at: 2026-06-06T13:49:33.262967656Z
   modified_at: 2026-06-06T13:49:33.262967656Z
+archived: true
+archived_at: 2026-06-06T13:49:35.788541369Z
