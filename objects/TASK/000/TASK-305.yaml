@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:57.919405229Z
-modified_at: 2026-06-06T08:35:28.018366049Z
+modified_at: 2026-06-06T15:12:07.975212707Z
 req_type: Task
 tags:
 - archival
@@ -92,3 +92,8 @@ comments:
       REC: b — legitimate coherence work but it is feature-add, not bug/stability, and frequency is low. Keep Approved; revisit when web-flow PRs recur.
   created_at: 2026-06-06T08:35:26.376361090Z
   modified_at: 2026-06-06T08:35:26.376361090Z
+- id: 019e9d7d-cd27-7c72-8572-8dedb987b962
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): BUILD Option B: explicit ''aida plan capture <PR>'' that synthesizes the 11-section docs/plans/ file from the PR description + commit log (for plans authored via the web /ultraplan flow that never landed a local plan file). Bounded, plan-tooling-adjacent.'
+  created_at: 2026-06-06T15:12:07.975212707Z
+  modified_at: 2026-06-06T15:12:07.975212707Z
