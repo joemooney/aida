@@ -85,12 +85,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:17.799198527Z
-modified_at: 2026-06-06T14:00:41.487672752Z
+modified_at: 2026-06-06T14:00:43.000876168Z
 req_type: Story
 tags:
 - agents
 - aida:status
 - cloud
+- deferred:post-stability
 - from-self-test
 - from-user-direction
 - multi-machine
