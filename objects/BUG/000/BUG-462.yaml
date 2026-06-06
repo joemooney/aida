@@ -1,0 +1,23 @@
+id: 019e9b8c-8570-7633-abe6-f0c96e94866e
+spec_id: BUG-462
+agreed_id: BUG-462
+title: 'Headless --no-human=both: implementer clean-exit-with-question is not routed to the advisor tier (BUG-459 sibling)'
+description: |-
+  Validation drain of TASK-457 (2026-06-05): the headless implementer hit a genuine strategic fork (onboarding feature work during the bugs-before-marketing phase), presented options A/B, asked 'Which way do you want to go?', and exited cleanly with NO commits. The orchestrator treated this as a plain phase-1 failure ('exited cleanly but opened no PR') with a /aida-pr resume hint — it did NOT recognize the implicit fork as a punt and did NOT route to the headless advisor tier (/aida-advise). The designed --no-human=both cascade (implementer punt -> advisor resolves-and-resumes OR escalates) never fired.
+
+  BUG-459 fixed the commits-exist-but-no-PR sub-case (orchestrator auto-opens the PR). This is the sibling: no-commits + clean-exit + conversational-question. Substrate-as-bouncer fix: under --no-human=both, a phase-1 clean exit with no PR AND no commits should be treated as an IMPLICIT punt -> route to the headless advisor tier, instead of hard-failing. The implementer asking a question and exiting is functionally identical to a punt; the orchestrator must not require the exact sentinel to trigger the advisor cascade.
+
+  Evidence: .aida/drain-logs/task-457-validation.log; task-457 branch empty (no commits); TASK-457 landed Needs Attention but advisor was never consulted. trace:BUG-459
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-06T06:08:58.224236855Z
+modified_at: 2026-06-06T06:08:58.224236855Z
+req_type: Bug
+tags:
+- batch:autonomy-floor
+- epic-33
+- no-human
+- orchestrator
+- reliability
