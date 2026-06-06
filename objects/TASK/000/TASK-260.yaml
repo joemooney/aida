@@ -62,7 +62,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T16:27:19.857342230Z
-modified_at: 2026-06-04T04:48:58.810128065Z
+modified_at: 2026-06-06T23:18:42.216205752Z
 req_type: Task
 tags:
 - aida:pickup
@@ -190,6 +190,11 @@ comments:
   content: 'Cross-reference: this spec is an instance of the pattern TASK-311 is designed to catch at filing time (dialog-role criteria contradicting the feature''s primary caller environment). Comment added 2026-05-17 as part of the self-audit lesson capture.'
   created_at: 2026-05-17T16:37:22.556027558Z
   modified_at: 2026-05-17T16:37:22.556027558Z
+- id: 019e9f3b-4528-7f22-a5b7-a8f9cc855a71
+  author: joe
+  content: 'Cross-ref: this spec is one of four instances cited in TASK-311 (codify the filing-time discipline ''name the primary caller(s) and verify each acceptance criterion against THEIR environment before filing''). See docs/aida/discipline/session-discipline.md -> ''Verify acceptance criteria against the primary caller''.'
+  created_at: 2026-06-06T23:18:42.216205752Z
+  modified_at: 2026-06-06T23:18:42.216205752Z
 archived: true
 archived_at: 2026-06-04T04:48:58.810128065Z
 implementation_info:
