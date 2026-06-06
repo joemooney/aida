@@ -2,12 +2,12 @@ id: 3999e6a2-0914-43de-a953-ee09d418d78a
 spec_id: EPIC-7
 title: 'ImplementationInfo: Implementation Metadata Tracking'
 description: 'Add an ImplementationInfo structure to track implementation metadata for requirements. Fields: implemented (bool), implementation_summary (Option String), last_agent_run (Option DateTime), risk_notes (Option String), test_coverage_notes (Option String), source_tool (Option String - e.g. claude, copilot), confidence_level (Option enum: High, Med, Low). Store as part of the Requirement in both YAML and SQLite backends.'
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: 136-traceability
 created_at: 2025-12-11T00:37:47.918542666Z
-modified_at: 2025-12-11T00:37:47.918542666Z
+modified_at: 2026-06-06T08:13:54.055830254Z
 req_type: Epic
 trace_links:
 - id: c2bb330c-f8b8-4e5d-900b-9b83ff68ca98

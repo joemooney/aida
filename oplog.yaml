@@ -13120,5 +13120,13 @@ operations:
   timestamp: 2026-06-06T08:13:49.871570435Z
   kind: !SetStatus
     status: Rejected
-clock: 1450
+- id: 019e9bfe-e65f-78d2-b23a-f44153e6c178
+  target_id: 3999e6a2-0914-43de-a953-ee09d418d78a
+  author: aida
+  node_id: '1'
+  lamport: 1451
+  timestamp: 2026-06-06T08:13:54.143628134Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1451
 node_id: '1'
