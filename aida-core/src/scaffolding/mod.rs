@@ -17,7 +17,7 @@ mod hooks;
 mod managed_merge;
 mod settings;
 
-pub use aida_md::extract_aida_block;
+pub use aida_md::{aida_md_matches, extract_aida_block};
 pub use claude_md::{claude_md_has_import, insert_claude_md_import, CLAUDE_AIDA_IMPORT};
 pub use managed_merge::{slot_merge, slots_for_file, SlotChange, SlotChangeKind};
 
@@ -172,6 +172,21 @@ pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> Dif
                         }
                     }
                 },
+            }
+        }
+        "AIDA.md" => {
+            // .claude/AIDA.md's "Claude Code skills" section is gated by
+            // generate_skills; an `aida init --no-skills` project drops it,
+            // but the status path always regenerates with skills on. Compare
+            // tolerant of that section so a clean --no-skills init doesn't
+            // report STALE-on-arrival. trace:TASK-125 | ai:claude
+            if aida_md_matches(actual, expected) {
+                DiffSlice::Match
+            } else {
+                DiffSlice::FullDiff {
+                    expected: expected.to_string(),
+                    actual: actual.to_string(),
+                }
             }
         }
         _ => {
