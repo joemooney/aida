@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:58:25.820595517Z
-modified_at: 2026-05-27T06:58:25.820595517Z
+modified_at: 2026-06-06T08:33:48.658634040Z
 req_type: Story
 tags:
 - agent-lift
@@ -20,3 +20,15 @@ relationships:
 - rel_type: Child
   target_id: 019e6835-1165-7f10-b5a0-d59343aa6544
   created_at: 2026-05-27T06:58:33.393752461Z
+comments:
+- id: 019e9c11-2072-7553-9603-b71288bab52d
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Productizing dogfood telemetry into `aida metrics agent-lift` is proof/marketing material (case studies, release notes). No `agent-lift` metrics code exists yet. Build now?
+      a) Reject/defer — marketing-phase artifact; defer per bugs-then-stability-then-marketing ordering
+      b) Build now — the underlying telemetry/usage substrate exists, so this is mostly a reporting layer and feeds the eventual marketing push
+      c) Minimal slice — emit the 2-3 metrics already trivially derivable (auto-bump success rate, coordinated agent count) and defer the rest
+      REC: a — its explicit purpose is dogfood-proof/case-study material, which is the deferred marketing phase; nothing downstream is blocked on it today.
+  created_at: 2026-06-06T08:33:48.658634040Z
+  modified_at: 2026-06-06T08:33:48.658634040Z
