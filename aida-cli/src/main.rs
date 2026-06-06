@@ -5406,11 +5406,42 @@ fn complete_init_scaffolding(
     Ok(())
 }
 
+/// Build the seeded onboarding "Commit AIDA scaffolding" requirement (sans the
+/// spec-id-dependent description, which the caller fills once an id is assigned).
+///
+/// BUG-445: the durable guardrail lives here. A scaffolding-commit task acts on
+/// the PRIMARY worktree's uncommitted state (the freshly-scaffolded `.gitignore`,
+/// `.aida/config.toml`, `.claude/*`). It must NEVER route through `aida queue
+/// work` worktree isolation: a worktree branched off the initial commit lacks
+/// the scaffolding entirely, and a bare `git add .` there (no `.gitignore`
+/// present) would embed the `.aida-store` gitlink + machine-specific
+/// cache/session symlinks into history. Flagging it `human_only` makes the
+/// pickability gate (`aida_core::pickability`) refuse it at every queue-work
+/// pickup site — head pickup, batch drain, and cluster drain — so it stays
+/// primary-worktree-only. The human (or any non-isolated session) marks it done
+/// with `aida queue done` after committing in the canonical repo.
+// trace:BUG-445 | ai:claude
+fn build_initial_scaffold_requirement() -> aida_core::Requirement {
+    use aida_core::{Requirement, RequirementPriority, RequirementStatus, RequirementType};
+
+    let mut req = Requirement::new(
+        "Commit AIDA scaffolding (initial setup)".to_string(),
+        "".to_string(),
+    );
+    req.req_type = RequirementType::Task;
+    req.status = RequirementStatus::Approved;
+    req.priority = RequirementPriority::High;
+    req.tags.insert("from-aida-init".to_string());
+    req.tags.insert("first-task".to_string());
+    req.tags.insert("scaffolding".to_string());
+    // trace:BUG-445 | ai:claude — primary-worktree-only guardrail (see fn doc).
+    req.human_only = true;
+    req
+}
+
 // trace:TASK-510 | ai:antigravity
 fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Path) -> Result<()> {
-    use aida_core::{
-        Requirement, RequirementPriority, RequirementStatus, RequirementType, Storage,
-    };
+    use aida_core::Storage;
 
     let resolved_db_path = root.join(db_path);
     let storage = Storage::new(&resolved_db_path);
@@ -5425,16 +5456,7 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
         return Ok(());
     }
 
-    let mut req = Requirement::new(
-        "Commit AIDA scaffolding (initial setup)".to_string(),
-        "".to_string(),
-    );
-    req.req_type = RequirementType::Task;
-    req.status = RequirementStatus::Approved;
-    req.priority = RequirementPriority::High;
-    req.tags.insert("from-aida-init".to_string());
-    req.tags.insert("first-task".to_string());
-    req.tags.insert("scaffolding".to_string());
+    let req = build_initial_scaffold_requirement();
 
     store.add_requirement_with_id(req, None, Some("task"));
 
@@ -5539,6 +5561,82 @@ mod task_510_init_scaffold_task_tests {
             store2.requirements.len(),
             1,
             "Idempotency failed: task was duplicated"
+        );
+    }
+
+    /// BUG-445: the durable guardrail. The seeded scaffolding-commit task
+    /// must be flagged `human_only` so `aida queue work` never worktree-
+    /// isolates it. A worktree branched off the initial commit lacks the
+    /// uncommitted scaffolding entirely, and a bare `git add .` there would
+    /// embed the `.aida-store` gitlink + machine-specific cache/session
+    /// symlinks into history. `human_only` makes the pickability gate refuse
+    /// the spec at every queue-work pickup site, keeping it primary-worktree-
+    /// only.
+    ///
+    /// This asserts on the builder (`build_initial_scaffold_requirement`) +
+    /// the pickability gate directly, NOT on a storage round-trip: the legacy
+    /// SQLite cache projection is lossy on `human_only` (the canonical
+    /// git-backend YAML round-trip preserves it, per
+    /// `RequirementsStore`/`models.rs`), so testing through `Storage::load`
+    /// on a `.db` path would assert the cache's lossiness rather than the
+    /// seeding decision. trace:BUG-445 | ai:claude
+    #[test]
+    fn scaffold_task_is_primary_worktree_only_and_not_pickable() {
+        use aida_core::pickability::{pickability, BlockedReason, Pickability};
+        use aida_core::RequirementsStore;
+
+        let req = build_initial_scaffold_requirement();
+
+        // The guardrail flag itself.
+        assert!(
+            req.human_only,
+            "scaffolding-commit task must be human_only so queue-work never \
+             worktree-isolates it (BUG-445)"
+        );
+
+        // And the consequence: the pickability gate (consulted by every
+        // queue-work pickup site — head pickup, batch drain, cluster drain)
+        // refuses it, so it can never route through worktree isolation.
+        let mut store = RequirementsStore::default();
+        store.requirements.push(req.clone());
+        assert_eq!(
+            pickability(&req, &store),
+            Pickability::Blocked(BlockedReason::HumanOnly),
+            "scaffolding-commit task must be un-pickable (human-only) so \
+             `aida queue work` cannot isolate it into a worktree (BUG-445)"
+        );
+    }
+
+    /// BUG-445 guard (c): the seeded task instruction must never emit a bare
+    /// `git add .` — it stages only AIDA's own paths, with `.gitignore`
+    /// listed first so deny-by-default rules apply. Asserts on the persisted
+    /// description (which the cache DOES round-trip, unlike `human_only`).
+    /// trace:BUG-445 | ai:claude
+    #[test]
+    fn scaffold_task_instruction_never_bare_git_add_dot() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = std::path::Path::new(".aida/cache.db");
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+
+        enqueue_initial_scaffold_task(tmp.path(), db_path).unwrap();
+
+        let storage = Storage::new(&tmp.path().join(db_path));
+        let store = storage.load().unwrap();
+        let desc = &store.requirements[0].description;
+
+        // Match the bare form precisely: `git add .gitignore ...` is the
+        // *correct* scoped form and legitimately starts with the same chars.
+        assert!(
+            !desc.contains("git add . "),
+            "instruction must never emit a bare `git add .` (BUG-445 c); got:\n{desc}"
+        );
+        assert!(
+            !desc.contains("git add .\n") && !desc.ends_with("git add ."),
+            "instruction must never emit a bare `git add .` (BUG-445 c); got:\n{desc}"
+        );
+        assert!(
+            desc.contains("git add .gitignore"),
+            "instruction must stage scoped paths starting with .gitignore (BUG-445 c)"
         );
     }
 }
