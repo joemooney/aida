@@ -55,9 +55,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:57:58.159777765Z
-modified_at: 2026-05-11T02:57:58.159777765Z
+modified_at: 2026-06-06T08:36:16.743096267Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-11T02:57:59.177120797Z
+comments:
+- id: 019e9c13-62e7-7960-93a4-f6f93fe04ad1
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Auto-spawn-next-implementer-on-PR-merge is unimplemented, and the orchestrator drain (`aida queue work --auto-complete`) now drives implementer→CI→reviewer→merge→pull→build cycles per spec — overlapping much of this story's intent. Implement the session-end auto-spawn or reject as overtaken?
+      a) Reject — the --auto-complete drain already chains successive specs through the full lifecycle without a manual session-end spawn ritual; this story's pain (the per-cycle manual restart) is largely solved by the drain.
+      b) Implement the lighter session-end variant: on `aida session end`, if the PR merged and queue has scoped work, offer Y/n auto-spawn of the next batch.
+      c) Keep parked for the interactive (non-drain) workflow where a user runs one session at a time and wants the next-batch prompt.
+      REC: a — the orchestrator drain is the project's chosen mechanism for chaining work; a parallel session-end auto-spawn path adds a second autonomy mechanism to maintain. Confirm the drain covers the interactive user's next-batch need before fully rejecting.
+  created_at: 2026-06-06T08:36:16.743096267Z
+  modified_at: 2026-06-06T08:36:16.743096267Z
