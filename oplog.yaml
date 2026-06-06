@@ -13433,5 +13433,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       Build the REGISTRY FOUNDATION slice only — STORY-74: 'aida projects register/list/forget' + the ~/.aida/projects.toml schema/validation. DEFER cross-project queue routing, relationships, search, and the release-hook tutor-sync until a real multi-repo workspace (beyond aida↔aida-tutor) creates recurring manual-sync pain. EPIC scoped to the registry primitive; other children stay parked.
-clock: 1485
+- id: 019e9d28-b0bf-76c3-906f-1d66fe6b4c2e
+  target_id: 019e1cca-9950-78a0-bf56-b1393eacdcc5
+  author: aida
+  node_id: '1'
+  lamport: 1486
+  timestamp: 2026-06-06T13:39:10.143122727Z
+  kind: !SetStatus
+    status: Completed
+clock: 1486
 node_id: '1'
