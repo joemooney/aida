@@ -8,10 +8,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T04:25:37.597664669Z
-modified_at: 2026-06-01T04:25:37.597664669Z
+modified_at: 2026-06-06T08:31:16.659512621Z
 req_type: Task
 tags:
 - aida:queue
 - distributed-coordination
 - from-advisor
 - kind:observation
+comments:
+- id: 019e9c0e-ceb3-7bf0-a1ec-6343d39ebe98
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: How to handle the same-user_id-on-two-machines queue-YAML conflict (both write registry/queues/<user>.yaml → orphan-branch merge conflict; acute for the BUG-89 "default" fallback in CI/containers)?
+      a) Document distinct-user_id-per-machine as a hard requirement for shared-branch collaboration (no code)
+      b) Warn when the resolved user_id is "default" and a remote "default" queue file already exists with a different machine fingerprint
+      c) Make queue-YAML merges conflict-tolerant (append-merge by entry uuid instead of line-merge)
+      REC: b — targets the actual hazard (the silent "default" collision) with a cheap guard; sharding already works for distinct users so (c) is premature. Captured observation, not urgent.
+  created_at: 2026-06-06T08:31:16.659512621Z
+  modified_at: 2026-06-06T08:31:16.659512621Z
