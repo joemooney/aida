@@ -14989,5 +14989,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       HOLD post-alpha — the spec self-identifies as a post-alpha enhancement ('not an alpha gate'); the bugs-before-marketing phase defers TUI-richness. When it proceeds, start with the thin slice (role-queue head + open-PR count), then add leases/CI-rollup/suggested-actions.
-clock: 1536
+- id: 019e9d53-9201-7c43-b5c9-542f914f261a
+  target_id: 019e2e34-bf49-7213-af67-7f5f918d7ca8
+  author: aida
+  node_id: '1'
+  lamport: 1537
+  timestamp: 2026-06-06T14:26:00.321198333Z
+  kind: !SetStatus
+    status: Approved
+clock: 1537
 node_id: '1'
