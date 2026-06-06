@@ -58,8 +58,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T02:32:59.072455559Z
-modified_at: 2026-06-06T08:34:29.802892938Z
+modified_at: 2026-06-06T08:34:32.360504256Z
 req_type: Task
+tags:
+- needs-human-input
 comments:
 - id: 019e55de-4694-7642-b0e3-5fb1795c55df
   author: joe
