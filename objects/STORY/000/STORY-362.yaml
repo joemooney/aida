@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-21T02:19:27.510264617Z
-modified_at: 2026-06-06T08:35:19.882538597Z
+modified_at: 2026-06-06T13:55:24.660575699Z
 req_type: Story
 tags:
 - advisor
@@ -31,3 +31,8 @@ comments:
       REC: a — there are no subsystem-scoped advisors today to use `--focus`, so the loading filter has no live consumer; defer until SPIKE-10 subsystems actually emerge.
   created_at: 2026-06-06T08:35:18.558691070Z
   modified_at: 2026-06-06T08:35:18.558691070Z
+- id: 019e9d37-8f74-75c1-ab2b-a061477210b7
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): DEFER post-stability (with STORY-363) — no subsystem-scoped advisors exist yet to consume --focus, so the loading filter has no live consumer. Revisit when SPIKE-10 subsystems actually emerge. (If built: backward-compatible subsystem: frontmatter tag, untagged = universal.)'
+  created_at: 2026-06-06T13:55:24.660575699Z
+  modified_at: 2026-06-06T13:55:24.660575699Z
