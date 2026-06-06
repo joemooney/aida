@@ -14644,5 +14644,13 @@ operations:
       ## ✅ Operator decision (2026-06-06 disposition sweep)
 
       DEFER to the marketing phase — its explicit purpose is dogfood-proof / case-study / release-note material, which is exactly the deferred marketing phase. Nothing downstream is blocked today. The telemetry substrate exists, so it's a quick reporting layer when the time comes.
-clock: 1518
+- id: 019e9d3f-55d0-7461-ace6-25c81898dd60
+  target_id: 019e6f6e-b427-7ce2-8d6a-26c7eb1f024b
+  author: aida
+  node_id: '1'
+  lamport: 1519
+  timestamp: 2026-06-06T14:03:54.192564639Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1519
 node_id: '1'
