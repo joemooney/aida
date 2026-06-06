@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:23.591115949Z
-modified_at: 2026-06-06T08:34:25.886611058Z
+modified_at: 2026-06-06T13:59:01.824434351Z
 req_type: Story
 tags:
 - advisor
@@ -52,3 +52,8 @@ comments:
       REC: a — the read-only sweep is genuinely bounded and low-risk and gives the operator a "did I miss a dependency before an overnight drain?" check; gate the write-back `--apply` until the suggestion quality is observed.
   created_at: 2026-06-06T08:34:23.124472746Z
   modified_at: 2026-06-06T08:34:23.124472746Z
+- id: 019e9d3a-dfc0-7a43-8f08-08246b9dd838
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Ship the READ-ONLY slice: aida deps sweep (+ --for-spec) lists ranked likely-dependencies from trace_links file-overlap + same-parent (weak signal). NO --apply write-back. Gives a ''did I miss a dependency before an overnight drain?'' check. GATE the --apply interactive write-back + --as-advisor-activity variant until suggestion quality is observed.'
+  created_at: 2026-06-06T13:59:01.824434351Z
+  modified_at: 2026-06-06T13:59:01.824434351Z
