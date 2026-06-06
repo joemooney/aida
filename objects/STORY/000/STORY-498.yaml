@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:08.739188377Z
-modified_at: 2026-06-03T05:40:08.739188377Z
+modified_at: 2026-06-06T08:30:47.212435656Z
 req_type: Story
 tags:
 - ci-gate
@@ -32,3 +32,9 @@ relationships:
 - rel_type: Child
   target_id: 019e8bfe-8dbc-7493-8cbe-5324878590c3
   created_at: 2026-06-03T05:40:16.814865692Z
+comments:
+- id: 019e9c0e-5bac-71a1-aa5e-e4ebe7fffaf0
+  author: joe
+  content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). MVP slice of EPIC-34 — a server-side PR-CI check that walks branch commit trailers, resolves each (SPEC-ID) against the live graph, and fails on dangling/dead/nonexistent ids; buildable from the existing trailer parser + TASK-488 mechanical-commit exemption, no open design question.
+  created_at: 2026-06-06T08:30:47.212435656Z
+  modified_at: 2026-06-06T08:30:47.212435656Z
