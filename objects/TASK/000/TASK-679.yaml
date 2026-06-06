@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T06:35:24.309912247Z
-modified_at: 2026-06-06T08:29:54.508606880Z
+modified_at: 2026-06-06T15:15:16.545127294Z
 req_type: Task
 tags:
 - aida:rel
@@ -38,3 +38,8 @@ comments:
       REC: a — single canonical edge is the smaller, less-redundant data model and lets BUG-448's view-layer union retire; reciprocal-on-show (b) is a nice-to-have layerable later. Architecture-adjacent (relationship storage) — needs master sign-off on the edge direction before implementation, which is why this is a human decision not ready-to-do.
   created_at: 2026-06-06T08:29:53.184796194Z
   modified_at: 2026-06-06T08:29:53.184796194Z
+- id: 019e9d80-adc1-7491-821e-57f336931325
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Normalize to a SINGLE CANONICAL edge: ''rel add --type parent FROM TO'' writes FROM--Child-->TO (matching ''aida add --parent''), dedup edges, and FIX the contradicting RelationshipType doc comments so stored direction matches the docs. Then --tree walks one edge type and BUG-448''s view-layer union can retire. Architecture-adjacent — keep the GitHub-argv/behavior stable; add migration/back-compat for existing inverted Parent edges (or a one-time normalize pass).'
+  created_at: 2026-06-06T15:15:16.545127294Z
+  modified_at: 2026-06-06T15:15:16.545127294Z
