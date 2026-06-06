@@ -21,12 +21,12 @@ description: |-
   WHY THIS HALF MATTERS: BUG-449 closes one door (the MCP gate); this watches ALL doors and makes AIDA police its own core claim -- git-canonical truth + traceability -- about itself. Substrate-as-bouncer as a continuous audit, not just an entry gate. Pairs with the existing 'awaiting commit' surface (the Done side) to cover the full lifecycle.
 
   Relates: BUG-449 (the gate), ADR-3/TASK-647 (the policy), STORY-86 (done-vs-completed semantics), the queue 'awaiting commit' surface (the Done-side analogue).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:17:06.196594607Z
-modified_at: 2026-06-06T04:15:17.496409523Z
+modified_at: 2026-06-06T04:23:27.497921586Z
 req_type: Task
 tags:
 - aida:doctor
@@ -45,3 +45,7 @@ relationships:
   target_id: 019e9b24-3b3d-7293-8de5-a116c3c6b335
   created_at: 2026-06-06T04:15:17.496404019Z
   created_by: joe
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-06T04:23:27.497921586Z
+  completion_sha: 548e730b7f50cee0e42b22d04d9538997d079f02
