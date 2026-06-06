@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:08:23.591115949Z
-modified_at: 2026-06-06T13:59:06.324433713Z
+modified_at: 2026-06-06T13:59:07.834465539Z
 req_type: Story
 tags:
 - advisor
@@ -40,6 +40,7 @@ tags:
 - batch
 - dependency-inference
 - needs-human-input
+- ready-to-implement
 relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
