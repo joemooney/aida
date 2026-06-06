@@ -51,10 +51,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:00.112532296Z
-modified_at: 2026-06-06T13:39:10.127548255Z
+modified_at: 2026-06-06T13:39:13.310942401Z
 req_type: Epic
-tags:
-- needs-human-input
 relationships:
 - rel_type: Parent
   target_id: 019e1cca-9dc9-77f3-add4-aff2792fc33c
