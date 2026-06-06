@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:30:50.120081171Z
-modified_at: 2026-06-06T08:36:25.379066041Z
+modified_at: 2026-06-06T14:03:57.145762734Z
 req_type: Story
 tags:
 - needs-human-input
@@ -33,3 +33,8 @@ comments:
       REC: c — drift visibility is low-cost and useful; the full read-only-checkout mechanism is complexity (rewound-store write-branch hazards the spec itself flags) without a concrete caller asking for it.
   created_at: 2026-06-06T08:36:23.296970650Z
   modified_at: 2026-06-06T08:36:23.296970650Z
+- id: 019e9d3f-6159-7631-b43a-00ddd3b3a327
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): Build the DRIFT-WARNING slice only: aida status warns when the store/code SHAs diverge (cheap, high-signal). DEFER the full read-only worktree checkout (aida store checkout/reset) — it carries rewound-store write hazards the spec itself flags and has no concrete caller. The v1 pairing trailer already records linkage for forensic lookup.'
+  created_at: 2026-06-06T14:03:57.145762734Z
+  modified_at: 2026-06-06T14:03:57.145762734Z
