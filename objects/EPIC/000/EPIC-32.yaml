@@ -100,7 +100,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T17:31:02.682757847Z
-modified_at: 2026-05-24T17:33:29.118619778Z
+modified_at: 2026-06-06T08:18:07.823363529Z
 req_type: Epic
 tags:
 - batch:user-driven-substrate
@@ -177,3 +177,19 @@ comments:
     — master (architectural reframe per operator)
   created_at: 2026-05-24T17:33:29.118619778Z
   modified_at: 2026-05-24T17:33:29.118619778Z
+- id: 019e9c02-c54f-7e72-a5c9-5cd0d429a381
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: EPIC-32 adds 3 new substrate entity types (query/canned-answer/skill-prompt) mainly for the separate aida-chat repo. But TASK-546 explicitly DEFERS this exact graduation pending 2wk aida-chat data. The two contradict — which wins?
+      a) Hold — honor TASK-546's graduation trigger; prove the schema in aida-chat's local SQLite first, graduate when 2+ consumers want it
+      b) Land the core schema now (EPIC says 'master core schema lands FIRST')
+      c) Reject EPIC-32 as duplicating the TASK-546 decision path
+      REC: a — defer; avoid baking unproven entity types into the shared substrate during a stability phase. Revisit at TASK-546's trigger.
+    Q2: This is a cross-consumer substrate-contract change (sketch-first master sign-off required; spec says 'master will post a schema sketch'). Approve schema now?
+      a) Block on the schema sketch + advisor verdict first
+      b) Approve the 3-type schema as drafted
+      c) Narrow to one type (query, read-only log) as a first ship
+      REC: a — a cross-repo substrate contract must clear the sketch round-trip before code; the sketch is not yet recorded.
+  created_at: 2026-06-06T08:18:07.823363529Z
+  modified_at: 2026-06-06T08:18:07.823363529Z
