@@ -65,7 +65,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:55.350844429Z
-modified_at: 2026-06-06T05:07:28.459983744Z
+modified_at: 2026-06-06T05:07:52.302505597Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -84,3 +84,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-06-06T05:07:28.459983744Z
   implemented_by: joe
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: no-pr
+  detail: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting
+  recovery_hint: 'The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work TASK-304 --resume 019e9b47c568`'
+  shelved_by: implementer
+  shelved_at: 2026-06-06T05:07:52.302505597Z
