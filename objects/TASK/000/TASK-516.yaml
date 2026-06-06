@@ -2,7 +2,7 @@ id: 019e57f2-e66f-7772-82bb-98dffa921535
 spec_id: TASK-516
 agreed_id: TASK-516
 title: 'aida import-plan --request-review: master-review handshake before plan is treated as canonical'
-description: |-
+description: |
   ## Why
 
   Current /ultraplan flow: web /ultraplan generates a plan, operator clicks accept, /aida-import-plan (or web equivalent) lands the plan under docs/plans/. The plan immediately becomes the canonical brief for whoever picks the spec up — riding into implementer sessions via TASK-95's plan-brief-on-pickup mechanism.
@@ -65,12 +65,16 @@ description: |-
   ## Origin
 
   2026-05-23 user during credit-burn night: 'ultraplan shows a yellow status button and I have clicked before on button accept plan but really I want you to review the plan. what should we do?' Workaround tonight is review-after-accept; this TASK closes the gap.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER — with one operator + one master the plan-review handshake is mostly ceremony; the friction (implementer picks up an unreviewed plan in the accept→review window) is rare and covered by the existing 'accept first, master sweeps docs/plans/ later' workaround. Revisit when subsystem advisors / multiple plan-reviewers exist.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:06:37.039775930Z
-modified_at: 2026-06-06T15:12:33.298843484Z
+modified_at: 2026-06-06T15:12:35.718351838Z
 req_type: Task
 tags:
 - advisor
