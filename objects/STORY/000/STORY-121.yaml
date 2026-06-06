@@ -83,11 +83,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:19:54.642684973Z
-modified_at: 2026-06-06T08:35:50.339111875Z
+modified_at: 2026-06-06T08:35:51.679982471Z
 req_type: Story
 tags:
 - block
 - implementer
+- needs-human-input
 - ping-pong
 - reviewer
 - session
