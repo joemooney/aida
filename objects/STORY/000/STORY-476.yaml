@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:57:48.843375306Z
-modified_at: 2026-06-06T08:33:52.398112311Z
+modified_at: 2026-06-06T15:18:17.516585870Z
 req_type: Story
 tags:
 - codex
@@ -34,3 +34,8 @@ comments:
       REC: b — if built, the generic one-way ref field is the right bounded shape and explicitly avoids the bidirectional-sync trap; but timing is the open question given the stability-first phase, so it needs a human go/defer call.
   created_at: 2026-06-06T08:33:51.096997497Z
   modified_at: 2026-06-06T08:33:51.096997497Z
+- id: 019e9d83-70ac-7912-b522-e94863452f6d
+  author: joe
+  content: '✅ OPERATOR DECISION (2026-06-06): DEFER to the marketing/adoption phase — one-way external issue refs (linear:/jira:/github:) are a PM-integration feature, not a bug/stability item; consistent with deferring STORY-475. When built: the generic provider:id ref field (render via configured base URLs + MCP search, NO bidirectional sync) is the right bounded shape.'
+  created_at: 2026-06-06T15:18:17.516585870Z
+  modified_at: 2026-06-06T15:18:17.516585870Z
