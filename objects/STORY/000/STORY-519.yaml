@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:35:34.763436046Z
-modified_at: 2026-06-05T15:35:34.763436046Z
+modified_at: 2026-06-06T08:17:28.658977973Z
 req_type: Story
 tags:
 - advisor-vision
@@ -48,3 +48,20 @@ tags:
 - parallel-pipelining
 - parent:STORY-265
 - plan-phase
+comments:
+- id: 019e9c02-2c52-7ed3-bfa8-f0a314bf6270
+  author: joe
+  content: |-
+    🔵 DECISION REQUEST (disposition sweep 2026-06-06) — needs human input.
+    Q1: Parallel plan-only fan-out is sequenced after BUG-444. Hold or proceed?
+      a) Hold until BUG-444 ships
+      b) Build now — planning touches no code, zero merge contention, independent of drain reliability
+      c) Reject — speculative parallel planning risks plan-slop on specs that may never be built
+      REC: b — planning is contention-free; the real control is the 'workable set only' scope discipline (already in acceptance).
+    Q2: It builds on STORY-265's --plan-only mode (still Draft). Sequence?
+      a) Defer to post-stability
+      b) Allow (low-risk, depends on shipped primitives)
+      c) Gate on STORY-265 landing first
+      REC: c — can't proceed until 265's --plan-only lands regardless of phase.
+  created_at: 2026-06-06T08:17:28.658977973Z
+  modified_at: 2026-06-06T08:17:28.658977973Z
