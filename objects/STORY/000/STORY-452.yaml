@@ -2,7 +2,7 @@ id: 019e5850-e7e7-7063-9b4f-0680c54107b4
 spec_id: STORY-452
 agreed_id: STORY-452
 title: 'Remote-aware agent registry: cloud /ultraplan sessions + cross-machine sessions visible in aida status (re-filed after STORY-448 ID-allocation race)'
-description: |-
+description: |
   ## Re-filing context
 
   Originally filed earlier 2026-05-23 as STORY-448. Lost in orphan-store rebase ID-allocation race — origin's STORY-448 became the EPIC-28 shelve-on-failure spec. This is the re-file under a fresh ID.
@@ -76,12 +76,16 @@ description: |-
   ## Origin
 
   2026-05-23 user: 'aida status needs to show agent status' — extended via design discussion. Re-filed after orphan-store rebase lost the original STORY-448.
+
+  ## ✅ Operator decision (2026-06-06 disposition sweep)
+
+  DEFER with the EPIC-31 cluster (parked post-stability) — strategic autonomy/multi-agent scope; the operator is the only consumer of the cross-machine aggregation today. Sequence with EPIC-31's registry design rather than shipping a remote-registration verb mid-bugs-phase.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T04:49:17.799198527Z
-modified_at: 2026-06-06T14:00:36.886661943Z
+modified_at: 2026-06-06T14:00:38.881943304Z
 req_type: Story
 tags:
 - agents
