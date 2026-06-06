@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T16:46:20.599720427Z
-modified_at: 2026-06-06T08:13:57.281468269Z
+modified_at: 2026-06-06T08:13:58.859205604Z
 req_type: Task
 tags:
 - aida:doctor
@@ -33,3 +33,5 @@ comments:
   content: Disposition sweep 2026-06-06 — ARCHIVED (parked, recoverable). aida-doctor/aida-recover ~80% overlap consolidation. Deferred per the spec's OWN recurrence-gate (act when a 3rd recovery skill appears or at next catalog audit). Parked rather than churn two working skills during the stability phase.
   created_at: 2026-06-06T08:13:57.281468269Z
   modified_at: 2026-06-06T08:13:57.281468269Z
+archived: true
+archived_at: 2026-06-06T08:13:58.859205604Z
