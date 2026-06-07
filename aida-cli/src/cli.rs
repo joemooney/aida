@@ -719,6 +719,28 @@ pub enum SessionCommand {
         force_claim: bool,
     },
 
+    /// Register an existing Claude harness worktree lease from a SubagentStart hook.
+    #[clap(hide = true)]
+    HarnessWorktreeRegister {
+        #[clap(long)]
+        agent_id: String,
+        #[clap(long)]
+        cwd: String,
+        #[clap(long)]
+        agent_type: Option<String>,
+        #[clap(long)]
+        branch: Option<String>,
+        #[clap(long)]
+        scope: Option<String>,
+    },
+
+    /// Release a Claude harness worktree lease from a SubagentStop hook.
+    #[clap(hide = true)]
+    HarnessWorktreeRelease {
+        #[clap(long)]
+        agent_id: String,
+    },
+
     /// End a scoped session: remove the worktree, delete the lease,
     /// leave the branch alone (merge/discard is up to the user). When
     /// `id` is omitted, ends the session whose lease names this cwd's

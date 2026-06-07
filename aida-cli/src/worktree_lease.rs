@@ -1,66 +1,54 @@
-//! TASK-634 (SPIKE-41 slice): pure derivation of an AIDA lease record from a
-//! Claude Code WorktreeCreate / WorktreeRemove hook payload.
+//! TASK-702: pure derivation of an AIDA lease record from Claude Code
+//! SubagentStart / SubagentStop hook payloads.
 //!
-//! Substrate-CAPTURE only: given the hook payload, compute the deterministic
-//! lease fields to write (on create) or the path to clear (on remove). The
-//! non-deterministic fields (id, started_at, hostname, owner) are filled at
-//! write time by the existing lease-creation machinery — they need a
-//! clock/uuid/git-config and so are not part of this pure core.
-//!
-//! Motivation: a Claude Code Workflow's parallel worktree-isolated agents
-//! (`isolation: "worktree"`) are invisible to the AIDA substrate today — they
-//! provision worktrees the harness owns, ship code, and populate zero lease
-//! state (the exact gap BUG-431 exposed, and the source of the orphan-worktree
-//! pile-up `aida doctor` later has to reap). Wiring a WorktreeCreate hook to
-//! register a lease (and WorktreeRemove to release it) closes that gap.
-//!
-//! The live hook wiring + `aida init` scaffold are DEFERRED until SPIKE-41
-//! confirms the Claude Code event timing/payload (operator decision
-//! 2026-06-06: "build the pure-testable core now … don't wire against
-//! unverified harness behavior"). Until then these functions have no caller, so
-//! the module is `allow(dead_code)`. trace:TASK-634 | ai:claude
-#![allow(dead_code)]
+//! Substrate-CAPTURE only: Claude owns harness worktree provisioning. AIDA
+//! observes SubagentStart to register an existing worktree lease, then observes
+//! SubagentStop to release the lease keyed by the same `agent_id`.
+//! trace:TASK-702 | ai:claude
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// The generic lease scope for a harness worktree whose branch carries no
-/// recognizable SPEC-ID. trace:TASK-634
+/// recognizable SPEC-ID.
 pub(crate) const HARNESS_WORKTREE_SCOPE: &str = "harness-worktree";
 
-/// The subset of a Claude Code worktree hook payload we capture.
+/// The subset of the empirically verified SubagentStart/Stop payloads AIDA
+/// needs to correlate harness worktree leases.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct WorktreePayload {
-    /// The worktree path the harness provisioned (WorktreeCreate) or is
-    /// tearing down (WorktreeRemove).
-    pub path: PathBuf,
-    /// The branch the worktree is on, when the event carries it.
-    pub branch: Option<String>,
+pub(crate) struct SubagentPayload {
+    pub agent_id: String,
+    pub agent_type: Option<String>,
+    pub cwd: PathBuf,
 }
 
-/// The deterministic lease fields derived from a WorktreeCreate payload — the
-/// subset a hook can compute without a clock/uuid/git-config. trace:TASK-634
+/// The deterministic lease fields derived from a SubagentStart payload. The
+/// caller supplies `branch` after running `git -C <cwd> rev-parse --abbrev-ref
+/// HEAD`; keeping git I/O outside this core leaves it unit-testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WorktreeLeaseSpec {
+    /// Stable hook correlation key. The writer also uses this as the lease id.
+    pub agent_id: String,
+    /// Claude's agent type, retained for role/display context when present.
+    pub agent_type: Option<String>,
     /// The lease scope: a SPEC-ID derived from the branch when recognizable,
     /// else the generic [`HARNESS_WORKTREE_SCOPE`].
     pub scope: String,
-    /// The branch the worktree is on (empty when the payload omits it).
+    /// The branch the worktree is on.
     pub branch: String,
     /// The worktree path to record on the lease.
     pub worktree_path: PathBuf,
 }
 
-/// The known AIDA spec-type branch prefixes (`task-688-…` → `TASK-688`).
+/// The known AIDA spec-type branch prefixes (`task-688-...` -> `TASK-688`).
 const SPEC_TYPES: &[&str] = &[
     "fr", "func", "nfr", "sys", "user", "bug", "epic", "story", "task", "spike", "sprint", "adr",
     "meta", "doc",
 ];
 
 /// Extract a SPEC-ID (e.g. `TASK-688`) from a branch name like
-/// `task-688-aida-release-after-pr`. Recognizes the standard
-/// `<type>-<number>-<slug>` convention; returns `None` for harness-generated
-/// names like `worktree-agent-<hex>` or anything without a `<type>-<number>`
-/// head. trace:TASK-634
+/// `task-688-aida-release`. Recognizes the standard `<type>-<number>-<slug>`
+/// convention; returns `None` for harness-generated names like
+/// `worktree-agent-<hex>` or anything without a `<type>-<number>` head.
 pub(crate) fn spec_id_from_branch(branch: &str) -> Option<String> {
     let mut parts = branch.split('-');
     let kind = parts.next()?.to_ascii_lowercase();
@@ -74,27 +62,39 @@ pub(crate) fn spec_id_from_branch(branch: &str) -> Option<String> {
     Some(format!("{}-{}", kind.to_uppercase(), num))
 }
 
-/// Derive the lease record to WRITE for a WorktreeCreate payload. The scope is
-/// the branch's SPEC-ID when derivable, else the generic harness scope so the
-/// worktree is still tracked. trace:TASK-634
-pub(crate) fn lease_spec_for_create(payload: &WorktreePayload) -> WorktreeLeaseSpec {
-    let scope = payload
-        .branch
-        .as_deref()
-        .and_then(spec_id_from_branch)
-        .unwrap_or_else(|| HARNESS_WORKTREE_SCOPE.to_string());
-    WorktreeLeaseSpec {
-        scope,
-        branch: payload.branch.clone().unwrap_or_default(),
-        worktree_path: payload.path.clone(),
+/// Normalize Claude's agent id into a filesystem-safe lease id. Claude agent
+/// ids are already stable correlation keys; this only strips punctuation that
+/// would be awkward in `.aida/sessions/<id>.toml`.
+pub(crate) fn lease_id_from_agent_id(agent_id: &str) -> String {
+    let id: String = agent_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    if id.is_empty() {
+        "unknownagent".to_string()
+    } else {
+        id
     }
 }
 
-/// The worktree path whose lease should be CLEARED for a WorktreeRemove
-/// payload — the match key for the existing lease-by-worktree lookup.
-/// trace:TASK-634
-pub(crate) fn lease_path_for_remove(payload: &WorktreePayload) -> &Path {
-    &payload.path
+/// Derive the lease record to WRITE for a SubagentStart payload. The scope is
+/// the branch's SPEC-ID when derivable, else the generic harness scope so the
+/// worktree is still tracked.
+pub(crate) fn lease_spec_for_start(payload: &SubagentPayload, branch: &str) -> WorktreeLeaseSpec {
+    let scope = spec_id_from_branch(branch).unwrap_or_else(|| HARNESS_WORKTREE_SCOPE.to_string());
+    WorktreeLeaseSpec {
+        agent_id: payload.agent_id.clone(),
+        agent_type: payload.agent_type.clone(),
+        scope,
+        branch: branch.to_string(),
+        worktree_path: payload.cwd.clone(),
+    }
+}
+
+/// The lease id whose file should be CLEARED for a SubagentStop payload.
+pub(crate) fn lease_id_for_stop(payload: &SubagentPayload) -> String {
+    lease_id_from_agent_id(&payload.agent_id)
 }
 
 #[cfg(test)]
@@ -115,32 +115,31 @@ mod tests {
             spec_id_from_branch("story-510-gitlab-ci"),
             Some("STORY-510".into())
         );
-        // Already-uppercase head normalizes too.
         assert_eq!(spec_id_from_branch("BUG-471-x"), Some("BUG-471".into()));
     }
 
     #[test]
     fn spec_id_none_for_harness_and_unrecognized_branches() {
-        // Harness auto-generated worktree branch — no SPEC-ID.
         assert_eq!(
             spec_id_from_branch("worktree-agent-a0f3696de475d07c3"),
             None
         );
-        // Default branches + slugs without a <type>-<number> head.
         assert_eq!(spec_id_from_branch("main"), None);
         assert_eq!(spec_id_from_branch("random-branch"), None);
-        // Known type but non-numeric id.
         assert_eq!(spec_id_from_branch("task-foo-bar"), None);
         assert_eq!(spec_id_from_branch(""), None);
     }
 
     #[test]
-    fn create_derives_spec_scope_from_branch() {
-        let p = WorktreePayload {
-            path: PathBuf::from("/repo/.worktrees/task-688"),
-            branch: Some("task-688-aida-release".into()),
+    fn start_derives_spec_scope_from_branch() {
+        let p = SubagentPayload {
+            agent_id: "agent-123".into(),
+            agent_type: Some("general-purpose".into()),
+            cwd: PathBuf::from("/repo/.worktrees/task-688"),
         };
-        let spec = lease_spec_for_create(&p);
+        let spec = lease_spec_for_start(&p, "task-688-aida-release");
+        assert_eq!(spec.agent_id, "agent-123");
+        assert_eq!(spec.agent_type.as_deref(), Some("general-purpose"));
         assert_eq!(spec.scope, "TASK-688");
         assert_eq!(spec.branch, "task-688-aida-release");
         assert_eq!(
@@ -150,33 +149,24 @@ mod tests {
     }
 
     #[test]
-    fn create_falls_back_to_harness_scope() {
-        // Harness branch → generic scope, still tracked.
-        let p = WorktreePayload {
-            path: PathBuf::from("/repo/.claude/worktrees/agent-abc"),
-            branch: Some("worktree-agent-abc".into()),
+    fn start_falls_back_to_harness_scope() {
+        let p = SubagentPayload {
+            agent_id: "agent-abc".into(),
+            agent_type: None,
+            cwd: PathBuf::from("/repo/.claude/worktrees/agent-abc"),
         };
-        assert_eq!(lease_spec_for_create(&p).scope, HARNESS_WORKTREE_SCOPE);
-
-        // No branch in the payload at all → generic scope, branch empty.
-        let p2 = WorktreePayload {
-            path: PathBuf::from("/repo/.claude/worktrees/agent-def"),
-            branch: None,
-        };
-        let spec = lease_spec_for_create(&p2);
+        let spec = lease_spec_for_start(&p, "worktree-agent-abc");
         assert_eq!(spec.scope, HARNESS_WORKTREE_SCOPE);
-        assert_eq!(spec.branch, "");
+        assert_eq!(spec.branch, "worktree-agent-abc");
     }
 
     #[test]
-    fn remove_returns_the_payload_path() {
-        let p = WorktreePayload {
-            path: PathBuf::from("/repo/.claude/worktrees/agent-abc"),
-            branch: None,
+    fn stop_uses_agent_id_as_release_key() {
+        let p = SubagentPayload {
+            agent_id: "Agent-ABC-123".into(),
+            agent_type: None,
+            cwd: PathBuf::from("/repo/.claude/worktrees/agent-abc"),
         };
-        assert_eq!(
-            lease_path_for_remove(&p),
-            Path::new("/repo/.claude/worktrees/agent-abc")
-        );
+        assert_eq!(lease_id_for_stop(&p), "agentabc123");
     }
 }

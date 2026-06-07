@@ -396,6 +396,26 @@ exit 0
             .to_string()
     }
 
+    /// Generate the SubagentStart harness worktree lease hook content.
+    /// trace:TASK-702 | ai:claude
+    pub(super) fn generate_subagent_start_hook(&self) -> String {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-subagent-start.sh")
+            .copied()
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// Generate the SubagentStop harness worktree lease hook content.
+    /// trace:TASK-702 | ai:claude
+    pub(super) fn generate_subagent_stop_hook(&self) -> String {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-subagent-stop.sh")
+            .copied()
+            .unwrap_or("")
+            .to_string()
+    }
+
     /// Generate the PreToolUse git-guardrails hook content. Same model as
     /// `generate_role_context_hook` — reads from EMBEDDED_TEMPLATES.
     /// trace:TASK-27 | ai:claude
