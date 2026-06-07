@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:57.919405229Z
-modified_at: 2026-06-06T22:27:36.682755079Z
+modified_at: 2026-06-07T20:11:34.407781086Z
 req_type: Task
 tags:
 - archival
@@ -101,6 +101,11 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): BUILD Option B: explicit ''aida plan capture <PR>'' that synthesizes the 11-section docs/plans/ file from the PR description + commit log (for plans authored via the web /ultraplan flow that never landed a local plan file). Bounded, plan-tooling-adjacent.'
   created_at: 2026-06-06T15:12:07.975212707Z
   modified_at: 2026-06-06T15:12:07.975212707Z
+- id: 019ea3b6-4e87-7823-b8fb-23c1d4f114fb
+  author: joe
+  content: 'SPIKE-8 findings (docs/spikes/2026-06-07-spike-8-ultraplan-comparison.md): your shipped shape (Option B — explicit `aida plan capture <PR>`) is confirmed as correct. SPIKE-8 found that web /ultraplan (condition C) is inherently interactive (needs the claude.ai Accept click) and therefore cannot participate in --no-human autonomous drains — so a passive auto-hook (Option A) would have had nothing to hook into during a headless run. Manual post-PR `aida plan capture` is the right design. No further action recommended.'
+  created_at: 2026-06-07T20:11:34.407781086Z
+  modified_at: 2026-06-07T20:11:34.407781086Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-06T22:27:36.682755079Z
