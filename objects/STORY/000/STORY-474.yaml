@@ -3,12 +3,12 @@ spec_id: STORY-474
 agreed_id: STORY-474
 title: MCP tool profiles and safe default surface
 description: 'Add named MCP tool profiles so AIDA can expose a conservative surface to untrusted or exploratory clients while keeping full coordination/admin tools available to trusted agents. Acceptance: aida mcp-serve supports profiles such as read-only, coordination, operator, admin, and full; tools advertise/profile metadata; read-only excludes all write tools; tests verify tools/list filtering; docs recommend safe defaults for marketplace installs.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:12.371919361Z
-modified_at: 2026-06-07T00:32:10.069180388Z
+modified_at: 2026-06-07T00:32:11.193848239Z
 req_type: Story
 tags:
 - codex
@@ -52,3 +52,7 @@ comments:
   content: "PARKED (autonomous churn 2026-06-06): PR-593 CI failed (main green → branch-specific). Build (ubuntu-latest)\tRun tests\t2026-06-06T23:06:49.2683853Z error: The following untracked working tree files would be overwritte\nBuild (ubuntu-latest)\tRun tests\t2026-06-06T23:06:53.4746923Z thread 'pr_ship_environment_tests::waits_for_ci_checks_to_register_be. Needs a rebase + fix; reopen after."
   created_at: 2026-06-06T23:14:21.469729769Z
   modified_at: 2026-06-06T23:14:21.469729769Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T00:32:11.193848239Z
+  completion_sha: 658c170d41a4fc6bdf6cdebea0d2553bc27736c2
