@@ -8,7 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T20:29:59.243598734Z
-modified_at: 2026-06-07T22:19:25.333405627Z
+modified_at: 2026-06-07T22:39:22.809092650Z
 req_type: Task
 tags:
 - review:draft-only
+comments:
+- id: 019ea43d-a0b9-7681-95f1-e6ff5a7b1409
+  author: joe
+  content: Commit 6167b7e63 references this requirement
+  created_at: 2026-06-07T22:39:22.809092650Z
+  modified_at: 2026-06-07T22:39:22.809092650Z
