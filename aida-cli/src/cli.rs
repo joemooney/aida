@@ -3933,6 +3933,17 @@ pub enum QuestionsCommand {
     /// pending ones first. The pure read; never prompts (scripting/scanning).
     List,
 
+    /// Sweep the scoped backlog for specs that are likely to need a human
+    /// decision before implementation, then attach DecisionRequests for the
+    /// flagged candidates that do not already have an open request.
+    Sweep {
+        /// Scope to sweep. Defaults to `backlog` (approved/planned/in-progress
+        /// near-term work). Supported: backlog, approved, planned,
+        /// in-progress, all. Low-priority and archived specs are always
+        /// excluded.
+        scope: Option<String>,
+    },
+
     /// Pose a structured DecisionRequest on a spec. The advisor distills a
     /// fork into a self-contained question + enumerated choices, each mapping
     /// to a deterministic resolution token. Refuses if the spec already has a
