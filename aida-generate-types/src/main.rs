@@ -15,6 +15,9 @@ fn generate_types_content() -> String {
         // STORY-332: punt / NeedsAttention types
         models::PuntCategory::decl(),
         models::AttentionReason::decl(),
+        // STORY-522: async decision-inbox types
+        models::DecisionChoice::decl(),
+        models::DecisionRequest::decl(),
         models::RequirementPriority::decl(),
         models::RequirementType::decl(),
         models::MetaSubtype::decl(),

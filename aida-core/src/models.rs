@@ -228,6 +228,71 @@ pub fn forbidden_attention_transition(
     }
 }
 
+/// One enumerated answer to a [`DecisionRequest`].
+///
+/// Each choice carries a human-readable `label` and `consequence` plus a
+/// machine-applicable `resolution` *token* — a deterministic action string
+/// (e.g. `"status:rejected"`, `"status:approved;tag:+ready-to-implement"`,
+/// `"tag:+deferred:post-stability"`, `"noop"`). The HARD RULE for STORY-522:
+/// every choice must encode a deterministic resolution — never free-form;
+/// un-reducible forks stay advisor-tier escalations, not questions.
+///
+/// Slice 1 (this code) RECORDS the resolution token. The loop-resume
+/// auto-applier that parses + applies the token is DEFERRED per the operator
+/// decision (it couples to the orchestrator and carries the design risk).
+// trace:STORY-522 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct DecisionChoice {
+    /// Short human label for the option (what the human picks).
+    pub label: String,
+    /// What happens / what this option means, in human terms.
+    pub consequence: String,
+    /// Deterministic action token the loop will eventually apply (NOT
+    /// applied in slice 1). Never free-form prose — a parseable token.
+    pub resolution: String,
+}
+
+/// A structured, persisted decision the human answers OUTSIDE any agent.
+///
+/// When the advisor can't resolve a fork, it distills the fork into a
+/// self-contained question + enumerated choices and records it on the spec.
+/// The human then batch-answers via plain CLI (`aida questions answer`) — a
+/// pure data op, no LLM session — flipping the request from pending to
+/// answered. A future drain pass reads the answered choice and applies its
+/// resolution token (DEFERRED — slice 1 only records the answer).
+// trace:STORY-522 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct DecisionRequest {
+    /// The self-contained question (state / deciding factor distilled so the
+    /// human needs no spec re-read to answer).
+    pub question: String,
+    /// Enumerated, actionable choices (≥2). Each maps to a resolution token.
+    pub choices: Vec<DecisionChoice>,
+    /// 0-based index of the recommended default choice, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recommended: Option<usize>,
+    /// Why the recommended default is recommended (the advisor's reasoning).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rationale: Option<String>,
+    /// 0-based index of the chosen answer. `None` while the request is
+    /// pending (unanswered).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered: Option<usize>,
+    /// When the question was first posed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asked_at: Option<DateTime<Utc>>,
+    /// When the human answered it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered_at: Option<DateTime<Utc>>,
+}
+
+impl DecisionRequest {
+    /// A request is pending until it has been answered.
+    pub fn is_pending(&self) -> bool {
+        self.answered.is_none()
+    }
+}
+
 /// Represents the priority of a requirement
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum RequirementPriority {
@@ -3423,6 +3488,13 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub human_only: bool,
 
+    /// A structured decision the human answers OUTSIDE any agent — the
+    /// async decision-inbox artifact. `None` when no question is pending or
+    /// recorded. Set by `aida questions ask`, answered by
+    /// `aida questions answer`. trace:STORY-522 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_request: Option<DecisionRequest>,
+
     /// Version number for optimistic locking (SQLite only)
     /// Incremented on each update, used to detect concurrent modifications
     #[serde(skip)]
@@ -3470,6 +3542,8 @@ impl Requirement {
             failure_reason: None,
             // trace:STORY-333 | ai:claude
             human_only: false,
+            // trace:STORY-522 | ai:claude
+            decision_request: None,
             urls: Vec::new(),
             attachments: Vec::new(),
             trace_links: Vec::new(),
@@ -6970,6 +7044,93 @@ mod tests {
         );
         assert_eq!(RelationshipType::References.inverse(), None);
         assert_eq!(RelationshipType::Custom("test".to_string()).inverse(), None);
+    }
+
+    // STORY-522: the async decision-inbox artifact. trace:STORY-522 | ai:claude
+
+    fn sample_decision_request() -> DecisionRequest {
+        DecisionRequest {
+            question: "Promote STORY-X to an EPIC, or ship as one story?".to_string(),
+            choices: vec![
+                DecisionChoice {
+                    label: "Promote to EPIC".to_string(),
+                    consequence: "decompose into child stories first".to_string(),
+                    resolution: "tag:+epic-candidate".to_string(),
+                },
+                DecisionChoice {
+                    label: "Ship as one story".to_string(),
+                    consequence: "implement directly".to_string(),
+                    resolution: "status:approved;tag:+ready-to-implement".to_string(),
+                },
+            ],
+            recommended: Some(1),
+            rationale: Some("the read/answer slice is bounded".to_string()),
+            answered: None,
+            asked_at: Some(Utc::now()),
+            answered_at: None,
+        }
+    }
+
+    #[test]
+    fn decision_request_is_pending_logic() {
+        let mut dr = sample_decision_request();
+        assert!(dr.is_pending(), "unanswered request is pending");
+        dr.answered = Some(0);
+        assert!(!dr.is_pending(), "answered request is no longer pending");
+    }
+
+    #[test]
+    fn requirement_with_decision_request_round_trips() {
+        let mut req = Requirement::new("Async decision protocol".to_string(), String::new());
+        req.decision_request = Some(sample_decision_request());
+
+        let yaml = serde_yaml::to_string(&req).unwrap();
+        // The field serializes under its snake_case name.
+        assert!(yaml.contains("decision_request:"), "yaml: {yaml}");
+        assert!(yaml.contains("Promote to EPIC"));
+
+        let parsed: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(parsed.decision_request, req.decision_request);
+        let dr = parsed.decision_request.unwrap();
+        assert_eq!(dr.choices.len(), 2);
+        assert_eq!(dr.recommended, Some(1));
+        assert!(dr.is_pending());
+        assert_eq!(
+            dr.choices[1].resolution,
+            "status:approved;tag:+ready-to-implement"
+        );
+    }
+
+    #[test]
+    fn requirement_without_decision_request_serializes_clean() {
+        // Backward-compat invariant: a spec with no decision skips the field
+        // entirely (skip_serializing_if), so existing YAML stays untouched.
+        let req = Requirement::new("plain".to_string(), String::new());
+        assert!(req.decision_request.is_none());
+        let yaml = serde_yaml::to_string(&req).unwrap();
+        assert!(
+            !yaml.contains("decision_request"),
+            "absent field must not serialize: {yaml}"
+        );
+    }
+
+    #[test]
+    fn legacy_requirement_yaml_without_field_deserializes() {
+        // CRITICAL: a Requirement YAML written before STORY-522 (no
+        // `decision_request` key) must still deserialize, with the field
+        // defaulting to None via #[serde(default)].
+        let mut req = Requirement::new("legacy".to_string(), "older spec".to_string());
+        req.spec_id = Some("STORY-001".to_string());
+        let yaml = serde_yaml::to_string(&req).unwrap();
+        // Sanity: the serialized legacy form genuinely lacks the field.
+        assert!(!yaml.contains("decision_request"));
+
+        let parsed: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert!(
+            parsed.decision_request.is_none(),
+            "missing field must default to None"
+        );
+        assert_eq!(parsed.spec_id.as_deref(), Some("STORY-001"));
     }
 }
 

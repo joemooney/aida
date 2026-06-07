@@ -787,6 +787,8 @@ mod tests {
             attention_reason: None,
             failure_reason: None,
             human_only: false,
+            // trace:STORY-522 | ai:claude
+            decision_request: None,
             version: 1,
         }
     }

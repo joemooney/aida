@@ -3742,6 +3742,71 @@ pub enum QueueCommand {
     },
 }
 
+/// `aida questions` — the async decision inbox. The advisor distills a fork
+/// it can't resolve into a structured DecisionRequest on the spec; the human
+/// batch-answers it here, OUTSIDE any agent (plain CLI, no LLM session).
+/// Slice 1 records the answer (pure data op); the loop-resume auto-applier
+/// that applies the chosen resolution token is deferred.
+// trace:STORY-522 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum QuestionsCommand {
+    /// List the decision inbox — every spec with a recorded DecisionRequest,
+    /// pending ones first. The pure read; never prompts (scripting/scanning).
+    List,
+
+    /// Pose a structured DecisionRequest on a spec. The advisor distills a
+    /// fork into a self-contained question + enumerated choices, each mapping
+    /// to a deterministic resolution token. Refuses if the spec already has a
+    /// pending request unless --force. Requires at least two choices.
+    Ask {
+        /// The spec (UUID or SPEC-ID) the question is about.
+        spec: String,
+
+        /// The self-contained question (no spec re-read needed to answer).
+        #[clap(long, short = 'q', value_name = "TEXT")]
+        question: String,
+
+        /// A choice, as `label|consequence|resolution`. Repeatable; supply at
+        /// least two. `resolution` is a deterministic action token (e.g.
+        /// `status:rejected`, `tag:+deferred:post-stability`, `noop`) — never
+        /// free-form prose.
+        #[clap(long, short = 'c', value_name = "LABEL|CONSEQUENCE|RESOLUTION")]
+        choice: Vec<String>,
+
+        /// 1-based index of the recommended default choice (stored 0-based).
+        #[clap(long, value_name = "N")]
+        recommend: Option<usize>,
+
+        /// Why the recommended default is recommended.
+        #[clap(long, value_name = "TEXT")]
+        rationale: Option<String>,
+
+        /// Overwrite an existing pending DecisionRequest on this spec.
+        #[clap(long)]
+        force: bool,
+    },
+
+    /// Answer pending decisions — a pure data op, no agent.
+    ///
+    /// `answer <spec> <choice>` records one answer non-interactively (choice
+    /// is a 1-based number, or the word `default`/`recommended`).
+    /// `answer` with no args enters the interactive loop over all pending
+    /// (TTY). `answer --all-defaults` confirms every recommended default at
+    /// once.
+    Answer {
+        /// The spec (UUID or SPEC-ID) to answer. Omit for the interactive loop.
+        spec: Option<String>,
+
+        /// The chosen option: a 1-based number, or `default`/`recommended`.
+        choice: Option<String>,
+
+        /// Confirm the recommended default for every pending request that has
+        /// one, in a single batch.
+        #[clap(long)]
+        all_defaults: bool,
+    },
+}
+
 /// `aida findings` — triage findings filed by headless drain phases (the
 /// reviewer's `from-review:` tag, the implementer's `from-implementer:`
 /// tag) and the advisor seat's `from-advisor:` observations.
@@ -5021,6 +5086,19 @@ pub enum Command {
     // trace:STORY-278 trace:STORY-285 | ai:claude
     #[clap(subcommand)]
     Findings(FindingsCommand),
+
+    /// The async decision inbox — structured questions the advisor distilled
+    /// from forks it couldn't resolve, which you answer OUTSIDE any agent
+    /// (plain CLI, no LLM session). Bare `aida questions` lists the inbox and,
+    /// at a TTY with pending items, offers to enter the answer loop;
+    /// `aida questions list` is the pure read; `aida questions answer` records
+    /// answers. The recorded answer is a pure data op — slice 1 records it,
+    /// a later loop pass applies the chosen resolution.
+    // trace:STORY-522 | ai:claude
+    Questions {
+        #[clap(subcommand)]
+        cmd: Option<QuestionsCommand>,
+    },
 
     /// Manage the live-advisor registration the `--no-human=both` orchestrator
     /// reads to decide whether to fork the live advisor (full in-flight
