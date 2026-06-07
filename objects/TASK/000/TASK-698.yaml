@@ -37,12 +37,12 @@ description: |-
 
   ## Relationships
   - Surfaces the STORY-495 knob. ADR-2 principle (surface concept + sensible default). Sibling of TASK-638 (role scaffold) — recommend merging into one machine-setup step. Cluster: TASK-645 (role default).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T20:24:04.813514736Z
-modified_at: 2026-06-07T21:41:28.761773958Z
+modified_at: 2026-06-07T21:53:49.178193741Z
 req_type: Task
 tags:
 - agents-config
@@ -52,3 +52,7 @@ tags:
 - onboarding-flow
 - parent:STORY-495
 - permission-posture
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T21:53:49.178193741Z
+  completion_sha: d55619d90df147b17ecfb9afa8042d0a3596473e
