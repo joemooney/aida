@@ -1,0 +1,12 @@
+id: 019ea2be-cd8e-7850-9170-37bfc016d6c6
+spec_id: TASK-692
+agreed_id: TASK-692
+title: 'STORY-472 slice 1: top-level ''aida release'' verb (--patch/--minor/--major, --check, --skip-xplat-check)'
+description: 'Promote the existing ''aida dev release'' flow (store pull -> scripts/release.sh -> wait tarballs -> upgrade siblings) to a memorable top-level ''aida release'' verb, addressing the operator friction (''I won''t remember the sequence''). Adds: --patch/--minor/--major bump flags (default patch); --check read-only preview (current->target version, repo/branch/clean-tree, the step sequence) without acting; --skip-xplat-check passthrough (sets AIDA_SKIP_XPLAT_CHECK for release.sh''s gate). Reuses handle_dev_release (no duplication). Pure resolve_release_bump + preview_next_version helpers, unit-tested. --after-pr deferred to a follow-up. trace:STORY-472'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T15:41:13.998329369Z
+modified_at: 2026-06-07T15:41:13.998329369Z
+req_type: Task
