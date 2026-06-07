@@ -1626,6 +1626,10 @@ fn run() -> Result<()> {
             remove_tag,
             blocked_by: _, // STORY-446: blocked-by edges land on the git-backend path
             remove_blocked_by: _,
+            // STORY-476: external refs land on the git-backend path only;
+            // the legacy SQLite path ignores them. trace:STORY-476 | ai:claude
+            add_ref: _,
+            remove_ref: _,
             interactive,
             strict: _, // legacy SQLite path ignores session leases
             force: _,  // TASK-47 guard only applies to git-canonical Edit
@@ -9300,6 +9304,34 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             req.tags.iter().cloned().collect::<Vec<_>>().join(", ")
                         );
                     }
+                    // STORY-476: one-way external issue refs rendered as links
+                    // via the `[external_refs]` base URLs in config. A ref with
+                    // no resolvable base URL prints its bare `provider:id`.
+                    // trace:STORY-476 | ai:claude
+                    if !req.external_refs.is_empty() {
+                        let base_urls = read_external_ref_base_urls(store_path);
+                        println!("{}:", "External refs".bold());
+                        for raw in &req.external_refs {
+                            match aida_core::external_refs::parse_ref(raw) {
+                                Ok(parsed) => {
+                                    match aida_core::external_refs::render_ref_url(
+                                        &parsed, &base_urls,
+                                    ) {
+                                        Some(url) => println!(
+                                            "  ↗ {} → {}",
+                                            parsed.canonical().yellow(),
+                                            url.cyan()
+                                        ),
+                                        None => println!("  ↗ {}", parsed.canonical().yellow()),
+                                    }
+                                }
+                                // Stored ref that no longer parses (e.g. a
+                                // provider removed from the known set) — show
+                                // it verbatim rather than dropping it.
+                                Err(_) => println!("  ↗ {}", raw.yellow()),
+                            }
+                        }
+                    }
                     // TASK-102: enumerate relationships inline when there are
                     // few (≤5) or `--rels` is passed; otherwise print the count
                     // + a pointer to `aida rel list`. Truncate past 10 with a
@@ -9532,6 +9564,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             remove_tag,
             blocked_by,
             remove_blocked_by,
+            add_ref,
+            remove_ref,
             strict,
             force,
             human_only,
@@ -9764,6 +9798,36 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if *no_human_only && req.human_only {
                 req.human_only = false;
                 changed = true;
+            }
+
+            // STORY-476: one-way external issue refs. `--add-ref` validates
+            // each `provider:id` (linear/jira/github) before storing the
+            // canonical form; an invalid ref is a hard error so a typo'd ref
+            // never lands silently. `--remove-ref` drops a stored ref by its
+            // canonical form. Both are repeatable and idempotent.
+            // trace:STORY-476 | ai:claude
+            for raw in add_ref {
+                let parsed =
+                    aida_core::external_refs::parse_ref(raw).map_err(|e| anyhow::anyhow!(e))?;
+                let canonical = parsed.canonical();
+                if !req.external_refs.contains(&canonical) {
+                    req.external_refs.push(canonical);
+                    changed = true;
+                }
+            }
+            for raw in remove_ref {
+                // Accept either the canonical or a loosely-typed form by
+                // normalizing through the parser when possible; fall back to a
+                // trimmed literal match so a stored-but-now-unknown provider
+                // can still be removed.
+                let target = aida_core::external_refs::parse_ref(raw)
+                    .map(|p| p.canonical())
+                    .unwrap_or_else(|_| raw.trim().to_string());
+                let before = req.external_refs.len();
+                req.external_refs.retain(|r| r != &target);
+                if req.external_refs.len() != before {
+                    changed = true;
+                }
             }
 
             if changed {
@@ -15423,6 +15487,60 @@ fn list_requirements(
     }
 
     Ok(())
+}
+
+/// Read the `[external_refs]` provider → base-URL map from `.aida/config.toml`.
+///
+/// Each line under the section is `provider = "https://..."` (e.g.
+/// `linear = "https://linear.app/acme/issue/"`). The project root is the
+/// parent of the orphan store path; fall back to `find_project_root()` and
+/// finally CWD. Missing file or section yields an empty map (callers then use
+/// the built-in defaults — see `aida_core::external_refs::render_ref_url`).
+/// Mirrors the line-by-line `read_config_workflow_hints` pattern.
+/// trace:STORY-476 | ai:claude
+fn read_external_ref_base_urls(
+    store_path: &std::path::Path,
+) -> std::collections::HashMap<String, String> {
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .or_else(|| find_project_root().ok())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let config_path = project_root.join(".aida").join("config.toml");
+    let mut map = std::collections::HashMap::new();
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(_) => return map,
+    };
+    let mut in_section = false;
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(stripped) = line.strip_prefix('[') {
+            in_section = stripped.trim_end_matches(']').trim() == "external_refs";
+            continue;
+        }
+        if in_section {
+            if let Some((key, val)) = line.split_once('=') {
+                let provider = key.trim().to_ascii_lowercase();
+                // Strip a trailing inline `# comment`, then surrounding quotes.
+                let v = val
+                    .split('#')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string();
+                if !provider.is_empty() && !v.is_empty() {
+                    map.insert(provider, v);
+                }
+            }
+        }
+    }
+    map
 }
 
 fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {

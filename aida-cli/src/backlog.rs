@@ -782,6 +782,8 @@ mod tests {
             attachments: Vec::new(),
             trace_links: Vec::new(),
             gitlab_issues: Vec::new(),
+            // trace:STORY-476 | ai:claude
+            external_refs: Vec::new(),
             implementation_info: None,
             ai_evaluation: None,
             attention_reason: None,

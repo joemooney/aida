@@ -5194,6 +5194,21 @@ pub enum Command {
         #[clap(long = "remove-blocked-by", value_name = "SPEC-ID")]
         remove_blocked_by: Vec<String>,
 
+        // trace:STORY-476 | ai:claude
+        /// Attach a one-way external issue reference (repeatable). Format
+        /// `provider:id` where provider is linear, jira, or github — e.g.
+        /// `--add-ref linear:LIN-123 --add-ref github:owner/repo#123`.
+        /// Rendered as a link in `aida show` and searchable. AIDA stores the
+        /// pointer; it does NOT sync state back to the external system.
+        #[clap(long = "add-ref", value_name = "PROVIDER:ID")]
+        add_ref: Vec<String>,
+
+        /// Remove a previously-attached external issue reference (repeatable).
+        /// Matches the stored `provider:id` form; removing an absent ref is a
+        /// no-op.
+        #[clap(long = "remove-ref", value_name = "PROVIDER:ID")]
+        remove_ref: Vec<String>,
+
         /// Use interactive mode (launches editor)
         #[clap(long, short = 'i')]
         interactive: bool,
