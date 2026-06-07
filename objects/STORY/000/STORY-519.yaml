@@ -42,17 +42,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:35:34.763436046Z
-modified_at: 2026-06-07T03:56:39.603981645Z
+modified_at: 2026-06-07T06:54:29.752144177Z
 req_type: Story
 tags:
 - advisor-vision
 - backlog-burndown
-- deferred:compose-via-harness
 - from-product
 - from-user-direction
 - parallel-pipelining
 - parent:STORY-265
 - plan-phase
+- ready-to-implement
 relationships:
 - rel_type: BlockedBy
   target_id: 019e3375-dee2-7032-9f95-327b44c474b3
