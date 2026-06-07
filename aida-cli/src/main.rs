@@ -22669,6 +22669,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     } else {
         render_doctor_report(&report, opts.heal)?;
     }
+
+    // BUG-471: heal now continues past a single finding's failure (no more
+    // first-error abort), so the failure signal moves to the exit code — bail
+    // non-zero after the report so scripts/automation still notice.
+    // trace:BUG-471 | ai:claude
+    let failed = report
+        .healed
+        .iter()
+        .filter(|r| r.status == "failed")
+        .count();
+    if failed > 0 {
+        anyhow::bail!("{failed} finding(s) failed to heal — see the report above");
+    }
     Ok(())
 }
 
@@ -23331,7 +23344,20 @@ fn heal_doctor_findings(
             continue;
         }
         for finding in items {
-            out.push(heal_doctor_finding(project_root, finding, opts)?);
+            // BUG-471: a single finding's heal failure must not abort the whole
+            // run (the resilient-drain discipline). Record it as a `failed`
+            // result and continue; the caller surfaces failures + exits non-zero.
+            // trace:BUG-471 | ai:claude
+            match heal_doctor_finding(project_root, finding, opts) {
+                Ok(result) => out.push(result),
+                Err(e) => out.push(DoctorHealResult {
+                    category: category.clone(),
+                    id: finding.id.clone(),
+                    action: finding.action.clone(),
+                    status: "failed".to_string(),
+                    detail: Some(e.to_string()),
+                }),
+            }
         }
     }
     Ok(out)
@@ -23447,10 +23473,22 @@ fn heal_doctor_lease(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
-    let lease = list_leases(project_root)
+    // BUG-471: a lease already ended (e.g. removed earlier in this same heal
+    // run, or by a concurrent session) is a no-op, not an error — mirror the
+    // dead-agent "already gone" handling so heal stays idempotent.
+    // trace:BUG-471 | ai:claude
+    let Some(lease) = list_leases(project_root)
         .into_iter()
         .find(|lease| lease.id == finding.id)
-        .ok_or_else(|| anyhow::anyhow!("lease {} no longer exists", finding.id))?;
+    else {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some("lease already ended".to_string()),
+        });
+    };
     let salvage = salvage_worktree_patch(
         project_root,
         &lease.scope,
@@ -23845,6 +23883,30 @@ mod story_462_doctor_tests {
         // Reaped → no longer reported.
         let after = collect_doctor_findings(&project, &store, Some("dead-agents")).unwrap();
         assert!(after.is_empty(), "reaped entry must not reappear");
+    }
+
+    #[test]
+    fn heal_doctor_lease_is_idempotent_when_lease_already_gone() {
+        // BUG-471: a stale-lease finding whose lease no longer exists (ended
+        // earlier in the same heal run, or by a concurrent session) must heal to
+        // a no-op skip — NOT an error that aborts the whole heal.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().to_path_buf();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        let finding = DoctorFinding {
+            category: "stale-leases".to_string(),
+            id: "deadbeef0000".to_string(),
+            summary: "stale lease".to_string(),
+            action: "end lease deadbeef0000".to_string(),
+            safe_heal: true,
+        };
+        let result = heal_doctor_lease(&project, &finding).expect("absent lease must not error");
+        assert_eq!(result.status, "skipped");
+        assert!(result
+            .detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("already ended"));
     }
 
     #[test]
