@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T20:07:39.591015455Z
-modified_at: 2026-06-06T13:49:48.597589885Z
+modified_at: 2026-06-07T04:06:51.219412734Z
 req_type: Epic
 tags:
 - batch:mcp-gate-parity
@@ -50,3 +50,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): COMMISSION the audit (see new child task): one bounded pass auditing every mutating MCP tool (add_relationship/add_comment/punt/update_relationship/…) for the same authority/lifecycle gates BUG-449 added to update_requirement. The substrate-as-bouncer invariant must hold at every MCP surface; security-relevant (agent self-completion on uncommitted code was the BUG-449 failure mode). EPIC stays open until the audit lands.'
   created_at: 2026-06-06T13:49:42.051482244Z
   modified_at: 2026-06-06T13:49:42.051482244Z
+- id: 019ea043-1453-72a0-a7d3-4f836e50fb21
+  author: joe
+  content: '✅ COMPLETE (2026-06-06): MCP gate parity delivered — BUG-449 (update_requirement gate) + TASK-673 + TASK-681 (full mutating-tool audit) all Completed. Substrate-as-bouncer holds across the MCP surface.'
+  created_at: 2026-06-07T04:06:51.219412734Z
+  modified_at: 2026-06-07T04:06:51.219412734Z
