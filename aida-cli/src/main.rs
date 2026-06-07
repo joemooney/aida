@@ -81762,6 +81762,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             permission_mode,
             no_launch,
             plan_only,
+            with_plan,
             role,
             no_pull,
             type_filter,
@@ -82083,6 +82084,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // trace:TASK-480 | ai:claude
                 if *allow_intermediate_only {
                     std::env::set_var("AIDA_ALLOW_INTERMEDIATE_ONLY", "1");
+                }
+                // STORY-265 slice 3: `--with-plan` runs a PLAN PRELUDE (plan
+                // session → Approved→Planned promote) before the drain's phase
+                // 1. Propagate it via an env var — the same pattern AIDA_CALIBRATE
+                // / AIDA_ALLOW_INTERMEDIATE_ONLY use — so it composes across the
+                // single-spec / batch / nextN drain routes without threading a
+                // new bool through every handler signature. `run_auto_complete`
+                // reads it once and runs the prelude before driving the phases;
+                // the Phase enum is untouched (the prelude is NOT a renumbered
+                // phase). trace:STORY-265 | ai:claude
+                if *with_plan {
+                    std::env::set_var("AIDA_WITH_PLAN", "1");
                 }
                 // STORY-492: `--resume-drain` is its own entry — read the crashed
                 // drain-state, gate on PID-liveness, reconcile from reality, and
@@ -87464,6 +87477,73 @@ fn handle_auto_complete(
     std::process::exit(result.exit_code);
 }
 
+/// STORY-265 slice 3: execute the `--with-plan` PLAN PRELUDE for one spec —
+/// the plan phase that runs before the auto-complete drain's phase 1. Reuses
+/// slice 2's `aida queue work <spec> --plan-only` planning session (headless
+/// when the drain runs a headless implementer) and slice 1's
+/// `aida plan promote <spec>` Approved→Planned transition, in that order
+/// (decided by [`auto_complete::plan_prelude_steps`]). The drain itself is
+/// entered unchanged after this returns `Ok`; the Phase enum is untouched (the
+/// prelude is NOT a renumbered phase). Each step shells out to the current
+/// `aida` binary; a non-zero exit aborts the prelude so the caller skips the
+/// drain. trace:STORY-265 | ai:claude
+fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Result<()> {
+    use auto_complete::PlanPreludeStep;
+    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let steps = auto_complete::plan_prelude_steps(spec, true, headless_implementer);
+    if !json {
+        eprintln!();
+        eprintln!(
+            "{} {} {}",
+            "📝".bold(),
+            format!("plan prelude: {spec}").bold(),
+            "(plan phase → promote → drain)".dimmed()
+        );
+    }
+    for step in steps {
+        match step {
+            PlanPreludeStep::PlanSession { spec: s, headless } => {
+                let mut args: Vec<String> = vec![
+                    "queue".into(),
+                    "work".into(),
+                    s.clone(),
+                    "--plan-only".into(),
+                ];
+                if headless {
+                    // Mirror the phase-1 headless implementer launch onto the
+                    // plan session so a `--no-human=both` drain plans headless
+                    // too. trace:STORY-265 | ai:claude
+                    args.push("--no-human".into());
+                }
+                let status = std::process::Command::new(&exe)
+                    .args(&args)
+                    .status()
+                    .with_context(|| format!("could not launch the plan session for {s}"))?;
+                if !status.success() {
+                    anyhow::bail!(
+                        "the plan session exited with status {} — no plan file was produced",
+                        status.code().unwrap_or(-1)
+                    );
+                }
+            }
+            PlanPreludeStep::Promote { spec: s } => {
+                let status = std::process::Command::new(&exe)
+                    .args(["plan", "promote", &s])
+                    .status()
+                    .with_context(|| format!("could not run `aida plan promote {s}`"))?;
+                if !status.success() {
+                    anyhow::bail!(
+                        "`aida plan promote {s}` exited with status {} — the spec was not \
+                         promoted to Planned (does the plan file's `Specs:` header list {s}?)",
+                        status.code().unwrap_or(-1)
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Run one `--auto-complete` orchestration and return its result *without*
 /// exiting the process — so a batch drain (TASK-285) can chain runs. Handles
 /// the preflight queue, the real driver, and the TASK-266 telemetry record.
@@ -87518,6 +87598,29 @@ fn run_auto_complete(
     if let Err(e) = ensure_queued_for_implementer(storage, user_id, spec) {
         eprintln!("{} {}", "✗".red().bold(), e);
         std::process::exit(1);
+    }
+    // STORY-265 slice 3: the `--with-plan` PLAN PRELUDE. When `--with-plan` is
+    // set (propagated as `AIDA_WITH_PLAN=1` by the dispatch arm), run a plan
+    // session + Approved→Planned promote BEFORE the phase-1 status bump and the
+    // drain. This is a prelude, NOT a renumbered phase — the 6-phase drain
+    // below is entered unchanged, so the Phase enum's index-as-exit-code
+    // contract is preserved. The prelude runs once per drained spec (single /
+    // batch / nextN all route through here). A prelude failure aborts this
+    // spec's run before any work is bumped/leased. trace:STORY-265 | ai:claude
+    if std::env::var("AIDA_WITH_PLAN").is_ok() {
+        let headless_implementer = no_human
+            .map(auto_complete::NoHumanMode::wants_headless_implementer)
+            .unwrap_or(false);
+        if let Err(e) = run_plan_prelude(spec, headless_implementer, json) {
+            eprintln!(
+                "{} plan prelude failed for {}: {} — the drain did not start \
+                 (re-run, or drop --with-plan to implement without a plan phase)",
+                "✗".red().bold(),
+                spec,
+                e
+            );
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        }
     }
     // TASK-133: capture the pre-spawn status bump (BUG-369) so the parent can
     // restore it if phase 1 fails without the child ever acquiring a lease.
