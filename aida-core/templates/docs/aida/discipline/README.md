@@ -14,6 +14,7 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`tag-conventions.md`](tag-conventions.md) | The `aida:<subcommand>` colon-namespaced tag convention, plus the flat behavior/provenance namespace and existing colon namespaces (`batch:`, `lifecycle:`, …) |
 | [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, parallel-choice vs sequential-step UI, planning-pass file hygiene, and why recursive-failure-risk fixes ship at the keyboard not the drain |
 | [`backlog-grooming.md`](backlog-grooming.md) | Grooming the Approved/Planned backlog — bucketing by tag/type/priority, what to queue vs archive vs escalate, and the file-overlap conflict heuristic |
+| [`autonomous-burndown.md`](autonomous-burndown.md) | Draining a ready backlog hands-off — the worktree-isolated implementer fan-out + integrator loop, the pickability gate, punt-and-continue, never-down-tools, and `/aida-burndown` vs the orchestrator drain |
 | [`git-sync-and-review.md`](git-sync-and-review.md) | Recovering when `aida pull` refuses (divergent branches) + the `aida review prompt` workflow — read-on-demand detail kept out of the always-in-context `AIDA.md` |
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
 | [`skill-prompt-kinds.md`](skill-prompt-kinds.md) | Classifying `AskUserQuestion` prompts into mechanical vs design-fork kind, and their `--zen` pause behavior |
