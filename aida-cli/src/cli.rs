@@ -3758,6 +3758,43 @@ pub enum QueueCommand {
         #[clap(long)]
         user: Option<String>,
     },
+    /// Recover a spec from a failed phase-1 implementer session — an
+    /// interactive wizard over the existing recovery primitives.
+    ///
+    /// After a phase-1 failure (an Anthropic 529, a commit-and-exit without a
+    /// PR, partial work, an external crash), recovery is a mechanical sequence
+    /// of git/gh/aida commands whose exact shape depends on the spec's state:
+    /// does a lease still hold it? is there an open/merged PR? are there commits
+    /// ahead of `origin/main` that were never pushed? is the worktree dirty?
+    /// This command inspects that state, recommends a recovery path, and steps
+    /// through it interactively — instead of you remembering the dance each time.
+    ///
+    /// It is a FRONT-END over existing primitives, not new mechanism: it reuses
+    /// the same lease probes as `aida session leases`, the same PR/branch probes
+    /// the orchestrator uses, drives phases 3-6 via the PR-only orchestrator
+    /// path when a PR is already open, and falls back to `aida pull` / session
+    /// cleanup / re-queue for the other cases. Recommended actions:
+    ///   • open PR (pushed)        → drive phases reviewer → merge → pull → build
+    ///   • commits, not pushed     → push + open PR + drive phases
+    ///   • commits + dirty worktree→ commit WIP, then push + PR + drive
+    ///   • no commits + dirty      → commit WIP and park for resumption
+    ///   • no commits + clean      → end the lease and re-queue
+    ///   • PR merged / spec done   → pull / nothing to do (already shipped)
+    Recover {
+        /// Spec to recover (UUID or SPEC-ID).
+        id: String,
+        /// Print the inspection result + recommended recovery plan WITHOUT
+        /// executing anything. The safe way to see the state read before acting.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip all confirmation prompts and run the recommended path
+        /// non-interactively (for scripted / headless use). NOT the default.
+        #[clap(long, visible_alias = "yes")]
+        auto: bool,
+        /// User ID (defaults to AIDA_USER or system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
 }
 
 /// `aida findings` — triage findings filed by headless drain phases (the
