@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-06-06T14:00:54.158061570Z
+modified_at: 2026-06-07T06:10:51.536841644Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -94,3 +94,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): DEFER with the EPIC-31 cluster — the integrator role identifier already validates (nothing broken); the remaining role-scaffolding infra (templates/roles/integrator.md + .aida/roles/ scaffold + discipline section) wants the same design pass as the EPIC-31 launcher/registry cluster, not a standalone bugs-phase ship.'
   created_at: 2026-06-06T14:00:45.961093400Z
   modified_at: 2026-06-06T14:00:45.961093400Z
+- id: 019ea0b4-9c10-7f13-82a1-f7f5c9d99b85
+  author: joe
+  content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): Integrator role scaffolding — same compete-vs-harness call as STORY-519/520: the harness delivers integration (proven this session); defer the in-aida role build.'
+  created_at: 2026-06-07T06:10:51.536841644Z
+  modified_at: 2026-06-07T06:10:51.536841644Z
