@@ -39320,6 +39320,19 @@ fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
 /// also hardens the real `gh` exec (e.g. a freshly-written `gh` wrapper)
 /// at negligible cost.
 /// trace:BUG-463 | ai:claude
+///
+/// `libc` is a `cfg(unix)`-only dependency and `ETXTBSY` is a Unix-only errno
+/// (Windows can never produce it on spawn), so the errno check is behind a
+/// cfg-gated helper — a real check on unix, a compile-time `false` elsewhere —
+/// to keep the Windows build green. trace:BUG-468 | ai:claude
+#[cfg(unix)]
+fn is_etxtbsy(e: &std::io::Error) -> bool {
+    e.raw_os_error() == Some(libc::ETXTBSY)
+}
+#[cfg(not(unix))]
+fn is_etxtbsy(_e: &std::io::Error) -> bool {
+    false
+}
 fn command_output_retrying_etxtbsy(
     cmd: &mut std::process::Command,
 ) -> std::io::Result<std::process::Output> {
@@ -39328,7 +39341,7 @@ fn command_output_retrying_etxtbsy(
     loop {
         match cmd.output() {
             Ok(out) => return Ok(out),
-            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && attempt < MAX_ATTEMPTS => {
+            Err(e) if is_etxtbsy(&e) && attempt < MAX_ATTEMPTS => {
                 attempt += 1;
                 std::thread::sleep(std::time::Duration::from_millis(2));
             }
