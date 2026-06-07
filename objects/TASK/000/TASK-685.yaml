@@ -3,14 +3,18 @@ spec_id: TASK-685
 agreed_id: TASK-685
 title: 'Refresh multi-user-setup.md: drop removed db migrate / db export-git commands'
 description: 'docs/multi-user-setup.md (last touched 2026-05-02) references CLI surface that no longer exists: ''aida db migrate --from/--to'' (no db migrate subcommand) and ''aida db export-git'' (no such subcommand). Found during TASK-627''s bounded staleness re-scan; the trivial ''aida init --distributed''->''aida init'' drift was fixed inline under TASK-627, but the migration/export commands need real attention (find current equivalents or remove the sections). Bounded out of TASK-627 (PostgreSQL deployment is an opt-in advanced path, not the getting-started flow).'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T00:35:45.329874618Z
-modified_at: 2026-06-07T00:35:45.329874618Z
+modified_at: 2026-06-07T04:03:50.597616486Z
 req_type: Task
 tags:
 - docs
 - freshness-audit
 - from-task-627
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T04:03:50.597616486Z
+  completion_sha: 9f089f1d10faef1271c201a902e7879c274be9a5
