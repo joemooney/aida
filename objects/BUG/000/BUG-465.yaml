@@ -3,12 +3,12 @@ spec_id: BUG-465
 agreed_id: BUG-465
 title: aida queue work on a fresh/empty queue dead-ends instead of guiding the first action
 description: 'Reproduced on a fresh aida init (2026-06-06 dogfood): the natural next action ''aida queue work'' errors ''queue is empty for <role>; pass an id explicitly or run aida queue list'' — a wall, not a path, for a brand-new user. EPIC-37''s acceptance is ''fresh init -> first queue work is boring and correct''; an unhelpful error violates it. There is no seeded onboarding task (by design — the user files their first spec), so the empty-queue first-run case needs GUIDANCE: e.g. ''Your queue is empty. New project? File your first spec: aida add --title "..." --type task --status approved, then aida queue work. Or browse: aida list.'' Detect the fresh/empty-project case (no real specs yet) and emit the file-your-first-spec onboarding hint instead of the bare error. Compose with the status Inbox fix (sibling). trace:EPIC-37'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T01:52:52.858830564Z
-modified_at: 2026-06-07T01:52:52.858830564Z
+modified_at: 2026-06-07T02:08:53.755017525Z
 req_type: Bug
 tags:
 - aida:queue:work
