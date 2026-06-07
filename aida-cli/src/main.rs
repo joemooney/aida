@@ -20535,6 +20535,147 @@ fn short_sha(sha: &str) -> String {
     }
 }
 
+/// Pure drift verdict: given the code commit's paired store SHA (from the
+/// `Aida-Store:` trailer) and the current orphan-store HEAD, decide whether
+/// the store has drifted away from the SHA the code was committed against.
+///
+/// Returns `Some(true)` when both SHAs are present and differ (drift),
+/// `Some(false)` when both are present and match (aligned), and `None` when
+/// either side is absent (no trailer, or no `.aida-store/`) — i.e. there is
+/// nothing to compare, so no drift claim is made.
+/// trace:STORY-49 | ai:claude
+fn store_sha_drift(
+    paired_store_sha: Option<&str>,
+    current_store_head: Option<&str>,
+) -> Option<bool> {
+    match (paired_store_sha, current_store_head) {
+        (Some(p), Some(c)) => Some(p.trim() != c.trim()),
+        _ => None,
+    }
+}
+
+/// Read the `Aida-Store:` trailer SHA from the code HEAD commit message at
+/// `project_root`, if present. Returns `None` on any git error, no trailer,
+/// or no commits. trace:STORY-49 | ai:claude
+fn paired_store_sha_for_head(project_root: &std::path::Path) -> Option<String> {
+    let head_msg = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-1", "--format=%B"])
+        .output()
+        .ok()?;
+    if !head_msg.status.success() {
+        return None;
+    }
+    let head_msg = String::from_utf8_lossy(&head_msg.stdout).to_string();
+    let trailers = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["interpret-trailers", "--parse"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .ok()?;
+    {
+        use std::io::Write;
+        if let Some(mut stdin) = trailers.stdin.as_ref().take() {
+            let _ = stdin.write_all(head_msg.as_bytes());
+        }
+    }
+    let trailer_output = trailers.wait_with_output().ok()?;
+    let trailer_text = String::from_utf8_lossy(&trailer_output.stdout).to_string();
+    trailer_text
+        .lines()
+        .find_map(|l| l.strip_prefix("Aida-Store:").map(|s| s.trim().to_string()))
+        .filter(|s| !s.is_empty())
+}
+
+/// Current orphan-store HEAD SHA from `<project_root>/.aida-store`, if the
+/// worktree exists and git can resolve it. trace:STORY-49 | ai:claude
+fn current_store_head_sha(project_root: &std::path::Path) -> Option<String> {
+    let store_path = project_root.join(".aida-store");
+    if !store_path.exists() {
+        return None;
+    }
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .filter(|s| !s.is_empty())
+}
+
+/// STORY-49: one-line store/code SHA-drift warning for `aida status`.
+///
+/// Warn-only: when the code HEAD's paired store SHA (`Aida-Store:` trailer)
+/// diverges from the current orphan-store HEAD, surface a single yellow line
+/// pointing at `aida store status` for detail. Silent when aligned, when
+/// there is no trailer (hook not installed / pre-hook commit), or when there
+/// is no `.aida-store/` — anything that isn't an unambiguous drift signal
+/// stays quiet so a fresh / unpaired project sees no nag. trace:STORY-49
+fn print_status_store_drift_section(project_root: &std::path::Path) {
+    let paired = paired_store_sha_for_head(project_root);
+    let current = current_store_head_sha(project_root);
+    if let Some(true) = store_sha_drift(paired.as_deref(), current.as_deref()) {
+        println!(
+            "  {} code HEAD pinned store {} but current store is {} — run {} for detail",
+            "Store drift:".bold().yellow(),
+            short_sha(paired.as_deref().unwrap_or("")).dimmed(),
+            short_sha(current.as_deref().unwrap_or("")).dimmed(),
+            "aida store status".cyan()
+        );
+        println!();
+    }
+}
+
+#[cfg(test)]
+mod story_49_store_drift_tests {
+    use super::store_sha_drift;
+
+    #[test]
+    fn aligned_when_paired_equals_current() {
+        assert_eq!(store_sha_drift(Some("abc123"), Some("abc123")), Some(false));
+    }
+
+    #[test]
+    fn drift_when_paired_differs_from_current() {
+        assert_eq!(store_sha_drift(Some("abc123"), Some("def456")), Some(true));
+    }
+
+    #[test]
+    fn whitespace_around_shas_is_ignored() {
+        assert_eq!(
+            store_sha_drift(Some("  abc123\n"), Some("abc123")),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn no_verdict_without_a_paired_sha() {
+        // No `Aida-Store:` trailer on the commit — nothing to compare.
+        assert_eq!(store_sha_drift(None, Some("abc123")), None);
+    }
+
+    #[test]
+    fn no_verdict_without_a_current_store_head() {
+        // No `.aida-store/` worktree — nothing to compare.
+        assert_eq!(store_sha_drift(Some("abc123"), None), None);
+    }
+
+    #[test]
+    fn no_verdict_when_both_absent() {
+        assert_eq!(store_sha_drift(None, None), None);
+    }
+}
+
 /// Install the prepare-commit-msg hook from EMBEDDED_TEMPLATES into
 /// `.git/hooks/prepare-commit-msg`. Idempotent. trace:EPIC-21 | ai:claude
 fn store_install_hook(force: bool) -> Result<()> {
@@ -66428,6 +66569,13 @@ fn handle_status_command_distributed(
     // trace:STORY-457 | ai:claude
     let wt_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
     print_status_working_tree_section(&wt_root);
+
+    // STORY-49: warn when the code HEAD's paired store SHA (`Aida-Store:`
+    // trailer) has drifted from the current orphan-store HEAD. Warn-only —
+    // the cheap, high-signal half of EPIC-21 v2; the full read-only
+    // `aida store checkout` time-travel is deferred. Silent unless there's an
+    // unambiguous drift signal. trace:STORY-49 | ai:claude
+    print_status_store_drift_section(&wt_root);
 
     // STORY-410: one-line substrate-drift notice. The opt-in memory pack
     // grows inside the aida binary; a project that scaffolded it months ago
