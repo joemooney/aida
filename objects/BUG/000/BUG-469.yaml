@@ -3,10 +3,14 @@ spec_id: BUG-469
 agreed_id: BUG-469
 title: 'Windows test build broken: forge.rs fake_output uses Unix-only ExitStatusExt::from_raw (EPIC-35)'
 description: 'aida-cli/src/forge.rs fake_output() test helper builds a std::process::ExitStatus via std::os::unix::process::ExitStatusExt::from_raw, which is Unix-only. On windows-latest ''cargo test --workspace'' fails to compile: E0433 ''cannot find unix in os'' (forge.rs:2452) + E0599 ''no from_raw on ExitStatus'' (forge.rs:2454). This is a cargo-test-only break (the non-test build is fine), surfaced after BUG-466/BUG-468 cleared the earlier cross-platform failures — the third and (per the compiler''s full error list) last Windows blocker on the v0.12.0 release. Fix: cfg-gate fake_output to use ExitStatusExt::from_raw per platform (unix: (code&0xff)<<8; windows: code as u32 via std::os::windows::process::ExitStatusExt). Both yield .code()==code.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T09:02:10.459491294Z
-modified_at: 2026-06-07T09:02:10.459491294Z
+modified_at: 2026-06-07T09:09:20.188833235Z
 req_type: Bug
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T09:09:20.188833235Z
+  completion_sha: b0aa5422a8741762d2ae6e7787e37dd46ba38e18
