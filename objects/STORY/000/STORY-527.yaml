@@ -1,0 +1,40 @@
+id: 019ea3ad-33ef-7650-8cca-32f8813889c6
+spec_id: STORY-527
+agreed_id: STORY-527
+title: '/aida-burndown skill: selector → ready/bounded fan-out → integrate (punt-and-continue) — the encoded autonomous-drain path'
+description: |-
+  Encode the parallel-implementer-fanout burndown pattern (memory feedback_parallel_implementer_fanout_burndown — the autonomous drain that empirically WORKS) as a RUNNABLE command, not just a doc. A doc alone repeats the exact failure the memory was born from ('loop/goal/begging didn't fix it; the fix is operational discipline + the right machinery') — substrate-as-bouncer: encode it.
+
+  ## Shape
+  The engine is Claude-Code-native (fan out Agent subagents with isolation:'worktree'; main session integrates; loop via wakeup) — a plain aida CLI subcommand can't spawn Claude subagents. So split:
+  - **aida supplies selector-resolution** (mostly exists): resolve a ready+bounded spec set from a flexible target.
+  - **A /aida-burndown skill** (under .claude/skills/ + templates/skills/, optionally compiling a saved burndown.js Workflow mirroring panel-review) drives the fan-out + integrate loop.
+
+  ## Selector — all axes through ONE readiness gate
+  /aida-burndown --batch NAME | --tag T | --status approved (default) | --queue | '<ad-hoc description>'. Every selector funnels through the pickability gate: ready + unblocked + bounded (no unresolved design fork). A spec that fails it is skipped/parked, never dragged in — that's what makes 'never stop to ask' safe. Default target: ready backlog for the active role.
+
+  ## Non-negotiables (from the memory)
+  - punt-and-continue: one blocker parks ONE spec (tag + note), the pipeline rolls on — never halts.
+  - never stop to ask / down tools; main session = integrator (merge greens, reconcile, relaunch waves).
+  - worktree isolation per implementer subagent; CI gates main.
+
+  ## Positioning (important)
+  This is the RECOMMENDED autonomous-drain path now — it works partly by sidestepping 'aida queue work --auto-complete' (the orchestrator-spawns-claude keystone behind BUG-431/STORY-492/EPIC-33). Don't reinvent orchestration; use the harness's. Position /aida-burndown as the recommended drain with the orchestrator drain hardened in PARALLEL (EPIC-33), NOT a competing second drain — state this in the skill + doc so there's no 'which drain do I trust' ambiguity.
+
+  ## Acceptance
+  - [ ] /aida-burndown skill scaffolded (.claude/skills/ + templates/skills/ + slash command)
+  - [ ] selector resolves ready+bounded set from --batch/--tag/--status/--queue/ad-hoc desc through the pickability gate
+  - [ ] drives worktree-isolated implementer fan-out + integrator loop with punt-and-continue
+  - [ ] companion discipline-pack doc ships (the why+rules) — autonomous-burndown.md
+  - [ ] skill text positions it vs the orchestrator drain (EPIC-33), no ambiguity
+  - [ ] test: selector resolution + pickability filtering (pure), exercised on a fixture spec set
+
+  ## Anchors
+  memory feedback_parallel_implementer_fanout_burndown; autonomous-drain epics; EPIC-33 (orchestrator hardening in parallel). Companion doc promoted to the discipline pack in the same effort (this story's first slice).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T20:01:37.775126021Z
+modified_at: 2026-06-07T20:01:37.775126021Z
+req_type: Story
