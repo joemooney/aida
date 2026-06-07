@@ -485,10 +485,3 @@
   added_by: joe
   added_at: 2026-06-06T03:50:50.415154751Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 019ea082-94be-7dd3-8313-dc80ed4ab5b4
-  position: 370000
-  added_by: joe
-  note: Scheduled task from 'smoke-audit'
-  added_at: 2026-06-07T05:16:13.472451770Z
-  for_role: advisor
