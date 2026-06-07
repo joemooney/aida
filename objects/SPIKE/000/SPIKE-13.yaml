@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:54:49.466065320Z
-modified_at: 2026-06-07T21:39:39.333369305Z
+modified_at: 2026-06-07T21:39:41.547779093Z
 req_type: Spike
 tags:
 - advisor-discipline
@@ -48,3 +48,8 @@ comments:
   content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): RESEARCH spike (multi-agent budget-dispatch investigation) — self-defers on thin evidence; not a code task to fan out. Keyboard.'
   created_at: 2026-06-07T06:11:04.000579911Z
   modified_at: 2026-06-07T06:11:04.000579911Z
+- id: 019ea406-fb6b-7f21-8153-d43a896bef77
+  author: joe
+  content: 'SPIKE-13 conclusion (report: docs/spikes/2026-06-07-spike-13-budget-aware-dispatch.md). VERDICT: recommend the portable FUSED Path 2+3+4 (operator-supplied hints + observed-availability inference + heartbeat paused-state); DEFER Path 1 (per-provider budget APIs) indefinitely as non-portable/brittle/pre-evidence. Key insight: dispatch needs an availability STATE BIT + timestamp (''unavailable since T, ~back T''''), not a token-budget integration — budget/rate-limit/manual pauses all collapse to one `paused` record on the EPIC-31 registry, extending STORY-435 heartbeat. Brief-time guard WARNS (heuristic), never refuses (per substrate-as-bouncer: hard gates are for invariants). BUILD STILL GATED: we have 2 budget-pause observations; spec self-gates at >=3-5, and the operator''s 2026-06-06 disposition said KEEP PARKED/recurrence-triggered. So this spike de-risks the design and files STORY-528 (draft, recurrence-gated) ready to pull at event #3 — no build now. Manual discipline (feedback_multi_agent_budget_dispatching) already covers the gap meanwhile. No code change — report doc only.'
+  created_at: 2026-06-07T21:39:41.547779093Z
+  modified_at: 2026-06-07T21:39:41.547779093Z
