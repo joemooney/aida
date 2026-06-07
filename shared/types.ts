@@ -33,6 +33,44 @@ raised_by?: string | null,
  */
 raised_at: string, };
 
+export type FailureReason = { 
+/**
+ * Stable slug for the phase that failed — `implementer`, `ci`,
+ * `review`, `merge`, `pull`, or `build`. A string (not an enum)
+ * keeps `aida-core` free of orchestrator concepts: the source of
+ * truth for phase identities lives in `aida-cli::auto_complete`.
+ */
+phase: string, 
+/**
+ * 1-based phase index (1..=6) for sorting / display.
+ */
+phase_index: number, 
+/**
+ * Stable slug for the failure kind — `no-pr`, `ci-red`,
+ * `request-changes`, `merge-conflict`, etc. Mirrors the orchestrator's
+ * existing `PhaseFailureKind::slug()`.
+ */
+kind: string, 
+/**
+ * One-line human description of what went wrong.
+ */
+detail: string, 
+/**
+ * Pre-rendered recovery hint — what the orchestrator would tell a
+ * human standing in front of the broken phase. Cached here so
+ * triage doesn't have to rebuild it.
+ */
+recovery_hint?: string | null, 
+/**
+ * Role / agent that shelved the spec (the active session role,
+ * `None` when no role context was available).
+ */
+shelved_by?: string | null, 
+/**
+ * When the spec was shelved.
+ */
+shelved_at: string, };
+
 export type DecisionChoice = { 
 /**
  * Short human label for the option (what the human picks).
@@ -1228,3 +1266,16 @@ export type ImproveDescriptionResponse = { improved_description: string, changes
 export type GeneratedChild = { title: string, description: string, type: string, rationale: string, };
 
 export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChild>, };
+
+export type QueueEntry = {
+    requirementId: string;
+    specId: string | null;
+    title: string;
+    status: string;
+    priority: string;
+    reqType: string;
+    position: number;
+    addedBy: string;
+    note: string | null;
+    addedAt: string;
+};
