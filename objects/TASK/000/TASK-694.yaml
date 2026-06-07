@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T16:49:05.807499637Z
-modified_at: 2026-06-07T21:22:21.722791287Z
+modified_at: 2026-06-07T21:53:28.793906628Z
 req_type: Task
 comments:
 - id: 019ea3d8-843d-77c0-b988-244f7d80972e
@@ -50,3 +50,8 @@ comments:
     Confirmed wiring (TASK-702, now UNBLOCKED): SubagentStart -> register lease(worktree_path=cwd, branch=git -C cwd rev-parse --abbrev-ref HEAD, scope=spec_id_from_branch(branch) else 'harness-worktree', key=agent_id). SubagentStop -> release lease by agent_id. Harness branches are 'worktree-agent-<id>' (no SPEC-ID → harness-worktree scope, as designed). trace:TASK-701 trace:TASK-694
   created_at: 2026-06-07T21:22:21.722791287Z
   modified_at: 2026-06-07T21:22:21.722791287Z
+- id: 019ea413-9ad9-7030-a669-7906ec11a8d3
+  author: joe
+  content: Superseded by TASK-702. The empirical probe (TASK-701) showed WorktreeCreate is an OWNERSHIP hook (replaces git, no path in payload) — the original 'wire WorktreeCreate/WorktreeRemove → lease' approach here is dead. The live work is the SubagentStart/Stop passive-observe wiring = TASK-702 (carries the verified design). Closing this; the probe findings live in the comments above.
+  created_at: 2026-06-07T21:53:28.793906628Z
+  modified_at: 2026-06-07T21:53:28.793906628Z
