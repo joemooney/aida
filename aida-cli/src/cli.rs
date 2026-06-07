@@ -6278,6 +6278,14 @@ pub enum Command {
         #[clap(long)]
         no_roles: bool,
 
+        /// Skip the first-machine-setup prompt for the agent permission
+        /// posture (~/.aida/agents.toml). By default, the first `aida init` on
+        /// a machine asks how `aida agent new` should handle permissions and
+        /// records the choice globally. Non-interactive init never prompts.
+        // trace:TASK-698 | ai:claude
+        #[clap(long)]
+        no_agent_config: bool,
+
         /// Overwrite existing files if already initialized
         #[clap(long)]
         force: bool,
