@@ -38,11 +38,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:00:19.174364070Z
-modified_at: 2026-06-06T20:13:02.331644537Z
+modified_at: 2026-06-07T00:32:21.009311692Z
 req_type: Task
 tags:
 - aida:review
-- blocked
 - external-validation
 - from-self-test
 - gitignored-paths
