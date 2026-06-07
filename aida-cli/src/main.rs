@@ -14386,18 +14386,24 @@ mod parse_requirement_type_tests {
 /// Initialize distributed mode using an orphan branch + worktree.
 /// This is the default for single-repo projects.
 /// Store lives at .aida-store/ (worktree of orphan branch 'aida-store').
-/// BUG-446: immediate-child directories of `cwd` that are their OWN git repos
-/// (a `.git` directory = nested repo, or a `.git` file = gitlink/submodule
-/// worktree) and are NOT registered submodules. A non-empty result means `cwd`
-/// is a workspace-of-projects, not a single project.
+/// BUG-446 / TASK-686: immediate-child directories of `cwd` that are their OWN
+/// project — a nested git repo (a `.git` directory, or a `.git` file =
+/// gitlink/submodule worktree) OR an AIDA project (a child `.aida/` dir) — and
+/// are NOT registered submodules. A non-empty result means `cwd` is a
+/// workspace-/parent-of-projects, not a single project.
 ///
-/// We deliberately test for a child's own `.git` entry rather than calling
-/// `git_ops::is_git_repo` (which shells out to `git rev-parse`): from inside
-/// `cwd` — itself a git repo by the time this runs — `rev-parse` resolves to
-/// `cwd`'s git-dir for EVERY subdirectory, so it would flag plain subdirs too.
-/// Dotted children (`.git`, `.aida-store`, …) and `.gitmodules`-declared
-/// submodules are intentional and excluded. trace:BUG-446 | ai:claude
-fn unmanaged_nested_git_repos(cwd: &std::path::Path) -> Vec<String> {
+/// We deliberately test for a child's own `.git`/`.aida` entry rather than
+/// calling `git_ops::is_git_repo` (which shells out to `git rev-parse`): from
+/// inside `cwd` — itself a git repo by the time this runs — `rev-parse`
+/// resolves to `cwd`'s git-dir for EVERY subdirectory, so it would flag plain
+/// subdirs too. Dotted children (`.git`, `.aida-store`, …) and
+/// `.gitmodules`-declared submodules are intentional and excluded.
+///
+/// TASK-686 added the child-`.aida/` arm: a parent of AIDA projects that aren't
+/// all plain git repos (the `~/ai/` case — ~80 children) would otherwise slip
+/// the guard and leave a scaffold every child inherits via ancestor CLAUDE.md.
+/// trace:BUG-446 trace:TASK-686 | ai:claude
+fn unmanaged_nested_projects(cwd: &std::path::Path) -> Vec<String> {
     let submodule_paths = gitmodule_child_paths(cwd);
     let mut found = Vec::new();
     let Ok(entries) = std::fs::read_dir(cwd) else {
@@ -14412,7 +14418,7 @@ fn unmanaged_nested_git_repos(cwd: &std::path::Path) -> Vec<String> {
         if name.starts_with('.') || submodule_paths.contains(&name) {
             continue;
         }
-        if path.join(".git").exists() {
+        if path.join(".git").exists() || path.join(".aida").is_dir() {
             found.push(name);
         }
     }
@@ -14474,7 +14480,7 @@ fn handle_init_distributed_worktree(
     // so re-running in a set-up project (handled below) keeps its own message;
     // bypass with --force. trace:BUG-446 | ai:claude
     if !force && !aida_dir.join("config.toml").exists() {
-        let nested = unmanaged_nested_git_repos(&cwd);
+        let nested = unmanaged_nested_projects(&cwd);
         if !nested.is_empty() {
             let preview = nested
                 .iter()
@@ -14489,17 +14495,18 @@ fn handle_init_distributed_worktree(
             };
             anyhow::bail!(
                 "This directory looks like a workspace of projects, not a single project: \
-                 it contains {} nested git {} ({}{}).\n\n\
+                 it contains {} child {} ({}{}).\n\n\
                  `aida init` here would capture the entire tree and root the requirement \
                  store at the workspace level — every `aida` command from a project \
-                 subdirectory would then operate on this workspace-wide store.\n\n\
+                 subdirectory would then operate on this workspace-wide store, and every \
+                 child would inherit this scaffold's CLAUDE.md via ancestor lookup.\n\n\
                  Run `aida init` inside an actual project directory instead, \
                  or pass --force to initialize here anyway.",
                 nested.len(),
                 if nested.len() == 1 {
-                    "repository"
+                    "project (git repo or AIDA project)"
                 } else {
-                    "repositories"
+                    "projects (git repos or AIDA projects)"
                 },
                 preview,
                 more,
@@ -48122,7 +48129,7 @@ mod bug_354_text_question_classifier_tests {
         )
         .unwrap();
 
-        let found = unmanaged_nested_git_repos(root);
+        let found = unmanaged_nested_projects(root);
         assert_eq!(found, vec!["projA".to_string(), "projB".to_string()]);
     }
 
@@ -48187,7 +48194,7 @@ mod bug_354_text_question_classifier_tests {
         let root = tmp.path();
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::create_dir_all(root.join("tests")).unwrap();
-        assert!(unmanaged_nested_git_repos(root).is_empty());
+        assert!(unmanaged_nested_projects(root).is_empty());
     }
 
     #[test]
@@ -48202,7 +48209,24 @@ mod bug_354_text_question_classifier_tests {
             "gitdir: /elsewhere/.git/modules/stray\n",
         )
         .unwrap();
-        assert_eq!(unmanaged_nested_git_repos(root), vec!["stray".to_string()]);
+        assert_eq!(unmanaged_nested_projects(root), vec!["stray".to_string()]);
+    }
+
+    #[test]
+    fn child_aida_project_counts_even_without_git() {
+        // TASK-686: a parent of AIDA projects (the ~/ai/ case) — a child with a
+        // `.aida/` dir but no `.git` must still be detected, so an init scaffold
+        // doesn't leak into a parent that every child inherits via ancestor
+        // CLAUDE.md.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("proj-a/.aida")).unwrap();
+        std::fs::create_dir_all(root.join("proj-b/.git")).unwrap();
+        std::fs::create_dir_all(root.join("plain-dir/src")).unwrap();
+        assert_eq!(
+            unmanaged_nested_projects(root),
+            vec!["proj-a".to_string(), "proj-b".to_string()]
+        );
     }
 
     #[test]
