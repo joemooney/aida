@@ -57,6 +57,8 @@ mod triage_lease;
 mod usage;
 mod worker;
 mod workflow_hints;
+// trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
+mod worktree_lease;
 mod zen;
 
 use anyhow::{Context, Result};
