@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T13:42:30.862628604Z
-modified_at: 2026-06-06T08:30:17.868995842Z
+modified_at: 2026-06-07T04:06:46.689889302Z
 req_type: Epic
 tags:
 - autonomous-drain
@@ -110,3 +110,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). The orchestrator correctness-floor keystone (active do-now); invariants 1-4 framework is set, several children still open (BUG-431, TASK-615, STORY-492, TASK-629, BUG-412, BUG-426) — drain them in dependency order via supervised --zen, no open umbrella decision.
   created_at: 2026-06-06T08:30:16.506946789Z
   modified_at: 2026-06-06T08:30:16.506946789Z
+- id: 019ea043-02a1-7e32-87fb-a2140f2a39e7
+  author: joe
+  content: '✅ COMPLETE (2026-06-06): orchestrator correctness-floor children all Completed/Rejected (BUG-431, STORY-492, TASK-615/629, BUG-412/426, etc.). The autonomous-drain invariants are in place.'
+  created_at: 2026-06-07T04:06:46.689889302Z
+  modified_at: 2026-06-07T04:06:46.689889302Z
