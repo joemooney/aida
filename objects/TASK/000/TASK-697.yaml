@@ -8,10 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T20:10:42.752618564Z
-modified_at: 2026-06-07T20:10:42.752618564Z
+modified_at: 2026-06-07T20:11:19.566686838Z
 req_type: Task
 tags:
 - from-spike:SPIKE-8
 - heuristic
 - refactor
 - ultraplan
+relationships:
+- rel_type: References
+  target_id: 019e34c6-0d76-7020-8d71-d7426ad092f6
+  created_at: 2026-06-07T20:11:19.566681255Z
+  created_by: joe
