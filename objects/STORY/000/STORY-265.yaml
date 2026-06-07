@@ -98,12 +98,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   Ship the SLICE first: --plan-only mode + the Approved→Planned lifecycle wiring (this is the dependency STORY-519/520 actually need). KEEP the current 'aida queue work' default behavior unchanged — new modes are OPT-IN, NO type-based default-mode change (that would be a UX surprise mid-stability). Defer --with-plan bundling + queue-list glyph changes as follow-ons.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:03:43.330261877Z
-modified_at: 2026-06-06T13:53:39.723309145Z
+modified_at: 2026-06-07T07:33:25.297017730Z
 req_type: Story
 tags:
 - advisor-vision
@@ -155,3 +155,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): Ship the SLICE first: --plan-only mode + the Approved→Planned lifecycle wiring (this is the dependency STORY-519/520 actually need). KEEP the current ''aida queue work'' default behavior unchanged — new modes are OPT-IN, NO type-based default-mode change (that would be a UX surprise mid-stability). Defer --with-plan bundling + queue-list glyph changes as follow-ons.'
   created_at: 2026-06-06T13:53:31.509804229Z
   modified_at: 2026-06-06T13:53:31.509804229Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T07:33:25.297017730Z
+  completion_sha: 408a0e8ce92b8e06e78e1adf7f4839ebc300e36c
