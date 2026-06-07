@@ -15600,5 +15600,13 @@ operations:
   timestamp: 2026-06-06T15:38:23.295096458Z
   kind: !SetStatus
     status: Planned
-clock: 1554
+- id: 019e9fc6-3022-7293-8382-3f0ebc4a0597
+  target_id: 019e4e41-cf77-78d0-900a-e4277111bb3a
+  author: aida
+  node_id: '1'
+  lamport: 1555
+  timestamp: 2026-06-07T01:50:26.338596053Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1555
 node_id: '1'

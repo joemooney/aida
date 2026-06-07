@@ -50,12 +50,12 @@ description: |-
   ## Origin
 
   User observation 2026-05-22 after \`aida init\` in a new project: *\"should aida scaffold have performed a git add?\"* — small friction, easy fix, aligns with \"single command, then it's set up.\"
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T05:56:36.343278174Z
-modified_at: 2026-06-06T04:18:37.730287775Z
+modified_at: 2026-06-07T01:50:26.320439718Z
 req_type: Task
 tags:
 - from-user-question
