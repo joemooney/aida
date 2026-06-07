@@ -1,0 +1,12 @@
+id: 019ea3f3-233b-7421-99ae-b0e46cbbc679
+spec_id: TASK-702
+agreed_id: TASK-702
+title: Wire SubagentStart/Stop -> AIDA lease register/release (TASK-694 passive-observe, gated on the probe)
+description: Gated on the SubagentStart payload probe. Reshape worktree_lease.rs from WorktreePayload{path,branch} to the verified SubagentStart shape {agent_id, agent_type, cwd}; lease_spec_for_create derives branch via git-in-cwd + reuses spec_id_from_branch for scope. Add the hook scripts + scaffold them via aida init (the deferred-from-TASK-634 scaffold half). SubagentStart -> register lease keyed on agent_id; SubagentStop -> release by agent_id. Substrate-CAPTURE only (don't own provisioning). trace:TASK-694
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T21:18:01.019067825Z
+modified_at: 2026-06-07T21:18:01.019067825Z
+req_type: Task
