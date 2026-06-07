@@ -232,6 +232,33 @@ pub enum ReportCommand {
     },
 }
 
+/// Dogfood metrics over the recorded telemetry substrate.
+///
+/// A reporting layer — computes nothing the telemetry logs don't already
+/// record. trace:STORY-477 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum MetricsCommand {
+    /// Agent-lift signals: autonomous drain success rate, runs over distinct
+    /// specs/builds, stale-base recoveries, and the autonomous-vs-human split.
+    /// Reads `~/.aida/auto-complete.jsonl` + `~/.aida/usage.jsonl`.
+    // trace:STORY-477 | ai:claude
+    AgentLift {
+        /// Report over the last N days/hours/minutes (e.g. `30d`, `12h`).
+        // trace:STORY-477 | ai:claude
+        #[clap(long, value_name = "WINDOW", default_value = "30d")]
+        since: String,
+        /// Emit Markdown — suitable for pasting into release notes or a case
+        /// study. Default is the colorized terminal view.
+        // trace:STORY-477 | ai:claude
+        #[clap(long)]
+        markdown: bool,
+        /// Emit a JSON object with the computed signals for machine consumers.
+        // trace:STORY-477 | ai:claude
+        #[clap(long, conflicts_with = "markdown")]
+        json: bool,
+    },
+}
+
 /// Starter-memory-pack substrate-drift discovery.
 ///
 /// The opt-in memory pack (`aida init --with-memories`) ships generic
@@ -5529,6 +5556,20 @@ pub enum Command {
         // trace:TASK-266 | ai:claude
         #[clap(long, requires = "auto_complete", conflicts_with = "failures")]
         pattern: bool,
+    },
+
+    /// Dogfood agent-lift metrics over the recorded telemetry substrate.
+    /// A reporting layer that surfaces the coordination signals already
+    /// derivable from the autonomous-drain log and the human CLI usage log:
+    /// drain success rate, autonomous runs over distinct specs/builds,
+    /// stale-base recoveries, and the autonomous-vs-human split. Useful for
+    /// case studies, release notes, and proving coordination value.
+    ///
+    // trace:STORY-477 | ai:claude — plain `//` so the SPEC-ID stays out of
+    // `--help` output (TASK-268).
+    Metrics {
+        #[clap(subcommand)]
+        cmd: crate::cli::MetricsCommand,
     },
 
     /// Generate a curated narrative work digest — Released / Major progress /
