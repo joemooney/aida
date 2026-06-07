@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:33:08.323277210Z
-modified_at: 2026-06-06T13:55:22.816587450Z
+modified_at: 2026-06-07T06:10:58.186400924Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -100,4 +100,9 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): KEEP DEFERRED to post-stability — the new rebase step touches the orchestrator lifecycle being stabilized; this reliability-class machinery ships best at-keyboard after the floor is solid. If/when built, the --dry-run cross-batch rebase-conflict forecast is the safest first slice.'
   created_at: 2026-06-06T13:55:17.741284134Z
   modified_at: 2026-06-06T13:55:17.741284134Z
+- id: 019ea0b4-b60a-7f71-a5fa-22cbfd2a2915
+  author: joe
+  content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): Deferred batch integrate-pass (from-review resume + new rebase step) — touches the orchestrator lifecycle (reliability-class); ships best at-keyboard, not blind fan-out.'
+  created_at: 2026-06-07T06:10:58.186400924Z
+  modified_at: 2026-06-07T06:10:58.186400924Z
 human_only: true
