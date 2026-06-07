@@ -117,7 +117,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:15:02.335601702Z
-modified_at: 2026-06-07T20:04:45.702663008Z
+modified_at: 2026-06-07T20:11:00.097235360Z
 req_type: Spike
 tags:
 - blocked
@@ -171,4 +171,9 @@ comments:
   content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): RESEARCH spike (empirical /ultraplan-quality study, ~6-9 drain sessions) — not an agent-implementable code task; needs supervised drain-runs + comparison. Keyboard/operator.'
   created_at: 2026-06-07T06:11:09.100511949Z
   modified_at: 2026-06-07T06:11:09.100511949Z
+- id: 019ea3b5-c881-7171-b48c-5bc1f9879dc1
+  author: joe
+  content: 'SPIKE-8 conclusion (report: docs/spikes/2026-06-07-spike-8-ultraplan-comparison.md). VERDICT: mixed / the question changed under us — recommend NOT running the full 6-9 PR sweep. Three findings: (1) On well-specified AIDA specs /ultraplan''s marginal value is structurally low — the spec already carries Proposed-shape + Acceptance + Composes-with, so the spec IS the plan; planning value is inversely proportional to spec specification quality, and AIDA discipline pushes specs toward well-specified. (2) OBE: both consumers (TASK-304 mode-cadence, TASK-305 web-plan archival) shipped Completed 2026-06-05 with reasoned defaults — the blocking-evidence premise is gone. (3) Condition C (web /ultraplan) cannot run headless at all (needs claude.ai Accept click) — the one condition idle-drain budget can''t buy. Local /ultraplan is a context-ASSEMBLY aid (real value on thin specs, marginal on well-formed ones), not an independent reasoning step. Honest scope note: the full A/B/C×2-3-spec experiment was NOT executed and C is structurally un-runnable headless; this is a directional analytical probe grounded in the real `aida ultraplan TASK-500` artifact + verified consumer-status, NOT fabricated reviewer/cost data. Concrete product change filed as TASK-697 (threshold should key on spec thinness, not bullet count). No spike branches/PRs created — only the report file lands.'
+  created_at: 2026-06-07T20:11:00.097235360Z
+  modified_at: 2026-06-07T20:11:00.097235360Z
 human_only: true
