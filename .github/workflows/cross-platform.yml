@@ -74,3 +74,55 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace
+
+  # TASK-687: the nightly matrix was red 3 days unnoticed before a release gate
+  # forced the issue. PR CI is Linux-only (TASK-257), so cross-platform debt
+  # accrues invisibly between releases. Make failure LOUD: open (or comment on)
+  # a single tracking issue when the *scheduled* run fails, and close it when a
+  # scheduled run goes green again. Scoped to `schedule` so the manual dispatches
+  # fired during a release fix-forward loop don't spam issues. trace:TASK-687
+  notify-failure:
+    name: Open tracking issue on nightly failure
+    needs: build
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the cross-platform-red issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          label="cross-platform-red"
+          gh label create "$label" --color B60205 \
+            --description "Nightly Windows/macOS CI is failing" 2>/dev/null || true
+          existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
+          line="Nightly cross-platform run failed: $RUN_URL"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$line"
+          else
+            printf '%s\n\n%s\n\n%s\n' \
+              "$line" \
+              "The Windows/macOS matrix is failing on the nightly cron. PR CI is Linux-only (TASK-257), so cross-platform regressions only surface here. Fix-forward until green; this issue auto-comments on each subsequent nightly failure and closes itself once a scheduled run lands green." \
+              "trace:TASK-687" \
+              | gh issue create --title "Nightly cross-platform CI is red" --label "$label" --body-file -
+          fi
+
+  notify-recovery:
+    name: Close tracking issue on nightly recovery
+    needs: build
+    if: success() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close any open cross-platform-red issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          label="cross-platform-red"
+          for n in $(gh issue list --state open --label "$label" --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Cross-platform CI is green again: $RUN_URL"
+          done
