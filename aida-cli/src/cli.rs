@@ -3942,6 +3942,11 @@ pub enum QuestionsCommand {
         /// in-progress, all. Low-priority and archived specs are always
         /// excluded.
         scope: Option<String>,
+        // trace:TASK-700 | ai:claude
+        /// Attach the DecisionRequests. Without this the sweep only PREVIEWS
+        /// which specs would get one (it mutates specs, so writing is opt-in).
+        #[clap(long)]
+        apply: bool,
     },
 
     /// Pose a structured DecisionRequest on a spec. The advisor distills a
