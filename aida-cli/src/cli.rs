@@ -6538,6 +6538,33 @@ pub enum Command {
         no_comments: bool,
     },
 
+    /// Import a saved plan file into AIDA conventions: archive it under
+    /// `docs/plans/YYYY-MM-DD-<slug>.md` and pin it to its SPEC with a
+    /// comment. `--request-review` additionally lands a master-review
+    /// handshake — it tags the spec `plan-review:pending` and posts a
+    /// "plan landed for master review" comment, so the plan is NOT yet
+    /// treated as canonical: `aida queue work <SPEC>` warns before
+    /// picking up a spec whose plan is still awaiting review.
+    // trace:TASK-516 | ai:claude
+    #[clap(name = "import-plan")]
+    ImportPlan {
+        /// The saved plan markdown file to import (e.g. the file
+        /// `/ultraplan` wrote when you chose "save plan to file").
+        file: String,
+
+        /// SPEC-ID this plan targets. If omitted, AIDA tries to detect it
+        /// from the filename (a `TYPE-N` pattern like `task-42`).
+        #[clap(long, value_name = "SPEC-ID")]
+        spec: Option<String>,
+
+        /// Land the plan as awaiting-master-review rather than canonical:
+        /// tag the spec `plan-review:pending` + post a review-requested
+        /// comment. `aida queue work <SPEC>` then warns before pickup.
+        // trace:TASK-516 | ai:claude
+        #[clap(long)]
+        request_review: bool,
+    },
+
     /// Derive a machine-checkable completion condition from AIDA
     /// metadata, ready to paste into `/goal` (or `/schedule`). Each flag
     /// contributes one clause; multiple flags compose with `AND`. Every
