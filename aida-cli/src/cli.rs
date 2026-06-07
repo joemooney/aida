@@ -6825,6 +6825,50 @@ pub enum PlanCommand {
         dry_run: bool,
     },
 
+    /// Plan-only fan-out over a set of Approved specs: run the plan step
+    /// for each spec in the set (sequentially) and promote each
+    /// Approved -> Planned once its plan file lands. The set is selected
+    /// by `--batch NAME` (every spec tagged `batch:NAME`), `--epic ID`
+    /// (every spec tagged `parent:ID`), or an explicit list of SPEC-IDs.
+    /// The workable-set discipline drops the low-priority tail by default
+    /// (avoids speculative plan-slop on specs that may never be built) —
+    /// pass `--include-low` to plan those too. True parallelism is the
+    /// harness's job: this driver hands the set to the orchestrating agent
+    /// by running each `aida queue work <spec> --plan-only` in turn;
+    /// promotion is contention-free pre-work, never a merge.
+    // trace:STORY-519 | ai:claude
+    FanOut {
+        /// Explicit SPEC-IDs to fan out over. Mutually exclusive with
+        /// --batch / --epic; pick exactly one selection mode.
+        specs: Vec<String>,
+
+        /// Select every Approved spec tagged `batch:NAME`.
+        #[clap(long, conflicts_with_all = ["epic", "specs"])]
+        batch: Option<String>,
+
+        /// Select every Approved spec tagged `parent:ID` (the epic/story
+        /// rollup convention).
+        #[clap(long, conflicts_with_all = ["batch", "specs"])]
+        epic: Option<String>,
+
+        /// Include low-priority specs in the fan-out. Off by default so
+        /// the workable set excludes the low-priority tail.
+        #[clap(long)]
+        include_low: bool,
+
+        /// Report the resolved set without launching any plan session or
+        /// promoting anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the per-spec plan session launch and only run the
+        /// Approved -> Planned promotion for specs that already have a
+        /// plan file. Useful after the harness has fanned the plan
+        /// sessions out itself and just needs the lifecycle bumps.
+        #[clap(long)]
+        promote_only: bool,
+    },
+
     /// Synthesize a `docs/plans/` file from a merged/open PR's description
     /// and commit log. For plans authored via the web `/ultraplan` flow
     /// that land a PR directly without ever writing a local plan file —

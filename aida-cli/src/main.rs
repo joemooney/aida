@@ -46290,6 +46290,97 @@ cargo test -p aida-cli
         assert!(parse_pr_number("not-a-pr").is_err());
     }
 
+    /// STORY-519: helper to build a fan-out candidate for the selector tests.
+    fn fc(spec_id: &str, approved: bool, low: bool, tags: &[&str]) -> FanOutCandidate {
+        FanOutCandidate {
+            spec_id: spec_id.to_string(),
+            is_approved: approved,
+            is_low_priority: low,
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+        }
+    }
+
+    /// STORY-519: a `--batch NAME` selection keeps Approved batch members,
+    /// drops the low-priority tail by default, and drops non-Approved members.
+    #[test]
+    fn fan_out_batch_excludes_low_tail_and_non_approved() {
+        let candidates = vec![
+            fc("STORY-1", true, false, &["batch:burndown"]),
+            fc("TASK-2", true, true, &["batch:burndown"]), // low-priority tail
+            fc("TASK-3", false, false, &["batch:burndown"]), // not Approved
+            fc("TASK-4", true, false, &["batch:other"]),   // different batch
+        ];
+        let (set, dropped) =
+            resolve_fan_out_set(&candidates, &FanOutSelector::Batch("burndown"), false);
+        assert_eq!(set, vec!["STORY-1"]);
+        assert!(dropped.contains(&"TASK-2".to_string()));
+        assert!(dropped.contains(&"TASK-3".to_string()));
+        // A spec in a different batch is never a member → not even "dropped".
+        assert!(!dropped.contains(&"TASK-4".to_string()));
+    }
+
+    /// STORY-519: `--include-low` keeps the low-priority members but still
+    /// drops non-Approved ones.
+    #[test]
+    fn fan_out_include_low_keeps_low_priority() {
+        let candidates = vec![
+            fc("STORY-1", true, false, &["batch:burndown"]),
+            fc("TASK-2", true, true, &["batch:burndown"]),
+            fc("TASK-3", false, true, &["batch:burndown"]),
+        ];
+        let (set, dropped) =
+            resolve_fan_out_set(&candidates, &FanOutSelector::Batch("burndown"), true);
+        assert_eq!(set, vec!["STORY-1", "TASK-2"]);
+        // Non-Approved still dropped even with include_low.
+        assert_eq!(dropped, vec!["TASK-3"]);
+    }
+
+    /// STORY-519: `--epic ID` selects by the `parent:ID` rollup tag.
+    #[test]
+    fn fan_out_epic_selects_by_parent_tag() {
+        let candidates = vec![
+            fc("STORY-1", true, false, &["parent:EPIC-7"]),
+            fc("STORY-2", true, false, &["parent:EPIC-7", "batch:x"]),
+            fc("STORY-3", true, false, &["parent:EPIC-9"]),
+        ];
+        let (set, dropped) =
+            resolve_fan_out_set(&candidates, &FanOutSelector::Epic("EPIC-7"), false);
+        assert_eq!(set, vec!["STORY-1", "STORY-2"]);
+        assert!(dropped.is_empty());
+    }
+
+    /// STORY-519: an explicit spec list keeps the requested order, drops a
+    /// non-Approved id, and reports an unknown id as dropped.
+    #[test]
+    fn fan_out_explicit_list_order_and_unknown() {
+        let candidates = vec![
+            fc("STORY-1", true, false, &[]),
+            fc("TASK-2", false, false, &[]),
+        ];
+        let ids = vec![
+            "TASK-2".to_string(),
+            "STORY-1".to_string(),
+            "GHOST-9".to_string(),
+        ];
+        let (set, dropped) = resolve_fan_out_set(&candidates, &FanOutSelector::Specs(&ids), false);
+        // STORY-1 kept; order follows the request (only one survives here).
+        assert_eq!(set, vec!["STORY-1"]);
+        // Non-Approved TASK-2 and unknown GHOST-9 both dropped.
+        assert!(dropped.contains(&"TASK-2".to_string()));
+        assert!(dropped.contains(&"GHOST-9".to_string()));
+    }
+
+    /// STORY-519: explicit-id matching is case-insensitive and preserves the
+    /// store's canonical id in the kept set.
+    #[test]
+    fn fan_out_explicit_case_insensitive() {
+        let candidates = vec![fc("STORY-42", true, false, &[])];
+        let ids = vec!["story-42".to_string()];
+        let (set, dropped) = resolve_fan_out_set(&candidates, &FanOutSelector::Specs(&ids), false);
+        assert_eq!(set, vec!["STORY-42"]);
+        assert!(dropped.is_empty());
+    }
+
     /// TASK-113: the ultraplan prompt assembler handles a spec with no
     /// acceptance criteria (edge case 1) and no trace-graph helpers (edge
     /// case 3) — placeholder text in the prompt, warnings surfaced — and
@@ -55100,6 +55191,21 @@ fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
         PlanCommand::Promote { spec, all, dry_run } => {
             plan_promote(spec.as_deref(), *all, *dry_run)
         }
+        PlanCommand::FanOut {
+            specs,
+            batch,
+            epic,
+            include_low,
+            dry_run,
+            promote_only,
+        } => plan_fan_out(
+            specs,
+            batch.as_deref(),
+            epic.as_deref(),
+            *include_low,
+            *dry_run,
+            *promote_only,
+        ),
         PlanCommand::Capture { pr, stdout } => plan_capture(pr, *stdout),
     }
 }
@@ -55890,6 +55996,256 @@ fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
         println!("(dry-run) {eligible} eligible for promotion, {skipped} skipped");
     } else {
         println!("{promoted} promoted to Planned, {skipped} skipped");
+    }
+    Ok(())
+}
+
+/// A spec considered for plan-only fan-out, reduced to the fields the
+/// selector reasons over. Keeping this a plain struct (not the full
+/// `Requirement`) lets the selection logic be unit-tested with no store.
+// trace:STORY-519 | ai:claude
+#[derive(Debug, Clone)]
+struct FanOutCandidate {
+    spec_id: String,
+    is_approved: bool,
+    is_low_priority: bool,
+    tags: Vec<String>,
+}
+
+/// How the fan-out set was selected. Drives both resolution and the
+/// human-readable header. trace:STORY-519 | ai:claude
+enum FanOutSelector<'a> {
+    /// Explicit SPEC-IDs passed on the command line.
+    Specs(&'a [String]),
+    /// Every Approved spec tagged `batch:NAME`.
+    Batch(&'a str),
+    /// Every Approved spec tagged `parent:ID`.
+    Epic(&'a str),
+}
+
+/// Pure resolution + workable-set filtering for plan-only fan-out.
+///
+/// Returns the ordered set of SPEC-IDs to fan out over, plus the SPEC-IDs
+/// that were dropped by the workable-set discipline (low-priority tail,
+/// or non-Approved status) so the caller can narrate them. The selector
+/// determines membership; the workable-set rules then prune:
+///   - non-Approved specs are always excluded (planning is an
+///     Approved -> Planned pre-step; nothing else qualifies);
+///   - low-priority specs are excluded unless `include_low` is set.
+///
+/// For an explicit `Specs` selection the requested ids are kept in the
+/// order given; for `Batch`/`Epic` the matching candidates are returned
+/// in their natural store order. Unknown explicit ids are reported as
+/// dropped (caller surfaces "not found"). trace:STORY-519 | ai:claude
+fn resolve_fan_out_set(
+    candidates: &[FanOutCandidate],
+    selector: &FanOutSelector,
+    include_low: bool,
+) -> (Vec<String>, Vec<String>) {
+    let tag_matches =
+        |c: &FanOutCandidate, want: &str| c.tags.iter().any(|t| t.eq_ignore_ascii_case(want));
+
+    // First pick the membership set in a stable order.
+    let members: Vec<&FanOutCandidate> = match selector {
+        FanOutSelector::Specs(ids) => {
+            let mut out = Vec::new();
+            for id in *ids {
+                if let Some(c) = candidates
+                    .iter()
+                    .find(|c| c.spec_id.eq_ignore_ascii_case(id))
+                {
+                    out.push(c);
+                }
+            }
+            out
+        }
+        FanOutSelector::Batch(name) => {
+            let want = format!("batch:{name}");
+            candidates
+                .iter()
+                .filter(|c| tag_matches(c, &want))
+                .collect()
+        }
+        FanOutSelector::Epic(id) => {
+            let want = format!("parent:{id}");
+            candidates
+                .iter()
+                .filter(|c| tag_matches(c, &want))
+                .collect()
+        }
+    };
+
+    // For explicit ids, an unknown id is a drop the caller should narrate.
+    let mut keep = Vec::new();
+    let mut dropped = Vec::new();
+    if let FanOutSelector::Specs(ids) = selector {
+        for id in *ids {
+            if !candidates
+                .iter()
+                .any(|c| c.spec_id.eq_ignore_ascii_case(id))
+            {
+                dropped.push(id.clone());
+            }
+        }
+    }
+
+    for c in members {
+        if !c.is_approved {
+            dropped.push(c.spec_id.clone());
+            continue;
+        }
+        if c.is_low_priority && !include_low {
+            dropped.push(c.spec_id.clone());
+            continue;
+        }
+        keep.push(c.spec_id.clone());
+    }
+
+    (keep, dropped)
+}
+
+/// `aida plan fan-out` — the thin plan-only fan-out driver (STORY-519).
+///
+/// Resolves a workable set of Approved specs (by explicit list, `--batch`,
+/// or `--epic`), then for each spec in turn runs the plan step
+/// (`aida queue work <spec> --plan-only`, STORY-265's slice 2) and the
+/// `aida plan promote <spec>` Approved -> Planned bump (slice 1). Sequential
+/// by design: true parallelism is the harness's job (worktree-isolated
+/// agents), and promotion is contention-free pre-work — never a merge — so
+/// fan-out can't race the drain (the STORY-519 thesis). `--promote-only`
+/// skips the plan-session launch and just runs the lifecycle bumps for specs
+/// whose plan file already landed. trace:STORY-519 | ai:claude
+fn plan_fan_out(
+    specs: &[String],
+    batch: Option<&str>,
+    epic: Option<&str>,
+    include_low: bool,
+    dry_run: bool,
+    promote_only: bool,
+) -> Result<()> {
+    use colored::Colorize;
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the requirement store"))?;
+
+    let selector = match (batch, epic, specs.is_empty()) {
+        (Some(b), None, true) => FanOutSelector::Batch(b),
+        (None, Some(e), true) => FanOutSelector::Epic(e),
+        (None, None, false) => FanOutSelector::Specs(specs),
+        (None, None, true) => {
+            anyhow::bail!("specify a selection: SPEC-IDs, --batch NAME, or --epic ID")
+        }
+        _ => anyhow::bail!("--batch, --epic, and an explicit spec list are mutually exclusive"),
+    };
+
+    let candidates: Vec<FanOutCandidate> = store
+        .requirements
+        .iter()
+        .filter_map(|r| {
+            r.spec_id.clone().map(|sid| FanOutCandidate {
+                spec_id: sid,
+                is_approved: r.status == aida_core::RequirementStatus::Approved,
+                is_low_priority: r.priority == aida_core::RequirementPriority::Low,
+                tags: r.tags.iter().cloned().collect(),
+            })
+        })
+        .collect();
+
+    let (set, dropped) = resolve_fan_out_set(&candidates, &selector, include_low);
+
+    let header = match &selector {
+        FanOutSelector::Specs(_) => "explicit spec list".to_string(),
+        FanOutSelector::Batch(b) => format!("batch:{b}"),
+        FanOutSelector::Epic(e) => format!("parent:{e}"),
+    };
+    println!(
+        "{} plan-only fan-out over {} ({} spec{}, {} dropped)",
+        "📐".bold(),
+        header.cyan(),
+        set.len(),
+        if set.len() == 1 { "" } else { "s" },
+        dropped.len()
+    );
+    if !dropped.is_empty() {
+        let why = if include_low {
+            "not Approved"
+        } else {
+            "not Approved or low-priority tail / unknown"
+        };
+        println!(
+            "  {} dropped ({}): {}",
+            "↷".dimmed(),
+            why,
+            dropped.join(", ")
+        );
+    }
+    if set.is_empty() {
+        println!("  nothing to fan out.");
+        return Ok(());
+    }
+
+    if dry_run {
+        for sid in &set {
+            let action = if promote_only {
+                "promote (plan-only skipped)"
+            } else {
+                "plan → promote"
+            };
+            println!("  {} {} → {}", "•".dimmed(), sid.bold(), action);
+        }
+        println!("(dry-run) {} spec(s) would be processed", set.len());
+        return Ok(());
+    }
+
+    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let (mut planned, mut promoted, mut failed) = (0usize, 0usize, 0usize);
+    for sid in &set {
+        if !promote_only {
+            println!("\n{} planning {}", "▶".cyan(), sid.bold());
+            let status = std::process::Command::new(&exe)
+                .args(["queue", "work", sid, "--plan-only"])
+                .status()
+                .with_context(|| format!("could not launch the plan session for {sid}"))?;
+            if !status.success() {
+                eprintln!(
+                    "  {} {} — plan session exited with status {}; skipping promote",
+                    "✗".red(),
+                    sid,
+                    status.code().unwrap_or(-1)
+                );
+                failed += 1;
+                continue;
+            }
+            planned += 1;
+        }
+
+        let status = std::process::Command::new(&exe)
+            .args(["plan", "promote", sid])
+            .status()
+            .with_context(|| format!("could not run `aida plan promote {sid}`"))?;
+        if status.success() {
+            promoted += 1;
+        } else {
+            eprintln!(
+                "  {} {} — promote exited with status {} (did the plan file's `Specs:` header list {sid}?)",
+                "✗".red(),
+                sid,
+                status.code().unwrap_or(-1)
+            );
+            failed += 1;
+        }
+    }
+
+    println!(
+        "\n{} fan-out done: {} planned, {} promoted, {} failed",
+        "✓".green(),
+        planned,
+        promoted,
+        failed
+    );
+    if failed > 0 {
+        // Non-zero so a harness can triage partial fan-outs.
+        std::process::exit(2);
     }
     Ok(())
 }
