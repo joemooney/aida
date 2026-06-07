@@ -586,6 +586,9 @@ impl SqliteBackend {
                 // un-pickability is a git-canonical concern.
                 // trace:STORY-333 | ai:claude
                 human_only: false,
+                // STORY-522: legacy centralized backend — not persisted.
+                // trace:STORY-522 | ai:claude
+                decision_request: None,
                 version,
             });
         }
@@ -1511,6 +1514,8 @@ impl DatabaseBackend for SqliteBackend {
                     // STORY-333: legacy centralized backend — not persisted.
                     // trace:STORY-333 | ai:claude
                     human_only: false,
+                    // trace:STORY-522 | ai:claude
+                    decision_request: None,
                     version,
                 }))
             }
