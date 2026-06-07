@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:54:21.039341210Z
-modified_at: 2026-06-06T08:30:24.736621390Z
+modified_at: 2026-06-07T01:00:12.888486460Z
 req_type: Story
 tags:
 - forge-provider
@@ -33,3 +33,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Slice-5 e2e GitLab drain + MR linkage in aida show + init forge UX — real remaining work (GitLabForge methods bail "lands in slice 3/4/5"); bounded validation slice against joe/aida-gl-test, depends on s3/s4 first.
   created_at: 2026-06-06T08:30:23.447218792Z
   modified_at: 2026-06-06T08:30:23.447218792Z
+- id: 019e9f98-34d8-73d1-84d2-2a0e99bae493
+  author: joe
+  content: Commit 3114c1c0f references this requirement
+  created_at: 2026-06-07T01:00:12.888486460Z
+  modified_at: 2026-06-07T01:00:12.888486460Z
