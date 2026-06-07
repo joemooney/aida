@@ -3800,6 +3800,202 @@ fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
         AdvisorCommand::Schedule(_) => {
             unreachable!("advisor schedule dispatches after storage init")
         }
+        // STORY-363: `handoff` writes a checked-in brief into a sibling
+        // project. It reads no requirement store — parent identity is derived
+        // from the current project root and the rest is an operator-authored
+        // template — so it dispatches in this store-less early handler.
+        // trace:STORY-363 | ai:claude
+        AdvisorCommand::Handoff { to, focus, force } => handle_advisor_handoff(to, focus, *force),
+    }
+}
+
+/// STORY-363 (SPIKE-10 Track B): write a checked-in advisor handoff brief into
+/// a sibling project. The brief lands at `<to>/docs/<date>-advisor-handoff.md`
+/// and carries five sections — parent identity (auto-derived from the current
+/// project root), vision, decided things, substrate slice (scoped by
+/// `--focus`), and latitude. Only parent identity and the focus topic are
+/// filled in; the strategic sections are placeholders the operator authors
+/// before committing the brief to the child project. Bounded by design: this
+/// is a template generator, not a context-extraction pipeline.
+// trace:STORY-363 | ai:claude
+fn handle_advisor_handoff(to: &std::path::Path, focus: &str, force: bool) -> Result<()> {
+    let focus = focus.trim();
+    if focus.is_empty() {
+        anyhow::bail!("--focus cannot be empty — name the topic this handoff hands off");
+    }
+    if !to.exists() {
+        anyhow::bail!(
+            "target project does not exist: {} — pass an existing project path with --to",
+            to.display()
+        );
+    }
+    // Parent identity is auto-derived from the current project root (falling
+    // back to the cwd when not inside an AIDA project — the handoff is still
+    // useful, just with a thinner identity line).
+    let parent_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let parent_name = parent_root
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let authored_by = brief_generated_by();
+    let body = render_advisor_handoff(&parent_name, &parent_root, focus, &date, &authored_by);
+
+    let docs_dir = to.join("docs");
+    std::fs::create_dir_all(&docs_dir)
+        .with_context(|| format!("failed to create {}", docs_dir.display()))?;
+    let path = docs_dir.join(format!("{date}-advisor-handoff.md"));
+
+    if path.exists() && !force {
+        anyhow::bail!(
+            "a handoff brief for today already exists: {} (pass --force to overwrite)",
+            path.display()
+        );
+    }
+    std::fs::write(&path, body).with_context(|| format!("failed to write {}", path.display()))?;
+
+    println!(
+        "{} {}",
+        "Wrote advisor handoff:".green().bold(),
+        path.display()
+    );
+    println!(
+        "  Fill in the vision / decided-things / latitude sections, then commit it to {}.",
+        parent_name.cyan()
+    );
+    Ok(())
+}
+
+/// Pure assembly of the advisor-handoff brief body — no I/O, fully testable in
+/// isolation. Five sections per SPIKE-10 Gap 2: parent identity (auto), vision
+/// (operator), decided things (operator-pruned), substrate slice (scoped by
+/// `--focus`), and latitude (operator). The strategic sections ship as
+/// placeholders the operator authors before committing.
+// trace:STORY-363 | ai:claude
+fn render_advisor_handoff(
+    parent_name: &str,
+    parent_root: &std::path::Path,
+    focus: &str,
+    date: &str,
+    authored_by: &str,
+) -> String {
+    let mut out = String::new();
+    out.push_str("---\n");
+    out.push_str(&format!("kind: {}\n", yaml_scalar("advisor-handoff")));
+    out.push_str(&format!("parent: {}\n", yaml_scalar(parent_name)));
+    out.push_str(&format!("focus: {}\n", yaml_scalar(focus)));
+    out.push_str(&format!("date: {}\n", yaml_scalar(date)));
+    out.push_str(&format!("authored_by: {}\n", yaml_scalar(authored_by)));
+    out.push_str("status: draft\n");
+    out.push_str("---\n\n");
+
+    out.push_str(&format!("# Advisor handoff — {focus}\n\n"));
+    out.push_str(&format!(
+        "Generated {date} from **{parent_name}**. This brief hands off the advisor \
+         context for **{focus}** to a sibling project. Parent identity and the focus \
+         topic are filled in; author the remaining sections before committing.\n\n"
+    ));
+
+    out.push_str("## 1. Parent identity (auto)\n\n");
+    out.push_str(&format!("- Parent project: **{parent_name}**\n"));
+    out.push_str(&format!("- Parent root: `{}`\n", parent_root.display()));
+    out.push_str(&format!("- Handoff focus: **{focus}**\n"));
+    out.push_str(&format!("- Generated: {date}\n\n"));
+
+    out.push_str("## 2. Vision (operator)\n\n");
+    out.push_str(
+        "_Why does this child project exist, and how does it relate to the parent's \
+         mission? What does success look like 3-6 months out?_\n\n",
+    );
+    out.push_str("- TODO: state the vision in the operator's own words.\n\n");
+
+    out.push_str("## 3. Decided things (operator-pruned)\n\n");
+    out.push_str(
+        "_Decisions the child should inherit rather than re-litigate — architecture \
+         choices, conventions, tooling, non-goals. Prune anything that doesn't carry \
+         over._\n\n",
+    );
+    out.push_str("- TODO: list the load-bearing decisions the child inherits.\n\n");
+
+    out.push_str(&format!("## 4. Substrate slice — {focus}\n\n"));
+    out.push_str(&format!(
+        "_The slice of the parent's substrate (specs, docs, conventions, code) that is \
+         relevant to **{focus}**. Point at concrete artifacts; do not paste them._\n\n"
+    ));
+    out.push_str("- TODO: link the specs / docs / modules that scope this focus.\n\n");
+
+    out.push_str("## 5. Latitude (operator)\n\n");
+    out.push_str(
+        "_Where the child has freedom to diverge, and where it must stay aligned with \
+         the parent. Name the guardrails and the open questions explicitly._\n\n",
+    );
+    out.push_str("- TODO: state the latitude and the guardrails.\n");
+
+    out
+}
+
+#[cfg(test)]
+mod story_363_handoff_tests {
+    use super::*;
+
+    // trace:STORY-363 | ai:claude
+    #[test]
+    fn render_advisor_handoff_has_frontmatter_and_five_sections() {
+        let body = render_advisor_handoff(
+            "aida",
+            std::path::Path::new("/home/joe/ai/aida"),
+            "git-canonical store",
+            "2026-06-06",
+            "claude",
+        );
+
+        // Frontmatter carries the auto-filled identity + focus.
+        assert!(body.starts_with("---\n"), "must open with YAML frontmatter");
+        assert!(body.contains("kind: advisor-handoff\n"));
+        assert!(body.contains("parent: aida\n"));
+        assert!(body.contains("focus: 'git-canonical store'\n"));
+        assert!(body.contains("date: 2026-06-06\n"));
+        assert!(body.contains("authored_by: claude\n"));
+        assert!(body.contains("status: draft\n"));
+
+        // All five named sections are present, in order.
+        let s1 = body.find("## 1. Parent identity (auto)").unwrap();
+        let s2 = body.find("## 2. Vision (operator)").unwrap();
+        let s3 = body.find("## 3. Decided things (operator-pruned)").unwrap();
+        let s4 = body
+            .find("## 4. Substrate slice — git-canonical store")
+            .unwrap();
+        let s5 = body.find("## 5. Latitude (operator)").unwrap();
+        assert!(
+            s1 < s2 && s2 < s3 && s3 < s4 && s4 < s5,
+            "sections out of order"
+        );
+
+        // Auto-filled parent identity section names the parent + root + focus.
+        assert!(body.contains("Parent project: **aida**"));
+        assert!(body.contains("`/home/joe/ai/aida`"));
+        assert!(body.contains("Handoff focus: **git-canonical store**"));
+
+        // The operator-authored sections ship as TODO placeholders.
+        assert_eq!(body.matches("- TODO:").count(), 4);
+    }
+
+    // trace:STORY-363 | ai:claude
+    #[test]
+    fn render_advisor_handoff_quotes_focus_with_special_chars_in_frontmatter() {
+        let body = render_advisor_handoff(
+            "parent",
+            std::path::Path::new("/tmp/parent"),
+            "orchestrator: drain & lease",
+            "2026-06-06",
+            "tester",
+        );
+        // yaml_scalar must quote a focus containing spaces/colons/ampersands.
+        assert!(body.contains("focus: 'orchestrator: drain & lease'\n"));
+        // The same focus flows into the substrate-section heading verbatim.
+        assert!(body.contains("## 4. Substrate slice — orchestrator: drain & lease"));
     }
 }
 
