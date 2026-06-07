@@ -200,15 +200,20 @@ pub fn run(opts: LauncherOptions) -> Result<()> {
         );
     }
 
+    // Resolve the configured theme up front so the dashboard paints in
+    // the user's palette from the first frame. trace:TASK-256 | ai:claude
+    let theme = crate::config::TuiConfig::load(&cwd).theme.theme();
+
     let intent_to_emit = {
         let _guard = term::TermGuard::enter()?;
         let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))?;
-        let model = dashboard::fetch(
+        let mut model = dashboard::fetch(
             RoleTab::default(),
             NavSection::Queue,
             opts.scope.as_deref(),
             dialog_id.as_deref(),
         );
+        model.theme = theme;
         event_loop(
             &mut terminal,
             model,

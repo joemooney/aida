@@ -34,11 +34,13 @@ mod state;
 mod statusbar;
 mod tab;
 mod term;
+mod theme;
 mod welcome;
 
 pub use app::{App, ExitKind};
 pub use config::{TuiConfig, TuiMode};
 pub use launcher::LauncherOptions;
+pub use theme::{Theme, ThemeName};
 
 /// Test-only re-export of the launcher's internal Intent + writer so
 /// integration tests under `aida-tui/tests/` can exercise the wire
