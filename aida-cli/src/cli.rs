@@ -3571,6 +3571,16 @@ pub enum QueueCommand {
         // trace:STORY-281 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         allow_stale_base: bool,
+        /// Opt out of the reviewer pre-flight intermediate-only refusal.
+        /// By default the reviewer refuses a PR whose diff changes ONLY
+        /// intermediate/generated files (build outputs, gitignored
+        /// paths, lockfiles with no source change) because such a fix is
+        /// not reproducible — it's overwritten on the next build. Pass
+        /// this flag when the PR is a deliberate regeneration of
+        /// checked-in build output.
+        // trace:TASK-480 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        allow_intermediate_only: bool,
         /// Opt out of phase-3 auto-rebase recovery. By default a fully
         /// headless auto-complete drain that hits the reviewer stale-base
         /// pre-flight attempts one clean `aida pr rebase` before refusing.
