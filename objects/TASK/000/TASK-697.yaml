@@ -1,0 +1,17 @@
+id: 019ea3b5-84c0-7d73-9cf6-f300b5d8ce43
+spec_id: TASK-697
+agreed_id: TASK-697
+title: ultraplan suggested-threshold should key on spec thinness, not acceptance-bullet count
+description: 'SPIKE-8 finding (docs/spikes/2026-06-07-spike-8-ultraplan-comparison.md): TASK-304 shipped the `mode=suggested` threshold as `acceptance-bullets>8`. But /ultraplan''s value is a context-assembly aid that helps most on THIN/under-specified specs and least on well-formed ones (which carry their own `## Proposed shape` + Acceptance + Composes-with — the spec IS the plan). Bullet count anti-correlates with where planning actually helps: a 9-bullet spec with a Proposed-shape block needs ultraplan LESS than a 2-bullet spec with no design. Change the heuristic to fire on specification THINNESS (no `## Proposed shape` section, short body) rather than chunkiness. Parent TASK-304 is Completed; this is the refinement, not a reopen.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T20:10:42.752618564Z
+modified_at: 2026-06-07T20:10:42.752618564Z
+req_type: Task
+tags:
+- from-spike:SPIKE-8
+- heuristic
+- refactor
+- ultraplan
