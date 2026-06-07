@@ -118,35 +118,91 @@ elif [ "$new_maj" != "$current_maj" ] || [ "$new_min" != "$current_min" ]; then
     is_major_or_minor=1
 fi
 
+# TASK-562: replace the opaque y/N ecosystem-watch prompt with an
+# age-thresholded auto-decision + an actionable refresh hint. The marker date
+# in ecosystem-watch.md is compared against today: fresh auto-passes (no
+# prompt), middling warns-then-prompts, stale (or unparseable) requires action.
+# --yes and non-TTY still bypass, so unattended releases are unchanged.
 if [ "$is_major_or_minor" = "1" ]; then
     echo
     echo "─── Ecosystem Watch Verification ───"
-    if [ -f "docs/competitive-analysis/ecosystem-watch.md" ]; then
-        last_updated=$(grep -m1 -E "Last updated|Last Updated" docs/competitive-analysis/ecosystem-watch.md | sed -E 's/.*: *//' | tr -d '[:space:]')
-        echo "  Ecosystem Watch last updated: $last_updated"
+    eco_file="docs/competitive-analysis/ecosystem-watch.md"
+    echo "  File: $eco_file"
+
+    last_updated=""
+    if [ -f "$eco_file" ]; then
+        last_updated=$(grep -m1 -E "Last [Uu]pdated" "$eco_file" | sed -E 's/.*: *//' | tr -d '[:space:]')
     else
-        echo "  warning: docs/competitive-analysis/ecosystem-watch.md not found!"
-        last_updated=""
+        echo "  ✗ not found — run an ecosystem scan and create it before a major/minor release."
     fi
-    
-    echo "  Reminder: Major and minor releases require an ecosystem scan and refresh."
-    echo "  If marketplace/package metadata changed, also run docs/security/marketplace-publication-checklist.md."
-    if [ "$auto_yes" = "1" ]; then
-        echo "  auto-confirm: --yes (or AIDA_RELEASE_YES=1) — bypassing ecosystem check."
-    elif [ ! -t 0 ]; then
-        echo "  warning: release script invoked without a TTY. Bypassing ecosystem check."
-    else
-        read -r -p "  Has the ecosystem review been completed/updated? [y/N]: " eco_answer
-        case "${eco_answer,,}" in
-            y|yes)
-                echo "  ok — ecosystem watch acknowledged."
-                ;;
-            *)
-                echo "error: Ecosystem review must be completed before a major/minor release." >&2
-                exit 1
-                ;;
-        esac
+
+    # Marker age in days (GNU date; age_days stays empty if it can't parse).
+    age_days=""
+    if [ -n "$last_updated" ]; then
+        marker_epoch=$(date -d "$last_updated" +%s 2>/dev/null || true)
+        if [ -n "$marker_epoch" ]; then
+            age_days=$(( ( $(date +%s) - marker_epoch ) / 86400 ))
+            echo "  Last updated: $last_updated (${age_days} days ago)"
+        else
+            echo "  Last updated: $last_updated (could not parse date)"
+        fi
     fi
+    last_commit=$(git log -1 --format='%ad' --date=short -- "$eco_file" 2>/dev/null || true)
+    [ -n "$last_commit" ] && echo "  Last commit:  $last_commit"
+    echo "  Refresh: review $eco_file + docs/competitive-analysis/ snapshots, then bump its 'Last updated:' line."
+    echo "  If marketplace/package metadata changed, also walk docs/security/marketplace-publication-checklist.md."
+
+    # Thresholds: <14d auto-pass · 14–30d warn+prompt · 30+d (or unknown) require.
+    fresh_days=14
+    stale_days=30
+    decision="require"   # strict default when age can't be determined
+    if [ -n "$age_days" ]; then
+        if [ "$age_days" -lt "$fresh_days" ]; then
+            decision="pass"
+        elif [ "$age_days" -lt "$stale_days" ]; then
+            decision="warn"
+        else
+            decision="require"
+        fi
+    fi
+
+    case "$decision" in
+        pass)
+            echo "  [auto-pass] ✓ Fresh (< ${fresh_days}d) — continuing release."
+            ;;
+        warn)
+            echo "  [warn] ⚠ Stale (${fresh_days}–${stale_days}d) — refresh recommended."
+            if [ "$auto_yes" = "1" ]; then
+                echo "  auto-confirm: --yes (or AIDA_RELEASE_YES=1) — continuing despite staleness."
+            elif [ ! -t 0 ]; then
+                echo "  warning: no TTY — continuing despite staleness."
+            else
+                read -r -p "  Continue anyway? [y/N]: " eco_answer
+                case "${eco_answer,,}" in
+                    y|yes) echo "  ok — continuing." ;;
+                    *) echo "error: refresh the ecosystem watch, then re-run." >&2; exit 1 ;;
+                esac
+            fi
+            ;;
+        require)
+            if [ -z "$age_days" ]; then
+                echo "  [require] ✗ Freshness unknown — refresh + set a 'Last updated:' date before releasing."
+            else
+                echo "  [require] ✗ Too stale (≥ ${stale_days}d) — refresh required before a major/minor release."
+            fi
+            if [ "$auto_yes" = "1" ]; then
+                echo "  auto-confirm: --yes (or AIDA_RELEASE_YES=1) — overriding the require-action gate."
+            elif [ ! -t 0 ]; then
+                echo "  warning: no TTY — overriding the require-action gate (review the ecosystem watch soon)."
+            else
+                read -r -p "  Override and release anyway? [y/N]: " eco_answer
+                case "${eco_answer,,}" in
+                    y|yes) echo "  overridden — release continuing." ;;
+                    *) echo "error: Ecosystem review required before this release." >&2; exit 1 ;;
+                esac
+            fi
+            ;;
+    esac
 fi
 
 echo "bumping workspace from v$current -> v$new"
