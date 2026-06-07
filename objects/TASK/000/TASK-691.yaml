@@ -1,0 +1,12 @@
+id: 019ea2a4-9ae0-78e1-8aed-1d3983611b60
+spec_id: TASK-691
+agreed_id: TASK-691
+title: 'STORY-335 follow-up: .aida/config.toml [integrate] strategy project default (flag overrides)'
+description: 'STORY-335 prose calls for the accumulation strategy to be settable as a project default in .aida/config.toml, with the --strategy flag overriding per-run. Slice 3 (TASK-690) shipped the flag + clean errors but not the config default (it needs config-struct plumbing). Add an [integrate] strategy = "per-item" key parsed into the project config; aida queue integrate resolves strategy as: --strategy flag > config > per-item default. Low priority.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T15:12:37.088720319Z
+modified_at: 2026-06-07T15:12:37.088720319Z
+req_type: Task
