@@ -104,6 +104,79 @@ pub(crate) fn ready_for_integration(
         .collect()
 }
 
+// ── STORY-335: rebase-conflict forecast (read-only first slice) ──────────────
+//
+// A deferred batch (`--auto-complete=through-ci`) cuts every branch from the
+// same stale main; integration must rebase each onto the advancing main. Before
+// landing anything, forecast which members WILL conflict — turning "hope the
+// rebase isn't bad" into a checkable preview. This slice is read-only: it uses
+// `git merge-tree` (no worktree mutation) and never touches the merge path.
+//
+// Scope note: each branch is forecast against *current* main independently, so
+// it catches conflicts with already-landed code. It does NOT yet model the
+// sequential accumulation (a member that only conflicts with an earlier,
+// not-yet-landed batch member won't show here) — that sequence-aware forecast
+// is a follow-up. trace:STORY-335 | ai:claude
+
+/// Read-only forecast of whether a PR branch rebases cleanly onto current main.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RebaseForecast {
+    /// No conflict — the branch integrates onto current main cleanly.
+    Clean,
+    /// Conflicts in these files (best-effort list; may be empty if unparsed).
+    Conflict(Vec<String>),
+    /// Couldn't tell (git too old, branch missing, probe error) — never guessed.
+    Unknown(String),
+}
+
+/// One member's forecast row, in batch order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ForecastRow {
+    pub id: String,
+    pub forecast: RebaseForecast,
+}
+
+/// Aggregate counts over a batch forecast. Pure projection for testability.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct ForecastSummary {
+    pub clean: usize,
+    pub conflict: usize,
+    pub unknown: usize,
+    /// IDs that will conflict, in batch order — the "resolve these first" list.
+    pub conflicting_ids: Vec<String>,
+}
+
+/// Parse the conflicted file paths from `git merge-tree --write-tree
+/// --name-only` output. On conflict (git exits 1) the first line is the written
+/// tree OID and the conflicted paths follow until the first blank line; the
+/// informational "Auto-merging/CONFLICT" messages come after that blank.
+/// trace:STORY-335 | ai:claude
+pub(crate) fn parse_merge_tree_conflict_files(stdout: &str) -> Vec<String> {
+    stdout
+        .lines()
+        .skip(1) // first line is the written tree OID
+        .take_while(|l| !l.trim().is_empty())
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// Summarize a batch's per-member forecast rows.
+pub(crate) fn summarize_forecast(rows: &[ForecastRow]) -> ForecastSummary {
+    let mut s = ForecastSummary::default();
+    for r in rows {
+        match &r.forecast {
+            RebaseForecast::Clean => s.clean += 1,
+            RebaseForecast::Conflict(_) => {
+                s.conflict += 1;
+                s.conflicting_ids.push(r.id.clone());
+            }
+            RebaseForecast::Unknown(_) => s.unknown += 1,
+        }
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +290,65 @@ mod tests {
             candidate("C", true, true, true, false),
         ];
         assert!(ready_for_integration(&candidates).is_empty());
+    }
+
+    // ── STORY-335 forecast helpers ──────────────────────────────────────────
+
+    #[test]
+    fn parse_merge_tree_conflict_files_extracts_paths_before_blank() {
+        // Real `git merge-tree --write-tree --name-only` conflict output:
+        // OID line, conflicted paths, blank line, then info messages.
+        let out = "663d4da1f330\nsrc/main.rs\nsrc/lib.rs\n\nAuto-merging src/main.rs\nCONFLICT (content): Merge conflict in src/main.rs\n";
+        assert_eq!(
+            parse_merge_tree_conflict_files(out),
+            vec!["src/main.rs".to_string(), "src/lib.rs".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_merge_tree_conflict_files_handles_single_file_no_trailing() {
+        let out = "abc123\nf.txt\n\nCONFLICT (content): Merge conflict in f.txt";
+        assert_eq!(parse_merge_tree_conflict_files(out), vec!["f.txt"]);
+    }
+
+    #[test]
+    fn parse_merge_tree_conflict_files_empty_when_only_oid() {
+        // Defensive: malformed/short output yields no files rather than panicking.
+        assert!(parse_merge_tree_conflict_files("justoid\n").is_empty());
+        assert!(parse_merge_tree_conflict_files("").is_empty());
+    }
+
+    fn row(id: &str, f: RebaseForecast) -> ForecastRow {
+        ForecastRow {
+            id: id.to_string(),
+            forecast: f,
+        }
+    }
+
+    #[test]
+    fn summarize_forecast_counts_and_orders_conflicts() {
+        let rows = vec![
+            row("A", RebaseForecast::Clean),
+            row(
+                "B",
+                RebaseForecast::Conflict(vec!["src/main.rs".to_string()]),
+            ),
+            row("C", RebaseForecast::Clean),
+            row("D", RebaseForecast::Conflict(vec![])),
+            row("E", RebaseForecast::Unknown("gh".to_string())),
+        ];
+        let s = summarize_forecast(&rows);
+        assert_eq!(s.clean, 2);
+        assert_eq!(s.conflict, 2);
+        assert_eq!(s.unknown, 1);
+        // Conflicting IDs preserved in batch order — the "resolve first" list.
+        assert_eq!(s.conflicting_ids, vec!["B".to_string(), "D".to_string()]);
+    }
+
+    #[test]
+    fn summarize_forecast_empty_is_all_zero() {
+        let s = summarize_forecast(&[]);
+        assert_eq!(s, ForecastSummary::default());
+        assert!(s.conflicting_ids.is_empty());
     }
 }
