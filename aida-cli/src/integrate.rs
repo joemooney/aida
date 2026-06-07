@@ -219,6 +219,48 @@ pub(crate) fn strategy_unsupported_message(strategy: IntegrateStrategy) -> Optio
     }
 }
 
+/// Parse a strategy from its CLI/config string form (`per-item`, `one-branch`,
+/// `stacked`; underscores tolerated). trace:TASK-691 | ai:claude
+pub(crate) fn parse_strategy(s: &str) -> Option<IntegrateStrategy> {
+    match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+        "per-item" => Some(IntegrateStrategy::PerItem),
+        "one-branch" => Some(IntegrateStrategy::OneBranch),
+        "stacked" => Some(IntegrateStrategy::Stacked),
+        _ => None,
+    }
+}
+
+/// TASK-691: read the project-default accumulation strategy from a
+/// `.aida/config.toml` body — the `strategy` key under `[integrate]`. Pure
+/// (takes the file content) + section-aware, mirroring the hand-rolled scanner
+/// the `[advisor]` config uses so we don't pull a serde-TOML dep for one
+/// scalar. Returns None when the section/key is absent or the value is
+/// unrecognized; the caller falls back to the `per-item` default.
+/// trace:TASK-691 | ai:claude
+pub(crate) fn integrate_strategy_from_config(content: &str) -> Option<IntegrateStrategy> {
+    let mut in_integrate = false;
+    for raw in content.lines() {
+        // Strip inline comments + trim.
+        let line = raw.split('#').next().unwrap_or(raw).trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(stripped) = line.strip_prefix('[') {
+            in_integrate = stripped.trim_end_matches(']').trim() == "integrate";
+            continue;
+        }
+        if in_integrate {
+            if let Some((k, v)) = line.split_once('=') {
+                if k.trim() == "strategy" {
+                    let v = v.trim().trim_matches('"').trim_matches('\'').trim();
+                    return parse_strategy(v);
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,5 +455,63 @@ mod tests {
             .expect("stacked is unsupported");
         assert!(stacked.contains("stacked"));
         assert!(stacked.contains("per-item"));
+    }
+
+    #[test]
+    fn parse_strategy_accepts_all_three_and_rejects_garbage() {
+        assert_eq!(parse_strategy("per-item"), Some(IntegrateStrategy::PerItem));
+        assert_eq!(
+            parse_strategy("one-branch"),
+            Some(IntegrateStrategy::OneBranch)
+        );
+        assert_eq!(
+            parse_strategy(" Stacked "),
+            Some(IntegrateStrategy::Stacked)
+        );
+        // underscores tolerated (toml-ish), case-insensitive.
+        assert_eq!(
+            parse_strategy("ONE_BRANCH"),
+            Some(IntegrateStrategy::OneBranch)
+        );
+        assert_eq!(parse_strategy("bogus"), None);
+        assert_eq!(parse_strategy(""), None);
+    }
+
+    #[test]
+    fn config_reads_integrate_strategy_from_its_section() {
+        let toml = "\
+[advisor]
+strategy = \"stacked\"
+
+[integrate]
+# the default accumulation strategy
+strategy = \"one-branch\"
+
+[telemetry]
+enabled = true
+";
+        // Reads the [integrate] section's strategy, not [advisor]'s.
+        assert_eq!(
+            integrate_strategy_from_config(toml),
+            Some(IntegrateStrategy::OneBranch)
+        );
+    }
+
+    #[test]
+    fn config_strategy_absent_or_unknown_is_none() {
+        assert_eq!(integrate_strategy_from_config(""), None);
+        assert_eq!(
+            integrate_strategy_from_config("[integrate]\nother = \"x\"\n"),
+            None
+        );
+        assert_eq!(
+            integrate_strategy_from_config("[integrate]\nstrategy = \"bogus\"\n"),
+            None
+        );
+        // strategy outside the [integrate] section is ignored.
+        assert_eq!(
+            integrate_strategy_from_config("[other]\nstrategy = \"stacked\"\n"),
+            None
+        );
     }
 }

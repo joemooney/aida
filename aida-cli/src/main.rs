@@ -88432,15 +88432,27 @@ fn handle_queue_integrate(
     interval: u64,
     max: usize,
     rebase: bool,
-    strategy: integrate::IntegrateStrategy,
+    strategy: Option<integrate::IntegrateStrategy>,
 ) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    // TASK-691: resolve the accumulation strategy — the --strategy flag wins,
+    // else the project default (`[integrate] strategy` in .aida/config.toml),
+    // else `per-item`. trace:TASK-691 | ai:claude
+    let strategy = strategy
+        .or_else(|| {
+            std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+                .ok()
+                .and_then(|c| integrate::integrate_strategy_from_config(&c))
+        })
+        .unwrap_or(integrate::IntegrateStrategy::PerItem);
+
     // STORY-335: only `per-item` is built; refuse `one-branch`/`stacked` cleanly
     // (with a pointer) before doing any probing or acting. trace:STORY-335
     if let Some(msg) = integrate::strategy_unsupported_message(strategy) {
         anyhow::bail!(msg);
     }
 
-    let project_root = find_project_root()?;
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
 
     let mut integrated_total: usize = 0;
