@@ -38,3 +38,7 @@ feature: Uncategorized
 created_at: 2026-06-07T20:01:37.775126021Z
 modified_at: 2026-06-07T20:01:37.775126021Z
 req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 019ea3af-fbb4-76c0-8fe5-55f88f9cde7f
+  created_at: 2026-06-07T20:04:44.178485298Z
