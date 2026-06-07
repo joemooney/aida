@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:14:43.589196772Z
-modified_at: 2026-06-06T08:30:36.308100363Z
+modified_at: 2026-06-07T04:06:55.348984419Z
 req_type: Epic
 tags:
 - collaboration-layer
@@ -66,3 +66,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Active, well-defined umbrella with slice roadmap; slice-1 routing/trait merged, forge.rs lands GitHub+pure-git real impls — remaining child slices (STORY-509/510/511) carry the bounded GitLab work; epic itself needs no new decision, just stays open until children land.
   created_at: 2026-06-06T08:30:32.305754152Z
   modified_at: 2026-06-06T08:30:32.305754152Z
+- id: 019ea043-2474-75a2-9d07-d2212cb6efd2
+  author: joe
+  content: '✅ COMPLETE (2026-06-06): GitLab as a first-class forge delivered — gh-call-site routing (slice 1), GitLabForge open/status/merge/comment/list via glab (STORY-509), GitLab CI (STORY-510), e2e MR linkage + docs (STORY-511). All slices shipped + dogfood-validated.'
+  created_at: 2026-06-07T04:06:55.348984419Z
+  modified_at: 2026-06-07T04:06:55.348984419Z
