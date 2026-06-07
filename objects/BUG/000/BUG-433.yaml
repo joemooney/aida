@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T15:58:12.402309656Z
-modified_at: 2026-06-06T04:16:08.574563878Z
+modified_at: 2026-06-07T02:28:14.221973885Z
 req_type: Bug
 tags:
 - bug-428-family
@@ -17,5 +17,11 @@ tags:
 - silent-wrong-data
 - store-detection
 - worktree
+comments:
+- id: 019e9fe8-cb0d-7fa3-a4fc-a2ff64f339e1
+  author: joe
+  content: Commit 6042a21e3 references this requirement
+  created_at: 2026-06-07T02:28:14.221973885Z
+  modified_at: 2026-06-07T02:28:14.221973885Z
 archived: true
 archived_at: 2026-06-06T04:16:08.574563878Z
