@@ -10734,6 +10734,97 @@ mod task_492_brief_tests {
         assert_eq!(headless_log_len(root, session), Some(6));
     }
 
+    // TASK-298: FULLY-ISOLATED tests of the pure stream-json stall parser.
+    // Each takes one JSONL line (or a small log body) and asserts on the
+    // detection verdict — no threads, no files, no orchestrator. trace:TASK-298
+
+    #[test]
+    fn stall_parser_silent_on_blank_and_non_json() {
+        assert_eq!(headless_line_permission_stall(""), None);
+        assert_eq!(headless_line_permission_stall("   "), None);
+        assert_eq!(headless_line_permission_stall("{not-json"), None);
+    }
+
+    #[test]
+    fn stall_parser_silent_on_clean_events() {
+        let init = r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#;
+        assert_eq!(headless_line_permission_stall(init), None);
+        let ok_result = r#"{"type":"result","subtype":"success","is_error":false}"#;
+        assert_eq!(headless_line_permission_stall(ok_result), None);
+        // An empty permission_denials array is NOT a stall.
+        let empty = r#"{"type":"assistant","permission_denials":[]}"#;
+        assert_eq!(headless_line_permission_stall(empty), None);
+    }
+
+    #[test]
+    fn stall_parser_detects_permission_denial_with_tool_name() {
+        let line = r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("denial detected");
+        assert!(reason.contains("permission gate"), "got: {reason}");
+        assert!(reason.contains("Bash"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_counts_multiple_denials_and_falls_back_to_tool_alias() {
+        // First denial uses the `tool` alias (not `tool_name`); the count tail
+        // reports the extras.
+        let line =
+            r#"{"type":"assistant","permission_denials":[{"tool":"Write"},{"tool_name":"Bash"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("denial detected");
+        assert!(reason.contains("Write"), "got: {reason}");
+        assert!(reason.contains("+1 more"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_detects_is_error_with_result_detail() {
+        // The SPIKE-7 false-positive: exit code 0 but is_error true.
+        let line = r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"permission gate refused\nsecond line"}"#;
+        let reason = headless_line_permission_stall(line).expect("is_error detected");
+        assert!(reason.contains("is_error"), "got: {reason}");
+        // Multi-line detail collapses to the first non-empty line.
+        assert!(reason.contains("permission gate refused"), "got: {reason}");
+        assert!(!reason.contains("second line"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_is_error_falls_back_to_subtype_when_no_result_text() {
+        let line = r#"{"type":"result","subtype":"error_max_turns","is_error":true}"#;
+        let reason = headless_line_permission_stall(line).expect("is_error detected");
+        assert!(reason.contains("error_max_turns"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_denial_wins_over_is_error_on_same_line() {
+        let line =
+            r#"{"type":"assistant","is_error":true,"permission_denials":[{"tool_name":"Edit"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("detected");
+        assert!(reason.contains("permission gate"), "got: {reason}");
+        assert!(reason.contains("Edit"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_scan_folds_log_and_returns_first_signal() {
+        // A realistic log: clean lines, then a denial, then more lines. The
+        // scan returns the first stall signal and ignores the clean prefix.
+        let log = [
+            r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}"#,
+            r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#,
+            r#"{"type":"result","subtype":"success","is_error":false}"#,
+        ]
+        .join("\n");
+        let reason = headless_log_permission_stall(&log).expect("stall found in log");
+        assert!(reason.contains("Bash"), "got: {reason}");
+
+        // A clean log yields no stall.
+        let clean = [
+            r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#,
+            r#"{"type":"result","subtype":"success","is_error":false,"duration_ms":10}"#,
+        ]
+        .join("\n");
+        assert_eq!(headless_log_permission_stall(&clean), None);
+    }
+
     fn req(spec_id: &str, title: &str, description: &str) -> Requirement {
         let mut req = Requirement::new(title.to_string(), description.to_string());
         req.spec_id = Some(spec_id.to_string());
@@ -34311,6 +34402,101 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
         }
     }
     newest_len
+}
+
+/// TASK-298: scan one headless `claude -p --output-format stream-json` JSONL
+/// *line* for a hard "the session bailed at a gate" signal and, when present,
+/// return a specific human-readable reason. SPIKE-7 found `claude -p`'s exit
+/// code is unreliable (it exits 0 even when it abandoned the work at a
+/// permission prompt), so the real completion signal lives in the stream:
+///
+///   - a non-empty `permission_denials` array → the model wanted a tool the
+///     non-interactive run could not grant; in `--no-human` mode there is no
+///     human to approve it, so the run is silently stuck. We surface the first
+///     denied tool name.
+///   - a top-level `is_error: true` (on any event, including the terminal
+///     `result`) → the run reported an error envelope; we surface its
+///     `result`/`subtype` detail.
+///
+/// Pure and FULLY ISOLATED: takes a single JSONL line, returns
+/// `Some(reason)` when the line carries a stall signal, `None` otherwise.
+/// Blank or non-JSON lines are `None` (the orchestrator's log is well-formed
+/// JSONL, but a partially-flushed final line must never trip a false stall).
+/// The watchdog folds this over the log so a `--no-human` drain wedged at a
+/// permission gate is detected and failed instead of hanging until the
+/// no-progress / ceiling timeout. trace:TASK-298 | ai:claude
+fn headless_line_permission_stall(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed: serde_json::Value = serde_json::from_str(trimmed).ok()?;
+
+    // Permission denials are the precise SPIKE-7 signal — surface them first
+    // with the offending tool name(s).
+    if let Some(denials) = parsed
+        .get("permission_denials")
+        .and_then(|v| v.as_array())
+        .filter(|a| !a.is_empty())
+    {
+        let tool = denials
+            .iter()
+            .find_map(|d| {
+                d.get("tool_name")
+                    .or_else(|| d.get("tool"))
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("an unknown tool");
+        let extra = if denials.len() > 1 {
+            format!(" (+{} more)", denials.len() - 1)
+        } else {
+            String::new()
+        };
+        return Some(format!(
+            "headless Claude bailed at the permission gate for tool {tool}{extra}"
+        ));
+    }
+
+    // An error envelope — `is_error: true` on any event (the terminal
+    // `result` event is the common carrier, but be liberal). Exit code 0
+    // cannot be trusted, so this is the authoritative failure flag.
+    if parsed.get("is_error").and_then(|v| v.as_bool()) == Some(true) {
+        let detail = parsed
+            .get("result")
+            .and_then(|v| v.as_str())
+            .map(first_nonempty_line)
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                parsed
+                    .get("subtype")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "error".to_string());
+        return Some(format!("headless Claude reported is_error: {detail}"));
+    }
+
+    None
+}
+
+/// TASK-298: fold [`headless_line_permission_stall`] over a whole headless log
+/// body, returning the first line's stall reason or `None`. Best-effort, like
+/// the sibling [`claude_log_indicates_api_outage`]: the classification is a
+/// refinement that lets the watchdog fail fast, not a gate.
+/// trace:TASK-298 | ai:claude
+fn headless_log_permission_stall(content: &str) -> Option<String> {
+    content.lines().find_map(headless_line_permission_stall)
+}
+
+/// First non-empty trimmed line of a string, or the empty string. Small pure
+/// helper so a multi-line `result` detail collapses to one log-friendly row.
+/// trace:TASK-298 | ai:claude
+fn first_nonempty_line(s: &str) -> String {
+    s.lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
 }
 
 struct TextQuestionPunt {
@@ -87245,6 +87431,21 @@ impl PhaseWatchdog {
                 self.last_progress = now;
             }
         }
+
+        // TASK-298: a `--no-human` headless run that hit a permission gate (or
+        // reported an `is_error` envelope) is silently stuck — `claude -p`
+        // exits 0 even when it bailed (SPIKE-7), so neither the natural-exit
+        // path nor the no-progress timer would catch it promptly. The log
+        // keeps the offending event, so scan it and trip the watchdog
+        // *immediately* with the specific reason rather than waiting out the
+        // no-progress / ceiling window. trace:TASK-298 | ai:claude
+        if let Some(reason) = read_headless_log_for_session(&self.project_root, &self.session_id)
+            .as_deref()
+            .and_then(headless_log_permission_stall)
+        {
+            return Some(reason);
+        }
+
         auto_complete::watchdog_verdict(
             now.duration_since(self.last_progress),
             now.duration_since(self.phase_start),
