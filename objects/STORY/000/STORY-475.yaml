@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-06-07T22:42:16.336279570Z
+modified_at: 2026-06-07T22:42:17.440767827Z
 req_type: Story
 tags:
 - audit
@@ -71,3 +71,8 @@ comments:
   content: 'Design sketch + threat model filed: docs/plans/2026-06-07-story-475-mcp-transport-sketch.md (Claude, 2026-06-07). NO code — status unchanged, spec stays deferred. Expands Codex''s 2026-05-26 sketch into a full security doc: (1) transport options A-F ranked by attack surface — recommends local-loopback HTTP+bearer (B) as the v1 substrate, SSH tunnel over it (C) as the blessed remote pattern so AIDA owns no crypto/PKI; mTLS (D) and OAuth/DCR (E) deferred; LAN/public bind (F) forbidden. (2) Auth = profile ∩ project-root ∩ token-validity; opaque 256-bit token via --token-env (name not value in argv) or 0600 .aida/ file; write-capable profiles NOT reachable over HTTP in v1. (3) Threat model T1-T10 — worst case named: a networked write transport whose token leaks lets an attacker rewrite the graph that AIDA''s autonomous drains then ACT on (substrate as execution vector); that''s why v1 is read-only. (4) Smallest-safe-slice: read-only + loopback-only + single-token + single-project + audited JSONL. (5) Eleven explicit operator security sign-off items before any code — incl. build-trigger confirmation, read-only-over-HTTP-only acceptance, audit-field/redaction approval, marketplace-checklist re-run, threat-model acceptance. Resolves Codex''s open question: HTTP disabled unless --transport http passed (not config-enabled).'
   created_at: 2026-06-07T22:31:12.770939265Z
   modified_at: 2026-06-07T22:31:12.770939265Z
+- id: 019ea440-4ae0-7ee1-a2d1-a8d8ceaef790
+  author: joe
+  content: Design SKETCH landed (docs/plans/ + this comment thread) for operator review — the story remains OPEN for implementation. The commit's (SPEC-ID) trailer auto-bumped it; re-opened with --force (sketch is a proposal, not the build).
+  created_at: 2026-06-07T22:42:17.440767827Z
+  modified_at: 2026-06-07T22:42:17.440767827Z
