@@ -235,7 +235,8 @@ pub enum ReportCommand {
 /// Dogfood metrics over the recorded telemetry substrate.
 ///
 /// A reporting layer — computes nothing the telemetry logs don't already
-/// record. trace:STORY-477 | ai:claude
+/// record.
+// trace:STORY-477 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MetricsCommand {
     /// Agent-lift signals: autonomous drain success rate, runs over distinct
