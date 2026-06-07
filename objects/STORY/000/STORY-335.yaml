@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:33:08.323277210Z
-modified_at: 2026-06-07T06:11:02.385337983Z
+modified_at: 2026-06-07T15:17:01.718677214Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -119,4 +119,19 @@ comments:
   content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): Deferred batch integrate-pass (from-review resume + new rebase step) — touches the orchestrator lifecycle (reliability-class); ships best at-keyboard, not blind fan-out.'
   created_at: 2026-06-07T06:10:58.186400924Z
   modified_at: 2026-06-07T06:10:58.186400924Z
+- id: 019ea2a8-a496-7270-b038-8c7ea942b058
+  author: joe
+  content: |-
+    Delivery status (2026-06-07, keyboard session) — three slices shipped via an operator-approved surface decision: extend STORY-520's `aida queue integrate` rather than add `--auto-complete=from-review` (the spec's original phrasing), since `aida queue integrate` shipped the integrate-pass machinery first and re-using it avoids two overlapping integrator paths.
+
+    Done:
+    - slice 1 / TASK-688 (merged): read-only cross-batch rebase-conflict forecast in `aida queue integrate --dry-run` (git merge-tree per member).
+    - slice 2 / TASK-689 (merged): opt-in `--rebase` step — rebase each member's PR branch onto current main before merge (composes `aida pr rebase`), punt-and-continue on conflict.
+    - slice 3 / TASK-690 (PR #643): `--strategy {per-item|one-branch|stacked}` selector; per-item works, the other two error cleanly pointing at follow-ups.
+
+    Acceptance mapping: rebase-before-merge ✓, --strategy ✓, --dry-run forecast ✓, member-fails-rebase-rest-still-land ✓. Deviations from the literal acceptance: surface is `aida queue integrate` (not `--auto-complete=from-review`); conflict handling is skip-and-continue (integrate isn't the --auto-complete orchestrator, so the --zen-pause vs --no-human-punt split doesn't apply here).
+
+    Remaining (all filed as children, story stays open): one-branch + stacked strategy implementations; sequence-aware forecast (model predecessors landing first); .aida/config.toml [integrate] strategy default (TASK-691).
+  created_at: 2026-06-07T15:17:01.718677214Z
+  modified_at: 2026-06-07T15:17:01.718677214Z
 human_only: true
