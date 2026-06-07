@@ -30002,6 +30002,41 @@ fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     None
 }
 
+/// STORY-335: read-only forecast of whether `branch` rebases cleanly onto
+/// `base_ref`, via `git merge-tree --write-tree` (no worktree mutation, no
+/// merge/rebase performed). git exits 0 = clean, 1 = conflict (paths listed),
+/// anything else (old git, missing branch, error) → Unknown — never guessed.
+/// trace:STORY-335 | ai:claude
+fn forecast_rebase_onto(
+    project_root: &std::path::Path,
+    base_ref: &str,
+    branch: &str,
+) -> integrate::RebaseForecast {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            base_ref,
+            branch,
+        ])
+        .output();
+    match out {
+        Ok(o) => match o.status.code() {
+            Some(0) => integrate::RebaseForecast::Clean,
+            Some(1) => integrate::RebaseForecast::Conflict(
+                integrate::parse_merge_tree_conflict_files(&String::from_utf8_lossy(&o.stdout)),
+            ),
+            _ => integrate::RebaseForecast::Unknown(
+                String::from_utf8_lossy(&o.stderr).trim().to_string(),
+            ),
+        },
+        Err(e) => integrate::RebaseForecast::Unknown(e.to_string()),
+    }
+}
+
 /// Return the branch name currently checked out at `path` (its HEAD).
 /// `None` if detached or git fails. trace:BUG-76 | ai:claude
 fn current_branch_at(path: &std::path::Path) -> Option<String> {
@@ -88044,6 +88079,10 @@ fn handle_queue_integrate(
         // drive path will. trace:STORY-520 | ai:claude
         let store = storage.load()?;
         let mut candidates: Vec<integrate::IntegrationCandidate> = Vec::new();
+        // STORY-335: keep each candidate's PR branch so the dry-run forecast can
+        // probe a rebase-onto-main conflict per ready member. trace:STORY-335
+        let mut branches: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::new();
         for req in &store.requirements {
             if req.status != RequirementStatus::Done {
                 continue;
@@ -88061,7 +88100,8 @@ fn handle_queue_integrate(
                 lookup,
                 PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_)
             );
-            let (facts, _branch, pr) = probe_resume_facts(&project_root, storage, &id, None);
+            let (facts, branch, pr) = probe_resume_facts(&project_root, storage, &id, None);
+            branches.insert(id.clone(), branch);
             candidates.push(integrate::IntegrationCandidate {
                 id,
                 is_done: true,
@@ -88119,6 +88159,84 @@ fn handle_queue_integrate(
 
         // --- Act: drive each ready spec, serially, through the PR-only path. ---
         let ready_ids: Vec<String> = ready.iter().map(|c| c.id.clone()).collect();
+
+        // STORY-335: dry-run rebase-conflict forecast. Each ready member's PR
+        // branch is checked (read-only, via `git merge-tree`) against current
+        // main — surfacing which WILL conflict before any merge is attempted.
+        // Read-only first slice: the act path below is unchanged (no rebase step
+        // yet). trace:STORY-335 | ai:claude
+        if dry_run && !ready_ids.is_empty() {
+            let base = detect_default_branch_ref(&project_root);
+            let rows: Vec<integrate::ForecastRow> = ready_ids
+                .iter()
+                .map(|id| {
+                    let forecast = match (&base, branches.get(id).and_then(|b| b.clone())) {
+                        (Some(base_ref), Some(branch)) => {
+                            forecast_rebase_onto(&project_root, base_ref, &branch)
+                        }
+                        (None, _) => integrate::RebaseForecast::Unknown(
+                            "no default branch (origin/main) detected".to_string(),
+                        ),
+                        (_, None) => integrate::RebaseForecast::Unknown(
+                            "no PR branch resolved for spec".to_string(),
+                        ),
+                    };
+                    integrate::ForecastRow {
+                        id: id.clone(),
+                        forecast,
+                    }
+                })
+                .collect();
+            let base_label = base.as_deref().unwrap_or("main");
+            println!(
+                "\n{} Rebase forecast (each PR branch onto {}, in order):",
+                "▸".cyan().bold(),
+                base_label
+            );
+            for r in &rows {
+                match &r.forecast {
+                    integrate::RebaseForecast::Clean => {
+                        println!("    {} {} — clean", "✓".green(), r.id);
+                    }
+                    integrate::RebaseForecast::Conflict(files) => {
+                        let detail = if files.is_empty() {
+                            String::new()
+                        } else {
+                            format!(": {}", files.join(", "))
+                        };
+                        println!("    {} {} — conflict{}", "⚠".yellow(), r.id, detail);
+                    }
+                    integrate::RebaseForecast::Unknown(why) => {
+                        println!("    {} {} — unknown ({})", "?".dimmed(), r.id, why);
+                    }
+                }
+            }
+            let s = integrate::summarize_forecast(&rows);
+            if s.conflict > 0 {
+                println!(
+                    "  {} {} of {} will conflict — resolve {} first.",
+                    "⚠".yellow().bold(),
+                    s.conflict,
+                    rows.len(),
+                    s.conflicting_ids.join(", ")
+                );
+            } else if s.unknown > 0 {
+                println!(
+                    "  {} {} clean, {} indeterminate — re-check those before integrating.",
+                    "▸".cyan(),
+                    s.clean,
+                    s.unknown
+                );
+            } else {
+                println!("  {} all {} forecast clean.", "✓".green().bold(), s.clean);
+            }
+            println!(
+                "  {} forecast checks each branch against current {} independently; a member that\n    only conflicts with an earlier un-landed batch member won't show here yet (follow-up).",
+                "·".dimmed(),
+                base_label
+            );
+        }
+
         for id in &ready_ids {
             if max != 0 && integrated_total >= max {
                 println!("{} reached --max {} this run; stopping.", "▸".cyan(), max);
