@@ -3250,6 +3250,18 @@ pub enum QueueCommand {
         // trace:STORY-265 | ai:claude
         #[clap(long, conflicts_with = "auto_complete")]
         plan_only: bool,
+        /// Plan-then-ship: run a PLAN phase before the implementer phase, then
+        /// the normal autonomous drain. The plan phase produces a `docs/plans/`
+        /// file (the same planning session as `--plan-only`) and promotes the
+        /// spec Approved -> Planned; the drain then implements, CIs, reviews,
+        /// merges, pulls, and builds as usual. Opt-in — without this flag the
+        /// drain starts straight at the implementer phase (default unchanged).
+        /// Only meaningful with an autonomous drain (`--auto-complete` /
+        /// `--drain`). Composes with `--no-human` (the plan phase runs headless
+        /// too when the implementer does).
+        // trace:STORY-265 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, requires = "autonomous")]
+        with_plan: bool,
         /// Override the inferred role. Without this, the role is derived
         /// from the queue items' `for_role` (single-item: that item's
         /// role; cluster: majority with a warning about minority items).
