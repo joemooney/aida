@@ -3907,6 +3907,12 @@ pub enum QueueCommand {
         /// continues. Preview with --dry-run first.
         #[clap(long)]
         rebase: bool,
+        // trace:STORY-335 | ai:claude
+        /// Accumulation strategy for the batch. `per-item` (default) = a branch
+        /// + PR per item, rebased and merged in order. `one-branch` and
+        /// `stacked` are accepted but not built yet (they error with a pointer).
+        #[clap(long, value_enum, default_value_t = crate::integrate::IntegrateStrategy::PerItem)]
+        strategy: crate::integrate::IntegrateStrategy,
         /// User ID (defaults to AIDA_USER or system user).
         #[clap(long)]
         user: Option<String>,
