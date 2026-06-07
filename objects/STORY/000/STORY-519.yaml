@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:35:34.763436046Z
-modified_at: 2026-06-07T06:54:29.752144177Z
+modified_at: 2026-06-07T07:49:23.843386721Z
 req_type: Story
 tags:
 - advisor-vision
@@ -85,3 +85,8 @@ comments:
   content: '✅ ADVISOR DECISION (2026-06-06, compete-vs-compose): DEFER the heavy in-aida-orchestrator build. This session demonstrated the capability END-TO-END via the HARNESS (Claude Code worktree-isolated agents fanning out + an integrator merge loop on top of aida''s thin primitives: queue, leases, plan-promote, status, questions) — ~50 specs shipped that way. Re-implementing parallel fan-out / integrator inside aida''s ''claude -p'' orchestrator (auto_complete.rs) would duplicate what the harness already does well. Reframe: aida ships the PRIMITIVES; the harness orchestrates. Revisit only if a non-harness consumer needs it. Parked (not ready-to-fanout).'
   created_at: 2026-06-07T03:56:38.267035489Z
   modified_at: 2026-06-07T03:56:38.267035489Z
+- id: 019ea10e-d303-7a93-a5ae-33b75d6f3d87
+  author: joe
+  content: Commit 3fa34e125 references this requirement
+  created_at: 2026-06-07T07:49:23.843386721Z
+  modified_at: 2026-06-07T07:49:23.843386721Z
