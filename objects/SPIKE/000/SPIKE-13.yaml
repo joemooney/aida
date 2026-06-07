@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:54:49.466065320Z
-modified_at: 2026-06-07T06:11:05.443981237Z
+modified_at: 2026-06-07T21:39:39.333369305Z
 req_type: Spike
 tags:
 - advisor-discipline
@@ -21,6 +21,11 @@ tags:
 - from-user-direction
 - multi-agent
 - sibling-of-EPIC-31
+relationships:
+- rel_type: References
+  target_id: 019ea406-9688-7fb0-87b7-57dab76db344
+  created_at: 2026-06-07T21:39:39.333362373Z
+  created_by: joe
 comments:
 - id: 019e9c11-b6ce-7840-928e-fef76e40689b
   author: joe
