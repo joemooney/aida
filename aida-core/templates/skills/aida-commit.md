@@ -25,6 +25,36 @@ Use this skill when:
 
 **No implementation without a requirement.** This skill detects untraced code, prompts to create requirements before committing, and automatically links commits to requirements.
 
+## Autonomy mode — `$AIDA_ZEN` / `$AIDA_HEADLESS` (TASK-297)
+
+This skill's only interactive pause is **Step 4** (prompt to create or link
+a requirement for untraced work). It is a `kind:confirmation` prompt — its
+default action (file a `completed` requirement for the untraced work, or
+proceed when the change is trivial) is the obvious one. Before surfacing it,
+check the autonomy mode:
+
+```bash
+aida zen status            # prints: zen | interactive
+echo "${AIDA_HEADLESS:-}"
+```
+
+- **`interactive`** (default) — surface the prompt unchanged.
+- **`zen`** (corroborated — never the bare `$AIDA_ZEN` env var, BUG-237) —
+  auto-resolve Step 4 to its safe default and proceed, printing
+  `↳ zen: auto-resolved "create requirement?" → option 1`.
+- **`AIDA_HEADLESS=1`** (a `--no-human` drain) is the stronger mode and
+  overrides `--zen`. Calling AskUserQuestion under `--no-human=both` is
+  permission-denied at the harness layer and crashes the session ~10s in
+  (SPIKE-7 / BUG-280) — so under headless the skill **never** prompts: it
+  auto-resolves Step 4 to the safe default (file the untraced work as a
+  `completed` requirement, or skip when the change is already traced) and
+  commits without pausing. A headless implementer already carries its spec
+  id, so the common case is fully traced; this guard only catches a stray
+  untraced file. `--no-human` > `--zen` > default.
+
+An un-annotated prompt defaults to `design-fork` (pause-safe). Author
+guidance: `docs/aida/discipline/skill-prompt-kinds.md`. trace:TASK-297
+
 ## Commit Message Format
 
 **Standard format:**
@@ -92,6 +122,9 @@ Present to user:
 
 ### Step 4: Prompt for Missing Requirements
 
+<!-- kind:confirmation -->
+Under `$AIDA_ZEN` or `AIDA_HEADLESS=1` this prompt auto-resolves to the safe
+default (see *Autonomy mode* above) — never block a headless commit on it.
 For untraced work, offer options:
 
 1. **Create new requirement**: Add to database with `completed` status

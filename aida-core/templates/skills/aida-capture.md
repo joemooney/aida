@@ -21,6 +21,34 @@ Use this skill when:
 - User asks to update requirements based on what was discussed
 - After implementing features without explicitly creating requirements
 
+## Autonomy mode — `$AIDA_ZEN` / `$AIDA_HEADLESS` (TASK-297)
+
+This skill's interactive pause is **Step 4** (per-finding "Offer Actions":
+add / update / skip). It is a `kind:confirmation` prompt — capture is
+best-effort bookkeeping whose safe default (file the finding) is obvious.
+Before surfacing it, check the autonomy mode:
+
+```bash
+aida zen status            # prints: zen | interactive
+echo "${AIDA_HEADLESS:-}"
+```
+
+- **`interactive`** (default) — surface the per-finding prompt unchanged.
+- **`zen`** (corroborated — never the bare `$AIDA_ZEN` env var, BUG-237) —
+  auto-resolve Step 4 to its safe default and proceed, printing
+  `↳ zen: auto-resolved "capture this finding?" → option 1`.
+- **`AIDA_HEADLESS=1`** (a `--no-human` drain) is the stronger mode and
+  overrides `--zen`. AskUserQuestion under `--no-human=both` is
+  permission-denied and crashes the session ~10s in (SPIKE-7 / BUG-280) — so
+  under headless the skill **never** prompts: auto-capture each clear finding
+  as a `draft` requirement (the conservative status — a human triages it
+  later) and skip ambiguous ones rather than guessing a wrong type/status.
+  Losing a capture is recoverable; a hung drain is not. `--no-human` >
+  `--zen` > default.
+
+An un-annotated prompt defaults to `design-fork` (pause-safe). Author
+guidance: `docs/aida/discipline/skill-prompt-kinds.md`. trace:TASK-297
+
 ## In-Progress Work
 
 !`aida list --status in-progress --format brief 2>/dev/null | head -10 || echo "none"`
@@ -62,7 +90,10 @@ Present a summary to the user:
 
 ### Step 4: Offer Actions
 
-For each finding, offer to:
+<!-- kind:confirmation -->
+Under `$AIDA_ZEN` or `AIDA_HEADLESS=1` this prompt auto-resolves (see
+*Autonomy mode* above) — headless captures land as `draft` for later triage
+rather than blocking the run. For each finding, offer to:
 1. **Add as new requirement**: Create with appropriate type and status
 2. **Update existing**: Add comments or change status
 3. **Skip**: Don't capture this item
