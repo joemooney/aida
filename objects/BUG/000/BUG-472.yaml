@@ -1,0 +1,12 @@
+id: 019ea2c8-037a-7cb0-8535-1a24fd262dcb
+spec_id: BUG-472
+agreed_id: BUG-472
+title: aida status 'Awaiting you' findings count includes non-draft specs (overcounts vs aida findings list)
+description: 'The ''Awaiting you'' 🔍 findings_total (build_awaiting_report in main.rs ~line 69848) builds the findings view from ListFilter::default() — ALL specs — so it counts completed/rejected specs that still carry their origin from-review/from-implementer tag. Result: status said ''35 findings awaiting triage'' while ''aida findings list'' (and the status ''─── Findings ───'' section, which filters status=draft) correctly showed 0. The AwaitingReport.findings_total field doc even says ''the aida findings list count''. Fix: compute findings_total from a status=draft-filtered summary list (mirroring print_status_findings_section), keeping the default summaries for the NeedsAttention escalations count. Discovered during finding triage 2026-06-07.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T15:51:17.626709528Z
+modified_at: 2026-06-07T15:51:17.626709528Z
+req_type: Bug
