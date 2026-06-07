@@ -117,9 +117,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:15:02.335601702Z
-modified_at: 2026-06-07T06:11:09.100511949Z
+modified_at: 2026-06-07T06:11:11.246312360Z
 req_type: Spike
 tags:
+- blocked
 - deferred:post-stability
 - evidence
 - no-human-amortized
