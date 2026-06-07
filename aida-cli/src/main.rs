@@ -12034,11 +12034,18 @@ fn add_pending_brief(
     brief_path: &std::path::Path,
 ) -> Result<()> {
     let pending_path = pending_briefs_path(project_root, agent);
+    // Store the project-relative key with forward slashes regardless of OS so
+    // the `.pending` sentinel is portable and matches the `.aida/agent-briefs/`
+    // convention used everywhere else. `Path::display()` emits `\` on Windows,
+    // which broke task_492_brief_tests on the cross-platform runner.
+    // trace:BUG-466 | ai:claude
     let rel = brief_path
         .strip_prefix(project_root)
         .unwrap_or(brief_path)
-        .display()
-        .to_string();
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
     let mut entries = read_pending_briefs(&pending_path);
     if !entries.iter().any(|e| e == &rel) {
         entries.push(rel);
