@@ -65,7 +65,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T07:10:55.350844429Z
-modified_at: 2026-06-06T06:02:30.380391740Z
+modified_at: 2026-06-07T20:11:33.182428044Z
 req_type: Task
 tags:
 - alpha-readiness
@@ -80,6 +80,11 @@ comments:
   content: Defaults for `mode` field gated on SPIKE-8 evidence. If SPIKE-8 supports the planning-improves-output hypothesis, `mode = "on-demand"` (current default) is correct. If SPIKE-8 refutes or is ambiguous, default may shift to `mode = "never"` with explicit per-project opt-in. Don't ship TASK-304 defaults until SPIKE-8 report lands.
   created_at: 2026-05-17T07:15:13.783738810Z
   modified_at: 2026-05-17T07:15:13.783738810Z
+- id: 019ea3b6-49be-7362-8f9c-a0b23262ea4a
+  author: joe
+  content: 'SPIKE-8 findings (docs/spikes/2026-06-07-spike-8-ultraplan-comparison.md): your shipped defaults (mode=on-demand, threshold=acceptance-bullets>8) are validated — keep on-demand, keep suggested opt-in; the spike gives no reason to change them. ONE refinement filed as TASK-697: /ultraplan''s value is a context-assembly aid that helps most on THIN/under-specified specs and least on well-formed ones (which carry their own Proposed-shape + Acceptance — the spec IS the plan). Bullet count anti-correlates with where planning helps, so the suggested-threshold should key on specification THINNESS, not chunkiness. Note: SPIKE-8 did not run the full empirical sweep (directional probe only; web-condition C is un-runnable headless), so this is a reasoned validation, not a measured one.'
+  created_at: 2026-06-07T20:11:33.182428044Z
+  modified_at: 2026-06-07T20:11:33.182428044Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-06T05:07:28.459983744Z
