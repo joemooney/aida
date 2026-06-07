@@ -1,0 +1,14 @@
+id: 019ea082-94be-7dd3-8313-dc80ed4ab5b4
+spec_id: TASK-0412
+title: Smoke audit task
+description: ''
+status: Approved
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-06-07T05:16:12.862475147Z
+modified_at: 2026-06-07T05:16:12.862475147Z
+req_type: Task
+tags:
+- batch:scheduled
+- scheduled:smoke-audit
