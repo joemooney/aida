@@ -1,0 +1,12 @@
+id: 019ea29e-d9b5-7291-9c1e-e4dffc92d555
+spec_id: TASK-690
+agreed_id: TASK-690
+title: 'STORY-335 slice 3: --strategy {per-item|one-branch|stacked} selector on aida queue integrate'
+description: 'Third slice of STORY-335. Adds a --strategy ValueEnum flag (per-item|one-branch|stacked) to ''aida queue integrate'', default per-item. per-item is the current behavior (branch+PR per item; the --rebase step lands them in order). one-branch and stacked error cleanly with a message pointing at the STORY-335 follow-ups (not built yet), matching the established --no-human=both ''accepts the value, errors until implemented'' pattern. Pure strategy_unsupported_message in integrate.rs (unit-tested); handler returns early on an unsupported strategy before probing/acting. Out of scope (follow-ups): the one-branch + stacked implementations, and the .aida/config.toml [integrate] strategy project default (flag-overrides-config) — filed separately. trace:STORY-335'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T15:06:19.957857068Z
+modified_at: 2026-06-07T15:06:19.957857068Z
+req_type: Task
