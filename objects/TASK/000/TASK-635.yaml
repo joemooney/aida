@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T03:17:56.115691596Z
-modified_at: 2026-06-07T15:19:14.106754656Z
+modified_at: 2026-06-07T15:19:16.306588666Z
 req_type: Task
 tags:
 - aida:release
@@ -37,3 +37,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Release gate is now met — both trigger specs TASK-615 and STORY-492 are Completed, version still sits at 0.11.0; deliverable is a mechanical `scripts/release.sh minor` (0.11.0→0.12.0) to propagate the EPIC-33 correctness floor to quizdom + consumers (re-confirm cross-platform CI green at tag time).
   created_at: 2026-06-06T08:30:53.604108337Z
   modified_at: 2026-06-06T08:30:53.604108337Z
+- id: 019ea2aa-b252-7453-bcf0-ddabbc85a914
+  author: joe
+  content: 'v0.12.0 cut, tagged, and pushed 2026-06-07 (release.yml built 4 tarballs). Closed manually — the chore: release commit doesn''t carry a (TASK-635) trailer.'
+  created_at: 2026-06-07T15:19:16.306588666Z
+  modified_at: 2026-06-07T15:19:16.306588666Z
