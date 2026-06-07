@@ -11,6 +11,7 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`machinery-glossary.md`](machinery-glossary.md) | One-paragraph definitions of AIDA's orchestration / session / autonomy machinery — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode |
 | [`tag-conventions.md`](tag-conventions.md) | The `aida:<subcommand>` colon-namespaced tag convention, plus the flat behavior/provenance namespace and existing colon namespaces (`batch:`, `lifecycle:`, …) |
 | [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, and parallel-choice vs sequential-step UI |
+| [`autonomous-burndown.md`](autonomous-burndown.md) | Hands-off backlog draining — worktree-isolated fan-out + integrator loop, pickability gate, punt-and-continue, `/aida-burndown` vs the orchestrator drain |
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
 | [`skill-prompt-kinds.md`](skill-prompt-kinds.md) | Classifying `AskUserQuestion` prompts into mechanical vs design-fork kind, and their `--zen` pause behavior |
 | [`substrate-as-bouncer.md`](substrate-as-bouncer.md) | The substrate-as-bouncer principle, detailing the pre-commit gitignored check hook and reviewer PR gates |
