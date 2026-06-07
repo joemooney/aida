@@ -101,12 +101,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   BUILD with the no-daemon pull-triggered design (evaluate cadence on aida pull; cadence→queue, standalone — do NOT couple to EPIC-30). DEFERRED to post-stability per phase. Skip shipping marketing-cadence templates (e.g. refresh-comp-analysis) until the marketing phase; the scheduling primitive is the on-thesis core.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T23:15:28.633295104Z
-modified_at: 2026-06-06T13:53:30.359677291Z
+modified_at: 2026-06-07T06:08:46.970617555Z
 req_type: Story
 tags:
 - advisor
@@ -154,3 +154,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): BUILD with the no-daemon pull-triggered design (evaluate cadence on aida pull; cadence→queue, standalone — do NOT couple to EPIC-30). DEFERRED to post-stability per phase. Skip shipping marketing-cadence templates (e.g. refresh-comp-analysis) until the marketing phase; the scheduling primitive is the on-thesis core.'
   created_at: 2026-06-06T13:53:22.408948534Z
   modified_at: 2026-06-06T13:53:22.408948534Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T06:08:46.970617555Z
+  completion_sha: 10b7b1dd7125a913743e4c1e463d0e74010a496f
