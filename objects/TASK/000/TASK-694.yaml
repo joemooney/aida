@@ -1,0 +1,12 @@
+id: 019ea2fc-ef0f-78a0-9c3c-5c353772c64d
+spec_id: TASK-694
+agreed_id: TASK-694
+title: 'TASK-634 wiring: live WorktreeCreate/WorktreeRemove hooks + aida init scaffold (gated on SPIKE-41)'
+description: 'Follow-up to TASK-634, whose pure-testable core shipped in commit a969702 (worktree_lease.rs: payload {path,branch?} → lease record). This is the DEFERRED live-wiring half: a WorktreeCreate hook that calls aida to register the derived lease (lease_spec_for_create) and a WorktreeRemove hook that releases it (lease_path_for_remove), scaffolded into the ''aida init'' hook bundle. GATED on SPIKE-41 confirming the Claude Code event timing/payload — instrument-don''t-infer. Removes the worktree_lease.rs allow(dead_code) once a caller exists. trace:TASK-634'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T16:49:05.807499637Z
+modified_at: 2026-06-07T16:49:05.807499637Z
+req_type: Task
