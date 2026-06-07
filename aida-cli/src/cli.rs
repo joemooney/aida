@@ -6146,6 +6146,14 @@ pub enum Command {
         // trace:STORY-255 | ai:claude
         #[clap(long)]
         refresh: bool,
+
+        /// Scope the starter memory pack to a subsystem. Memory files
+        /// carrying a `subsystem:` frontmatter tag load only when their
+        /// value matches; untagged memories are universal and always load.
+        /// Omit to load the full pack.
+        // trace:STORY-362 | ai:claude
+        #[clap(long, value_name = "SUBSYSTEM")]
+        focus: Option<String>,
     },
 
     /// Starter-memory-pack drift discovery (`aida memories check`)
