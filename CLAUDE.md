@@ -44,6 +44,7 @@ aida init --no-skills          # Skip .claude/skills/ and .claude/commands/
 aida init --no-hooks           # Skip .claude/hooks/ and git hooks
 aida init --with-memories      # Also write the starter memory pack (opt-in)
 aida init --with-memories --refresh   # Overlay updated pack files, keep your edits
+aida init --with-memories --focus <subsystem>  # Scope the pack to a subsystem (untagged memories = universal, always loaded)
 aida init --force              # Overwrite existing files
 ```
 
@@ -71,6 +72,8 @@ Prerequisites: `aida` on PATH (run `aida-on` first if using the dev build), `gh`
 - **Starter memory pack** (`--with-memories`, opt-in) — the generic discipline memories under `aida-core/templates/memories/` written to `~/.claude/projects/<slug>/memory/`. The pack is **marker-driven**: every memory file carrying `propagation: scaffolding-pack` in frontmatter ships, so the set grows just by tagging new generic memories. Scaffolded files get `originSessionId: aida-scaffold` + a `scaffoldChecksum` (FNV-1a of the body). `aida init --with-memories --refresh` overlays newer versions of files the user has *not* edited (body checksum still matches) and leaves edited or unmarked files alone. `MEMORY.md`'s `<!-- aida:scaffold-pack -->` block is regenerated; user content outside the markers is preserved.
 
 When adding a new generic discipline memory, tag it `propagation: scaffolding-pack` and it joins the pack on the next build — no code change.
+
+**Subsystem-scoped memories (STORY-362).** A memory file may also carry an optional `subsystem: <name>` frontmatter tag. `aida init --with-memories --focus <subsystem>` then loads only universal memories plus those whose `subsystem:` matches (case-insensitive). Backward-compatible: a memory with no `subsystem:` tag is **universal** and always loads, with or without `--focus`. Omitting `--focus` loads the full pack regardless of tags. (Forward-looking for SPIKE-10 subsystem-scoped advisors; the embedded pack is all-universal today.)
 
 ### Daily-use commands
 

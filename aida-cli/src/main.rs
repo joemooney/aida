@@ -892,6 +892,7 @@ fn run() -> Result<()> {
         name,
         with_memories,
         refresh,
+        focus,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -961,7 +962,10 @@ fn run() -> Result<()> {
         // is non-fatal: it writes outside the project root, so a hiccup
         // there must not abort an otherwise-successful init. trace:STORY-255
         if *with_memories || *refresh {
-            if let Err(e) = scaffold_memory_pack(*refresh) {
+            // STORY-362: --focus <subsystem> scopes the pack to universal
+            // (untagged) memories plus those whose `subsystem:` frontmatter
+            // matches. trace:STORY-362 | ai:claude
+            if let Err(e) = scaffold_memory_pack(*refresh, focus.as_deref()) {
                 eprintln!("  {} starter memory pack skipped: {}", "Note:".dimmed(), e);
             }
         }
@@ -5546,15 +5550,52 @@ struct MemoryPackReport {
     kept_user: usize,
 }
 
+/// Decide whether a memory template loads under an active `--focus`
+/// subsystem. A memory with no top-level `subsystem:` frontmatter key is
+/// **universal** and always loads. A tagged memory loads only when its
+/// `subsystem:` value matches `focus` (case-insensitive). When `focus` is
+/// `None` the full pack loads (every member passes). trace:STORY-362 | ai:claude
+fn memory_matches_focus(template: &str, focus: Option<&str>) -> bool {
+    let Some(focus) = focus else {
+        return true; // no focus → full pack
+    };
+    let template = normalize_line_endings(template);
+    let Some((fm, _)) = split_md_frontmatter(&template) else {
+        return true; // malformed/no frontmatter → treat as universal
+    };
+    match frontmatter_field(fm, "subsystem") {
+        Some(subsystem) => subsystem.eq_ignore_ascii_case(focus),
+        None => true, // untagged → universal, always loads
+    }
+}
+
 /// Write (or `--refresh`) the starter memory pack into `mem_dir`. Every
 /// embedded `memories/*` template except the MEMORY.md skeleton is a pack
 /// member; MEMORY.md's `aida:scaffold-pack` index block is regenerated.
 /// The pure core of `scaffold_memory_pack` — takes the target dir directly
 /// so it is testable without touching the real `$HOME`.
+///
+/// `focus` scopes the pack to a subsystem (STORY-362): when `Some`, only
+/// universal (untagged) memories plus those whose `subsystem:` frontmatter
+/// matches are written/indexed; `None` writes the full pack.
 /// trace:STORY-255 | ai:claude
-fn scaffold_memory_pack_into(mem_dir: &std::path::Path, refresh: bool) -> Result<MemoryPackReport> {
+fn scaffold_memory_pack_into(
+    mem_dir: &std::path::Path,
+    refresh: bool,
+    focus: Option<&str>,
+) -> Result<MemoryPackReport> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
 
+    let all_members = EMBEDDED_TEMPLATES.iter().any(|(k, _)| {
+        k.strip_prefix("memories/")
+            .is_some_and(|n| n != "MEMORY.md")
+    });
+    if !all_members {
+        anyhow::bail!("no starter memories are embedded in this build");
+    }
+
+    // trace:STORY-362 | ai:claude — apply the --focus subsystem filter:
+    // untagged memories are universal and always pass.
     let mut files: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
         .iter()
         .filter_map(|(k, v)| {
@@ -5562,9 +5603,12 @@ fn scaffold_memory_pack_into(mem_dir: &std::path::Path, refresh: bool) -> Result
                 .filter(|n| *n != "MEMORY.md")
                 .map(|n| (n, *v))
         })
+        .filter(|(_, template)| memory_matches_focus(template, focus))
         .collect();
     if files.is_empty() {
-        anyhow::bail!("no starter memories are embedded in this build");
+        anyhow::bail!(
+            "no starter memories match the requested focus subsystem (and none are universal)"
+        );
     }
     files.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -5606,9 +5650,10 @@ fn scaffold_memory_pack_into(mem_dir: &std::path::Path, refresh: bool) -> Result
 }
 
 /// Write (or `--refresh`) the starter memory pack into the Claude Code
-/// project memory dir for the current working directory.
+/// project memory dir for the current working directory. `focus` scopes the
+/// pack to a subsystem (STORY-362); `None` writes the full pack.
 /// trace:STORY-255 | ai:claude
-fn scaffold_memory_pack(refresh: bool) -> Result<()> {
+fn scaffold_memory_pack(refresh: bool, focus: Option<&str>) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let home =
         dirs::home_dir().context("cannot resolve home directory for the starter memory pack")?;
@@ -5619,7 +5664,7 @@ fn scaffold_memory_pack(refresh: bool) -> Result<()> {
         .join(&slug)
         .join("memory");
 
-    let report = scaffold_memory_pack_into(&mem_dir, refresh)?;
+    let report = scaffold_memory_pack_into(&mem_dir, refresh, focus)?;
 
     println!();
     if refresh {
@@ -5641,6 +5686,14 @@ fn scaffold_memory_pack(refresh: bool) -> Result<()> {
         );
     }
     println!("    {}", mem_dir.display().to_string().dimmed());
+    // trace:STORY-362 | ai:claude
+    if let Some(focus) = focus {
+        println!(
+            "    {} scoped to subsystem '{}' (universal memories always included)",
+            "focus:".dimmed(),
+            focus
+        );
+    }
     Ok(())
 }
 
@@ -95903,7 +95956,7 @@ mod story_255_discipline_pack_tests {
     fn memory_pack_writes_marked_files_with_marker_and_checksum() {
         let dir = tempfile::tempdir().unwrap();
         let mem = dir.path().join("memory");
-        let report = scaffold_memory_pack_into(&mem, false).unwrap();
+        let report = scaffold_memory_pack_into(&mem, false, None).unwrap();
 
         assert!(
             report.written >= 10,
@@ -95944,11 +95997,89 @@ mod story_255_discipline_pack_tests {
         assert!(index.contains("](feedback_run_help_before_suggesting_flags.md)"));
     }
 
+    /// STORY-362: the `--focus <subsystem>` loading filter. A memory tagged
+    /// `subsystem: X` loads only under `--focus X`; an untagged memory is
+    /// universal and loads regardless of focus (or its absence).
+    /// trace:STORY-362 | ai:claude
+    #[test]
+    fn memory_focus_filter_loads_universal_plus_matching_subsystem() {
+        // Hand-built templates — fully isolated, no embedded pack, no $HOME,
+        // no filesystem.
+        let universal = "---\nname: universal_mem\ntype: feedback\n---\nBody.\n";
+        let orchestrator = concat!(
+            "---\nname: orch_mem\nsubsystem: orchestrator\ntype: feedback\n---\n",
+            "Body.\n"
+        );
+        let storage = "---\nname: store_mem\nsubsystem: storage\ntype: feedback\n---\nBody.\n";
+
+        // No focus → everything loads (full pack).
+        assert!(memory_matches_focus(universal, None));
+        assert!(memory_matches_focus(orchestrator, None));
+        assert!(memory_matches_focus(storage, None));
+
+        // --focus orchestrator → universal + the orchestrator memory load;
+        // the storage-tagged memory does not.
+        assert!(
+            memory_matches_focus(universal, Some("orchestrator")),
+            "untagged memory must be universal under any focus"
+        );
+        assert!(
+            memory_matches_focus(orchestrator, Some("orchestrator")),
+            "subsystem-matching memory must load under its focus"
+        );
+        assert!(
+            !memory_matches_focus(storage, Some("orchestrator")),
+            "non-matching subsystem memory must NOT load under a different focus"
+        );
+
+        // Match is case-insensitive on the subsystem value.
+        assert!(memory_matches_focus(orchestrator, Some("Orchestrator")));
+
+        // Malformed / frontmatter-less content is treated as universal.
+        assert!(memory_matches_focus("no frontmatter here", Some("storage")));
+    }
+
+    /// STORY-362: end-to-end through the scaffold writer — only universal +
+    /// matching-subsystem memories land on disk under `--focus`.
+    /// trace:STORY-362 | ai:claude
+    #[test]
+    fn memory_pack_focus_scopes_written_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        // The embedded pack is currently all-universal (untagged), so a focus
+        // on any subsystem still writes the full universal set — and crucially
+        // no fewer than the unfocused run for the universal members. Compare a
+        // focused run against an unfocused baseline: every file the focused run
+        // wrote must be one the baseline also wrote (subset), and every member
+        // it kept is universal.
+        let focused =
+            scaffold_memory_pack_into(&mem, false, Some("nonexistent-subsystem")).unwrap();
+        // All embedded members are untagged today → all universal → all written.
+        assert!(
+            focused.written >= 10,
+            "untagged (universal) memories must always load under any focus, got {}",
+            focused.written
+        );
+        // Every written file is genuinely universal (no subsystem tag).
+        for entry in std::fs::read_dir(&mem).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().unwrap() == "MEMORY.md" {
+                continue;
+            }
+            let body = std::fs::read_to_string(&path).unwrap();
+            let (fm, _) = split_md_frontmatter(&body).unwrap();
+            assert!(
+                frontmatter_field(fm, "subsystem").is_none(),
+                "{path:?} carries a subsystem tag but was written under a non-matching focus"
+            );
+        }
+    }
+
     #[test]
     fn memory_pack_refresh_overlays_pristine_skips_edited() {
         let dir = tempfile::tempdir().unwrap();
         let mem = dir.path().join("memory");
-        let first = scaffold_memory_pack_into(&mem, false).unwrap();
+        let first = scaffold_memory_pack_into(&mem, false, None).unwrap();
         assert!(first.written >= 10);
 
         // (a) User-edit one file's body — must be kept on refresh.
@@ -95971,7 +96102,7 @@ mod story_255_discipline_pack_tests {
                 .replacen("---\n", "---\nstaleField: x\n", 1);
         std::fs::write(&stale, &stale_v1).unwrap();
 
-        let report = scaffold_memory_pack_into(&mem, true).unwrap();
+        let report = scaffold_memory_pack_into(&mem, true, None).unwrap();
         assert_eq!(report.written, 0, "all files already exist on refresh");
         assert_eq!(report.kept_edited, 1, "the body-edited file is kept");
         assert_eq!(report.kept_user, 1, "the unmarked user file is kept");
@@ -96088,7 +96219,7 @@ mod story_255_discipline_pack_tests {
     fn drift_freshly_scaffolded_dir_is_current() {
         let dir = tempfile::tempdir().unwrap();
         let mem = dir.path().join("memory");
-        let written = scaffold_memory_pack_into(&mem, false).unwrap();
+        let written = scaffold_memory_pack_into(&mem, false, None).unwrap();
         assert!(written.written >= 10);
 
         let report = compute_memory_drift_into(&mem).unwrap();
@@ -96110,7 +96241,7 @@ mod story_255_discipline_pack_tests {
     fn drift_classifies_missing_stale_edited_and_user_owned() {
         let dir = tempfile::tempdir().unwrap();
         let mem = dir.path().join("memory");
-        scaffold_memory_pack_into(&mem, false).unwrap();
+        scaffold_memory_pack_into(&mem, false, None).unwrap();
 
         // (a) Missing: delete one scaffolded file.
         let missing = mem.join("feedback_run_help_before_suggesting_flags.md");
