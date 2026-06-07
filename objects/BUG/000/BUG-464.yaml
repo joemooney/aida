@@ -1,0 +1,19 @@
+id: 019e9fc8-4c74-7543-a341-29b9ce2c6a2f
+spec_id: BUG-464
+agreed_id: BUG-464
+title: aida status miscounts seeded META prompts as 'untriaged drafts' on a fresh init
+description: 'Reproduced on a fresh ''git init && aida init'' (2026-06-06 dogfood): aida status prints ''Inbox: 6 untriaged drafts — clear with /aida-triage'', but the 6 are the seeded META prompts (META-001..006, Draft). They are AI-prompt templates, NOT user-triageable work. A brand-new user is told they have 6 things to triage when they have zero real work; /aida-triage on them is nonsense. BUG-415 sibling: the status ''untriaged drafts'' inbox count includes META (and likely other stateless/seed rows) — it must exclude them the same way ''aida list'' hides META by default. Fix: the inbox/untriaged-drafts count should count only real, triageable requirement rows (exclude META + any pre-seeded stateless types). On a fresh init the inbox should read 0 (or the line should be omitted). trace:BUG-415'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T01:52:44.660430372Z
+modified_at: 2026-06-07T01:52:44.660430372Z
+req_type: Bug
+tags:
+- aida:status
+- first-run
+- from-dogfood-2026-06-06
+- onboarding
+- parent:EPIC-37
+- severity:major
