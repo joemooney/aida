@@ -10,12 +10,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   Build the PURE-TESTABLE CORE now (hook payload {path, branch?} → the lease record to write/clear); DEFER the live WorktreeCreate/WorktreeRemove hook wiring + aida init scaffold until SPIKE-41 confirms the Claude Code event timing/payload. De-risks while honoring the SPIKE-41 gate — don't wire against unverified harness behavior (instrument-don't-infer).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-02T03:17:19.822087542Z
-modified_at: 2026-06-06T15:15:15.027354268Z
+modified_at: 2026-06-07T16:47:56.346385272Z
 req_type: Task
 tags:
 - claude-code-compose
@@ -43,3 +43,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): Build the PURE-TESTABLE CORE now (hook payload {path, branch?} → the lease record to write/clear); DEFER the live WorktreeCreate/WorktreeRemove hook wiring + aida init scaffold until SPIKE-41 confirms the Claude Code event timing/payload. De-risks while honoring the SPIKE-41 gate — don''t wire against unverified harness behavior (instrument-don''t-infer).'
   created_at: 2026-06-06T15:15:07.798682995Z
   modified_at: 2026-06-06T15:15:07.798682995Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T16:47:56.346385272Z
+  completion_sha: a969702540c864b845fead76a2858f08461bc425
