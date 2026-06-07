@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T15:35:34.763436046Z
-modified_at: 2026-06-06T14:13:13.746901917Z
+modified_at: 2026-06-07T03:56:38.267035489Z
 req_type: Story
 tags:
 - advisor-vision
@@ -80,3 +80,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): BUILD (planning is merge-contention-free, independent of drain reliability), GATED on STORY-265''s --plan-only mode landing first. Scope discipline: fan out over the WORKABLE set only (exclude the low-priority tail) to control plan-slop. Recorded blocked-by STORY-265.'
   created_at: 2026-06-06T14:13:04.292569741Z
   modified_at: 2026-06-06T14:13:04.292569741Z
+- id: 019ea039-b9fb-7953-ab5b-35dd1f7b757f
+  author: joe
+  content: '✅ ADVISOR DECISION (2026-06-06, compete-vs-compose): DEFER the heavy in-aida-orchestrator build. This session demonstrated the capability END-TO-END via the HARNESS (Claude Code worktree-isolated agents fanning out + an integrator merge loop on top of aida''s thin primitives: queue, leases, plan-promote, status, questions) — ~50 specs shipped that way. Re-implementing parallel fan-out / integrator inside aida''s ''claude -p'' orchestrator (auto_complete.rs) would duplicate what the harness already does well. Reframe: aida ships the PRIMITIVES; the harness orchestrates. Revisit only if a non-harness consumer needs it. Parked (not ready-to-fanout).'
+  created_at: 2026-06-07T03:56:38.267035489Z
+  modified_at: 2026-06-07T03:56:38.267035489Z
