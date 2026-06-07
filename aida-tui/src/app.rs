@@ -159,6 +159,13 @@ pub struct App {
     /// supervisor's passthrough rendering writes raw bytes; this is only
     /// ever used while a modal owns the screen. trace:STORY-133 STORY-134
     ratatui_term: Option<Terminal<CrosstermBackend<Stdout>>>,
+    /// Cached mission-control snapshot (queue head + open-PR count) for the
+    /// empty-state welcome panel. Fetched lazily on the first empty-shell
+    /// repaint and invalidated to `None` whenever a session ends (so re-
+    /// entering the empty shell re-reads the now-changed queue). Keeping it
+    /// cached avoids the `gh` shell-out firing on every repaint (resize,
+    /// modal close). trace:TASK-255 | ai:claude
+    mission: Option<welcome::MissionData>,
 }
 
 /// State for the status overlay — what `App` carries while [`Mode::Over
@@ -222,6 +229,7 @@ impl App {
             launch_scope: None,
             project_root: PathBuf::new(),
             ratatui_term: None,
+            mission: None,
         }
     }
 
@@ -508,6 +516,10 @@ impl App {
                         // STORY-135: the recoverable tab set just shrank.
                         self.persist_state();
                     }
+                    // TASK-255: a session ending likely changed the queue /
+                    // PR picture — drop the cached mission snapshot so the
+                    // empty-shell repaint below re-reads it fresh.
+                    self.mission = None;
                     // BUG-109: a hosted session ending no longer takes
                     // the TUI with it — the supervisor drops back to the
                     // welcome shell, a persistent home the user leaves
@@ -927,9 +939,24 @@ impl App {
             // Empty shell — no hosted child to blit. Render the welcome
             // panel so a first-time user sees the key vocabulary instead
             // of a blank black screen. trace:BUG-109 | ai:claude
+            //
+            // TASK-255: enrich it into a thin mission-control view — the
+            // role queue head + open-PR count beneath the keys. Fetched
+            // lazily once and cached on `self.mission` so the `gh` leg
+            // doesn't fire on every repaint (resize, focus change, modal
+            // close); invalidated when a session ends.
+            if self.mission.is_none() {
+                self.mission = Some(welcome::fetch_mission());
+            }
             let (cols, rows) = self.term_size;
             let prefix = describe_key_long(self.config.prefix_key);
-            welcome::render(out, cols, rows.saturating_sub(1), &prefix)?;
+            welcome::render(
+                out,
+                cols,
+                rows.saturating_sub(1),
+                &prefix,
+                self.mission.as_ref(),
+            )?;
         }
         self.paint_strip(out)
     }
