@@ -1054,10 +1054,11 @@ fn run() -> Result<()> {
         minor,
         major,
         check,
+        after_pr,
         skip_xplat_check,
     } = &cli.command
     {
-        return handle_release(*patch, *minor, *major, *check, *skip_xplat_check);
+        return handle_release(*patch, *minor, *major, *check, *after_pr, *skip_xplat_check);
     }
 
     // Doctor commands run before storage init — they may need to operate
@@ -61120,6 +61121,7 @@ fn handle_release(
     minor: bool,
     major: bool,
     check: bool,
+    after_pr: Option<u64>,
     skip_xplat_check: bool,
 ) -> Result<()> {
     let bump = resolve_release_bump(patch, minor, major).map_err(|e| anyhow::anyhow!(e))?;
@@ -61171,6 +61173,11 @@ fn handle_release(
                 "⚠".yellow()
             ),
         }
+        if let Some(n) = after_pr {
+            println!(
+                "  after-pr: would wait for PR #{n}'s checks, merge it (--squash --delete-branch), and sync main FIRST"
+            );
+        }
         println!("  steps:   1) aida-store pull  2) scripts/release.sh {bump} (cross-platform gate + tag + push)  3) wait for tarballs  4) upgrade sibling installs");
         println!(
             "  cross-platform gate: {}",
@@ -61184,6 +61191,59 @@ fn handle_release(
         return Ok(());
     }
 
+    // TASK-693: land an in-flight PR before releasing — wait for its checks,
+    // merge it, and sync local main so scripts/release.sh tags a main that
+    // actually includes the merged work. Refuse if the checks don't pass.
+    // trace:STORY-472 | ai:claude
+    if let Some(n) = after_pr {
+        let repo = std::env::current_dir().ok().and_then(|cwd| {
+            find_aida_repo_above(&cwd).or_else(|| {
+                std::env::var("AIDA_DEV_REPO")
+                    .ok()
+                    .map(std::path::PathBuf::from)
+                    .filter(|p| is_aida_repo(p))
+            })
+        });
+
+        println!("{} waiting for PR #{n}'s checks…", "▸".cyan().bold());
+        match std::process::Command::new("gh")
+            .args(build_after_pr_watch_args(n))
+            .status()
+        {
+            Ok(s) if s.success() => println!("  {} PR #{n} checks passed", "✓".green()),
+            Ok(_) => anyhow::bail!(
+                "PR #{n}'s checks did not pass — not merging or releasing. Inspect with `gh pr checks {n}`, or fix + re-run."
+            ),
+            Err(e) => anyhow::bail!("could not run `gh pr checks {n} --watch`: {e}"),
+        }
+
+        println!("{} merging PR #{n}…", "▸".cyan().bold());
+        match std::process::Command::new("gh")
+            .args(build_after_pr_merge_args(n))
+            .status()
+        {
+            Ok(s) if s.success() => println!("  {} PR #{n} merged", "✓".green()),
+            _ => anyhow::bail!(
+                "`gh pr merge {n} --squash --delete-branch` failed — merge it manually, then re-run `aida release` without --after-pr."
+            ),
+        }
+
+        // Sync local main so release.sh tags the merged commit.
+        if let Some(r) = &repo {
+            println!("{} syncing local main…", "▸".cyan().bold());
+            let pull = std::process::Command::new("git")
+                .arg("-C")
+                .arg(r)
+                .args(["pull", "--ff-only"])
+                .status();
+            if !matches!(pull, Ok(s) if s.success()) {
+                anyhow::bail!(
+                    "`git pull --ff-only` failed after merging PR #{n} — sync main manually, then re-run `aida release` without --after-pr."
+                );
+            }
+        }
+    }
+
     if skip_xplat_check {
         // scripts/release.sh / pre-release-check.sh honor this env. trace:STORY-472
         std::env::set_var("AIDA_SKIP_XPLAT_CHECK", "1");
@@ -61191,9 +61251,55 @@ fn handle_release(
     handle_dev_release(bump)
 }
 
+/// TASK-693: argv for blocking on a PR's checks (`gh pr checks <N> --watch
+/// --fail-fast`) — exits 0 once all pass, non-zero the moment one fails.
+/// trace:STORY-472 | ai:claude
+fn build_after_pr_watch_args(pr: u64) -> Vec<String> {
+    vec![
+        "pr".into(),
+        "checks".into(),
+        pr.to_string(),
+        "--watch".into(),
+        "--fail-fast".into(),
+    ]
+}
+
+/// TASK-693: argv to squash-merge a PR and delete its branch
+/// (`gh pr merge <N> --squash --delete-branch`). trace:STORY-472 | ai:claude
+fn build_after_pr_merge_args(pr: u64) -> Vec<String> {
+    vec![
+        "pr".into(),
+        "merge".into(),
+        pr.to_string(),
+        "--squash".into(),
+        "--delete-branch".into(),
+    ]
+}
+
 #[cfg(test)]
 mod release_verb_tests {
-    use super::{preview_next_version, resolve_release_bump};
+    use super::{
+        build_after_pr_merge_args, build_after_pr_watch_args, preview_next_version,
+        resolve_release_bump,
+    };
+
+    #[test]
+    fn after_pr_watch_argv_blocks_and_fails_fast() {
+        // TASK-693: --after-pr blocks on the PR's checks via
+        // `gh pr checks <N> --watch --fail-fast` before merging.
+        assert_eq!(
+            build_after_pr_watch_args(641),
+            vec!["pr", "checks", "641", "--watch", "--fail-fast"]
+        );
+    }
+
+    #[test]
+    fn after_pr_merge_argv_squashes_and_deletes_branch() {
+        assert_eq!(
+            build_after_pr_merge_args(641),
+            vec!["pr", "merge", "641", "--squash", "--delete-branch"]
+        );
+    }
 
     #[test]
     fn resolve_bump_defaults_to_patch() {
