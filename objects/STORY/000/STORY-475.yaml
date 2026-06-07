@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-06-07T06:10:57.194824799Z
+modified_at: 2026-06-07T22:31:12.770939265Z
 req_type: Story
 tags:
 - audit
@@ -66,3 +66,8 @@ comments:
   content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): Remote/auth MCP transport — new network + token-auth + audit surface (security-sensitive); should NOT be implemented by a blind fan-out agent. Keyboard, paired with STORY-474 profiles.'
   created_at: 2026-06-07T06:10:56.049887857Z
   modified_at: 2026-06-07T06:10:56.049887857Z
+- id: 019ea436-2682-7190-9996-fbfe6ddece2d
+  author: joe
+  content: 'Design sketch + threat model filed: docs/plans/2026-06-07-story-475-mcp-transport-sketch.md (Claude, 2026-06-07). NO code — status unchanged, spec stays deferred. Expands Codex''s 2026-05-26 sketch into a full security doc: (1) transport options A-F ranked by attack surface — recommends local-loopback HTTP+bearer (B) as the v1 substrate, SSH tunnel over it (C) as the blessed remote pattern so AIDA owns no crypto/PKI; mTLS (D) and OAuth/DCR (E) deferred; LAN/public bind (F) forbidden. (2) Auth = profile ∩ project-root ∩ token-validity; opaque 256-bit token via --token-env (name not value in argv) or 0600 .aida/ file; write-capable profiles NOT reachable over HTTP in v1. (3) Threat model T1-T10 — worst case named: a networked write transport whose token leaks lets an attacker rewrite the graph that AIDA''s autonomous drains then ACT on (substrate as execution vector); that''s why v1 is read-only. (4) Smallest-safe-slice: read-only + loopback-only + single-token + single-project + audited JSONL. (5) Eleven explicit operator security sign-off items before any code — incl. build-trigger confirmation, read-only-over-HTTP-only acceptance, audit-field/redaction approval, marketplace-checklist re-run, threat-model acceptance. Resolves Codex''s open question: HTTP disabled unless --transport http passed (not config-enabled).'
+  created_at: 2026-06-07T22:31:12.770939265Z
+  modified_at: 2026-06-07T22:31:12.770939265Z
