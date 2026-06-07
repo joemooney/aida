@@ -177,6 +177,48 @@ pub(crate) fn summarize_forecast(rows: &[ForecastRow]) -> ForecastSummary {
     s
 }
 
+// ── STORY-335: accumulation-strategy selector ───────────────────────────────
+//
+// The accumulation shape — how a deferred batch's items are grouped before
+// integration — is orthogonal to the phase-range. Only `per-item` is built; the
+// other two are accepted on the CLI from day one and error cleanly until
+// implemented (the established `--no-human=both` "accept-the-value,
+// error-until-implemented" pattern). trace:STORY-335 | ai:claude
+
+/// How a deferred batch's items are accumulated before integration.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum IntegrateStrategy {
+    /// Branch + PR per item; integrate rebases + merges them in order. The MVP
+    /// and the only implemented strategy today.
+    PerItem,
+    /// All items as commits on one branch; one rebase, one PR. Not built yet.
+    OneBranch,
+    /// Each item builds on the previous; integrate rebases the stack as a unit.
+    /// Not built yet (gated on stacked-branch awareness).
+    Stacked,
+}
+
+/// A clean "not built yet" message for strategies accepted on the CLI but not
+/// yet implemented, or `None` for the supported `per-item` strategy. Lets the
+/// flag accept all three values from day one while refusing the unbuilt ones
+/// with a pointer rather than a silent no-op. trace:STORY-335 | ai:claude
+pub(crate) fn strategy_unsupported_message(strategy: IntegrateStrategy) -> Option<String> {
+    match strategy {
+        IntegrateStrategy::PerItem => None,
+        IntegrateStrategy::OneBranch => Some(
+            "the `one-branch` accumulation strategy isn't built yet — all batch items on one \
+             branch with a single rebase + PR is a follow-up. Use `--strategy per-item` (default)."
+                .to_string(),
+        ),
+        IntegrateStrategy::Stacked => Some(
+            "the `stacked` accumulation strategy isn't built yet — rebasing a stacked branch chain \
+             as a unit is a follow-up (gated on stacked-branch awareness). Use `--strategy \
+             per-item` (default)."
+                .to_string(),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,5 +392,26 @@ mod tests {
         let s = summarize_forecast(&[]);
         assert_eq!(s, ForecastSummary::default());
         assert!(s.conflicting_ids.is_empty());
+    }
+
+    // ── STORY-335 strategy selector ─────────────────────────────────────────
+
+    #[test]
+    fn per_item_strategy_is_supported() {
+        assert!(strategy_unsupported_message(IntegrateStrategy::PerItem).is_none());
+    }
+
+    #[test]
+    fn one_branch_and_stacked_error_cleanly_pointing_at_followup() {
+        // Accepted on the CLI but not built — must refuse with a pointer to the
+        // supported strategy, never silently no-op.
+        let one = strategy_unsupported_message(IntegrateStrategy::OneBranch)
+            .expect("one-branch is unsupported");
+        assert!(one.contains("one-branch"));
+        assert!(one.contains("per-item"));
+        let stacked = strategy_unsupported_message(IntegrateStrategy::Stacked)
+            .expect("stacked is unsupported");
+        assert!(stacked.contains("stacked"));
+        assert!(stacked.contains("per-item"));
     }
 }

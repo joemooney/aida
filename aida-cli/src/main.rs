@@ -83090,11 +83090,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             interval,
             max,
             rebase,
+            strategy,
             user,
         } => {
             let user_id = current_user_id(user.as_deref());
             handle_queue_integrate(
-                storage, &user_id, *dry_run, *watch, *interval, *max, *rebase,
+                storage, &user_id, *dry_run, *watch, *interval, *max, *rebase, *strategy,
             )?;
         }
     }
@@ -88067,7 +88068,14 @@ fn handle_queue_integrate(
     interval: u64,
     max: usize,
     rebase: bool,
+    strategy: integrate::IntegrateStrategy,
 ) -> Result<()> {
+    // STORY-335: only `per-item` is built; refuse `one-branch`/`stacked` cleanly
+    // (with a pointer) before doing any probing or acting. trace:STORY-335
+    if let Some(msg) = integrate::strategy_unsupported_message(strategy) {
+        anyhow::bail!(msg);
+    }
+
     let project_root = find_project_root()?;
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
 
