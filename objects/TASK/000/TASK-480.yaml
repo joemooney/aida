@@ -33,12 +33,12 @@ description: |-
   ## Why high-leverage
 
   The same operators experiencing this pain are exactly the ones who'd benefit from AIDA's positioning as 'substrate that doesn't require trusting the agent.' This enhancement makes the value proposition concrete: 'AIDA's reviewer catches the shortcut Claude would have taken, independently of whether you set rules.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T23:00:19.174364070Z
-modified_at: 2026-06-07T00:32:21.009311692Z
+modified_at: 2026-06-07T00:32:22.374130100Z
 req_type: Task
 tags:
 - aida:review
@@ -63,3 +63,7 @@ comments:
   content: 'PARKED (autonomous churn 2026-06-06): PR-579''s CI failed on pr_ship_environment_tests::ci_startup_timeout_has_configuration_message + an ''untracked files would be overwritten by merge'' git error — a stale-base/branch-specific failure (main is green). The review-detection work itself looks fine; needs a rebase onto main + re-run, OR the test fixture''s stray-file issue resolved. Reopen (remove ''blocked'', re-add ready-to-implement) after rebasing PR-579.'
   created_at: 2026-06-06T20:13:02.331644537Z
   modified_at: 2026-06-06T20:13:02.331644537Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T00:32:22.374130100Z
+  completion_sha: 67be3ece95187d89644d37b4b8369f8b7daa0c2a
