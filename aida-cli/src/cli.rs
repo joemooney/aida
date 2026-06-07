@@ -3860,6 +3860,49 @@ pub enum QueueCommand {
         #[clap(long)]
         user: Option<String>,
     },
+    /// Integrate finished work: serialize the back-end merge phases over every
+    /// spec that's Done with an open PR.
+    ///
+    /// This is the consumer half of a producer/consumer split. Implementers
+    /// (the producers, working in parallel on isolated scopes) finish their
+    /// work, flip a spec to Done, and leave an open PR — they never merge. This
+    /// command (the single, serial consumer) watches for that pair — Done + open
+    /// PR — and drives the remaining phases (reviewer → CI → merge → pull →
+    /// build) on each in turn, ONE AT A TIME. Merging into the default branch is
+    /// a shared, serial resource, so there is exactly one merge authority.
+    ///
+    /// The handoff is the substrate itself: the loop polls for the Done +
+    /// open-PR state, no message bus needed. Each ready spec is driven through
+    /// the same PR-only orchestrator path as `aida queue work <id>
+    /// --auto-complete --from-pr` (implementation shipped outside this loop, so
+    /// the implementer phase is skipped). A spec whose PR is already merged, or
+    /// has no open PR, or whose PR probe is inconclusive (gh missing / auth /
+    /// network) is reported and skipped — never re-driven, never guessed.
+    Integrate {
+        /// Inspect the ready-for-integration set and print what WOULD be driven,
+        /// without merging anything. The safe way to see the loop's decision.
+        #[clap(long)]
+        dry_run: bool,
+        /// Run a single pass over the ready set and exit (the default). Kept as
+        /// an explicit flag for symmetry with --watch.
+        #[clap(long)]
+        once: bool,
+        /// Keep watching: after each pass, sleep --interval seconds and scan
+        /// again, integrating newly-ready specs as producers ship them. Without
+        /// this the command makes a single pass and exits.
+        #[clap(long)]
+        watch: bool,
+        /// Seconds to sleep between passes in --watch mode (default 60).
+        #[clap(long, value_name = "SECS", default_value_t = 60)]
+        interval: u64,
+        /// Cap the number of specs integrated this run (across all passes). 0 =
+        /// no cap. A guardrail for a first cautious run.
+        #[clap(long, value_name = "N", default_value_t = 0)]
+        max: usize,
+        /// User ID (defaults to AIDA_USER or system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
 }
 
 /// `aida questions` — the async decision inbox. The advisor distills a fork
