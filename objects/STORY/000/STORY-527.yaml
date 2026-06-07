@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T20:01:37.775126021Z
-modified_at: 2026-06-07T22:42:10.125431250Z
+modified_at: 2026-06-07T22:42:11.364396499Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -48,3 +48,8 @@ comments:
   content: 'Design sketch landed: docs/plans/2026-06-07-story-527-aida-burndown-sketch.md. Vehicle = SKILL driving Agent(worktree) fan-out, NOT a compiled burndown.js Workflow (burndown is dynamic-width + data-terminated; saved-Workflow lane fits fixed-topology like panel-review, not this). aida owns the deterministic half via ONE new read-only verb ''aida burndown plan --json'' = selector (--batch/--tag/--status/--queue/ad-hoc, default=active-role ready backlog) funneled through a pickability gate (ready AND unblocked-via graph --blocked-by AND bounded). Bounded heuristic (slice 1, conservative): has ## Acceptance AND no fork tag; false-park cheap, false-go costs a stalled subagent. Skill drives wave loop: fan out N worktree-isolated implementers (1 bounded spec each -> PR), integrator merges greens + reconciles + re-resolves selector + relaunches; punt-and-continue (one blocker parks ONE spec). Positioned as the RECOMMENDED drain, NOT competing with orchestrator drain (EPIC-33 hardened in parallel). SVS: ship CLI verb+gate+pure tests first, then the skill. Needs sign-off on vehicle, verb name, bounded heuristic, slice order. Status unchanged.'
   created_at: 2026-06-07T22:31:23.488107696Z
   modified_at: 2026-06-07T22:31:23.488107696Z
+- id: 019ea440-3324-7663-b8ef-06a595963a8d
+  author: joe
+  content: Design SKETCH landed (docs/plans/ + this comment thread) for operator review — the story remains OPEN for implementation. The commit's (SPEC-ID) trailer auto-bumped it; re-opened with --force (sketch is a proposal, not the build).
+  created_at: 2026-06-07T22:42:11.364396499Z
+  modified_at: 2026-06-07T22:42:11.364396499Z
