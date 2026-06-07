@@ -79,6 +79,10 @@ tags:
 - integrate-pass
 - rebase
 - strategy-selector
+relationships:
+- rel_type: Parent
+  target_id: 019ea285-a328-7721-8dc4-45d72995e185
+  created_at: 2026-06-07T14:38:54.911440639Z
 comments:
 - id: 019e7c58-0ed0-7750-9b26-ae3c6c04cbfa
   author: joe
