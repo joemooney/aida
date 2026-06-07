@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T20:10:42.752618564Z
-modified_at: 2026-06-07T20:22:31.646844187Z
+modified_at: 2026-06-07T21:50:48.233797756Z
 req_type: Task
 tags:
 - from-spike:SPIKE-8
@@ -20,3 +20,9 @@ relationships:
   target_id: 019e34c6-0d76-7020-8d71-d7426ad092f6
   created_at: 2026-06-07T20:11:19.566681255Z
   created_by: joe
+comments:
+- id: 019ea411-27a9-74d1-8b7c-2696e956265d
+  author: joe
+  content: Commit efbea4005 references this requirement
+  created_at: 2026-06-07T21:50:48.233797756Z
+  modified_at: 2026-06-07T21:50:48.233797756Z
