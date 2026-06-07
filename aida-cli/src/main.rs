@@ -30629,6 +30629,185 @@ fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
+/// TASK-99: count how many commits the local `base_ref` is BEHIND
+/// `origin/main` — i.e. commits on origin that the base hasn't yet
+/// picked up. Returns `None` when `origin/main` (or the base ref)
+/// doesn't resolve — fresh clone, offline, detached, etc. — so the
+/// caller stays silent rather than warn on missing data. Best-effort:
+/// any git failure → `None`. trace:TASK-99 | ai:claude
+fn commits_behind_origin_main(repo: &std::path::Path, base_ref: &str) -> Option<u32> {
+    let rev_parse = |refname: &str| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["rev-parse", "--verify", "--quiet", refname])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    // Only meaningful against the remote-tracking ref. If `origin/main`
+    // isn't present we have nothing authoritative to compare against.
+    rev_parse("origin/main")?;
+    rev_parse(base_ref)?;
+    let range = format!("{}..origin/main", base_ref);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// TASK-99: pure decision — given how many commits the new worktree's
+/// base is behind `origin/<branch>`, produce the warning line (or
+/// `None` when the base is current). Side-effect-free so the
+/// behind-count → message mapping is unit-testable in isolation, no
+/// git/CWD required. trace:TASK-99 | ai:claude
+fn behind_origin_warning(behind: u32, branch: &str) -> Option<String> {
+    if behind == 0 {
+        return None;
+    }
+    Some(format!(
+        "worktree base is {} commit{} behind origin/{} — run `aida rebase` to refresh, or your PR may land stale",
+        behind,
+        if behind == 1 { "" } else { "s" },
+        branch
+    ))
+}
+
+#[cfg(test)]
+mod task_99_behind_origin_tests {
+    use super::*;
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn zero_behind_is_silent() {
+        assert_eq!(behind_origin_warning(0, "main"), None);
+    }
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn one_behind_is_singular() {
+        let msg = behind_origin_warning(1, "main").expect("warns when behind");
+        assert!(msg.contains("1 commit behind origin/main"), "{msg}");
+        assert!(!msg.contains("commits"), "singular form expected: {msg}");
+        assert!(msg.contains("aida rebase"), "points at rebase: {msg}");
+    }
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn many_behind_is_plural() {
+        let msg = behind_origin_warning(5, "main").expect("warns when behind");
+        assert!(msg.contains("5 commits behind origin/main"), "{msg}");
+    }
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn names_the_supplied_branch() {
+        let msg = behind_origin_warning(2, "develop").expect("warns when behind");
+        assert!(msg.contains("origin/develop"), "{msg}");
+    }
+
+    /// Fully isolated: own tempdir, never touches the shared CWD or repo.
+    /// `origin/main` is absent in a bare local init, so the behind-count
+    /// helper returns `None` (stay silent on missing remote-tracking data)
+    /// rather than erroring or warning spuriously. trace:TASK-99 | ai:claude
+    #[test]
+    fn no_origin_main_is_silent() {
+        fn git(repo: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+                .expect("git on PATH");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "--initial-branch=main", "--quiet"]);
+        git(repo, &["config", "user.email", "t@example.com"]);
+        git(repo, &["config", "user.name", "T"]);
+        std::fs::write(repo.join("f.txt"), "hi").unwrap();
+        git(repo, &["add", "f.txt"]);
+        git(repo, &["commit", "-m", "init", "--quiet"]);
+        // No remote, so no origin/main → helper stays silent.
+        assert_eq!(commits_behind_origin_main(repo, "main"), None);
+    }
+
+    /// Fully isolated: a local clone whose `main` is N commits behind its
+    /// origin counts exactly N behind. Own tempdir; no shared state.
+    /// trace:TASK-99 | ai:claude
+    #[test]
+    fn counts_behind_against_origin_main() {
+        fn git(repo: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+                .expect("git on PATH");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let origin = tmp.path().join("origin");
+        let clone = tmp.path().join("clone");
+        std::fs::create_dir_all(&origin).unwrap();
+
+        git(&origin, &["init", "--initial-branch=main", "--quiet"]);
+        git(&origin, &["config", "user.email", "t@example.com"]);
+        git(&origin, &["config", "user.name", "T"]);
+        std::fs::write(origin.join("f.txt"), "0").unwrap();
+        git(&origin, &["add", "f.txt"]);
+        git(&origin, &["commit", "-m", "c0", "--quiet"]);
+
+        // Clone — clone's main now matches origin/main (0 behind).
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "--quiet",
+                origin.to_str().unwrap(),
+                clone.to_str().unwrap(),
+            ],
+        );
+        git(&clone, &["config", "user.email", "t@example.com"]);
+        git(&clone, &["config", "user.name", "T"]);
+        assert_eq!(commits_behind_origin_main(&clone, "main"), Some(0));
+
+        // Advance origin by 2 commits, fetch into the clone WITHOUT merging.
+        for i in 1..=2 {
+            std::fs::write(origin.join("f.txt"), i.to_string()).unwrap();
+            git(&origin, &["add", "f.txt"]);
+            git(&origin, &["commit", "-m", &format!("c{i}"), "--quiet"]);
+        }
+        git(&clone, &["fetch", "--quiet", "origin"]);
+        // Clone's local main is now 2 behind origin/main.
+        assert_eq!(commits_behind_origin_main(&clone, "main"), Some(2));
+        // And the decision fn turns that into a plural warning.
+        let behind = commits_behind_origin_main(&clone, "main").unwrap();
+        assert!(behind_origin_warning(behind, "main")
+            .unwrap()
+            .contains("2 commits behind"));
+    }
+}
+
 /// STORY-106: best-effort emit the "queue empty for this role" workflow
 /// hint after a successful `queue done` (or `edit --status completed` on
 /// a queue-tracked spec). Detects role+scope from the session env / lease,
@@ -80744,6 +80923,24 @@ fn handle_queue_work(
                 plan.scope
             )
         })?;
+
+    // TASK-99: warn (don't auto-pull) when the base the new worktree forked
+    // from is behind origin/main. Closes the visibility half of the
+    // 2026-05-13 stale-base pain cheaply: the operator sees the drift at
+    // pickup and can `aida rebase` before the session accumulates work on a
+    // stale base. We deliberately do NOT auto-pull here — that risks
+    // surprising the worktree; the orchestrator drain (fresh main per-phase)
+    // and the rebase verb own divergence handling. Best-effort + silent on
+    // missing data (no origin/main → fresh clone / offline).
+    // trace:TASK-99 | ai:claude
+    {
+        let base_ref = resolved_base.as_deref().unwrap_or("main");
+        if let Some(behind) = commits_behind_origin_main(&project_root, base_ref) {
+            if let Some(msg) = behind_origin_warning(behind, "main") {
+                eprintln!("  {} {}", "⚠".yellow().bold(), msg.yellow());
+            }
+        }
+    }
 
     // STORY-248: register the stacked-branch entry in `.aida/stacks.json`
     // so `aida pull --auto`'s cascade can find it when the parent merges.
