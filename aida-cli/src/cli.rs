@@ -182,6 +182,31 @@ pub enum TraceCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// CI trace-COVERAGE check: walk a diff and report which changed source
+    /// hunks carry the required code-to-spec provenance (an inline trace
+    /// comment OR a live commit `(SPEC-ID)` trailer), per the deterministic
+    /// coverage definition + exemptions (tests / generated / docs / config /
+    /// vendored / pure-deletion / fmt-only / trivial). Distinct from `gate`,
+    /// which validates the trailer spec-ids; this checks that the changed CODE
+    /// is traced. Report-only by default (CI succeeds); `--block` fails CI on
+    /// any uncovered coverable hunk.
+    Coverage {
+        /// Git revision range to scan (e.g. `origin/main..HEAD`). Defaults to
+        /// `<default-branch>..HEAD` (the commits this branch adds), falling
+        /// back to `HEAD~20..HEAD` when no default branch resolves.
+        #[clap(long)]
+        range: Option<String>,
+
+        /// Emit machine-readable JSON instead of human text.
+        #[clap(long)]
+        json: bool,
+
+        /// Fail (exit non-zero) when any coverable changed hunk is uncovered.
+        /// Default is report-only: the report prints but CI succeeds.
+        #[clap(long)]
+        block: bool,
+    },
 }
 
 /// Commands for generating reports
