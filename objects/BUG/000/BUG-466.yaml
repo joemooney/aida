@@ -3,10 +3,14 @@ spec_id: BUG-466
 agreed_id: BUG-466
 title: 'Windows: add_pending_brief stores OS-native path separators → cross-platform CI red'
 description: 'task_492_brief_tests::pending_brief_sentinel_add_clear_lifecycle fails on windows-latest: add_pending_brief() used Path::display().to_string() which emits backslashes on Windows, so the project-relative key was ''.aida\\agent-briefs\\...'' and the assertion entries.iter().all(|e| e.starts_with(".aida/agent-briefs/")) failed. This reddened the nightly cross-platform workflow 3 consecutive runs (2026-06-04/05/06), blocking the v0.12.0 release gate. Fix: normalize the relative key to forward slashes via path components join. macOS + Linux unaffected (native separator is already /).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T08:14:52.609923860Z
-modified_at: 2026-06-07T08:14:52.609923860Z
+modified_at: 2026-06-07T08:25:30.543007379Z
 req_type: Bug
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T08:25:30.543007379Z
+  completion_sha: d1dd57b278024e3e7c7592d80d80aab535fa9c7e
