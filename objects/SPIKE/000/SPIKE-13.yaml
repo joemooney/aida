@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:54:49.466065320Z
-modified_at: 2026-06-07T21:39:41.547779093Z
+modified_at: 2026-06-07T21:39:57.365975119Z
 req_type: Spike
 tags:
 - advisor-discipline
@@ -53,3 +53,8 @@ comments:
   content: 'SPIKE-13 conclusion (report: docs/spikes/2026-06-07-spike-13-budget-aware-dispatch.md). VERDICT: recommend the portable FUSED Path 2+3+4 (operator-supplied hints + observed-availability inference + heartbeat paused-state); DEFER Path 1 (per-provider budget APIs) indefinitely as non-portable/brittle/pre-evidence. Key insight: dispatch needs an availability STATE BIT + timestamp (''unavailable since T, ~back T''''), not a token-budget integration — budget/rate-limit/manual pauses all collapse to one `paused` record on the EPIC-31 registry, extending STORY-435 heartbeat. Brief-time guard WARNS (heuristic), never refuses (per substrate-as-bouncer: hard gates are for invariants). BUILD STILL GATED: we have 2 budget-pause observations; spec self-gates at >=3-5, and the operator''s 2026-06-06 disposition said KEEP PARKED/recurrence-triggered. So this spike de-risks the design and files STORY-528 (draft, recurrence-gated) ready to pull at event #3 — no build now. Manual discipline (feedback_multi_agent_budget_dispatching) already covers the gap meanwhile. No code change — report doc only.'
   created_at: 2026-06-07T21:39:41.547779093Z
   modified_at: 2026-06-07T21:39:41.547779093Z
+- id: 019ea407-3935-7881-a36d-94e92bcd9363
+  author: joe
+  content: Commit fd2bd4d9d references this requirement
+  created_at: 2026-06-07T21:39:57.365975119Z
+  modified_at: 2026-06-07T21:39:57.365975119Z
