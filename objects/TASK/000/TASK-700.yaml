@@ -1,0 +1,12 @@
+id: 019ea3c9-89a9-7811-941e-5f1a2e0ac07a
+spec_id: TASK-700
+agreed_id: TASK-700
+title: 'aida questions sweep: add --dry-run (default preview) before it writes DecisionRequests'
+description: 'STORY-523 (#655) shipped ''aida questions sweep'' which WRITES DecisionRequests directly on every invocation (only a ''scope'' arg, no preview gate). A coarse text-keyword heuristic (design fork / ambiguous / unclear / needs human / operator decision needed) that mutates specs with no preview risks spamming the decision inbox with false positives. Fix: make --dry-run the DEFAULT (print which specs WOULD get a DecisionRequest + the formulated question, no writes); require --apply (or --write) to actually attach. Mirrors the integrate --dry-run / archive --dry-run convention. Filed post-hoc: STORY-523 was briefed draft-for-review but was merged directly; the heuristic + contract use are sound (5 tests, consumes existing DecisionRequest contract, skips open-request + low-priority + archived specs) — this preview gate is the one substantive gap. trace:STORY-523'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T20:32:34.729073157Z
+modified_at: 2026-06-07T20:32:34.729073157Z
+req_type: Task
