@@ -106,3 +106,6 @@ docs/writeups/
 # `/aida-plan` over queue items; promote to docs/plans/<name>.md when adopted.
 # Gitignored so they don't linger untracked and abort a later PR's pull. trace:TASK-383
 docs/plans/_draft/
+
+# Rendered/shareable artifacts live in joemooney/artifacts, not the code repo.
+*.pdf
