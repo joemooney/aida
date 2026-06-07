@@ -83089,10 +83089,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             watch,
             interval,
             max,
+            rebase,
             user,
         } => {
             let user_id = current_user_id(user.as_deref());
-            handle_queue_integrate(storage, &user_id, *dry_run, *watch, *interval, *max)?;
+            handle_queue_integrate(
+                storage, &user_id, *dry_run, *watch, *interval, *max, *rebase,
+            )?;
         }
     }
     Ok(())
@@ -88063,6 +88066,7 @@ fn handle_queue_integrate(
     watch: bool,
     interval: u64,
     max: usize,
+    rebase: bool,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
@@ -88079,9 +88083,11 @@ fn handle_queue_integrate(
         // drive path will. trace:STORY-520 | ai:claude
         let store = storage.load()?;
         let mut candidates: Vec<integrate::IntegrationCandidate> = Vec::new();
-        // STORY-335: keep each candidate's PR branch so the dry-run forecast can
-        // probe a rebase-onto-main conflict per ready member. trace:STORY-335
+        // STORY-335: keep each candidate's PR branch (for the dry-run forecast)
+        // and PR number (for the --rebase step) per ready member. trace:STORY-335
         let mut branches: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::new();
+        let mut pr_numbers: std::collections::HashMap<String, Option<u32>> =
             std::collections::HashMap::new();
         for req in &store.requirements {
             if req.status != RequirementStatus::Done {
@@ -88102,6 +88108,7 @@ fn handle_queue_integrate(
             );
             let (facts, branch, pr) = probe_resume_facts(&project_root, storage, &id, None);
             branches.insert(id.clone(), branch);
+            pr_numbers.insert(id.clone(), pr);
             candidates.push(integrate::IntegrationCandidate {
                 id,
                 is_done: true,
@@ -88243,14 +88250,75 @@ fn handle_queue_integrate(
                 return Ok(());
             }
             if dry_run {
+                let rebase_note = if rebase { " (would rebase first)" } else { "" };
                 println!(
-                    "  {} [dry-run] would drive `{}` via `aida queue work {} --auto-complete --from-pr`",
+                    "  {} [dry-run] would drive `{}` via `aida queue work {} --auto-complete --from-pr`{}",
                     "→".dimmed(),
                     id,
-                    id
+                    id,
+                    rebase_note
                 );
                 continue;
             }
+
+            // STORY-335: rebase this member's PR branch onto current main before
+            // merging it. A deferred batch cuts every branch from the same stale
+            // main, so without this they would merge un-rebased. Composes the
+            // existing `aida pr rebase <N> --no-smoke` primitive (temp-worktree
+            // rebase + force-push-with-lease). A rebase conflict/failure skips
+            // this member and continues — punt-and-continue, like the resilient
+            // drain; the slice-1 --dry-run forecast previews these. The local
+            // smoke is skipped because the --from-pr drive below runs CI.
+            // trace:STORY-335 | ai:claude
+            if rebase {
+                match pr_numbers.get(id).and_then(|p| *p) {
+                    Some(pr) => {
+                        println!(
+                            "{} rebasing `{}` (PR #{}) onto current main…",
+                            "↻".cyan(),
+                            id,
+                            pr
+                        );
+                        let rb = std::process::Command::new(&aida)
+                            .current_dir(&project_root)
+                            .args(build_integrate_rebase_args(pr))
+                            .status();
+                        match rb {
+                            Ok(s) if s.success() => {
+                                println!("  {} `{}` rebased onto main", "✓".green(), id);
+                            }
+                            Ok(_) => {
+                                println!(
+                                    "  {} `{}` rebase failed (conflict?) — skipping; resolve with `aida pr rebase {}` then re-run",
+                                    "⚠".yellow(),
+                                    id,
+                                    pr
+                                );
+                                continue;
+                            }
+                            Err(e) => {
+                                println!(
+                                    "  {} `{}` rebase could not run ({e}) — skipping",
+                                    "⚠".yellow(),
+                                    id
+                                );
+                                continue;
+                            }
+                        }
+                    }
+                    None => {
+                        // Defensive: ready members have an open PR, so a number
+                        // should resolve. If it somehow doesn't, integrate as-is
+                        // rather than skip — the --from-pr drive still gates on CI.
+                        println!(
+                            "  {} `{}` — --rebase set but no PR number resolved; integrating without rebase",
+                            "·".dimmed(),
+                            id
+                        );
+                    }
+                }
+            }
+
             println!(
                 "{} integrating `{}` (reviewer → CI → merge → pull → build)…",
                 "↩".cyan().bold(),
@@ -91076,8 +91144,8 @@ mod read_verdict_file_tests {
 #[cfg(test)]
 mod real_phase_driver_wiring_tests {
     use super::{
-        build_auto_punt_args, build_phase3_auto_rebase_args, find_orchestrated_lease,
-        RealPhaseDriver,
+        build_auto_punt_args, build_integrate_rebase_args, build_phase3_auto_rebase_args,
+        find_orchestrated_lease, RealPhaseDriver,
     };
 
     /// Mint a session lease + its manifest under `<root>/.aida/sessions/`,
@@ -91136,6 +91204,18 @@ mod real_phase_driver_wiring_tests {
         assert_eq!(
             build_phase3_auto_rebase_args(193),
             vec!["pr", "rebase", "193", "--no-smoke"],
+        );
+    }
+
+    #[test]
+    fn integrate_rebase_argv_is_pr_rebase_no_smoke() {
+        // STORY-335: `aida queue integrate --rebase` rebases each member's PR
+        // branch onto current main via exactly `aida pr rebase <N> --no-smoke`
+        // before driving its --from-pr merge. --no-smoke is load-bearing — the
+        // subsequent --from-pr drive runs CI, so a local smoke would be wasted.
+        assert_eq!(
+            build_integrate_rebase_args(641),
+            vec!["pr", "rebase", "641", "--no-smoke"],
         );
     }
 
@@ -91851,6 +91931,21 @@ fn build_implementer_phase_args(
 /// `pr rebase <N> --no-smoke` contract) is unit-testable without spawning.
 // trace:TASK-262 | ai:claude
 fn build_phase3_auto_rebase_args(pr_number: u64) -> Vec<String> {
+    vec![
+        "pr".into(),
+        "rebase".into(),
+        pr_number.to_string(),
+        "--no-smoke".into(),
+    ]
+}
+
+/// STORY-335: the argv `aida queue integrate --rebase` hands to the `aida`
+/// subprocess to rebase a ready member's PR branch onto current main before
+/// merging it. Mirrors the phase-3 auto-rebase (`pr rebase <N> --no-smoke`):
+/// the local smoke is skipped because the subsequent `--from-pr` drive runs CI.
+/// Factored out so the subprocess contract is unit-testable without spawning.
+/// trace:STORY-335 | ai:claude
+fn build_integrate_rebase_args(pr_number: u32) -> Vec<String> {
     vec![
         "pr".into(),
         "rebase".into(),

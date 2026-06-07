@@ -3899,6 +3899,14 @@ pub enum QueueCommand {
         /// no cap. A guardrail for a first cautious run.
         #[clap(long, value_name = "N", default_value_t = 0)]
         max: usize,
+        // trace:STORY-335 | ai:claude
+        /// Rebase each member's PR branch onto current main before merging it.
+        /// A deferred batch cuts every branch from the same stale main, so
+        /// without this they merge un-rebased. Opt-in: composes `pr rebase`
+        /// (force-push-with-lease); a rebase conflict skips that member and
+        /// continues. Preview with --dry-run first.
+        #[clap(long)]
+        rebase: bool,
         /// User ID (defaults to AIDA_USER or system user).
         #[clap(long)]
         user: Option<String>,
