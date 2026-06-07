@@ -14,25 +14,24 @@ to catch integration failures that unit tests around `tool_descriptors()` miss:
 - MCP writes are visible to local CLI reads
 - coordination tools round-trip through `.aida/` files
 
-The suite is staged so it can land while still-open bugs are in flight:
+The suite runs the full roundtrip by default:
 
 1. `initialize`, `tools/list descriptors`, and the CLI-to-MCP read direction
-   pass today — they validate the TASK-440 outputSchema closure, basic resource
-   access, MCP error envelopes, and confirm the MCP server can read what the
-   local CLI wrote.
+   validate the TASK-440 outputSchema closure, basic resource access, MCP error
+   envelopes, and confirm the MCP server can read what the local CLI wrote.
 
-2. `--require-agent-contract` validates the field names documented for external
+2. The MCP-write -> CLI-read direction and the coordination-tool round trips run
+   by default. These were staged behind a gate while BUG-310 (MCP writes
+   reporting success without persisting to the canonical store) was in flight;
+   BUG-310 has shipped, so the full roundtrip is the default gate now (TASK-453).
+
+3. `--require-agent-contract` validates the field names documented for external
    agents in `docs/agents/cross-agent-onboarding.md`. Keep this gated while MCP
    docs and descriptors are converging.
 
-3. The remaining tests exercise the MCP-write -> CLI-read direction and the
-   coordination-tool round trips. They are gated behind
-   `--require-mcp-write-roundtrip` so the default smoke path can land before
-   every deployment environment is ready to treat MCP writes as required.
-   Enable this gate in CI once the MCP server is the supported Codex path.
-
 trace:TASK-451 | ai:codex
 trace:BUG-310 | ai:codex
+trace:TASK-453 | ai:claude
 trace:TASK-549 | ai:antigravity
 """
 
