@@ -135,7 +135,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T01:59:46.867277094Z
-modified_at: 2026-06-06T13:45:06.699383114Z
+modified_at: 2026-06-07T07:35:08.494550268Z
 req_type: Epic
 tags:
 - advisor-worker-pattern
@@ -223,3 +223,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): DECOMPOSE into the 5 named child stories (treat in-flight PR-497 as a partial slice — do NOT trailer the EPIC on its merge). Worker mechanism: build the MINIMAL long-running loop + graceful stop + crash-recovery state file; DEFER the Unix-socket control plane and the new REQUEST spec-type until a real need appears (no daemon-grade infra yet).'
   created_at: 2026-06-06T13:44:59.111310050Z
   modified_at: 2026-06-06T13:44:59.111310050Z
+- id: 019ea101-c5ce-7eb1-b2a0-3517587be905
+  author: joe
+  content: '✅ COMPLETE (2026-06-07): v1 drain-loop + systemd unit shipped (#497). Unix-socket control plane + REQUEST spec-type DEFERRED — the harness delivers persistent autonomous execution (compose-via-harness; operator decision 2026-06-07).'
+  created_at: 2026-06-07T07:35:08.494550268Z
+  modified_at: 2026-06-07T07:35:08.494550268Z
