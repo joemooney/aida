@@ -18,6 +18,7 @@ mod drain_resume;
 mod drain_state;
 mod effort_calibration;
 mod exit_signal;
+mod external_import_bleed;
 mod findings;
 mod forge;
 mod global_queue;
@@ -23054,6 +23055,45 @@ fn collect_doctor_findings(
         }
     };
 
+    // TASK-696: an ANCESTOR CLAUDE.md / CLAUDE.local.md / AGENTS.md whose
+    // @-imports resolve OUTSIDE this project bleeds into every child project —
+    // it pollutes the child's context AND trips Claude Code's "Allow external
+    // CLAUDE.md file imports?" prompt on launch. The classic cause is an
+    // accidental `aida init` in a parent-of-projects (TASK-686 now prevents new
+    // ones; this detects existing ones). Read-only finding — removing a stray
+    // ancestor file is a follow-up heal. trace:TASK-696 | ai:claude
+    for ancestor in project_root.ancestors().skip(1) {
+        for fname in external_import_bleed::ANCESTOR_INSTRUCTION_FILES {
+            let file = ancestor.join(fname);
+            let Ok(content) = std::fs::read_to_string(&file) else {
+                continue;
+            };
+            let escaping: Vec<String> = external_import_bleed::parse_at_imports(&content)
+                .into_iter()
+                .filter(|imp| {
+                    external_import_bleed::import_escapes_project(ancestor, imp, project_root)
+                })
+                .collect();
+            if !escaping.is_empty() {
+                push(DoctorFinding {
+                    category: "external-import-bleed".to_string(),
+                    id: file.display().to_string(),
+                    summary: format!(
+                        "ancestor {} has {} @-import(s) resolving outside this project ({}) — it bleeds into every child + trips Claude Code's external-import prompt",
+                        file.display(),
+                        escaping.len(),
+                        escaping.join(", ")
+                    ),
+                    action: format!(
+                        "review {} — if it's a stray scaffold (e.g. an accidental `aida init` in a parent-of-projects), remove the stray ancestor instruction file",
+                        file.display()
+                    ),
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+
     let cache_path =
         aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
     let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
@@ -23393,6 +23433,13 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         | "completed-no-commit"
         | "uncorroborated-completed"
         | "integrity" => "completed-without-commit",
+        // TASK-696: ancestor CLAUDE.md/AGENTS.md @-imports resolving outside the
+        // project (external-import bleed). trace:TASK-696 | ai:claude
+        "external-import-bleed"
+        | "external-imports"
+        | "ancestor-claude"
+        | "ancestor-bleed"
+        | "bleed" => "external-import-bleed",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
