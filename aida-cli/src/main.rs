@@ -36,6 +36,8 @@ mod prompts;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
 mod queue_recover;
+// trace:STORY-452 | ai:claude — inferred recent-remote-agent-activity for `aida status`.
+mod remote_activity;
 mod reviewer_summary;
 mod rules_sync;
 // trace:STORY-262 | ai:claude
@@ -32911,6 +32913,149 @@ fn collect_recently_merged_prs(
     let mut rows = parse_recently_merged_prs(&String::from_utf8_lossy(&out.stdout));
     rows.truncate(limit);
     rows
+}
+
+/// STORY-452: read the tip commit of each remote-tracking branch under
+/// `origin/*` into `RemoteCommit`s for the remote-activity inference. One
+/// `git for-each-ref` call, no per-branch git invocations. Records use the
+/// short branch name (`origin/bug-250` → `bug-250`). Empty when git is
+/// unavailable or there are no remote branches. trace:STORY-452 | ai:claude
+fn collect_remote_branch_commits(
+    project_root: &std::path::Path,
+) -> Vec<remote_activity::RemoteCommit> {
+    // Tab-delimited: <short-name>\t<committerdate-iso8601-strict>\t<subject>.
+    let out = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args([
+            "for-each-ref",
+            "--format=%(refname:short)\t%(committerdate:iso8601-strict)\t%(subject)",
+            "refs/remotes/origin",
+        ])
+        .output();
+    let Ok(out) = out else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    parse_remote_branch_commits(&stdout)
+}
+
+/// STORY-452: parse the tab-delimited `git for-each-ref` output into
+/// `RemoteCommit`s. Pure — unit-tested without git. `origin/HEAD` (a symbolic
+/// pointer, not a real branch) is skipped. trace:STORY-452 | ai:claude
+fn parse_remote_branch_commits(stdout: &str) -> Vec<remote_activity::RemoteCommit> {
+    let mut commits = Vec::new();
+    for line in stdout.lines() {
+        let mut parts = line.splitn(3, '\t');
+        let Some(refname) = parts.next() else {
+            continue;
+        };
+        // `git for-each-ref ... refs/remotes/origin` yields `origin/<branch>`.
+        let branch = refname.strip_prefix("origin/").unwrap_or(refname);
+        if branch.is_empty() || branch == "HEAD" {
+            continue;
+        }
+        let when = parts
+            .next()
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim()).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc));
+        let subject = parts.next().unwrap_or("").to_string();
+        if subject.trim().is_empty() {
+            continue;
+        }
+        commits.push(remote_activity::RemoteCommit {
+            branch: branch.to_string(),
+            subject,
+            when,
+        });
+    }
+    commits
+}
+
+/// STORY-452: `aida status` "Recent remote activity" section. Infers cloud /
+/// cross-machine agent work from `[AI:...]` commit trailers on remote branches
+/// that have NO local session lease, since those agents never appear in the
+/// local registry. Read-only, lossy-by-design, and silent when there is no
+/// remote signal (or git is unavailable). trace:STORY-452 | ai:claude
+fn print_status_remote_activity_section(project_root: &std::path::Path, limit: usize) {
+    let commits = collect_remote_branch_commits(project_root);
+    if commits.is_empty() {
+        return;
+    }
+    let lease_branches: Vec<String> = list_leases(project_root)
+        .into_iter()
+        .map(|l| l.branch)
+        .filter(|b| !b.is_empty())
+        .collect();
+    let rows = remote_activity::infer_remote_activity(&commits, &lease_branches, limit);
+    if rows.is_empty() {
+        return;
+    }
+    println!("{}", "─── Recent remote activity (inferred) ───".bold());
+    for row in &rows {
+        let subject = truncate_for_width(&row.subject, 52);
+        let when = row.when.map(humanize_relative).unwrap_or_default();
+        let spec = row.spec_id.as_deref().unwrap_or("");
+        println!(
+            "  {:<11} {:<14} {} {}",
+            row.agent_type.cyan(),
+            spec.bold(),
+            subject,
+            when.dimmed()
+        );
+        println!("    {} {}", "branch:".dimmed(), row.branch.dimmed());
+    }
+    println!(
+        "  {}",
+        "(inferred from commit trailers on lease-less branches — local agents shown above)"
+            .dimmed()
+    );
+    println!();
+}
+
+#[cfg(test)]
+mod story_452_remote_activity_tests {
+    use super::*;
+
+    // STORY-452: for-each-ref output → RemoteCommit rows; origin/ prefix
+    // stripped, origin/HEAD skipped, missing/blank subjects dropped.
+    #[test]
+    fn parse_remote_branch_commits_strips_prefix_and_skips_head() {
+        let stdout = "origin/HEAD\t2026-06-01T10:00:00+00:00\tpointer\n\
+                      origin/bug-250\t2026-06-01T09:00:00+00:00\t[AI:codex] fix: x (BUG-250)\n\
+                      origin/story-431\t2026-06-01T08:00:00+00:00\t[AI:antigravity] feat: y\n";
+        let commits = parse_remote_branch_commits(stdout);
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].branch, "bug-250");
+        assert!(commits[0].subject.contains("BUG-250"));
+        assert!(commits[0].when.is_some());
+        assert_eq!(commits[1].branch, "story-431");
+    }
+
+    // STORY-452: a malformed date leaves `when` None but still yields a row.
+    #[test]
+    fn parse_remote_branch_commits_tolerates_bad_dates() {
+        let stdout = "origin/feat-x\tnot-a-date\t[AI:codex] feat: x (TASK-1)\n";
+        let commits = parse_remote_branch_commits(stdout);
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].branch, "feat-x");
+        assert!(commits[0].when.is_none());
+    }
+
+    // STORY-452: end-to-end over parsed git output — agent-attributed
+    // lease-less branches become remote-activity rows.
+    #[test]
+    fn parsed_commits_feed_inference() {
+        let stdout = "origin/bug-250\t2026-06-01T09:00:00+00:00\t[AI:codex] fix: x (BUG-250)\n\
+                      origin/main\t2026-06-01T08:00:00+00:00\tchore: human merge\n";
+        let commits = parse_remote_branch_commits(stdout);
+        let rows = remote_activity::infer_remote_activity(&commits, &[], 10);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].agent_type, "codex");
+        assert_eq!(rows[0].branch, "bug-250");
+    }
 }
 
 #[cfg(test)]
@@ -69494,6 +69639,12 @@ fn handle_status_command_distributed(
     print_status_worktrees_section(&project_root);
     print_status_open_prs_section(&project_root);
     print_status_recently_merged_section(&project_root, 5);
+
+    // STORY-452: inferred cloud / cross-machine agent activity from commit
+    // trailers on lease-less remote branches — local agents already appear in
+    // the "Active agents" section. Read-only; silent when no remote signal.
+    // trace:STORY-452 | ai:claude
+    print_status_remote_activity_section(&project_root, 5);
 
     // TASK-539: pending-findings backlog — silent when empty. Surfaced before
     // the working-tree section so triage-able items are visible without
