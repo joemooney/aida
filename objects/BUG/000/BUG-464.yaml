@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T01:52:44.660430372Z
-modified_at: 2026-06-07T01:52:44.660430372Z
+modified_at: 2026-06-07T02:02:46.623398029Z
 req_type: Bug
 tags:
 - aida:status
@@ -17,3 +17,9 @@ tags:
 - onboarding
 - parent:EPIC-37
 - severity:major
+comments:
+- id: 019e9fd1-7bdf-7aa1-a927-eaf9a6e38acb
+  author: joe
+  content: Commit 6a99bb3c2 references this requirement
+  created_at: 2026-06-07T02:02:46.623398029Z
+  modified_at: 2026-06-07T02:02:46.623398029Z
