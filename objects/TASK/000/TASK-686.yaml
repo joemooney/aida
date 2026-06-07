@@ -23,12 +23,12 @@ description: |-
 
   ## Notes
   - Doesn't help the existing stray ~/ai/ scaffold (manual cleanup), but prevents recurrence. Possible companion: `aida doctor` flags an ancestor CLAUDE.md whose imports resolve outside a project.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T01:59:18.035945233Z
-modified_at: 2026-06-07T01:59:18.035945233Z
+modified_at: 2026-06-07T19:41:11.564093302Z
 req_type: Task
 tags:
 - aida:init
