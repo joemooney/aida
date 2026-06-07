@@ -1,0 +1,12 @@
+id: 019ea291-8910-7ce3-92b3-7807b2dca13b
+spec_id: TASK-689
+agreed_id: TASK-689
+title: 'STORY-335 slice 2: rebase step in aida queue integrate (--rebase, opt-in)'
+description: 'Second slice of STORY-335. Adds an opt-in --rebase flag to ''aida queue integrate'': before driving each ready member''s --from-pr merge, rebase its PR branch onto current main by composing the existing ''aida pr rebase <N> --no-smoke'' primitive (temp-worktree rebase + force-push-with-lease + cross-fork/worktree guards already battle-tested). Clean rebase → proceed to merge; rebase failure/conflict → skip that member with a clear reason and continue (punt-and-continue, EPIC-28 resilient-drain discipline; the slice-1 --dry-run forecast previews this). Default behavior (no --rebase) is unchanged from STORY-520. Smoke skipped (--no-smoke) because the subsequent --from-pr drive runs CI. Remaining STORY-335 slices: --strategy {per-item|one-branch|stacked} and the sequence-aware forecast. trace:STORY-335'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T14:51:47.344312076Z
+modified_at: 2026-06-07T14:51:47.344312076Z
+req_type: Task
