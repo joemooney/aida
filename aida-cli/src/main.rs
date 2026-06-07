@@ -67211,12 +67211,21 @@ fn handle_status_command_distributed(
     // intake awaiting an advisor disposition (keep → queue / backlog → archive
     // / unclear → needs-attention). Shown only when non-empty so an empty
     // inbox stays quiet, and reads like a queue to clear. trace:TASK-648
+    // BUG-464: exclude META (and other non-triageable seed rows) the same way
+    // `aida list` hides META by default — otherwise a fresh `aida init` reports
+    // its 6 seeded META prompts as "6 untriaged drafts", sending a brand-new
+    // user to /aida-triage for AI-prompt templates that aren't real intake.
+    // trace:BUG-464 | ai:claude
     let draft_inbox = backend
         .list_summaries(&aida_core::ListFilter {
             status: Some("draft".to_string()),
             ..Default::default()
         })
-        .map(|v| v.len())
+        .map(|v| {
+            v.iter()
+                .filter(|r| !r.req_type.eq_ignore_ascii_case("meta"))
+                .count()
+        })
         .unwrap_or(0);
     if draft_inbox > 0 {
         println!(
@@ -80123,11 +80132,30 @@ fn resolve_queue_work_plan(
                         listed
                     )
                 };
-                anyhow::anyhow!(
-                    "queue is empty for {}; pass an id explicitly or run `aida queue list`{}",
-                    role_filter.as_deref().unwrap_or("any role"),
-                    suffix
-                )
+                // BUG-465: on a FRESH project (no real, non-META specs yet) the
+                // queue is legitimately empty — guide the new user's first
+                // action instead of dead-ending with a bare error. EPIC-37:
+                // fresh init -> first `queue work` must be boring and correct.
+                // trace:BUG-465 | ai:claude
+                let has_real_specs = store
+                    .requirements
+                    .iter()
+                    .any(|r| !matches!(r.req_type, aida_core::RequirementType::Meta));
+                if !has_real_specs && skipped_unpickable.is_empty() {
+                    anyhow::anyhow!(
+                        "Your queue is empty — looks like a fresh project. Get started:\n  \
+                         1. File a spec:  aida add --title \"<what you're building>\" --type task --status approved\n  \
+                         2. Queue it:     aida queue add <SPEC-ID>   (the id printed by step 1)\n  \
+                         3. Work it:      aida queue work\n  \
+                         Browse anytime with `aida list`."
+                    )
+                } else {
+                    anyhow::anyhow!(
+                        "queue is empty for {}; pass an id explicitly or run `aida queue list`{}",
+                        role_filter.as_deref().unwrap_or("any role"),
+                        suffix
+                    )
+                }
             })?;
         if !skipped_unpickable.is_empty() {
             let listed = skipped_unpickable
