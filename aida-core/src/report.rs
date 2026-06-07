@@ -924,6 +924,13 @@ pub fn check_scaffold_status(
 /// trace:FR-1-028, FR-1-047 | ai:claude
 fn file_matches_for_status(path: &Path, actual: &str, expected: &str) -> bool {
     let category = crate::scaffolding::FileCategory::from_path(path);
+    // .claude/AIDA.md is Template-class but carries one section
+    // (`## Claude Code skills`) that an `aida init --no-skills` project
+    // legitimately drops. Compare it tolerant of that section so a clean
+    // --no-skills init isn't flagged as drift. trace:TASK-125 | ai:claude
+    if path.file_name().and_then(|s| s.to_str()) == Some("AIDA.md") {
+        return crate::scaffolding::aida_md_matches(actual, expected);
+    }
     match category {
         crate::scaffolding::FileCategory::Template => actual.trim() == expected.trim(),
         crate::scaffolding::FileCategory::Seed => seed_matches(path, actual, expected),

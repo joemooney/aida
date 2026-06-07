@@ -59,6 +59,11 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
   - `file_finding({title, description, source?, spec_id?, pr?, kind?, severity?})` — required: `title`, `description`. File a triage-able draft TASK with appropriate `from-*` tags.
   - `list_findings({pr?, source?, kind?})` — list findings.
   - `triage_finding({id, action, reason?})` — required: `id`, `action`. Promote (Approved) or dismiss (Rejected) a finding.
+  - **`file_finding` is for TRIAGEABLE ITEMS only** — a bug or task the project should act on. It is NOT a session journal or a phase-completion checkpoint. Filing "Phase 1 complete" / "Phase 2 outcome: clean" as findings just creates draft TASKs the advisor has to dismiss. For checkpoints / intermediate status / session journals use instead:
+    - `aida session manifest` — the per-session brief,
+    - `add_comment` on the spec you're working — progress notes that live with the work,
+    - local agent-side notes (`walkthrough.md`, scratch files) — anything not meant for project triage.
+  - Litmus test — **good finding:** `"TOCTOU race in claim_task"` (a bug to fix). **Bad finding:** `"Phase 1 complete"` (a status update — belongs in a comment or the manifest).
 
 - **Task-claim channel:**
   - `claim_task({spec_id, role?})` — required: `spec_id`. Atomic lease on a queued spec (writes `.aida/sessions/<lease>.toml`).
@@ -77,7 +82,7 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
 
 These are the **agent-coordination primitives**. They're how multiple agents (you, a human, another agent) coordinate on the same spec graph without stepping on each other.
 
-> **Schemas:** all 29 tools advertise `inputSchema` and descriptor-level `outputSchema`. Runtime responses still use MCP text content envelopes; structured emission of `structuredContent` is the Path B follow-up (**STORY-399**). Treat `outputSchema` as descriptor metadata until that ships.
+> **Schemas:** all 29 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
 
 ## How to connect (minimum viable)
 
@@ -168,7 +173,7 @@ Specs you'll want to track because they affect your operation:
 | **TASK-438** | Fixes TOCTOU race on `claim_task` (two concurrent claims could both succeed) | Approved |
 | **BUG-310** | MCP-created specs not consistently visible to local CLI | Shipped |
 | **STORY-398** | Empirical Codex roundtrip + `docs/agents/codex-mcp-setup.md` | Shipped |
-| **STORY-399** | Path B — emit `structuredContent` matching `outputSchema` | Approved, deferred until STORY-398 surfaces need |
+| **STORY-399** | Path B — emit `structuredContent` matching `outputSchema` | Shipped (additive: text envelope preserved) |
 | **STORY-82** | Modernize the older spec-graph tools to current CLI vocabulary | Approved, post-STORY-398 |
 | **EPIC-27** | MCP server modernization: mirror the full AIDA CLI surface | Strategic container; ongoing |
 | **BUG-307** | Orchestrator auto-cleans dormant leases (reduces "lease stuck" friction) | Shipped |

@@ -841,4 +841,212 @@ mod tests {
              the new policy"
         );
     }
+
+    // ----------------------------------------------------------------------
+    // Template-drift CI guard (TASK-649)
+    //
+    // AIDA's dual-copy template system embeds aida-core/templates/ into the
+    // binary at compile time via build.rs (`embed_file` / `embed_directory`).
+    // Those embed helpers are guarded by `path.exists()`, so a *phantom*
+    // reference — a source path that was renamed/deleted but still listed in
+    // build.rs — is silently dropped at build time rather than failing the
+    // build. The result is a template that "should" ship but doesn't, and
+    // nobody notices until a downstream `aida init` produces a project missing
+    // that file. Likewise, two embed calls mapping different sources to the
+    // same destination key would have one silently clobber the other in the
+    // `EMBEDDED_TEMPLATES` map.
+    //
+    // These tests turn both drift modes into a hard build failure (modelled on
+    // ECC's scripts/ci/validate-install-manifests.js), by parsing build.rs's
+    // own embed declarations and validating them against disk. They are
+    // deterministic: the inputs are the checked-in build.rs source and the
+    // checked-in templates/ tree, both under CARGO_MANIFEST_DIR.
+    // trace:TASK-649 | ai:claude
+
+    /// One source→destination declaration parsed out of build.rs.
+    #[derive(Debug, Clone)]
+    struct EmbedDecl {
+        /// Source path relative to CARGO_MANIFEST_DIR, e.g.
+        /// `templates/skills` or `templates/settings.json`.
+        source: String,
+        /// Destination key/prefix the source scaffolds under, e.g.
+        /// `skills` or `settings.json`.
+        dest: String,
+        /// True for `embed_directory` (source must be a dir), false for
+        /// `embed_file` (source must be a file).
+        is_dir: bool,
+    }
+
+    /// Parse every `embed_file(...)` / `embed_directory(...)` call out of
+    /// build.rs and return its (source, dest, is_dir) triple.
+    ///
+    /// The embed helpers take the source path and destination key as the two
+    /// string-literal arguments following `&mut code`; the source always
+    /// begins with `templates/`. Calls may span multiple lines, so we match
+    /// over the whole file. The helper *definitions* (`fn embed_file` /
+    /// `fn embed_directory`) and the internal recursive `embed_directory_rec`
+    /// call do not match this `&mut code, "templates/..", ".."` arg shape, so
+    /// they fall out naturally. trace:TASK-649
+    fn parse_build_rs_embeds() -> Vec<EmbedDecl> {
+        let build_rs = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/build.rs"))
+            .expect("aida-core/build.rs must be readable for the template-drift guard");
+
+        // Match `embed_file` or `embed_directory`, then (skipping the
+        // `&mut code,` argument and any whitespace/newlines) capture the
+        // source string starting with `templates/` and the following dest
+        // string. `(?s)` lets `.` cross newlines for multi-line calls.
+        let re = regex::Regex::new(
+            r#"(?s)embed_(file|directory)\s*\(\s*&mut\s+code\s*,\s*"(templates/[^"]+)"\s*,\s*"([^"]+)"\s*,?\s*\)"#,
+        )
+        .unwrap();
+
+        let mut decls = Vec::new();
+        for cap in re.captures_iter(&build_rs) {
+            let is_dir = &cap[1] == "directory";
+            decls.push(EmbedDecl {
+                source: cap[2].to_string(),
+                dest: cap[3].to_string(),
+                is_dir,
+            });
+        }
+        decls
+    }
+
+    #[test]
+    fn build_rs_embeds_were_parsed() {
+        // Sanity floor: the parser must find the known embed declarations.
+        // If this regresses to zero the existence guard below would vacuously
+        // pass, so assert a meaningful lower bound and a couple of anchors.
+        let decls = parse_build_rs_embeds();
+        assert!(
+            decls.len() >= 10,
+            "expected to parse at least 10 embed declarations from build.rs, \
+             found {} — the parser likely drifted from build.rs's call shape \
+             (template-drift guard would otherwise vacuously pass)",
+            decls.len()
+        );
+        assert!(
+            decls
+                .iter()
+                .any(|d| d.source == "templates/skills" && d.dest == "skills" && d.is_dir),
+            "expected the `embed_directory(.., \"templates/skills\", \"skills\")` \
+             declaration to be parsed from build.rs"
+        );
+        assert!(
+            decls.iter().any(|d| d.source == "templates/settings.json"
+                && d.dest == "settings.json"
+                && !d.is_dir),
+            "expected the `embed_file(.., \"templates/settings.json\", \
+             \"settings.json\")` declaration to be parsed from build.rs"
+        );
+    }
+
+    /// Every source path referenced by build.rs must exist on disk with the
+    /// expected kind (file vs directory). A phantom reference (renamed or
+    /// deleted source still listed in build.rs) is silently dropped by the
+    /// `path.exists()` guard at build time — this test makes it a red build.
+    /// trace:TASK-649
+    #[test]
+    fn every_embedded_template_source_path_exists() {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let decls = parse_build_rs_embeds();
+
+        let mut missing: Vec<String> = Vec::new();
+        let mut wrong_kind: Vec<String> = Vec::new();
+
+        for decl in &decls {
+            let abs = manifest_dir.join(&decl.source);
+            if !abs.exists() {
+                missing.push(decl.source.clone());
+                continue;
+            }
+            if decl.is_dir && !abs.is_dir() {
+                wrong_kind.push(format!(
+                    "{} is referenced via embed_directory but is not a directory",
+                    decl.source
+                ));
+            } else if !decl.is_dir && !abs.is_file() {
+                wrong_kind.push(format!(
+                    "{} is referenced via embed_file but is not a file",
+                    decl.source
+                ));
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "build.rs references template source path(s) that do not exist on \
+             disk (phantom embed — would be silently dropped at build time, \
+             producing a binary missing the scaffold): {missing:?}"
+        );
+        assert!(
+            wrong_kind.is_empty(),
+            "build.rs references template source path(s) of the wrong kind: \
+             {wrong_kind:?}"
+        );
+    }
+
+    /// No two embed declarations may map to the same destination key/prefix.
+    /// Single-ownership of each destination is what makes the embedded map's
+    /// keys unambiguous; a collision would have one source silently clobber
+    /// the other. trace:TASK-649
+    #[test]
+    fn embedded_template_destinations_are_uniquely_owned() {
+        let decls = parse_build_rs_embeds();
+
+        let mut seen: HashMap<String, String> = HashMap::new();
+        let mut collisions: Vec<String> = Vec::new();
+        for decl in &decls {
+            if let Some(prev) = seen.insert(decl.dest.clone(), decl.source.clone()) {
+                collisions.push(format!(
+                    "destination `{}` claimed by both `{}` and `{}`",
+                    decl.dest, prev, decl.source
+                ));
+            }
+        }
+
+        assert!(
+            collisions.is_empty(),
+            "two scaffold sources map to the same destination (single-\
+             ownership violation — one would clobber the other in \
+             EMBEDDED_TEMPLATES): {collisions:?}"
+        );
+    }
+
+    /// Every embedded key (= a destination the scaffolder writes to) must
+    /// resolve back to a declared destination prefix from build.rs. Keys are
+    /// unique by HashMap construction; this guards the inverse — an embedded
+    /// entry whose owning declaration was removed (orphan embed). trace:TASK-649
+    #[test]
+    fn every_embedded_key_has_a_declared_owner() {
+        let decls = parse_build_rs_embeds();
+        // Destination prefixes (dir embeds) and exact dest keys (file embeds).
+        let dir_prefixes: Vec<&str> = decls
+            .iter()
+            .filter(|d| d.is_dir)
+            .map(|d| d.dest.as_str())
+            .collect();
+        let file_keys: std::collections::HashSet<&str> = decls
+            .iter()
+            .filter(|d| !d.is_dir)
+            .map(|d| d.dest.as_str())
+            .collect();
+
+        let mut orphans: Vec<String> = Vec::new();
+        for key in EMBEDDED_TEMPLATES.keys() {
+            let owned_by_dir = dir_prefixes
+                .iter()
+                .any(|p| *key == *p || key.starts_with(&format!("{p}/")));
+            let owned_by_file = file_keys.contains(key);
+            if !owned_by_dir && !owned_by_file {
+                orphans.push((*key).to_string());
+            }
+        }
+
+        assert!(
+            orphans.is_empty(),
+            "embedded template key(s) have no owning declaration in build.rs \
+             (orphan embed): {orphans:?}"
+        );
+    }
 }

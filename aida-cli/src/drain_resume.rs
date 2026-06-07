@@ -210,6 +210,75 @@ pub(crate) fn resume_plan(
     }
 }
 
+/// TASK-405: the decision for a PR-only invocation
+/// (`aida queue work <SPEC> --auto-complete --from-pr`). Implementation shipped
+/// OUTSIDE the orchestrator — a PR is already open for the spec — and the
+/// operator wants a *fresh* orchestrator to drive the remaining phases
+/// (reviewer → CI → merge → pull → build) WITHOUT re-running the implementer.
+///
+/// This is a sibling of `resume_plan` but with a different shape: there is no
+/// crashed-drain state to read, no PID-liveness gate (the implementer ran
+/// elsewhere, possibly by hand), and no per-member flight tracking. The only
+/// inputs are the world's probed facts about the PR + spec. Keeping it a pure
+/// function over those facts means the entry-phase decision is exhaustively
+/// unit-testable independent of how the facts were gathered.
+///
+/// The refusals are the spec's "no zombie launches" guarantee: refuse when no
+/// PR exists, when the PR is already merged, or when the spec is already
+/// Completed (the merge already promoted it) — there is nothing to drive in any
+/// of those cases. trace:TASK-405 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FromPrOutcome {
+    /// No open PR was found for the spec — refuse (nothing to drive).
+    RefuseNoPr,
+    /// The PR is already merged — refuse (the merge already happened; let the
+    /// auto-bump / `aida pull` promote the spec).
+    RefuseAlreadyMerged,
+    /// The spec is already Completed — refuse (the lifecycle already finished).
+    RefuseAlreadyCompleted,
+    /// Drive the remaining phases starting at this phase (never the
+    /// implementer — that is the whole point of `--from-pr`).
+    DriveFrom(Phase),
+}
+
+/// Decide what a `--from-pr` invocation should do, from probed world facts.
+/// Pure: the caller probes whether a PR exists, its merged/CI/review state, and
+/// whether the spec is already Completed; this only decides.
+///
+/// Refusal precedence (each is a distinct clean exit, no launch):
+/// 1. `spec_completed` → the whole lifecycle is done; nothing to drive.
+/// 2. `!pr_exists` → there is no PR to drive phases against.
+/// 3. `pr_merged` → the merge already happened; don't re-drive a merged PR.
+///
+/// Otherwise drive from the earliest phase whose effect is absent, but NEVER
+/// the implementer (phase 1) — `--from-pr` exists precisely because the
+/// implementer ran outside the orchestrator. So the floor is `Reviewer`:
+/// reviewed → Merge (CI gating is re-established by `gh pr merge` respecting
+/// required checks); otherwise Reviewer. We deliberately do NOT start at CI:
+/// the CI-wait phase is coupled to the implementer session/lease a fresh
+/// process does not hold (the same STORY-492 / `clamp_resume_start_phase`
+/// reasoning) — re-entering at the reviewer re-establishes gating safely.
+/// trace:TASK-405 | ai:claude
+pub(crate) fn from_pr_plan(pr_exists: bool, facts: &ResumeFacts) -> FromPrOutcome {
+    if facts.spec_completed {
+        return FromPrOutcome::RefuseAlreadyCompleted;
+    }
+    if !pr_exists {
+        return FromPrOutcome::RefuseNoPr;
+    }
+    if facts.pr_merged {
+        return FromPrOutcome::RefuseAlreadyMerged;
+    }
+    // Drive from the reviewer onward. If an approving verdict already exists,
+    // skip straight to the merge; otherwise run the reviewer. We never enter
+    // at CI (implementer-coupled) and never at the implementer.
+    if facts.reviewed {
+        FromPrOutcome::DriveFrom(Phase::Merge)
+    } else {
+        FromPrOutcome::DriveFrom(Phase::Reviewer)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -420,5 +489,97 @@ mod tests {
             &facts(true, true, true, true, false, false),
         );
         assert_eq!(out, ResumeOutcome::ResumeAt(Phase::Pull));
+    }
+
+    // --- TASK-405: from_pr_plan (PR-only invocation) ---
+
+    #[test]
+    fn from_pr_refuses_when_no_pr_exists() {
+        // No PR at all ⇒ nothing to drive, refuse cleanly (no zombie launch).
+        assert_eq!(
+            from_pr_plan(false, &facts(false, false, false, false, false, false)),
+            FromPrOutcome::RefuseNoPr
+        );
+    }
+
+    #[test]
+    fn from_pr_refuses_when_pr_already_merged() {
+        // PR exists but is already merged ⇒ the merge already happened; let the
+        // auto-bump promote the spec, don't re-drive.
+        assert_eq!(
+            from_pr_plan(true, &facts(true, true, true, true, false, false)),
+            FromPrOutcome::RefuseAlreadyMerged
+        );
+    }
+
+    #[test]
+    fn from_pr_refuses_when_spec_already_completed() {
+        // Spec is Completed ⇒ the whole lifecycle finished. This dominates even
+        // if a (stale) PR still looks open.
+        assert_eq!(
+            from_pr_plan(true, &facts(true, true, true, false, true, false)),
+            FromPrOutcome::RefuseAlreadyCompleted
+        );
+    }
+
+    #[test]
+    fn from_pr_completed_dominates_other_refusals() {
+        // Completed wins even over merged — the most-final state takes
+        // precedence so the message is the most accurate.
+        assert_eq!(
+            from_pr_plan(true, &facts(true, true, true, true, true, false)),
+            FromPrOutcome::RefuseAlreadyCompleted
+        );
+        // …and over no-PR (a Completed spec needs no PR).
+        assert_eq!(
+            from_pr_plan(false, &facts(false, false, false, false, true, false)),
+            FromPrOutcome::RefuseAlreadyCompleted
+        );
+    }
+
+    #[test]
+    fn from_pr_open_pr_unreviewed_drives_from_reviewer() {
+        // The common case: PR open, CI status unknown/red, no verdict yet ⇒
+        // enter at the reviewer (NOT the implementer, NOT CI).
+        assert_eq!(
+            from_pr_plan(true, &facts(true, false, false, false, false, false)),
+            FromPrOutcome::DriveFrom(Phase::Reviewer)
+        );
+        // Even when CI is already green we still start at the reviewer — we
+        // never enter at the implementer-coupled CI-wait phase.
+        assert_eq!(
+            from_pr_plan(true, &facts(true, true, false, false, false, false)),
+            FromPrOutcome::DriveFrom(Phase::Reviewer)
+        );
+    }
+
+    #[test]
+    fn from_pr_open_pr_already_reviewed_drives_from_merge() {
+        // PR open + an approving verdict already exists ⇒ skip the reviewer,
+        // drive from the merge (gh pr merge still respects required checks).
+        assert_eq!(
+            from_pr_plan(true, &facts(true, true, true, false, false, false)),
+            FromPrOutcome::DriveFrom(Phase::Merge)
+        );
+    }
+
+    #[test]
+    fn from_pr_never_enters_at_implementer_or_ci() {
+        // Exhaustive: across every non-refusing fact combination the entry
+        // phase is always Reviewer or Merge — never Implementer, never CI.
+        for ci in [false, true] {
+            for reviewed in [false, true] {
+                let out = from_pr_plan(true, &facts(true, ci, reviewed, false, false, false));
+                match out {
+                    FromPrOutcome::DriveFrom(p) => {
+                        assert!(
+                            p == Phase::Reviewer || p == Phase::Merge,
+                            "from_pr must enter at reviewer/merge, got {p:?}"
+                        );
+                    }
+                    other => panic!("expected DriveFrom, got {other:?}"),
+                }
+            }
+        }
     }
 }

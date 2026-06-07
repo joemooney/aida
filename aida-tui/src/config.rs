@@ -13,6 +13,7 @@
 //!
 //! trace:STORY-132 STORY-244 | ai:claude
 
+use crate::theme::ThemeName;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::path::{Path, PathBuf};
 
@@ -40,6 +41,10 @@ pub struct TuiConfig {
     pub prefix_key: KeyEvent,
     pub max_tabs: usize,
     pub mode: TuiMode,
+    /// Active theme palette. `[tui] theme = "catppuccin-mocha"` selects it;
+    /// defaults to [`ThemeName::default`] (Catppuccin Mocha). An unknown
+    /// token keeps the default. trace:TASK-256 | ai:claude
+    pub theme: ThemeName,
 }
 
 impl Default for TuiConfig {
@@ -49,6 +54,7 @@ impl Default for TuiConfig {
             // Soft cap on concurrently hosted sessions (plan risk #6).
             max_tabs: crate::tab::MAX_TABS,
             mode: TuiMode::default(),
+            theme: ThemeName::default(),
         }
     }
 }
@@ -80,6 +86,12 @@ impl TuiConfig {
                 "mode" => {
                     if let Some(m) = parse_mode(&val) {
                         cfg.mode = m;
+                    }
+                }
+                // trace:TASK-256 | ai:claude
+                "theme" => {
+                    if let Some(t) = ThemeName::from_config_str(&val) {
+                        cfg.theme = t;
                     }
                 }
                 _ => {}
@@ -252,5 +264,23 @@ mode = \"pty-host\"
 ";
         let pairs = scan_tui_section(toml);
         assert!(pairs.contains(&("mode".into(), "pty-host".into())));
+    }
+
+    #[test]
+    fn theme_defaults_to_catppuccin_mocha() {
+        // TASK-256: the default palette is Catppuccin Mocha.
+        assert_eq!(TuiConfig::default().theme, ThemeName::CatppuccinMocha);
+    }
+
+    #[test]
+    fn config_scan_picks_up_theme_field() {
+        let toml = "\
+[tui]
+theme = \"dark\"
+";
+        let pairs = scan_tui_section(toml);
+        assert!(pairs.contains(&("theme".into(), "dark".into())));
+        // And the token resolves to the right palette name.
+        assert_eq!(ThemeName::from_config_str("dark"), Some(ThemeName::Dark));
     }
 }

@@ -33,13 +33,98 @@ raised_by?: string | null,
  */
 raised_at: string, };
 
+export type FailureReason = { 
+/**
+ * Stable slug for the phase that failed — `implementer`, `ci`,
+ * `review`, `merge`, `pull`, or `build`. A string (not an enum)
+ * keeps `aida-core` free of orchestrator concepts: the source of
+ * truth for phase identities lives in `aida-cli::auto_complete`.
+ */
+phase: string, 
+/**
+ * 1-based phase index (1..=6) for sorting / display.
+ */
+phase_index: number, 
+/**
+ * Stable slug for the failure kind — `no-pr`, `ci-red`,
+ * `request-changes`, `merge-conflict`, etc. Mirrors the orchestrator's
+ * existing `PhaseFailureKind::slug()`.
+ */
+kind: string, 
+/**
+ * One-line human description of what went wrong.
+ */
+detail: string, 
+/**
+ * Pre-rendered recovery hint — what the orchestrator would tell a
+ * human standing in front of the broken phase. Cached here so
+ * triage doesn't have to rebuild it.
+ */
+recovery_hint?: string | null, 
+/**
+ * Role / agent that shelved the spec (the active session role,
+ * `None` when no role context was available).
+ */
+shelved_by?: string | null, 
+/**
+ * When the spec was shelved.
+ */
+shelved_at: string, };
+
+export type DecisionChoice = { 
+/**
+ * Short human label for the option (what the human picks).
+ */
+label: string, 
+/**
+ * What happens / what this option means, in human terms.
+ */
+consequence: string, 
+/**
+ * Deterministic action token the loop will eventually apply (NOT
+ * applied in slice 1). Never free-form prose — a parseable token.
+ */
+resolution: string, };
+
+export type DecisionRequest = { 
+/**
+ * The self-contained question (state / deciding factor distilled so the
+ * human needs no spec re-read to answer).
+ */
+question: string, 
+/**
+ * Enumerated, actionable choices (≥2). Each maps to a resolution token.
+ */
+choices: Array<DecisionChoice>, 
+/**
+ * 0-based index of the recommended default choice, if any.
+ */
+recommended?: number | null, 
+/**
+ * Why the recommended default is recommended (the advisor's reasoning).
+ */
+rationale?: string | null, 
+/**
+ * 0-based index of the chosen answer. `None` while the request is
+ * pending (unanswered).
+ */
+answered?: number | null, 
+/**
+ * When the question was first posed.
+ */
+asked_at?: string | null, 
+/**
+ * When the human answered it.
+ */
+answered_at?: string | null, };
+
 export type RequirementPriority = "High" | "Medium" | "Low";
 
 export type RequirementType = "Functional" | "NonFunctional" | "System" | "User" | "ChangeRequest" | "Bug" | "Epic" | "Story" | "Task" | "Spike" | "Sprint" | "Folder" | "Meta" | "Principle" | "Vision" | "Constraint" | "Decision" | "Term" | "Doc";
 
 export type MetaSubtype = "Prompt" | "Skill" | "Command" | "Template" | "Config";
 
-export type RelationshipType = "Parent" | "Child" | "Duplicate" | "Verifies" | "VerifiedBy" | "References" | { "Custom": string };
+export type RelationshipType = "Parent" | "Child" | "Duplicate" | "Verifies" | "VerifiedBy" | "References" | "BlockedBy" | "Blocks" | { "Custom": string };
 
 export type CustomFieldType = "text" | "textarea" | "select" | "boolean" | "date" | "user" | "requirement" | "number";
 
@@ -796,6 +881,13 @@ history?: Array<HistoryEntry>,
  */
 archived?: boolean, 
 /**
+ * Timestamp when this requirement was archived (None when not archived).
+ * Cleared on unarchive. Used by `aida archive --older-than` sweeps and
+ * the auto-sweep on `aida pull` to compute spec age.
+ * trace:STORY-441 | ai:claude
+ */
+archived_at?: string | null, 
+/**
  * Custom status string (for types with custom statuses)
  * If set, this takes precedence over the `status` enum field
  */
@@ -826,6 +918,16 @@ trace_links?: Array<TraceLink>,
  */
 gitlab_issues?: Array<GitLabIssueLink>, 
 /**
+ * One-way external issue references composing this spec with PM systems
+ * (Linear / Jira / GitHub). Each entry is a validated `provider:id`
+ * string (e.g. `linear:LIN-123`, `jira:PROJ-456`,
+ * `github:owner/repo#123`). Rendered as clickable links via the
+ * `[external_refs]` base URLs in `.aida/config.toml`, and searchable.
+ * Deliberately one-way — AIDA records the ref, it does NOT sync state
+ * back to the external system. trace:STORY-476 | ai:claude
+ */
+external_refs?: Array<string>, 
+/**
  * Implementation metadata for this requirement
  */
 implementation_info?: ImplementationInfo | null, 
@@ -840,7 +942,32 @@ ai_evaluation?: StoredAiEvaluation | null,
  * this *currently* paused"; the punt ledger keeps the durable history.
  * trace:STORY-332 | ai:claude
  */
-attention_reason?: AttentionReason | null, };
+attention_reason?: AttentionReason | null, 
+/**
+ * Set by the `--auto-complete` orchestrator when it shelves a spec
+ * after a phase failure (sibling to `attention_reason` — see
+ * [`FailureReason`]). Sticks until the spec is triaged out of
+ * `NeedsAttention`; the punt ledger keeps the durable history.
+ * trace:EPIC-28 | ai:claude
+ */
+failure_reason?: FailureReason | null, 
+/**
+ * Marks this spec as work no agent can do — a person-in-the-room task,
+ * a sign-off, a physical activity. The pre-pickup gate
+ * (`crate::pickability`) skips any spec with this flag set so the
+ * orchestrator/queue never spawn a doomed phase-1 implementer on it.
+ * Distinct from `BlockedBy` (which clears when the blocker ships):
+ * `human_only` is a permanent property of the spec, cleared only by
+ * the human explicitly flipping it off. trace:STORY-333 | ai:claude
+ */
+human_only?: boolean, 
+/**
+ * A structured decision the human answers OUTSIDE any agent — the
+ * async decision-inbox artifact. `None` when no question is pending or
+ * recorded. Set by `aida questions ask`, answered by
+ * `aida questions answer`. trace:STORY-522 | ai:claude
+ */
+decision_request?: DecisionRequest | null, };
 
 export type RequirementSnapshot = { 
 /**
@@ -1150,10 +1277,6 @@ export type GeneratedChild = { title: string, description: string, type: string,
 
 export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChild>, };
 
-// Queue entry type (STORY-0369). Manually-maintained: the REST/gRPC
-// queue payload is not derived by aida-generate-types, so this block
-// needs to be re-appended whenever shared/types.ts is regenerated.
-// trace:STORY-0369 STORY-86 | ai:claude
 export type QueueEntry = {
     requirementId: string;
     specId: string | null;

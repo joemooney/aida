@@ -415,6 +415,10 @@ impl PostgresBackend {
             attachments,
             trace_links,
             gitlab_issues,
+            // STORY-476: external refs are not persisted by the Postgres
+            // backend (opt-in, behind the `postgres` feature).
+            // trace:STORY-476 | ai:claude
+            external_refs: Vec::new(),
             implementation_info,
             ai_evaluation,
             // STORY-332: punt metadata is not persisted by the Postgres
@@ -428,6 +432,8 @@ impl PostgresBackend {
             // Postgres backend (opt-in, behind the `postgres` feature).
             // trace:STORY-333 | ai:claude
             human_only: false,
+            // trace:STORY-522 | ai:claude
+            decision_request: None,
             version,
         })
     }
@@ -1381,6 +1387,7 @@ impl DatabaseBackend for PostgresBackend {
                 for_role: None,
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             })
             .collect();
 

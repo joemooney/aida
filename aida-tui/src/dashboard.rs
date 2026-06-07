@@ -11,9 +11,10 @@
 //! trace:STORY-244 | ai:claude
 
 use crate::nav::{self, NavSection, NavState};
+use crate::theme::Theme;
 use anyhow::Result;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph, Wrap};
 use ratatui::Frame;
@@ -115,6 +116,11 @@ pub struct DashboardModel {
     /// Notice line above the middle list (e.g. "loading PRs…", "`gh`
     /// failed — empty PR list"). Cleared on a successful refetch.
     pub notice: Option<String>,
+    /// Active palette — every styled span in the dashboard resolves its
+    /// color through this rather than naming a literal. Defaults to the
+    /// Catppuccin Mocha palette; the launcher overrides it from
+    /// `[tui] theme`. trace:TASK-256 | ai:claude
+    pub theme: Theme,
 }
 
 impl Default for DashboardModel {
@@ -127,6 +133,7 @@ impl Default for DashboardModel {
             ambient: AmbientState::default(),
             preview_cache: HashMap::new(),
             notice: None,
+            theme: Theme::default(),
         }
     }
 }
@@ -513,13 +520,14 @@ pub fn render(frame: &mut Frame, model: &DashboardModel) {
     ])
     .split(rows[1]);
 
-    nav::render(frame, body[0], &model.nav);
+    nav::render(frame, body[0], &model.nav, &model.theme);
     render_list(frame, body[1], model);
     render_preview(frame, body[2], model);
     render_hint_row(frame, rows[2], model);
 }
 
 fn render_tabs(frame: &mut Frame, area: Rect, model: &DashboardModel) {
+    let theme = &model.theme;
     let mut spans: Vec<Span> = Vec::new();
     for r in [RoleTab::Implementer, RoleTab::Reviewer, RoleTab::Dialog] {
         let label = format!("  {}  ", r.as_str());
@@ -527,12 +535,12 @@ fn render_tabs(frame: &mut Frame, area: Rect, model: &DashboardModel) {
             spans.push(Span::styled(
                 format!("[{}]", label.trim()),
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
+                    .fg(theme.on_accent)
+                    .bg(theme.accent)
                     .add_modifier(Modifier::BOLD),
             ));
         } else {
-            spans.push(Span::styled(label, Style::default().fg(Color::DarkGray)));
+            spans.push(Span::styled(label, Style::default().fg(theme.dim)));
         }
         spans.push(Span::raw("  "));
     }
@@ -540,7 +548,10 @@ fn render_tabs(frame: &mut Frame, area: Rect, model: &DashboardModel) {
 }
 
 fn render_list(frame: &mut Frame, area: Rect, model: &DashboardModel) {
-    let block = Block::bordered().title(format!(" {} ", section_title(model.nav.current())));
+    let theme = &model.theme;
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.border))
+        .title(format!(" {} ", section_title(model.nav.current())));
     let inner_w = area.width.saturating_sub(2) as usize;
     let inner_h = area.height.saturating_sub(2) as usize;
 
@@ -565,11 +576,11 @@ fn render_list(frame: &mut Frame, area: Rect, model: &DashboardModel) {
         let clipped: String = text.chars().take(inner_w.max(4)).collect();
         let style = if i == model.selected {
             Style::default()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
+                .fg(theme.on_accent)
+                .bg(theme.accent)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default()
+            Style::default().fg(theme.fg)
         };
         lines.push(Line::from(Span::styled(clipped, style)));
     }
@@ -578,7 +589,7 @@ fn render_list(frame: &mut Frame, area: Rect, model: &DashboardModel) {
             0,
             Line::from(Span::styled(
                 notice.clone(),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(theme.warn),
             )),
         );
     }
@@ -597,7 +608,10 @@ fn section_title(s: NavSection) -> &'static str {
 }
 
 fn render_preview(frame: &mut Frame, area: Rect, model: &DashboardModel) {
-    let block = Block::bordered().title(" Preview ");
+    let theme = &model.theme;
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.border))
+        .title(" Preview ");
     let lines: Vec<Line> = match model
         .current_row()
         .and_then(|r| model.preview_cache.get(&r.id))
@@ -605,7 +619,7 @@ fn render_preview(frame: &mut Frame, area: Rect, model: &DashboardModel) {
         Some(buf) => buf.iter().map(|s| Line::from(s.clone())).collect(),
         None => vec![Line::from(Span::styled(
             "(no selection)",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.dim),
         ))],
     };
     frame.render_widget(
@@ -622,7 +636,7 @@ fn render_hint_row(frame: &mut Frame, area: Rect, model: &DashboardModel) {
         model.ambient.role, model.ambient.queue_depth, model.ambient.dialog_state
     );
     frame.render_widget(
-        Paragraph::new(Span::styled(text, Style::default().fg(Color::DarkGray))),
+        Paragraph::new(Span::styled(text, Style::default().fg(model.theme.dim))),
         area,
     );
 }

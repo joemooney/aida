@@ -33,9 +33,13 @@ mod pr_rebase;
 mod pr_ship;
 mod process_probe;
 mod prompts;
+// trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
+mod queue_recover;
 mod reviewer_summary;
 mod rules_sync;
+// trace:STORY-262 | ai:claude
+mod schedule;
 mod session;
 mod session_manifest;
 mod stacks;
@@ -44,6 +48,8 @@ mod status_cleanup;
 mod status_display;
 #[cfg(test)]
 mod test_env;
+// trace:TASK-661 | ai:claude
+mod triage_lease;
 mod usage;
 mod worker;
 mod workflow_hints;
@@ -99,13 +105,14 @@ use aida_core::{
 use crate::cli::{
     AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
     BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
-    DbCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand, FindingsCommand,
-    GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand, MailboxCommand,
-    McpCommand, NodeCommand, OrchestratorCommand, PlanCommand, PrCommand, PuntsCommand,
-    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
-    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SessionWakeupCommand, SkillCommand, StackCommand, TraceCommand,
-    TypeCommand, WorkerCommand, ZenCommand,
+    DbCommand, DepsCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
+    FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand,
+    MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand, PlanCommand,
+    PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelDefCommand, RelationshipCommand,
+    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
+    ScaffoldCommand, ScheduleCommand, ServerCommand, SessionCommand, SessionManifestCommand,
+    SessionWakeupCommand, SkillCommand, StackCommand, TraceCommand, TriageCommand, TypeCommand,
+    WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -885,6 +892,7 @@ fn run() -> Result<()> {
         name,
         with_memories,
         refresh,
+        focus,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -954,7 +962,10 @@ fn run() -> Result<()> {
         // is non-fatal: it writes outside the project root, so a hiccup
         // there must not abort an otherwise-successful init. trace:STORY-255
         if *with_memories || *refresh {
-            if let Err(e) = scaffold_memory_pack(*refresh) {
+            // STORY-362: --focus <subsystem> scopes the pack to universal
+            // (untagged) memories plus those whose `subsystem:` frontmatter
+            // matches. trace:STORY-362 | ai:claude
+            if let Err(e) = scaffold_memory_pack(*refresh, focus.as_deref()) {
                 eprintln!("  {} starter memory pack skipped: {}", "Note:".dimmed(), e);
             }
         }
@@ -972,6 +983,13 @@ fn run() -> Result<()> {
     } = &cli.command
     {
         return handle_upgrade_command(*check, version.as_deref(), *yes, target.as_deref(), *diff);
+    }
+
+    // STORY-410: `aida memories check` compares the local Claude Code memory
+    // pack to the binary's embedded master — no store access needed, so handle
+    // it before storage resolution (like init/upgrade). trace:STORY-410
+    if let Command::Memories(MemoriesCommand::Check { verbose, json }) = &cli.command {
+        return handle_memories_check(*verbose, *json);
     }
 
     // Handle skill commands before storage resolution — needs no DB.
@@ -1031,6 +1049,7 @@ fn run() -> Result<()> {
         category,
         json,
         force,
+        since,
         cmd,
     } = &cli.command
     {
@@ -1040,6 +1059,7 @@ fn run() -> Result<()> {
             category.as_deref(),
             *json,
             *force,
+            since.as_deref(),
             cmd.as_ref(),
         );
     }
@@ -1048,6 +1068,13 @@ fn run() -> Result<()> {
     // trace:EPIC-21 | ai:claude
     if let Command::Store(store_cmd) = &cli.command {
         return handle_store_command(store_cmd);
+    }
+
+    // Sandbox commands MANAGE a throwaway store directory; they don't read the
+    // project's store, so dispatch before store detection (and so they work
+    // even from a non-AIDA cwd). trace:SPIKE-48 | ai:claude
+    if let Command::Sandbox(sandbox_cmd) = &cli.command {
+        return handle_sandbox_command(sandbox_cmd);
     }
 
     // Help-all is pure text; no storage needed.
@@ -1062,6 +1089,31 @@ fn run() -> Result<()> {
     // dispatch the whole group early. trace:TASK-93 TASK-94 | ai:claude
     if let Command::Plan(plan_cmd) = &cli.command {
         return handle_plan_command(plan_cmd);
+    }
+
+    // `aida deps sweep` self-loads the store via `load_store_for_lookup`
+    // and scans source for trace comments — like `plan helpers`, it needs
+    // no shared storage handle. Read-only. trace:STORY-447 | ai:claude
+    if let Command::Deps(deps_cmd) = &cli.command {
+        return handle_deps_command(deps_cmd);
+    }
+
+    // STORY-498: `aida trace gate` is self-contained — it reads git for the
+    // commit range and self-loads the store via `load_store_for_lookup` to
+    // resolve each `(SPEC-ID)` trailer. Dispatch it early (the other `trace`
+    // subcommands still need the shared storage handle and fall through to the
+    // backend path). Exits non-zero on a dead/dangling reference.
+    // trace:STORY-498 | ai:claude
+    if let Command::Trace(TraceCommand::Gate { range, json }) = &cli.command {
+        return handle_trace_gate(range.as_deref(), *json);
+    }
+
+    // STORY-499: `aida trace coverage` is self-contained the same way `gate` is
+    // — it reads git for the diff + range and self-loads the store to resolve
+    // `// trace:` anchors / `(SPEC-ID)` trailers. Dispatch it early so it never
+    // needs the shared storage handle. trace:STORY-499 | ai:claude
+    if let Command::Trace(TraceCommand::Coverage { range, json, block }) = &cli.command {
+        return handle_trace_coverage(range.as_deref(), *json, *block);
     }
 
     // `aida changelog` is self-contained: git + read-only store, no shared
@@ -1140,6 +1192,12 @@ fn run() -> Result<()> {
     if let Command::Session(session_cmd) = &cli.command {
         return handle_session_command(session_cmd);
     }
+    // TASK-661 (ADR-3): disposition/triage lease. Dispatched before storage
+    // init — it reads + writes only `.aida/triage-leases/` files and probes
+    // PIDs; no requirement-store handle needed. trace:TASK-661 | ai:claude
+    if let Command::Triage(triage_cmd) = &cli.command {
+        return handle_triage_command(triage_cmd);
+    }
     // EPIC-31 agent launchers supervise external CLIs and write process
     // registry state directly; no requirement store handle needed.
     // trace:STORY-432 | ai:codex
@@ -1176,8 +1234,15 @@ fn run() -> Result<()> {
     // `~/.aida/advisor.toml` (per-user, not per-project) and is intended to
     // be runnable from anywhere — including outside any AIDA project. Reads
     // no requirement store. trace:STORY-360 | ai:claude
+    // STORY-262: `aida advisor schedule` needs the requirement store (it
+    // files TASKs into the queue), so it must NOT short-circuit here — it
+    // falls through to the post-storage-init dispatch. Only the
+    // store-less registration subcommands run early.
+    // trace:STORY-262 | ai:claude
     if let Command::Advisor(advisor_cmd) = &cli.command {
-        return handle_advisor_command(advisor_cmd);
+        if !matches!(advisor_cmd, AdvisorCommand::Schedule(_)) {
+            return handle_advisor_command(advisor_cmd);
+        }
     }
 
     // STORY-301: drain-state introspection. Dispatched before storage init —
@@ -1219,6 +1284,13 @@ fn run() -> Result<()> {
     // store. trace:STORY-439 | ai:claude
     if let Command::Autonomy(autonomy_cmd) = &cli.command {
         return handle_autonomy_command(autonomy_cmd);
+    }
+
+    // TASK-394: the `--no-human` acknowledgement marker just touches/removes a
+    // file (no requirement store). Dispatch before storage init so it works on
+    // a fresh clone too. trace:TASK-394 | ai:claude
+    if let Command::NoHuman(no_human_cmd) = &cli.command {
+        return handle_no_human_command(no_human_cmd);
     }
 
     // Determine which requirements file to use
@@ -1278,14 +1350,27 @@ fn run() -> Result<()> {
             // trace:BUG-442 trace:TASK-621 trace:BUG-428 | ai:claude
             let distributed_root = distributed_mode_declared().or_else(|| {
                 let root = find_project_root().ok()?;
-                branch_exists_anywhere(&root, "aida-store").then_some(root)
+                if branch_exists_anywhere(&root, "aida-store") {
+                    return Some(root);
+                }
+                // BUG-433: the store is physically PRESENT here (`.aida-store/`
+                // with an `objects/` dir — even via a symlink to the main store)
+                // but there's no `.aida/config.toml` marker AND no detectable
+                // `aida-store` branch — e.g. a session worktree forked from a
+                // commit that predates the committed scaffolding, or a symlink
+                // into another repo's store. Detect distributed mode from the
+                // store's SHAPE so we use the real store instead of silently
+                // falling through to the legacy backend (which serves
+                // stale/unrelated data with no signal — the inverse of BUG-428).
+                // trace:BUG-433 | ai:claude
+                attached_store_present(&root).then_some(root)
             });
             if let Some(project_root) = distributed_root {
                 // An already-attached fresh clone (no config, but the worktree
                 // exists from a prior auto-attach) must be used directly — no
                 // re-fetch, no repeated "attached…" noise on every command.
                 let existing_worktree = project_root.join(".aida-store");
-                let store_path_opt = if existing_worktree.join("objects").is_dir() {
+                let store_path_opt = if attached_store_present(&project_root) {
                     Some(existing_worktree)
                 } else if branch_exists_anywhere(&project_root, "aida-store") {
                     // Auto-attach the store worktree from the `aida-store` branch
@@ -1399,8 +1484,13 @@ fn run() -> Result<()> {
             tags,
             prefix,
             parent,
+            blocked_by: _, // STORY-446: blocked-by edges land on the git-backend path
             force_parent,
             interactive,
+            // STORY-333: legacy centralized backend does not persist the
+            // human-only marker; ignore the flags here. trace:TASK-130 | ai:claude
+            human_only: _,
+            no_human_only: _,
             effort: _,
         } => {
             // trace:BUG-17 | ai:claude — resolve description from inline,
@@ -1505,6 +1595,7 @@ fn run() -> Result<()> {
             note,
             depends_on,
             as_deep_link,
+            notify,
             cmd,
         } => {
             let store = storage.load()?;
@@ -1516,6 +1607,7 @@ fn run() -> Result<()> {
                 note.as_deref(),
                 depends_on.as_deref(),
                 *as_deep_link,
+                *notify,
                 cmd,
                 &store,
                 &project_root,
@@ -1536,6 +1628,12 @@ fn run() -> Result<()> {
             tags,
             add_tag,
             remove_tag,
+            blocked_by: _, // STORY-446: blocked-by edges land on the git-backend path
+            remove_blocked_by: _,
+            // STORY-476: external refs land on the git-backend path only;
+            // the legacy SQLite path ignores them. trace:STORY-476 | ai:claude
+            add_ref: _,
+            remove_ref: _,
             interactive,
             strict: _, // legacy SQLite path ignores session leases
             force: _,  // TASK-47 guard only applies to git-canonical Edit
@@ -1679,11 +1777,14 @@ fn run() -> Result<()> {
             );
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
+        Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
+        Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
@@ -1692,6 +1793,7 @@ fn run() -> Result<()> {
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
+        Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
@@ -1703,6 +1805,7 @@ fn run() -> Result<()> {
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
         Command::Autonomy(_) => unreachable!("autonomy is dispatched before storage init"),
+        Command::NoHuman(_) => unreachable!("no-human is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -1918,11 +2021,24 @@ fn run() -> Result<()> {
             );
         }
         Command::Advisor(_) => {
-            // Unreachable — `aida advisor` dispatches before storage resolution
-            // (it reads only `~/.aida/advisor.toml`). The arm exists only to
-            // satisfy match exhaustiveness on the legacy-storage branch.
-            // trace:STORY-360 | ai:claude
-            unreachable!("Command::Advisor dispatched before storage init");
+            // STORY-360: `aida advisor` (register/unregister/status) dispatches
+            // before storage resolution. STORY-262's `advisor schedule`
+            // dispatches in `handle_git_backend_command` (it needs the store).
+            // This legacy-SQLite arm is unreachable for both. The schedule
+            // subcommand additionally requires the git-canonical store, so a
+            // legacy project never reaches it.
+            // trace:STORY-360 trace:STORY-262 | ai:claude
+            unreachable!("Command::Advisor dispatched before legacy storage init");
+        }
+        Command::Questions { .. } => {
+            // `aida questions` reads/writes the `decision_request` field on a
+            // spec; the deprecated SQLite backend does not persist it.
+            // trace:STORY-522 | ai:claude
+            anyhow::bail!(
+                "aida questions requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
         }
         Command::Punt { .. } => {
             // `aida punt` writes the NeedsAttention status + structured punt
@@ -1950,6 +2066,15 @@ fn run() -> Result<()> {
                 "aida state-snapshot requires the distributed git-canonical \
                  store (run `aida init` to migrate, or this project is on \
                  the deprecated --centralized backend)"
+            );
+        }
+        Command::ImportPlan { .. } => {
+            // The plan-review handshake tags + comments on the spec via the
+            // git-canonical write path. trace:TASK-516 | ai:claude
+            anyhow::bail!(
+                "aida import-plan requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
             );
         }
         Command::Skill(_) => {
@@ -2277,7 +2402,13 @@ fn handle_findings_command(
             println!("Dismissed finding {id} — status → Rejected.");
         }
 
-        FindingsCommand::Promote { id, r#for, reason } => {
+        FindingsCommand::Promote {
+            id,
+            r#for,
+            reason,
+            auto_complete,
+            force,
+        } => {
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -2287,6 +2418,87 @@ fn handle_findings_command(
                     "{id} is not a finding (no `from-review:`/`from-implementer:`/`from-advisor:` tag) — \
                      `aida findings` only triages real findings. \
                      Use `aida edit {id} --status approved` for a general status change."
+                );
+            }
+
+            // TASK-579: a finding's underlying fix may have already merged
+            // referencing the id the finding carried *before* it became real
+            // work (its origin-ID — `spec_id` here, distinct from a later
+            // `agreed_id`). Promoting it as fresh work then strands it In
+            // Progress / Approved forever, because the auto-bump scan finds no
+            // commit referencing the *new* id. Scan the default branch for a
+            // merged commit referencing any of the finding's ids; warn, or
+            // (`--auto-complete`) bump straight to Completed instead of
+            // queueing a no-op. `--force` skips the check entirely (reopen /
+            // extend). trace:TASK-579 | ai:claude
+            let project_root = store_path
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("cannot resolve project root from store path"))?;
+            let mut candidate_ids: Vec<String> = Vec::new();
+            if let Some(s) = req.spec_id.as_deref() {
+                candidate_ids.push(s.to_string());
+            }
+            if let Some(a) = req.agreed_id.as_deref() {
+                if !candidate_ids.iter().any(|c| c.eq_ignore_ascii_case(a)) {
+                    candidate_ids.push(a.to_string());
+                }
+            }
+            let already_merged = if *force {
+                None
+            } else {
+                find_merged_commit_referencing_ids(project_root, &candidate_ids)
+            };
+
+            if let Some((sha, subject)) = &already_merged {
+                if *auto_complete {
+                    let now = chrono::Utc::now();
+                    let author = get_default_author();
+                    let display_id = req.display_id();
+                    req.comments.push(Comment {
+                        id: Uuid::now_v7(),
+                        content: format!(
+                            "Auto-completed on promote {date}: origin-ID fix already \
+                             merged ({sha} \"{subject}\"). No fresh work to queue.",
+                            date = now.format("%Y-%m-%d")
+                        ),
+                        author: author.clone(),
+                        created_at: now,
+                        modified_at: now,
+                        parent_id: None,
+                        replies: Vec::new(),
+                        reactions: Vec::new(),
+                    });
+                    if let Some(text) = reason.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                        req.comments.push(Comment {
+                            id: Uuid::now_v7(),
+                            content: format!(
+                                "Promoted by {author} {date}: {text}",
+                                date = now.format("%Y-%m-%d")
+                            ),
+                            author,
+                            created_at: now,
+                            modified_at: now,
+                            parent_id: None,
+                            replies: Vec::new(),
+                            reactions: Vec::new(),
+                        });
+                    }
+                    req.status = RequirementStatus::Completed;
+                    req.modified_at = now;
+                    backend.update_requirement(&req)?;
+                    record_role_activity(&display_id, "auto-complete");
+                    println!(
+                        "Promoted finding {id} — origin-ID fix already merged ({sha}), \
+                         status → Completed (no queue). Re-run with --force to queue anyway."
+                    );
+                    return Ok(());
+                }
+                eprintln!(
+                    "Warning: {id}'s origin-ID fix appears already merged on the default \
+                     branch ({sha} \"{subject}\"). Promoting it as fresh work may strand \
+                     it open — the Done→Completed auto-bump can't fire with no commit \
+                     referencing the promoted id. Re-run with --auto-complete to bump it \
+                     straight to Completed, or --force to queue it anyway."
                 );
             }
 
@@ -2534,6 +2746,617 @@ fn handle_findings_command(
     Ok(())
 }
 
+// ===================================================================
+// `aida questions` — the async decision inbox (STORY-522, slice 1).
+//
+// The advisor distills a fork it can't resolve into a structured
+// DecisionRequest on the spec; the human batch-answers it OUTSIDE any
+// agent (plain CLI, no LLM session). Slice 1 RECORDS the answer (a pure
+// data op); the loop-resume auto-applier that applies the chosen
+// resolution token is DEFERRED per the operator decision.
+// trace:STORY-522 | ai:claude
+// ===================================================================
+
+/// Parse a `--choice` string of the form `label|consequence|resolution`
+/// into a [`DecisionChoice`]. Each of the three fields is trimmed; all
+/// three are required and non-empty. The `resolution` is a deterministic
+/// action token (e.g. `status:rejected`, `tag:+deferred`, `noop`) — its
+/// shape isn't validated here (slice 1 only records it), but it must be
+/// present so the eventual auto-applier has something to act on.
+// trace:STORY-522 | ai:claude
+fn parse_decision_choice(spec: &str) -> Result<aida_core::DecisionChoice> {
+    let parts: Vec<&str> = spec.splitn(3, '|').collect();
+    if parts.len() != 3 {
+        anyhow::bail!(
+            "invalid --choice {spec:?}: expected `label|consequence|resolution` \
+             (three fields separated by `|`)"
+        );
+    }
+    let label = parts[0].trim();
+    let consequence = parts[1].trim();
+    let resolution = parts[2].trim();
+    if label.is_empty() || consequence.is_empty() || resolution.is_empty() {
+        anyhow::bail!(
+            "invalid --choice {spec:?}: label, consequence, and resolution \
+             must all be non-empty"
+        );
+    }
+    Ok(aida_core::DecisionChoice {
+        label: label.to_string(),
+        consequence: consequence.to_string(),
+        resolution: resolution.to_string(),
+    })
+}
+
+/// Resolve a user-typed choice token (`"2"`, `"default"`, `"recommended"`)
+/// to a 0-based choice index, validated against `request`.
+// trace:STORY-522 | ai:claude
+fn resolve_choice_index(request: &aida_core::DecisionRequest, choice: &str) -> Result<usize> {
+    let trimmed = choice.trim();
+    if trimmed.eq_ignore_ascii_case("default") || trimmed.eq_ignore_ascii_case("recommended") {
+        return request.recommended.ok_or_else(|| {
+            anyhow::anyhow!(
+                "no recommended default on this question — pick a choice number (1-{})",
+                request.choices.len()
+            )
+        });
+    }
+    let one_based: usize = trimmed.parse().map_err(|_| {
+        anyhow::anyhow!(
+            "invalid choice {choice:?}: expected a number 1-{}, `default`, or `recommended`",
+            request.choices.len()
+        )
+    })?;
+    if one_based == 0 || one_based > request.choices.len() {
+        anyhow::bail!(
+            "choice {one_based} out of range — this question has {} choices (1-{})",
+            request.choices.len(),
+            request.choices.len()
+        );
+    }
+    Ok(one_based - 1)
+}
+
+/// Record an answer on a (pending) DecisionRequest: resolve the user-typed
+/// `choice` to an index, set `answered` + `answered_at`, return the index.
+/// Pure (no I/O) so the record-and-flip logic is unit-testable without a
+/// backend. Errors if already answered or the choice is invalid.
+// trace:STORY-522 | ai:claude
+fn record_answer(request: &mut aida_core::DecisionRequest, choice: &str) -> Result<usize> {
+    if !request.is_pending() {
+        anyhow::bail!("already answered");
+    }
+    let idx = resolve_choice_index(request, choice)?;
+    request.answered = Some(idx);
+    request.answered_at = Some(chrono::Utc::now());
+    Ok(idx)
+}
+
+/// Confirm the recommended default on a (pending) DecisionRequest. Returns
+/// the chosen index, or `None` when there is no default to confirm or the
+/// request is already answered. Pure (no I/O). trace:STORY-522 | ai:claude
+fn confirm_default(request: &mut aida_core::DecisionRequest) -> Option<usize> {
+    if !request.is_pending() {
+        return None;
+    }
+    let idx = request.recommended?;
+    request.answered = Some(idx);
+    request.answered_at = Some(chrono::Utc::now());
+    Some(idx)
+}
+
+/// Render a single pending DecisionRequest to stdout — question, numbered
+/// choices (recommended marked), and rationale. Shared by the list view
+/// and the interactive answer loop.
+// trace:STORY-522 | ai:claude
+fn print_decision_request(display_id: &str, title: &str, request: &aida_core::DecisionRequest) {
+    println!(
+        "{} {}  {}",
+        "Decision needed:".yellow().bold(),
+        display_id.cyan().bold(),
+        title.dimmed()
+    );
+    println!("  {}", request.question);
+    for (i, choice) in request.choices.iter().enumerate() {
+        let marker = if request.recommended == Some(i) {
+            " (recommended)".green().to_string()
+        } else {
+            String::new()
+        };
+        println!(
+            "    {}{} {} — {}",
+            format!("{}.", i + 1).bold(),
+            marker,
+            choice.label.bold(),
+            choice.consequence.dimmed()
+        );
+    }
+    if let Some(rationale) = &request.rationale {
+        println!("  {} {}", "Why:".dimmed(), rationale);
+    }
+}
+
+/// Load every requirement carrying a DecisionRequest, partitioned into
+/// (pending, answered). Reads full objects (the cache does not project the
+/// `decision_request` field, mirroring history). trace:STORY-522 | ai:claude
+fn collect_decision_requests(
+    backend: &aida_core::CachedGitBackend,
+) -> Result<(Vec<aida_core::Requirement>, Vec<aida_core::Requirement>)> {
+    let mut pending = Vec::new();
+    let mut answered = Vec::new();
+    for req in backend.list_requirements(false)? {
+        match &req.decision_request {
+            Some(dr) if dr.is_pending() => pending.push(req),
+            Some(_) => answered.push(req),
+            None => {}
+        }
+    }
+    Ok((pending, answered))
+}
+
+/// `aida questions` / `aida questions list` / `ask` / `answer` dispatch.
+// trace:STORY-522 | ai:claude
+fn handle_questions_command(
+    cmd: Option<&QuestionsCommand>,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    match cmd {
+        // Bare `aida questions` — list, then (TTY + pending) offer the loop.
+        None => {
+            let pending_count = questions_list(backend)?;
+            let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+            if interactive && pending_count > 0 {
+                print!("\nAnswer {pending_count} now? [Y/n] ");
+                use std::io::Write;
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                let answer = input.trim();
+                if answer.is_empty() || answer.eq_ignore_ascii_case("y") {
+                    questions_answer_loop(backend, store_path)?;
+                }
+            }
+            Ok(())
+        }
+        Some(QuestionsCommand::List) => {
+            questions_list(backend)?;
+            Ok(())
+        }
+        Some(QuestionsCommand::Ask {
+            spec,
+            question,
+            choice,
+            recommend,
+            rationale,
+            force,
+        }) => questions_ask(
+            backend,
+            store_path,
+            spec,
+            question,
+            choice,
+            *recommend,
+            rationale.as_deref(),
+            *force,
+        ),
+        Some(QuestionsCommand::Answer {
+            spec,
+            choice,
+            all_defaults,
+        }) => {
+            if *all_defaults {
+                if spec.is_some() || choice.is_some() {
+                    anyhow::bail!(
+                        "--all-defaults answers every recommended default in bulk; \
+                         do not also pass <spec>/<choice>"
+                    );
+                }
+                return questions_answer_all_defaults(backend, store_path);
+            }
+            match (spec, choice) {
+                (Some(spec), Some(choice)) => {
+                    questions_answer_one(backend, store_path, spec, choice)
+                }
+                (None, None) => questions_answer_loop(backend, store_path),
+                _ => anyhow::bail!(
+                    "answer takes either both <spec> and <choice> \
+                     (non-interactive) or neither (interactive loop)"
+                ),
+            }
+        }
+    }
+}
+
+/// List the decision inbox. Returns the count of pending requests so the
+/// bare-invocation caller can decide whether to offer the answer loop.
+// trace:STORY-522 | ai:claude
+fn questions_list(backend: &aida_core::CachedGitBackend) -> Result<usize> {
+    let (pending, answered) = collect_decision_requests(backend)?;
+    if pending.is_empty() && answered.is_empty() {
+        println!(
+            "{}",
+            "Decision inbox empty — no questions recorded.".dimmed()
+        );
+        return Ok(0);
+    }
+    if !pending.is_empty() {
+        println!(
+            "{} ({})",
+            "Pending decisions".yellow().bold(),
+            pending.len()
+        );
+        for req in &pending {
+            if let Some(dr) = &req.decision_request {
+                println!();
+                print_decision_request(&req.display_id(), &req.title, dr);
+            }
+        }
+    }
+    if !answered.is_empty() {
+        println!();
+        println!("{} ({})", "Answered".green().bold(), answered.len());
+        for req in &answered {
+            if let Some(dr) = &req.decision_request {
+                if let Some(idx) = dr.answered {
+                    let label = dr.choices.get(idx).map(|c| c.label.as_str()).unwrap_or("?");
+                    println!(
+                        "  {:<14} {} → {}",
+                        req.display_id().cyan(),
+                        req.title.dimmed(),
+                        label.bold()
+                    );
+                }
+            }
+        }
+    }
+    Ok(pending.len())
+}
+
+/// `aida questions ask` — pose a DecisionRequest on a spec.
+// trace:STORY-522 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn questions_ask(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    spec: &str,
+    question: &str,
+    choice_specs: &[String],
+    recommend: Option<usize>,
+    rationale: Option<&str>,
+    force: bool,
+) -> Result<()> {
+    if choice_specs.len() < 2 {
+        anyhow::bail!(
+            "a decision needs at least two choices (got {}) — pass --choice \
+             `label|consequence|resolution` twice or more",
+            choice_specs.len()
+        );
+    }
+    let choices: Vec<aida_core::DecisionChoice> = choice_specs
+        .iter()
+        .map(|c| parse_decision_choice(c))
+        .collect::<Result<_>>()?;
+
+    // recommend is 1-based on the CLI; store 0-based.
+    let recommended = match recommend {
+        Some(n) => {
+            if n == 0 || n > choices.len() {
+                anyhow::bail!(
+                    "--recommend {n} out of range — there are {} choices (1-{})",
+                    choices.len(),
+                    choices.len()
+                );
+            }
+            Some(n - 1)
+        }
+        None => None,
+    };
+
+    let mut req = backend
+        .get_requirement_by_spec_id(spec)?
+        .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
+    let display_id = req.display_id();
+
+    if let Some(existing) = &req.decision_request {
+        if existing.is_pending() && !force {
+            anyhow::bail!(
+                "{display_id} already has a pending decision — answer it first, \
+                 or pass --force to overwrite it"
+            );
+        }
+    }
+
+    let now = chrono::Utc::now();
+    let request = aida_core::DecisionRequest {
+        question: question.to_string(),
+        choices,
+        recommended,
+        rationale: rationale.map(|s| s.to_string()),
+        answered: None,
+        asked_at: Some(now),
+        answered_at: None,
+    };
+    req.decision_request = Some(request.clone());
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+
+    println!("{} {display_id}", "Decision recorded:".green().bold());
+    print_decision_request(&display_id, &req.title, &request);
+    println!(
+        "{}",
+        "Answer it with `aida questions answer` (or `aida questions` at a TTY).".dimmed()
+    );
+    Ok(())
+}
+
+/// Record one answer on a spec's DecisionRequest (the non-interactive,
+/// agent-free data op). trace:STORY-522 | ai:claude
+fn questions_answer_one(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    spec: &str,
+    choice: &str,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(spec)?
+        .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
+    let display_id = req.display_id();
+    let title = req.title.clone();
+
+    let request = req
+        .decision_request
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("{display_id} has no decision to answer"))?;
+    if !request.is_pending() {
+        anyhow::bail!("{display_id} is already answered");
+    }
+    let idx = record_answer(request, choice)?;
+    let label = request.choices[idx].label.clone();
+
+    req.modified_at = chrono::Utc::now();
+    backend.update_requirement(&req)?;
+    println!(
+        "{} {display_id} ({}) → {}",
+        "Answered".green().bold(),
+        title.dimmed(),
+        label.bold()
+    );
+    Ok(())
+}
+
+/// Interactive answer loop over every pending DecisionRequest. Reads a
+/// choice number (or `s`/`skip`) from stdin per question.
+// trace:STORY-522 | ai:claude
+fn questions_answer_loop(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let (pending, _) = collect_decision_requests(backend)?;
+    if pending.is_empty() {
+        println!("{}", "No pending decisions to answer.".dimmed());
+        return Ok(());
+    }
+    let mut answered = 0usize;
+    for req in pending {
+        let spec = req.display_id();
+        let dr = match &req.decision_request {
+            Some(dr) if dr.is_pending() => dr,
+            _ => continue,
+        };
+        println!();
+        print_decision_request(&spec, &req.title, dr);
+        let prompt = match dr.recommended {
+            Some(r) => format!(
+                "  Choice [1-{}, Enter={}, s=skip]: ",
+                dr.choices.len(),
+                r + 1
+            ),
+            None => format!("  Choice [1-{}, s=skip]: ", dr.choices.len()),
+        };
+        print!("{prompt}");
+        use std::io::Write;
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let entered = input.trim();
+        if entered.eq_ignore_ascii_case("s") || entered.eq_ignore_ascii_case("skip") {
+            println!("  {}", "skipped".dimmed());
+            continue;
+        }
+        let choice = if entered.is_empty() {
+            // Enter accepts the recommended default when one exists.
+            if dr.recommended.is_none() {
+                println!(
+                    "  {}",
+                    "no default — type a choice number or s to skip".dimmed()
+                );
+                continue;
+            }
+            "default".to_string()
+        } else {
+            entered.to_string()
+        };
+        match questions_answer_one(backend, store_path, &spec, &choice) {
+            Ok(()) => answered += 1,
+            Err(e) => println!("  {} {e}", "error:".red()),
+        }
+    }
+    println!();
+    println!("{} {answered} answered.", "Done.".green().bold());
+    Ok(())
+}
+
+/// `aida questions answer --all-defaults` — confirm every recommended
+/// default in one shot. trace:STORY-522 | ai:claude
+fn questions_answer_all_defaults(
+    backend: &aida_core::CachedGitBackend,
+    _store_path: &std::path::Path,
+) -> Result<()> {
+    let (pending, _) = collect_decision_requests(backend)?;
+    let mut answered = 0usize;
+    let mut skipped = 0usize;
+    for mut req in pending {
+        let display_id = req.display_id();
+        let request = match req.decision_request.as_mut() {
+            Some(r) if r.is_pending() => r,
+            _ => continue,
+        };
+        let Some(idx) = confirm_default(request) else {
+            skipped += 1;
+            continue;
+        };
+        let label = request.choices[idx].label.clone();
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+        answered += 1;
+        println!("  {} {display_id} → {}", "Answered".green(), label.bold());
+    }
+    if answered == 0 && skipped == 0 {
+        println!("{}", "No pending decisions to answer.".dimmed());
+    } else {
+        println!(
+            "{} {answered} answered{}.",
+            "Done.".green().bold(),
+            if skipped > 0 {
+                format!(", {skipped} skipped (no recommended default)")
+            } else {
+                String::new()
+            }
+        );
+    }
+    Ok(())
+}
+
+// STORY-522: `aida questions` parser + record/confirm logic. These tests are
+// fully isolated — pure functions over in-memory DecisionRequest values, no
+// backend / CWD / HOME / git. trace:STORY-522 | ai:claude
+#[cfg(test)]
+mod questions_tests {
+    use super::*;
+
+    fn sample_request() -> aida_core::DecisionRequest {
+        aida_core::DecisionRequest {
+            question: "Promote or ship?".to_string(),
+            choices: vec![
+                aida_core::DecisionChoice {
+                    label: "Promote to EPIC".to_string(),
+                    consequence: "decompose first".to_string(),
+                    resolution: "tag:+epic-candidate".to_string(),
+                },
+                aida_core::DecisionChoice {
+                    label: "Ship as story".to_string(),
+                    consequence: "implement directly".to_string(),
+                    resolution: "status:approved".to_string(),
+                },
+            ],
+            recommended: Some(1),
+            rationale: None,
+            answered: None,
+            asked_at: None,
+            answered_at: None,
+        }
+    }
+
+    #[test]
+    fn parse_choice_splits_three_fields() {
+        let c = parse_decision_choice("Reject|drop the spec|status:rejected").unwrap();
+        assert_eq!(c.label, "Reject");
+        assert_eq!(c.consequence, "drop the spec");
+        assert_eq!(c.resolution, "status:rejected");
+    }
+
+    #[test]
+    fn parse_choice_trims_whitespace() {
+        let c = parse_decision_choice("  A  |  does B  |  noop  ").unwrap();
+        assert_eq!(c.label, "A");
+        assert_eq!(c.consequence, "does B");
+        assert_eq!(c.resolution, "noop");
+    }
+
+    #[test]
+    fn parse_choice_resolution_may_contain_no_extra_pipes() {
+        // splitn(3) keeps everything after the 2nd pipe in `resolution`, so a
+        // compound token survives intact.
+        let c = parse_decision_choice("Approve|ready|status:approved;tag:+ready").unwrap();
+        assert_eq!(c.resolution, "status:approved;tag:+ready");
+    }
+
+    #[test]
+    fn parse_choice_rejects_too_few_fields() {
+        assert!(parse_decision_choice("just a label").is_err());
+        assert!(parse_decision_choice("label|consequence").is_err());
+    }
+
+    #[test]
+    fn parse_choice_rejects_empty_fields() {
+        assert!(parse_decision_choice("|consequence|res").is_err());
+        assert!(parse_decision_choice("label||res").is_err());
+        assert!(parse_decision_choice("label|consequence|").is_err());
+    }
+
+    #[test]
+    fn resolve_index_handles_numbers_and_keywords() {
+        let req = sample_request();
+        assert_eq!(resolve_choice_index(&req, "1").unwrap(), 0);
+        assert_eq!(resolve_choice_index(&req, "2").unwrap(), 1);
+        // default / recommended → the 0-based recommended index.
+        assert_eq!(resolve_choice_index(&req, "default").unwrap(), 1);
+        assert_eq!(resolve_choice_index(&req, "recommended").unwrap(), 1);
+        // out of range / non-numeric → error.
+        assert!(resolve_choice_index(&req, "0").is_err());
+        assert!(resolve_choice_index(&req, "3").is_err());
+        assert!(resolve_choice_index(&req, "nope").is_err());
+    }
+
+    #[test]
+    fn record_answer_flips_pending_to_answered() {
+        let mut req = sample_request();
+        assert!(req.is_pending());
+        let idx = record_answer(&mut req, "1").unwrap();
+        assert_eq!(idx, 0);
+        assert_eq!(req.answered, Some(0));
+        assert!(req.answered_at.is_some());
+        assert!(!req.is_pending());
+        // A second answer is refused.
+        assert!(record_answer(&mut req, "2").is_err());
+    }
+
+    #[test]
+    fn record_answer_default_keyword_uses_recommended() {
+        let mut req = sample_request();
+        let idx = record_answer(&mut req, "default").unwrap();
+        assert_eq!(idx, 1);
+        assert_eq!(req.answered, Some(1));
+    }
+
+    #[test]
+    fn confirm_default_sets_answered_to_recommended() {
+        let mut req = sample_request();
+        let idx = confirm_default(&mut req).unwrap();
+        assert_eq!(idx, 1);
+        assert_eq!(req.answered, Some(1));
+        assert!(req.answered_at.is_some());
+        assert!(!req.is_pending());
+    }
+
+    #[test]
+    fn confirm_default_skips_when_no_recommendation() {
+        let mut req = sample_request();
+        req.recommended = None;
+        assert!(confirm_default(&mut req).is_none());
+        assert!(req.is_pending(), "no default → left pending");
+    }
+
+    #[test]
+    fn confirm_default_skips_already_answered() {
+        let mut req = sample_request();
+        req.answered = Some(0);
+        assert!(confirm_default(&mut req).is_none());
+        assert_eq!(req.answered, Some(0), "existing answer untouched");
+    }
+}
+
 /// `aida findings add` — file an advisor observation as a `from-advisor:`
 /// finding (STORY-467). Mirrors the doc-add minimal path: build the
 /// Requirement, allocate a SPEC-ID via `update_atomically`, write the
@@ -2762,6 +3585,189 @@ fn handle_findings_recur(
     Ok(())
 }
 
+/// TASK-516: the tag a spec carries while its imported plan is awaiting
+/// master review. `aida import-plan --request-review` stamps it; the
+/// master removes it (`aida edit <SPEC> --remove-tag plan-review:pending`)
+/// once the plan is approved. `aida queue work` warns while it's present.
+// trace:TASK-516 | ai:claude
+const PLAN_REVIEW_PENDING_TAG: &str = "plan-review:pending";
+
+/// TASK-516: the pure warn-decision for `aida queue work`. Returns the
+/// warning message when the spec's tag set still carries
+/// `plan-review:pending` — i.e. an imported plan is awaiting master review
+/// and should NOT yet be treated as canonical for implementer pickup.
+/// Fully isolated: no I/O, no store, no globals — just the tag set in, an
+/// `Option<String>` out, so the decision is unit-testable in isolation.
+// trace:TASK-516 | ai:claude
+fn plan_review_warning(
+    tags: &std::collections::HashSet<String>,
+    spec_display: &str,
+) -> Option<String> {
+    if tags.contains(PLAN_REVIEW_PENDING_TAG) {
+        Some(format!(
+            "{} {}'s plan is still awaiting master review (tagged `{}`). \
+             The archived plan is NOT yet canonical — the master hasn't \
+             signed off. Proceeding will treat an unreviewed plan as the \
+             implementation brief. Once reviewed, the master clears the tag \
+             with `aida edit {} --remove-tag {}`.",
+            "Plan-review pending:".yellow().bold(),
+            spec_display,
+            PLAN_REVIEW_PENDING_TAG,
+            spec_display,
+            PLAN_REVIEW_PENDING_TAG,
+        ))
+    } else {
+        None
+    }
+}
+
+/// TASK-516: detect a `TYPE-N` spec id embedded in a plan filename (e.g.
+/// `task-516`, `STORY-86`, `2026-06-06-task-516-foo.md`). Returns the
+/// uppercased `TYPE-N` token, or None. Fully isolated for unit testing.
+// trace:TASK-516 | ai:claude
+fn detect_spec_id_from_filename(filename: &str) -> Option<String> {
+    let re = regex::Regex::new(
+        r"(?i)\b(functional|non-functional|system|user|bug|epic|story|task|spike|sprint|folder|meta|doc|fr|nfr)-(\d+)\b",
+    )
+    .ok()?;
+    re.captures(filename)
+        .map(|c| format!("{}-{}", c[1].to_uppercase(), &c[2]))
+}
+
+/// `aida import-plan <file> [--spec <SPEC>] [--request-review]` (TASK-516).
+///
+/// Archives a saved plan markdown file under
+/// `docs/plans/YYYY-MM-DD-<slug>.md` and pins it to its SPEC with a
+/// comment. With `--request-review`, lands a minimal master-review
+/// handshake: tags the spec `plan-review:pending` and posts a "plan landed
+/// for master review" comment so `aida queue work <SPEC>` warns before
+/// pickup, keeping an unreviewed plan from being treated as canonical.
+///
+/// Minimal Phase-1 slice of TASK-516: no dedicated approve/revise/decline
+/// verbs and no `aida status` pane — the master clears the tag/edits the
+/// comment by hand. trace:TASK-516 | ai:claude
+fn handle_import_plan_command(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    file: &str,
+    spec: Option<&str>,
+    request_review: bool,
+) -> Result<()> {
+    let src = std::path::Path::new(file);
+    if !src.exists() {
+        anyhow::bail!("Plan file not found: {file}");
+    }
+
+    // Resolve the target spec: explicit --spec wins, else detect from the
+    // filename. Never guess silently beyond the filename heuristic.
+    let detected = spec
+        .map(|s| s.to_string())
+        .or_else(|| detect_spec_id_from_filename(file));
+    let spec_id = detected.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Could not determine the target SPEC for this plan. Pass `--spec <SPEC-ID>` \
+             (the filename had no recognizable TYPE-N pattern)."
+        )
+    })?;
+
+    let mut req = backend
+        .get_requirement_by_spec_id(&spec_id)?
+        .ok_or_else(|| not_found::requirement_not_found(&spec_id, Some(store_path)))?;
+    let spec_display = req
+        .agreed_id
+        .as_deref()
+        .or(req.spec_id.as_deref())
+        .unwrap_or(&spec_id)
+        .to_string();
+
+    // Archive the plan under docs/plans/YYYY-MM-DD-<slug>.md (AIDA
+    // convention). Slug derives from the spec title; fall back to the
+    // source filename stem. The plan dir lives at the main worktree root.
+    let main_root = find_main_worktree_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let plans_dir = main_root.join("docs/plans");
+    std::fs::create_dir_all(&plans_dir)?;
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let slug_source = if req.title.trim().is_empty() {
+        src.file_stem().and_then(|s| s.to_str()).unwrap_or("plan")
+    } else {
+        req.title.as_str()
+    };
+    let slug: String = slugify_str(slug_source)
+        .split('-')
+        .take(6)
+        .collect::<Vec<_>>()
+        .join("-");
+    let slug = if slug.is_empty() {
+        "plan".to_string()
+    } else {
+        slug
+    };
+    let dest = plans_dir.join(format!("{date}-{slug}.md"));
+    // Don't overwrite an existing archived plan silently — disambiguate.
+    let dest = if dest.exists() && dest != src {
+        plans_dir.join(format!(
+            "{date}-{slug}-{}.md",
+            chrono::Local::now().format("%H%M%S")
+        ))
+    } else {
+        dest
+    };
+    if dest != src {
+        std::fs::copy(src, &dest)?;
+    }
+    let dest_rel = dest
+        .strip_prefix(&main_root)
+        .unwrap_or(&dest)
+        .display()
+        .to_string();
+
+    let now = chrono::Utc::now();
+    let author = get_default_author();
+
+    let comment_body = if request_review {
+        format!(
+            "Plan landed for master review: {dest_rel}. Master verdict awaited before \
+             implementer pickup (tagged `{PLAN_REVIEW_PENDING_TAG}`)."
+        )
+    } else {
+        format!("Plan imported to {dest_rel} (via aida import-plan).")
+    };
+    req.comments.push(Comment {
+        id: Uuid::now_v7(),
+        content: comment_body,
+        author,
+        created_at: now,
+        modified_at: now,
+        parent_id: None,
+        replies: Vec::new(),
+        reactions: Vec::new(),
+    });
+
+    if request_review {
+        req.tags.insert(PLAN_REVIEW_PENDING_TAG.to_string());
+    }
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+
+    println!(
+        "Imported plan to {} (pinned to {}).",
+        dest_rel, spec_display
+    );
+    if request_review {
+        println!(
+            "  {} {} tagged `{}`. `aida queue work {}` will warn before pickup until the \
+             master clears the tag with `aida edit {} --remove-tag {}`.",
+            "Master review requested:".cyan().bold(),
+            spec_display,
+            PLAN_REVIEW_PENDING_TAG,
+            spec_display,
+            spec_display,
+            PLAN_REVIEW_PENDING_TAG,
+        );
+    }
+    Ok(())
+}
+
 /// `aida advisor` — manage the live-advisor registration the
 /// `--no-human=both` orchestrator reads (STORY-360). Three actions:
 ///   - `register` writes the current session's UUID + project slug to
@@ -2780,7 +3786,325 @@ fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
             Ok(())
         }
         AdvisorCommand::Status { json } => handle_advisor_status(*json),
+        // STORY-262: `schedule` needs the requirement store, so it's routed
+        // through the post-storage-init dispatch instead of this store-less
+        // early handler. trace:STORY-262 | ai:claude
+        AdvisorCommand::Schedule(_) => {
+            unreachable!("advisor schedule dispatches after storage init")
+        }
     }
+}
+
+/// STORY-262: `aida advisor schedule <add|list|enable|disable|remove|run>`.
+/// The no-daemon scheduling primitive — recurring task templates with a
+/// cadence, fired into the queue on `aida pull`.
+/// trace:STORY-262 | ai:claude
+fn handle_schedule_command(
+    cmd: &ScheduleCommand,
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    match cmd {
+        ScheduleCommand::Add {
+            name,
+            every,
+            template,
+            description,
+            tags,
+            for_role,
+        } => {
+            // Validate the cadence up front so a bad token errors at
+            // registration instead of silently never-firing.
+            schedule::parse_cadence(every)
+                .with_context(|| format!("invalid --every cadence '{every}'"))?;
+
+            let mut file = schedule::load(project_root);
+            if file.schedules.iter().any(|s| &s.name == name) {
+                anyhow::bail!(
+                    "a schedule named '{name}' already exists — `aida advisor schedule remove {name}` first, or pick a different name"
+                );
+            }
+            let parsed_tags: Vec<String> = tags
+                .as_deref()
+                .map(|t| {
+                    t.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default();
+            file.schedules.push(schedule::Schedule {
+                name: name.clone(),
+                cadence: every.clone(),
+                title: template.clone(),
+                description: description.clone(),
+                tags: parsed_tags,
+                for_role: canonical_role_name(for_role),
+                last_fired: None,
+                enabled: true,
+            });
+            schedule::save(project_root, &file)?;
+            println!(
+                "{} schedule '{}' — every {}, routes to {} (fires on next `aida pull`)",
+                "Registered".green().bold(),
+                name.cyan(),
+                every,
+                for_role,
+            );
+            Ok(())
+        }
+        ScheduleCommand::List { json } => {
+            let file = schedule::load(project_root);
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&file.schedules)?);
+                return Ok(());
+            }
+            if file.schedules.is_empty() {
+                println!(
+                    "No schedules registered. Add one with:\n  aida advisor schedule add <name> --every 14d --template \"...\""
+                );
+                return Ok(());
+            }
+            let now = chrono::Utc::now();
+            println!(
+                "{:<28} {:<9} {:<13} {:<13} {}",
+                "Name".bold(),
+                "Cadence".bold(),
+                "Last fired".bold(),
+                "Next due".bold(),
+                "Status".bold(),
+            );
+            for s in &file.schedules {
+                let last = s
+                    .last_fired
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_else(|| "(never)".to_string());
+                let next = s
+                    .next_due()
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_else(|| "now".to_string());
+                let status = if !s.enabled {
+                    "disabled".dimmed().to_string()
+                } else if s.is_due(now) {
+                    "due".yellow().bold().to_string()
+                } else {
+                    "pending".green().to_string()
+                };
+                println!(
+                    "{:<28} {:<9} {:<13} {:<13} {}",
+                    s.name, s.cadence, last, next, status,
+                );
+            }
+            Ok(())
+        }
+        ScheduleCommand::Enable { name } => set_schedule_enabled(project_root, name, true),
+        ScheduleCommand::Disable { name } => set_schedule_enabled(project_root, name, false),
+        ScheduleCommand::Remove { name } => {
+            let mut file = schedule::load(project_root);
+            let before = file.schedules.len();
+            file.schedules.retain(|s| &s.name != name);
+            if file.schedules.len() == before {
+                anyhow::bail!("no schedule named '{name}'");
+            }
+            schedule::save(project_root, &file)?;
+            println!("{} schedule '{}'", "Removed".green().bold(), name.cyan());
+            Ok(())
+        }
+        ScheduleCommand::Run { name } => {
+            let fired = fire_schedules(project_root, store_path, name.as_deref(), false)?;
+            if fired.is_empty() {
+                match name {
+                    Some(n) => println!("Schedule '{n}' fired no TASK (see notes above)."),
+                    None => println!("No schedules were due."),
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// STORY-262 helper: flip a schedule's `enabled` flag. trace:STORY-262 | ai:claude
+fn set_schedule_enabled(project_root: &std::path::Path, name: &str, enabled: bool) -> Result<()> {
+    let mut file = schedule::load(project_root);
+    let s = file
+        .schedules
+        .iter_mut()
+        .find(|s| s.name == name)
+        .ok_or_else(|| anyhow::anyhow!("no schedule named '{name}'"))?;
+    s.enabled = enabled;
+    schedule::save(project_root, &file)?;
+    println!(
+        "{} schedule '{}'",
+        if enabled {
+            "Enabled".green().bold()
+        } else {
+            "Disabled".yellow().bold()
+        },
+        name.cyan(),
+    );
+    Ok(())
+}
+
+/// STORY-262: evaluate schedules and fire the due ones (the logic `aida pull`
+/// invokes, and `aida advisor schedule run` too). Returns the names of
+/// schedules that actually filed a TASK.
+///
+/// - `only`: when `Some(name)`, restrict to that one schedule and FORCE-fire
+///   it regardless of cadence (the `schedule run <name>` semantics). When
+///   `None`, fire every currently-due, enabled schedule.
+/// - `quiet`: suppress the per-fire stdout lines (used by `--quiet` pulls).
+///
+/// Skip rule (acceptance): if a schedule already has an open (non-terminal)
+/// TASK from a prior fire, SKIP and surface a note rather than piling up.
+/// trace:STORY-262 | ai:claude
+fn fire_schedules(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    only: Option<&str>,
+    quiet: bool,
+) -> Result<Vec<String>> {
+    let mut file = schedule::load(project_root);
+    if file.schedules.is_empty() {
+        if let Some(n) = only {
+            anyhow::bail!("no schedule named '{n}'");
+        }
+        return Ok(vec![]);
+    }
+    if let Some(n) = only {
+        if !file.schedules.iter().any(|s| s.name == n) {
+            anyhow::bail!("no schedule named '{n}'");
+        }
+    }
+
+    let now = chrono::Utc::now();
+    // Load the store once to detect open prior fires by `scheduled:<name>` tag.
+    let storage = Storage::new(store_path.to_path_buf());
+    let store = storage.load().ok();
+
+    let mut fired: Vec<String> = vec![];
+    let mut changed = false;
+
+    for s in file.schedules.iter_mut() {
+        // Targeting: when `only` is set, force-fire just that one.
+        let should_consider = match only {
+            Some(n) => s.name == n,
+            None => s.is_due(now),
+        };
+        if !should_consider {
+            continue;
+        }
+        // A forced run still respects `enabled = false` only when not
+        // explicitly named; an explicit `run <name>` overrides.
+        if only.is_none() && !s.enabled {
+            continue;
+        }
+
+        // Skip if a prior fire is still open (non-terminal).
+        let scheduled_tag = format!("scheduled:{}", s.name);
+        let has_open_prior = store
+            .as_ref()
+            .map(|st| {
+                st.requirements
+                    .iter()
+                    .any(|r| r.tags.contains(&scheduled_tag) && !is_terminal_status(&r.status))
+            })
+            .unwrap_or(false);
+        if has_open_prior {
+            if !quiet {
+                eprintln!(
+                    "  {} schedule '{}' has an open TASK from a prior fire — skipping (finish it first)",
+                    "Note:".dimmed(),
+                    s.name,
+                );
+            }
+            continue;
+        }
+
+        match file_task_for_schedule(&storage, s) {
+            Ok(spec_id) => {
+                s.last_fired = Some(now);
+                changed = true;
+                fired.push(s.name.clone());
+                if !quiet {
+                    println!(
+                        "  {} {} from schedule '{}' → {} queue",
+                        "Filed".green().bold(),
+                        spec_id.cyan(),
+                        s.name,
+                        s.for_role,
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} schedule '{}' failed to file a TASK: {} (last_fired not updated; retries next pull)",
+                    "Warning:".yellow().bold(),
+                    s.name,
+                    e,
+                );
+            }
+        }
+    }
+
+    if changed {
+        schedule::save(project_root, &file)?;
+    }
+    Ok(fired)
+}
+
+/// STORY-262: file one TASK from a schedule template into the target role's
+/// queue. Returns the new spec id (or the UUID if no spec id was assigned).
+/// Tags the TASK `scheduled:<name>` + `batch:scheduled` so it's traceable and
+/// drainable via `aida queue work --batch scheduled --auto-complete`.
+/// trace:STORY-262 | ai:claude
+fn file_task_for_schedule(storage: &Storage, s: &schedule::Schedule) -> Result<String> {
+    let mut store = storage.load()?;
+
+    let mut requirement =
+        Requirement::new(s.title.clone(), s.description.clone().unwrap_or_default());
+    requirement.req_type = RequirementType::Task;
+    // Approved so the routed role can pick it up immediately; these are
+    // operator-registered cadences, not unvetted intake.
+    requirement.status = RequirementStatus::Approved;
+    requirement.owner = get_default_author();
+
+    let mut tags: HashSet<String> = HashSet::new();
+    tags.insert(format!("scheduled:{}", s.name));
+    tags.insert("batch:scheduled".to_string());
+    for t in &s.tags {
+        tags.insert(t.clone());
+    }
+    requirement.tags = tags;
+
+    let id = requirement.id;
+    let type_prefix = store.get_type_prefix(&requirement.req_type);
+    store.add_requirement_with_id(requirement, None, type_prefix.as_deref());
+    storage.save(&store)?;
+
+    let spec_id = store
+        .get_requirement_by_id(&id)
+        .and_then(|r| r.spec_id.clone())
+        .unwrap_or_else(|| id.to_string());
+
+    // Route into the target role's queue.
+    let user_id = current_user_id(None);
+    let entry = aida_core::QueueEntry {
+        user_id: user_id.clone(),
+        requirement_id: id,
+        position: i64::MAX,
+        added_by: user_id,
+        note: Some(format!("Scheduled task from '{}'", s.name)),
+        added_at: chrono::Utc::now(),
+        for_role: Some(canonical_role_name(&s.for_role)),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    storage
+        .queue_add(entry)
+        .with_context(|| format!("failed to queue scheduled TASK {spec_id}"))?;
+
+    Ok(spec_id)
 }
 
 fn handle_advisor_register(uuid: Option<&str>, project_slug: Option<&str>) -> Result<()> {
@@ -3734,6 +5058,73 @@ fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
                 Ok(())
             }
         },
+        // Human-intervention maturity report: count of escalate-to-human punt
+        // records, rolled up per day. The honest maturity signal — the count
+        // trending toward zero shows the autonomy investment paying off.
+        // (Operator decision 2026-06-06: ship the intervention-count only;
+        // the availability-polluted duration fraction is skipped.)
+        // trace:TASK-340 | ai:claude
+        AutonomyCommand::Report { last, json } => {
+            let project_root = find_project_root()?;
+            let records = punt::read_ledger(&project_root);
+            let days = punt::human_interventions_by_day(&records);
+            let total = punt::total_human_interventions(&records);
+
+            if *json {
+                let capped: Vec<&punt::AutonomyDay> = days.iter().take(*last).collect();
+                let payload = serde_json::json!({
+                    "total_human_interventions": total,
+                    "days": capped,
+                });
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+                return Ok(());
+            }
+
+            println!("{}", "Autonomy maturity — human interventions".bold());
+            println!(
+                "  {}",
+                "count of escalate-to-human punt decisions, per day (newest first)".dimmed()
+            );
+            println!();
+
+            if days.is_empty() {
+                println!(
+                    "  {}",
+                    "No human interventions recorded — no drain has escalated to a human yet."
+                        .green()
+                );
+                println!(
+                    "  {}",
+                    "interventions are escalate-to-human records in .aida/punts.jsonl".dimmed()
+                );
+                return Ok(());
+            }
+
+            println!("  {:<12} {}", "DATE".dimmed(), "INTERVENTIONS".dimmed());
+            for day in days.iter().take(*last) {
+                println!(
+                    "  {:<12} {}",
+                    day.date,
+                    day.interventions.to_string().bold()
+                );
+            }
+            println!();
+            println!(
+                "  {} {} across {} day{}",
+                "Total:".bold(),
+                total.to_string().bold(),
+                days.len(),
+                if days.len() == 1 { "" } else { "s" },
+            );
+            println!(
+                "  {}",
+                "the count trending toward zero is the maturity signal; \
+                 it is NOT polluted by human-availability latency the way a \
+                 raw duration fraction would be"
+                    .dimmed()
+            );
+            Ok(())
+        }
     }
 }
 /// Add a promoted finding to a role's work queue.
@@ -3772,6 +5163,7 @@ fn queue_promoted_finding(
         for_role: Some(role.clone()),
         for_scope: None,
         for_session: None,
+        added_by_machine: None,
     };
     storage.queue_add(entry).with_context(|| {
         format!(
@@ -4158,15 +5550,52 @@ struct MemoryPackReport {
     kept_user: usize,
 }
 
+/// Decide whether a memory template loads under an active `--focus`
+/// subsystem. A memory with no top-level `subsystem:` frontmatter key is
+/// **universal** and always loads. A tagged memory loads only when its
+/// `subsystem:` value matches `focus` (case-insensitive). When `focus` is
+/// `None` the full pack loads (every member passes). trace:STORY-362 | ai:claude
+fn memory_matches_focus(template: &str, focus: Option<&str>) -> bool {
+    let Some(focus) = focus else {
+        return true; // no focus → full pack
+    };
+    let template = normalize_line_endings(template);
+    let Some((fm, _)) = split_md_frontmatter(&template) else {
+        return true; // malformed/no frontmatter → treat as universal
+    };
+    match frontmatter_field(fm, "subsystem") {
+        Some(subsystem) => subsystem.eq_ignore_ascii_case(focus),
+        None => true, // untagged → universal, always loads
+    }
+}
+
 /// Write (or `--refresh`) the starter memory pack into `mem_dir`. Every
 /// embedded `memories/*` template except the MEMORY.md skeleton is a pack
 /// member; MEMORY.md's `aida:scaffold-pack` index block is regenerated.
 /// The pure core of `scaffold_memory_pack` — takes the target dir directly
 /// so it is testable without touching the real `$HOME`.
+///
+/// `focus` scopes the pack to a subsystem (STORY-362): when `Some`, only
+/// universal (untagged) memories plus those whose `subsystem:` frontmatter
+/// matches are written/indexed; `None` writes the full pack.
 /// trace:STORY-255 | ai:claude
-fn scaffold_memory_pack_into(mem_dir: &std::path::Path, refresh: bool) -> Result<MemoryPackReport> {
+fn scaffold_memory_pack_into(
+    mem_dir: &std::path::Path,
+    refresh: bool,
+    focus: Option<&str>,
+) -> Result<MemoryPackReport> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
 
+    let all_members = EMBEDDED_TEMPLATES.iter().any(|(k, _)| {
+        k.strip_prefix("memories/")
+            .is_some_and(|n| n != "MEMORY.md")
+    });
+    if !all_members {
+        anyhow::bail!("no starter memories are embedded in this build");
+    }
+
+    // trace:STORY-362 | ai:claude — apply the --focus subsystem filter:
+    // untagged memories are universal and always pass.
     let mut files: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
         .iter()
         .filter_map(|(k, v)| {
@@ -4174,9 +5603,12 @@ fn scaffold_memory_pack_into(mem_dir: &std::path::Path, refresh: bool) -> Result
                 .filter(|n| *n != "MEMORY.md")
                 .map(|n| (n, *v))
         })
+        .filter(|(_, template)| memory_matches_focus(template, focus))
         .collect();
     if files.is_empty() {
-        anyhow::bail!("no starter memories are embedded in this build");
+        anyhow::bail!(
+            "no starter memories match the requested focus subsystem (and none are universal)"
+        );
     }
     files.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -4218,9 +5650,10 @@ fn scaffold_memory_pack_into(mem_dir: &std::path::Path, refresh: bool) -> Result
 }
 
 /// Write (or `--refresh`) the starter memory pack into the Claude Code
-/// project memory dir for the current working directory.
+/// project memory dir for the current working directory. `focus` scopes the
+/// pack to a subsystem (STORY-362); `None` writes the full pack.
 /// trace:STORY-255 | ai:claude
-fn scaffold_memory_pack(refresh: bool) -> Result<()> {
+fn scaffold_memory_pack(refresh: bool, focus: Option<&str>) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let home =
         dirs::home_dir().context("cannot resolve home directory for the starter memory pack")?;
@@ -4231,7 +5664,7 @@ fn scaffold_memory_pack(refresh: bool) -> Result<()> {
         .join(&slug)
         .join("memory");
 
-    let report = scaffold_memory_pack_into(&mem_dir, refresh)?;
+    let report = scaffold_memory_pack_into(&mem_dir, refresh, focus)?;
 
     println!();
     if refresh {
@@ -4253,7 +5686,369 @@ fn scaffold_memory_pack(refresh: bool) -> Result<()> {
         );
     }
     println!("    {}", mem_dir.display().to_string().dimmed());
+    // trace:STORY-362 | ai:claude
+    if let Some(focus) = focus {
+        println!(
+            "    {} scoped to subsystem '{}' (universal memories always included)",
+            "focus:".dimmed(),
+            focus
+        );
+    }
     Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// STORY-410: existing-project substrate-drift discovery.
+//
+// `aida init --with-memories --refresh` (STORY-255) lets a project overlay
+// newer scaffolding-pack memories onto its existing dir, preserving user
+// edits via body-checksum. But the user has to KNOW the pack is stale to run
+// it. `aida memories check` is the discoverability surface: it compares the
+// local memory dir against the binary's embedded master pack and reports
+// drift, without writing anything. `aida status` surfaces a one-line summary
+// when the pack is significantly behind.
+// trace:STORY-410 | ai:claude
+// ──────────────────────────────────────────────────────────────────────────
+
+/// One pack member's relationship to the binary's embedded master.
+/// trace:STORY-410 | ai:claude
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum MemoryDriftState {
+    /// The master ships this memory; the local dir doesn't have it.
+    /// `--refresh` would write it fresh.
+    Missing,
+    /// Present locally and pristine but byte-different from the current
+    /// embedded version — `--refresh` would overlay the newer master.
+    Stale,
+    /// Present locally, pristine, and byte-identical to the master.
+    UpToDate,
+    /// Present locally, scaffolded, but the body no longer matches its
+    /// recorded checksum — the user edited it. `--refresh` keeps the edit.
+    Edited,
+    /// Present locally with no `aida-scaffold` marker — the user's own file
+    /// shadowing a pack name. `--refresh` never touches it.
+    UserOwned,
+}
+
+/// One row of `aida memories check` output.
+/// trace:STORY-410 | ai:claude
+#[derive(Debug)]
+struct MemoryDriftRow {
+    /// Pack-member filename (e.g. `feedback_advocate_not_be_passive.md`).
+    name: String,
+    /// `name:` frontmatter label, falling back to the filename.
+    label: String,
+    /// One-line `description:` from the master template, when present.
+    description: String,
+    state: MemoryDriftState,
+}
+
+/// The full drift report: every embedded pack member classified against the
+/// local memory dir. Pure data — printing lives in `print_memory_drift`.
+/// trace:STORY-410 | ai:claude
+#[derive(Debug, Default)]
+struct MemoryDriftReport {
+    rows: Vec<MemoryDriftRow>,
+}
+
+impl MemoryDriftReport {
+    fn count(&self, state: MemoryDriftState) -> usize {
+        self.rows.iter().filter(|r| r.state == state).count()
+    }
+    fn missing(&self) -> usize {
+        self.count(MemoryDriftState::Missing)
+    }
+    fn stale(&self) -> usize {
+        self.count(MemoryDriftState::Stale)
+    }
+    fn up_to_date(&self) -> usize {
+        self.count(MemoryDriftState::UpToDate)
+    }
+    fn edited(&self) -> usize {
+        self.count(MemoryDriftState::Edited)
+    }
+    fn user_owned(&self) -> usize {
+        self.count(MemoryDriftState::UserOwned)
+    }
+    /// How many master-pack members `--refresh` would land (write or overlay).
+    /// This is the number that matters for "how behind am I?".
+    fn behind(&self) -> usize {
+        self.missing() + self.stale()
+    }
+}
+
+/// Compute the embedded `name:` label + `description:` for a master template.
+fn master_memory_meta(template: &str) -> (String, String) {
+    let template = normalize_line_endings(template);
+    let (fm, _) = split_md_frontmatter(&template).unwrap_or(("", ""));
+    let label = frontmatter_field(fm, "name").unwrap_or("").to_string();
+    let desc = frontmatter_field(fm, "description")
+        .unwrap_or("")
+        .trim_matches('"')
+        .to_string();
+    (label, desc)
+}
+
+/// Classify every embedded scaffolding-pack memory against an on-disk memory
+/// dir. The pure core of `aida memories check` — takes the dir directly so it
+/// is testable without touching the real `$HOME`. Mirrors the marker-driven
+/// selection in `scaffold_memory_pack_into` so the two surfaces never diverge.
+/// trace:STORY-410 | ai:claude
+fn compute_memory_drift_into(mem_dir: &std::path::Path) -> Result<MemoryDriftReport> {
+    use aida_core::templates::EMBEDDED_TEMPLATES;
+
+    let mut files: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
+        .iter()
+        .filter_map(|(k, v)| {
+            k.strip_prefix("memories/")
+                .filter(|n| *n != "MEMORY.md")
+                .map(|n| (n, *v))
+        })
+        .collect();
+    if files.is_empty() {
+        anyhow::bail!("no starter memories are embedded in this build");
+    }
+    files.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut report = MemoryDriftReport::default();
+    for (name, template) in &files {
+        let scaffolded = build_scaffolded_memory(template)
+            .with_context(|| format!("malformed starter memory template: {name}"))?;
+        let (fm_label, description) = master_memory_meta(template);
+        let label = if fm_label.is_empty() {
+            name.to_string()
+        } else {
+            fm_label
+        };
+
+        let dest = mem_dir.join(name);
+        let state = if !dest.exists() {
+            MemoryDriftState::Missing
+        } else {
+            let existing = std::fs::read_to_string(&dest)?;
+            match memory_refresh_disposition(&existing) {
+                MemoryDisposition::UserOwned => MemoryDriftState::UserOwned,
+                MemoryDisposition::Edited => MemoryDriftState::Edited,
+                MemoryDisposition::Pristine => {
+                    if normalize_line_endings(&existing) == scaffolded {
+                        MemoryDriftState::UpToDate
+                    } else {
+                        MemoryDriftState::Stale
+                    }
+                }
+            }
+        };
+
+        report.rows.push(MemoryDriftRow {
+            name: name.to_string(),
+            label,
+            description,
+            state,
+        });
+    }
+    Ok(report)
+}
+
+/// Resolve the Claude Code project memory dir for the current working
+/// directory (same slug rule as `scaffold_memory_pack`).
+fn project_memory_dir() -> Result<std::path::PathBuf> {
+    let cwd = std::env::current_dir()?;
+    let home =
+        dirs::home_dir().context("cannot resolve home directory for the starter memory pack")?;
+    let slug = process_probe::encode_cwd_for_projects(&cwd);
+    Ok(home
+        .join(".claude")
+        .join("projects")
+        .join(&slug)
+        .join("memory"))
+}
+
+/// `aida memories check`: compare the local memory pack against the binary's
+/// embedded master and report drift. Reads only — never writes. The
+/// recommendation (`aida init --with-memories --refresh`) is exact and
+/// paste-ready. trace:STORY-410 | ai:claude
+fn handle_memories_check(verbose: bool, json: bool) -> Result<()> {
+    let mem_dir = project_memory_dir()?;
+    let report = compute_memory_drift_into(&mem_dir)?;
+
+    if json {
+        let rows: Vec<serde_json::Value> = report
+            .rows
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name,
+                    "label": r.label,
+                    "description": r.description,
+                    "state": match r.state {
+                        MemoryDriftState::Missing => "missing",
+                        MemoryDriftState::Stale => "stale",
+                        MemoryDriftState::UpToDate => "up-to-date",
+                        MemoryDriftState::Edited => "edited",
+                        MemoryDriftState::UserOwned => "user-owned",
+                    },
+                })
+            })
+            .collect();
+        let out = serde_json::json!({
+            "memory_dir": mem_dir.display().to_string(),
+            "aida_version": current_version(),
+            "master_total": report.rows.len(),
+            "behind": report.behind(),
+            "missing": report.missing(),
+            "stale": report.stale(),
+            "up_to_date": report.up_to_date(),
+            "edited": report.edited(),
+            "user_owned": report.user_owned(),
+            "rows": rows,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+
+    print_memory_drift(&mem_dir, &report, verbose);
+    Ok(())
+}
+
+/// Render the human-readable `aida memories check` report. Default mode caps
+/// each category at 5 entries; `--verbose` lists them all.
+/// trace:STORY-410 | ai:claude
+fn print_memory_drift(mem_dir: &std::path::Path, report: &MemoryDriftReport, verbose: bool) {
+    let max = if verbose { usize::MAX } else { 5 };
+
+    println!();
+    println!("  {}: {}", "Memory pack".bold(), mem_dir.display());
+    println!(
+        "  {} (in this aida binary): {} master memories",
+        "Master pack".bold(),
+        report.rows.len()
+    );
+    println!();
+
+    if !mem_dir.exists() {
+        println!(
+            "  {} no local memory pack yet — all {} master memories are missing.",
+            "Note:".yellow(),
+            report.rows.len()
+        );
+        print_memory_drift_recommendation();
+        return;
+    }
+
+    let print_category = |heading: colored::ColoredString,
+                          state: MemoryDriftState,
+                          with_desc: bool| {
+        let rows: Vec<&MemoryDriftRow> = report.rows.iter().filter(|r| r.state == state).collect();
+        if rows.is_empty() {
+            return;
+        }
+        println!("  {} ({}):", heading, rows.len());
+        for row in rows.iter().take(max) {
+            if with_desc && !row.description.is_empty() {
+                println!("    {} — {}", row.label.cyan(), row.description.dimmed());
+            } else {
+                println!("    {}", row.label.cyan());
+            }
+        }
+        if rows.len() > max {
+            println!(
+                "    {} (run {} to see all)",
+                format!("... {} more", rows.len() - max).dimmed(),
+                "aida memories check --verbose".cyan()
+            );
+        }
+        println!();
+    };
+
+    print_category(
+        "Missing from local".yellow(),
+        MemoryDriftState::Missing,
+        true,
+    );
+    print_category(
+        "Stale (newer version in master)".yellow(),
+        MemoryDriftState::Stale,
+        true,
+    );
+    print_category(
+        "Edited locally (kept by --refresh)".blue(),
+        MemoryDriftState::Edited,
+        false,
+    );
+    print_category(
+        "Your own (no scaffold marker; never overwritten)".dimmed(),
+        MemoryDriftState::UserOwned,
+        false,
+    );
+
+    println!("  {} up to date.", report.up_to_date().to_string().green());
+    println!();
+
+    if report.behind() == 0 {
+        println!(
+            "  {} memory pack is current with this aida binary.",
+            "✓".green()
+        );
+        println!();
+    } else {
+        println!(
+            "  {} {} behind master.",
+            report.behind().to_string().yellow().bold(),
+            if report.behind() == 1 {
+                "memory is"
+            } else {
+                "memories are"
+            }
+        );
+        print_memory_drift_recommendation();
+    }
+}
+
+/// The exact, paste-ready refresh command. trace:STORY-410 | ai:claude
+fn print_memory_drift_recommendation() {
+    println!();
+    println!(
+        "  To pull missing/updated memories (keeps your edits):\n    {}",
+        "aida init --with-memories --refresh".cyan()
+    );
+    println!();
+}
+
+/// STORY-410 Phase 2: the `aida status` one-liner. Silent unless a local
+/// memory pack exists AND is behind the binary's master — so a project that
+/// never opted into `--with-memories` is never nagged, and a current pack
+/// stays quiet (the line appearing is itself the signal). Best-effort: any
+/// error (no $HOME, no embedded pack) degrades to silence rather than
+/// breaking the status surface. trace:STORY-410 | ai:claude
+fn print_status_memory_drift_section() {
+    let Ok(mem_dir) = project_memory_dir() else {
+        return;
+    };
+    // A project that never scaffolded the pack has no memory dir — don't nag.
+    if !mem_dir.exists() {
+        return;
+    }
+    let Ok(report) = compute_memory_drift_into(&mem_dir) else {
+        return;
+    };
+    let behind = report.behind();
+    if behind == 0 {
+        return;
+    }
+    // Only surface when the pack is actually adopted (some scaffolded files
+    // present). An all-missing dir means the user keeps their own memories
+    // there but never took the pack — leave them alone.
+    if report.up_to_date() + report.stale() + report.edited() == 0 {
+        return;
+    }
+    println!(
+        "  {} {} memor{} behind master — run {} for details",
+        "Memory pack:".bold().yellow(),
+        behind,
+        if behind == 1 { "y" } else { "ies" },
+        "aida memories check".cyan()
+    );
+    println!();
 }
 
 /// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
@@ -4396,6 +6191,149 @@ fn has_aida_runtime_deny_pattern(content: &str) -> bool {
     content.lines().any(|line| line.trim() == ".aida/*")
 }
 
+/// The canonical set of top-level paths `aida init` writes as scaffolding.
+/// This is the ALLOW-LIST for the init self-commit (TASK-631) — the commit
+/// stages exactly these and NEVER a bare `git add .`, so an `aida init` run
+/// inside an existing repo with unrelated WIP can't sweep the user's changes
+/// into the "chore: scaffold AIDA" commit.
+///
+/// Out of scope by design: user content, the `.aida-store/` worktree (it's a
+/// separate orphan branch with its own commits), `.aida/cache.db` and other
+/// runtime state (gitignored by the deny-by-default `.aida/*` rule). Only
+/// `.aida/config.toml` is the tracked exception under `.aida/`.
+/// trace:TASK-631 | ai:claude
+fn init_scaffold_candidate_paths() -> &'static [&'static str] {
+    &[
+        ".gitignore",
+        ".aida/config.toml",
+        ".mcp.json",
+        "CLAUDE.md",
+        "AGENTS.md",
+        ".claude",
+        ".codex",
+        // trace:TASK-457 | ai:claude
+        ".antigravity",
+        "docs/plans",
+        "docs/aida",
+        "docs/agents",
+        "docs/extending-skills.md",
+        "docs/competitive-analysis",
+    ]
+}
+
+/// Filter [`init_scaffold_candidate_paths`] to the ones that actually exist
+/// on disk under `root`. Pure (modulo filesystem reads) so it can be unit
+/// tested against a temp dir. Returns paths relative to `root`, suitable for
+/// passing straight to `git add`. trace:TASK-631 | ai:claude
+fn init_scaffold_commit_paths(root: &std::path::Path) -> Vec<String> {
+    init_scaffold_candidate_paths()
+        .iter()
+        .filter(|p| root.join(p).exists())
+        .map(|p| p.to_string())
+        .collect()
+}
+
+/// Decide whether init should auto-commit its scaffolding (`Some(true)`),
+/// never commit (`Some(false)`), or prompt the operator (`None`). Pure so the
+/// auto-vs-prompt branch is unit-testable without a real TTY.
+///
+/// Auto when non-interactive (no TTY: orchestrator / agent / CI / piped) —
+/// same non-TTY-fast-path discipline as BUG-422/BUG-407. On a TTY we return
+/// `None` so the caller prompts (default-Y) and an operator with unrelated
+/// WIP can decline. An explicit `AIDA_INIT_COMMIT_SCAFFOLD` env override wins
+/// over the TTY heuristic in both directions (`1`/`true`/`yes`/`on` → auto,
+/// `0`/`false`/`no`/`off` → never). trace:TASK-631 | ai:claude
+fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -> Option<bool> {
+    if let Some(raw) = env_override {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => return Some(true),
+            "0" | "false" | "no" | "off" => return Some(false),
+            _ => {}
+        }
+    }
+    if stdin_is_tty {
+        // TTY → caller should prompt (default-Y), not auto-commit.
+        None
+    } else {
+        // Non-interactive → auto-commit.
+        Some(true)
+    }
+}
+
+/// After scaffolding is on disk, commit init's OWN created paths so a fresh
+/// clone / session worktree inherits the scaffolding without the operator
+/// having to remember the manual `git add . && git commit` step (BUG-445,
+/// BUG-433, BUG-73 family). Auto-commits when non-interactive; prompts
+/// (default-Y) on a TTY after printing the exact paths it will stage.
+///
+/// Scoped to [`init_scaffold_commit_paths`] — never `git add .`. Returns
+/// `Ok(true)` when a commit was made (so the caller can dedup the onboarding
+/// "commit scaffolding" task), `Ok(false)` otherwise. Best-effort: a git
+/// failure here is a soft note, not a fatal init error. trace:TASK-631 | ai:claude
+fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
+    use aida_core::git_ops;
+
+    let paths = init_scaffold_commit_paths(root);
+    if paths.is_empty() {
+        return Ok(false);
+    }
+
+    let stdin_is_tty = std::io::stdin().is_terminal();
+    let env_override = std::env::var("AIDA_INIT_COMMIT_SCAFFOLD").ok();
+    let decision = should_auto_commit_scaffold(stdin_is_tty, env_override.as_deref());
+
+    let proceed = match decision {
+        Some(true) => true,
+        Some(false) => false,
+        None => {
+            // TTY: show what will be staged, then prompt default-Y.
+            println!();
+            println!(
+                "  {} will stage these AIDA scaffolding paths:",
+                "init".bold()
+            );
+            for p in &paths {
+                println!("    {}", p.dimmed());
+            }
+            prompt_yes_no("  Commit the AIDA scaffolding now? [Y/n] ", true).unwrap_or(false)
+        }
+    };
+
+    if !proceed {
+        println!(
+            "  {} scaffolding left uncommitted — commit it with `git add {} && git commit -m 'chore: scaffold AIDA'`.",
+            "Note:".dimmed(),
+            paths.join(" "),
+        );
+        return Ok(false);
+    }
+
+    let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+    if let Err(e) = git_ops::add(root, &path_refs) {
+        eprintln!(
+            "  {} could not stage scaffolding paths: {}",
+            "Note:".dimmed(),
+            e
+        );
+        return Ok(false);
+    }
+    match git_ops::commit(root, "chore: scaffold AIDA") {
+        Ok(true) => {
+            println!(
+                "  {} committed AIDA scaffolding (chore: scaffold AIDA)",
+                "Done".green()
+            );
+            Ok(true)
+        }
+        // Nothing staged was new (already tracked + unchanged). Not an error.
+        Ok(false) => Ok(false),
+        Err(e) => {
+            eprintln!("  {} could not commit scaffolding: {}", "Note:".dimmed(), e);
+            Ok(false)
+        }
+    }
+}
+
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
 /// commands, hooks, MCP integration, etc. Called by both centralized and
 /// distributed init paths after their respective storage setup is complete.
@@ -4418,6 +6356,9 @@ fn complete_init_scaffolding(
         "claude" => {
             config.generate_agents_md = false;
             config.generate_codex_skills = false;
+            // .antigravity/ mirrors the non-Claude .codex/ dir; the
+            // Claude-only profile skips both. trace:TASK-457 | ai:claude
+            config.generate_antigravity_skills = false;
         }
         "codex" => {
             config.generate_claude_md = false;
@@ -4438,6 +6379,9 @@ fn complete_init_scaffolding(
         config.generate_skills = false;
         config.generate_commands = false;
         config.generate_codex_skills = false;
+        // --no-skills skips every agent-skill dir consistently, including
+        // the new .antigravity/skills/. trace:TASK-457 | ai:claude
+        config.generate_antigravity_skills = false;
         config.include_aida_req_skill = false;
         config.include_aida_plan_skill = false;
         config.include_aida_implement_skill = false;
@@ -4605,6 +6549,14 @@ fn complete_init_scaffolding(
                 " ".repeat(24)
             );
         }
+        // trace:TASK-457 | ai:claude
+        if config_for_output.generate_antigravity_skills {
+            println!(
+                "    {}{}Workflow skills (Antigravity-compatible)",
+                ".antigravity/skills/".white().bold(),
+                " ".repeat(18)
+            );
+        }
         if !no_hooks && config_for_output.generate_claude_code_hooks {
             println!(
                 "    {}{}Commit validation hooks",
@@ -4678,6 +6630,32 @@ fn complete_init_scaffolding(
         " ".repeat(23)
     );
 
+    // TASK-645: surface the role model at the onboarding moment so there is
+    // no undefined-role window. The default is read-side (`AIDA_SESSION_ROLE`
+    // unset → implementer); init can't set the env var from a subprocess, so
+    // it names the default and the switch command rather than entering one.
+    println!();
+    println!("  {}:", "Your role".bold());
+    println!(
+        "    You're the {} by default — the seat that picks up and ships work.",
+        "implementer".green().bold()
+    );
+    println!(
+        "    {} Roles are just hats you wear as the project grows ({}/{}/{}).",
+        "·".dimmed(),
+        "implementer".cyan(),
+        "advisor".cyan(),
+        "reviewer".cyan()
+    );
+    // trace:TASK-667 — under the shell wrapper the bare `aida role enter`
+    // is correct; raw, the `eval "$(...)"` form is. eval_subcommand_hint
+    // picks based on AIDA_SHELL_WRAPPER instead of hardcoding one form.
+    println!(
+        "    {} Switch any time: {}",
+        "·".dimmed(),
+        eval_subcommand_hint("role enter <role>").cyan()
+    );
+
     if !verbose {
         println!();
         // BUG-38: the prior hint pointed at re-running `aida init
@@ -4710,23 +6688,67 @@ fn complete_init_scaffolding(
     }
     println!();
 
+    // TASK-631: commit init's OWN scaffolding now that every scaffolded path
+    // is on disk — auto when non-interactive, prompt default-Y on a TTY,
+    // scoped to init-created paths (never `git add .`). This dissolves the
+    // onboarding "remember to commit the scaffolding" footgun (BUG-445) and
+    // the downstream "fresh clone / session worktree lacks the scaffolding"
+    // failure (BUG-433, BUG-73 family). trace:TASK-631 | ai:claude
+    let scaffolding_committed = commit_init_scaffolding(root).unwrap_or(false);
+
     // trace:TASK-510 | ai:antigravity
-    if let Err(e) = enqueue_initial_scaffold_task(root, &db_path) {
-        eprintln!(
-            "  {} could not enqueue initial scaffolding task: {}",
-            "Note:".dimmed(),
-            e
-        );
+    // DEDUP (TASK-631): when init committed the scaffolding itself, skip
+    // enqueuing the "Commit AIDA scaffolding" onboarding task — the first
+    // user shouldn't be told to do an already-done step.
+    if !scaffolding_committed {
+        if let Err(e) = enqueue_initial_scaffold_task(root, &db_path) {
+            eprintln!(
+                "  {} could not enqueue initial scaffolding task: {}",
+                "Note:".dimmed(),
+                e
+            );
+        }
     }
 
     Ok(())
 }
 
+/// Build the seeded onboarding "Commit AIDA scaffolding" requirement (sans the
+/// spec-id-dependent description, which the caller fills once an id is assigned).
+///
+/// BUG-445: the durable guardrail lives here. A scaffolding-commit task acts on
+/// the PRIMARY worktree's uncommitted state (the freshly-scaffolded `.gitignore`,
+/// `.aida/config.toml`, `.claude/*`). It must NEVER route through `aida queue
+/// work` worktree isolation: a worktree branched off the initial commit lacks
+/// the scaffolding entirely, and a bare `git add .` there (no `.gitignore`
+/// present) would embed the `.aida-store` gitlink + machine-specific
+/// cache/session symlinks into history. Flagging it `human_only` makes the
+/// pickability gate (`aida_core::pickability`) refuse it at every queue-work
+/// pickup site — head pickup, batch drain, and cluster drain — so it stays
+/// primary-worktree-only. The human (or any non-isolated session) marks it done
+/// with `aida queue done` after committing in the canonical repo.
+// trace:BUG-445 | ai:claude
+fn build_initial_scaffold_requirement() -> aida_core::Requirement {
+    use aida_core::{Requirement, RequirementPriority, RequirementStatus, RequirementType};
+
+    let mut req = Requirement::new(
+        "Commit AIDA scaffolding (initial setup)".to_string(),
+        "".to_string(),
+    );
+    req.req_type = RequirementType::Task;
+    req.status = RequirementStatus::Approved;
+    req.priority = RequirementPriority::High;
+    req.tags.insert("from-aida-init".to_string());
+    req.tags.insert("first-task".to_string());
+    req.tags.insert("scaffolding".to_string());
+    // trace:BUG-445 | ai:claude — primary-worktree-only guardrail (see fn doc).
+    req.human_only = true;
+    req
+}
+
 // trace:TASK-510 | ai:antigravity
 fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Path) -> Result<()> {
-    use aida_core::{
-        Requirement, RequirementPriority, RequirementStatus, RequirementType, Storage,
-    };
+    use aida_core::Storage;
 
     let resolved_db_path = root.join(db_path);
     let storage = Storage::new(&resolved_db_path);
@@ -4741,23 +6763,14 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
         return Ok(());
     }
 
-    let mut req = Requirement::new(
-        "Commit AIDA scaffolding (initial setup)".to_string(),
-        "".to_string(),
-    );
-    req.req_type = RequirementType::Task;
-    req.status = RequirementStatus::Approved;
-    req.priority = RequirementPriority::High;
-    req.tags.insert("from-aida-init".to_string());
-    req.tags.insert("first-task".to_string());
-    req.tags.insert("scaffolding".to_string());
+    let req = build_initial_scaffold_requirement();
 
     store.add_requirement_with_id(req, None, Some("task"));
 
     let (requirement_uuid, spec_id_display) = if let Some(last) = store.requirements.last_mut() {
         let spec_id = last.spec_id.as_deref().unwrap_or("TASK-1").to_string();
         last.description = format!(
-            "After aida init, the scaffolded files are untracked. Run: git add . && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) ensure only the right files get committed. Run 'aida queue done {}' after the commit lands.",
+            "After aida init, the scaffolded files are untracked. Stage only AIDA's own paths (never `git add .` in a repo with unrelated work): git add .gitignore .aida/config.toml .mcp.json CLAUDE.md AGENTS.md .claude docs/plans docs/aida && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) keep runtime state out. Run 'aida queue done {}' after the commit lands.",
             spec_id
         );
 
@@ -4796,6 +6809,7 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
         for_role: Some("implementer".to_string()),
         for_scope: None,
         for_session: None,
+        added_by_machine: None,
     };
     // Best-effort queue_add — the spec exists either way; queue-add failure
     // is a softer error than the substrate write being unrecoverable.
@@ -4856,14 +6870,234 @@ mod task_510_init_scaffold_task_tests {
             "Idempotency failed: task was duplicated"
         );
     }
+
+    /// BUG-445: the durable guardrail. The seeded scaffolding-commit task
+    /// must be flagged `human_only` so `aida queue work` never worktree-
+    /// isolates it. A worktree branched off the initial commit lacks the
+    /// uncommitted scaffolding entirely, and a bare `git add .` there would
+    /// embed the `.aida-store` gitlink + machine-specific cache/session
+    /// symlinks into history. `human_only` makes the pickability gate refuse
+    /// the spec at every queue-work pickup site, keeping it primary-worktree-
+    /// only.
+    ///
+    /// This asserts on the builder (`build_initial_scaffold_requirement`) +
+    /// the pickability gate directly, NOT on a storage round-trip: the legacy
+    /// SQLite cache projection is lossy on `human_only` (the canonical
+    /// git-backend YAML round-trip preserves it, per
+    /// `RequirementsStore`/`models.rs`), so testing through `Storage::load`
+    /// on a `.db` path would assert the cache's lossiness rather than the
+    /// seeding decision. trace:BUG-445 | ai:claude
+    #[test]
+    fn scaffold_task_is_primary_worktree_only_and_not_pickable() {
+        use aida_core::pickability::{pickability, BlockedReason, Pickability};
+        use aida_core::RequirementsStore;
+
+        let req = build_initial_scaffold_requirement();
+
+        // The guardrail flag itself.
+        assert!(
+            req.human_only,
+            "scaffolding-commit task must be human_only so queue-work never \
+             worktree-isolates it (BUG-445)"
+        );
+
+        // And the consequence: the pickability gate (consulted by every
+        // queue-work pickup site — head pickup, batch drain, cluster drain)
+        // refuses it, so it can never route through worktree isolation.
+        let mut store = RequirementsStore::default();
+        store.requirements.push(req.clone());
+        assert_eq!(
+            pickability(&req, &store),
+            Pickability::Blocked(BlockedReason::HumanOnly),
+            "scaffolding-commit task must be un-pickable (human-only) so \
+             `aida queue work` cannot isolate it into a worktree (BUG-445)"
+        );
+    }
+
+    /// BUG-445 guard (c): the seeded task instruction must never emit a bare
+    /// `git add .` — it stages only AIDA's own paths, with `.gitignore`
+    /// listed first so deny-by-default rules apply. Asserts on the persisted
+    /// description (which the cache DOES round-trip, unlike `human_only`).
+    /// trace:BUG-445 | ai:claude
+    #[test]
+    fn scaffold_task_instruction_never_bare_git_add_dot() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = std::path::Path::new(".aida/cache.db");
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+
+        enqueue_initial_scaffold_task(tmp.path(), db_path).unwrap();
+
+        let storage = Storage::new(&tmp.path().join(db_path));
+        let store = storage.load().unwrap();
+        let desc = &store.requirements[0].description;
+
+        // Match the bare form precisely: `git add .gitignore ...` is the
+        // *correct* scoped form and legitimately starts with the same chars.
+        assert!(
+            !desc.contains("git add . "),
+            "instruction must never emit a bare `git add .` (BUG-445 c); got:\n{desc}"
+        );
+        assert!(
+            !desc.contains("git add .\n") && !desc.ends_with("git add ."),
+            "instruction must never emit a bare `git add .` (BUG-445 c); got:\n{desc}"
+        );
+        assert!(
+            desc.contains("git add .gitignore"),
+            "instruction must stage scoped paths starting with .gitignore (BUG-445 c)"
+        );
+    }
+}
+
+// trace:TASK-631 | ai:claude
+#[cfg(test)]
+mod task_631_init_self_commit_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn commit_paths_filters_to_existing_only_and_never_bare_dot() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        // Nothing written yet → empty list.
+        assert!(init_scaffold_commit_paths(root).is_empty());
+
+        // Write a representative subset of init-owned paths.
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".aida/config.toml"), "x").unwrap();
+        std::fs::write(root.join(".gitignore"), "x").unwrap();
+        std::fs::write(root.join("CLAUDE.md"), "x").unwrap();
+        std::fs::create_dir_all(root.join(".claude/skills")).unwrap();
+        std::fs::write(root.join(".claude/skills/foo.md"), "x").unwrap();
+        std::fs::create_dir_all(root.join("docs/aida")).unwrap();
+
+        // An UNRELATED user file must NOT appear in the staged set.
+        std::fs::write(root.join("user_wip.rs"), "x").unwrap();
+
+        let paths = init_scaffold_commit_paths(root);
+        assert!(paths.contains(&".aida/config.toml".to_string()));
+        assert!(paths.contains(&".gitignore".to_string()));
+        assert!(paths.contains(&"CLAUDE.md".to_string()));
+        assert!(paths.contains(&".claude".to_string()));
+        assert!(paths.contains(&"docs/aida".to_string()));
+
+        // Candidates that were never written are filtered out.
+        assert!(!paths.contains(&"AGENTS.md".to_string()));
+        assert!(!paths.contains(&".codex".to_string()));
+
+        // CRITICAL invariant: never a bare "." and never the user's WIP.
+        assert!(!paths.iter().any(|p| p == "."));
+        assert!(!paths.iter().any(|p| p == "user_wip.rs"));
+
+        // Every staged path is one of the known candidates.
+        let candidates = init_scaffold_candidate_paths();
+        for p in &paths {
+            assert!(
+                candidates.contains(&p.as_str()),
+                "staged path {p} is not in the init allow-list"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_vs_prompt_decision() {
+        // Non-interactive (no TTY) → auto-commit.
+        assert_eq!(should_auto_commit_scaffold(false, None), Some(true));
+        // Interactive (TTY) → prompt (None).
+        assert_eq!(should_auto_commit_scaffold(true, None), None);
+
+        // Env override forces auto even on a TTY.
+        assert_eq!(
+            should_auto_commit_scaffold(true, Some("1")),
+            Some(true),
+            "env=1 should force auto"
+        );
+        assert_eq!(should_auto_commit_scaffold(true, Some("true")), Some(true));
+        assert_eq!(should_auto_commit_scaffold(true, Some("YES")), Some(true));
+        assert_eq!(should_auto_commit_scaffold(true, Some(" on ")), Some(true));
+
+        // Env override forces never even when non-interactive.
+        assert_eq!(
+            should_auto_commit_scaffold(false, Some("0")),
+            Some(false),
+            "env=0 should force never"
+        );
+        assert_eq!(
+            should_auto_commit_scaffold(false, Some("false")),
+            Some(false)
+        );
+        assert_eq!(should_auto_commit_scaffold(false, Some("no")), Some(false));
+        assert_eq!(should_auto_commit_scaffold(false, Some("off")), Some(false));
+
+        // Unrecognized env value falls through to the TTY heuristic.
+        assert_eq!(
+            should_auto_commit_scaffold(false, Some("maybe")),
+            Some(true)
+        );
+        assert_eq!(should_auto_commit_scaffold(true, Some("maybe")), None);
+    }
 }
 
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
+///
+/// `AIDA_STORE` overrides everything: when it points at an existing
+/// git-canonical store directory (one containing `objects/`), the whole CLI
+/// (and the MCP server, which shares this resolver) retargets there instead of
+/// walking up from CWD. This is the throwaway dev-playground / sandbox path
+/// (SPIKE-48) — run drains and test scenarios against a discardable store
+/// without touching the project's real `aida-store` orphan branch. The pointed
+/// directory must already exist and look like a store; a missing or malformed
+/// `AIDA_STORE` is ignored so a stale export never silently writes to a
+/// half-formed location. trace:SPIKE-48 | ai:claude
 /// trace:BUG-57 | ai:claude
 fn detect_distributed_store() -> Option<std::path::PathBuf> {
+    if let Some(store) = aida_store_override() {
+        return Some(store);
+    }
     let cwd = std::env::current_dir().ok()?;
     detect_distributed_store_from(&cwd)
+}
+
+/// BUG-433: is a git-canonical store physically attached at `<root>/.aida-store`?
+/// True when `.aida-store/objects/` is a directory — the hallmark of an attached
+/// orphan-store worktree, resolved through a symlink too. Used to detect
+/// distributed mode from the store's SHAPE when neither `.aida/config.toml` nor
+/// an `aida-store` branch is present, so plain `aida` uses the real store
+/// instead of silently serving legacy data. trace:BUG-433 | ai:claude
+fn attached_store_present(project_root: &std::path::Path) -> bool {
+    project_root.join(".aida-store").join("objects").is_dir()
+}
+
+/// Resolve the `AIDA_STORE` env override into a usable store path, or `None`
+/// when unset / pointing at something that isn't a git-canonical store. A valid
+/// store directory is one that exists and contains an `objects/` subdirectory
+/// (the per-spec YAML tree GitBackend manages). Validation is deliberately
+/// strict-but-quiet: a typo'd or not-yet-created path falls through to normal
+/// resolution rather than erroring, so the override is opt-in and never the
+/// thing that breaks a forgotten-export shell. Use `aida sandbox create` to
+/// produce a directory this accepts. trace:SPIKE-48 | ai:claude
+fn aida_store_override() -> Option<std::path::PathBuf> {
+    let raw = std::env::var("AIDA_STORE").ok()?;
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    aida_store_override_from(std::path::Path::new(raw))
+}
+
+/// Path-resolution core of [`aida_store_override`], split out so it can be
+/// unit-tested without mutating process env. Returns the canonicalized store
+/// path when `path` exists and holds an `objects/` directory, else `None`.
+/// trace:SPIKE-48 | ai:claude
+fn aida_store_override_from(path: &std::path::Path) -> Option<std::path::PathBuf> {
+    if !path.is_dir() {
+        return None;
+    }
+    if !path.join("objects").is_dir() {
+        return None;
+    }
+    Some(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
 }
 
 /// Walk up from `start` and return the project root whose `.aida/config.toml`
@@ -5356,6 +7590,130 @@ fn load_dispenser(store_path: &std::path::Path) -> Result<aida_core::models::Dis
     )))
 }
 
+/// TASK-102: human-readable phrase for a relationship edge, shared by
+/// `aida show`'s inline enumeration and the centralized renderer so the two
+/// stay consistent. trace:TASK-102 | ai:claude
+fn relationship_phrase(rt: &aida_core::models::RelationshipType) -> String {
+    use aida_core::models::RelationshipType as R;
+    match rt {
+        R::Parent => "is parent of".to_string(),
+        R::Child => "is child of".to_string(),
+        R::Duplicate => "is duplicate of".to_string(),
+        R::Verifies => "verifies".to_string(),
+        R::VerifiedBy => "is verified by".to_string(),
+        R::References => "references".to_string(),
+        R::BlockedBy => "is blocked by".to_string(),
+        R::Blocks => "blocks".to_string(),
+        R::Custom(name) => name.clone(),
+    }
+}
+
+/// STORY-446: add a BlockedBy edge from `spec_id` to `blocker_id`, plus the
+/// inverse Blocks edge on the blocker — atomically and idempotently. Returns
+/// the blocker's display id for messaging. The pickability gate
+/// (`aida_core::pickability`) already matches the typed BlockedBy variant, so
+/// this is purely the ergonomic declaration path (STORY-333 added the variant).
+/// trace:STORY-446 | ai:claude
+fn add_blocked_by_edge(
+    backend: &aida_core::CachedGitBackend,
+    spec_id: &str,
+    blocker_id: &str,
+) -> Result<String> {
+    use aida_core::models::{Relationship, RelationshipType};
+    use aida_core::DatabaseBackend;
+
+    let mut req = backend
+        .get_requirement_by_spec_id(spec_id)?
+        .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
+    let blocker = backend
+        .get_requirement_by_spec_id(blocker_id)?
+        .ok_or_else(|| not_found::requirement_not_found(blocker_id, None))?;
+    if blocker.id == req.id {
+        anyhow::bail!("a requirement cannot be blocked by itself ({})", spec_id);
+    }
+    let blocker_display = blocker
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| blocker_id.to_string());
+
+    // Idempotent: only add the BlockedBy edge if absent.
+    if !req
+        .relationships
+        .iter()
+        .any(|r| matches!(r.rel_type, RelationshipType::BlockedBy) && r.target_id == blocker.id)
+    {
+        req.relationships.push(Relationship {
+            rel_type: RelationshipType::BlockedBy,
+            target_id: blocker.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+    }
+
+    // Inverse Blocks edge on the blocker (also idempotent).
+    let mut blocker = backend.get_requirement_by_spec_id(blocker_id)?.unwrap();
+    if !blocker
+        .relationships
+        .iter()
+        .any(|r| matches!(r.rel_type, RelationshipType::Blocks) && r.target_id == req.id)
+    {
+        blocker.relationships.push(Relationship {
+            rel_type: RelationshipType::Blocks,
+            target_id: req.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+        blocker.modified_at = chrono::Utc::now();
+        backend.update_requirement(&blocker)?;
+    }
+    Ok(blocker_display)
+}
+
+/// STORY-446: remove the BlockedBy edge from `spec_id` to `blocker_id` and the
+/// inverse Blocks edge on the blocker. No-op (returns the display id) when the
+/// edge is absent. trace:STORY-446 | ai:claude
+fn remove_blocked_by_edge(
+    backend: &aida_core::CachedGitBackend,
+    spec_id: &str,
+    blocker_id: &str,
+) -> Result<String> {
+    use aida_core::models::RelationshipType;
+    use aida_core::DatabaseBackend;
+
+    let mut req = backend
+        .get_requirement_by_spec_id(spec_id)?
+        .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
+    let blocker = backend
+        .get_requirement_by_spec_id(blocker_id)?
+        .ok_or_else(|| not_found::requirement_not_found(blocker_id, None))?;
+    let blocker_display = blocker
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| blocker_id.to_string());
+
+    let before = req.relationships.len();
+    req.relationships.retain(|r| {
+        !(matches!(r.rel_type, RelationshipType::BlockedBy) && r.target_id == blocker.id)
+    });
+    if req.relationships.len() != before {
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+    }
+
+    let mut blocker = backend.get_requirement_by_spec_id(blocker_id)?.unwrap();
+    let inv_before = blocker.relationships.len();
+    blocker
+        .relationships
+        .retain(|r| !(matches!(r.rel_type, RelationshipType::Blocks) && r.target_id == req.id));
+    if blocker.relationships.len() != inv_before {
+        blocker.modified_at = chrono::Utc::now();
+        backend.update_requirement(&blocker)?;
+    }
+    Ok(blocker_display)
+}
+
 /// Handle commands routed to the GitBackend (when --file points to a directory).
 fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -> Result<()> {
     // STORY-43: warn loudly when this clone has been hijacked. Runs once
@@ -5423,12 +7781,30 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Agent(agent_cmd) => {
             return handle_agent_command(agent_cmd);
         }
+        Command::Advisor(advisor_cmd) => {
+            // STORY-262: `aida advisor schedule` is the only advisor subcommand
+            // that reaches storage init — it files TASKs into the queue. The
+            // store-less registration subcommands (register/unregister/status)
+            // dispatch before storage init and never reach here.
+            // trace:STORY-262 | ai:claude
+            match advisor_cmd {
+                AdvisorCommand::Schedule(sched_cmd) => {
+                    let project_root = store_path
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                    return handle_schedule_command(sched_cmd, &project_root, store_path);
+                }
+                _ => unreachable!("non-schedule advisor subcommands dispatch before storage init"),
+            }
+        }
         Command::Brief {
             agent,
             spec,
             note,
             depends_on,
             as_deep_link,
+            notify,
             cmd,
         } => {
             let store = backend.load()?;
@@ -5441,6 +7817,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 note.as_deref(),
                 depends_on.as_deref(),
                 *as_deep_link,
+                *notify,
                 cmd,
                 &store,
                 project_root,
@@ -5601,12 +7978,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             );
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
+        Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
+        Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
+        Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
@@ -5615,6 +7995,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
+        Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
@@ -5640,6 +8021,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             json,
             tree,
             show_tags,
+            blocked,
+            no_flow,
+            no_glyph,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -5742,6 +8126,72 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
 
+            // TASK-670: compute the leading work-routing overlay (↑ queued /
+            // ▶ in-flight / ⊘ blocked) once for the visible row set, then map
+            // each row to a glyph. Two cheap reads are always on (a queues
+            // dir scan + a live-lease probe); the blocked axis needs a graph
+            // walk so it's gated behind --blocked. `--no-glyph` short-circuits
+            // ALL of it (restores the pure-cache fast path); `--no-flow` keeps
+            // the cheap probes off too since the column is dropped anyway.
+            // trace:TASK-670 | ai:claude
+            let show_flow = !*no_glyph && !*no_flow;
+            // The routing sets feed BOTH the flow-glyph column AND the JSON
+            // routing fields. The display-suppression flags (`--no-glyph` /
+            // `--no-flow`) hide the COLUMN but must not blank the machine
+            // fields, so compute the cheap probes whenever we render glyphs OR
+            // emit JSON. trace:TASK-670 | ai:claude
+            let need_routing = show_flow || *json;
+            // project root = the parent of the `.aida-store` worktree.
+            let routing_root = store_path.parent().map(|p| p.to_path_buf());
+            let queued_ids: HashSet<Uuid> = if need_routing {
+                routing_root
+                    .as_deref()
+                    .map(all_queued_requirement_ids)
+                    .unwrap_or_default()
+            } else {
+                HashSet::new()
+            };
+            let in_flight_scopes: HashSet<String> = if need_routing {
+                routing_root
+                    .as_deref()
+                    .map(in_flight_lease_scopes)
+                    .unwrap_or_default()
+            } else {
+                HashSet::new()
+            };
+            // Blocked axis: only when --blocked. Needs the relationships array,
+            // which the cache projection drops, so load the full store once and
+            // resolve BlockedBy edges per row.
+            let blocked_ids: HashSet<Uuid> = if need_routing && *blocked {
+                match backend.load() {
+                    Ok(store) => store
+                        .requirements
+                        .iter()
+                        .filter(|r| aida_core::pickability::blocked_by_incomplete(r, &store))
+                        .map(|r| r.id)
+                        .collect(),
+                    Err(_) => HashSet::new(),
+                }
+            } else {
+                HashSet::new()
+            };
+            // Per-row routing classifier. A row is in-flight when a live lease's
+            // scope matches its canonical or origin id (case-insensitive); the
+            // in-flight set is empty unless a live lease exists.
+            let row_routing = |r: &aida_core::RequirementSummary| -> (bool, bool, bool) {
+                let queued = queued_ids.contains(&r.id);
+                let blocked = blocked_ids.contains(&r.id);
+                let in_flight = if in_flight_scopes.is_empty() {
+                    false
+                } else {
+                    [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|id| in_flight_scopes.contains(&id.to_ascii_lowercase()))
+                };
+                (in_flight, blocked, queued)
+            };
+
             // STORY-441: count of archived rows that would have surfaced if
             // `--all` was set. Cheap second query, used only to render the
             // "(N archived hidden — pass --all …)" footer hint. Skipped when
@@ -5765,6 +8215,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // human chrome (banner / footer count / colours).
             // trace:STORY-244 | ai:claude
             if *json {
+                // TASK-670: carry the work-routing axis as machine fields
+                // (glyphs are display-only). `blocked` reflects the graph walk
+                // only when --blocked was passed; otherwise it's always false.
+                // trace:TASK-670 | ai:claude
                 #[derive(serde::Serialize)]
                 struct ListJsonRow<'a> {
                     spec_id: &'a str,
@@ -5772,19 +8226,28 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     req_type: &'a str,
                     status: &'a str,
                     tags: &'a [String],
+                    queued: bool,
+                    in_flight: bool,
+                    blocked: bool,
                 }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
-                    .map(|r| ListJsonRow {
-                        spec_id: r
-                            .agreed_id
-                            .as_deref()
-                            .or(r.spec_id.as_deref())
-                            .unwrap_or(""),
-                        title: r.title.as_str(),
-                        req_type: r.req_type.as_str(),
-                        status: r.status.as_str(),
-                        tags: &r.tags,
+                    .map(|r| {
+                        let (in_flight, blocked, queued) = row_routing(r);
+                        ListJsonRow {
+                            spec_id: r
+                                .agreed_id
+                                .as_deref()
+                                .or(r.spec_id.as_deref())
+                                .unwrap_or(""),
+                            title: r.title.as_str(),
+                            req_type: r.req_type.as_str(),
+                            status: r.status.as_str(),
+                            tags: &r.tags,
+                            queued,
+                            in_flight,
+                            blocked,
+                        }
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&out)?);
@@ -5930,19 +8393,49 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // terminals; chip set itself is truncated to 3 with a
                 // "+N more" suffix. trace:TASK-569 | ai:claude
                 let title_max = if *show_tags { 50 } else { usize::MAX };
+                // TASK-670: the leading work-routing column. `flow_prefix` is
+                // "<glyph> " (2 visible cols) per row when the column is shown,
+                // else "". `flow_header` reserves the same 2 cols in the header
+                // + divider so the ID column stays aligned. `render_status`
+                // drops the status glyph under --no-glyph for plain-text output.
+                // trace:TASK-670 | ai:claude
+                let flow_header = if show_flow { "  " } else { "" };
+                let flow_width = flow_header.len();
+                let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
+                    if !show_flow {
+                        return String::new();
+                    }
+                    let (in_flight, blocked, queued) = row_routing(r);
+                    format!(
+                        "{} ",
+                        status_display::flow_glyph(in_flight, blocked, queued)
+                    )
+                };
+                let render_status = |status: &str| -> String {
+                    if *no_glyph {
+                        // 13 cols = the glyph(1)+space(1)+11-label width the
+                        // glyph cell occupies, so columns line up either way.
+                        status_display::status_cell_no_glyph(status, 13)
+                    } else {
+                        status_display::status_cell(status, 11)
+                    }
+                };
                 if *show_origin {
                     if *show_tags {
                         println!(
-                            "{:<12} {:<14} {:<12} {:<10} {:<50} {}",
-                            "ID", "Origin ID", "Type", "Status", "Title", "Tags"
+                            "{}{:<12} {:<14} {:<12} {:<13} {:<50} {}",
+                            flow_header, "ID", "Origin ID", "Type", "Status", "Title", "Tags"
                         );
                     } else {
                         println!(
-                            "{:<12} {:<14} {:<12} {:<10} {}",
-                            "ID", "Origin ID", "Type", "Status", "Title"
+                            "{}{:<12} {:<14} {:<12} {:<13} {}",
+                            flow_header, "ID", "Origin ID", "Type", "Status", "Title"
                         );
                     }
-                    println!("{}", "─".repeat(if *show_tags { 110 } else { 78 }));
+                    println!(
+                        "{}",
+                        "─".repeat(flow_width + if *show_tags { 113 } else { 81 })
+                    );
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -5964,15 +8457,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         // string to column width FIRST, then colour —
                         // {:<10} counts ANSI escape bytes otherwise.
                         // trace:TASK-269 | ai:claude
-                        let status_cell = status_display::paint_status(
-                            &format!("{:<10}", req.status),
-                            &req.status,
-                        );
+                        // TASK-315: glyph + colour in the Status column (cell is
+                        // 13 visible cols: glyph + space + 11-wide label).
+                        let status_cell = render_status(&req.status);
+                        let flow = flow_prefix(req);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
                             println!(
-                                "{:<12} {}{:<12} {} {:<50} {}",
+                                "{}{:<12} {}{:<12} {} {:<50} {}",
+                                flow,
                                 display_id,
                                 origin_cell,
                                 req.req_type,
@@ -5982,24 +8476,27 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             );
                         } else {
                             println!(
-                                "{:<12} {}{:<12} {} {}",
-                                display_id, origin_cell, req.req_type, status_cell, req.title,
+                                "{}{:<12} {}{:<12} {} {}",
+                                flow, display_id, origin_cell, req.req_type, status_cell, req.title,
                             );
                         }
                     }
                 } else {
                     if *show_tags {
                         println!(
-                            "{:<14} {:<12} {:<10} {:<10} {:<50} {}",
-                            "ID", "Type", "Status", "Priority", "Title", "Tags"
+                            "{}{:<14} {:<12} {:<13} {:<10} {:<50} {}",
+                            flow_header, "ID", "Type", "Status", "Priority", "Title", "Tags"
                         );
                     } else {
                         println!(
-                            "{:<14} {:<12} {:<10} {:<10} {}",
-                            "ID", "Type", "Status", "Priority", "Title"
+                            "{}{:<14} {:<12} {:<13} {:<10} {}",
+                            flow_header, "ID", "Type", "Status", "Priority", "Title"
                         );
                     }
-                    println!("{}", "─".repeat(if *show_tags { 108 } else { 74 }));
+                    println!(
+                        "{}",
+                        "─".repeat(flow_width + if *show_tags { 111 } else { 77 })
+                    );
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -6008,15 +8505,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             .unwrap_or("?");
                         // TASK-269: unified status palette — pad-then-colour
                         // keeps the column aligned. trace:TASK-269 | ai:claude
-                        let status_cell = status_display::paint_status(
-                            &format!("{:<10}", req.status),
-                            &req.status,
-                        );
+                        // TASK-315: glyph + colour in the Status column (cell is
+                        // 13 visible cols: glyph + space + 11-wide label).
+                        let status_cell = render_status(&req.status);
+                        let flow = flow_prefix(req);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
                             println!(
-                                "{:<14} {:<12} {} {:<10} {:<50} {}",
+                                "{}{:<14} {:<12} {} {:<10} {:<50} {}",
+                                flow,
                                 display_id,
                                 req.req_type,
                                 status_cell,
@@ -6026,8 +8524,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             );
                         } else {
                             println!(
-                                "{:<14} {:<12} {} {:<10} {}",
-                                display_id, req.req_type, status_cell, req.priority, req.title,
+                                "{}{:<14} {:<12} {} {:<10} {}",
+                                flow,
+                                display_id,
+                                req.req_type,
+                                status_cell,
+                                req.priority,
+                                req.title,
                             );
                         }
                     }
@@ -6056,9 +8559,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             tags,
             prefix,
             parent,
+            blocked_by,
             force_parent,
             interactive,
             effort,
+            human_only,
+            no_human_only,
             ..
         } => {
             // BUG-45 + interactive expansion: when the user doesn't pass
@@ -6175,6 +8681,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 req.set_status_from_str(canonical);
             }
+            // TASK-647 (ADR-3): advisor-gate the production of approved+ specs.
+            // A non-advisor, non-TTY caller (headless agent, drain/auto
+            // capture) can only file `draft`; a requested approved+ status is
+            // downgraded with a one-line triage notice. An interactive human
+            // (TTY) or the advisor role is unaffected. trace:TASK-647 | ai:claude
+            let intake_downgraded_from =
+                if status_requires_advisor_authority(&req.status) && !has_advisor_authority() {
+                    let from = req.status;
+                    req.status = RequirementStatus::Draft;
+                    Some(from)
+                } else {
+                    None
+                };
             if let Some(p) = &effective_priority {
                 let canonical = validate_priority_input(p).map_err(|e| anyhow::anyhow!(e))?;
                 req.set_priority_from_str(canonical);
@@ -6210,6 +8729,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 req.req_type = rt;
             }
+            // TASK-130: a Spike is time-boxed research with operator-judgment
+            // decisions (candidate selection, experimental design, rubric
+            // evaluation, report writing) — not heads-down implementation. So
+            // a Spike is born human-only by default (the orchestrator's
+            // pre-pickup gate then skips it instead of an implementer agent
+            // mis-treating research as coding). `--no-human-only` opts a Spike
+            // back into auto-pickup; `--human-only` sets the marker on any
+            // type. Reuses the STORY-333 human_only primitive.
+            // trace:TASK-130 | ai:claude
+            req.human_only = resolve_human_only(&req.req_type, *human_only, *no_human_only);
             if let Some(o) = owner {
                 req.owner = o.clone();
             }
@@ -6500,8 +9029,39 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     last.spec_id.as_deref().unwrap_or("?"),
                     last.title
                 );
+                // TASK-647 (ADR-3): note that a requested approved+ status was
+                // held for advisor triage. The spec is filed (as draft); this
+                // is informational, not an error. trace:TASK-647 | ai:claude
+                if let Some(from) = intake_downgraded_from {
+                    eprintln!(
+                        "{} filed as {} (requested {} needs advisor authority) — queued for advisor triage.",
+                        "ℹ".cyan(),
+                        "draft".yellow(),
+                        from.to_string().to_lowercase().dimmed()
+                    );
+                }
                 if let Some(sid) = last.spec_id.as_deref() {
                     record_role_activity(sid, "add");
+                }
+
+                // STORY-446: apply any --blocked-by / --depends-on edges now
+                // that the spec exists, atomically with the inverse Blocks
+                // edge so the pickability gate holds pickup until the blocker
+                // is Completed. trace:STORY-446 | ai:claude
+                if !blocked_by.is_empty() {
+                    if let Some(sid) = last.spec_id.as_deref() {
+                        for blocker in blocked_by {
+                            match add_blocked_by_edge(&backend, sid, blocker) {
+                                Ok(disp) => println!("  Blocked by: {}", disp.cyan()),
+                                Err(e) => eprintln!(
+                                    "  {} could not add blocked-by {}: {}",
+                                    "Warning:".yellow().bold(),
+                                    blocker,
+                                    e
+                                ),
+                            }
+                        }
+                    }
                 }
 
                 // BUG-58: when adding from inside a session worktree
@@ -6654,6 +9214,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             card,
             brief,
             full,
+            rels,
         } => {
             // trace:TASK-518 | ai:antigravity
             let mut resolved_id = id.clone();
@@ -6796,12 +9357,124 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             req.tags.iter().cloned().collect::<Vec<_>>().join(", ")
                         );
                     }
+                    // STORY-476: one-way external issue refs rendered as links
+                    // via the `[external_refs]` base URLs in config. A ref with
+                    // no resolvable base URL prints its bare `provider:id`.
+                    // trace:STORY-476 | ai:claude
+                    if !req.external_refs.is_empty() {
+                        let base_urls = read_external_ref_base_urls(store_path);
+                        println!("{}:", "External refs".bold());
+                        for raw in &req.external_refs {
+                            match aida_core::external_refs::parse_ref(raw) {
+                                Ok(parsed) => {
+                                    match aida_core::external_refs::render_ref_url(
+                                        &parsed, &base_urls,
+                                    ) {
+                                        Some(url) => println!(
+                                            "  ↗ {} → {}",
+                                            parsed.canonical().yellow(),
+                                            url.cyan()
+                                        ),
+                                        None => println!("  ↗ {}", parsed.canonical().yellow()),
+                                    }
+                                }
+                                // Stored ref that no longer parses (e.g. a
+                                // provider removed from the known set) — show
+                                // it verbatim rather than dropping it.
+                                Err(_) => println!("  ↗ {}", raw.yellow()),
+                            }
+                        }
+                    }
+                    // TASK-102: enumerate relationships inline when there are
+                    // few (≤5) or `--rels` is passed; otherwise print the count
+                    // + a pointer to `aida rel list`. Truncate past 10 with a
+                    // "…N more" line so highly-connected specs don't flood the
+                    // view. Each edge shows direction-phrase + target + title.
+                    // trace:TASK-102 | ai:claude
                     if !req.relationships.is_empty() {
-                        println!(
-                            "{}: {} relationship(s)",
-                            "Relations".bold(),
-                            req.relationships.len()
-                        );
+                        let total = req.relationships.len();
+                        const INLINE_THRESHOLD: usize = 5;
+                        const TRUNCATE_AT: usize = 10;
+                        let spec_label = req.spec_id.as_deref().unwrap_or(id);
+                        if *rels || total <= INLINE_THRESHOLD {
+                            println!("{}:", "Relations".bold());
+                            for rel in req.relationships.iter().take(TRUNCATE_AT) {
+                                let phrase = relationship_phrase(&rel.rel_type);
+                                match backend.get_requirement(&rel.target_id)? {
+                                    Some(t) => println!(
+                                        "  ↳ {} {} ({})",
+                                        phrase.cyan(),
+                                        t.spec_id.as_deref().unwrap_or("?").yellow(),
+                                        t.title
+                                    ),
+                                    None => println!(
+                                        "  ↳ {} {} (missing)",
+                                        phrase.cyan(),
+                                        rel.target_id.to_string().dimmed()
+                                    ),
+                                }
+                            }
+                            if total > TRUNCATE_AT {
+                                println!(
+                                    "  … {} more — see `aida rel list {}`",
+                                    total - TRUNCATE_AT,
+                                    spec_label
+                                );
+                            }
+                        } else {
+                            println!(
+                                "{}: {} relationship(s)  (use {} to enumerate, or `aida rel list {}`)",
+                                "Relations".bold(),
+                                total,
+                                "--rels".cyan(),
+                                spec_label
+                            );
+                        }
+                    }
+                    // STORY-446: Blockers section — one line per BlockedBy edge
+                    // with the blocker's status + a pickability glyph (✓ when
+                    // Completed/satisfied, ◐ when it still blocks pickup), so the
+                    // pickability gate's verdict is visible at a glance.
+                    // trace:STORY-446 | ai:claude
+                    let blocker_targets: Vec<uuid::Uuid> = req
+                        .relationships
+                        .iter()
+                        .filter(|r| matches!(r.rel_type, RelationshipType::BlockedBy))
+                        .map(|r| r.target_id)
+                        .collect();
+                    if !blocker_targets.is_empty() {
+                        println!("\n{}:", "Blockers".bold());
+                        let mut unsatisfied = 0;
+                        for target in &blocker_targets {
+                            let (sid, status, satisfied) = match backend.get_requirement(target)? {
+                                Some(b) => {
+                                    let satisfied =
+                                        matches!(b.status, RequirementStatus::Completed);
+                                    (
+                                        b.spec_id.clone().unwrap_or_else(|| "?".to_string()),
+                                        format!("{}", b.status),
+                                        satisfied,
+                                    )
+                                }
+                                None => (target.to_string(), "missing".to_string(), false),
+                            };
+                            if !satisfied {
+                                unsatisfied += 1;
+                            }
+                            let glyph = if satisfied {
+                                "✓".green().to_string()
+                            } else {
+                                "◐".yellow().to_string()
+                            };
+                            println!("  {} {} ({})", glyph, sid, status);
+                        }
+                        if unsatisfied > 0 {
+                            println!(
+                                "  {} blocked — {} blocker(s) not yet Completed; `aida queue work` will refuse pickup",
+                                "⚠".yellow(),
+                                unsatisfied
+                            );
+                        }
                     }
                     if !req.comments.is_empty() {
                         println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
@@ -6856,6 +9529,32 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 .with_timezone(&chrono::Local)
                                 .format("%Y-%m-%d %H:%M %Z")
                         );
+                    }
+                    // STORY-522: surface a PENDING DecisionRequest so the
+                    // human sees the question + choices in `aida show`,
+                    // self-contained, and can answer it with
+                    // `aida questions answer`. trace:STORY-522 | ai:claude
+                    if let Some(dr) = req.decision_request.as_ref().filter(|d| d.is_pending()) {
+                        println!("\n{}:", "Decision needed".yellow().bold());
+                        println!("  {}", dr.question);
+                        for (i, choice) in dr.choices.iter().enumerate() {
+                            let marker = if dr.recommended == Some(i) {
+                                " (recommended)".green().to_string()
+                            } else {
+                                String::new()
+                            };
+                            println!(
+                                "    {}{} {} — {}",
+                                format!("{}.", i + 1).bold(),
+                                marker,
+                                choice.label.bold(),
+                                choice.consequence.dimmed()
+                            );
+                        }
+                        if let Some(rationale) = &dr.rationale {
+                            println!("  {} {}", "Why:".dimmed(), rationale);
+                        }
+                        println!("  {}", "Answer with `aida questions answer`.".dimmed());
                     }
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
@@ -6916,6 +9615,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             tags,
             add_tag,
             remove_tag,
+            blocked_by,
+            remove_blocked_by,
+            add_ref,
+            remove_ref,
             strict,
             force,
             human_only,
@@ -7012,6 +9715,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 {
                     anyhow::bail!(msg);
                 }
+                // TASK-647 (ADR-3): advisor-gate the draft→approved promotion.
+                // A non-advisor, non-TTY caller may not lift a draft into the
+                // approved+ pipeline — that's the intake-triage decision the
+                // advisor (or an interactive human) owns. Execution flips
+                // (Approved→InProgress→Done) are NOT gated, so drains are
+                // unaffected. trace:TASK-647 | ai:claude
+                let new_status = parse_status(canonical)?;
+                if matches!(req.status, RequirementStatus::Draft)
+                    && status_requires_advisor_authority(&new_status)
+                    && !has_advisor_authority()
+                {
+                    anyhow::bail!(
+                        "promoting a draft to {} needs advisor authority (advisor role or an \
+                         interactive session). Leave it draft for advisor triage, or run as \
+                         the advisor.",
+                        canonical
+                    );
+                }
                 let was_needs_attention = matches!(req.status, RequirementStatus::NeedsAttention);
                 req.set_status_from_str(canonical);
                 // STORY-332 / EPIC-28: a spec triaged out of NeedsAttention is
@@ -7094,6 +9815,30 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
                 changed = true;
             }
+            // TASK-524: typo guard — a `lifecycle:*` tag that isn't a recognized
+            // short-circuit tag silently no-ops at drain time (it's just an
+            // unread string). Warn on any misspelling the user passed via
+            // `--tags` or `--add-tag` so it's caught at edit time, not when a
+            // drain quietly fails to skip the phase. trace:TASK-524 | ai:claude
+            {
+                let passed: Vec<String> = tags
+                    .iter()
+                    .flat_map(|t| t.split(',').map(|s| s.trim().to_string()))
+                    .chain(add_tag.iter().cloned())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                for tag in &passed {
+                    if auto_complete::is_unrecognized_lifecycle_tag(tag) {
+                        eprintln!(
+                            "  {} unrecognized lifecycle tag `{}` — it will NOT short-circuit \
+                             any phase. Valid: {}",
+                            "⚠".yellow().bold(),
+                            tag,
+                            auto_complete::RECOGNIZED_LIFECYCLE_TAGS.join(", ")
+                        );
+                    }
+                }
+            }
             // STORY-333: `--human-only` / `--no-human-only` flip the typed
             // marker that the pickability gate consults. Clap's
             // `conflicts_with` keeps the two flags mutually exclusive, so
@@ -7106,6 +9851,36 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if *no_human_only && req.human_only {
                 req.human_only = false;
                 changed = true;
+            }
+
+            // STORY-476: one-way external issue refs. `--add-ref` validates
+            // each `provider:id` (linear/jira/github) before storing the
+            // canonical form; an invalid ref is a hard error so a typo'd ref
+            // never lands silently. `--remove-ref` drops a stored ref by its
+            // canonical form. Both are repeatable and idempotent.
+            // trace:STORY-476 | ai:claude
+            for raw in add_ref {
+                let parsed =
+                    aida_core::external_refs::parse_ref(raw).map_err(|e| anyhow::anyhow!(e))?;
+                let canonical = parsed.canonical();
+                if !req.external_refs.contains(&canonical) {
+                    req.external_refs.push(canonical);
+                    changed = true;
+                }
+            }
+            for raw in remove_ref {
+                // Accept either the canonical or a loosely-typed form by
+                // normalizing through the parser when possible; fall back to a
+                // trimmed literal match so a stored-but-now-unknown provider
+                // can still be removed.
+                let target = aida_core::external_refs::parse_ref(raw)
+                    .map(|p| p.canonical())
+                    .unwrap_or_else(|_| raw.trim().to_string());
+                let before = req.external_refs.len();
+                req.external_refs.retain(|r| r != &target);
+                if req.external_refs.len() != before {
+                    changed = true;
+                }
             }
 
             if changed {
@@ -7197,8 +9972,38 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         cleanup_escalated_leases_for_spec(&project_root, spec_id);
                     }
                 }
-            } else {
+            } else if blocked_by.is_empty() && remove_blocked_by.is_empty() {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
+            }
+
+            // STORY-446: apply blocked-by edge add/remove AFTER any scalar edit
+            // has been saved, so the helper operates on the persisted spec
+            // (avoiding a save that would clobber the new edge). Runs whether or
+            // not a scalar field changed. trace:STORY-446 | ai:claude
+            if !blocked_by.is_empty() || !remove_blocked_by.is_empty() {
+                let edit_spec = req.spec_id.as_deref().unwrap_or(id).to_string();
+                for blocker in blocked_by {
+                    match add_blocked_by_edge(&backend, &edit_spec, blocker) {
+                        Ok(disp) => println!("  Blocked by: {}", disp.cyan()),
+                        Err(e) => eprintln!(
+                            "  {} could not add blocked-by {}: {}",
+                            "Warning:".yellow().bold(),
+                            blocker,
+                            e
+                        ),
+                    }
+                }
+                for blocker in remove_blocked_by {
+                    match remove_blocked_by_edge(&backend, &edit_spec, blocker) {
+                        Ok(disp) => println!("  Removed blocked-by: {}", disp.cyan()),
+                        Err(e) => eprintln!(
+                            "  {} could not remove blocked-by {}: {}",
+                            "Warning:".yellow().bold(),
+                            blocker,
+                            e
+                        ),
+                    }
+                }
             }
         }
         Command::Del { id, yes } => {
@@ -7224,6 +10029,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Findings(findings_cmd) => {
             handle_findings_command(findings_cmd, &backend, store_path)?;
+        }
+        Command::ImportPlan {
+            file,
+            spec,
+            request_review,
+        } => {
+            handle_import_plan_command(
+                &backend,
+                store_path,
+                file,
+                spec.as_deref(),
+                *request_review,
+            )?;
+        }
+        Command::Questions { cmd } => {
+            handle_questions_command(cmd.as_ref(), &backend, store_path)?;
         }
         Command::Punt {
             id,
@@ -7735,7 +10556,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // config — the orphan-store model wants linear history
             // anyway (replay local commits on top of remote), so
             // rebase is the right default.
-            if *pull {
+            if *pull && !aida_core::git_ops::has_remote(store_path, "origin") {
+                // BUG-432: local-only / fresh-init projects have no `origin`
+                // yet (the aida-demo + pre-remote flow). The pull is a graceful
+                // skip, not a fatal — otherwise `aida queue work`'s startup sync
+                // (and a standalone `aida db sync --pull`) die before a remote
+                // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
+                // trace:BUG-432 | ai:claude
+                println!("  No `origin` remote — skipping pull (local-only project).");
+            } else if *pull {
                 // Snapshot local state before pull for conflict detection
                 let local_reqs = backend.load().map(|s| s.requirements).unwrap_or_default();
 
@@ -7990,6 +10819,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_load_command(load_cmd, &storage)?;
         }
+        // FR-267: trace commands must resolve spec ids against the resolved
+        // git store — including a SIBLING store in an `aida init --sibling`
+        // workspace. Previously `Command::Trace` fell through to the
+        // "not yet supported for git backend" catch-all, so `aida trace
+        // scan` / `aida trace list` only worked when the store lived inside
+        // the current repo. `store_path` here is whatever
+        // `detect_distributed_store` resolved (the sibling `../aida-store`
+        // for sibling-mode configs), and `Storage::new(<dir>)` delegates
+        // load/save to GitBackend — so the same store-resolution that
+        // already backs `aida add` / `aida show` now backs trace-id
+        // resolution too, regardless of which code repo's CWD invoked it.
+        // (MCP `show_requirement` already routed through the resolved
+        // store_path, so it needed no change.)
+        // trace:FR-267 | ai:claude
+        Command::Trace(trace_cmd) => {
+            let storage = Storage::new(store_path);
+            handle_trace_command(trace_cmd, &storage)?;
+        }
         // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
         // `load` alias for quantitative effort summaries.
         Command::Backlog(backlog_cmd) => {
@@ -8206,7 +11053,23 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
         // STORY-444: `aida backlog groom` writes (queue + tag); list /
         // analyze are read-only. trace:STORY-444 | ai:claude
         Command::Backlog(cmd) => matches!(cmd, BacklogCommand::Groom { .. }),
+        // FR-267: trace add/remove always mutate the store; `trace scan`
+        // only writes with `--update`. scan/list/gate/sweep without a write
+        // are read-only. trace:FR-267 | ai:claude
+        Command::Trace(cmd) => matches!(
+            cmd,
+            TraceCommand::Add { .. }
+                | TraceCommand::Remove { .. }
+                | TraceCommand::Scan { update: true, .. }
+        ),
         Command::Findings(cmd) => !matches!(cmd, FindingsCommand::List { .. }),
+        // STORY-522: `aida questions ask` / `answer` write the
+        // decision_request field; bare list / `list` are read-only.
+        // trace:STORY-522 | ai:claude
+        Command::Questions { cmd } => matches!(
+            cmd,
+            Some(QuestionsCommand::Ask { .. }) | Some(QuestionsCommand::Answer { .. })
+        ),
         Command::Config(cmd) => matches!(
             cmd,
             ConfigCommand::Format { .. }
@@ -8237,6 +11100,7 @@ fn handle_brief_command(
     note: Option<&str>,
     depends_on: Option<&str>,
     as_deep_link: bool,
+    notify: bool,
     cmd: &Option<BriefCommand>,
     store: &RequirementsStore,
     project_root: &std::path::Path,
@@ -8266,6 +11130,17 @@ fn handle_brief_command(
                 depends_on,
             )?;
             println!("{}", path.display());
+            // TASK-502: --notify marks the brief urgent — write a `.pending`
+            // sentinel so the receiving agent's `aida status` surfaces it
+            // without a heartbeat. Idempotent. trace:TASK-502 | ai:claude
+            if notify {
+                add_pending_brief(project_root, agent, &path)?;
+                eprintln!(
+                    "{} notified — {} will see this in `aida status`",
+                    "📬".to_string(),
+                    agent.cyan()
+                );
+            }
             // SPIKE-33: also print a claude-cli:// deep link the operator
             // can click → opens Claude Code in the spec's worktree (or
             // project root) with a short pickup prompt referencing the
@@ -8860,6 +11735,136 @@ fn spec_id_from_brief_filename(name: &str) -> Option<String> {
     Some(spec.to_string())
 }
 
+/// TASK-502: the `.pending` sentinel for an agent — one urgent (unacked,
+/// `--notify`'d) brief path per line, project-relative. Lives in the agent's
+/// brief dir so `ack`, which only has the brief path, can find it from the
+/// brief's parent without needing the project root or agent name.
+fn pending_briefs_path(project_root: &std::path::Path, agent: &str) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join("agent-briefs")
+        .join(agent)
+        .join(".pending")
+}
+
+/// Read the current `.pending` entries (project-relative brief paths), trimming
+/// blanks. Missing file → empty list.
+fn read_pending_briefs(pending_path: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(pending_path)
+        .map(|s| {
+            s.lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Rewrite `.pending` from a list — delete the file when the list is empty so
+/// an empty inbox leaves no sentinel behind.
+fn write_pending_briefs(pending_path: &std::path::Path, entries: &[String]) -> Result<()> {
+    if entries.is_empty() {
+        if pending_path.exists() {
+            std::fs::remove_file(pending_path)
+                .with_context(|| format!("failed to remove empty {}", pending_path.display()))?;
+        }
+        return Ok(());
+    }
+    if let Some(parent) = pending_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    std::fs::write(pending_path, format!("{}\n", entries.join("\n")))
+        .with_context(|| format!("failed to write {}", pending_path.display()))?;
+    Ok(())
+}
+
+/// Add a brief to the agent's `.pending` sentinel, idempotently (re-notifying
+/// the same brief does not duplicate the entry). Stored project-relative.
+fn add_pending_brief(
+    project_root: &std::path::Path,
+    agent: &str,
+    brief_path: &std::path::Path,
+) -> Result<()> {
+    let pending_path = pending_briefs_path(project_root, agent);
+    let rel = brief_path
+        .strip_prefix(project_root)
+        .unwrap_or(brief_path)
+        .display()
+        .to_string();
+    let mut entries = read_pending_briefs(&pending_path);
+    if !entries.iter().any(|e| e == &rel) {
+        entries.push(rel);
+    }
+    write_pending_briefs(&pending_path, &entries)
+}
+
+/// Remove a brief from its agent's `.pending` sentinel (called on ack). The
+/// agent dir is the brief's parent, so we don't need the project root. Matches
+/// either the bare brief name or any path entry ending in it, so an
+/// absolute-vs-relative mismatch doesn't strand the entry.
+fn clear_pending_brief(brief_path: &std::path::Path) {
+    let Some(dir) = brief_path.parent() else {
+        return;
+    };
+    let pending_path = dir.join(".pending");
+    if !pending_path.exists() {
+        return;
+    }
+    let Some(name) = brief_path.file_name().and_then(|n| n.to_str()) else {
+        return;
+    };
+    let kept: Vec<String> = read_pending_briefs(&pending_path)
+        .into_iter()
+        .filter(|e| {
+            // Drop the entry whose final path component is this brief's file
+            // name (handles project-relative vs absolute storage).
+            std::path::Path::new(e).file_name().and_then(|n| n.to_str()) != Some(name)
+        })
+        .collect();
+    let _ = write_pending_briefs(&pending_path, &kept);
+}
+
+/// TASK-502: scan `.aida/agent-briefs/*/.pending` and return `(agent, count)`
+/// for every agent with at least one urgent (notify'd, unacked) brief. When
+/// `AIDA_AGENT_NAME` resolves to a known brief-agent, narrow to that one (the
+/// "current agent's identity" case); otherwise report all agents.
+fn collect_pending_brief_counts(project_root: &std::path::Path) -> Vec<(String, usize)> {
+    let briefs_root = project_root.join(".aida").join("agent-briefs");
+    let Ok(entries) = std::fs::read_dir(&briefs_root) else {
+        return Vec::new();
+    };
+    // Derive the current brief-agent from the stable session name
+    // (e.g. "claude-3f2a" → "claude"), if any.
+    let current_agent = std::env::var("AIDA_AGENT_NAME").ok().and_then(|name| {
+        ["claude", "codex", "antigravity"]
+            .into_iter()
+            .find(|a| name == *a || name.starts_with(&format!("{a}-")))
+            .map(str::to_string)
+    });
+    let mut out: Vec<(String, usize)> = Vec::new();
+    for entry in entries.flatten() {
+        if !entry.path().is_dir() {
+            continue;
+        }
+        let Some(agent) = entry.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        if let Some(cur) = &current_agent {
+            if &agent != cur {
+                continue;
+            }
+        }
+        let count = read_pending_briefs(&entry.path().join(".pending")).len();
+        if count > 0 {
+            out.push((agent, count));
+        }
+    }
+    out.sort();
+    out
+}
+
 fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
     let path = brief_file;
     if !path.exists() {
@@ -8890,6 +11895,9 @@ fn ack_agent_brief(brief_file: &std::path::Path) -> Result<()> {
             acked_path.display()
         )
     })?;
+    // TASK-502: drop this brief from the agent's `.pending` sentinel (no-op if
+    // it was never --notify'd). Uses the pre-rename path's file name.
+    clear_pending_brief(path);
     println!("Acknowledged: {}", acked_path.display());
     Ok(())
 }
@@ -9036,6 +12044,124 @@ mod task_492_brief_tests {
     use super::*;
     use aida_core::{Relationship, RelationshipType};
 
+    /// BUG-453: headless_log_len returns the byte length of the session's JSONL
+    /// log (matched by `-<session_id>.jsonl` suffix) and reflects growth — the
+    /// signal the watchdog uses so a reading-but-productive session isn't
+    /// false-killed. None when no matching log exists.
+    #[test]
+    fn headless_log_len_tracks_session_log_growth() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        let dir = root.join(".aida").join("headless-logs");
+        std::fs::create_dir_all(&dir).unwrap();
+        let session = "019e9a07-8e2d-7800-ad4e-73534034f704";
+
+        // No log yet → None.
+        assert_eq!(headless_log_len(root, session), None);
+
+        // A non-matching log (different session) is ignored.
+        std::fs::write(dir.join("task-x-deadbeef-0000.jsonl"), "noise\n").unwrap();
+        assert_eq!(headless_log_len(root, session), None);
+
+        // The matching log → its byte length; appending grows it.
+        let logp = dir.join(format!("task-673-{session}.jsonl"));
+        std::fs::write(&logp, "a").unwrap();
+        assert_eq!(headless_log_len(root, session), Some(1));
+        std::fs::write(&logp, "abcdef").unwrap();
+        assert_eq!(headless_log_len(root, session), Some(6));
+    }
+
+    // TASK-298: FULLY-ISOLATED tests of the pure stream-json stall parser.
+    // Each takes one JSONL line (or a small log body) and asserts on the
+    // detection verdict — no threads, no files, no orchestrator. trace:TASK-298
+
+    #[test]
+    fn stall_parser_silent_on_blank_and_non_json() {
+        assert_eq!(headless_line_permission_stall(""), None);
+        assert_eq!(headless_line_permission_stall("   "), None);
+        assert_eq!(headless_line_permission_stall("{not-json"), None);
+    }
+
+    #[test]
+    fn stall_parser_silent_on_clean_events() {
+        let init = r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#;
+        assert_eq!(headless_line_permission_stall(init), None);
+        let ok_result = r#"{"type":"result","subtype":"success","is_error":false}"#;
+        assert_eq!(headless_line_permission_stall(ok_result), None);
+        // An empty permission_denials array is NOT a stall.
+        let empty = r#"{"type":"assistant","permission_denials":[]}"#;
+        assert_eq!(headless_line_permission_stall(empty), None);
+    }
+
+    #[test]
+    fn stall_parser_detects_permission_denial_with_tool_name() {
+        let line = r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("denial detected");
+        assert!(reason.contains("permission gate"), "got: {reason}");
+        assert!(reason.contains("Bash"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_counts_multiple_denials_and_falls_back_to_tool_alias() {
+        // First denial uses the `tool` alias (not `tool_name`); the count tail
+        // reports the extras.
+        let line =
+            r#"{"type":"assistant","permission_denials":[{"tool":"Write"},{"tool_name":"Bash"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("denial detected");
+        assert!(reason.contains("Write"), "got: {reason}");
+        assert!(reason.contains("+1 more"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_detects_is_error_with_result_detail() {
+        // The SPIKE-7 false-positive: exit code 0 but is_error true.
+        let line = r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"permission gate refused\nsecond line"}"#;
+        let reason = headless_line_permission_stall(line).expect("is_error detected");
+        assert!(reason.contains("is_error"), "got: {reason}");
+        // Multi-line detail collapses to the first non-empty line.
+        assert!(reason.contains("permission gate refused"), "got: {reason}");
+        assert!(!reason.contains("second line"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_is_error_falls_back_to_subtype_when_no_result_text() {
+        let line = r#"{"type":"result","subtype":"error_max_turns","is_error":true}"#;
+        let reason = headless_line_permission_stall(line).expect("is_error detected");
+        assert!(reason.contains("error_max_turns"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_denial_wins_over_is_error_on_same_line() {
+        let line =
+            r#"{"type":"assistant","is_error":true,"permission_denials":[{"tool_name":"Edit"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("detected");
+        assert!(reason.contains("permission gate"), "got: {reason}");
+        assert!(reason.contains("Edit"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_scan_folds_log_and_returns_first_signal() {
+        // A realistic log: clean lines, then a denial, then more lines. The
+        // scan returns the first stall signal and ignores the clean prefix.
+        let log = [
+            r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}"#,
+            r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#,
+            r#"{"type":"result","subtype":"success","is_error":false}"#,
+        ]
+        .join("\n");
+        let reason = headless_log_permission_stall(&log).expect("stall found in log");
+        assert!(reason.contains("Bash"), "got: {reason}");
+
+        // A clean log yields no stall.
+        let clean = [
+            r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#,
+            r#"{"type":"result","subtype":"success","is_error":false,"duration_ms":10}"#,
+        ]
+        .join("\n");
+        assert_eq!(headless_log_permission_stall(&clean), None);
+    }
+
     fn req(spec_id: &str, title: &str, description: &str) -> Requirement {
         let mut req = Requirement::new(title.to_string(), description.to_string());
         req.spec_id = Some(spec_id.to_string());
@@ -9077,6 +12203,338 @@ mod task_492_brief_tests {
         store
     }
 
+    /// TASK-502: the `.pending` sentinel lifecycle — add is idempotent,
+    /// clear drops the matching entry, and an emptied sentinel is removed.
+    #[test]
+    fn pending_brief_sentinel_add_clear_lifecycle() {
+        use super::{
+            add_pending_brief, clear_pending_brief, pending_briefs_path, read_pending_briefs,
+        };
+        let dir = tempfile::TempDir::new().unwrap();
+        let root = dir.path();
+        let agent_dir = root.join(".aida").join("agent-briefs").join("codex");
+        std::fs::create_dir_all(&agent_dir).unwrap();
+        let brief_a = agent_dir.join("TASK-1-stamp.md");
+        let brief_b = agent_dir.join("TASK-2-stamp.md");
+        std::fs::write(&brief_a, "a").unwrap();
+        std::fs::write(&brief_b, "b").unwrap();
+
+        let pending = pending_briefs_path(root, "codex");
+
+        // add A twice → one entry (idempotent); add B → two entries.
+        add_pending_brief(root, "codex", &brief_a).unwrap();
+        add_pending_brief(root, "codex", &brief_a).unwrap();
+        add_pending_brief(root, "codex", &brief_b).unwrap();
+        let entries = read_pending_briefs(&pending);
+        assert_eq!(entries.len(), 2, "idempotent add: {entries:?}");
+        // stored project-relative
+        assert!(entries.iter().all(|e| e.starts_with(".aida/agent-briefs/")));
+
+        // clear A → only B remains, file still present.
+        clear_pending_brief(&brief_a);
+        let entries = read_pending_briefs(&pending);
+        assert_eq!(entries.len(), 1, "after clearing A: {entries:?}");
+        assert!(entries[0].ends_with("TASK-2-stamp.md"));
+        assert!(pending.exists());
+
+        // clear B → empty → sentinel removed.
+        clear_pending_brief(&brief_b);
+        assert!(read_pending_briefs(&pending).is_empty());
+        assert!(!pending.exists(), "emptied .pending should be deleted");
+    }
+
+    /// TASK-102: `aida show --rels` (and the `--relations` alias) parse to the
+    /// `rels` flag.
+    #[test]
+    fn show_rels_flag_parses() {
+        for arg in ["--rels", "--relations"] {
+            let cli = Cli::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
+            match cli.command {
+                Command::Show { rels, .. } => assert!(rels, "{arg} should set rels"),
+                other => panic!("unexpected command: {other:?}"),
+            }
+        }
+        // default: off
+        let cli = Cli::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
+        match cli.command {
+            Command::Show { rels, .. } => assert!(!rels),
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    /// STORY-457: the untracked safe-to-remove classifier flags editor scratch,
+    /// build droppings, and OS cruft — never source/docs.
+    #[test]
+    fn untracked_safe_to_remove_classifier() {
+        use super::untracked_is_safe_to_remove;
+        for p in [
+            "foo.bak",
+            "a/b/c.tmp",
+            ".x.swp",
+            "main.rs.orig",
+            "mod.pyc",
+            ".DS_Store",
+            "pkg/__pycache__/m.pyc",
+            "editor~",
+        ] {
+            assert!(untracked_is_safe_to_remove(p), "should flag: {p}");
+        }
+        for p in [
+            "src/main.rs",
+            "docs/plans/2026-06-05-x.md",
+            "scripts/deploy.sh",
+            "README.md",
+            "Cargo.toml",
+        ] {
+            assert!(!untracked_is_safe_to_remove(p), "should NOT flag: {p}");
+        }
+    }
+
+    /// TASK-666 (STORY-457): the untracked-history reconcile core upserts new
+    /// paths with first-observed=now and prunes paths no longer untracked,
+    /// preserving the original timestamp of paths that persist.
+    #[test]
+    fn untracked_history_upsert_and_prune() {
+        use super::reconcile_untracked_map;
+        use std::collections::HashMap;
+        let now = chrono::Utc::now();
+        let older = (now - chrono::Duration::days(2)).to_rfc3339();
+        let mut stored: HashMap<String, String> = HashMap::new();
+        stored.insert("kept.md".to_string(), older.clone());
+        stored.insert("gone.md".to_string(), older.clone());
+
+        let current = vec!["kept.md".to_string(), "fresh.md".to_string()];
+        let merged = reconcile_untracked_map(stored, &current, now);
+
+        // Pruned: no longer untracked.
+        assert!(!merged.contains_key("gone.md"));
+        // Kept: original (older) timestamp preserved, not reset to now.
+        assert_eq!(
+            merged.get("kept.md").map(String::as_str),
+            Some(older.as_str())
+        );
+        // New: first-observed = now.
+        assert_eq!(
+            merged.get("fresh.md").map(String::as_str),
+            Some(now.to_rfc3339().as_str())
+        );
+        assert_eq!(merged.len(), 2);
+    }
+
+    /// TASK-666 (STORY-457): age classification buckets first-observed times into
+    /// recent (<1h) / mid / stale (≥1d); a missing first-seen reads as recent.
+    #[test]
+    fn untracked_age_classification() {
+        use super::{classify_untracked_age, UntrackedAge};
+        let now = chrono::Utc::now();
+        assert_eq!(classify_untracked_age(None, now), UntrackedAge::Recent);
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::minutes(30)), now),
+            UntrackedAge::Recent
+        );
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::hours(5)), now),
+            UntrackedAge::Mid
+        );
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::days(3)), now),
+            UntrackedAge::Stale
+        );
+        // Exactly 1h is no longer "recent"; exactly 1d is "stale".
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::hours(1)), now),
+            UntrackedAge::Mid
+        );
+        assert_eq!(
+            classify_untracked_age(Some(now - chrono::Duration::days(1)), now),
+            UntrackedAge::Stale
+        );
+    }
+
+    /// TASK-666 (STORY-457): last-status timestamp round-trips through
+    /// `.aida/last-status.toml`, and is absent (None) before the first write.
+    #[test]
+    fn last_status_at_round_trip() {
+        use super::{read_last_status_at, write_last_status_at};
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+
+        // No file yet → None.
+        assert!(read_last_status_at(root).is_none());
+
+        let now = chrono::Utc::now();
+        write_last_status_at(root, now);
+        let read = read_last_status_at(root).expect("recorded timestamp");
+        // RFC3339 round-trip is second-or-finer exact; compare at second precision.
+        assert_eq!(read.timestamp(), now.timestamp());
+    }
+
+    /// TASK-666 (STORY-457): `write_last_status_at` is a no-op when `.aida/` is
+    /// absent (uninitialized project) — never creates state or panics.
+    #[test]
+    fn last_status_at_noop_without_aida_dir() {
+        use super::{read_last_status_at, write_last_status_at};
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        write_last_status_at(root, chrono::Utc::now());
+        assert!(!root.join(".aida").exists());
+        assert!(read_last_status_at(root).is_none());
+    }
+
+    /// TASK-662: the first run (no prior snapshot) yields no delta — there's
+    /// no baseline to diff against, so consumers see `null`, not an all-new
+    /// burst.
+    #[test]
+    fn findings_delta_first_run_is_none() {
+        use super::compute_findings_delta;
+        let current = vec!["TASK-1".to_string(), "TASK-2".to_string()];
+        assert!(compute_findings_delta(None, &current).is_none());
+    }
+
+    /// TASK-662: a prior run with zero findings is distinct from "no prior
+    /// run" — `Some(empty)` produces a real delta where everything current is
+    /// new.
+    #[test]
+    fn findings_delta_empty_baseline_counts_all_as_new() {
+        use super::compute_findings_delta;
+        let prev: Vec<String> = vec![];
+        let current = vec!["TASK-3".to_string(), "TASK-1".to_string()];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.previous_total, 0);
+        assert_eq!(d.current_total, 2);
+        assert_eq!(d.new_count, 2);
+        // new_ids is sorted regardless of input order.
+        assert_eq!(d.new_ids, vec!["TASK-1".to_string(), "TASK-3".to_string()]);
+        assert_eq!(d.resolved_count, 0);
+    }
+
+    /// TASK-662: a steady state (same set both runs) reports no new and no
+    /// resolved findings — the common quiet case.
+    #[test]
+    fn findings_delta_unchanged_is_quiet() {
+        use super::compute_findings_delta;
+        let prev = vec!["TASK-1".to_string(), "TASK-2".to_string()];
+        let current = vec!["TASK-2".to_string(), "TASK-1".to_string()];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.new_count, 0);
+        assert!(d.new_ids.is_empty());
+        assert_eq!(d.resolved_count, 0);
+        assert_eq!(d.previous_total, 2);
+        assert_eq!(d.current_total, 2);
+    }
+
+    /// TASK-662: a mixed run — one finding filed, one triaged away — reports
+    /// both the new and the resolved counts independently.
+    #[test]
+    fn findings_delta_mixed_new_and_resolved() {
+        use super::compute_findings_delta;
+        let prev = vec!["TASK-1".to_string(), "TASK-2".to_string()];
+        let current = vec!["TASK-2".to_string(), "TASK-9".to_string()];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.new_count, 1);
+        assert_eq!(d.new_ids, vec!["TASK-9".to_string()]);
+        assert_eq!(d.resolved_count, 1); // TASK-1 gone
+        assert_eq!(d.previous_total, 2);
+        assert_eq!(d.current_total, 2);
+    }
+
+    /// TASK-662: duplicate IDs in either snapshot can't fabricate a delta —
+    /// the diff is set-based, so a doubled entry collapses.
+    #[test]
+    fn findings_delta_is_dedup_safe() {
+        use super::compute_findings_delta;
+        let prev = vec!["TASK-1".to_string(), "TASK-1".to_string()];
+        let current = vec![
+            "TASK-1".to_string(),
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+        ];
+        let d = compute_findings_delta(Some(&prev), &current).expect("delta");
+        assert_eq!(d.previous_total, 1);
+        assert_eq!(d.current_total, 2);
+        assert_eq!(d.new_count, 1);
+        assert_eq!(d.new_ids, vec!["TASK-2".to_string()]);
+        assert_eq!(d.resolved_count, 0);
+    }
+
+    /// TASK-662: the findings snapshot round-trips through
+    /// `.aida/last-findings.toml`, sorts/dedups on write, and is a no-op
+    /// (None) when `.aida/` is absent.
+    #[test]
+    fn last_findings_round_trip_and_noop() {
+        use super::{read_last_findings, write_last_findings};
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+
+        // No file yet → None (no prior run).
+        assert!(read_last_findings(root).is_none());
+
+        // No `.aida/` dir → write is a no-op, still None.
+        write_last_findings(root, &["TASK-2".to_string()]);
+        assert!(read_last_findings(root).is_none());
+
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        write_last_findings(
+            root,
+            &[
+                "TASK-2".to_string(),
+                "TASK-1".to_string(),
+                "TASK-2".to_string(),
+            ],
+        );
+        let read = read_last_findings(root).expect("recorded snapshot");
+        // Sorted + deduped on write.
+        assert_eq!(read, vec!["TASK-1".to_string(), "TASK-2".to_string()]);
+    }
+
+    /// STORY-446: `--blocked-by` (repeatable) + the `--depends-on` alias parse
+    /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
+    #[test]
+    fn blocked_by_flags_parse_on_add_and_edit() {
+        let add = Cli::try_parse_from([
+            "aida",
+            "add",
+            "--title",
+            "t",
+            "--type",
+            "task",
+            "--blocked-by",
+            "TASK-1",
+            "--depends-on",
+            "TASK-2",
+        ])
+        .unwrap();
+        match add.command {
+            Command::Add { blocked_by, .. } => {
+                assert_eq!(blocked_by, vec!["TASK-1".to_string(), "TASK-2".to_string()]);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let edit = Cli::try_parse_from([
+            "aida",
+            "edit",
+            "TASK-9",
+            "--blocked-by",
+            "TASK-1",
+            "--remove-blocked-by",
+            "TASK-3",
+        ])
+        .unwrap();
+        match edit.command {
+            Command::Edit {
+                blocked_by,
+                remove_blocked_by,
+                ..
+            } => {
+                assert_eq!(blocked_by, vec!["TASK-1".to_string()]);
+                assert_eq!(remove_blocked_by, vec!["TASK-3".to_string()]);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
     #[test]
     fn brief_cli_parses_canonical_create_shape() {
         let cli = Cli::try_parse_from(["aida", "brief", "codex", "TASK-492", "--note", "ship it"])
@@ -9088,6 +12546,7 @@ mod task_492_brief_tests {
                 note,
                 depends_on,
                 as_deep_link,
+                notify,
                 cmd,
             } => {
                 assert_eq!(agent.as_deref(), Some("codex"));
@@ -9095,6 +12554,7 @@ mod task_492_brief_tests {
                 assert_eq!(note.as_deref(), Some("ship it"));
                 assert_eq!(depends_on, None);
                 assert!(!as_deep_link);
+                assert!(!notify);
                 assert!(cmd.is_none());
             }
             other => panic!("unexpected command: {other:?}"),
@@ -9532,6 +12992,407 @@ fn suspicious_title_signal(title: &str) -> Option<String> {
 
 fn config_path_for_project(project_root: &std::path::Path) -> std::path::PathBuf {
     project_root.join(".aida").join("config.toml")
+}
+
+/// TASK-304: `[ultraplan] mode` governs whether AIDA proactively suggests
+/// `aida ultraplan <SPEC>` for chunky specs. /ultraplan is inherently
+/// interactive (claude.ai web approval), so the realistic surface is
+/// `never | on-demand | suggested` — never a "frequently auto-pull" mode.
+/// trace:TASK-304 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UltraplanMode {
+    /// `aida ultraplan` refuses with a configured-off message; no clipboard.
+    Never,
+    /// Default — preserves current behavior: the user runs `aida ultraplan
+    /// SPEC` explicitly, no pickup-time hints.
+    OnDemand,
+    /// Pickup surfaces (`/aida-pickup`, `aida queue work` no-arg head,
+    /// `aida queue list` head row) hint when the head spec is chunky.
+    Suggested,
+}
+
+impl UltraplanMode {
+    fn from_token(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "never" => Some(Self::Never),
+            "on-demand" | "on_demand" | "ondemand" => Some(Self::OnDemand),
+            "suggested" => Some(Self::Suggested),
+            _ => None,
+        }
+    }
+}
+
+/// TASK-304: parsed `[ultraplan]` config. Both fields default safely so a
+/// project with no `[ultraplan]` block (or an unparseable one) keeps the
+/// current opt-in behavior: `mode = on-demand`, threshold `acceptance-bullets>8`.
+/// trace:TASK-304 | ai:claude
+struct UltraplanConfig {
+    mode: UltraplanMode,
+    /// The `acceptance-bullets>N` threshold — the only heuristic supported
+    /// today. A spec triggers a suggestion when its `## Acceptance` checkbox
+    /// count is strictly greater than this.
+    bullet_threshold: usize,
+}
+
+impl Default for UltraplanConfig {
+    fn default() -> Self {
+        Self {
+            mode: UltraplanMode::OnDemand,
+            bullet_threshold: 8,
+        }
+    }
+}
+
+/// TASK-304: read `[ultraplan]` from `.aida/config.toml`. Missing file,
+/// missing block, unparseable TOML, or unknown token values all fall back to
+/// the defaults — the suggestion layer is a soft feature, never load-bearing.
+/// trace:TASK-304 | ai:claude
+fn read_ultraplan_config(project_root: &std::path::Path) -> UltraplanConfig {
+    let mut cfg = UltraplanConfig::default();
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return cfg;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return cfg;
+    };
+    let Some(table) = value.get("ultraplan") else {
+        return cfg;
+    };
+    if let Some(mode) = table
+        .get("mode")
+        .and_then(|v| v.as_str())
+        .and_then(UltraplanMode::from_token)
+    {
+        cfg.mode = mode;
+    }
+    if let Some(n) = table
+        .get("suggest_threshold")
+        .and_then(|v| v.as_str())
+        .and_then(parse_acceptance_bullet_threshold)
+    {
+        cfg.bullet_threshold = n;
+    }
+    cfg
+}
+
+/// TASK-304: parse a `suggest_threshold` token. Only `acceptance-bullets>N`
+/// is honored today (the spec's chosen default heuristic — mechanical, no
+/// NLP, falsifiable); the `N` is extracted. Unknown tokens return `None` so
+/// the caller keeps the default threshold. trace:TASK-304 | ai:claude
+fn parse_acceptance_bullet_threshold(token: &str) -> Option<usize> {
+    token
+        .trim()
+        .to_ascii_lowercase()
+        .strip_prefix("acceptance-bullets>")?
+        .trim()
+        .parse::<usize>()
+        .ok()
+}
+
+/// TASK-304: count the markdown task-list bullets (`- [ ]` / `- [x]`) inside
+/// a spec's `## Acceptance` section — a rough complexity proxy. Returns 0
+/// when there's no Acceptance section. Checked and unchecked items both
+/// count: a long checklist is chunky regardless of how much is already
+/// ticked. Tolerates `*`/`+` bullet markers and `## Acceptance Criteria`
+/// heading variants. trace:TASK-304 | ai:claude
+fn count_acceptance_bullets(description: &str) -> usize {
+    let mut in_section = false;
+    let mut count = 0;
+    for line in description.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix('#') {
+            // A markdown heading at any level — entering or leaving the
+            // Acceptance section resets the counter scope.
+            let heading = rest.trim_start_matches('#').trim().to_ascii_lowercase();
+            in_section = heading.starts_with("acceptance");
+            continue;
+        }
+        if in_section && is_task_bullet(trimmed) {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// TASK-304: is this a markdown task-list item (`- [ ]`, `* [x]`, `+ [X]`)?
+fn is_task_bullet(trimmed: &str) -> bool {
+    let after_marker = trimmed
+        .strip_prefix("- ")
+        .or_else(|| trimmed.strip_prefix("* "))
+        .or_else(|| trimmed.strip_prefix("+ "));
+    match after_marker {
+        Some(rest) => {
+            let r = rest.trim_start();
+            r.starts_with("[ ]") || r.starts_with("[x]") || r.starts_with("[X]")
+        }
+        None => false,
+    }
+}
+
+/// TASK-304: the pickup-time suggestion hint. Returns `Some(message)` only
+/// when `[ultraplan] mode = "suggested"` AND the spec's acceptance checklist
+/// is longer than the configured threshold; `None` otherwise (the common
+/// case — on-demand/never, or a spec that isn't chunky). The message format
+/// is fixed by the spec so downstream surfaces render it identically.
+/// trace:TASK-304 | ai:claude
+fn ultraplan_suggestion_hint(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+) -> Option<String> {
+    let cfg = read_ultraplan_config(project_root);
+    if cfg.mode != UltraplanMode::Suggested {
+        return None;
+    }
+    let bullets = count_acceptance_bullets(&req.description);
+    if bullets <= cfg.bullet_threshold {
+        return None;
+    }
+    let id = req.display_id();
+    Some(format!(
+        "{id} has {bullets} acceptance bullets — `aida ultraplan {id}` to \
+         assemble a planning prompt before implementing."
+    ))
+}
+
+/// TASK-304: render the ultraplan suggestion hint to stdout under the
+/// shared pickup surfaces (queue next / work / list). No-op when the helper
+/// returns `None`. trace:TASK-304 | ai:claude
+fn print_ultraplan_suggestion_hint(project_root: &std::path::Path, req: &aida_core::Requirement) {
+    if let Some(hint) = ultraplan_suggestion_hint(project_root, req) {
+        println!();
+        println!("  {} {}", "⤷".cyan(), hint);
+    }
+}
+
+/// TASK-304: the `[ultraplan]` block `aida init` scaffolds into a new
+/// project's `.aida/config.toml`. Ships `mode = "on-demand"` (preserves
+/// current behavior) plus a comment explaining the never/on-demand/suggested
+/// trade-off and why "frequently/auto-pull" isn't an option. Appended like
+/// the `[forge]` section so all three init paths share one source of truth.
+/// trace:TASK-304 | ai:claude
+fn init_ultraplan_config_section() -> &'static str {
+    "\n# trace:TASK-304 | ai:claude\n\
+     # Whether AIDA proactively suggests `aida ultraplan <SPEC>` for chunky\n\
+     # specs. /ultraplan is interactive (claude.ai web approval), so there is\n\
+     # no \"auto-pull\" mode — only:\n\
+     #   never      — `aida ultraplan` is disabled (refuses with a message)\n\
+     #   on-demand  — current behavior: run `aida ultraplan SPEC` yourself\n\
+     #   suggested  — pickup surfaces (/aida-pickup, queue work/list head)\n\
+     #                hint when the head spec passes suggest_threshold\n\
+     # suggest_threshold only applies in `suggested` mode. The lone heuristic\n\
+     # is `acceptance-bullets>N`: the count of `- [ ]` items in the spec's\n\
+     # `## Acceptance` section (mechanical, no NLP).\n\
+     [ultraplan]\n\
+     mode = \"on-demand\"\n\
+     suggest_threshold = \"acceptance-bullets>8\"\n"
+}
+
+#[cfg(test)]
+mod task_304_ultraplan_cadence_tests {
+    use super::*;
+
+    fn write_config(root: &std::path::Path, body: &str) {
+        let config_dir = root.join(".aida");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("config.toml"), body).unwrap();
+    }
+
+    fn req_with(spec_id: &str, description: &str) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new("chunky spec".to_string(), description.to_string());
+        r.spec_id = Some(spec_id.to_string());
+        r
+    }
+
+    const NINE_BULLETS: &str = "## Why\n\nsome prose\n\n## Acceptance\n\n\
+        - [ ] one\n- [ ] two\n- [ ] three\n- [ ] four\n- [ ] five\n\
+        - [ ] six\n- [ ] seven\n- [ ] eight\n- [ ] nine\n\n## Out of scope\n\n- [ ] not counted\n";
+
+    // ── mode token parsing ──────────────────────────────────────────────
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn mode_tokens_parse() {
+        assert_eq!(
+            UltraplanMode::from_token("never"),
+            Some(UltraplanMode::Never)
+        );
+        assert_eq!(
+            UltraplanMode::from_token("on-demand"),
+            Some(UltraplanMode::OnDemand)
+        );
+        assert_eq!(
+            UltraplanMode::from_token(" Suggested "),
+            Some(UltraplanMode::Suggested)
+        );
+        assert_eq!(UltraplanMode::from_token("frequently"), None);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn threshold_token_parses_and_rejects() {
+        assert_eq!(
+            parse_acceptance_bullet_threshold("acceptance-bullets>8"),
+            Some(8)
+        );
+        assert_eq!(
+            parse_acceptance_bullet_threshold("ACCEPTANCE-BULLETS>3"),
+            Some(3)
+        );
+        assert_eq!(
+            parse_acceptance_bullet_threshold("story-with-design-forks"),
+            None
+        );
+        assert_eq!(
+            parse_acceptance_bullet_threshold("acceptance-bullets>abc"),
+            None
+        );
+    }
+
+    // ── bullet counting ─────────────────────────────────────────────────
+    /// Counts only `## Acceptance` checkbox bullets, both checked and
+    /// unchecked; ignores bullets in other sections. trace:TASK-304 | ai:claude
+    #[test]
+    fn counts_acceptance_bullets_only() {
+        assert_eq!(count_acceptance_bullets(NINE_BULLETS), 9);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn counts_checked_and_unchecked() {
+        let d = "## Acceptance\n- [ ] todo\n- [x] done\n- [X] also done\n";
+        assert_eq!(count_acceptance_bullets(d), 3);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn counts_zero_without_acceptance_section() {
+        let d = "## Why\n- [ ] not acceptance\n- [ ] still not\n";
+        assert_eq!(count_acceptance_bullets(d), 0);
+    }
+
+    /// Tolerates `## Acceptance Criteria` heading variants. trace:TASK-304
+    #[test]
+    fn tolerates_acceptance_criteria_heading() {
+        let d = "## Acceptance Criteria\n- [ ] a\n- [ ] b\n";
+        assert_eq!(count_acceptance_bullets(d), 2);
+    }
+
+    // ── read_ultraplan_config: each mode + threshold ────────────────────
+    /// Absent config → on-demand default, threshold 8. trace:TASK-304
+    #[test]
+    fn config_absent_defaults_on_demand() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = read_ultraplan_config(tmp.path());
+        assert_eq!(cfg.mode, UltraplanMode::OnDemand);
+        assert_eq!(cfg.bullet_threshold, 8);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn config_never_mode_parses() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"never\"\n");
+        assert_eq!(read_ultraplan_config(tmp.path()).mode, UltraplanMode::Never);
+    }
+
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn config_suggested_mode_with_custom_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[ultraplan]\nmode = \"suggested\"\nsuggest_threshold = \"acceptance-bullets>3\"\n",
+        );
+        let cfg = read_ultraplan_config(tmp.path());
+        assert_eq!(cfg.mode, UltraplanMode::Suggested);
+        assert_eq!(cfg.bullet_threshold, 3);
+    }
+
+    /// Unknown mode token falls back to the on-demand default rather than
+    /// erroring. trace:TASK-304 | ai:claude
+    #[test]
+    fn config_unknown_mode_falls_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"frequently\"\n");
+        assert_eq!(
+            read_ultraplan_config(tmp.path()).mode,
+            UltraplanMode::OnDemand
+        );
+    }
+
+    // ── ultraplan_suggestion_hint: mode × threshold matrix ──────────────
+    /// on-demand never hints, even for a chunky spec. trace:TASK-304
+    #[test]
+    fn hint_silent_on_demand() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"on-demand\"\n");
+        let r = req_with("STORY-9", NINE_BULLETS);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
+    }
+
+    /// never never hints. trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_silent_never() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"never\"\n");
+        let r = req_with("STORY-9", NINE_BULLETS);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
+    }
+
+    /// suggested + over threshold → hint with the documented format.
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_fires_suggested_over_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        let r = req_with("STORY-9", NINE_BULLETS);
+        let hint = ultraplan_suggestion_hint(tmp.path(), &r).expect("expected a hint");
+        assert_eq!(
+            hint,
+            "STORY-9 has 9 acceptance bullets — `aida ultraplan STORY-9` to \
+             assemble a planning prompt before implementing."
+        );
+    }
+
+    /// suggested but at/under threshold (8 is not > 8) → silent.
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_silent_at_threshold_boundary() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        let eight = "## Acceptance\n- [ ] 1\n- [ ] 2\n- [ ] 3\n- [ ] 4\n\
+            - [ ] 5\n- [ ] 6\n- [ ] 7\n- [ ] 8\n";
+        let r = req_with("STORY-8", eight);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
+    }
+
+    /// A custom lower threshold makes a smaller checklist trip the hint.
+    /// trace:TASK-304 | ai:claude
+    #[test]
+    fn hint_respects_custom_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(
+            tmp.path(),
+            "[ultraplan]\nmode = \"suggested\"\nsuggest_threshold = \"acceptance-bullets>2\"\n",
+        );
+        let three = "## Acceptance\n- [ ] a\n- [ ] b\n- [ ] c\n";
+        let r = req_with("TASK-3", three);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_some());
+    }
+
+    /// The scaffolded `[ultraplan]` block ships mode = on-demand and parses
+    /// back to the on-demand default. trace:TASK-304 | ai:claude
+    #[test]
+    fn scaffolded_block_is_on_demand() {
+        let section = init_ultraplan_config_section();
+        assert!(section.contains("[ultraplan]"));
+        assert!(section.contains("mode = \"on-demand\""));
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), section);
+        let cfg = read_ultraplan_config(tmp.path());
+        assert_eq!(cfg.mode, UltraplanMode::OnDemand);
+        assert_eq!(cfg.bullet_threshold, 8);
+    }
 }
 
 fn line_for_key(body: &str, section: &str, key: &str) -> Option<usize> {
@@ -10252,6 +14113,63 @@ mod parse_requirement_type_tests {
 /// Initialize distributed mode using an orphan branch + worktree.
 /// This is the default for single-repo projects.
 /// Store lives at .aida-store/ (worktree of orphan branch 'aida-store').
+/// BUG-446: immediate-child directories of `cwd` that are their OWN git repos
+/// (a `.git` directory = nested repo, or a `.git` file = gitlink/submodule
+/// worktree) and are NOT registered submodules. A non-empty result means `cwd`
+/// is a workspace-of-projects, not a single project.
+///
+/// We deliberately test for a child's own `.git` entry rather than calling
+/// `git_ops::is_git_repo` (which shells out to `git rev-parse`): from inside
+/// `cwd` — itself a git repo by the time this runs — `rev-parse` resolves to
+/// `cwd`'s git-dir for EVERY subdirectory, so it would flag plain subdirs too.
+/// Dotted children (`.git`, `.aida-store`, …) and `.gitmodules`-declared
+/// submodules are intentional and excluded. trace:BUG-446 | ai:claude
+fn unmanaged_nested_git_repos(cwd: &std::path::Path) -> Vec<String> {
+    let submodule_paths = gitmodule_child_paths(cwd);
+    let mut found = Vec::new();
+    let Ok(entries) = std::fs::read_dir(cwd) else {
+        return found;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || submodule_paths.contains(&name) {
+            continue;
+        }
+        if path.join(".git").exists() {
+            found.push(name);
+        }
+    }
+    found.sort();
+    found
+}
+
+/// First path component of each `path = …` entry in the top-level `.gitmodules`
+/// — enough to exclude an immediate-child submodule directory from the
+/// workspace-of-projects guard. trace:BUG-446 | ai:claude
+fn gitmodule_child_paths(cwd: &std::path::Path) -> std::collections::HashSet<String> {
+    let mut paths = std::collections::HashSet::new();
+    let Ok(content) = std::fs::read_to_string(cwd.join(".gitmodules")) else {
+        return paths;
+    };
+    for line in content.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("path") {
+            if let Some(value) = rest.split('=').nth(1) {
+                if let Some(first) = value.trim().split('/').next() {
+                    if !first.is_empty() {
+                        paths.insert(first.to_string());
+                    }
+                }
+            }
+        }
+    }
+    paths
+}
+
 fn handle_init_distributed_worktree(
     force: bool,
     no_skills: bool,
@@ -10272,6 +14190,48 @@ fn handle_init_distributed_worktree(
         anyhow::bail!(
             "Not a git repository. Run 'git init' first, or use --sibling for a separate repo."
         );
+    }
+
+    // BUG-446: refuse to initialize over a workspace-of-projects. A fresh
+    // `aida init` (no `.aida/config.toml` yet) whose directory contains nested,
+    // non-submodule git repos would capture the whole tree as untracked entries
+    // (nested repos becoming gitlinks) and root the orphan store at the
+    // workspace level — every `aida` command from a future project subdirectory
+    // would then climb UP to this workspace-wide store. Gate on not-yet-init'd
+    // so re-running in a set-up project (handled below) keeps its own message;
+    // bypass with --force. trace:BUG-446 | ai:claude
+    if !force && !aida_dir.join("config.toml").exists() {
+        let nested = unmanaged_nested_git_repos(&cwd);
+        if !nested.is_empty() {
+            let preview = nested
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            let more = if nested.len() > 5 {
+                format!(", … (+{} more)", nested.len() - 5)
+            } else {
+                String::new()
+            };
+            anyhow::bail!(
+                "This directory looks like a workspace of projects, not a single project: \
+                 it contains {} nested git {} ({}{}).\n\n\
+                 `aida init` here would capture the entire tree and root the requirement \
+                 store at the workspace level — every `aida` command from a project \
+                 subdirectory would then operate on this workspace-wide store.\n\n\
+                 Run `aida init` inside an actual project directory instead, \
+                 or pass --force to initialize here anyway.",
+                nested.len(),
+                if nested.len() == 1 {
+                    "repository"
+                } else {
+                    "repositories"
+                },
+                preview,
+                more,
+            );
+        }
     }
 
     // Post-clone detection (EPIC-1-052 Phase 4): if origin already has the
@@ -10586,7 +14546,16 @@ fn handle_init_distributed_worktree(
     );
     // EPIC-35: scaffold the [forge] section with the auto-detected provider.
     let config_content = config_content + &forge::init_forge_config_section(&cwd);
+    // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
+    let config_content = config_content + init_ultraplan_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+
+    // STORY-511: surface the auto-detected forge so the operator sees the
+    // inference instead of having to read .aida/config.toml. EPIC-35 init UX.
+    {
+        let (_, msg) = forge::init_forge_detection_message(&cwd);
+        println!("  {} {}", "Done".green(), msg);
+    }
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
@@ -10742,12 +14711,19 @@ fn handle_init_post_clone(
     );
     // EPIC-35: scaffold the [forge] section with the auto-detected provider.
     let config_content = config_content + &forge::init_forge_config_section(&cwd);
+    // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
+    let config_content = config_content + init_ultraplan_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
         "Done".green(),
         ".aida/config.toml".white().bold()
     );
+    // STORY-511: surface the auto-detected forge (EPIC-35 init UX).
+    {
+        let (_, msg) = forge::init_forge_detection_message(cwd);
+        println!("  {} {}", "Done".green(), msg);
+    }
 
     // docs/plans/ for plan archive (post-clone attach: never overwrite).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
@@ -11128,7 +15104,9 @@ fn handle_init_distributed_sibling(
          #   [block_allocation.bug]\n\
          #   auto_claim_threshold = 50\n\
          #   auto_claim_size = 200\n";
-    std::fs::write(aida_dir.join("config.toml"), config_content)?;
+    // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
+    let config_content = config_content.to_string() + init_ultraplan_config_section();
+    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
@@ -11320,6 +15298,20 @@ fn add_requirement_cli(
         requirement.status = parse_status(status)?;
     }
 
+    // TASK-647 (ADR-3): advisor-gate the production of approved+ specs. A
+    // non-advisor, non-TTY caller (headless agent, drain/auto capture) can
+    // only file `draft`; a requested approved+ status is downgraded with a
+    // one-line triage notice. Advisor role or an interactive human is
+    // unaffected. trace:TASK-647 | ai:claude
+    let intake_downgraded_from =
+        if status_requires_advisor_authority(&requirement.status) && !has_advisor_authority() {
+            let from = requirement.status;
+            requirement.status = RequirementStatus::Draft;
+            Some(from)
+        } else {
+            None
+        };
+
     if let Some(priority) = priority_str {
         requirement.priority = parse_priority(priority)?;
     }
@@ -11396,6 +15388,17 @@ fn add_requirement_cli(
     println!("UUID: {}", id);
     if let Some(spec_id) = &added_req.spec_id {
         println!("ID: {}", spec_id.green());
+    }
+
+    // TASK-647 (ADR-3): tell the caller their requested status was held for
+    // triage. Quiet and non-fatal — the spec is filed, just as draft.
+    if let Some(from) = intake_downgraded_from {
+        eprintln!(
+            "{} filed as {} (requested {} needs advisor authority) — queued for advisor triage.",
+            "ℹ".cyan(),
+            "draft".yellow(),
+            from.to_string().to_lowercase().dimmed()
+        );
     }
 
     // Show parent relationship if created
@@ -11539,6 +15542,60 @@ fn list_requirements(
     Ok(())
 }
 
+/// Read the `[external_refs]` provider → base-URL map from `.aida/config.toml`.
+///
+/// Each line under the section is `provider = "https://..."` (e.g.
+/// `linear = "https://linear.app/acme/issue/"`). The project root is the
+/// parent of the orphan store path; fall back to `find_project_root()` and
+/// finally CWD. Missing file or section yields an empty map (callers then use
+/// the built-in defaults — see `aida_core::external_refs::render_ref_url`).
+/// Mirrors the line-by-line `read_config_workflow_hints` pattern.
+/// trace:STORY-476 | ai:claude
+fn read_external_ref_base_urls(
+    store_path: &std::path::Path,
+) -> std::collections::HashMap<String, String> {
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .or_else(|| find_project_root().ok())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let config_path = project_root.join(".aida").join("config.toml");
+    let mut map = std::collections::HashMap::new();
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(_) => return map,
+    };
+    let mut in_section = false;
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(stripped) = line.strip_prefix('[') {
+            in_section = stripped.trim_end_matches(']').trim() == "external_refs";
+            continue;
+        }
+        if in_section {
+            if let Some((key, val)) = line.split_once('=') {
+                let provider = key.trim().to_ascii_lowercase();
+                // Strip a trailing inline `# comment`, then surrounding quotes.
+                let v = val
+                    .split('#')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .trim_matches('"')
+                    .trim_matches('\'')
+                    .to_string();
+                if !provider.is_empty() && !v.is_empty() {
+                    map.insert(provider, v);
+                }
+            }
+        }
+    }
+    map
+}
+
 fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     // Load requirements first (needed for SPEC-ID lookup)
     let store = storage.load()?;
@@ -11628,21 +15685,9 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
             if let Some(target_req) = target {
                 let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
 
-                // Format the relationship description based on type
-                let description = match &relationship.rel_type {
-                    RelationshipType::Parent => format!("is parent of"),
-                    RelationshipType::Child => format!("is child of"),
-                    RelationshipType::Duplicate => format!("is duplicate of"),
-                    RelationshipType::Verifies => format!("verifies"),
-                    RelationshipType::VerifiedBy => format!("is verified by"),
-                    RelationshipType::References => format!("references"),
-                    // STORY-333: typed `blocked-by` / `blocks` surface as
-                    // human-readable prose so `aida show` reads naturally.
-                    // trace:STORY-333 | ai:claude
-                    RelationshipType::BlockedBy => format!("is blocked by"),
-                    RelationshipType::Blocks => format!("blocks"),
-                    RelationshipType::Custom(name) => format!("{}", name),
-                };
+                // TASK-102: shared phrase mapping (STORY-333 added typed
+                // blocked-by/blocks prose; now via `relationship_phrase`).
+                let description = relationship_phrase(&relationship.rel_type);
 
                 println!(
                     "  {} {} - {}",
@@ -11796,8 +15841,22 @@ fn handle_graph_command(
             "follow",
         )
     } else {
+        // BUG-448: the epic rollup must union BOTH parenthood edge types stored
+        // on the parent. `aida add --parent` records a `Child` edge on the
+        // parent; `aida rel add --type parent` records a `Parent` edge on the
+        // parent (inverted-but-displayed-as "is parent of") and writes nothing
+        // on the child. Both are OUTGOING from the epic and both mean "this is a
+        // child", so `--tree` walked over only `Child` reported "(no related
+        // specs)" for any epic whose children were grouped post-hoc via
+        // `rel add`. Walking both types (deduped by the visited/seen sets) makes
+        // `show`, `--follow parent`, and `--tree` agree. The underlying
+        // edge-semantics divergence is a separate data-model normalization
+        // (follow-up). trace:BUG-448 | ai:claude
         (
-            vec![(vec![RelationshipType::Child], Direction::Outgoing)],
+            vec![(
+                vec![RelationshipType::Child, RelationshipType::Parent],
+                Direction::Outgoing,
+            )],
             "tree",
         )
     };
@@ -14075,9 +18134,190 @@ fn handle_doc_command(
                 }
             }
         }
+
+        // Release-time doc-coverage gate. Warn-only.
+        // trace:TASK-680 | ai:claude
+        DocCommand::Coverage { since, json } => {
+            let store = backend.load()?;
+            let project_root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+
+            // Resolve the release boundary. An explicit `--since` wins; else the
+            // most recent `v*` tag; else `None` (scan all of history).
+            let boundary_ref: Option<String> = match since {
+                Some(s) => Some(s.clone()),
+                None => git_describe_latest_tag(&project_root),
+            };
+            let cutoff: Option<chrono::DateTime<chrono::Utc>> = boundary_ref
+                .as_deref()
+                .and_then(|r| git_ref_commit_time(&project_root, r));
+
+            let gaps = find_uncovered_completed_specs(&store.requirements, cutoff);
+
+            if *json {
+                let rows: Vec<serde_json::Value> = gaps
+                    .iter()
+                    .map(|r| {
+                        serde_json::json!({
+                            "id": r.display_id(),
+                            "title": r.title,
+                            "type": r.req_type.to_string(),
+                        })
+                    })
+                    .collect();
+                let payload = serde_json::json!({
+                    "since": boundary_ref,
+                    "uncovered_count": gaps.len(),
+                    "uncovered": rows,
+                });
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+                return Ok(());
+            }
+
+            let window_label = match &boundary_ref {
+                Some(r) => format!("since {}", r),
+                None => "across all history".to_string(),
+            };
+
+            if gaps.is_empty() {
+                println!(
+                    "{} Doc coverage OK — every spec completed {} has a doc entry.",
+                    "✓".green(),
+                    window_label
+                );
+                return Ok(());
+            }
+
+            println!(
+                "{} {} spec(s) completed {} have no doc entry:",
+                "⚠".yellow(),
+                gaps.len(),
+                window_label
+            );
+            for r in &gaps {
+                println!("  {} · {}", r.display_id().cyan(), r.title);
+            }
+            println!();
+            println!("Capture each with: aida doc add --title \"…\" --about <ID>");
+            println!("(warn-only — this gate does not block the release)");
+        }
     }
 
     Ok(())
+}
+
+/// Resolve the commit time of a git ref/tag as a UTC timestamp. Best-effort —
+/// `None` on any git failure or unparseable output.
+/// trace:TASK-680 | ai:claude
+fn git_ref_commit_time(
+    root: &std::path::Path,
+    git_ref: &str,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["log", "-1", "--format=%cI", git_ref])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        return None;
+    }
+    chrono::DateTime::parse_from_rfc3339(&s)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+/// Pure selection for the release-time doc-coverage gate (TASK-680).
+///
+/// Returns the requirements that **reached Completed at or after `cutoff`** and
+/// have **no Doc entry referencing them** (no `Doc`-typed requirement carries a
+/// `References` edge pointing at them). When `cutoff` is `None`, every spec that
+/// ever reached Completed is considered (full-history scan — used when the repo
+/// has no tags yet).
+///
+/// "Reached Completed" is read from the spec's transition `history`: any
+/// `HistoryEntry` whose `changes` include a `status` field whose `new_value`
+/// is `Completed`. As a fallback for specs that are currently Completed but
+/// carry no such history row (e.g. imported/legacy data), the spec's
+/// `modified_at` is used as the transition time.
+///
+/// Doc-typed requirements and archived specs are never themselves reported as
+/// gaps (a doc doesn't need a doc about it).
+///
+/// trace:TASK-680 | ai:claude
+fn find_uncovered_completed_specs(
+    requirements: &[aida_core::models::Requirement],
+    cutoff: Option<chrono::DateTime<chrono::Utc>>,
+) -> Vec<aida_core::models::Requirement> {
+    use aida_core::models::{RelationshipType, RequirementStatus, RequirementType};
+
+    // Set of spec uuids that at least one Doc References.
+    let mut documented: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+    for doc in requirements
+        .iter()
+        .filter(|r| r.req_type == RequirementType::Doc)
+    {
+        for rel in &doc.relationships {
+            if rel.rel_type == RelationshipType::References {
+                documented.insert(rel.target_id);
+            }
+        }
+    }
+
+    let completed_str = RequirementStatus::Completed.to_string();
+
+    let mut gaps: Vec<aida_core::models::Requirement> = Vec::new();
+    for req in requirements {
+        // Docs and archived specs are out of scope.
+        if req.req_type == RequirementType::Doc || req.archived {
+            continue;
+        }
+
+        // When did this spec reach Completed (if ever)?
+        let completed_at: Option<chrono::DateTime<chrono::Utc>> = req
+            .history
+            .iter()
+            .filter(|h| {
+                h.changes
+                    .iter()
+                    .any(|c| c.field_name == "status" && c.new_value == completed_str)
+            })
+            .map(|h| h.timestamp)
+            .max()
+            .or_else(|| {
+                // Fallback: currently Completed but no history row recording it.
+                if req.status == RequirementStatus::Completed {
+                    Some(req.modified_at)
+                } else {
+                    None
+                }
+            });
+
+        let Some(reached_at) = completed_at else {
+            continue;
+        };
+
+        // Inside the release window?
+        if let Some(c) = cutoff {
+            if reached_at < c {
+                continue;
+            }
+        }
+
+        // Already documented?
+        if documented.contains(&req.id) {
+            continue;
+        }
+
+        gaps.push(req.clone());
+    }
+
+    gaps.sort_by(|a, b| a.display_id().cmp(&b.display_id()));
+    gaps
 }
 
 /// Print the full detail view for a single Doc entry.
@@ -14450,7 +18690,48 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             force,
             yes,
             hijack,
+            remote_only,
         } => {
+            // FR-265 remote-only path: backfill a registry entry for some
+            // OTHER (legacy) clone and push, without touching this clone's
+            // identity. Requires explicit --id/--hostname/--email since the
+            // entry isn't about the local clone. trace:FR-265 | ai:claude
+            if *remote_only {
+                let id = requested_id.clone().ok_or_else(|| {
+                    anyhow::anyhow!("--remote-only requires --id <NODE_ID> (explicit; nothing is inferred from this clone)")
+                })?;
+                let hn = hn_override.clone().ok_or_else(|| {
+                    anyhow::anyhow!("--remote-only requires --hostname <HOST> (explicit; nothing is inferred from this clone)")
+                })?;
+                let email = email_override.clone().ok_or_else(|| {
+                    anyhow::anyhow!("--remote-only requires --email <EMAIL> (explicit; nothing is inferred from this clone)")
+                })?;
+                if let Err(msg) = aida_core::node::validate_node_id(&id) {
+                    anyhow::bail!("Invalid node id: {}", msg);
+                }
+                let user_id = 1;
+                println!(
+                    "Backfilling registry entry for node {} (hostname={}, email={}) — local identity untouched...",
+                    id, hn, email
+                );
+                let registered = aida_core::git_ops::register_node_remote_only(
+                    store_path, id, user_id, &hn, email,
+                )?;
+                println!(
+                    "{} Backfilled node id {} into registry/nodes.toml. This clone's identity ({}) is unchanged.",
+                    "".green().bold(),
+                    registered,
+                    if node_config_path.exists() {
+                        aida_core::NodeConfig::load(&node_config_path)
+                            .map(|c| c.node_id)
+                            .unwrap_or_else(|_| "-".to_string())
+                    } else {
+                        "none".to_string()
+                    }
+                );
+                return Ok(());
+            }
+
             // STORY-43 hijack path: re-claim an existing node id.
             if let Some(target_id) = hijack {
                 let hn = hn_override.clone().unwrap_or_else(hostname);
@@ -16032,7 +20313,7 @@ fn record_role_activity(spec_id: &str, action: &str) {
 fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     let project_root = statusline_project_root();
     match cmd {
-        RoleCommand::Enter { name, cd } => handle_role_enter(&project_root, name, *cd),
+        RoleCommand::Enter { name, cd } => handle_role_enter(&project_root, name.as_deref(), *cd),
         RoleCommand::Add {
             name,
             purpose,
@@ -16211,14 +20492,47 @@ fn print_role_scope(state: &RoleState) {
     }
 }
 
-fn handle_role_enter(project_root: &std::path::Path, name: &str, cd: bool) -> Result<()> {
-    let (mut state, _) = load_role(project_root, name).map_err(|_| {
+fn handle_role_enter(project_root: &std::path::Path, name: Option<&str>, cd: bool) -> Result<()> {
+    // TASK-644: resolve the role name. When the name is omitted, or names a
+    // role that doesn't exist, fall back to an interactive picker — but ONLY
+    // when stdin is a TTY. The primary caller is `eval "$(aida role enter)"`,
+    // so stdout is a captured pipe; gate on stdin, draw to /dev/tty (stderr
+    // fallback), and keep stdout carrying nothing but the eval payload.
+    let resolved = match name {
+        Some(n) if load_role(project_root, n).is_ok() => n.to_string(),
+        explicit => {
+            if std::io::stdin().is_terminal() {
+                match pick_role_interactively(project_root, explicit)? {
+                    Some(chosen) => chosen,
+                    None => return Ok(()), // cancelled — stdout stays empty, eval is a no-op
+                }
+            } else {
+                // Non-interactive: preserve the deterministic error + exit code.
+                let n = explicit.unwrap_or("");
+                if n.is_empty() {
+                    anyhow::bail!(
+                        "No role name given and stdin is not a terminal.\n\
+                         Pass a name (`aida role enter <name>`) or run interactively.\n\
+                         See available roles with: `aida role list`"
+                    );
+                }
+                anyhow::bail!(
+                    "No such role: {}\n\
+                     Create it with: `aida role add {}`\n\
+                     See available roles with: `aida role list`",
+                    n,
+                    n
+                );
+            }
+        }
+    };
+    let (mut state, _) = load_role(project_root, &resolved).map_err(|_| {
         anyhow::anyhow!(
             "No such role: {}\n\
              Create it with: `aida role add {}`\n\
              See available roles with: `aida role list`",
-            name,
-            name
+            resolved,
+            resolved
         )
     })?;
     state.last_active_at = chrono::Utc::now();
@@ -16229,6 +20543,142 @@ fn handle_role_enter(project_root: &std::path::Path, name: &str, cd: bool) -> Re
     Ok(())
 }
 
+/// TASK-644: interactive role picker for `aida role enter` (no name / unknown
+/// name on a TTY). Renders the list and reads the selection over `/dev/tty`
+/// (falling back to stderr+stdin) so stdout stays clean for the eval payload.
+/// Returns `Ok(Some(name))` on selection, `Ok(None)` if the user cancels.
+fn pick_role_interactively(
+    project_root: &std::path::Path,
+    unknown: Option<&str>,
+) -> Result<Option<String>> {
+    let header = match unknown.filter(|u| !u.is_empty()) {
+        Some(u) => format!("No such role: {} — pick one of the existing roles:", u),
+        None => "Select a role to enter:".to_string(),
+    };
+    // role-enter marks the *active* shell role; no spawn-default to highlight.
+    pick_role_with_header(project_root, &header, None)
+}
+
+/// TASK-644/TASK-646: shared role picker. Renders `header` then the role
+/// list over `/dev/tty` (stderr fallback) and reads a numeric selection from
+/// stdin — so callers whose stdout is a captured pipe (`eval "$(...)"`) stay
+/// uncorrupted. `highlight`, when set, marks that role `▸` and is offered as
+/// the default on a blank Enter (rather than cancelling). Returns
+/// `Ok(Some(name))` on selection, `Ok(None)` on cancel.
+fn pick_role_with_header(
+    project_root: &std::path::Path,
+    header: &str,
+    highlight: Option<&str>,
+) -> Result<Option<String>> {
+    use std::io::Write;
+
+    let roles = list_roles(project_root)?;
+    if roles.is_empty() {
+        anyhow::bail!(
+            "No roles defined for {}.\n\
+             Create one with: `aida role add <name>`\n\
+             Or install a starter set: `aida role scaffold`",
+            project_root.display()
+        );
+    }
+
+    // Prefer a direct /dev/tty handle so the picker is visible even when both
+    // stdout and stderr are redirected (the `eval "$(...)"` case captures
+    // stdout; stderr may also be captured by tooling). Fall back to stderr.
+    let mut tty = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/tty")
+        .ok();
+    macro_rules! ui {
+        ($($arg:tt)*) => {{
+            if let Some(t) = tty.as_mut() {
+                let _ = writeln!(t, $($arg)*);
+            } else {
+                eprintln!($($arg)*);
+            }
+        }};
+    }
+
+    let active = std::env::var("AIDA_SESSION_ROLE").ok();
+    let highlight_idx = highlight.and_then(|h| roles.iter().position(|r| r.name == h));
+    ui!("{}", header);
+    for (i, role) in roles.iter().enumerate() {
+        // `*` = currently-active shell role; `▸` = the offered default.
+        let marker = if Some(i) == highlight_idx {
+            "▸"
+        } else if active.as_deref() == Some(&role.name) {
+            "*"
+        } else {
+            " "
+        };
+        let scope = if role.global { " [global]" } else { "" };
+        let last = humanize_relative(role.last_active_at);
+        let purpose = role
+            .purpose
+            .as_deref()
+            .map(|p| format!(" — {}", p))
+            .unwrap_or_default();
+        ui!(
+            "  {} {:>2}) {}{}  (last active {}){}",
+            marker,
+            i + 1,
+            role.name,
+            scope,
+            last,
+            purpose
+        );
+    }
+    match highlight_idx {
+        Some(_) => ui!(
+            "  Enter a number (blank = {}, q to cancel): ",
+            highlight.unwrap_or("default")
+        ),
+        None => ui!("  Enter a number (or blank/q to cancel): "),
+    }
+
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    // TASK-646: with a highlighted default, a blank line accepts it instead
+    // of cancelling; `q` still cancels. Without a default, blank cancels.
+    let trimmed = answer.trim();
+    if trimmed.is_empty() {
+        if let Some(idx) = highlight_idx {
+            return Ok(Some(roles[idx].name.clone()));
+        }
+    }
+    match parse_role_selection(&answer, roles.len()) {
+        RoleSelection::Index(i) => Ok(Some(roles[i].name.clone())),
+        RoleSelection::Cancel => Ok(None),
+        RoleSelection::Invalid => {
+            ui!("Not a valid selection: {} — cancelled.", answer.trim());
+            Ok(None)
+        }
+    }
+}
+
+/// TASK-644: outcome of parsing a role-picker selection line. Pure so the
+/// picker's branch logic is testable without a real TTY read.
+#[derive(Debug, PartialEq, Eq)]
+enum RoleSelection {
+    /// Zero-based index into the role list.
+    Index(usize),
+    /// Blank line or `q`/`Q` — user cancelled.
+    Cancel,
+    /// Non-numeric or out-of-range — treated as a cancel, with a notice.
+    Invalid,
+}
+
+fn parse_role_selection(input: &str, n_roles: usize) -> RoleSelection {
+    let trimmed = input.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("q") {
+        return RoleSelection::Cancel;
+    }
+    match trimmed.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= n_roles => RoleSelection::Index(n - 1),
+        _ => RoleSelection::Invalid,
+    }
+}
+
 fn handle_role_add(
     project_root: &std::path::Path,
     name: &str,
@@ -16236,14 +20686,15 @@ fn handle_role_add(
     global: bool,
 ) -> Result<()> {
     if let Ok((existing, path)) = load_role(project_root, name) {
+        // trace:TASK-667 — emit the wrapper-correct enter form.
         anyhow::bail!(
             "Role '{}' already exists at {}.\n\
-             Resume it with: `aida role enter {}`\n\
+             Resume it with: `{}`\n\
              See its details with: `aida role show {}`\n\
              ({})",
             name,
             path.display(),
-            name,
+            eval_subcommand_hint(&format!("role enter {name}")),
             name,
             if existing.global {
                 "currently a global role"
@@ -16926,7 +21377,11 @@ fn handle_role_scaffold() -> Result<()> {
             }
         );
         println!();
-        println!("Try them: {}", "aida role enter implementer".cyan());
+        // trace:TASK-667 — wrapper-correct enter form.
+        println!(
+            "Try them: {}",
+            eval_subcommand_hint("role enter implementer").cyan()
+        );
         println!("List all: {}", "aida role list".cyan());
     }
     Ok(())
@@ -17186,6 +21641,246 @@ fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
     }
 }
 
+// ── Sandbox store (SPIKE-48) ─────────────────────────────────────────────
+//
+// A throwaway, discardable git-canonical store for drain-testing and scenario
+// play. It is an ORDINARY store directory targeted via the `AIDA_STORE` env
+// override (resolved in `aida_store_override`), so every `aida` command run in a
+// shell that exports it operates on the sandbox instead of the project's real
+// `aida-store` orphan branch. Lowest-machinery by design: a temp dir + a git
+// repo + the same `GitBackend` init the real store uses — no daemon, no orphan
+// branch, no remote. This is the dev-playground slice of SPIKE-48; the
+// first-user/tutorial layer is deferred. trace:SPIKE-48 | ai:claude
+
+/// Default sandbox store location: a stable per-user dir under the system temp
+/// directory, so repeated `aida sandbox create` / `path` point at the same
+/// playground without the user tracking a path. Per-user so two accounts on one
+/// box don't collide. trace:SPIKE-48 | ai:claude
+fn default_sandbox_path() -> std::path::PathBuf {
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "default".to_string());
+    std::env::temp_dir().join(format!("aida-sandbox-{user}"))
+}
+
+fn sandbox_path_or_default(path: Option<&std::path::Path>) -> std::path::PathBuf {
+    path.map(|p| p.to_path_buf())
+        .unwrap_or_else(default_sandbox_path)
+}
+
+fn handle_sandbox_command(cmd: &cli::SandboxCommand) -> Result<()> {
+    match cmd {
+        cli::SandboxCommand::Create { path, seed, force } => {
+            sandbox_create(sandbox_path_or_default(path.as_deref()), *seed, *force)
+        }
+        cli::SandboxCommand::Reset { path, seed } => {
+            sandbox_reset(sandbox_path_or_default(path.as_deref()), *seed)
+        }
+        cli::SandboxCommand::Destroy { path } => {
+            sandbox_destroy(sandbox_path_or_default(path.as_deref()))
+        }
+        cli::SandboxCommand::Path { path, export } => {
+            sandbox_path(sandbox_path_or_default(path.as_deref()), *export)
+        }
+    }
+}
+
+/// Print the shell line that retargets `aida` at the sandbox. Shown by
+/// `create` / `reset` / `path --export` so the user can copy-paste-activate.
+fn sandbox_export_line(store: &std::path::Path) -> String {
+    format!("export AIDA_STORE={}", store.display())
+}
+
+/// Is `dir` already a usable sandbox store (a git repo holding `objects/`)?
+fn sandbox_is_populated(dir: &std::path::Path) -> bool {
+    aida_core::git_ops::is_git_repo(dir) && dir.join("objects").is_dir()
+}
+
+/// Create (or no-op on) the sandbox store at `store`. Initializes a git repo +
+/// `GitBackend` (which lays down `objects/` and `metadata.yaml`), optionally
+/// seeds curated scenario specs, and prints the activation export line.
+/// trace:SPIKE-48 | ai:claude
+fn sandbox_create(store: std::path::PathBuf, seed: bool, force: bool) -> Result<()> {
+    use aida_core::git_ops;
+
+    if sandbox_is_populated(&store) && !force {
+        println!(
+            "{} sandbox store already exists at {}",
+            "Note:".dimmed(),
+            store.display().to_string().white().bold()
+        );
+        println!("  Use it:        {}", sandbox_export_line(&store).cyan());
+        println!("  Re-seed:       {}", "aida sandbox reset --seed".cyan());
+        println!("  Recreate:      {}", "aida sandbox create --force".cyan());
+        return Ok(());
+    }
+
+    if force && store.exists() {
+        std::fs::remove_dir_all(&store)
+            .with_context(|| format!("failed to remove existing sandbox at {}", store.display()))?;
+    }
+
+    std::fs::create_dir_all(&store)
+        .with_context(|| format!("failed to create sandbox dir {}", store.display()))?;
+
+    if !git_ops::is_git_repo(&store) {
+        git_ops::init(&store)?;
+    }
+    // A throwaway store still needs an identity for commits to succeed.
+    let git_name =
+        git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA Sandbox".to_string());
+    let git_email =
+        git_ops::git_config_get("user.email").unwrap_or_else(|_| "sandbox@localhost".to_string());
+    git_ops::configure_user(&store, &git_name, &git_email)?;
+
+    // Initialize the backend (creates objects/ + metadata.yaml) and seed META
+    // prompts so the playground behaves like a real project.
+    let backend = aida_core::GitBackend::new(&store)?;
+    let mut rs = aida_core::models::RequirementsStore::new();
+    rs.name = "AIDA Sandbox".to_string();
+    rs.title = "AIDA Sandbox".to_string();
+    aida_core::meta::seed_meta_requirements(&mut rs)?;
+    backend.save(&rs)?;
+
+    std::fs::write(store.join("objects/.gitkeep"), "")?;
+    git_ops::add_all(&store, "objects")?;
+    if store.join("metadata.yaml").exists() {
+        git_ops::add(&store, &["metadata.yaml"])?;
+    }
+    let _ = git_ops::commit(&store, "chore: initialize AIDA sandbox store");
+
+    println!(
+        "{} sandbox store at {}",
+        "Created".green(),
+        store.display().to_string().white().bold()
+    );
+
+    if seed {
+        sandbox_seed(&store)?;
+    }
+
+    println!();
+    println!("Activate it in this shell:");
+    println!("  {}", sandbox_export_line(&store).cyan());
+    println!(
+        "Then `aida list` / `aida queue work` operate on the sandbox. {} when done.",
+        "aida sandbox destroy".cyan()
+    );
+    Ok(())
+}
+
+/// Wipe the sandbox's contents and re-create it empty (or `--seed`-ed). The
+/// directory path is reused so an exported `AIDA_STORE` stays valid.
+/// trace:SPIKE-48 | ai:claude
+fn sandbox_reset(store: std::path::PathBuf, seed: bool) -> Result<()> {
+    if store.exists() {
+        std::fs::remove_dir_all(&store)
+            .with_context(|| format!("failed to reset sandbox at {}", store.display()))?;
+    }
+    sandbox_create(store, seed, true)
+}
+
+/// Delete the sandbox store directory entirely. Idempotent.
+/// trace:SPIKE-48 | ai:claude
+fn sandbox_destroy(store: std::path::PathBuf) -> Result<()> {
+    if store.exists() {
+        std::fs::remove_dir_all(&store)
+            .with_context(|| format!("failed to destroy sandbox at {}", store.display()))?;
+        println!(
+            "{} sandbox store at {}",
+            "Removed".green(),
+            store.display().to_string().white().bold()
+        );
+        println!("  Unset the override: {}", "unset AIDA_STORE".cyan());
+    } else {
+        println!(
+            "{} no sandbox store at {}",
+            "Note:".dimmed(),
+            store.display()
+        );
+    }
+    Ok(())
+}
+
+/// Print the sandbox path (and existence), or the `export AIDA_STORE=...` line
+/// with `--export`. trace:SPIKE-48 | ai:claude
+fn sandbox_path(store: std::path::PathBuf, export: bool) -> Result<()> {
+    if export {
+        println!("{}", sandbox_export_line(&store));
+        return Ok(());
+    }
+    let state = if sandbox_is_populated(&store) {
+        "exists".green()
+    } else {
+        "not created".dimmed()
+    };
+    println!("{} ({})", store.display(), state);
+    Ok(())
+}
+
+/// Seed a small, deterministic set of curated scenario specs into the sandbox:
+/// a short lifecycle walk plus a blocked-by chain (so `aida graph --blocked-by`
+/// and a drain have something to chew on). Deterministic + offline by design —
+/// AI-generated scenarios are a deferred nicety. trace:SPIKE-48 | ai:claude
+fn sandbox_seed(store: &std::path::Path) -> Result<()> {
+    use aida_core::models::{RelationshipType, Requirement, RequirementStatus, RequirementType};
+
+    let backend = aida_core::GitBackend::new(store)?;
+
+    // Build the scenario specs in memory first so we can wire a blocked-by edge
+    // by UUID (each Requirement gets its id at construction).
+    let mut lifecycle = Requirement::new(
+        "Sandbox: a lifecycle walk".to_string(),
+        "Approved task to walk Draft -> Approved -> Planned -> In Progress -> Done. \
+         Edit its status with `aida edit <id> --status ...` to feel the state machine."
+            .to_string(),
+    );
+    lifecycle.req_type = RequirementType::Task;
+    lifecycle.status = RequirementStatus::Approved;
+    lifecycle.tags.insert("sandbox".to_string());
+
+    let mut blocker = Requirement::new(
+        "Sandbox: the blocker".to_string(),
+        "This task blocks the dependent below. Try `aida graph <dependent-id> --blocked-by`."
+            .to_string(),
+    );
+    blocker.req_type = RequirementType::Task;
+    blocker.status = RequirementStatus::Approved;
+    blocker.tags.insert("sandbox".to_string());
+
+    let mut dependent = Requirement::new(
+        "Sandbox: the dependent".to_string(),
+        "Blocked by 'the blocker' — it won't be pickable until the blocker is Done.".to_string(),
+    );
+    dependent.req_type = RequirementType::Task;
+    dependent.status = RequirementStatus::Approved;
+    dependent.tags.insert("sandbox".to_string());
+    dependent
+        .relationships
+        .push(aida_core::models::Relationship {
+            rel_type: RelationshipType::BlockedBy,
+            target_id: blocker.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some("sandbox".to_string()),
+        });
+    // Inverse edge on the blocker so the graph reads cleanly both ways.
+    blocker.relationships.push(aida_core::models::Relationship {
+        rel_type: RelationshipType::Blocks,
+        target_id: dependent.id,
+        created_at: Some(chrono::Utc::now()),
+        created_by: Some("sandbox".to_string()),
+    });
+
+    let mut writer = backend.bulk_writer()?;
+    writer.add(lifecycle)?;
+    writer.add(blocker)?;
+    writer.add(dependent)?;
+    let count = writer.finish("chore: seed sandbox scenario specs")?;
+
+    println!("  {} {} scenario specs", "Seeded".green(), count);
+    Ok(())
+}
+
 /// Print the alignment between this commit's paired store SHA (from the
 /// `Aida-Store:` trailer) and the current orphan store HEAD. Reports
 /// "aligned" when they match, "drift" with commit count otherwise.
@@ -17357,6 +22052,147 @@ fn short_sha(sha: &str) -> String {
     }
 }
 
+/// Pure drift verdict: given the code commit's paired store SHA (from the
+/// `Aida-Store:` trailer) and the current orphan-store HEAD, decide whether
+/// the store has drifted away from the SHA the code was committed against.
+///
+/// Returns `Some(true)` when both SHAs are present and differ (drift),
+/// `Some(false)` when both are present and match (aligned), and `None` when
+/// either side is absent (no trailer, or no `.aida-store/`) — i.e. there is
+/// nothing to compare, so no drift claim is made.
+/// trace:STORY-49 | ai:claude
+fn store_sha_drift(
+    paired_store_sha: Option<&str>,
+    current_store_head: Option<&str>,
+) -> Option<bool> {
+    match (paired_store_sha, current_store_head) {
+        (Some(p), Some(c)) => Some(p.trim() != c.trim()),
+        _ => None,
+    }
+}
+
+/// Read the `Aida-Store:` trailer SHA from the code HEAD commit message at
+/// `project_root`, if present. Returns `None` on any git error, no trailer,
+/// or no commits. trace:STORY-49 | ai:claude
+fn paired_store_sha_for_head(project_root: &std::path::Path) -> Option<String> {
+    let head_msg = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-1", "--format=%B"])
+        .output()
+        .ok()?;
+    if !head_msg.status.success() {
+        return None;
+    }
+    let head_msg = String::from_utf8_lossy(&head_msg.stdout).to_string();
+    let trailers = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["interpret-trailers", "--parse"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .ok()?;
+    {
+        use std::io::Write;
+        if let Some(mut stdin) = trailers.stdin.as_ref().take() {
+            let _ = stdin.write_all(head_msg.as_bytes());
+        }
+    }
+    let trailer_output = trailers.wait_with_output().ok()?;
+    let trailer_text = String::from_utf8_lossy(&trailer_output.stdout).to_string();
+    trailer_text
+        .lines()
+        .find_map(|l| l.strip_prefix("Aida-Store:").map(|s| s.trim().to_string()))
+        .filter(|s| !s.is_empty())
+}
+
+/// Current orphan-store HEAD SHA from `<project_root>/.aida-store`, if the
+/// worktree exists and git can resolve it. trace:STORY-49 | ai:claude
+fn current_store_head_sha(project_root: &std::path::Path) -> Option<String> {
+    let store_path = project_root.join(".aida-store");
+    if !store_path.exists() {
+        return None;
+    }
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .filter(|s| !s.is_empty())
+}
+
+/// STORY-49: one-line store/code SHA-drift warning for `aida status`.
+///
+/// Warn-only: when the code HEAD's paired store SHA (`Aida-Store:` trailer)
+/// diverges from the current orphan-store HEAD, surface a single yellow line
+/// pointing at `aida store status` for detail. Silent when aligned, when
+/// there is no trailer (hook not installed / pre-hook commit), or when there
+/// is no `.aida-store/` — anything that isn't an unambiguous drift signal
+/// stays quiet so a fresh / unpaired project sees no nag. trace:STORY-49
+fn print_status_store_drift_section(project_root: &std::path::Path) {
+    let paired = paired_store_sha_for_head(project_root);
+    let current = current_store_head_sha(project_root);
+    if let Some(true) = store_sha_drift(paired.as_deref(), current.as_deref()) {
+        println!(
+            "  {} code HEAD pinned store {} but current store is {} — run {} for detail",
+            "Store drift:".bold().yellow(),
+            short_sha(paired.as_deref().unwrap_or("")).dimmed(),
+            short_sha(current.as_deref().unwrap_or("")).dimmed(),
+            "aida store status".cyan()
+        );
+        println!();
+    }
+}
+
+#[cfg(test)]
+mod story_49_store_drift_tests {
+    use super::store_sha_drift;
+
+    #[test]
+    fn aligned_when_paired_equals_current() {
+        assert_eq!(store_sha_drift(Some("abc123"), Some("abc123")), Some(false));
+    }
+
+    #[test]
+    fn drift_when_paired_differs_from_current() {
+        assert_eq!(store_sha_drift(Some("abc123"), Some("def456")), Some(true));
+    }
+
+    #[test]
+    fn whitespace_around_shas_is_ignored() {
+        assert_eq!(
+            store_sha_drift(Some("  abc123\n"), Some("abc123")),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn no_verdict_without_a_paired_sha() {
+        // No `Aida-Store:` trailer on the commit — nothing to compare.
+        assert_eq!(store_sha_drift(None, Some("abc123")), None);
+    }
+
+    #[test]
+    fn no_verdict_without_a_current_store_head() {
+        // No `.aida-store/` worktree — nothing to compare.
+        assert_eq!(store_sha_drift(Some("abc123"), None), None);
+    }
+
+    #[test]
+    fn no_verdict_when_both_absent() {
+        assert_eq!(store_sha_drift(None, None), None);
+    }
+}
+
 /// Install the prepare-commit-msg hook from EMBEDDED_TEMPLATES into
 /// `.git/hooks/prepare-commit-msg`. Idempotent. trace:EPIC-21 | ai:claude
 fn store_install_hook(force: bool) -> Result<()> {
@@ -17415,6 +22251,7 @@ fn handle_doctor_command(
     category: Option<&str>,
     json: bool,
     force: bool,
+    since: Option<&str>,
     cmd: Option<&cli::DoctorCommand>,
 ) -> Result<()> {
     let Some(cmd) = cmd else {
@@ -17424,6 +22261,7 @@ fn handle_doctor_command(
             category: category.map(str::to_string),
             json,
             force,
+            since: since.map(str::to_string),
         });
     };
     match cmd {
@@ -17433,6 +22271,7 @@ fn handle_doctor_command(
             category: Some(category.clone()),
             json: *json,
             force,
+            since: since.map(str::to_string),
         }),
         cli::DoctorCommand::Heal {
             category,
@@ -17445,6 +22284,7 @@ fn handle_doctor_command(
             category: Some(category.clone()),
             json: *json,
             force: *force,
+            since: since.map(str::to_string),
         }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
@@ -17480,6 +22320,9 @@ struct DoctorRunOptions {
     category: Option<String>,
     json: bool,
     force: bool,
+    /// TASK-673: cutoff for the completed-without-commit integrity check —
+    /// specs completed before this ref/date are exempt (legacy history).
+    since: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -17524,11 +22367,29 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let store = Storage::new(&store_path)
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
-    let mut report = DoctorReport::from_findings(collect_doctor_findings(
-        &project_root,
-        &store,
-        opts.category.as_deref(),
-    )?);
+    let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+
+    // TASK-673: the completed-without-commit integrity check runs git scans
+    // (a default-branch `git log` + `git grep`) so it is kept OUT of the hot
+    // `collect_doctor_findings` path (which `aida status` calls on every
+    // invocation) and appended here, where only `aida doctor` reaches it.
+    // It honours the same `--category` filter as the built-in categories.
+    // trace:TASK-673 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "completed-without-commit")? {
+        let since = opts
+            .since
+            .clone()
+            .or_else(|| std::env::var("AIDA_DOCTOR_COMPLETED_SINCE").ok())
+            .filter(|s| !s.trim().is_empty());
+        findings.extend(scan_completed_without_commit(
+            &project_root,
+            &store,
+            since.as_deref(),
+        ));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    let mut report = DoctorReport::from_findings(findings);
 
     if opts.heal {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
@@ -17635,7 +22496,7 @@ fn collect_doctor_findings(
             .creator_pid
             .is_some_and(|pid| !process_probe::pid_is_alive(pid));
         let branch_merged = matches!(
-            detect_merged_pr_for_branch(project_root, &lease.branch),
+            detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
             PrLookup::Found(_)
         );
         if matches!(state, LeaseState::Stale) || pid_dead || branch_merged {
@@ -17896,15 +22757,223 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // STORY-496: dead-PID agent-registry entries (corpses under
         // `.aida/agents/`). trace:STORY-496 | ai:claude
         "dead-agent" | "dead-agents" | "stale-agent" | "stale-agents" | "agents" => "dead-agents",
+        // TASK-673: Completed specs git can't corroborate. trace:TASK-673 | ai:claude
+        "completed-without-commit"
+        | "completed-without-commits"
+        | "completed-no-commit"
+        | "uncorroborated-completed"
+        | "integrity" => "completed-without-commit",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, orphan-queue-entries, stale-reviewer-leases, stale-locks, \
-             dead-agents, OBE-briefs)",
+             dead-agents, OBE-briefs, completed-without-commit)",
             other
         ),
     };
     Ok(normalized.to_string())
+}
+
+/// Whether `category` (a normalized doctor category) is in scope given the
+/// user's `--category` filter. `None` filter selects everything. Errors only
+/// if the filter itself is an unknown category. trace:TASK-673 | ai:claude
+fn doctor_category_selected(filter: Option<&str>, category: &str) -> Result<bool> {
+    match filter {
+        None => Ok(true),
+        Some(raw) => Ok(normalize_doctor_category(raw)? == category),
+    }
+}
+
+/// TASK-673: spec-graph ⟂ git tripwire. Returns a `completed-without-commit`
+/// finding for every spec in `Completed` status that NO commit on the default
+/// CODE branch references (by `(SPEC-ID)` subject/trailer) and that NO tracked
+/// file at that branch carries a `// trace:SPEC-ID`. A Completed spec with zero
+/// corroboration means the requirement graph is asserting work git has never
+/// seen — the defense-in-depth companion to the BUG-449 MCP gate.
+///
+/// CRITICAL: scans the default CODE branch only (resolved via
+/// `resolve_default_branch_ref`), never the orphan `aida-store` branch — whose
+/// `update SPEC-NNN` bookkeeping commits mention the bare id and would mask
+/// every violation. Plan commits are skipped (their trailer names planned, not
+/// delivered, specs). `Done` specs are deliberately excluded: that is the
+/// queue's "awaiting commit" transient, surfaced separately, so this check
+/// targets only the harder Completed-without-corroboration case. Read-only.
+///
+/// `since` (a git ref/tag or ISO date) exempts specs last modified before that
+/// point, quieting noise on legacy history predating trace conventions. The
+/// reference scan itself always walks the FULL default-branch history so an old
+/// corroborating commit is never missed. trace:TASK-673 | ai:claude
+fn scan_completed_without_commit(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    since: Option<&str>,
+) -> Vec<DoctorFinding> {
+    use std::process::Command as PCmd;
+
+    let completed: Vec<&aida_core::models::Requirement> = store
+        .requirements
+        .iter()
+        .filter(|r| matches!(r.status, RequirementStatus::Completed))
+        .filter(|r| r.spec_id.is_some() || r.agreed_id.is_some())
+        .collect();
+    if completed.is_empty() {
+        return Vec::new();
+    }
+
+    // No resolvable default branch (e.g. a store with no code repo) → we cannot
+    // corroborate, so stay silent rather than flag every Completed spec.
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+
+    // ---- Reference set: spec ids named by commits on the default branch. ----
+    // Full history (no --max-count) so an old corroborating commit is never
+    // missed — the `since` cutoff bounds *flagging*, not the reference scan.
+    let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Some(log) = git(&["log", "--pretty=format:%s", &default_ref]) {
+        for subject in log.lines() {
+            let subject = subject.trim();
+            if subject.is_empty() || is_plan_commit_subject(subject) {
+                continue;
+            }
+            for id in extract_spec_ids_from_commit(subject) {
+                referenced.insert(id.to_ascii_uppercase());
+            }
+        }
+    }
+
+    // ---- Reference set, second source: `// trace:SPEC-ID` in tracked files. ----
+    // `git grep <ref>` scans only tracked blobs at the default branch tree —
+    // exactly "a tracked file carries the trace". Unioning trace hits keeps the
+    // reference set as complete as possible so the check stays conservative
+    // (false positives erode trust faster than the rare miss).
+    if let Some(grep) = git(&[
+        "grep",
+        "-hoI",
+        "-E",
+        r"trace:[A-Za-z]+-[0-9]+(-[0-9]+)?",
+        &default_ref,
+    ]) {
+        for line in grep.lines() {
+            if let Some(id) = parse_trace_id_token(line) {
+                referenced.insert(id);
+            }
+        }
+    }
+
+    // ---- Optional legacy-exemption cutoff. ----
+    let cutoff = since.and_then(|s| resolve_completed_since_cutoff(project_root, s));
+
+    let mut findings = Vec::new();
+    for req in completed {
+        if let Some(cut) = cutoff {
+            if req.modified_at < cut {
+                continue; // legacy spec, exempt from the check
+            }
+        }
+        let spec_id = req.spec_id.as_deref().or(req.agreed_id.as_deref());
+        let Some(spec_id) = spec_id else { continue };
+        let referenced_by_id = referenced.contains(&spec_id.to_ascii_uppercase())
+            || req
+                .agreed_id
+                .as_deref()
+                .map(|a| referenced.contains(&a.to_ascii_uppercase()))
+                .unwrap_or(false)
+            || req
+                .spec_id
+                .as_deref()
+                .map(|s| referenced.contains(&s.to_ascii_uppercase()))
+                .unwrap_or(false);
+        if referenced_by_id {
+            continue;
+        }
+        findings.push(DoctorFinding {
+            category: "completed-without-commit".to_string(),
+            id: spec_id.to_string(),
+            summary: format!(
+                "Completed spec {spec_id} has no commit referencing it on {default_ref} \
+                 (and no tracked trace comment) — git cannot corroborate the completion"
+            ),
+            action: format!(
+                "land a commit carrying `({spec_id})` then `aida pull`, or re-open for triage \
+                 (`aida doctor --heal --category completed-without-commit --yes --force`)"
+            ),
+            // Re-opening a Completed spec is a real status mutation, never a
+            // "safe" auto-fix — gated behind --yes --force like branch deletion.
+            safe_heal: false,
+        });
+    }
+    findings.sort_by(|a, b| a.id.cmp(&b.id));
+    findings
+}
+
+/// Parse the spec id out of a `git grep -o` hit on the trace regex. The line is
+/// the matched text (`trace:SPEC-ID`), possibly carrying a `ref:file:` prefix
+/// git adds when grepping a tree; we locate the last `trace:` and read the id
+/// after it. Returns the id upper-cased, or None if the token is malformed.
+/// trace:TASK-673 | ai:claude
+fn parse_trace_id_token(line: &str) -> Option<String> {
+    let idx = line.rfind("trace:")?;
+    let rest = &line[idx + "trace:".len()..];
+    let end = rest
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .unwrap_or(rest.len());
+    let tok = &rest[..end];
+    // Shape: <ALPHA>+ '-' <DIGITS> (optional '-<DIGITS>'). Guard against a bare
+    // word or a leading digit so non-spec `trace:` strings don't pollute the set.
+    let first_alpha = tok.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+    if first_alpha && tok.contains('-') {
+        Some(tok.to_ascii_uppercase())
+    } else {
+        None
+    }
+}
+
+/// Resolve a `--since` value to a UTC cutoff: first try it as a git ref/tag and
+/// take that commit's committer date; failing that, parse it as an RFC-3339
+/// datetime or a bare `YYYY-MM-DD` date. None if it resolves to neither.
+/// trace:TASK-673 | ai:claude
+fn resolve_completed_since_cutoff(
+    project_root: &std::path::Path,
+    since: &str,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    use std::process::Command as PCmd;
+    let out = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-1", "--format=%cI", since])
+        .output()
+        .ok();
+    if let Some(o) = out {
+        if o.status.success() {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&s) {
+                return Some(dt.with_timezone(&chrono::Utc));
+            }
+        }
+    }
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(since) {
+        return Some(dt.with_timezone(&chrono::Utc));
+    }
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(since, "%Y-%m-%d") {
+        let naive = d.and_hms_opt(0, 0, 0)?;
+        return Some(chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
+            naive,
+            chrono::Utc,
+        ));
+    }
+    None
 }
 
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
@@ -18049,6 +23118,12 @@ fn heal_doctor_finding(
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
         }
+        // TASK-673: re-open an uncorroborated Completed spec to Done so it
+        // surfaces in the queue's "awaiting commit" lane for triage rather than
+        // silently asserting work git never saw. Force-gated (see heal_doctor_findings).
+        "completed-without-commit" if opts.force && opts.yes => {
+            heal_doctor_completed_without_commit(project_root, finding)
+        }
         _ => Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -18188,6 +23263,50 @@ fn heal_doctor_spec_status(
         category: finding.category.clone(),
         id: finding.id.clone(),
         action: action.unwrap_or_else(|| "no automatic status change applied".to_string()),
+        status: if changed { "healed" } else { "skipped" }.to_string(),
+        detail: None,
+    })
+}
+
+/// TASK-673: re-open a Completed-without-corroboration spec to Done. Done is the
+/// "finished on a branch, awaiting merge" state, so the spec lands in the
+/// queue's "awaiting commit" lane where the missing corroboration is visible and
+/// actionable — far better than a Completed row git can't back up. Re-checks the
+/// status is still Completed (a concurrent `aida pull` may have legitimately
+/// corroborated it since the scan). The finding id matches either spec_id or
+/// agreed_id. trace:TASK-673 | ai:claude
+fn heal_doctor_completed_without_commit(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let mut store = storage.load()?;
+    let mut action = None;
+    for req in &mut store.requirements {
+        let matches_id = req.spec_id.as_deref() == Some(finding.id.as_str())
+            || req.agreed_id.as_deref() == Some(finding.id.as_str());
+        if !matches_id {
+            continue;
+        }
+        if matches!(req.status, RequirementStatus::Completed) {
+            req.status = RequirementStatus::Done;
+            req.modified_at = chrono::Utc::now();
+            action = Some(format!(
+                "re-opened {} from Completed to Done (no corroborating commit) for triage",
+                finding.id
+            ));
+        }
+        break;
+    }
+    if action.is_some() {
+        storage.save(&store)?;
+    }
+    let changed = action.is_some();
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: action
+            .unwrap_or_else(|| "spec is no longer Completed — nothing to re-open".to_string()),
         status: if changed { "healed" } else { "skipped" }.to_string(),
         detail: None,
     })
@@ -18398,6 +23517,7 @@ mod story_462_doctor_tests {
             category,
             json,
             force,
+            since,
             cmd,
         } = cli.command
         else {
@@ -18408,6 +23528,7 @@ mod story_462_doctor_tests {
         assert_eq!(category.as_deref(), Some("stale-leases"));
         assert!(json);
         assert!(!force);
+        assert!(since.is_none());
         assert!(cmd.is_none());
     }
 
@@ -18522,6 +23643,259 @@ mod story_462_doctor_tests {
         assert!(normalize_doctor_category("not-a-category").is_err());
     }
 
+    // ---- TASK-673: completed-without-commit integrity tripwire ----
+
+    #[test]
+    fn normalize_doctor_category_accepts_completed_without_commit() {
+        for alias in [
+            "completed-without-commit",
+            "completed-no-commit",
+            "uncorroborated-completed",
+            "integrity",
+        ] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                "completed-without-commit"
+            );
+        }
+    }
+
+    #[test]
+    fn doctor_category_selected_honours_filter() {
+        // No filter selects everything.
+        assert!(doctor_category_selected(None, "completed-without-commit").unwrap());
+        // Matching (including via alias) selects.
+        assert!(doctor_category_selected(Some("integrity"), "completed-without-commit").unwrap());
+        // Non-matching filter excludes.
+        assert!(
+            !doctor_category_selected(Some("stale-leases"), "completed-without-commit").unwrap()
+        );
+        // Unknown filter is an error, not a silent false.
+        assert!(doctor_category_selected(Some("bogus"), "completed-without-commit").is_err());
+    }
+
+    #[test]
+    fn parse_trace_id_token_extracts_spec_id() {
+        assert_eq!(
+            parse_trace_id_token("trace:TASK-673"),
+            Some("TASK-673".into())
+        );
+        // git grep on a ref may keep a `ref:file:` prefix — take the last trace:.
+        assert_eq!(
+            parse_trace_id_token("main:src/a.rs:trace:STORY-86"),
+            Some("STORY-86".into())
+        );
+        // Hierarchical ids (FR-1-042) survive.
+        assert_eq!(
+            parse_trace_id_token("trace:FR-1-042"),
+            Some("FR-1-042".into())
+        );
+        // Lower-case input normalizes up.
+        assert_eq!(parse_trace_id_token("trace:task-9"), Some("TASK-9".into()));
+        // Malformed (no hyphen / leading digit) → None.
+        assert_eq!(parse_trace_id_token("trace:nope"), None);
+        assert_eq!(parse_trace_id_token("no trace here"), None);
+    }
+
+    /// Helper: a code repo on `main` plus an attached `.aida-store` whose specs
+    /// are saved through `Storage`. Returns (project_root tempdir, storage).
+    fn integrity_fixture() -> (tempfile::TempDir, Storage) {
+        fn g(root: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .expect("git");
+            assert!(out.status.success(), "git {:?} failed", args);
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        g(root, &["init", "-q", "-b", "main"]);
+        g(root, &["config", "user.email", "t@t.t"]);
+        g(root, &["config", "user.name", "t"]);
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        let storage = Storage::new(root.join(".aida-store"));
+        (tmp, storage)
+    }
+
+    fn completed_spec(spec_id: &str) -> Requirement {
+        let mut req = Requirement::new(format!("work for {spec_id}"), String::new());
+        req.spec_id = Some(spec_id.to_string());
+        req.status = RequirementStatus::Completed;
+        req
+    }
+
+    #[test]
+    fn integrity_flags_completed_spec_without_any_reference() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        // A real commit corroborates TASK-100; TASK-200 has no commit at all.
+        std::fs::write(root.join("a.txt"), "x").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-qm", "feat: do the thing (TASK-100)"]);
+
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-100"), completed_spec("TASK-200")];
+        storage.save(&store).unwrap();
+
+        let findings = scan_completed_without_commit(root, &store, None);
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["TASK-200"],
+            "only the uncorroborated spec flagged"
+        );
+        assert_eq!(findings[0].category, "completed-without-commit");
+        assert!(!findings[0].safe_heal, "re-open is never a safe auto-fix");
+    }
+
+    #[test]
+    fn integrity_trace_comment_corroborates() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        // No (SPEC-ID) in the subject, but a tracked file carries the trace.
+        std::fs::write(
+            root.join("lib.rs"),
+            "// trace:TASK-300 | ai:claude\nfn f() {}\n",
+        )
+        .unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-qm", "chore: scaffold"]);
+
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-300")];
+        storage.save(&store).unwrap();
+
+        let findings = scan_completed_without_commit(root, &store, None);
+        assert!(
+            findings.is_empty(),
+            "a tracked // trace:SPEC-ID is corroboration, expected no findings, got {findings:?}"
+        );
+    }
+
+    #[test]
+    fn integrity_ignores_aida_store_bookkeeping_commits() {
+        // The orphan-store-style bare "update TASK-NNN" subject must NOT count
+        // as a reference — it always exists and would mask every violation.
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+        };
+        std::fs::write(root.join("a.txt"), "x").unwrap();
+        g(&["add", "."]);
+        // Bare "update TASK-400" — no parenthesized trailer.
+        g(&["commit", "-qm", "update TASK-400"]);
+
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-400")];
+        storage.save(&store).unwrap();
+
+        let findings = scan_completed_without_commit(root, &store, None);
+        assert_eq!(
+            findings.len(),
+            1,
+            "bare 'update TASK-NNN' must not corroborate"
+        );
+        assert_eq!(findings[0].id, "TASK-400");
+    }
+
+    #[test]
+    fn integrity_done_specs_are_not_flagged() {
+        // Done is the queue's "awaiting commit" transient, surfaced elsewhere —
+        // this check targets only Completed-without-corroboration.
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["commit", "--allow-empty", "-qm", "init"])
+            .output()
+            .unwrap();
+
+        let mut done = completed_spec("TASK-500");
+        done.status = RequirementStatus::Done;
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![done];
+        storage.save(&store).unwrap();
+
+        assert!(scan_completed_without_commit(root, &store, None).is_empty());
+    }
+
+    #[test]
+    fn integrity_since_exempts_legacy_specs() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["commit", "--allow-empty", "-qm", "init"])
+            .output()
+            .unwrap();
+
+        let mut legacy = completed_spec("TASK-600");
+        legacy.modified_at = "2020-01-01T00:00:00Z".parse().unwrap();
+        let mut recent = completed_spec("TASK-601");
+        recent.modified_at = chrono::Utc::now();
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![legacy, recent];
+        storage.save(&store).unwrap();
+
+        // No cutoff → both flagged.
+        assert_eq!(scan_completed_without_commit(root, &store, None).len(), 2);
+        // Cutoff after the legacy spec → only the recent one flagged.
+        let findings = scan_completed_without_commit(root, &store, Some("2023-01-01"));
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["TASK-601"]);
+    }
+
+    #[test]
+    fn integrity_heal_reopens_completed_to_done() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-700")];
+        storage.save(&store).unwrap();
+
+        let finding = DoctorFinding {
+            category: "completed-without-commit".to_string(),
+            id: "TASK-700".to_string(),
+            summary: "Completed spec TASK-700 has no commit ...".to_string(),
+            action: "re-open".to_string(),
+            safe_heal: false,
+        };
+        let result = heal_doctor_completed_without_commit(root, &finding).unwrap();
+        assert_eq!(result.status, "healed");
+        let reloaded = storage.load().unwrap();
+        assert_eq!(reloaded.requirements[0].status, RequirementStatus::Done);
+
+        // Idempotent: a second heal is a no-op (spec already left Completed).
+        let again = heal_doctor_completed_without_commit(root, &finding).unwrap();
+        assert_eq!(again.status, "skipped");
+    }
+
     /// BUG-407: `confirm_doctor_category` must NOT block on stdin in a
     /// non-interactive shell (the `aida doctor --heal` hang). Under `cargo
     /// test` stdin is non-interactive, so this returns Ok(false) immediately
@@ -18571,6 +23945,7 @@ mod story_462_doctor_tests {
                 category: Some("stale-locks".to_string()),
                 json: false,
                 force: false,
+                since: None,
             },
         )
         .unwrap();
@@ -18608,6 +23983,7 @@ mod story_462_doctor_tests {
                 category: Some("spec-status-drift".to_string()),
                 json: false,
                 force: false,
+                since: None,
             },
         )
         .unwrap();
@@ -18651,6 +24027,7 @@ mod story_462_doctor_tests {
                 category: Some("spec-status-drift".to_string()),
                 json: false,
                 force: false,
+                since: None,
             },
         )
         .unwrap();
@@ -18685,6 +24062,7 @@ mod story_462_doctor_tests {
             for_role: Some("reviewer".into()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         storage.queue_add(entry).unwrap();
 
@@ -18725,6 +24103,7 @@ mod story_462_doctor_tests {
             for_role: Some("reviewer".into()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         storage.queue_add(entry).unwrap();
 
@@ -18741,6 +24120,7 @@ mod story_462_doctor_tests {
             category: Some("orphan-queue-entries".to_string()),
             json: false,
             force: false,
+            since: None,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
         assert_eq!(result.status, "healed");
@@ -20189,6 +25569,142 @@ fn validate_session_start_args(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// TASK-661 (ADR-3): per-scope disposition/triage lease. The authority gate
+/// (`has_advisor_authority`) decides WHO may dispose; this lease enforces HOW
+/// MANY — exactly one live advisor per scope. Acquire takes the lease (refused,
+/// naming the holder, if a live advisor already holds the scope), release frees
+/// it, status lists the live set (reaping dead holders on read). Reuses the
+/// same PID-liveness reaper primitive (`process_probe::pid_is_alive`) the
+/// session-lease reaper uses, so a crashed advisor cannot lock triage forever.
+/// trace:TASK-661 | ai:claude
+fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
+    let project_root = find_project_root()?;
+    match cmd {
+        TriageCommand::Acquire { scope, user } => {
+            let slug = triage_lease::scope_slug(scope.as_deref());
+            let owner = current_user_id(user.as_deref());
+            // Reap dead holders first so a crashed advisor's lease doesn't
+            // wrongly block a fresh acquire. trace:TASK-661 | ai:claude
+            let live =
+                triage_lease::live_leases_reaping(&project_root, process_probe::pid_is_alive);
+            // Record the disposing advisor's SHELL pid, not this short-lived
+            // `aida` process — the `aida` wrapper is a shell function so our
+            // parent IS the interactive shell / Claude session that's doing
+            // the disposing. A process-id() lease would be reaped on the very
+            // next invocation (the acquiring process has already exited),
+            // never persisting; the shell pid lives as long as the advisor
+            // session does, so the lease persists and is reaped only when the
+            // advisor's shell dies. trace:TASK-661 | ai:claude
+            let holder_pid = creator_shell_pid().unwrap_or_else(std::process::id);
+            let new_lease = triage_lease::DispositionLease {
+                scope: slug.clone(),
+                owner: owner.clone(),
+                pid: holder_pid,
+                hostname: hostname(),
+                started_at: chrono::Utc::now(),
+            };
+            match triage_lease::decide_acquire(new_lease, &live) {
+                triage_lease::AcquireDecision::Granted(lease) => {
+                    triage_lease::write_lease(&project_root, &lease)?;
+                    println!(
+                        "{} disposition lease for scope {} (held by {}).",
+                        "Acquired".green().bold(),
+                        slug.cyan(),
+                        owner
+                    );
+                    println!(
+                        "  Dispose from fresh substrate reads, then `aida triage release --scope {}`.",
+                        slug
+                    );
+                    Ok(())
+                }
+                triage_lease::AcquireDecision::AlreadyHeld(_) => {
+                    println!(
+                        "{} you already hold the disposition lease for scope {}.",
+                        "OK:".green().bold(),
+                        slug.cyan()
+                    );
+                    Ok(())
+                }
+                triage_lease::AcquireDecision::Refused(holder) => {
+                    // substrate-as-bouncer: a second disposing advisor is
+                    // refused, naming the holder. Non-zero exit so scripts /
+                    // drains can branch on it. trace:TASK-661 | ai:claude
+                    anyhow::bail!(
+                        "scope {} is already being disposed by {} (pid {} on {}, since {}). \
+                         One disposing advisor per scope — coordinate with the holder or wait \
+                         for them to release.",
+                        slug,
+                        holder.owner,
+                        holder.pid,
+                        holder.hostname,
+                        holder.started_at.format("%Y-%m-%d %H:%M UTC"),
+                    );
+                }
+            }
+        }
+        TriageCommand::Release { scope, user } => {
+            let slug = triage_lease::scope_slug(scope.as_deref());
+            let owner = current_user_id(user.as_deref());
+            if triage_lease::release(&project_root, &slug, &owner)? {
+                println!(
+                    "{} disposition lease for scope {}.",
+                    "Released".green().bold(),
+                    slug.cyan()
+                );
+            } else {
+                println!(
+                    "{} no disposition lease held by {} for scope {}.",
+                    "Note:".yellow().bold(),
+                    owner,
+                    slug.cyan()
+                );
+            }
+            Ok(())
+        }
+        TriageCommand::Status { json } => {
+            let live =
+                triage_lease::live_leases_reaping(&project_root, process_probe::pid_is_alive);
+            if *json {
+                #[derive(serde::Serialize)]
+                struct Row<'a> {
+                    scope: &'a str,
+                    owner: &'a str,
+                    pid: u32,
+                    hostname: &'a str,
+                    started_at: String,
+                }
+                let rows: Vec<Row> = live
+                    .iter()
+                    .map(|l| Row {
+                        scope: &l.scope,
+                        owner: &l.owner,
+                        pid: l.pid,
+                        hostname: &l.hostname,
+                        started_at: l.started_at.to_rfc3339(),
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else if live.is_empty() {
+                println!("No active disposition leases. Any advisor may dispose.");
+            } else {
+                println!("Active disposition leases (one disposing advisor per scope):");
+                for l in &live {
+                    println!(
+                        "  {} — {} (pid {} on {}, since {})",
+                        l.scope.cyan(),
+                        l.owner,
+                        l.pid,
+                        l.hostname,
+                        l.started_at.format("%Y-%m-%d %H:%M UTC"),
+                    );
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
@@ -20471,6 +25987,51 @@ fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
     }
 }
 
+/// TASK-646: resolve the role for a SPAWNED CHILD agent. ADR-2 ordering:
+///   1. `--role X` → use X (no prompt).
+///   2. no `--role`, stdin is a TTY → prompt via the shared role picker,
+///      pre-highlighting `implementer` (the dominant spawn); blank Enter
+///      accepts implementer, `q` cancels.
+///   3. no `--role`, non-interactive → default `implementer` + a one-line
+///      notice; never errors, never hangs, never launches role-less.
+/// The launching shell's `AIDA_SESSION_ROLE` is deliberately NOT inherited —
+/// advisor/product spawning an implementer is the common case, so cloning the
+/// launcher's hat would be wrong. Returns `Ok(None)` only when the user
+/// cancels the picker, so the caller aborts the launch cleanly.
+fn resolve_child_role(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    agent_type: &str,
+) -> Result<Option<String>> {
+    if let Some(r) = role {
+        return Ok(Some(r));
+    }
+    if std::io::stdin().is_terminal() {
+        let header = format!("Select a role for the new {} agent:", agent_type);
+        // `pick_role_with_header` returns Ok(None) on cancel → propagate as
+        // the abort signal.
+        pick_role_with_header(project_root, &header, Some("implementer"))
+    } else {
+        eprintln!(
+            "{} no --role given, defaulting to {} (non-interactive launch)",
+            "ℹ".cyan(),
+            "implementer".cyan()
+        );
+        Ok(Some("implementer".to_string()))
+    }
+}
+
+/// TASK-646: project root for child-role resolution, derived from the
+/// launch cwd (or the process cwd) the same way `agent_new_with_config`
+/// derives it — so the picker lists the right project's roles.
+fn child_role_project_root(cwd: Option<&std::path::Path>) -> Result<std::path::PathBuf> {
+    let base = cwd
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let discovered_root = find_aida_project_root_from(&base)?;
+    Ok(main_worktree_root_from(&discovered_root))
+}
+
 fn agent_new_claude(
     role: Option<String>,
     spec: Option<String>,
@@ -20482,6 +26043,15 @@ fn agent_new_claude(
     name: Option<String>,
     bg: bool,
 ) -> Result<()> {
+    // TASK-646: resolve the child role (flag → picker → implementer default)
+    // before any launch work. A cancelled picker aborts cleanly.
+    let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "claude")? {
+        Some(r) => Some(r),
+        None => {
+            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            return Ok(());
+        }
+    };
     // STORY-495: faithful default — inject `--permission-mode` only when the
     // operator passed it explicitly. Otherwise leave Claude on its native
     // posture and let the uniform `[agents] bypass` knob (applied in
@@ -20556,6 +26126,14 @@ fn agent_new_codex(
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
+    // TASK-646: resolve the child role before launch (flag → picker → default).
+    let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "codex")? {
+        Some(r) => Some(r),
+        None => {
+            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            return Ok(());
+        }
+    };
     let mut default_args = Vec::new();
     if bypass_sandbox {
         default_args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
@@ -20592,6 +26170,14 @@ fn agent_new_antigravity(
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
 ) -> Result<()> {
+    // TASK-646: resolve the child role before launch (flag → picker → default).
+    let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "antigravity")? {
+        Some(r) => Some(r),
+        None => {
+            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            return Ok(());
+        }
+    };
     let mut default_args = Vec::new();
     if bypass_sandbox {
         default_args.push("--dangerously-skip-permissions".to_string());
@@ -23249,6 +28835,65 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+/// TASK-670: the set of requirement UUIDs that sit in *some* role queue
+/// (across every user's queue file), for the leading ↑ work-routing glyph on
+/// `aida list`. Cheap by design — one `read_dir` over
+/// `.aida-store/registry/queues/` + a YAML parse per file, no Storage::load().
+/// Work-routing is a project-global axis (not the current shell's queue), so we
+/// union across all queue files. Returns an empty set when the dir is absent.
+/// trace:TASK-670 | ai:claude
+fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
+    let mut out = HashSet::new();
+    let dir = project_root.join(".aida-store/registry/queues");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        if let Ok(items) = serde_yaml::from_str::<Vec<aida_core::QueueEntry>>(&content) {
+            for item in items {
+                out.insert(item.requirement_id);
+            }
+        }
+    }
+    out
+}
+
+/// TASK-670: the set of scope strings held by *live* session leases — the input
+/// for the in-flight ▶ work-routing glyph. "Live" means a running claude was
+/// found inside the lease's worktree (the same probe `aida session leases` uses
+/// for its `live` state); dormant / stale / reaped leases are excluded so a
+/// dead session never shows ▶ (cf. STORY-496). Scopes are lowercased for a
+/// case-insensitive match against a row's spec/agreed id. trace:TASK-670 | ai:claude
+fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
+    let leases = list_leases(project_root);
+    if leases.is_empty() {
+        return HashSet::new();
+    }
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    leases
+        .iter()
+        .filter_map(|l| {
+            let worktree_exists = l.worktree_path.exists();
+            let has_live_claude = live.iter().any(|s| {
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            });
+            let age_hours = now.signed_duration_since(l.started_at).num_hours();
+            match classify_lease_state(worktree_exists, has_live_claude, age_hours) {
+                LeaseState::Live => Some(l.scope.to_ascii_lowercase()),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
 /// BUG-98: cheap lease count for the `aida session list` footer hint.
 /// Users repeatedly reach for `session list` looking for "active
 /// sessions" when they really want `session leases` (the scoped-lease
@@ -24527,7 +30172,7 @@ fn resolve_stack_base(
             );
         }
         if !force {
-            let merged = detect_merged_pr_for_branch(project_root, b);
+            let merged = detect_merged_pr_for_branch_via_forge(project_root, b);
             if let PrLookup::Found(pr) = &merged {
                 anyhow::bail!(
                     "--base `{}` is already merged (PR-{}); branching from it \
@@ -24554,7 +30199,7 @@ fn resolve_stack_base(
         .filter(|l| !lease_covers_cwd(l, &canon_cwd))
         .filter(|l| {
             !matches!(
-                detect_merged_pr_for_branch(project_root, &l.branch),
+                detect_merged_pr_for_branch_via_forge(project_root, &l.branch),
                 PrLookup::Found(_)
             )
         })
@@ -24793,11 +30438,140 @@ fn effective_force_claim_for_session_start(
 #[cfg(test)]
 mod preflight_spec_status_tests {
     use super::{
-        effective_force_claim_for_session_start, preflight_spec_status,
+        dup_pickup_recheck, effective_force_claim_for_session_start, preflight_spec_status,
         preflight_spec_status_review_aware, session_start_status_bump_preconditions_met,
-        PreflightDecision, RequirementStatus,
+        DupPickupDecision, PreflightDecision, RequirementStatus,
     };
     use tempfile::TempDir;
+
+    // TASK-619: cross-machine duplicate-pickup re-check. trace:TASK-619 |
+    // ai:claude
+    #[test]
+    fn dup_pickup_refuses_when_approved_became_in_progress_under_us() {
+        // Headline case: we planned a pickup on an Approved spec, pulled, and
+        // it's now InProgress — another machine grabbed it. Refuse.
+        let d = dup_pickup_recheck(
+            "TASK-619",
+            Some(&RequirementStatus::Approved),
+            Some(&RequirementStatus::InProgress),
+            false, // force_claim
+            false, // orchestrator_corroborated
+            false, // is_review
+        );
+        match d {
+            DupPickupDecision::Refuse(m) => {
+                assert!(m.contains("TASK-619"), "{m}");
+                assert!(m.contains("force-claim"), "{m}");
+                assert!(m.contains("machine"), "{m}");
+            }
+            other => panic!("expected Refuse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dup_pickup_refuses_when_planned_became_done_or_completed() {
+        // Shipped-elsewhere variants also count as claimed-under-us.
+        assert!(matches!(
+            dup_pickup_recheck(
+                "STORY-1",
+                Some(&RequirementStatus::Planned),
+                Some(&RequirementStatus::Done),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Refuse(_)
+        ));
+        assert!(matches!(
+            dup_pickup_recheck(
+                "STORY-1",
+                Some(&RequirementStatus::Approved),
+                Some(&RequirementStatus::Completed),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn dup_pickup_proceeds_when_status_unchanged() {
+        // No transition under us → nothing to refuse; the normal preflight runs.
+        assert_eq!(
+            dup_pickup_recheck(
+                "TASK-619",
+                Some(&RequirementStatus::Approved),
+                Some(&RequirementStatus::Approved),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Proceed
+        );
+    }
+
+    #[test]
+    fn dup_pickup_proceeds_when_already_in_progress_at_plan_time() {
+        // A resume/force flow: the spec was already InProgress when we planned,
+        // so a stable InProgress is NOT a cross-machine grab — leave it to the
+        // existing preflight (and --force-claim / --resume), don't double-refuse.
+        assert_eq!(
+            dup_pickup_recheck(
+                "TASK-619",
+                Some(&RequirementStatus::InProgress),
+                Some(&RequirementStatus::InProgress),
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Proceed
+        );
+    }
+
+    #[test]
+    fn dup_pickup_bypassed_by_force_claim_orchestrator_and_review() {
+        // The deliberate-takeover / orchestrator-child / review escapes all
+        // proceed even on an Approved → InProgress transition.
+        for (force, orch, review) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            assert_eq!(
+                dup_pickup_recheck(
+                    "TASK-619",
+                    Some(&RequirementStatus::Approved),
+                    Some(&RequirementStatus::InProgress),
+                    force,
+                    orch,
+                    review,
+                ),
+                DupPickupDecision::Proceed,
+                "force={force} orch={orch} review={review}"
+            );
+        }
+    }
+
+    #[test]
+    fn dup_pickup_proceeds_when_status_unknown() {
+        // Scope isn't a plain spec (cluster / PR) → no status to compare → no-op.
+        assert_eq!(
+            dup_pickup_recheck("EPIC-20", None, None, false, false, false),
+            DupPickupDecision::Proceed
+        );
+        assert_eq!(
+            dup_pickup_recheck(
+                "TASK-1",
+                Some(&RequirementStatus::Approved),
+                None,
+                false,
+                false,
+                false,
+            ),
+            DupPickupDecision::Proceed
+        );
+    }
 
     // BUG-436: a review session must be allowed to start against a Done /
     // Completed spec (reviewing a PR is not implementing the spec); a non-review
@@ -25278,6 +31052,90 @@ fn preflight_spec_status_review_aware(
         return PreflightDecision::Allow;
     }
     preflight_spec_status(owns, status, force_claim)
+}
+
+/// TASK-619: outcome of the pull-then-re-check guard that runs immediately
+/// before `aida queue work` claims a spec. Session leases live under
+/// `.aida/sessions/` and are machine-local (gitignored), so they cannot stop
+/// a *second machine* from grabbing the same spec — the only shared "someone
+/// is on this" signal is the git-canonical status flip, which is
+/// eventually-consistent. `handle_queue_work` already pulls the orphan store
+/// before claiming; this guard re-reads the spec's status from that freshly
+/// pulled view and refuses if the spec was grabbed (or shipped) elsewhere in
+/// the window between when we planned the pickup and now. trace:TASK-619 |
+/// ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum DupPickupDecision {
+    /// Nothing claimed it under us — let the existing preflight take over.
+    Proceed,
+    /// The status changed under us to a "claimed/shipped elsewhere" state —
+    /// refuse with the given operator-facing message.
+    Refuse(String),
+}
+
+/// TASK-619: pure decision for the cross-machine duplicate-pickup guard.
+///
+/// Fires only when the spec was *pickable* at plan time (i.e. not already
+/// owned by us / mid-flight) but the post-pull status says it is now claimed
+/// or shipped somewhere else. That transition-under-us is the cross-machine
+/// dup-pickup signal. Resuming a spec that was *already* InProgress at plan
+/// time is a legitimate flow (the operator/orchestrator knows the state and
+/// `--force-claim`/`--resume` cover it), so a stable InProgress → InProgress
+/// is left to the existing `preflight_spec_status` gate, not refused here.
+///
+/// Bypassed entirely when `--force-claim` is set, when the orchestrator
+/// corroborated this child (the parent already flipped status before spawning
+/// us), or for review sessions (reviewing a Done/Completed PR is the normal
+/// pre-review state). trace:TASK-619 | ai:claude
+fn dup_pickup_recheck(
+    spec_id: &str,
+    status_at_plan: Option<&RequirementStatus>,
+    status_after_pull: Option<&RequirementStatus>,
+    force_claim: bool,
+    orchestrator_corroborated: bool,
+    is_review: bool,
+) -> DupPickupDecision {
+    if force_claim || orchestrator_corroborated || is_review {
+        return DupPickupDecision::Proceed;
+    }
+    // Only act on real specs we can compare.
+    let (Some(before), Some(after)) = (status_at_plan, status_after_pull) else {
+        return DupPickupDecision::Proceed;
+    };
+
+    // "Pickable at plan time" = a state where starting fresh implementer work
+    // is the normal intent. If the spec was already InProgress/Done/etc. when
+    // we planned, the existing preflight (and --force-claim/--resume) owns that
+    // case — don't double-refuse here.
+    let was_pickable = matches!(
+        before,
+        RequirementStatus::Approved | RequirementStatus::Planned | RequirementStatus::Draft
+    );
+    if !was_pickable {
+        return DupPickupDecision::Proceed;
+    }
+
+    // A "claimed or shipped elsewhere" post-pull state means another machine
+    // flipped the git-canonical status in the window we were planning.
+    let claimed_elsewhere = matches!(
+        after,
+        RequirementStatus::InProgress
+            | RequirementStatus::Done
+            | RequirementStatus::Completed
+            | RequirementStatus::NeedsAttention
+    );
+    if !claimed_elsewhere {
+        return DupPickupDecision::Proceed;
+    }
+
+    DupPickupDecision::Refuse(format!(
+        "spec `{spec_id}` was {before} when this pickup was planned but is now {after} \
+         after pulling the latest store — another machine or session most likely claimed \
+         it in between (session leases are machine-local, so the git-canonical status flip \
+         is the only cross-machine signal). Refusing to double-claim. \
+         Re-run `aida queue work` to pick the next free item, or pass `--force-claim` to \
+         take it over deliberately."
+    ))
 }
 
 fn session_start_status_bump_preconditions_met(
@@ -26288,6 +32146,185 @@ fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
+/// TASK-99: count how many commits the local `base_ref` is BEHIND
+/// `origin/main` — i.e. commits on origin that the base hasn't yet
+/// picked up. Returns `None` when `origin/main` (or the base ref)
+/// doesn't resolve — fresh clone, offline, detached, etc. — so the
+/// caller stays silent rather than warn on missing data. Best-effort:
+/// any git failure → `None`. trace:TASK-99 | ai:claude
+fn commits_behind_origin_main(repo: &std::path::Path, base_ref: &str) -> Option<u32> {
+    let rev_parse = |refname: &str| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["rev-parse", "--verify", "--quiet", refname])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    // Only meaningful against the remote-tracking ref. If `origin/main`
+    // isn't present we have nothing authoritative to compare against.
+    rev_parse("origin/main")?;
+    rev_parse(base_ref)?;
+    let range = format!("{}..origin/main", base_ref);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// TASK-99: pure decision — given how many commits the new worktree's
+/// base is behind `origin/<branch>`, produce the warning line (or
+/// `None` when the base is current). Side-effect-free so the
+/// behind-count → message mapping is unit-testable in isolation, no
+/// git/CWD required. trace:TASK-99 | ai:claude
+fn behind_origin_warning(behind: u32, branch: &str) -> Option<String> {
+    if behind == 0 {
+        return None;
+    }
+    Some(format!(
+        "worktree base is {} commit{} behind origin/{} — run `aida rebase` to refresh, or your PR may land stale",
+        behind,
+        if behind == 1 { "" } else { "s" },
+        branch
+    ))
+}
+
+#[cfg(test)]
+mod task_99_behind_origin_tests {
+    use super::*;
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn zero_behind_is_silent() {
+        assert_eq!(behind_origin_warning(0, "main"), None);
+    }
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn one_behind_is_singular() {
+        let msg = behind_origin_warning(1, "main").expect("warns when behind");
+        assert!(msg.contains("1 commit behind origin/main"), "{msg}");
+        assert!(!msg.contains("commits"), "singular form expected: {msg}");
+        assert!(msg.contains("aida rebase"), "points at rebase: {msg}");
+    }
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn many_behind_is_plural() {
+        let msg = behind_origin_warning(5, "main").expect("warns when behind");
+        assert!(msg.contains("5 commits behind origin/main"), "{msg}");
+    }
+
+    // trace:TASK-99 | ai:claude
+    #[test]
+    fn names_the_supplied_branch() {
+        let msg = behind_origin_warning(2, "develop").expect("warns when behind");
+        assert!(msg.contains("origin/develop"), "{msg}");
+    }
+
+    /// Fully isolated: own tempdir, never touches the shared CWD or repo.
+    /// `origin/main` is absent in a bare local init, so the behind-count
+    /// helper returns `None` (stay silent on missing remote-tracking data)
+    /// rather than erroring or warning spuriously. trace:TASK-99 | ai:claude
+    #[test]
+    fn no_origin_main_is_silent() {
+        fn git(repo: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+                .expect("git on PATH");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "--initial-branch=main", "--quiet"]);
+        git(repo, &["config", "user.email", "t@example.com"]);
+        git(repo, &["config", "user.name", "T"]);
+        std::fs::write(repo.join("f.txt"), "hi").unwrap();
+        git(repo, &["add", "f.txt"]);
+        git(repo, &["commit", "-m", "init", "--quiet"]);
+        // No remote, so no origin/main → helper stays silent.
+        assert_eq!(commits_behind_origin_main(repo, "main"), None);
+    }
+
+    /// Fully isolated: a local clone whose `main` is N commits behind its
+    /// origin counts exactly N behind. Own tempdir; no shared state.
+    /// trace:TASK-99 | ai:claude
+    #[test]
+    fn counts_behind_against_origin_main() {
+        fn git(repo: &std::path::Path, args: &[&str]) {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+                .expect("git on PATH");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let origin = tmp.path().join("origin");
+        let clone = tmp.path().join("clone");
+        std::fs::create_dir_all(&origin).unwrap();
+
+        git(&origin, &["init", "--initial-branch=main", "--quiet"]);
+        git(&origin, &["config", "user.email", "t@example.com"]);
+        git(&origin, &["config", "user.name", "T"]);
+        std::fs::write(origin.join("f.txt"), "0").unwrap();
+        git(&origin, &["add", "f.txt"]);
+        git(&origin, &["commit", "-m", "c0", "--quiet"]);
+
+        // Clone — clone's main now matches origin/main (0 behind).
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "--quiet",
+                origin.to_str().unwrap(),
+                clone.to_str().unwrap(),
+            ],
+        );
+        git(&clone, &["config", "user.email", "t@example.com"]);
+        git(&clone, &["config", "user.name", "T"]);
+        assert_eq!(commits_behind_origin_main(&clone, "main"), Some(0));
+
+        // Advance origin by 2 commits, fetch into the clone WITHOUT merging.
+        for i in 1..=2 {
+            std::fs::write(origin.join("f.txt"), i.to_string()).unwrap();
+            git(&origin, &["add", "f.txt"]);
+            git(&origin, &["commit", "-m", &format!("c{i}"), "--quiet"]);
+        }
+        git(&clone, &["fetch", "--quiet", "origin"]);
+        // Clone's local main is now 2 behind origin/main.
+        assert_eq!(commits_behind_origin_main(&clone, "main"), Some(2));
+        // And the decision fn turns that into a plural warning.
+        let behind = commits_behind_origin_main(&clone, "main").unwrap();
+        assert!(behind_origin_warning(behind, "main")
+            .unwrap()
+            .contains("2 commits behind"));
+    }
+}
+
 /// STORY-106: best-effort emit the "queue empty for this role" workflow
 /// hint after a successful `queue done` (or `edit --status completed` on
 /// a queue-tracked spec). Detects role+scope from the session env / lease,
@@ -26368,12 +32405,13 @@ fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
     // stays Unknown so the hint never *asserts* there's no PR on guesswork.
     // trace:BUG-232 | ai:claude
     let pr_state = match (branch.as_deref(), commits_ahead) {
-        (Some(b), Some(n)) if n > 0 => match detect_open_pr_for_branch(&project_root, b) {
-            PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
-            PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
-            PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_) => {
-                workflow_hints::PrState::Unknown
-            }
+        // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+        (Some(b), Some(n)) if n > 0 => match change_lookup_for_branch(&project_root, b) {
+            crate::forge::ChangeLookup::Found(c) => workflow_hints::PrState::Open(c.id),
+            crate::forge::ChangeLookup::NoChange => workflow_hints::PrState::Absent,
+            crate::forge::ChangeLookup::CliMissing
+            | crate::forge::ChangeLookup::CliFailed(_)
+            | crate::forge::ChangeLookup::Unreachable(_) => workflow_hints::PrState::Unknown,
         },
         _ => workflow_hints::PrState::Unknown,
     };
@@ -26500,6 +32538,1047 @@ fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
         .filter(|l| !l.trim().is_empty())
         .map(|l| l.to_string())
         .collect()
+}
+
+/// STORY-457: is this untracked path auto-flaggable as safe-to-remove? Editor
+/// scratch, build droppings, and OS cruft — never source. Matched on the file
+/// name / extension or a path segment. trace:STORY-457 | ai:claude
+fn untracked_is_safe_to_remove(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    const SUFFIXES: &[&str] = &[
+        ".bak", ".tmp", ".swp", ".swo", ".orig", ".pyc", ".pyo", ".class", "~",
+    ];
+    if SUFFIXES.iter().any(|s| name.ends_with(s)) {
+        return true;
+    }
+    if name == ".DS_Store" || name == "Thumbs.db" {
+        return true;
+    }
+    // Build/cache dirs anywhere in the path.
+    path.split('/')
+        .any(|seg| seg == "__pycache__" || seg == ".mypy_cache" || seg == ".pytest_cache")
+}
+
+/// STORY-456: structured per-worktree status row — the assembled merge of
+/// `git worktree list`, the session lease covering it, live/dormant process
+/// state, working-tree cleanliness, commits-ahead-of-default, and the open
+/// PR (if any) on its branch. Drives both the text Worktrees section and the
+/// `--json` projection so the two never drift. The PR-derived fields are
+/// populated from a single batched `gh pr list` snapshot — never one gh call
+/// per row. trace:STORY-456 | ai:claude
+#[derive(Debug, Clone, PartialEq)]
+struct WorktreeStatusRow {
+    path: std::path::PathBuf,
+    branch: String,
+    /// Spec the worktree is tied to (lease scope, else branch-name inference).
+    tied_spec: Option<String>,
+    lease_scope: Option<String>,
+    has_live: bool,
+    dirty_count: usize,
+    /// Commits the branch is ahead of the default ref. `None` when it could
+    /// not be computed (detached HEAD, missing default ref, git failure).
+    ahead: Option<u32>,
+    pr_number: Option<u64>,
+    pr_ci: Option<String>,
+    pr_mergeable: Option<String>,
+    /// Obsolescence verdict — TIED (in flight) vs OBSOLETE (safe to remove).
+    obsolete: bool,
+}
+
+/// STORY-456: tie a worktree to a spec id. The lease scope is authoritative;
+/// fall back to inferring `TASK-425` from a `task-425` / `task-425-2` branch
+/// name so leaseless worktrees still get a spec hint. trace:STORY-456
+fn infer_tied_spec(lease_scope: Option<&str>, branch: &str) -> Option<String> {
+    if let Some(scope) = lease_scope {
+        if !scope.is_empty() {
+            return Some(scope.to_string());
+        }
+    }
+    // Branch names are slugged lowercase (e.g. `task-425-2`,
+    // `story-456-status-worktrees`). Recover a leading `<type>-<num>`.
+    let mut parts = branch.splitn(3, '-');
+    let kind = parts.next()?;
+    let num = parts.next()?;
+    if num.chars().all(|c| c.is_ascii_digit()) && !num.is_empty() {
+        Some(format!("{}-{}", kind.to_uppercase(), num))
+    } else {
+        None
+    }
+}
+
+/// STORY-456: pure assembly of the Worktrees rows from already-collected
+/// inputs (no I/O) so the merge + obsolescence logic is unit-testable.
+///
+/// Obsolescence verdict (per spec): a worktree is TIED (in flight) if ANY of
+/// — an active lease covers it, the tree is dirty, a live process runs there,
+/// it has un-merged commits ahead of the default branch, or it has an open
+/// PR. It is OBSOLETE (safe to remove) only when ALL of those are false: no
+/// lease, clean tree, nothing live, nothing ahead, no open PR. The conjunction
+/// keeps the "safe to remove" signal conservative. trace:STORY-456 | ai:claude
+fn assemble_worktree_status_rows(
+    worktrees: &[WorktreeRecord],
+    main_root: &std::path::Path,
+    leases: &[SessionLease],
+    live: &[process_probe::LiveSession],
+    pr_by_branch: &std::collections::HashMap<String, status_cleanup::OpenPrItem>,
+    ahead_by_path: &std::collections::HashMap<std::path::PathBuf, u32>,
+) -> Vec<WorktreeStatusRow> {
+    let mut rows = Vec::new();
+    for wt in worktrees {
+        // Skip the main worktree and the AIDA-managed orphan store.
+        if wt.path == *main_root || wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        let branch = wt
+            .branch
+            .clone()
+            .unwrap_or_else(|| "(detached)".to_string());
+        let dirty_count = worktree_dirty_entries(&wt.path).len();
+        let lease = leases.iter().find(|l| l.worktree_path == wt.path);
+        let lease_scope = lease.map(|l| l.scope.clone());
+        let has_live = live
+            .iter()
+            .any(|s| !s.stale_cwd && (s.cwd == wt.path || s.cwd.starts_with(&wt.path)));
+        let ahead = ahead_by_path.get(&wt.path).copied();
+        let pr = pr_by_branch.get(&branch);
+        let tied_spec = infer_tied_spec(lease_scope.as_deref(), &branch);
+
+        let has_open_pr = pr.is_some();
+        let has_unmerged = ahead.map(|a| a > 0).unwrap_or(false);
+        let obsolete =
+            lease.is_none() && dirty_count == 0 && !has_live && !has_unmerged && !has_open_pr;
+
+        rows.push(WorktreeStatusRow {
+            path: wt.path.clone(),
+            branch,
+            tied_spec,
+            lease_scope,
+            has_live,
+            dirty_count,
+            ahead,
+            pr_number: pr.map(|p| p.number),
+            pr_ci: pr.and_then(|p| p.ci_rollup.clone()),
+            pr_mergeable: pr.and_then(|p| p.mergeable.clone()),
+            obsolete,
+        });
+    }
+    rows
+}
+
+/// STORY-456: `aida status` Worktrees section. Display-only — lists each
+/// non-main, non-store worktree with its branch, tied spec, clean/dirty
+/// state, the session lease covering it, live/dormant status, commits-ahead
+/// of the default branch, its open PR (number + CI + mergeability), and an
+/// obsolescence verdict (✓ in flight / ⚠ obsolete — `git worktree remove`).
+/// Silent when only the main worktree exists. The open-PR fields come from a
+/// single batched `gh pr list` snapshot — one gh call regardless of worktree
+/// count. trace:STORY-456 | ai:claude
+fn print_status_worktrees_section(project_root: &std::path::Path) {
+    let main_root = main_worktree_root_from(project_root);
+    let rows = collect_worktree_status_rows(&main_root);
+    if rows.is_empty() {
+        return;
+    }
+    println!("{}", "─── Worktrees ───".bold());
+    for row in &rows {
+        let dirty_part = if row.dirty_count == 0 {
+            "clean".to_string()
+        } else {
+            format!("dirty({})", row.dirty_count).yellow().to_string()
+        };
+        let lease_part = match &row.lease_scope {
+            Some(scope) => format!("lease:{scope}"),
+            None => "no-lease".to_string(),
+        };
+        let live_part = if row.has_live {
+            "live".green().to_string()
+        } else if row.lease_scope.is_some() {
+            "dormant".yellow().to_string()
+        } else {
+            String::new()
+        };
+
+        let mut line = format!(
+            "  {} ({}) — {} · {}",
+            row.path.display(),
+            row.branch.cyan(),
+            dirty_part,
+            lease_part
+        );
+        if !live_part.is_empty() {
+            line.push_str(&format!(" · {live_part}"));
+        }
+        if let Some(ahead) = row.ahead {
+            if ahead > 0 {
+                line.push_str(&format!(" · {ahead}↑main"));
+            }
+        }
+        if let Some(n) = row.pr_number {
+            let ci = row.pr_ci.as_deref().unwrap_or("?");
+            line.push_str(&format!(" · {}", format!("PR #{n} [CI:{ci}]").cyan()));
+        }
+        // Verdict marker: ✓ in flight / ⚠ obsolete — <recovery command>.
+        if row.obsolete {
+            line.push_str(&"  ⚠ obsolete — `git worktree remove`".dimmed().to_string());
+        } else {
+            line.push_str(&"  ✓ in flight".dimmed().to_string());
+        }
+        println!("{line}");
+    }
+    println!();
+}
+
+/// STORY-456: I/O wrapper that gathers the inputs (worktrees, leases, live
+/// sessions, the batched open-PR snapshot, per-worktree ahead-of-default
+/// counts) and hands them to the pure `assemble_worktree_status_rows`. Shared
+/// by the text section and the `--json` projection so they never drift.
+/// trace:STORY-456 | ai:claude
+fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStatusRow> {
+    let worktrees = list_worktrees(main_root);
+    let leases = list_leases(main_root);
+    let live = process_probe::probe_live_claude_sessions();
+    // One batched gh call for every worktree's PR (never per-row).
+    let pr_by_branch = collect_open_prs(main_root).by_branch;
+    // Commits-ahead-of-default per worktree branch (cheap local git).
+    let default_ref =
+        detect_default_branch_ref(main_root).unwrap_or_else(|| "origin/main".to_string());
+    let mut ahead_by_path = std::collections::HashMap::new();
+    for wt in &worktrees {
+        if wt.path == *main_root || wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        if let Some(branch) = wt.branch.as_deref() {
+            if let Some(a) = branch_ahead_of(main_root, branch, &default_ref) {
+                ahead_by_path.insert(wt.path.clone(), a);
+            }
+        }
+    }
+    assemble_worktree_status_rows(
+        &worktrees,
+        main_root,
+        &leases,
+        &live,
+        &pr_by_branch,
+        &ahead_by_path,
+    )
+}
+
+/// STORY-456: `aida status` Open PRs section. Lists every open PR (one
+/// batched `gh pr list` call) with number + title, CI rollup, mergeability,
+/// and a recommended next step per state. Silent when there are no open PRs
+/// or gh is unavailable — display-only orientation, not a gate.
+/// trace:STORY-456 | ai:claude
+fn print_status_open_prs_section(project_root: &std::path::Path) {
+    let snapshot = collect_open_prs(project_root);
+    if snapshot.by_branch.is_empty() {
+        return;
+    }
+    let mut prs: Vec<&status_cleanup::OpenPrItem> = snapshot.by_branch.values().collect();
+    prs.sort_by_key(|p| p.number);
+
+    println!("{}", "─── Open PRs ───".bold());
+    for pr in prs {
+        let ci = pr.ci_rollup.as_deref().unwrap_or("?");
+        let merge = pr.mergeable.as_deref().unwrap_or("UNKNOWN");
+        let next = open_pr_next_step(
+            ci,
+            &merge.to_ascii_uppercase(),
+            pr.review_decision.as_deref(),
+        );
+        let title = truncate_for_width(&pr.title, 56);
+        println!(
+            "  {} {} [CI:{} · {}]",
+            format!("PR #{}", pr.number).cyan(),
+            title,
+            ci,
+            merge.to_ascii_lowercase()
+        );
+        println!("    {} · {}", pr.head_branch.dimmed(), next.dimmed());
+    }
+    println!();
+}
+
+/// STORY-456: recommended next step for an open PR, keyed off CI rollup,
+/// mergeability, and review decision. Distinguishes CI-failing from
+/// merge-conflict from awaiting-review — the conflation the spec calls out
+/// (`gh pr checks --watch` blurs CI with mergeability). Pure. trace:STORY-456
+fn open_pr_next_step(ci: &str, mergeable: &str, review_decision: Option<&str>) -> String {
+    if ci == "fail" {
+        return "CI failing — fix & push".to_string();
+    }
+    if mergeable == "CONFLICTING" {
+        return "merge conflict — rebase onto default".to_string();
+    }
+    if ci == "pending" {
+        return "CI in progress — wait".to_string();
+    }
+    match review_decision {
+        Some("CHANGES_REQUESTED") => "changes requested — address review".to_string(),
+        Some("APPROVED") => "approved — ready to merge".to_string(),
+        Some("REVIEW_REQUIRED") => "awaiting review".to_string(),
+        _ if ci == "pass" => "checks green — ready to merge".to_string(),
+        _ => "awaiting review".to_string(),
+    }
+}
+
+/// Truncate `s` to at most `max` chars, appending an ellipsis when cut.
+fn truncate_for_width(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+    out.push('…');
+    out
+}
+
+/// STORY-456: `aida status` Recently merged section — last N merged PRs (one
+/// batched `gh pr list --state merged` call) for orientation. Silent when
+/// there are none or gh is unavailable. trace:STORY-456 | ai:claude
+fn print_status_recently_merged_section(project_root: &std::path::Path, limit: usize) {
+    let merged = collect_recently_merged_prs(project_root, limit);
+    if merged.is_empty() {
+        return;
+    }
+    println!("{}", "─── Recently merged ───".bold());
+    for (number, title, when) in &merged {
+        let title = truncate_for_width(title, 56);
+        let when = when.as_deref().unwrap_or("");
+        println!(
+            "  {} {} {}",
+            format!("PR #{number}").green(),
+            title,
+            when.dimmed()
+        );
+    }
+    println!();
+}
+
+/// STORY-456: parse `gh pr list --state merged --json number,title,mergedAt`
+/// into `(number, title, humanized-merge-time)` rows. Pure — unit-tested
+/// against captured gh JSON. trace:STORY-456 | ai:claude
+fn parse_recently_merged_prs(stdout: &str) -> Vec<(u64, String, Option<String>)> {
+    let json: serde_json::Value = match serde_json::from_str(stdout) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let mut rows = Vec::new();
+    for pr in json.as_array().cloned().unwrap_or_default() {
+        let Some(number) = pr.get("number").and_then(|v| v.as_u64()) else {
+            continue;
+        };
+        let title = pr
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let when = pr
+            .get("mergedAt")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| humanize_relative(dt.with_timezone(&chrono::Utc)));
+        rows.push((number, title, when));
+    }
+    rows
+}
+
+/// STORY-456: batched fetch of the last `limit` merged PRs. Empty when gh is
+/// missing or the call fails. trace:STORY-456 | ai:claude
+fn collect_recently_merged_prs(
+    project_root: &std::path::Path,
+    limit: usize,
+) -> Vec<(u64, String, Option<String>)> {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "merged",
+            "--limit",
+            &limit.to_string(),
+            "--json",
+            "number,title,mergedAt",
+        ])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let mut rows = parse_recently_merged_prs(&String::from_utf8_lossy(&out.stdout));
+    rows.truncate(limit);
+    rows
+}
+
+#[cfg(test)]
+mod story_456_status_worktrees_tests {
+    use super::*;
+
+    fn lease(scope: &str, worktree: &std::path::Path) -> SessionLease {
+        SessionLease {
+            id: "019elease456".to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".to_string(),
+            worktree_path: worktree.to_path_buf(),
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "host".to_string(),
+            role: Some("implementer".to_string()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+        }
+    }
+
+    fn pr_item(number: u64, branch: &str) -> status_cleanup::OpenPrItem {
+        status_cleanup::OpenPrItem {
+            number,
+            title: format!("PR {number}"),
+            head_branch: branch.to_string(),
+            ci_rollup: Some("pass".to_string()),
+            mergeable: Some("MERGEABLE".to_string()),
+            review_decision: None,
+        }
+    }
+
+    #[test]
+    fn infer_tied_spec_prefers_lease_scope() {
+        assert_eq!(
+            infer_tied_spec(Some("STORY-456"), "story-456-foo"),
+            Some("STORY-456".to_string())
+        );
+    }
+
+    #[test]
+    fn infer_tied_spec_falls_back_to_branch_name() {
+        assert_eq!(
+            infer_tied_spec(None, "task-425-2"),
+            Some("TASK-425".to_string())
+        );
+        assert_eq!(
+            infer_tied_spec(None, "story-456-status"),
+            Some("STORY-456".to_string())
+        );
+        // No numeric segment → no inference.
+        assert_eq!(infer_tied_spec(None, "feature-branch"), None);
+        assert_eq!(infer_tied_spec(None, "(detached)"), None);
+    }
+
+    // A worktree with no lease, clean tree, nothing live, nothing ahead, and
+    // no open PR is the conservative OBSOLETE case. trace:STORY-456
+    #[test]
+    fn obsolete_when_all_signals_quiet() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt = WorktreeRecord {
+            path: std::path::PathBuf::from("/repo-wt"),
+            branch: Some("task-999".to_string()),
+        };
+        let ahead = std::collections::HashMap::new(); // no ahead entry → None
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &[],
+            &[],
+            &std::collections::HashMap::new(),
+            &ahead,
+        );
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].obsolete, "quiet worktree should be obsolete");
+        assert_eq!(rows[0].tied_spec, Some("TASK-999".to_string()));
+    }
+
+    // ANY of: lease / dirty / live / ahead / open-PR keeps it TIED (in flight).
+    #[test]
+    fn tied_when_commits_ahead() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt = WorktreeRecord {
+            path: std::path::PathBuf::from("/repo-wt"),
+            branch: Some("task-1".to_string()),
+        };
+        let mut ahead = std::collections::HashMap::new();
+        ahead.insert(wt.path.clone(), 3u32);
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &[],
+            &[],
+            &std::collections::HashMap::new(),
+            &ahead,
+        );
+        assert!(!rows[0].obsolete, "un-merged commits ahead → in flight");
+        assert_eq!(rows[0].ahead, Some(3));
+    }
+
+    #[test]
+    fn tied_when_open_pr_present() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt = WorktreeRecord {
+            path: std::path::PathBuf::from("/repo-wt"),
+            branch: Some("task-2".to_string()),
+        };
+        let mut prs = std::collections::HashMap::new();
+        prs.insert("task-2".to_string(), pr_item(77, "task-2"));
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &[],
+            &[],
+            &prs,
+            &std::collections::HashMap::new(),
+        );
+        assert!(!rows[0].obsolete, "open PR → in flight");
+        assert_eq!(rows[0].pr_number, Some(77));
+        assert_eq!(rows[0].pr_ci.as_deref(), Some("pass"));
+    }
+
+    #[test]
+    fn tied_when_lease_covers_it() {
+        let main = std::path::PathBuf::from("/repo");
+        let wt_path = std::path::PathBuf::from("/repo-wt");
+        let wt = WorktreeRecord {
+            path: wt_path.clone(),
+            branch: Some("story-456".to_string()),
+        };
+        let leases = vec![lease("STORY-456", &wt_path)];
+        let rows = assemble_worktree_status_rows(
+            std::slice::from_ref(&wt),
+            &main,
+            &leases,
+            &[],
+            &std::collections::HashMap::new(),
+            &std::collections::HashMap::new(),
+        );
+        assert!(!rows[0].obsolete, "active lease → in flight");
+        assert_eq!(rows[0].lease_scope.as_deref(), Some("STORY-456"));
+    }
+
+    // The main worktree and the orphan store are excluded from the rows.
+    #[test]
+    fn skips_main_and_store_worktrees() {
+        let main = std::path::PathBuf::from("/repo");
+        let worktrees = vec![
+            WorktreeRecord {
+                path: main.clone(),
+                branch: Some("main".to_string()),
+            },
+            WorktreeRecord {
+                path: std::path::PathBuf::from("/repo-store"),
+                branch: Some("aida-store".to_string()),
+            },
+            WorktreeRecord {
+                path: std::path::PathBuf::from("/repo-wt"),
+                branch: Some("task-3".to_string()),
+            },
+        ];
+        let rows = assemble_worktree_status_rows(
+            &worktrees,
+            &main,
+            &[],
+            &[],
+            &std::collections::HashMap::new(),
+            &std::collections::HashMap::new(),
+        );
+        assert_eq!(rows.len(), 1, "only the real session worktree remains");
+        assert_eq!(rows[0].branch, "task-3");
+    }
+
+    #[test]
+    fn open_pr_next_step_distinguishes_ci_from_merge_from_review() {
+        assert_eq!(
+            open_pr_next_step("fail", "MERGEABLE", None),
+            "CI failing — fix & push"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "CONFLICTING", None),
+            "merge conflict — rebase onto default"
+        );
+        assert_eq!(
+            open_pr_next_step("pending", "MERGEABLE", None),
+            "CI in progress — wait"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "MERGEABLE", Some("CHANGES_REQUESTED")),
+            "changes requested — address review"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "MERGEABLE", Some("APPROVED")),
+            "approved — ready to merge"
+        );
+        assert_eq!(
+            open_pr_next_step("pass", "MERGEABLE", None),
+            "checks green — ready to merge"
+        );
+    }
+
+    #[test]
+    fn parse_recently_merged_prs_reads_gh_json() {
+        let json = r#"[
+            {"number": 570, "title": "feat: thing", "mergedAt": "2026-06-01T10:00:00Z"},
+            {"number": 569, "title": "fix: other", "mergedAt": null}
+        ]"#;
+        let rows = parse_recently_merged_prs(json);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].0, 570);
+        assert_eq!(rows[0].1, "feat: thing");
+        assert!(rows[0].2.is_some(), "mergedAt humanized");
+        assert_eq!(rows[1].0, 569);
+        assert!(rows[1].2.is_none(), "null mergedAt → None");
+    }
+
+    #[test]
+    fn parse_recently_merged_prs_handles_garbage() {
+        assert!(parse_recently_merged_prs("not json").is_empty());
+        assert!(parse_recently_merged_prs("{}").is_empty());
+    }
+
+    #[test]
+    fn truncate_for_width_cuts_and_keeps_short() {
+        assert_eq!(truncate_for_width("short", 10), "short");
+        let cut = truncate_for_width("aaaaaaaaaa", 5);
+        assert_eq!(cut.chars().count(), 5);
+        assert!(cut.ends_with('…'));
+    }
+}
+
+/// TASK-539: `aida status` Findings section. Display-only — surfaces the
+/// pending-triage findings backlog (silent when empty) so it isn't invisible
+/// until the user remembers `aida findings list`. Reuses the same
+/// `build_findings_view` the findings command uses; shows a compact per-finding
+/// line (source + id + origin + title), capped, with a pointer to the full
+/// list. trace:TASK-539 | ai:claude
+fn print_status_findings_section(backend: &aida_core::CachedGitBackend) {
+    // Findings are DRAFT specs carrying a from-* tag (matches `aida findings
+    // list`). Filtering to draft avoids counting completed/rejected specs that
+    // still carry their origin from-review/from-implementer tag.
+    let filter = aida_core::ListFilter {
+        status: Some("draft".to_string()),
+        ..Default::default()
+    };
+    let Ok(summaries) = backend.list_summaries(&filter) else {
+        return;
+    };
+    let sections = crate::findings::build_findings_view(
+        &summaries,
+        &crate::findings::FindingsFilter::default(),
+    );
+    let total = crate::findings::count_findings(&sections);
+    if total == 0 {
+        return;
+    }
+    println!("{}", "─── Findings ───".bold());
+    println!(
+        "  {} pending finding(s) awaiting triage",
+        total.to_string().yellow()
+    );
+    const CAP: usize = 6;
+    let mut shown = 0;
+    'outer: for section in &sections {
+        for group in &section.groups {
+            for row in &group.rows {
+                println!(
+                    "  • {} {} ({}) — {}",
+                    section.source.label().dimmed(),
+                    row.display_id.yellow(),
+                    group.origin,
+                    row.title
+                );
+                shown += 1;
+                if shown >= CAP {
+                    break 'outer;
+                }
+            }
+        }
+    }
+    if total > shown {
+        println!(
+            "  … {} more — `aida findings list` (promote/dismiss to triage)",
+            total - shown
+        );
+    }
+    println!();
+}
+
+/// STORY-457: `aida status` working-tree section. Display-only — parses
+/// `git status --porcelain` in `root` and groups into staged / modified-tracked
+/// / untracked, auto-flagging safe-to-remove untracked cruft with an `rm`
+/// recommendation and surfacing the rest for a commit-or-remove decision.
+/// Silent when the tree is clean. (The mtime recent-vs-stale split + the
+/// content-matches-HEAD heuristic from the spec are a follow-up refinement.)
+/// trace:STORY-457 | ai:claude
+/// STORY-457 persistence: per-clone status-run state under `.aida/`, gitignored
+/// by the deny-by-default `.aida/*` rule (no .gitignore change needed). Two
+/// files drive the recent-vs-stale untracked heuristic and TASK-662's
+/// delta-since-last-run:
+///   - `last-status.toml`: timestamp of the previous `aida status` run.
+///   - `untracked-history.toml`: first-observed timestamp per untracked path.
+/// All I/O is best-effort: failures degrade to an empty / in-memory view
+/// (everything reads as first-seen-now) and never break `aida status`.
+/// trace:STORY-457 | ai:claude
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct LastStatusRecord {
+    last_status_at: Option<String>,
+}
+
+fn status_last_path(root: &std::path::Path) -> std::path::PathBuf {
+    root.join(".aida").join("last-status.toml")
+}
+
+fn status_untracked_history_path(root: &std::path::Path) -> std::path::PathBuf {
+    root.join(".aida").join("untracked-history.toml")
+}
+
+/// Read the previous `aida status` run timestamp, if one was recorded.
+/// Consumed by the recent-vs-stale heuristic and (later) TASK-662's delta.
+/// trace:STORY-457 | ai:claude
+fn read_last_status_at(root: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let txt = std::fs::read_to_string(status_last_path(root)).ok()?;
+    let rec: LastStatusRecord = toml::from_str(&txt).ok()?;
+    rec.last_status_at
+        .as_deref()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+/// Record `now` as the latest `aida status` run time (best-effort; no-op when
+/// `.aida/` is absent, i.e. not an initialized project). trace:STORY-457
+fn write_last_status_at(root: &std::path::Path, now: chrono::DateTime<chrono::Utc>) {
+    if !root.join(".aida").is_dir() {
+        return;
+    }
+    let rec = LastStatusRecord {
+        last_status_at: Some(now.to_rfc3339()),
+    };
+    if let Ok(txt) = toml::to_string(&rec) {
+        let _ = std::fs::write(status_last_path(root), txt);
+    }
+}
+
+/// TASK-662: per-clone snapshot of the finding IDs seen on the previous
+/// `aida status` run, persisted under `.aida/last-findings.toml` (gitignored by
+/// the deny-by-default `.aida/*` rule — no .gitignore change needed). Drives the
+/// `findings.delta` block in `aida status --json` (new-since-last-run). All I/O
+/// is best-effort: a missing/unreadable file reads as "no prior run" so the
+/// first delta is suppressed, and a write failure never breaks `aida status`.
+/// trace:TASK-662 | ai:claude
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct LastFindingsRecord {
+    /// Sorted-unique finding display IDs (e.g. `TASK-5`) seen last run.
+    #[serde(default)]
+    ids: Vec<String>,
+}
+
+fn status_last_findings_path(root: &std::path::Path) -> std::path::PathBuf {
+    root.join(".aida").join("last-findings.toml")
+}
+
+/// Read the finding IDs recorded on the previous run. `None` distinguishes
+/// "no prior run recorded" (suppress the delta entirely on a first run) from
+/// "prior run had zero findings" (`Some(empty)`). trace:TASK-662 | ai:claude
+fn read_last_findings(root: &std::path::Path) -> Option<Vec<String>> {
+    let txt = std::fs::read_to_string(status_last_findings_path(root)).ok()?;
+    let rec: LastFindingsRecord = toml::from_str(&txt).ok()?;
+    Some(rec.ids)
+}
+
+/// Record the current finding IDs as the new baseline (best-effort; no-op when
+/// `.aida/` is absent, i.e. not an initialized project). trace:TASK-662
+fn write_last_findings(root: &std::path::Path, ids: &[String]) {
+    if !root.join(".aida").is_dir() {
+        return;
+    }
+    let mut ids = ids.to_vec();
+    ids.sort();
+    ids.dedup();
+    let rec = LastFindingsRecord { ids };
+    if let Ok(txt) = toml::to_string(&rec) {
+        let _ = std::fs::write(status_last_findings_path(root), txt);
+    }
+}
+
+/// The delta between the previous run's findings snapshot and the current set.
+/// Serialized into `findings.delta` of `aida status --json`. trace:TASK-662
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+struct FindingsDelta {
+    /// Total findings recorded on the previous run.
+    previous_total: usize,
+    /// Total findings now.
+    current_total: usize,
+    /// Findings present now but absent last run (newly filed since last run).
+    new_count: usize,
+    /// IDs of the new findings (sorted), so consumers can name them.
+    new_ids: Vec<String>,
+    /// Findings present last run but gone now (triaged / promoted / dismissed).
+    resolved_count: usize,
+}
+
+/// Pure core of the delta-since-last-run: compare the persisted snapshot
+/// (`previous`, `None` = no prior run) against the `current` finding IDs.
+/// `None` ⇒ `None` (first run has no baseline to diff). Order-insensitive and
+/// dedup-safe so a reordered or duplicated snapshot can't fabricate a delta.
+/// trace:TASK-662 | ai:claude
+fn compute_findings_delta(
+    previous: Option<&[String]>,
+    current: &[String],
+) -> Option<FindingsDelta> {
+    let previous = previous?;
+    let prev_set: std::collections::HashSet<&str> = previous.iter().map(|s| s.as_str()).collect();
+    let cur_set: std::collections::HashSet<&str> = current.iter().map(|s| s.as_str()).collect();
+    let mut new_ids: Vec<String> = cur_set
+        .iter()
+        .filter(|id| !prev_set.contains(*id))
+        .map(|id| id.to_string())
+        .collect();
+    new_ids.sort();
+    let resolved_count = prev_set.iter().filter(|id| !cur_set.contains(*id)).count();
+    Some(FindingsDelta {
+        previous_total: prev_set.len(),
+        current_total: cur_set.len(),
+        new_count: new_ids.len(),
+        new_ids,
+        resolved_count,
+    })
+}
+
+/// Load → upsert (first-observed = `now` for new paths) → prune (drop paths no
+/// longer untracked) → persist the untracked-history map, returning the
+/// first-observed timestamp for each currently-untracked path. Pure-data core
+/// is `reconcile_untracked_map` (unit-tested); this wrapper does the I/O.
+/// trace:STORY-457 | ai:claude
+fn reconcile_untracked_history(
+    root: &std::path::Path,
+    current: &[String],
+    now: chrono::DateTime<chrono::Utc>,
+) -> std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> {
+    let path = status_untracked_history_path(root);
+    let stored: std::collections::HashMap<String, String> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| toml::from_str(&t).ok())
+        .unwrap_or_default();
+    let merged = reconcile_untracked_map(stored, current, now);
+    if root.join(".aida").is_dir() {
+        if let Ok(txt) = toml::to_string(&merged) {
+            let _ = std::fs::write(&path, txt);
+        }
+    }
+    merged
+        .into_iter()
+        .filter_map(|(p, ts)| {
+            chrono::DateTime::parse_from_rfc3339(&ts)
+                .ok()
+                .map(|dt| (p, dt.with_timezone(&chrono::Utc)))
+        })
+        .collect()
+}
+
+/// Pure core of `reconcile_untracked_history`: upsert new paths with
+/// first-observed = `now`, prune entries no longer untracked. RFC3339 strings
+/// in/out so it's trivially serializable + testable. trace:STORY-457 | ai:claude
+fn reconcile_untracked_map(
+    mut stored: std::collections::HashMap<String, String>,
+    current: &[String],
+    now: chrono::DateTime<chrono::Utc>,
+) -> std::collections::HashMap<String, String> {
+    let cur: std::collections::HashSet<&str> = current.iter().map(|s| s.as_str()).collect();
+    stored.retain(|p, _| cur.contains(p.as_str()));
+    for p in current {
+        stored.entry(p.clone()).or_insert_with(|| now.to_rfc3339());
+    }
+    stored
+}
+
+/// STORY-457 recent-vs-stale classification of an untracked path given its
+/// first-observed time: recent (<1h), stale (≥1d), or mid. trace:STORY-457
+#[derive(Debug, PartialEq, Eq)]
+enum UntrackedAge {
+    Recent,
+    Mid,
+    Stale,
+}
+
+fn classify_untracked_age(
+    first_seen: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> UntrackedAge {
+    // Missing first-seen → just observed → recent.
+    let seen = first_seen.unwrap_or(now);
+    let age = now.signed_duration_since(seen);
+    if age < chrono::Duration::hours(1) {
+        UntrackedAge::Recent
+    } else if age >= chrono::Duration::days(1) {
+        UntrackedAge::Stale
+    } else {
+        UntrackedAge::Mid
+    }
+}
+
+fn print_status_working_tree_section(root: &std::path::Path) {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["status", "--porcelain"])
+        .output();
+    let Ok(out) = out else { return };
+    if !out.status.success() {
+        return;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+
+    let mut staged = 0usize;
+    let mut modified: Vec<String> = Vec::new();
+    let mut untracked_safe: Vec<String> = Vec::new();
+    let mut untracked_other: Vec<String> = Vec::new();
+
+    for line in text.lines() {
+        if line.len() < 3 {
+            continue;
+        }
+        let code = &line[..2];
+        let path = line[3..].trim().to_string();
+        let x = code.chars().next().unwrap_or(' '); // index (staged) column
+        let y = code.chars().nth(1).unwrap_or(' '); // worktree column
+        if code == "??" {
+            if untracked_is_safe_to_remove(&path) {
+                untracked_safe.push(path);
+            } else {
+                untracked_other.push(path);
+            }
+            continue;
+        }
+        // Staged: index column carries a change other than space/?.
+        if x != ' ' && x != '?' {
+            staged += 1;
+        }
+        // Modified/deleted in the worktree (unstaged).
+        if y == 'M' || y == 'D' {
+            modified.push(path);
+        }
+    }
+
+    // STORY-457 persistence: record this run's timestamp + first-observation
+    // history BEFORE the clean-tree early-return, so the recent-vs-stale clock
+    // advances on every `aida status` (and TASK-662's delta has a baseline)
+    // regardless of whether the tree is dirty. trace:STORY-457 | ai:claude
+    let now = chrono::Utc::now();
+    let all_untracked: Vec<String> = untracked_safe
+        .iter()
+        .chain(untracked_other.iter())
+        .cloned()
+        .collect();
+    let first_seen = reconcile_untracked_history(root, &all_untracked, now);
+    write_last_status_at(root, now);
+
+    if staged == 0 && modified.is_empty() && untracked_safe.is_empty() && untracked_other.is_empty()
+    {
+        return;
+    }
+
+    let preview = |paths: &[String]| {
+        paths
+            .iter()
+            .take(3)
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let preview_refs = |paths: &[&String]| {
+        paths
+            .iter()
+            .take(3)
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    // STORY-457: split non-cruft untracked into recent (<1h) / mid / stale (≥1d)
+    // by first-observed age so long-lingering files stand out from fresh ones.
+    let mut untracked_recent: Vec<&String> = Vec::new();
+    let mut untracked_mid: Vec<&String> = Vec::new();
+    let mut untracked_stale: Vec<&String> = Vec::new();
+    for p in &untracked_other {
+        match classify_untracked_age(first_seen.get(p).copied(), now) {
+            UntrackedAge::Recent => untracked_recent.push(p),
+            UntrackedAge::Mid => untracked_mid.push(p),
+            UntrackedAge::Stale => untracked_stale.push(p),
+        }
+    }
+
+    println!("{}", "─── Working tree ───".bold());
+    if staged > 0 {
+        println!(
+            "  {} {} staged file(s) — `git diff --cached` to review",
+            "●".green(),
+            staged
+        );
+    }
+    if !modified.is_empty() {
+        println!(
+            "  {} {} modified — {}{}",
+            "✎".yellow(),
+            modified.len(),
+            preview(&modified),
+            if modified.len() > 3 { ", …" } else { "" }
+        );
+    }
+    if !untracked_recent.is_empty() {
+        println!(
+            "  {} {} untracked — recent (<1h) — {}{}  (new)",
+            "?".cyan(),
+            untracked_recent.len(),
+            preview_refs(&untracked_recent),
+            if untracked_recent.len() > 3 {
+                ", …"
+            } else {
+                ""
+            }
+        );
+    }
+    if !untracked_mid.is_empty() {
+        println!(
+            "  {} {} untracked — {}{}  (commit or remove)",
+            "?".cyan(),
+            untracked_mid.len(),
+            preview_refs(&untracked_mid),
+            if untracked_mid.len() > 3 { ", …" } else { "" }
+        );
+    }
+    if !untracked_stale.is_empty() {
+        println!(
+            "  {} {} untracked — stale (≥1d) — {}{}  (commit or remove)",
+            "?".yellow(),
+            untracked_stale.len(),
+            preview_refs(&untracked_stale),
+            if untracked_stale.len() > 3 {
+                ", …"
+            } else {
+                ""
+            }
+        );
+    }
+    if !untracked_safe.is_empty() {
+        println!(
+            "  {} {} removable cruft — {}{}  (safe: `rm`)",
+            "🧹".to_string(),
+            untracked_safe.len(),
+            preview(&untracked_safe),
+            if untracked_safe.len() > 3 {
+                ", …"
+            } else {
+                ""
+            }
+        );
+    }
+    println!();
 }
 
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
@@ -26681,6 +33760,58 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
 /// `CiProbe::NoSignal` for any failure path so callers don't have to
 /// distinguish between "no PR" and "gh broken" — both degrade to "proceed
 /// silently." trace:TASK-111 | ai:claude
+/// STORY-516: forge-routed CI probe — the ci-op entry point the call sites use
+/// instead of `probe_ci_state_for_branch` directly, so a GitLab / pure-git repo
+/// goes through its own provider. GitHubForge delegates back to
+/// `probe_ci_state_for_branch` (which runs `gh` in CWD), so behaviour on GitHub
+/// is unchanged — `project_root` is used only to SELECT the provider, so it is
+/// resolved internally here and the call sites stay a pure name-swap. Converts
+/// the forge-neutral `CiProbeResult` back to `CiProbe` so the existing match
+/// sites are unchanged; a provider Err collapses to `NoSignal`.
+/// trace:STORY-516 | ai:claude
+/// STORY-516: reverse of `ci_probe_result_from_ci_probe` — convert a forge
+/// `CiProbeResult` (incl. a provider `Err`) back to the orchestrator's
+/// `CiProbe`, so the `*_via_forge` CI helpers stay a pure name-swap at their
+/// call sites. trace:STORY-516 | ai:claude
+fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiProbe {
+    match r {
+        Ok(crate::forge::CiProbeResult::NoSignal(why)) => CiProbe::NoSignal(why),
+        Ok(crate::forge::CiProbeResult::NoChecks { change }) => CiProbe::PrNoChecks {
+            pr_number: change as u32,
+        },
+        Ok(crate::forge::CiProbeResult::InProgress { change }) => CiProbe::InProgress {
+            pr_number: change as u32,
+        },
+        Ok(crate::forge::CiProbeResult::Green { change }) => CiProbe::Green {
+            pr_number: change as u32,
+        },
+        Ok(crate::forge::CiProbeResult::Failed { change, summary }) => CiProbe::Red {
+            pr_number: change as u32,
+            failed_summary: summary,
+        },
+        Err(e) => CiProbe::NoSignal(format!("{e:#}")),
+    }
+}
+
+pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    ci_probe_from_ci_probe_result(
+        crate::forge::forge_for(&project_root).ci_probe_for_branch(branch),
+    )
+}
+
+/// STORY-516: forge-routed orchestrator / `--watch-ci` CI watch — blocks until
+/// the branch's workflow-run CI is terminal (streaming when interactive),
+/// returning CiProbe. GitHubForge delegates to `watch_ci_for_context`.
+/// `no_human_active` is the headless flag (inverted to `interactive`).
+/// trace:STORY-516 | ai:claude
+pub(crate) fn watch_ci_for_context_via_forge(branch: &str, no_human_active: bool) -> CiProbe {
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    ci_probe_from_ci_probe_result(
+        crate::forge::forge_for(&project_root).stream_ci_for_branch(branch, !no_human_active),
+    )
+}
+
 pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
     let gh = match resolve_gh_binary() {
         Some(p) => p,
@@ -26816,7 +33947,7 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
     let started = std::time::Instant::now();
     for poll in 0..MAX_POLLS {
         std::thread::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
-        let probe = probe_ci_state_for_branch(branch);
+        let probe = ci_probe_via_forge(branch); // STORY-516: forge-routed
         let elapsed = started.elapsed().as_secs();
         match &probe {
             CiProbe::InProgress { pr_number } => {
@@ -26845,7 +33976,7 @@ fn should_stream_ci_watch(stdout_is_tty: bool, no_human_active: bool) -> bool {
     stdout_is_tty && !no_human_active
 }
 
-fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiProbe {
+pub(crate) fn watch_ci_for_context(branch: &str, no_human_active: bool) -> CiProbe {
     if should_stream_ci_watch(std::io::stdout().is_terminal(), no_human_active) {
         watch_ci_terminal(branch)
     } else {
@@ -26908,7 +34039,7 @@ fn watch_ci_terminal(branch: &str) -> CiProbe {
         .args(["run", "watch", &run_id])
         .status();
     // Re-probe to classify Green/Red for the end-session decision tree.
-    probe_ci_state_for_branch(branch)
+    ci_probe_via_forge(branch) // STORY-516: forge-routed
 }
 
 /// trace:STORY-73 | ai:claude
@@ -27665,12 +34796,13 @@ fn session_end(
     // GH confirms no open PR; unknown GH states never assert "missing PR".
     // trace:BUG-361
     let commits_ahead = branch_commits_ahead_main(&project_root, &target.branch);
-    let pr_state = match detect_open_pr_for_branch(&project_root, &target.branch) {
-        PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
-        PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
-        PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_) => {
-            workflow_hints::PrState::Unknown
-        }
+    // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+    let pr_state = match change_lookup_for_branch(&project_root, &target.branch) {
+        crate::forge::ChangeLookup::Found(c) => workflow_hints::PrState::Open(c.id),
+        crate::forge::ChangeLookup::NoChange => workflow_hints::PrState::Absent,
+        crate::forge::ChangeLookup::CliMissing
+        | crate::forge::ChangeLookup::CliFailed(_)
+        | crate::forge::ChangeLookup::Unreachable(_) => workflow_hints::PrState::Unknown,
     };
     // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
     // for this branch has already been squash-merged / merged, the work is shipped
@@ -27688,7 +34820,9 @@ fn session_end(
         }
     }
     if !is_completed {
-        if let PrLookup::Found(_) = detect_merged_pr_for_branch(&project_root, &target.branch) {
+        if let PrLookup::Found(_) =
+            detect_merged_pr_for_branch_via_forge(&project_root, &target.branch)
+        {
             is_completed = true;
         }
     }
@@ -27705,6 +34839,18 @@ fn session_end(
     };
     if let Some(work) = &session_end_unshipped_work {
         emit_session_end_unshipped_warning(&work);
+    }
+
+    // STORY-127 detector (4): leaving this role's session while a DIFFERENT
+    // role's queue has work waiting. Warn (don't block) so the user can
+    // switch role first instead of walking away from queued work.
+    // trace:STORY-127 | ai:claude
+    {
+        let role_counts = read_queue_role_counts(&project_root);
+        let waiting = cross_role_queue_waiting(target.role.as_deref(), &role_counts);
+        if let Some(msg) = session_end_cross_role_warning(&waiting) {
+            eprintln!("  {} {}", "Warning:".yellow().bold(), msg);
+        }
     }
 
     // TASK-111: CI awareness. Probe the branch for an open PR's CI state
@@ -27729,9 +34875,9 @@ fn session_end(
             "Note:".dimmed()
         );
     } else if !skip_ci && !force {
-        let probe = probe_ci_state_for_branch(&target.branch);
-        // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
-        // same `CiAction::Wait`; the difference is the live display.
+        let probe = ci_probe_via_forge(&target.branch); // STORY-516: forge-routed
+                                                        // TASK-233: --watch-ci blocks like --wait-ci, so it produces the
+                                                        // same `CiAction::Wait`; the difference is the live display.
         match decide_ci_action(&probe, wait_ci || watch_ci, yes) {
             CiAction::Proceed => {}
             CiAction::Wait => {
@@ -27740,7 +34886,7 @@ fn session_end(
                         "{} CI in progress — watching until terminal state (Ctrl+C to stop watching)",
                         "→".cyan()
                     );
-                    watch_ci_for_context(&target.branch, false)
+                    watch_ci_for_context_via_forge(&target.branch, false) // STORY-516
                 } else {
                     eprintln!(
                         "{} CI in progress — waiting for terminal state (poll every 30s; Ctrl+C to skip)",
@@ -28168,10 +35314,10 @@ fn session_end(
 /// Open-PR metadata captured by `gh pr list` for a session's branch. Just
 /// the fields the auto-queue side-effect needs to brief a reviewer.
 /// trace:STORY-66 | ai:claude
-struct OpenPrInfo {
-    number: u64,
-    title: String,
-    url: String,
+pub(crate) struct OpenPrInfo {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    pub(crate) url: String,
 }
 
 /// Why `detect_open_pr_for_branch` returned no PR — so the caller (and the
@@ -28186,7 +35332,7 @@ struct OpenPrInfo {
 /// failure — same as before. Conflating the two made every network blip
 /// look like a "no PR" failure with a misleading recovery hint.
 /// trace:BUG-72 BUG-257 | ai:claude
-enum PrLookup {
+pub(crate) enum PrLookup {
     Found(OpenPrInfo),
     /// `gh` ran cleanly but reported no open PR for this branch.
     NoOpenPr,
@@ -28614,6 +35760,136 @@ fn read_headless_log_for_session(
     None
 }
 
+/// BUG-453: byte length of the headless session's JSONL log (the newest file
+/// matching `-<session_id>.jsonl` under `.aida/headless-logs/`), or `None`. A
+/// *growing* log means the session is alive and emitting events — reading,
+/// thinking, or editing — even when it hasn't yet changed a worktree file. The
+/// phase watchdog folds this into its progress signal so a productive-but-
+/// currently-reading implementer is not false-killed as "no progress" (the
+/// TASK-673 symptom: it wrote 503 lines, then spent its final window reading
+/// tests in a 20k-line file and the worktree-only signature went static).
+/// trace:BUG-453 | ai:claude
+fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<u64> {
+    let dir = project_root.join(".aida").join("headless-logs");
+    let suffix = format!("-{session_id}.jsonl");
+    let mut newest_len: Option<u64> = None;
+    let mut newest_mtime = std::time::UNIX_EPOCH;
+    for entry in std::fs::read_dir(&dir).ok()?.flatten() {
+        let is_match = entry
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.ends_with(&suffix))
+            .unwrap_or(false);
+        if !is_match {
+            continue;
+        }
+        if let Ok(meta) = entry.metadata() {
+            let m = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+            if m >= newest_mtime {
+                newest_mtime = m;
+                newest_len = Some(meta.len());
+            }
+        }
+    }
+    newest_len
+}
+
+/// TASK-298: scan one headless `claude -p --output-format stream-json` JSONL
+/// *line* for a hard "the session bailed at a gate" signal and, when present,
+/// return a specific human-readable reason. SPIKE-7 found `claude -p`'s exit
+/// code is unreliable (it exits 0 even when it abandoned the work at a
+/// permission prompt), so the real completion signal lives in the stream:
+///
+///   - a non-empty `permission_denials` array → the model wanted a tool the
+///     non-interactive run could not grant; in `--no-human` mode there is no
+///     human to approve it, so the run is silently stuck. We surface the first
+///     denied tool name.
+///   - a top-level `is_error: true` (on any event, including the terminal
+///     `result`) → the run reported an error envelope; we surface its
+///     `result`/`subtype` detail.
+///
+/// Pure and FULLY ISOLATED: takes a single JSONL line, returns
+/// `Some(reason)` when the line carries a stall signal, `None` otherwise.
+/// Blank or non-JSON lines are `None` (the orchestrator's log is well-formed
+/// JSONL, but a partially-flushed final line must never trip a false stall).
+/// The watchdog folds this over the log so a `--no-human` drain wedged at a
+/// permission gate is detected and failed instead of hanging until the
+/// no-progress / ceiling timeout. trace:TASK-298 | ai:claude
+fn headless_line_permission_stall(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed: serde_json::Value = serde_json::from_str(trimmed).ok()?;
+
+    // Permission denials are the precise SPIKE-7 signal — surface them first
+    // with the offending tool name(s).
+    if let Some(denials) = parsed
+        .get("permission_denials")
+        .and_then(|v| v.as_array())
+        .filter(|a| !a.is_empty())
+    {
+        let tool = denials
+            .iter()
+            .find_map(|d| {
+                d.get("tool_name")
+                    .or_else(|| d.get("tool"))
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("an unknown tool");
+        let extra = if denials.len() > 1 {
+            format!(" (+{} more)", denials.len() - 1)
+        } else {
+            String::new()
+        };
+        return Some(format!(
+            "headless Claude bailed at the permission gate for tool {tool}{extra}"
+        ));
+    }
+
+    // An error envelope — `is_error: true` on any event (the terminal
+    // `result` event is the common carrier, but be liberal). Exit code 0
+    // cannot be trusted, so this is the authoritative failure flag.
+    if parsed.get("is_error").and_then(|v| v.as_bool()) == Some(true) {
+        let detail = parsed
+            .get("result")
+            .and_then(|v| v.as_str())
+            .map(first_nonempty_line)
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                parsed
+                    .get("subtype")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "error".to_string());
+        return Some(format!("headless Claude reported is_error: {detail}"));
+    }
+
+    None
+}
+
+/// TASK-298: fold [`headless_line_permission_stall`] over a whole headless log
+/// body, returning the first line's stall reason or `None`. Best-effort, like
+/// the sibling [`claude_log_indicates_api_outage`]: the classification is a
+/// refinement that lets the watchdog fail fast, not a gate.
+/// trace:TASK-298 | ai:claude
+fn headless_log_permission_stall(content: &str) -> Option<String> {
+    content.lines().find_map(headless_line_permission_stall)
+}
+
+/// First non-empty trimmed line of a string, or the empty string. Small pure
+/// helper so a multi-line `result` detail collapses to one log-friendly row.
+/// trace:TASK-298 | ai:claude
+fn first_nonempty_line(s: &str) -> String {
+    s.lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
+}
+
 struct TextQuestionPunt {
     detail: String,
     lean: String,
@@ -28639,35 +35915,32 @@ fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt
     if !trimmed.contains('?') {
         return None;
     }
-    let question = first_question_sentence(trimmed)?;
-    let question_lower = question.to_ascii_lowercase();
-    const QUESTION_FORK_MARKERS: &[&str] = &[
-        "which path",
-        "which option",
-        "which approach",
-        "which one",
-        "do you want me to",
-        "would you like me to",
-        "should i",
-        "should we",
-        "want me to",
-        "how would you like",
-        "need you to choose",
-        "please confirm",
-        "confirm and i'll proceed",
-        "confirm and i’ll proceed",
-        "confirm and i will proceed",
-        "confirm this path",
-        "confirm the path",
-        "confirm option",
-        "confirm approach",
-    ];
-    if !QUESTION_FORK_MARKERS
+    // BUG-462: scan EVERY question sentence (not just the first `?`) for
+    // decision-fork phrasing. A confident headless implementer phrases its
+    // "which path?" infinitely many ways and routinely buries the operative
+    // question after an options block, so the first `?` in the text is often a
+    // rhetorical aside. An exact-phrase allowlist checked against only the first
+    // question is the wrong shape — it let "Which way do you want to go?" (the
+    // TASK-457 drain) fall through to a misleading phase-1 NoPr failure instead
+    // of advisor-tier routing. trace:BUG-462 | ai:claude
+    let questions = all_question_sentences(trimmed);
+    let question = questions
         .iter()
-        .any(|marker| question_lower.contains(marker))
-    {
-        return None;
-    }
+        .find(|q| question_has_fork_marker(&q.to_ascii_lowercase()))
+        .cloned()
+        // Options-block fallback: even when no phrase marker matches, an
+        // enumerated multi-option block (`A)`/`B)`, `1.`/`2.`, `Option A/B`)
+        // paired with a trailing question is an unambiguous decision fork. Bias
+        // toward punt here: a spec parked and routed to the headless advisor
+        // beats a hard phase-1 NoPr failure with a misleading `/aida-pr` hint —
+        // "a paused spec beats a guessed one". trace:BUG-462 | ai:claude
+        .or_else(|| {
+            if has_options_block(trimmed) {
+                questions.last().cloned()
+            } else {
+                None
+            }
+        })?;
     let recommendation = recommendation_line(trimmed).unwrap_or_else(|| {
         "review the punted analysis and choose the implementation path".to_string()
     });
@@ -28680,14 +35953,103 @@ fn pending_text_question_from_result_text(text: &str) -> Option<TextQuestionPunt
     })
 }
 
-fn first_question_sentence(text: &str) -> Option<String> {
+/// Decision-fork phrasing markers for a single (already lowercased) question
+/// sentence. Broadened under BUG-462 beyond the original BUG-354/BUG-374 set so
+/// novel phrasings ("which way", "do you want", "would you like") still route to
+/// the advisor tier. Kept narrow enough that an ordinary summary question
+/// ("does the parser handle aliases?") does not match. trace:BUG-462 | ai:claude
+fn question_has_fork_marker(question_lower: &str) -> bool {
+    const QUESTION_FORK_MARKERS: &[&str] = &[
+        "which path",
+        "which option",
+        "which approach",
+        "which one",
+        "which way",
+        "which direction",
+        "do you want",
+        "would you like",
+        "want me to",
+        "should i",
+        "should we",
+        "how would you like",
+        "how should",
+        "need you to choose",
+        "go with",
+        "do you prefer",
+        "your call",
+        "please confirm",
+        "confirm and i'll proceed",
+        "confirm and i’ll proceed",
+        "confirm and i will proceed",
+        "confirm this path",
+        "confirm the path",
+        "confirm option",
+        "confirm approach",
+    ];
+    QUESTION_FORK_MARKERS
+        .iter()
+        .any(|marker| question_lower.contains(marker))
+}
+
+/// Every `?`-terminated sentence in `text`, whitespace-collapsed. Splits on
+/// `.`/`!`/`?` so a fork question buried after rhetorical asides is still
+/// surfaced (BUG-462 scans all of them, not just the first). trace:BUG-462
+fn all_question_sentences(text: &str) -> Vec<String> {
     let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let question_idx = collapsed.find('?')?;
-    let start = collapsed[..question_idx]
-        .rfind(['.', '!', '\n'])
-        .map(|i| i + 1)
-        .unwrap_or(0);
-    Some(collapsed[start..=question_idx].trim().to_string()).filter(|s| !s.is_empty())
+    let mut out = Vec::new();
+    let mut start = 0usize;
+    // `?`/`.`/`!` are ASCII, so every index used here is a char boundary.
+    for (i, b) in collapsed.bytes().enumerate() {
+        match b {
+            b'?' => {
+                let sentence = collapsed[start..=i]
+                    .trim_start_matches(['.', '!', '?', ' '])
+                    .trim();
+                if !sentence.is_empty() {
+                    out.push(sentence.to_string());
+                }
+                start = i + 1;
+            }
+            b'.' | b'!' => start = i + 1,
+            _ => {}
+        }
+    }
+    out
+}
+
+/// True when `text` presents an enumerated *choice* — two or more lines that
+/// start with a letter-labelled option (`Option A`, `A)`, `B:`). Deliberately
+/// LETTER-only (not `1.`/`2.`): digit labels far more often enumerate completed
+/// *steps* in a summary than mutually-exclusive choices, and the fallback fires
+/// only when no phrase marker matched, so a numbered accomplishments list with a
+/// trailing rhetorical question must not read as a fork. Line-anchored so inline
+/// version strings like `v1.2.0` don't count. trace:BUG-462 | ai:claude
+fn has_options_block(text: &str) -> bool {
+    let mut enumerated = 0usize;
+    for raw in text.lines() {
+        // strip a leading markdown bold/bullet so "- **A)** ..." still counts
+        let line = raw
+            .trim_start()
+            .trim_start_matches(['-', '*', ' '])
+            .trim_start_matches("**");
+        if line.to_ascii_lowercase().starts_with("option ") || starts_with_letter_label(line) {
+            enumerated += 1;
+        }
+    }
+    enumerated >= 2
+}
+
+/// A single letter (`A`–`H`, any case) followed by `)`, `.`, or `:` — the start
+/// of a letter-labelled option line. trace:BUG-462 | ai:claude
+fn starts_with_letter_label(line: &str) -> bool {
+    let mut chars = line.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    let Some(sep) = chars.next() else {
+        return false;
+    };
+    matches!(first, 'A'..='H' | 'a'..='h') && matches!(sep, ')' | '.' | ':')
 }
 
 fn recommendation_line(text: &str) -> Option<String> {
@@ -28712,11 +36074,71 @@ fn bounded_text(text: &str, max: usize) -> String {
     format!("{}…", &text[..end])
 }
 
+/// STORY-516: reverse of `change_lookup_from_pr_lookup` — convert a forge
+/// `ChangeLookup` back to the orchestrator's `PrLookup` so the `*_via_forge`
+/// helpers are a pure name-swap at their call sites (match arms stay PrLookup).
+/// trace:STORY-516 | ai:claude
+fn pr_lookup_from_change_lookup(c: crate::forge::ChangeLookup) -> PrLookup {
+    match c {
+        crate::forge::ChangeLookup::Found(r) => PrLookup::Found(OpenPrInfo {
+            number: r.id,
+            title: r.title.unwrap_or_default(),
+            url: r.url,
+        }),
+        crate::forge::ChangeLookup::NoChange => PrLookup::NoOpenPr,
+        crate::forge::ChangeLookup::CliMissing => PrLookup::GhMissing,
+        crate::forge::ChangeLookup::CliFailed(s) => PrLookup::GhFailed(s),
+        crate::forge::ChangeLookup::Unreachable(s) => PrLookup::GhUnreachable(s),
+    }
+}
+
+/// STORY-516: forge-routed spec-search open-PR lookup (BUG-223 fallback). GitHub
+/// delegates to `detect_open_pr_for_spec`. trace:STORY-516 | ai:claude
+pub(crate) fn detect_open_pr_for_spec_via_forge(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> PrLookup {
+    pr_lookup_from_change_lookup(
+        crate::forge::forge_for(project_root)
+            .change_for_spec(spec)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+    )
+}
+
+/// STORY-516: forge-routed merged-PR-for-branch lookup. GitHub delegates to
+/// `detect_merged_pr_for_branch`. trace:STORY-516 | ai:claude
+pub(crate) fn detect_merged_pr_for_branch_via_forge(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> PrLookup {
+    pr_lookup_from_change_lookup(
+        crate::forge::forge_for(project_root)
+            .merged_change_for_branch(branch)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+    )
+}
+
+/// STORY-516: forge-routed branch lookup — the view-op entry point the call
+/// sites use instead of `detect_open_pr_for_branch` directly, so a GitLab /
+/// pure-git repo goes through its own provider. GitHubForge delegates back to
+/// `detect_open_pr_for_branch`, so behaviour on GitHub is unchanged. The
+/// provider returns `Result<ChangeLookup>`; GitHub never errs (it adapts a
+/// PrLookup), and a provider Err (GitLab stub) collapses to `CliFailed` so
+/// callers keep a single 5-state match. trace:STORY-516 | ai:claude
+pub(crate) fn change_lookup_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> crate::forge::ChangeLookup {
+    crate::forge::forge_for(project_root)
+        .change_for_branch(branch)
+        .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")))
+}
+
 /// Look up a single open PR keyed on `branch`. The richer [`PrLookup`]
 /// return shape lets callers print an honest skip reason (no PR yet / gh
 /// missing / gh failed) instead of collapsing every case to `None`.
 /// trace:STORY-66 BUG-72 BUG-74 | ai:claude
-fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+pub(crate) fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "open"])
 }
 
@@ -28783,7 +36205,7 @@ fn probe_branch_on_origin(project_root: &std::path::Path, branch: &str) -> Branc
 /// every covered spec in its `## Per-spec` section, so the spec id is a
 /// reliable key even after the branch the PR was opened from changed.
 /// trace:BUG-223 | ai:claude
-fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
+pub(crate) fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
     gh_pr_list_first(project_root, &["--search", spec, "--state", "open"])
 }
 
@@ -28824,7 +36246,10 @@ fn pr_head_branch(project_root: &std::path::Path, pr_number: u64) -> Option<Stri
 /// but it won't reach `main` without a new PR. Mirrors the shape of
 /// [`detect_open_pr_for_branch`] but queries `--state merged` and returns
 /// only the first hit (most recent). trace:BUG-88 | ai:claude
-fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+pub(crate) fn detect_merged_pr_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "merged"])
 }
 
@@ -29223,6 +36648,29 @@ pub(crate) fn find_plan_files_for_spec(
 /// Parse the `## Followups` section of a plan: collect the column-0
 /// `- `/`* ` bullets until the next `##` header. Leading marker and a
 /// trailing period are stripped; placeholder/empty bullets are dropped.
+/// TASK-431: is this `## Followups` bullet a "no followups" sentinel
+/// (`None`, `N/A`, `NA`, `Nothing`, `(none)`, optionally followed by an
+/// em-dash / colon / spaced-dash explanation) rather than a real followup?
+/// Conservative — only when the sentinel is the WHOLE leading clause, so a
+/// genuine bullet like "None of these handlers do X" is kept. trace:TASK-431
+fn followup_is_sentinel(text: &str) -> bool {
+    let lower = text.trim().to_ascii_lowercase();
+    let unparen = lower.trim_start_matches('(').trim_end_matches(')').trim();
+    // Leading clause = everything before the first explanation separator.
+    let head = unparen
+        .split([':', '—'])
+        .next()
+        .unwrap_or(unparen)
+        .split(" - ")
+        .next()
+        .unwrap_or(unparen)
+        .trim();
+    matches!(
+        head,
+        "none" | "n/a" | "na" | "nothing" | "nothing here" | "nothing to do"
+    )
+}
+
 fn parse_plan_followups(content: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut in_section = false;
@@ -29251,7 +36699,11 @@ fn parse_plan_followups(content: &str) -> Vec<String> {
             // STARTS with `<`, e.g. `<describe the followup>`) — not any bullet
             // that merely contains `<` (a real followup like "support `Vec<T>`"
             // or "fix the `a < b` guard" was being silently dropped).
-            if text.is_empty() || text.starts_with('<') || text.starts_with("file as") {
+            if text.is_empty()
+                || text.starts_with('<')
+                || text.starts_with("file as")
+                || followup_is_sentinel(&text)
+            {
                 continue;
             }
             out.push(text);
@@ -29832,27 +37284,33 @@ fn try_auto_queue_pr_review(
         ));
     }
 
-    let pr = match detect_open_pr_for_branch(project_root, branch) {
-        PrLookup::Found(pr) => pr,
-        PrLookup::NoOpenPr => {
+    // STORY-516: forge-routed. Reconstruct OpenPrInfo from the ChangeRef so the
+    // downstream pr.number/url/title uses stay unchanged. trace:STORY-516 | ai:claude
+    let pr = match change_lookup_for_branch(project_root, branch) {
+        crate::forge::ChangeLookup::Found(c) => OpenPrInfo {
+            number: c.id,
+            title: c.title.unwrap_or_default(),
+            url: c.url,
+        },
+        crate::forge::ChangeLookup::NoChange => {
             return AutoQueueOutcome::skipped_by_design(format!(
                 "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
                 branch
             ));
         }
-        PrLookup::GhMissing => {
+        crate::forge::ChangeLookup::CliMissing => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `{}`. Install gh to enable.",
                 branch
             ));
         }
-        PrLookup::GhFailed(reason) => {
+        crate::forge::ChangeLookup::CliFailed(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: `gh pr list` failed for branch `{}` ({}) — no reviewer story filed",
                 branch, reason
             ));
         }
-        PrLookup::GhUnreachable(reason) => {
+        crate::forge::ChangeLookup::Unreachable(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: GH API unreachable for branch `{}` ({}) — no reviewer story filed (transient; retry once the API is reachable)",
                 branch, reason
@@ -30010,6 +37468,7 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             force_delete_branch,
             complexity,
             effort,
+            no_trailer_check,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -30018,6 +37477,7 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *force_delete_branch,
             *complexity,
             *effort,
+            *no_trailer_check,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
     }
@@ -30516,6 +37976,7 @@ fn pr_ship_handler(
     force_delete_branch: bool,
     complexity: Option<complexity_calibration::ComplexityLevel>,
     effort: Option<effort_calibration::EffortBucket>,
+    no_trailer_check: bool,
 ) -> Result<()> {
     use pr_ship::{
         format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
@@ -30541,6 +38002,16 @@ fn pr_ship_handler(
     let branch = current_git_branch(&project_root)?;
     if branch.is_empty() {
         anyhow::bail!("could not detect current branch (detached HEAD?)");
+    }
+
+    // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
+    // Catch a hallucinated / typo'd / since-rejected `(SPEC-ID)` trailer BEFORE
+    // the commit reaches the PR + shared history. Reuses the STORY-498 gate's
+    // pure validator + store resolver, client-side. Refuses (exit 1) on a dead
+    // reference; `--no-trailer-check` and a store-less checkout both bypass.
+    // trace:STORY-469 | ai:claude
+    if !dry_run {
+        run_client_trailer_guard(&project_root, "pr ship", no_trailer_check);
     }
 
     // ---- Step 1: resolve or create the PR. ----
@@ -30704,7 +38175,11 @@ fn pr_ship_handler(
 
     // ---- Dry-run: print the resolved plan and exit. ----
     if dry_run {
-        let plan = format_dry_run_plan(&opts, &steps);
+        let plan = format_dry_run_plan(
+            &opts,
+            &steps,
+            crate::forge::resolve_forge_kind(&project_root),
+        );
         print!("{}", plan);
         eprintln!(
             "  → PR target: {}",
@@ -30721,32 +38196,60 @@ fn pr_ship_handler(
     // user sees live progress — capture-output via the retry wrapper
     // would swallow the streaming output, which is the whole point of
     // `--watch`. CI failures are real (not transient), so no retry.
-    eprintln!("  step 2: watching CI for PR-{}", pr_number);
-    wait_for_pr_checks_to_register(&project_root, pr_number)?;
-    let watch_status = std::process::Command::new("gh")
-        .current_dir(&project_root)
-        .args(["pr", "checks", &pr_number.to_string(), "--watch"])
-        .status()
-        .context("could not invoke `gh pr checks --watch`")?;
-    if !watch_status.success() {
+    //
+    // BUG-417: a repo with no `.github/workflows` will never register checks, so
+    // the register-wait below would block for the full timeout and then bail.
+    // Detect that (or an explicit `AIDA_PR_SHIP_NO_CI_WAIT` / `lifecycle:no-ci-wait`
+    // opt-out) and skip straight to merge. trace:BUG-417 | ai:claude
+    if let Some(reason) = pr_ship_ci_wait_skip_reason(&project_root) {
+        eprintln!(
+            "  step 2: {} — skipping CI wait for PR-{}",
+            reason, pr_number
+        );
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &ShipStep::WatchCi,
-            &StepOutcome::Failed(format!("exit {}", watch_status)),
+            &StepOutcome::Skipped(reason),
         );
-        let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
-        eprintln!("{} CI failed for PR-{}", "✗".red().bold(), pr_number);
-        eprintln!("  {}", hint);
-        anyhow::bail!("CI did not pass for PR-{pr_number}");
+    } else {
+        eprintln!("  step 2: watching CI for PR-{}", pr_number);
+        wait_for_pr_checks_to_register(&project_root, pr_number)?;
+        // STORY-516: route the blocking CI watch through the Forge trait (streams
+        // live; GitHub `gh pr checks <N> --watch`). trace:STORY-516 | ai:claude
+        let watch_change = crate::forge::ChangeRef {
+            id: pr_number,
+            url: String::new(),
+            branch: branch.clone(),
+            base: String::new(),
+            title: None,
+        };
+        let ci_result = crate::forge::forge_for(&project_root).watch_ci(&watch_change);
+        let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
+        if ci_failed {
+            let detail = match &ci_result {
+                Err(e) => format!("{e:#}"),
+                _ => format!("CI did not pass for PR-{pr_number}"),
+            };
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &ShipStep::WatchCi,
+                &StepOutcome::Failed(detail),
+            );
+            let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
+            eprintln!("{} CI failed for PR-{}", "✗".red().bold(), pr_number);
+            eprintln!("  {}", hint);
+            anyhow::bail!("CI did not pass for PR-{pr_number}");
+        }
+        eprintln!("  {} CI green for PR-{}", "✓".green(), pr_number);
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::WatchCi,
+            &StepOutcome::Ok,
+        );
     }
-    eprintln!("  {} CI green for PR-{}", "✓".green(), pr_number);
-    log_ship_activity(
-        &main_worktree,
-        Some(pr_number),
-        &ShipStep::WatchCi,
-        &StepOutcome::Ok,
-    );
 
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
@@ -30771,26 +38274,32 @@ fn pr_ship_handler(
         );
     }
 
-    let retry_cfg = crate::network_retry::RetryConfig::load(&main_worktree);
-    let mut stderr_sink = crate::network_retry::StderrSink;
-    let merge_out = crate::network_retry::run_with_retry(
-        &format!("gh pr merge {pr_number}"),
-        &retry_cfg,
-        &mut stderr_sink,
-        || {
-            let mut cmd = std::process::Command::new("gh");
-            let args =
-                pr_ship::merge_args(pr_number, delete_branch, explicit_squash_subject.as_deref());
-            cmd.current_dir(&project_root)
-                .args(args.iter().map(String::as_str));
-            cmd
-        },
-    )
-    .context("could not invoke `gh pr merge`")?;
-    if !merge_out.status.success() {
-        let stderr_text = String::from_utf8_lossy(&merge_out.stderr)
-            .trim()
-            .to_string();
+    // STORY-516: route the merge through the Forge trait instead of an inline
+    // `gh pr merge`. GitHubForge::merge_change reuses the SPEC-410-pinned
+    // `merge_args` (byte-identical argv) and the same network_retry wrapper, so
+    // this is behaviour-preserving on GitHub; a GitLab / pure-git repo now gets
+    // its own provider's merge. The unified contract returns Err (with stderr)
+    // on a failed merge, which we map to the existing activity-log + recovery
+    // hint + bail. trace:STORY-516 | ai:claude
+    let merge_opts = crate::forge::MergeOptions {
+        method: crate::forge::MergeMethod::Squash,
+        squash_subject: explicit_squash_subject.clone(),
+        delete_branch,
+    };
+    let change_ref = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: branch.clone(),
+        base: String::new(),
+        title: None,
+    };
+    let mut merge_sink = crate::network_retry::StderrSink;
+    if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
+        &change_ref,
+        &merge_opts,
+        &mut merge_sink,
+    ) {
+        let stderr_text = format!("{e:#}");
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
@@ -30800,7 +38309,7 @@ fn pr_ship_handler(
         let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
         eprintln!("{} merge failed: {}", "✗".red().bold(), stderr_text);
         eprintln!("  {}", hint);
-        anyhow::bail!("`gh pr merge` exited {}", merge_out.status);
+        return Err(e.context("`gh pr merge` failed"));
     }
     eprintln!("  {} merged PR-{}", "✓".green(), pr_number);
     log_ship_activity(
@@ -31124,9 +38633,9 @@ fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
 /// `branch`. Returns the new PR's number, parsed from the URL `gh`
 /// prints on success. Branch must already be pushed; we push it first.
 fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64> {
-    use pr_ship::{
-        derive_pr_body_from_commit, derive_pr_title_from_commit, parse_pr_number_from_create_output,
-    };
+    // STORY-516: PR-number parsing now lives in GitHubForge::open_change, so
+    // `parse_pr_number_from_create_output` is no longer needed here.
+    use pr_ship::{derive_pr_body_from_commit, derive_pr_title_from_commit};
 
     // Push first so `gh pr create` doesn't error with "no commits between".
     eprintln!("  pushing {} to origin", branch);
@@ -31157,40 +38666,33 @@ fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64
         anyhow::bail!("could not derive a non-empty PR title from the latest commit");
     }
 
-    let mut args: Vec<String> = vec![
-        "pr".into(),
-        "create".into(),
-        "--title".into(),
-        title.clone(),
-        "--base".into(),
-        "main".into(),
-    ];
-    if body.is_empty() {
-        args.push("--body".into());
-        args.push("".into());
-    } else {
-        args.push("--body".into());
-        args.push(body);
-    }
-
-    let out = std::process::Command::new("gh")
-        .current_dir(project_root)
-        .args(args.iter().map(String::as_str))
-        .output()
+    // STORY-516: route PR creation through the Forge trait. open_change passes
+    // an explicit `--head <branch>` (the branch we just pushed) — equivalent to
+    // the prior inferred head, and what makes a GitLab/pure-git repo open its
+    // own change. Returns ChangeRef{id} (id == 0 on an unparseable URL, which we
+    // treat as the prior "no PR number found" bail). trace:STORY-516 | ai:claude
+    // BUG-417: resolve the PR base from origin's default branch instead of
+    // assuming `main`. A repo whose default is `master` (or anything else) made
+    // `gh pr create --base main` fail with a GraphQL base-ref error. trace:BUG-417 | ai:claude
+    let base = crate::forge::default_branch_of(project_root);
+    eprintln!("  base branch: {}", base);
+    let req = crate::forge::OpenChange {
+        branch: branch.to_string(),
+        base,
+        title: title.clone(),
+        body,
+        draft: false,
+    };
+    let change = crate::forge::forge_for(project_root)
+        .open_change(req)
         .context("could not invoke `gh pr create`")?;
-    if !out.status.success() {
+    if change.id == 0 {
         anyhow::bail!(
-            "`gh pr create` failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
+            "`gh pr create` succeeded but no PR number found in its output: {}",
+            change.url
         );
     }
-    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-    parse_pr_number_from_create_output(&stdout).ok_or_else(|| {
-        anyhow::anyhow!(
-            "`gh pr create` succeeded but no PR number found in its output: {}",
-            stdout.trim()
-        )
-    })
+    Ok(change.id)
 }
 
 /// TASK-140: the full HEAD commit message of a BRANCH (not the local cwd HEAD).
@@ -31357,6 +38859,89 @@ fn fetch_pr_ship_metadata_via_gh(project_root: &std::path::Path, n: u64) -> Resu
     })
 }
 
+/// BUG-417: return `Some(reason)` when `aida pr ship` should skip the blocking
+/// CI wait rather than hang on a repo that will never register checks. Two
+/// triggers: (1) an explicit opt-out env (`AIDA_PR_SHIP_NO_CI_WAIT=1` or the
+/// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) no GitHub Actions
+/// workflow files configured (`.github/workflows/*.{yml,yaml}` absent or empty)
+/// — the quizdom "no `.github/workflows` at all" case. `None` ⇒ wait normally.
+/// trace:BUG-417 | ai:claude
+fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Option<String> {
+    // Explicit opt-out (env-level honoring of lifecycle:no-ci-wait, which the
+    // direct `pr ship` path does not otherwise read from a spec).
+    let env_optout = std::env::var("AIDA_PR_SHIP_NO_CI_WAIT")
+        .map(|v| {
+            let v = v.trim().to_ascii_lowercase();
+            !v.is_empty() && v != "0" && v != "false"
+        })
+        .unwrap_or(false);
+    let tag_optout = std::env::var("AIDA_LIFECYCLE_TAGS")
+        .map(|v| {
+            v.split(',')
+                .any(|t| t.trim().eq_ignore_ascii_case("lifecycle:no-ci-wait"))
+        })
+        .unwrap_or(false);
+    if env_optout || tag_optout {
+        return Some("CI wait disabled (lifecycle:no-ci-wait)".to_string());
+    }
+
+    // No workflows configured ⇒ checks will never register.
+    if !repo_has_ci_workflows(project_root) {
+        return Some("no CI workflows configured (.github/workflows)".to_string());
+    }
+    None
+}
+
+/// BUG-417: true when the project has at least one GitHub Actions workflow file
+/// (`.github/workflows/*.{yml,yaml}`). The pure file-name rule lives in
+/// `pr_ship::workflow_files_indicate_ci`; this only does the directory read.
+/// trace:BUG-417 | ai:claude
+fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
+    let dir = project_root.join(".github").join("workflows");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return false;
+    };
+    let names: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    pr_ship::workflow_files_indicate_ci(names.iter().map(String::as_str))
+}
+
+/// Run a `Command` to completion, retrying transient `ETXTBSY`
+/// ("Text file busy", `os error 26`) spawn failures.
+///
+/// BUG-463: on Linux, `exec`ing a file fails with `ETXTBSY` while *any*
+/// process still holds that file open for writing. In a parallel test
+/// runner (or any multi-threaded program), one thread that writes an
+/// executable script can have its still-open writable fd transiently
+/// inherited by an unrelated child process a sibling thread `fork`/`exec`s
+/// between that fd's `open` and `close`. The borrowing child keeps the
+/// file "busy" until it exits, so the writer's own `exec` of the
+/// just-written script races and flakes with `ETXTBSY`. The condition is
+/// short-lived (the borrowing child exits in milliseconds), so a bounded
+/// retry-with-backoff turns the flake into a deterministic success. This
+/// also hardens the real `gh` exec (e.g. a freshly-written `gh` wrapper)
+/// at negligible cost.
+/// trace:BUG-463 | ai:claude
+fn command_output_retrying_etxtbsy(
+    cmd: &mut std::process::Command,
+) -> std::io::Result<std::process::Output> {
+    const MAX_ATTEMPTS: u32 = 50;
+    let mut attempt = 0u32;
+    loop {
+        match cmd.output() {
+            Ok(out) => return Ok(out),
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && attempt < MAX_ATTEMPTS => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 fn wait_for_pr_checks_to_register(project_root: &std::path::Path, pr_number: u64) -> Result<()> {
     wait_for_pr_checks_to_register_with_gh(
         project_root,
@@ -31378,10 +38963,13 @@ fn wait_for_pr_checks_to_register_with_gh(
     let deadline = std::time::Instant::now() + timeout;
     loop {
         let pr = pr_number.to_string();
-        let out = std::process::Command::new(gh_bin)
+        // BUG-463: retry transient `ETXTBSY` so a just-written `gh` wrapper
+        // (or a fake one in the parallel test runner) doesn't flake the exec.
+        let mut command = std::process::Command::new(gh_bin);
+        command
             .current_dir(project_root)
-            .args(["pr", "checks", &pr])
-            .output()
+            .args(["pr", "checks", &pr]);
+        let out = command_output_retrying_etxtbsy(&mut command)
             .with_context(|| format!("could not invoke `gh pr checks {pr_number}`"))?;
         let stdout = String::from_utf8_lossy(&out.stdout);
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -31847,6 +39435,90 @@ fn preflight_stale_base_file_sets(
     )
 }
 
+/// TASK-480: reviewer pre-flight intermediate-only check. Fetches the
+/// PR's head, computes the files it changes against its base, asks the
+/// repo's own `.gitignore` whether each is ignored, and runs the pure
+/// [`pr_rebase::classify_intermediate_only`] classifier.
+///
+/// Same fail-open convention as [`preflight_stale_base_check`]: gh /
+/// git infra errors surface as `Err` and the caller proceeds with a
+/// warning — we never block an autonomous drain on a transient blip.
+/// A *successfully detected* intermediate-only diff always refuses.
+/// trace:TASK-480 | ai:claude
+fn preflight_intermediate_only_check(
+    project_root: &std::path::Path,
+    n: u64,
+) -> Result<pr_rebase::IntermediateOnlyOutcome> {
+    preflight_intermediate_only_check_with_gh(project_root, n, std::ffi::OsStr::new("gh"))
+}
+
+fn preflight_intermediate_only_check_with_gh(
+    project_root: &std::path::Path,
+    n: u64,
+    gh_bin: &std::ffi::OsStr,
+) -> Result<pr_rebase::IntermediateOnlyOutcome> {
+    let info = fetch_pr_info_via_gh_bin(project_root, n, gh_bin)
+        .and_then(|j| pr_rebase::parse_pr_info(&j, n).map_err(|e| anyhow::anyhow!(e)))
+        .context("could not resolve PR metadata — is `gh` installed and authenticated?")?;
+
+    let origin_base = format!("origin/{}", info.base_ref);
+
+    // Refresh origin + fetch the PR head, same as the stale-base probe.
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["fetch", "origin", "--prune"])
+        .status();
+    let pr_local_branch = format!("pr-{n}");
+    let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    let pr_fetch = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["fetch", "origin", pr_refspec.as_str()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    if !matches!(pr_fetch, Ok(s) if s.success()) {
+        anyhow::bail!(
+            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) for pre-flight \
+             intermediate-only check"
+        );
+    }
+
+    let changed = files_in_range(project_root, &format!("{origin_base}..{pr_local_branch}"));
+    Ok(classify_intermediate_only_with_gitignore(
+        project_root,
+        &changed,
+    ))
+}
+
+/// Run the pure classifier with a `git check-ignore`-backed gitignore
+/// predicate. Pulled out so the wiring (build the predicate, call the
+/// classifier) is reused by the preflight and unit-testable in
+/// isolation. trace:TASK-480 | ai:claude
+fn classify_intermediate_only_with_gitignore(
+    project_root: &std::path::Path,
+    changed: &[String],
+) -> pr_rebase::IntermediateOnlyOutcome {
+    pr_rebase::classify_intermediate_only(changed, |path| git_path_is_ignored(project_root, path))
+}
+
+/// `git check-ignore -q <path>` — exit 0 ⇒ ignored. We pass `--no-index`
+/// so a path that is *tracked* but matches an ignore rule still reports
+/// its ignore status (we OR this with the generated-path heuristic; a
+/// tracked-but-ignored build output is exactly the intermediate case we
+/// want to catch). Any spawn/other error ⇒ treat as not-ignored (fail
+/// open). trace:TASK-480 | ai:claude
+fn git_path_is_ignored(project_root: &std::path::Path, path: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["check-ignore", "-q", "--no-index", path])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod task_471_stale_base_preflight_tests {
     use super::*;
@@ -31865,6 +39537,66 @@ mod task_471_stale_base_preflight_tests {
             String::from_utf8_lossy(&out.stderr)
         );
         String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    // --- TASK-480: intermediate-only gitignore-backed wiring ---
+
+    #[test]
+    fn git_path_is_ignored_honors_dot_gitignore() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "-q"]);
+        std::fs::write(repo.join(".gitignore"), "generated/\n*.gen.rs\n").unwrap();
+
+        assert!(git_path_is_ignored(repo, "generated/api.rs"));
+        assert!(git_path_is_ignored(repo, "foo.gen.rs"));
+        assert!(!git_path_is_ignored(repo, "src/main.rs"));
+    }
+
+    #[test]
+    fn classify_with_gitignore_refuses_project_specific_generated_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "-q"]);
+        // A project-specific generated dir NOT in the built-in heuristic
+        // list, only known via the project's own .gitignore.
+        std::fs::write(repo.join(".gitignore"), "proto-gen/\n").unwrap();
+
+        let only_generated = vec!["proto-gen/api.pb.rs".to_string()];
+        assert!(matches!(
+            classify_intermediate_only_with_gitignore(repo, &only_generated),
+            pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { .. }
+        ));
+
+        let with_source = vec![
+            "proto-gen/api.pb.rs".to_string(),
+            "src/handler.rs".to_string(),
+            "src/lib.rs".to_string(),
+        ];
+        // 1 intermediate : 2 source → minority → clean.
+        assert_eq!(
+            classify_intermediate_only_with_gitignore(repo, &with_source),
+            pr_rebase::IntermediateOnlyOutcome::Clean
+        );
+    }
+
+    #[test]
+    fn classify_with_gitignore_refuses_heuristic_target_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        git(repo, &["init", "-q"]);
+        // Empty .gitignore — the target/ refusal must come from the
+        // built-in heuristic, not the project's ignore rules.
+        std::fs::write(repo.join(".gitignore"), "\n").unwrap();
+
+        let only_target = vec![
+            "target/debug/foo.bin".to_string(),
+            "target/release/aida".to_string(),
+        ];
+        assert!(matches!(
+            classify_intermediate_only_with_gitignore(repo, &only_target),
+            pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { .. }
+        ));
     }
 
     #[cfg(unix)]
@@ -32158,6 +39890,13 @@ mod pr_ship_environment_tests {
         git(path, &["commit", "--allow-empty", "-m", "base", "--quiet"]);
     }
 
+    // BUG-463: each test owns its own `tempfile::tempdir()`, so the fake `gh`
+    // scripts are already path-isolated. The residual CI flake came from
+    // `ETXTBSY` when exec'ing a just-written script while a sibling test's
+    // child transiently held the writable fd; the exec path now retries on
+    // `ETXTBSY` (see `command_output_retrying_etxtbsy`), so writing the
+    // script here stays a plain write + chmod.
+    // trace:BUG-463 | ai:claude
     fn make_executable(path: &std::path::Path, body: &str) {
         std::fs::write(path, body).unwrap();
         let mut perms = std::fs::metadata(path).unwrap().permissions();
@@ -32266,9 +40005,11 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
     // Try to associate this run with the active session lease so the
     // review-story description records who opened the PR. Falls back to
     // a synthetic "(no-session)" id if no lease covers the cwd.
-    let session_id = std::env::current_dir()
+    let lease = std::env::current_dir()
         .ok()
-        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+    let lease_scope = lease.as_ref().map(|l| l.scope.clone());
+    let session_id = lease
         .map(|l| l.id)
         .unwrap_or_else(|| "(no-sess)".to_string());
 
@@ -32279,6 +40020,27 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
         AutoQueueOrigin::PrSkill,
     );
     render_auto_queue_outcome(&outcome);
+
+    // TASK-630: opening the PR is the event that ends a deliberate PR-hold
+    // (BUG-250). `aida pr auto-queue-review` runs right after `gh pr create`
+    // (the /aida-pr step), so a Filed/AlreadyExists outcome means the held PR is
+    // now open — clear the persisted `.aida/pr-holds/<spec>.json` marker so a
+    // later `aida queue work <spec> --resume` no longer treats the spec as held.
+    // Best-effort: a missing marker (the common case — most PRs were never
+    // held) or an unlink error never perturbs the queue-review flow.
+    // trace:TASK-630 | ai:claude
+    if matches!(
+        outcome.status,
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
+    ) {
+        if let Some(spec) = &lease_scope {
+            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+            let marker = punt::hold_signal_path(&main_root, spec);
+            if punt::read_hold_signal(&marker).is_some() {
+                let _ = std::fs::remove_file(&marker);
+            }
+        }
+    }
 
     // BUG-86: on every non-success outcome (needs-attention OR by-design
     // skip), print the exact command to re-run manually. The skill side
@@ -35961,6 +43723,148 @@ mod statusline_tests {
         assert_eq!(humanize_size(1024 * 1024 * 1024), "1.0 GB");
     }
 
+    /// TASK-644: role-picker selection parsing. Blank/`q` cancels, a valid
+    /// 1-based number maps to a 0-based index, anything else is Invalid.
+    #[test]
+    fn role_selection_parse_covers_cancel_index_and_invalid() {
+        use super::{parse_role_selection, RoleSelection};
+        assert_eq!(parse_role_selection("", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("  \n", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("q", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("Q\n", 3), RoleSelection::Cancel);
+        assert_eq!(parse_role_selection("1", 3), RoleSelection::Index(0));
+        assert_eq!(parse_role_selection(" 3 \n", 3), RoleSelection::Index(2));
+        assert_eq!(parse_role_selection("0", 3), RoleSelection::Invalid);
+        assert_eq!(parse_role_selection("4", 3), RoleSelection::Invalid);
+        assert_eq!(parse_role_selection("nope", 3), RoleSelection::Invalid);
+        assert_eq!(parse_role_selection("1x", 3), RoleSelection::Invalid);
+    }
+
+    /// TASK-645: the read-side role default. Unset/blank → implementer
+    /// (flagged as default); any explicit value passes through canonicalized
+    /// BUG-460: advisor authority is granted by advisor role, a TTY, OR a
+    /// live-orchestrator-corroborated op — but a bare non-advisor headless agent
+    /// (no TTY, not orchestrated) is still gated.
+    #[test]
+    fn advisor_authority_grants_orchestrated_ops_but_gates_bare_agents() {
+        use super::advisor_authority_from;
+        // bare headless implementer/reviewer: no authority
+        assert!(!advisor_authority_from("implementer", false, false));
+        assert!(!advisor_authority_from("reviewer", false, false));
+        // the three authority sources
+        assert!(advisor_authority_from("advisor", false, false)); // advisor role
+        assert!(advisor_authority_from("implementer", true, false)); // interactive TTY
+        assert!(advisor_authority_from("implementer", false, true)); // under a live orchestrator
+        assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
+    }
+
+    /// TASK-130: a Spike is born human-only (research is human-driven) unless
+    /// `--no-human-only` opts it back into auto-pickup; every other type
+    /// defaults to NOT human-only; `--human-only` flips any type on. The flags
+    /// always win over the per-type default.
+    #[test]
+    fn resolve_human_only_spike_defaults_human_only_override_respected() {
+        use super::resolve_human_only;
+        use aida_core::RequirementType;
+
+        // Spike → human-only by default (no flags).
+        assert!(resolve_human_only(&RequirementType::Spike, false, false));
+        // Spike + --no-human-only → opted back into auto-pickup.
+        assert!(!resolve_human_only(&RequirementType::Spike, false, true));
+        // Spike + --human-only → still human-only (flag agrees with default).
+        assert!(resolve_human_only(&RequirementType::Spike, true, false));
+
+        // Non-Spike types default to NOT human-only.
+        assert!(!resolve_human_only(&RequirementType::Task, false, false));
+        assert!(!resolve_human_only(&RequirementType::Bug, false, false));
+        assert!(!resolve_human_only(&RequirementType::Story, false, false));
+        assert!(!resolve_human_only(
+            &RequirementType::Functional,
+            false,
+            false
+        ));
+
+        // --human-only flips any type on regardless of its default.
+        assert!(resolve_human_only(&RequirementType::Task, true, false));
+        // --no-human-only is a no-op for a type that already defaults off.
+        assert!(!resolve_human_only(&RequirementType::Task, false, true));
+    }
+
+    /// and unflagged. `dialog` canonicalizes to `advisor` (TASK-586).
+    #[test]
+    fn effective_role_defaults_to_implementer_when_unset() {
+        use super::resolve_effective_role;
+        assert_eq!(
+            resolve_effective_role(None),
+            ("implementer".to_string(), true)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("")),
+            ("implementer".to_string(), true)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("   ")),
+            ("implementer".to_string(), true)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("advisor")),
+            ("advisor".to_string(), false)
+        );
+        assert_eq!(
+            resolve_effective_role(Some("  reviewer  ")),
+            ("reviewer".to_string(), false)
+        );
+        // explicit implementer is NOT flagged as the implicit default
+        assert_eq!(
+            resolve_effective_role(Some("implementer")),
+            ("implementer".to_string(), false)
+        );
+        // dialog → advisor canonicalization still applies
+        assert_eq!(
+            resolve_effective_role(Some("dialog")),
+            ("advisor".to_string(), false)
+        );
+    }
+
+    /// TASK-647 (ADR-3): the intake gate's status predicate. Approved and
+    /// beyond require advisor authority to produce; Draft / Rejected /
+    /// NeedsAttention don't (they aren't approved pipeline work).
+    #[test]
+    fn status_authority_gate_covers_approved_and_beyond() {
+        use super::status_requires_advisor_authority;
+        use aida_core::models::RequirementStatus as S;
+        assert!(status_requires_advisor_authority(&S::Approved));
+        assert!(status_requires_advisor_authority(&S::Planned));
+        assert!(status_requires_advisor_authority(&S::InProgress));
+        assert!(status_requires_advisor_authority(&S::Done));
+        assert!(status_requires_advisor_authority(&S::Completed));
+        assert!(!status_requires_advisor_authority(&S::Draft));
+        assert!(!status_requires_advisor_authority(&S::Rejected));
+        assert!(!status_requires_advisor_authority(&S::NeedsAttention));
+    }
+
+    /// BUG-444: the keystone phase-1 decision. When both PR lookups return
+    /// empty-but-successful, ONLY a branch genuinely absent from origin is a
+    /// definitive NoPr; an on-origin (or unconfirmable) branch is a retryable
+    /// eventual-consistency window. Regression guard for the dominant
+    /// drain-failure cause (false NoPr racing GitHub's index).
+    #[test]
+    fn empty_phase1_lookup_only_definitive_when_branch_absent() {
+        use super::{empty_phase1_lookup_is_definitive_nopr, BranchOriginProbe};
+        assert!(
+            empty_phase1_lookup_is_definitive_nopr(&BranchOriginProbe::Absent),
+            "absent branch (never pushed) → definitive NoPr"
+        );
+        assert!(
+            !empty_phase1_lookup_is_definitive_nopr(&BranchOriginProbe::Present),
+            "on-origin branch → retry (PR likely exists but not indexed yet)"
+        );
+        assert!(
+            !empty_phase1_lookup_is_definitive_nopr(&BranchOriginProbe::LsRemoteFailed),
+            "unconfirmable → retry rather than false NoPr"
+        );
+    }
+
     /// BUG-64: terminal-status predicate. Completed and Rejected are
     /// terminal; everything else (including the STORY-86 `Done` state) is
     /// open and accepts new children. trace:BUG-64 STORY-86 | ai:claude
@@ -36172,6 +44076,7 @@ mod statusline_tests {
             for_role: None,
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         let err = classify_queue_move_target(
             target,
@@ -36218,6 +44123,7 @@ mod statusline_tests {
             for_role: None,
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         classify_queue_move_target(
             target,
@@ -36665,6 +44571,104 @@ mod statusline_tests {
         assert!(!requirement_missing_acceptance(&task));
     }
 
+    /// TASK-680: the release-time doc-coverage selector reports a spec iff it
+    /// reached Completed at/after the cutoff AND no Doc references it. Pins:
+    /// window filtering by completion timestamp, the doc-reference exemption,
+    /// the modified_at fallback for history-less Completed specs, and that
+    /// Docs / archived specs are never themselves reported.
+    /// trace:TASK-680 | ai:claude
+    #[test]
+    fn doc_coverage_selects_completed_since_tag_without_doc() {
+        use aida_core::models::{
+            FieldChange, HistoryEntry, Relationship, RelationshipType, RequirementStatus,
+            RequirementType,
+        };
+        use aida_core::Requirement;
+        use chrono::{Duration, Utc};
+
+        let cutoff = Utc::now() - Duration::days(7);
+        let after = cutoff + Duration::days(1);
+        let before = cutoff - Duration::days(1);
+
+        let status_completed = |ts| HistoryEntry {
+            id: uuid::Uuid::new_v4(),
+            author: "tester".into(),
+            timestamp: ts,
+            changes: vec![FieldChange {
+                field_name: "status".into(),
+                old_value: "Done".into(),
+                new_value: RequirementStatus::Completed.to_string(),
+            }],
+        };
+
+        // (1) Completed after the cutoff, no doc → REPORTED.
+        let mut gap = Requirement::new("Shipped, undocumented".into(), String::new());
+        gap.spec_id = Some("TASK-100".into());
+        gap.req_type = RequirementType::Task;
+        gap.status = RequirementStatus::Completed;
+        gap.history.push(status_completed(after));
+
+        // (2) Completed after the cutoff but documented → exempt.
+        let mut documented = Requirement::new("Shipped, documented".into(), String::new());
+        documented.spec_id = Some("TASK-101".into());
+        documented.req_type = RequirementType::Task;
+        documented.status = RequirementStatus::Completed;
+        documented.history.push(status_completed(after));
+
+        // (3) Completed BEFORE the cutoff → outside the window, not reported.
+        let mut old = Requirement::new("Shipped last release".into(), String::new());
+        old.spec_id = Some("TASK-102".into());
+        old.req_type = RequirementType::Task;
+        old.status = RequirementStatus::Completed;
+        old.history.push(status_completed(before));
+
+        // (4) Still in progress → never reported.
+        let mut wip = Requirement::new("In flight".into(), String::new());
+        wip.spec_id = Some("TASK-103".into());
+        wip.req_type = RequirementType::Task;
+        wip.status = RequirementStatus::InProgress;
+
+        // (5) Currently Completed but no history row; modified_at after cutoff
+        //     → reported via the fallback.
+        let mut legacy = Requirement::new("Legacy completed".into(), String::new());
+        legacy.spec_id = Some("TASK-104".into());
+        legacy.req_type = RequirementType::Task;
+        legacy.status = RequirementStatus::Completed;
+        legacy.modified_at = after;
+
+        // (6) The Doc itself — never reported even if Completed.
+        let mut doc = Requirement::new("Doc about TASK-101".into(), String::new());
+        doc.spec_id = Some("DOC-1".into());
+        doc.req_type = RequirementType::Doc;
+        doc.status = RequirementStatus::Completed;
+        doc.modified_at = after;
+        doc.relationships.push(Relationship {
+            target_id: documented.id,
+            rel_type: RelationshipType::References,
+            created_at: Some(Utc::now()),
+            created_by: None,
+        });
+
+        let all = vec![gap.clone(), documented, old, wip, legacy.clone(), doc];
+
+        let reported = find_uncovered_completed_specs(&all, Some(cutoff));
+        let ids: Vec<String> = reported.iter().map(|r| r.display_id()).collect();
+        assert_eq!(
+            ids,
+            vec!["TASK-100".to_string(), "TASK-104".to_string()],
+            "only the undocumented specs completed since the cutoff are reported"
+        );
+
+        // No cutoff → full-history scan also pulls in the pre-cutoff gap.
+        let all_history = find_uncovered_completed_specs(&all, None);
+        let all_ids: Vec<String> = all_history.iter().map(|r| r.display_id()).collect();
+        assert!(all_ids.contains(&"TASK-102".to_string()));
+        assert!(all_ids.contains(&"TASK-100".to_string()));
+        assert!(all_ids.contains(&"TASK-104".to_string()));
+        assert!(!all_ids.contains(&"DOC-1".to_string()));
+        assert!(!all_ids.contains(&"TASK-101".to_string()));
+    }
+
     /// BUG-65 acceptance: shipping 3 specs sequentially via a typical
     /// implementer lifecycle (edit → done) leaves the activity log
     /// pointing at the 3rd, not the 1st. This is the contract the
@@ -36905,6 +44909,574 @@ mod statusline_tests {
         );
     }
 
+    // STORY-498: pure validity-gate core. A resolver maps id → resolution; the
+    // gate must flag nonexistent + rejected references, pass live ones, and
+    // honour the no-trailer / plan-commit exemptions. trace:STORY-498 | ai:claude
+    #[test]
+    fn trace_gate_flags_nonexistent_and_rejected_references() {
+        let commits = vec![
+            // live → passes
+            (
+                "aaaaaaa".to_string(),
+                "[AI:claude] feat(api): add endpoint (FR-1-042) (#10)".to_string(),
+            ),
+            // nonexistent → fails
+            (
+                "bbbbbbb".to_string(),
+                "[AI:claude] fix(scope): hallucinated id (FR-99999)".to_string(),
+            ),
+            // rejected → fails (dead reference)
+            (
+                "ccccccc".to_string(),
+                "fix(thing): cite a dead spec (BUG-7)".to_string(),
+            ),
+            // mechanical / release commit with no trailer → exempt
+            (
+                "ddddddd".to_string(),
+                "chore(release): bump to v1.2.3".to_string(),
+            ),
+            // plan commit naming a not-yet-real id → skipped
+            (
+                "eeeeeee".to_string(),
+                "[AI:claude] docs(plans): plan for unbuilt work (STORY-12345)".to_string(),
+            ),
+        ];
+
+        let resolve = |id: &str| match id.to_ascii_uppercase().as_str() {
+            "FR-1-042" => SpecResolution::Live,
+            "BUG-7" => SpecResolution::Rejected,
+            _ => SpecResolution::Missing,
+        };
+
+        let violations = validate_trailer_references(&commits, resolve);
+        assert_eq!(violations.len(), 2, "got: {violations:?}");
+
+        let missing = &violations[0];
+        assert_eq!(missing.spec_id, "FR-99999");
+        assert_eq!(missing.verdict, TrailerVerdict::Nonexistent);
+        assert_eq!(missing.sha, "bbbbbbb");
+
+        let dead = &violations[1];
+        assert_eq!(dead.spec_id, "BUG-7");
+        assert_eq!(dead.verdict, TrailerVerdict::Rejected);
+        assert_eq!(dead.sha, "ccccccc");
+    }
+
+    #[test]
+    fn trace_gate_passes_when_all_references_live() {
+        let commits = vec![
+            (
+                "1111111".to_string(),
+                "[AI:claude] feat(x): a (TASK-1)".to_string(),
+            ),
+            (
+                "2222222".to_string(),
+                "STORY-2: leading-colon shape (#42)".to_string(),
+            ),
+            (
+                "3333333".to_string(),
+                "fix: multi (BUG-3 BUG-4)".to_string(),
+            ),
+            ("4444444".to_string(), "chore: no trailer here".to_string()),
+        ];
+        // Everything that resolves is live.
+        let violations = validate_trailer_references(&commits, |_| SpecResolution::Live);
+        assert!(
+            violations.is_empty(),
+            "expected clean gate, got: {violations:?}"
+        );
+    }
+
+    #[test]
+    fn trace_gate_reports_every_id_in_a_multi_spec_trailer() {
+        let commits = vec![(
+            "abcabc1".to_string(),
+            "[AI:claude] feat(s): bulk (BUG-1 BUG-2 BUG-3) (#9)".to_string(),
+        )];
+        // BUG-2 missing, the rest live.
+        let resolve = |id: &str| {
+            if id.eq_ignore_ascii_case("BUG-2") {
+                SpecResolution::Missing
+            } else {
+                SpecResolution::Live
+            }
+        };
+        let violations = validate_trailer_references(&commits, resolve);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].spec_id, "BUG-2");
+        assert_eq!(violations[0].verdict, TrailerVerdict::Nonexistent);
+    }
+
+    // ── STORY-499: diff-level trace-COVERAGE core (fully-isolated) ──
+    //
+    // The whole point of STORY-499 is that the coverage decision (file →
+    // requires-trace? + hunk → has-trace?) is a PURE fn with every dependency
+    // injected — no git, no store. These tests exercise it with hand-built
+    // hunks + an in-test resolver. trace:STORY-499 | ai:claude
+
+    fn live_resolver(id: &str) -> SpecResolution {
+        // Treat anything starting `DEAD` as missing; everything else live.
+        if id.to_ascii_uppercase().starts_with("DEAD") {
+            SpecResolution::Missing
+        } else {
+            SpecResolution::Live
+        }
+    }
+
+    fn empty_maps() -> (
+        std::collections::HashMap<String, Vec<String>>,
+        std::collections::HashMap<String, String>,
+        std::collections::HashMap<String, bool>,
+    ) {
+        (
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+        )
+    }
+
+    #[test]
+    fn coverage_file_classifier_exemptions() {
+        // F1 tests
+        assert_eq!(
+            classify_coverage_file("aida-cli/tests/foo.rs", None),
+            Some(CoverageExemption::TestFile)
+        );
+        assert_eq!(
+            classify_coverage_file("src/bar_test.rs", None),
+            Some(CoverageExemption::TestFile)
+        );
+        assert_eq!(
+            classify_coverage_file("web/comp.test.ts", None),
+            Some(CoverageExemption::TestFile)
+        );
+        // F2 generated — path + marker
+        assert_eq!(
+            classify_coverage_file("src/generated/types.rs", None),
+            Some(CoverageExemption::Generated)
+        );
+        assert_eq!(
+            classify_coverage_file("src/types.gen.rs", None),
+            Some(CoverageExemption::Generated)
+        );
+        assert_eq!(
+            classify_coverage_file("src/types.rs", Some("// @generated by tool\nfn x() {}")),
+            Some(CoverageExemption::Generated)
+        );
+        // F3 docs / non-source
+        assert_eq!(
+            classify_coverage_file("README.md", None),
+            Some(CoverageExemption::DocOrProse)
+        );
+        assert_eq!(
+            classify_coverage_file("docs/plans/x.rs", None),
+            Some(CoverageExemption::DocOrProse)
+        );
+        // F4 config
+        assert_eq!(
+            classify_coverage_file("Cargo.toml", None),
+            Some(CoverageExemption::ConfigData)
+        );
+        assert_eq!(
+            classify_coverage_file("Cargo.lock", None),
+            Some(CoverageExemption::ConfigData)
+        );
+        // F5 vendored
+        assert_eq!(
+            classify_coverage_file("vendor/lib/x.rs", None),
+            Some(CoverageExemption::Vendored)
+        );
+        // Coverable source file → None
+        assert_eq!(classify_coverage_file("aida-cli/src/main.rs", None), None);
+        // Unknown extension → not coverable (prose)
+        assert_eq!(
+            classify_coverage_file("Makefile", None),
+            Some(CoverageExemption::DocOrProse)
+        );
+    }
+
+    #[test]
+    fn coverage_hunk_classifier_exemptions() {
+        let mk = |added: &[&str], removed: &[&str]| ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: added.iter().map(|s| s.to_string()).collect(),
+            removed: removed.iter().map(|s| s.to_string()).collect(),
+        };
+        // H1 pure deletion
+        assert_eq!(
+            classify_coverage_hunk(&mk(&[], &["old();", "more();"]), 1),
+            Some(CoverageExemption::PureDeletion)
+        );
+        // H2 whitespace-only reflow (same content, different spacing)
+        assert_eq!(
+            classify_coverage_hunk(&mk(&["let  x =  1;"], &["let x = 1;"]), 1),
+            Some(CoverageExemption::CommentOrBlankOnly)
+        );
+        // H4 comment-only addition
+        assert_eq!(
+            classify_coverage_hunk(&mk(&["// a comment", "/// doc"], &[]), 1),
+            Some(CoverageExemption::CommentOrBlankOnly)
+        );
+        // H4 trivial one-liner (<=1 effective added line)
+        assert_eq!(
+            classify_coverage_hunk(&mk(&["let x = 1;"], &[]), 1),
+            Some(CoverageExemption::Trivial)
+        );
+        // Real multi-line code addition → coverable (None)
+        assert_eq!(
+            classify_coverage_hunk(
+                &mk(&["fn f() {", "    do_a();", "    do_b();", "}"], &[]),
+                1
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn coverage_attribution_in_hunk_anchor() {
+        // A real coverable code hunk with an inline `// trace:` is covered.
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn feature() {".to_string(),
+                "    // trace:STORY-499 | ai:claude".to_string(),
+                "    do_work();".to_string(),
+                "    do_more();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.coverable(), 1);
+        assert_eq!(cov.covered(), 1);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::InHunkAnchor));
+        assert!(cov.uncovered().is_empty());
+        assert_eq!(cov.ratio(), 1.0);
+    }
+
+    #[test]
+    fn coverage_attribution_proximity_anchor_above_only() {
+        // The trace anchor sits ABOVE the hunk in the post-change file (an
+        // unchanged `/// trace:` over a changed body). new_start=4 (1-based),
+        // so file lines [0..3) are searched above it; the anchor at index 2
+        // (line 3) is within N=5.
+        let post = vec![
+            "use std::x;".to_string(),         // line 1
+            "".to_string(),                    // line 2
+            "/// trace:STORY-499".to_string(), // line 3  (above, within 5)
+            "fn body() {".to_string(),         // line 4  <- hunk start
+            "    changed();".to_string(),      // line 5
+            "    changed2();".to_string(),     // line 6
+            "}".to_string(),
+        ];
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 4,
+            added: vec!["    changed();".to_string(), "    changed2();".to_string()],
+            removed: vec!["    old();".to_string()],
+        }];
+        let mut files = std::collections::HashMap::new();
+        files.insert("src/x.rs".to_string(), post);
+        let (_e, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::ProximityAnchor));
+
+        // A trace anchor BELOW the hunk must NOT count (it annotates the next
+        // item, per SPIKE-47 risk #2).
+        let post_below = vec![
+            "fn body() {".to_string(),         // line 1  <- hunk start
+            "    changed();".to_string(),      // line 2
+            "    changed2();".to_string(),     // line 3
+            "}".to_string(),                   // line 4
+            "/// trace:STORY-499".to_string(), // line 5 (below — must not count)
+        ];
+        let mut files2 = std::collections::HashMap::new();
+        files2.insert("src/x.rs".to_string(), post_below);
+        let hunks2 = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 1,
+            added: vec!["    changed();".to_string(), "    changed2();".to_string()],
+            removed: vec![],
+        }];
+        let cov2 = compute_diff_coverage(&hunks2, &files2, &gen, &floor, 5, 1, live_resolver);
+        // No anchor above, no trailer → uncovered.
+        assert!(cov2.hunks[0].is_uncovered_coverable());
+    }
+
+    #[test]
+    fn coverage_attribution_file_level_module_anchor() {
+        let post = vec![
+            "//! trace:STORY-499".to_string(),
+            "fn a() {".to_string(),
+            "    x();".to_string(),
+            "    y();".to_string(),
+            "}".to_string(),
+        ];
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 50, // far from the module anchor → only file-level can cover
+            added: vec!["    x();".to_string(), "    y();".to_string()],
+            removed: vec![],
+        }];
+        let mut files = std::collections::HashMap::new();
+        files.insert("src/x.rs".to_string(), post);
+        let (_e, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::FileAnchor));
+    }
+
+    #[test]
+    fn coverage_attribution_commit_trailer_floor() {
+        // No inline anchor anywhere, but the file's commit carries a live
+        // trailer → covered by the §4.2.4 floor. This is why the default world
+        // (every feat/fix commit has a trailer) keeps the gate silent.
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn f() {".to_string(),
+                "    a();".to_string(),
+                "    b();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, _f) = empty_maps();
+        let mut floor = std::collections::HashMap::new();
+        floor.insert("src/x.rs".to_string(), true);
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::CommitTrailer));
+    }
+
+    #[test]
+    fn coverage_uncovered_coverable_hunk_is_reported() {
+        // Real code, no anchor, no trailer → the one thing the gate flags.
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn slipped_in() {".to_string(),
+                "    untraced();".to_string(),
+                "    more_untraced();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.coverable(), 1);
+        assert_eq!(cov.covered(), 0);
+        assert_eq!(cov.uncovered().len(), 1);
+        assert_eq!(cov.ratio(), 0.0);
+    }
+
+    #[test]
+    fn coverage_dead_anchor_does_not_count() {
+        // A `// trace:DEAD-1` that resolves Missing is NOT coverage (parity with
+        // STORY-498's live-resolution requirement).
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn f() {".to_string(),
+                "    // trace:DEAD-1".to_string(),
+                "    a();".to_string(),
+                "    b();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert!(cov.hunks[0].is_uncovered_coverable());
+    }
+
+    #[test]
+    fn coverage_exempt_files_drop_from_denominator() {
+        let hunks = vec![
+            // exempt: test file
+            ParsedHunk {
+                file: "tests/it.rs".to_string(),
+                new_start: 1,
+                added: vec!["assert!(true);".to_string(), "assert!(false);".to_string()],
+                removed: vec![],
+            },
+            // exempt: docs
+            ParsedHunk {
+                file: "README.md".to_string(),
+                new_start: 1,
+                added: vec!["a".to_string(), "b".to_string()],
+                removed: vec![],
+            },
+            // coverable + uncovered
+            ParsedHunk {
+                file: "src/x.rs".to_string(),
+                new_start: 10,
+                added: vec![
+                    "fn f() {".to_string(),
+                    "    a();".to_string(),
+                    "    b();".to_string(),
+                    "}".to_string(),
+                ],
+                removed: vec![],
+            },
+        ];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.exempt(), 2);
+        assert_eq!(cov.coverable(), 1);
+        assert_eq!(cov.uncovered().len(), 1);
+    }
+
+    #[test]
+    fn coverage_all_exempt_diff_passes_vacuously() {
+        let hunks = vec![ParsedHunk {
+            file: "docs/plan.md".to_string(),
+            new_start: 1,
+            added: vec!["prose".to_string()],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.coverable(), 0);
+        assert!(cov.uncovered().is_empty());
+        assert_eq!(cov.ratio(), 1.0);
+    }
+
+    #[test]
+    fn coverage_diff_parser_splits_hunks_and_files() {
+        let diff = "\
+diff --git a/src/a.rs b/src/a.rs
+--- a/src/a.rs
++++ b/src/a.rs
+@@ -1,2 +1,3 @@
+ unchanged
++added line one
++added line two
+@@ -10,0 +12,1 @@
++another add
+diff --git a/old.rs b/new.rs
+--- a/old.rs
++++ b/new.rs
+@@ -5,1 +5,1 @@
+-removed
++replaced
+diff --git a/gone.rs b/gone.rs
+--- a/gone.rs
++++ /dev/null
+@@ -1,1 +0,0 @@
+-deleted file body
+";
+        let hunks = parse_unified_diff_hunks(diff);
+        // 3 hunks attributed to real files; the /dev/null target is skipped.
+        assert_eq!(hunks.len(), 3, "got: {hunks:?}");
+        assert_eq!(hunks[0].file, "src/a.rs");
+        assert_eq!(hunks[0].new_start, 1);
+        assert_eq!(hunks[0].added, vec!["added line one", "added line two"]);
+        assert_eq!(hunks[1].file, "src/a.rs");
+        assert_eq!(hunks[1].new_start, 12);
+        assert_eq!(hunks[2].file, "new.rs");
+        assert_eq!(hunks[2].added, vec!["replaced"]);
+        assert_eq!(hunks[2].removed, vec!["removed"]);
+    }
+
+    // ── STORY-469 Guard 1: client-side trailer-guard refusal formatting ──
+
+    #[test]
+    fn client_trailer_guard_refusal_names_each_dead_reference() {
+        // Reuse the shared validator to produce violations, then check the
+        // client-side refusal message surfaces every offending id + the
+        // recovery guidance + the --force escape.
+        let commits = vec![
+            (
+                "aaa1111".to_string(),
+                "[AI:claude] feat(x): hallucinated id (STORY-99999)".to_string(),
+            ),
+            (
+                "bbb2222".to_string(),
+                "fix(y): rejected ref (BUG-7)".to_string(),
+            ),
+        ];
+        let resolve = |id: &str| match id.to_ascii_uppercase().as_str() {
+            "BUG-7" => SpecResolution::Rejected,
+            _ => SpecResolution::Missing,
+        };
+        let violations = validate_trailer_references(&commits, resolve);
+        assert_eq!(violations.len(), 2, "got: {violations:?}");
+
+        let lines = format_trailer_guard_refusal("pr ship", &violations);
+        let joined = lines.join("\n");
+        assert!(joined.contains("pr ship"), "names the surface: {joined}");
+        assert!(joined.contains("STORY-99999"), "names missing id: {joined}");
+        assert!(joined.contains("BUG-7"), "names rejected id: {joined}");
+        assert!(
+            joined.contains("does not exist in the requirement graph"),
+            "explains missing verdict: {joined}"
+        );
+        assert!(
+            joined.contains("resolves to a rejected spec"),
+            "explains rejected verdict: {joined}"
+        );
+        assert!(
+            joined.contains("--force"),
+            "offers the intentional bypass: {joined}"
+        );
+    }
+
+    /// TASK-579: the origin-ID-in-git-log detector used by `aida findings
+    /// promote` to spot a fix that already merged against the id the finding
+    /// carried before becoming real work.
+    #[test]
+    fn commit_subject_references_id_matches_origin_id() {
+        let ids = vec!["TASK-1-097".to_string(), "TASK-124".to_string()];
+
+        // The real trigger from the spec: the fix shipped referencing the
+        // origin-ID in a trailing paren.
+        assert!(commit_subject_references_id(
+            "fix(init): push onboarding task onto implementer queue (TASK-1-097)",
+            &ids
+        ));
+
+        // Case-insensitive match.
+        assert!(commit_subject_references_id(
+            "fix(init): tweak (task-1-097)",
+            &ids
+        ));
+
+        // Leading SPEC-ID: prefix shape also counts.
+        assert!(commit_subject_references_id(
+            "TASK-124: do the thing (#42)",
+            &ids
+        ));
+
+        // An unrelated spec id does NOT match.
+        assert!(!commit_subject_references_id(
+            "fix(scope): something else (BUG-999)",
+            &ids
+        ));
+
+        // A plan commit naming the id is NOT a completion signal.
+        assert!(!commit_subject_references_id(
+            "docs(plans): plan for (TASK-1-097)",
+            &ids
+        ));
+
+        // No reference at all → no match.
+        assert!(!commit_subject_references_id(
+            "chore: bump dep version",
+            &ids
+        ));
+
+        // Empty id list never matches.
+        assert!(!commit_subject_references_id(
+            "fix(init): tweak (TASK-1-097)",
+            &[]
+        ));
+    }
+
     /// TASK-93: `locate_symbol_line` finds a definition's 1-based line and,
     /// crucially, is NOT thrown off by a preceding blank line (the `^\s*`
     /// vs `^[ \t]*` off-by-one).
@@ -37018,6 +45590,49 @@ mod statusline_tests {
             parse_plan_followups(fenced),
             vec!["real followup".to_string()]
         );
+    }
+
+    /// TASK-431: "no followups" sentinel bullets (None / N/A / Nothing /
+    /// (none), with or without an em-dash/colon/dash explanation) are dropped,
+    /// while a real bullet that merely STARTS with one of those words is kept.
+    #[test]
+    fn plan_followups_drops_sentinel_bullets() {
+        let plan = "\
+## Followups
+
+- None — the fix is self-contained.
+- N/A
+- (none)
+- Nothing
+- Nothing to do: shipped complete
+- None of these handlers validate the input
+- Note: add a retry here
+
+## Related
+";
+        assert_eq!(
+            parse_plan_followups(plan),
+            vec![
+                "None of these handlers validate the input".to_string(),
+                "Note: add a retry here".to_string(),
+            ]
+        );
+        // Direct predicate coverage.
+        // The caller strips a trailing '.' before calling, so pass dotless forms.
+        for s in [
+            "None",
+            "none",
+            "N/A",
+            "na",
+            "Nothing",
+            "(none)",
+            "Nothing — done",
+        ] {
+            assert!(followup_is_sentinel(s), "should be sentinel: {s:?}");
+        }
+        for s in ["None of these", "Nothing works yet", "Notify the user"] {
+            assert!(!followup_is_sentinel(s), "should be real: {s:?}");
+        }
     }
 
     /// BUG-104: a real followup that merely *contains* `<` (generics, a `<`
@@ -37183,6 +45798,109 @@ cargo test -p aida-cli
                 .as_deref(),
             Some("inline")
         );
+    }
+
+    /// TASK-305: the pure PR→plan synthesis fills all 11 sections from a PR
+    /// fixture, mines verification commands from the description, lists the
+    /// changed files under Critical Files, and credits the spec ids found in
+    /// the commit log. Then `plan_sections_present` (the same check
+    /// `aida plan verify` runs) accepts the output.
+    #[test]
+    fn plan_capture_synthesizes_verifiable_plan() {
+        let pr = CapturedPr {
+            number: 65,
+            title: "feat(plan): web flow plumbing (STORY-278)".to_string(),
+            body:
+                "## Summary\n\nWire the web /ultraplan flow end to end.\n\n## Testing\n\n```bash\n\
+                   cargo test -p aida-cli --release\naida plan verify docs/plans/x.md\n```\n"
+                    .to_string(),
+            commit_subjects: vec![
+                "[AI:claude] feat(plan): step one (STORY-278)".to_string(),
+                "[AI:claude] feat(plan): step two (STORY-278)".to_string(),
+            ],
+            changed_files: vec![
+                "aida-cli/src/main.rs".to_string(),
+                "aida-cli/src/cli.rs".to_string(),
+            ],
+        };
+
+        let md = synthesize_plan_from_pr(&pr, "2026-06-06");
+
+        // Header carries Date / Specs / Status / Complexity / Source.
+        assert!(md.contains("Date: 2026-06-06"));
+        assert!(md.contains("Specs: STORY-278"));
+        assert!(md.contains("Source: web /ultraplan PR-65"));
+        assert!(md.contains("Status: Completed"));
+        assert!(md.contains("Complexity: 2 commits"));
+
+        // Approach pulls the PR body; Critical Files lists the diff.
+        assert!(md.contains("Wire the web /ultraplan flow end to end."));
+        assert!(md.contains("- `aida-cli/src/main.rs`"));
+        assert!(md.contains("- `aida-cli/src/cli.rs`"));
+
+        // Verification mines the command-shaped lines from the body.
+        assert!(md.contains("cargo test -p aida-cli --release"));
+        assert!(md.contains("aida plan verify docs/plans/x.md"));
+
+        // Commit log becomes the build-order steps.
+        assert!(md.contains("1. [AI:claude] feat(plan): step one (STORY-278)"));
+
+        // The same section check `aida plan verify` runs must pass — every
+        // hard-required section present.
+        for spec in PLAN_SECTIONS {
+            let present = md.lines().any(|l| {
+                let lower = l.to_ascii_lowercase();
+                l.starts_with("##")
+                    && lower.contains(spec.keyword)
+                    && spec.exclude.map(|ex| !lower.contains(ex)).unwrap_or(true)
+            });
+            assert!(present, "captured plan missing section: {}", spec.label);
+        }
+
+        // Idempotent / deterministic: same input → byte-identical output.
+        let md2 = synthesize_plan_from_pr(&pr, "2026-06-06");
+        assert_eq!(md, md2);
+
+        // Slug threads the spec id + PR number for a stable filename.
+        assert_eq!(captured_plan_slug(&pr), "story-278-from-pr-65");
+    }
+
+    /// TASK-305: a PR with no body / no commits / no diff still yields a
+    /// fully-sectioned plan with explicit not-captured markers (so
+    /// `aida plan verify` still passes) and a PR-number-based slug.
+    #[test]
+    fn plan_capture_handles_empty_pr() {
+        let pr = CapturedPr {
+            number: 7,
+            title: String::new(),
+            body: String::new(),
+            commit_subjects: vec![],
+            changed_files: vec![],
+        };
+        let md = synthesize_plan_from_pr(&pr, "2026-06-06");
+        assert!(md.contains("# Plan: PR-7"));
+        assert!(md.contains("Specs: <!-- not captured from PR -->"));
+        assert!(md.contains("<!-- not captured from PR -->"));
+        // All hard-required sections still present.
+        for spec in PLAN_SECTIONS.iter().filter(|s| s.hard) {
+            assert!(
+                md.lines()
+                    .any(|l| l.starts_with("##") && l.to_ascii_lowercase().contains(spec.keyword)),
+                "missing hard section: {}",
+                spec.label
+            );
+        }
+        assert_eq!(captured_plan_slug(&pr), "pr-7");
+    }
+
+    /// TASK-305: PR arg parsing accepts bare / PR- / # forms.
+    #[test]
+    fn plan_capture_parses_pr_arg() {
+        assert_eq!(parse_pr_number("65").unwrap(), 65);
+        assert_eq!(parse_pr_number("PR-65").unwrap(), 65);
+        assert_eq!(parse_pr_number("pr-65").unwrap(), 65);
+        assert_eq!(parse_pr_number("#65").unwrap(), 65);
+        assert!(parse_pr_number("not-a-pr").is_err());
     }
 
     /// TASK-113: the ultraplan prompt assembler handles a spec with no
@@ -37438,6 +46156,109 @@ reason = "reserved by docs build"
         assert!(msg.contains("use --stdout to print"));
         assert!(msg.contains("TASK-514"));
         assert!(msg.contains("2655"));
+    }
+
+    /// TASK-516: the `aida queue work` warn-decision fires exactly when the
+    /// spec carries `plan-review:pending`, and stays silent otherwise.
+    /// Fully isolated — feeds tag sets straight into the pure decision
+    /// function, no store / FS / process. trace:TASK-516 | ai:claude
+    #[test]
+    fn plan_review_warning_fires_only_on_pending_tag() {
+        use std::collections::HashSet;
+
+        // Pending tag present → warns, and the message names the spec + the
+        // remediation (clear the tag).
+        let mut pending: HashSet<String> = HashSet::new();
+        pending.insert("plan-review:pending".to_string());
+        pending.insert("batch:foo".to_string());
+        let warn = plan_review_warning(&pending, "TASK-516");
+        assert!(warn.is_some(), "pending tag must warn");
+        let msg = warn.unwrap();
+        assert!(msg.contains("TASK-516"));
+        assert!(msg.contains("plan-review:pending"));
+        assert!(msg.contains("--remove-tag"));
+
+        // No pending tag (even with other tags) → silent.
+        let mut other: HashSet<String> = HashSet::new();
+        other.insert("batch:foo".to_string());
+        other.insert("from-advisor:observation".to_string());
+        assert!(
+            plan_review_warning(&other, "TASK-516").is_none(),
+            "absent pending tag must not warn"
+        );
+
+        // Empty tag set → silent.
+        assert!(plan_review_warning(&HashSet::new(), "TASK-516").is_none());
+
+        // A near-miss tag that merely contains the prefix as a substring of
+        // a DIFFERENT tag must NOT trip the warning (exact-membership test).
+        let mut near: HashSet<String> = HashSet::new();
+        near.insert("plan-review:pending-later".to_string());
+        assert!(
+            plan_review_warning(&near, "TASK-516").is_none(),
+            "substring near-miss must not warn"
+        );
+    }
+
+    /// TASK-516: filename spec-detection picks up `TYPE-N` patterns and
+    /// uppercases the type; returns None when no pattern is present.
+    // trace:TASK-516 | ai:claude
+    #[test]
+    fn detect_spec_id_from_filename_finds_type_n() {
+        assert_eq!(
+            detect_spec_id_from_filename("2026-06-06-task-516-handshake.md"),
+            Some("TASK-516".to_string())
+        );
+        assert_eq!(
+            detect_spec_id_from_filename("STORY-86.md"),
+            Some("STORY-86".to_string())
+        );
+        assert_eq!(detect_spec_id_from_filename("plan.md"), None);
+        assert_eq!(detect_spec_id_from_filename("no-numbers-here.md"), None);
+    }
+
+    /// TASK-516: the CLI exposes `import-plan` with the `--request-review`
+    /// flag and an optional `--spec`. trace:TASK-516 | ai:claude
+    #[test]
+    fn import_plan_flag_parses() {
+        use crate::cli::{Cli, Command};
+        use clap::Parser;
+
+        let cli = Cli::try_parse_from(["aida", "import-plan", "plan.md"]).unwrap();
+        if let Command::ImportPlan {
+            file,
+            spec,
+            request_review,
+        } = cli.command
+        {
+            assert_eq!(file, "plan.md");
+            assert_eq!(spec, None);
+            assert!(!request_review);
+        } else {
+            panic!("expected ImportPlan command");
+        }
+
+        let cli = Cli::try_parse_from([
+            "aida",
+            "import-plan",
+            "plan.md",
+            "--spec",
+            "TASK-516",
+            "--request-review",
+        ])
+        .unwrap();
+        if let Command::ImportPlan {
+            file,
+            spec,
+            request_review,
+        } = cli.command
+        {
+            assert_eq!(file, "plan.md");
+            assert_eq!(spec.as_deref(), Some("TASK-516"));
+            assert!(request_review);
+        } else {
+            panic!("expected ImportPlan command");
+        }
     }
 
     /// STORY-306: the punt payload carries the spec's identity + the fork
@@ -37820,6 +46641,7 @@ reason = "reserved by docs build"
             for_role: Some("implementer".into()),
             for_scope: scope.map(|s| s.to_string()),
             for_session: sess.map(|s| s.to_string()),
+            added_by_machine: None,
         };
         let lease = SessionLease {
             id: "abcdef123456".into(),
@@ -38664,6 +47486,163 @@ mod bug_354_text_question_classifier_tests {
         let text = "My recommendation is B first. I will proceed with that path.";
         assert!(pending_text_question_from_result_text(text).is_none());
     }
+
+    #[test]
+    fn detects_unmanaged_nested_repos_excluding_submodules_and_dotdirs() {
+        // BUG-446: a workspace-of-projects — two sibling project repos.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("projA/.git")).unwrap();
+        std::fs::create_dir_all(root.join("projB/.git")).unwrap();
+        // a plain subdir (no own .git) must NOT count
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        // a dotted child repo (e.g. .aida-store worktree) must be skipped
+        std::fs::create_dir_all(root.join(".aida-store/.git")).unwrap();
+        // a registered submodule is intentional → excluded
+        std::fs::create_dir_all(root.join("vendored/.git")).unwrap();
+        std::fs::write(
+            root.join(".gitmodules"),
+            "[submodule \"vendored\"]\n\tpath = vendored\n\turl = https://example/x\n",
+        )
+        .unwrap();
+
+        let found = unmanaged_nested_git_repos(root);
+        assert_eq!(found, vec!["projA".to_string(), "projB".to_string()]);
+    }
+
+    #[test]
+    fn plan_specs_parses_header_line() {
+        // STORY-265: the Specs: header, comma + space separated.
+        let content = "# Plan: thing\n\nDate: 2026-06-06\nSpecs: STORY-265, BUG-12 TASK-1-097\nStatus: Draft\n\n## Body\nSpecs: NOT-THIS-ONE\n";
+        assert_eq!(
+            parse_plan_specs(content),
+            vec!["STORY-265", "BUG-12", "TASK-1-097"]
+        );
+        assert!(parse_plan_specs("# no specs line here\n").is_empty());
+    }
+
+    #[test]
+    fn find_plan_file_matches_spec_and_skips_template() {
+        // STORY-265: finds the plan whose Specs: lists the spec (case-insensitive),
+        // skips _TEMPLATE.md, ignores non-matching plans, newest date-prefix wins.
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        std::fs::write(
+            dir.join("_TEMPLATE.md"),
+            "Specs: STORY-265\n", // template must be ignored even if it mentions the spec
+        )
+        .unwrap();
+        std::fs::write(dir.join("2026-06-01-other.md"), "Specs: BUG-99\n").unwrap();
+        std::fs::write(
+            dir.join("2026-06-05-early.md"),
+            "# Plan\nSpecs: story-265\n", // case-insensitive match
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("2026-06-06-late.md"),
+            "# Plan\nSpecs: STORY-265, TASK-2\n",
+        )
+        .unwrap();
+
+        let found = find_plan_file_for_spec(dir, "STORY-265").unwrap();
+        assert_eq!(found.file_name().unwrap(), "2026-06-06-late.md"); // newest wins
+        assert!(find_plan_file_for_spec(dir, "STORY-999").is_none());
+        // a spec only present in the template is NOT matched
+        assert!(find_plan_file_for_spec(dir, "BUG-99").is_some()); // (real plan)
+    }
+
+    #[test]
+    fn attached_store_present_detects_objects_dir() {
+        // BUG-433: distributed mode is detectable from the store's shape
+        // (.aida-store/objects/) even with no config marker / no branch.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert!(!attached_store_present(root)); // bare project — no store
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        assert!(!attached_store_present(root)); // .aida-store but not git-canonical
+        std::fs::create_dir_all(root.join(".aida-store").join("objects")).unwrap();
+        assert!(attached_store_present(root)); // objects/ present → attached store
+    }
+
+    #[test]
+    fn single_project_has_no_unmanaged_nested_repos() {
+        // BUG-446: a normal single project — plain subdirs, no nested repos.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("tests")).unwrap();
+        assert!(unmanaged_nested_git_repos(root).is_empty());
+    }
+
+    #[test]
+    fn gitlink_file_counts_as_nested_repo() {
+        // BUG-446: a submodule worktree NOT registered in .gitmodules has a
+        // `.git` FILE (gitlink) — still a separate project, must be detected.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("stray")).unwrap();
+        std::fs::write(
+            root.join("stray/.git"),
+            "gitdir: /elsewhere/.git/modules/stray\n",
+        )
+        .unwrap();
+        assert_eq!(unmanaged_nested_git_repos(root), vec!["stray".to_string()]);
+    }
+
+    #[test]
+    fn which_way_do_you_want_to_go_classifies_as_punt() {
+        // BUG-462: the TASK-457 validation drain — the headless implementer hit
+        // a real strategic fork, presented two options, and ended with "Which
+        // way do you want to go?". The pre-BUG-462 marker list (which path /
+        // do you want me to / want me to) missed this exact phrasing, so the
+        // run fell through to a phase-1 NoPr failure instead of advisor routing.
+        let text = "This is onboarding feature work during the bugs-before-marketing phase. \
+                    A: implement the .antigravity scaffolding now. B: capture the corrected \
+                    understanding and revisit when onboarding is in-season. \
+                    I recommend B. Which way do you want to go?";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("'which way do you want to go' fork must classify (BUG-462)");
+        assert!(punt.detail.contains("Which way do you want to go?"));
+        assert!(punt.lean.contains("recommend"));
+    }
+
+    #[test]
+    fn fork_question_after_a_rhetorical_aside_classifies() {
+        // BUG-462: scan ALL question sentences, not just the first `?`. Here the
+        // first question is a rhetorical aside; the operative fork question comes
+        // later and must still be found.
+        let text = "Does that make sense? There are two paths. Should we split this \
+                    into two passes or do it in one? I lean toward one pass.";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("buried fork question must classify (BUG-462)");
+        assert!(punt.detail.contains("Should we split this"));
+    }
+
+    #[test]
+    fn novel_question_with_letter_options_block_classifies() {
+        // BUG-462: options-block fallback — even when the question dodges every
+        // phrase marker, a letter-labelled choice block makes the fork explicit.
+        let text = "Two ways to model this.\nA) inline the helper\nB) extract a module\n\nHow do we land it?";
+        let punt = pending_text_question_from_result_text(text)
+            .expect("letter-option block + question must classify (BUG-462)");
+        assert!(punt.detail.contains("How do we land it?"));
+    }
+
+    #[test]
+    fn numbered_summary_with_rhetorical_question_does_not_classify() {
+        // BUG-462 false-positive guard: a numbered ACCOMPLISHMENTS list (steps,
+        // not choices) with a trailing self-answered question must NOT punt.
+        // Digit labels are excluded from the options-block fallback for exactly
+        // this reason.
+        let text = "Done. Implemented:\n1. parser fix\n2. test added\nDoes everything pass? Yes, all green.";
+        assert!(pending_text_question_from_result_text(text).is_none());
+    }
+
+    #[test]
+    fn all_question_sentences_splits_on_terminators() {
+        let qs = all_question_sentences("First. Is this one? Then more! And another?");
+        assert_eq!(qs, vec!["Is this one?", "And another?"]);
+    }
 }
 
 #[cfg(test)]
@@ -38883,6 +47862,64 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn current_user_id_override_wins() {
         assert_eq!(current_user_id(Some("alice")), "alice");
+    }
+
+    // ---- TASK-618: default-queue cross-machine collision predicate ----
+
+    /// Non-"default" user_ids shard cleanly per user, so a foreign
+    /// fingerprint there is NOT a collision (alice.yaml vs bob.yaml never
+    /// share a file). The predicate must stay silent regardless.
+    #[test]
+    fn collision_predicate_ignores_non_default_user() {
+        assert_eq!(
+            default_queue_collision_fingerprint("alice", "host-a", [Some("host-b")]),
+            None
+        );
+    }
+
+    /// "default" + an existing entry from a DIFFERENT machine = the hazard:
+    /// return the foreign fingerprint to name in the warning.
+    #[test]
+    fn collision_predicate_flags_default_foreign_machine() {
+        assert_eq!(
+            default_queue_collision_fingerprint(
+                "default",
+                "host-a",
+                [Some("host-a"), Some("host-b")]
+            ),
+            Some("host-b".to_string())
+        );
+    }
+
+    /// "default" but every recorded fingerprint is THIS machine = no
+    /// collision (the common single-machine-unconfigured case).
+    #[test]
+    fn collision_predicate_silent_when_all_same_machine() {
+        assert_eq!(
+            default_queue_collision_fingerprint(
+                "default",
+                "host-a",
+                [Some("host-a"), Some("host-a")]
+            ),
+            None
+        );
+    }
+
+    /// Entries with no recorded fingerprint (pre-TASK-618 / non-CLI writers)
+    /// and empty strings are ignored — they can't be attributed to a machine,
+    /// so they never raise a false alarm.
+    #[test]
+    fn collision_predicate_ignores_unknown_fingerprints() {
+        assert_eq!(
+            default_queue_collision_fingerprint("default", "host-a", [None, Some("")]),
+            None
+        );
+        // An empty on-disk file (no entries) is silent too.
+        let empty: [Option<&str>; 0] = [];
+        assert_eq!(
+            default_queue_collision_fingerprint("default", "host-a", empty),
+            None
+        );
     }
 
     /// BUG-90: with no override, `AIDA_USER` is the highest-precedence env
@@ -39500,6 +48537,64 @@ mod store_walkup_tests {
         assert_eq!(resolved, root.join(".aida-store"));
     }
 
+    /// FR-267: in an `aida init --sibling` workspace the code repo's
+    /// `.aida/config.toml` points `store_path` OUTSIDE the repo (e.g.
+    /// `../aida-store`). Store resolution must follow that pointer to the
+    /// SIBLING directory — this is the same resolution that now backs
+    /// `aida trace scan` / `aida trace list` (they route through the
+    /// resolved `store_path` in `handle_git_backend_command`). Resolving
+    /// from a nested subdir of the code repo must still land on the sibling.
+    /// trace:FR-267 | ai:claude
+    #[test]
+    fn detect_distributed_store_resolves_sibling_store_outside_repo() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        // workspace/
+        //   code-a/.aida/config.toml  (store_path = "../aida-store")
+        //   aida-store/               (the shared sibling store)
+        let code_a = ws.join("code-a");
+        fs::create_dir_all(code_a.join(".aida")).unwrap();
+        fs::write(
+            code_a.join(".aida/config.toml"),
+            "[deployment]\nmode = \"distributed\"\nstore_path = \"../aida-store\"\nstore_type = \"sibling\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(ws.join("aida-store")).unwrap();
+
+        // Invoked from a nested source dir inside the code repo.
+        let nested = code_a.join("src/foo");
+        fs::create_dir_all(&nested).unwrap();
+
+        let resolved = detect_distributed_store_from(&nested).expect("sibling store must resolve");
+        // Compare canonicalized paths so the `../` segment is normalized.
+        assert_eq!(
+            resolved.canonicalize().unwrap(),
+            ws.join("aida-store").canonicalize().unwrap(),
+            "store must resolve to the SIBLING aida-store, not inside code-a"
+        );
+    }
+
+    /// FR-267: the resolution-path selector that backs trace commands must
+    /// also declare distributed mode for a sibling-store config — so a
+    /// sibling workspace never falls through to the legacy YAML/SQLite
+    /// fallback. trace:FR-267 | ai:claude
+    #[test]
+    fn sibling_store_config_declares_distributed_mode() {
+        let tmp = TempDir::new().unwrap();
+        let code_a = tmp.path().join("code-a");
+        fs::create_dir_all(code_a.join(".aida")).unwrap();
+        fs::write(
+            code_a.join(".aida/config.toml"),
+            "[deployment]\nmode = \"distributed\"\nstore_path = \"../aida-store\"\nstore_type = \"sibling\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            distributed_mode_declared_from(&code_a),
+            Some(code_a.clone()),
+            "sibling config must declare distributed mode"
+        );
+    }
+
     /// No `.aida/config.toml` anywhere up the tree → returns None (caller
     /// falls through to legacy / registry resolution).
     /// trace:BUG-57 | ai:claude
@@ -39509,6 +48604,71 @@ mod store_walkup_tests {
         let nested = tmp.path().join("a/b");
         std::fs::create_dir_all(&nested).unwrap();
         assert!(detect_distributed_store_from(&nested).is_none());
+    }
+
+    /// SPIKE-48: a directory that exists and holds `objects/` is accepted as a
+    /// sandbox store override; the returned path resolves to it.
+    /// trace:SPIKE-48 | ai:claude
+    #[test]
+    fn aida_store_override_accepts_dir_with_objects() {
+        let tmp = TempDir::new().unwrap();
+        let store = tmp.path().join("sandbox");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        let resolved = aida_store_override_from(&store).expect("should accept store");
+        // Canonicalized, so compare against the canonical form of the input.
+        assert_eq!(resolved, store.canonicalize().unwrap());
+    }
+
+    /// SPIKE-48: validation is strict-but-quiet — a missing path, a regular
+    /// file, or a dir without `objects/` all fall through (return None) rather
+    /// than erroring, so a stale/typo'd export never silently misdirects writes.
+    /// trace:SPIKE-48 | ai:claude
+    #[test]
+    fn aida_store_override_rejects_non_store_paths() {
+        let tmp = TempDir::new().unwrap();
+
+        // Missing path.
+        assert!(aida_store_override_from(&tmp.path().join("nope")).is_none());
+
+        // Exists, but no objects/ subdir.
+        let bare = tmp.path().join("bare");
+        std::fs::create_dir_all(&bare).unwrap();
+        assert!(aida_store_override_from(&bare).is_none());
+
+        // A regular file, not a directory.
+        let file = tmp.path().join("afile");
+        std::fs::write(&file, "x").unwrap();
+        assert!(aida_store_override_from(&file).is_none());
+
+        // objects/ present but as a FILE, not a dir → still rejected.
+        let weird = tmp.path().join("weird");
+        std::fs::create_dir_all(&weird).unwrap();
+        std::fs::write(weird.join("objects"), "not a dir").unwrap();
+        assert!(aida_store_override_from(&weird).is_none());
+    }
+
+    /// SPIKE-48: `sandbox_is_populated` is true only for a git repo holding
+    /// `objects/`; the seed/scenario round-trip produces an override-acceptable
+    /// store. trace:SPIKE-48 | ai:claude
+    #[test]
+    fn sandbox_create_and_seed_round_trip() {
+        let tmp = TempDir::new().unwrap();
+        let store = tmp.path().join("sb");
+
+        // Fresh dir is not yet a populated sandbox.
+        assert!(!sandbox_is_populated(&store));
+
+        sandbox_create(store.clone(), true, false).expect("create+seed");
+
+        // Now it is a populated, override-acceptable store.
+        assert!(sandbox_is_populated(&store));
+        assert!(aida_store_override_from(&store).is_some());
+        assert!(store.join("objects").is_dir());
+
+        // Destroy removes it; override no longer resolves.
+        sandbox_destroy(store.clone()).expect("destroy");
+        assert!(!store.exists());
+        assert!(aida_store_override_from(&store).is_none());
     }
 
     /// BUG-331: from a sibling git worktree, detection resolves the canonical
@@ -43139,6 +52299,143 @@ mod git_linkage_tests {
     }
 }
 
+/// STORY-511: coverage for the forge-aware change-request (PR/MR) linkage
+/// formatter that `aida show`'s git-linkage section renders. Fully
+/// isolated — no git repo, no `gh`/`glab` on PATH, no I/O — the rendering
+/// is a pure function of (ForgeKind, ChangeLinkageState). EPIC-35 slice 5.
+/// trace:STORY-511 | ai:claude
+#[cfg(test)]
+mod change_linkage_format_tests {
+    use super::*;
+    use crate::forge::ForgeKind;
+
+    /// Convenience: collect the (label, value) lines into a single string
+    /// so assertions can match against the full rendered block.
+    fn render(forge: ForgeKind, state: &ChangeLinkageState) -> String {
+        format_change_linkage(forge, state)
+            .into_iter()
+            .map(|(l, v)| format!("{l}: {v}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn github_shipped_uses_pr_noun() {
+        let out = render(
+            ForgeKind::GitHub,
+            &ChangeLinkageState::Shipped { number: Some(42) },
+        );
+        assert!(out.contains("Branch: merged to main"), "{out}");
+        assert!(out.contains("PR: PR-42"), "{out}");
+    }
+
+    #[test]
+    fn gitlab_shipped_uses_mr_noun() {
+        let out = render(
+            ForgeKind::GitLab,
+            &ChangeLinkageState::Shipped { number: Some(7) },
+        );
+        assert!(out.contains("Branch: merged to main"), "{out}");
+        assert!(out.contains("MR: MR-7"), "{out}");
+        // The GitHub-only noun must NOT leak onto a GitLab repo.
+        assert!(!out.contains("PR-7"), "{out}");
+    }
+
+    #[test]
+    fn shipped_without_number_omits_change_line() {
+        let out = render(
+            ForgeKind::GitLab,
+            &ChangeLinkageState::Shipped { number: None },
+        );
+        assert_eq!(out, "Branch: merged to main");
+    }
+
+    #[test]
+    fn gitlab_in_flight_found_renders_mr_and_url() {
+        let out = render(
+            ForgeKind::GitLab,
+            &ChangeLinkageState::InFlightFound {
+                number: 13,
+                url: "https://gitlab.com/joe/aida-gl-test/-/merge_requests/13".to_string(),
+            },
+        );
+        assert!(
+            out.contains("MR: MR-13 https://gitlab.com/joe/aida-gl-test/-/merge_requests/13"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn github_in_flight_found_renders_pr_and_url() {
+        let out = render(
+            ForgeKind::GitHub,
+            &ChangeLinkageState::InFlightFound {
+                number: 99,
+                url: "https://github.com/joe/aida/pull/99".to_string(),
+            },
+        );
+        assert!(
+            out.contains("PR: PR-99 https://github.com/joe/aida/pull/99"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn no_change_uses_forge_noun() {
+        assert_eq!(
+            render(ForgeKind::GitHub, &ChangeLinkageState::InFlightNoChange),
+            "PR: no PR opened yet"
+        );
+        assert_eq!(
+            render(ForgeKind::GitLab, &ChangeLinkageState::InFlightNoChange),
+            "MR: no MR opened yet"
+        );
+    }
+
+    #[test]
+    fn cli_missing_names_the_right_cli_per_forge() {
+        let gh = render(ForgeKind::GitHub, &ChangeLinkageState::CliMissing);
+        assert!(gh.contains("gh not installed"), "{gh}");
+        assert!(gh.contains("PR state unknown"), "{gh}");
+
+        let gl = render(ForgeKind::GitLab, &ChangeLinkageState::CliMissing);
+        assert!(gl.contains("glab not installed"), "{gl}");
+        assert!(gl.contains("MR state unknown"), "{gl}");
+        // The GitLab diagnostic must not name `gh`.
+        assert!(!gl.contains("gh "), "{gl}");
+    }
+
+    #[test]
+    fn pure_git_cli_missing_uses_generic_label() {
+        // Pure-git has no forge CLI binary; the diagnostic must not print an
+        // empty token ("  not installed").
+        let out = render(ForgeKind::None, &ChangeLinkageState::CliMissing);
+        assert!(out.contains("the forge CLI not installed"), "{out}");
+        assert!(out.contains("change state unknown"), "{out}");
+    }
+
+    #[test]
+    fn cli_failed_and_unreachable_use_forge_noun() {
+        let gl_fail = render(ForgeKind::GitLab, &ChangeLinkageState::CliFailed);
+        assert!(gl_fail.contains("glab lookup failed"), "{gl_fail}");
+        assert!(gl_fail.contains("MR state unknown"), "{gl_fail}");
+
+        let gl_unreach = render(ForgeKind::GitLab, &ChangeLinkageState::Unreachable);
+        assert!(gl_unreach.contains("MR API unreachable"), "{gl_unreach}");
+        assert!(gl_unreach.contains("(transient)"), "{gl_unreach}");
+    }
+
+    #[test]
+    fn branch_not_found_is_forge_independent() {
+        for f in [ForgeKind::GitHub, ForgeKind::GitLab, ForgeKind::None] {
+            assert_eq!(
+                render(f, &ChangeLinkageState::BranchNotFound),
+                "Branch: work committed but branch not found locally"
+            );
+        }
+    }
+}
+
 /// TASK-238: coverage for the queue-list tag surfacing — the inline
 /// chip formatter and the `--by-batch` group key. trace:TASK-238
 #[cfg(test)]
@@ -44460,6 +53757,235 @@ fn apply_color_mode(mode: &str) {
 /// budget holds even when the orphan store has hundreds of objects.
 /// Returns `None` if the file is missing or unreadable.
 /// trace:FR-1-041 | ai:claude
+/// TASK-648 (ADR-3): non-archived draft count from the cache, read-only and
+/// fast (same SQLite-without-Cache::open pattern as the statusline freshness
+/// probe — no migration, no write lock on the prompt hot path). The advisor's
+/// statusline shows this as the draft-inbox depth to triage. Returns 0 when
+/// the cache is absent or unreadable rather than erroring the prompt.
+fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
+    if !cache_path.exists() {
+        return 0;
+    }
+    let conn = match rusqlite::Connection::open_with_flags(
+        cache_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
+        Ok(c) => c,
+        Err(_) => return 0,
+    };
+    conn.query_row(
+        "SELECT COUNT(*) FROM requirements_cache WHERE archived = 0 AND LOWER(status) = 'draft'",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|n| n.max(0) as usize)
+    .unwrap_or(0)
+}
+
+// ─── STORY-127: Scope-B runtime anti-pattern detectors ──────────────────
+//
+// Each surface the user TYPES (`aida pull`, `git pull` (via the code leg),
+// `aida dev release`, `aida session end`) detects when its precondition is
+// not met and emits a one-line WARNING (never a block — the user/agent
+// always proceeds). The detection is a single git/queue/lease query.
+//
+// The detection LOGIC is a set of pure, unit-tested predicates so the
+// warning conditions are testable without process/git/forge I/O. The call
+// sites do the cheap query and feed the result to the predicate.
+// trace:STORY-127 | ai:claude
+
+/// Detector (1) + (2): `aida pull` / `git pull` (code leg) no-op.
+///
+/// `pull_was_noop` — the code-leg `git pull --ff-only` advanced nothing
+/// (local branch already at origin). When that coincides with the user
+/// holding an active **reviewer** lease on an **unmerged** PR, the no-op is
+/// almost certainly the PR-27-style mistake: running catch-up commands
+/// BEFORE the merge has happened. Warn so the user waits for the merge.
+///
+/// When there is no such reviewer lease the no-op is unremarkable — a plain
+/// one-line note still helps ("Already up to date — nothing to pull") but is
+/// not the same alarm. The two callers distinguish via the second arg.
+/// trace:STORY-127 | ai:claude
+fn pull_noop_warning(pull_was_noop: bool, reviewer_unmerged_pr: Option<&str>) -> Option<String> {
+    if !pull_was_noop {
+        return None;
+    }
+    match reviewer_unmerged_pr {
+        Some(pr) => Some(format!(
+            "No new commits on origin. You hold a reviewer lease on {pr}, which is \
+             not merged yet — did you mean to wait for {pr} to merge first? \
+             (catch-up before the merge is a no-op)"
+        )),
+        None => Some("Already up to date — origin had no new commits.".to_string()),
+    }
+}
+
+/// Detector (2): cheap "local main already at origin/main" check, expressed
+/// as a pure predicate over the two SHAs so it is testable. `None` for
+/// either SHA (couldn't resolve a ref) means "can't tell" → no warning.
+/// trace:STORY-127 | ai:claude
+fn local_main_already_at_origin(local_sha: Option<&str>, origin_sha: Option<&str>) -> bool {
+    match (local_sha, origin_sha) {
+        (Some(a), Some(b)) => !a.is_empty() && a == b,
+        _ => false,
+    }
+}
+
+/// Detector (3): `aida dev release` (→ `scripts/release.sh`) with unmerged
+/// PRs. Returns a one-line warning naming every open PR — a release tag cut
+/// now will NOT include their changes. Pure over the already-collected
+/// open-PR numbers. trace:STORY-127 | ai:claude
+fn release_unmerged_pr_warning(open_pr_numbers: &[u64]) -> Option<String> {
+    if open_pr_numbers.is_empty() {
+        return None;
+    }
+    let mut nums: Vec<u64> = open_pr_numbers.to_vec();
+    nums.sort_unstable();
+    nums.dedup();
+    let list = nums
+        .iter()
+        .map(|n| format!("PR-{n}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let (verb, subj) = if nums.len() == 1 {
+        ("is", "PR")
+    } else {
+        ("are", "PRs")
+    };
+    Some(format!(
+        "{} open {} ({}) — the release {} not merged, so the tag will NOT include \
+         their changes. Merge first if they belong in this release.",
+        nums.len(),
+        subj,
+        list,
+        verb,
+    ))
+}
+
+/// Detector (4): `aida session end` while a DIFFERENT role has queued work
+/// waiting. `ending_role` is the role of the lease being torn down;
+/// `role_counts` is the per-role queue depth for the current user. Returns
+/// the `(role, count)` pairs for every OTHER role with at least one waiting
+/// item, sorted by role name for stable output. Pure over the inputs.
+/// trace:STORY-127 | ai:claude
+fn cross_role_queue_waiting(
+    ending_role: Option<&str>,
+    role_counts: &std::collections::HashMap<String, usize>,
+) -> Vec<(String, usize)> {
+    let mut out: Vec<(String, usize)> = role_counts
+        .iter()
+        .filter(|(role, &count)| {
+            count > 0 && ending_role.map(|er| er != role.as_str()).unwrap_or(true)
+        })
+        .map(|(role, &count)| (role.clone(), count))
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// Render the detector-(4) warning body from the cross-role pairs. `None`
+/// when nothing is waiting elsewhere. trace:STORY-127 | ai:claude
+fn session_end_cross_role_warning(waiting: &[(String, usize)]) -> Option<String> {
+    if waiting.is_empty() {
+        return None;
+    }
+    let list = waiting
+        .iter()
+        .map(|(role, count)| {
+            format!(
+                "{} has {} item{}",
+                role,
+                count,
+                if *count == 1 { "" } else { "s" }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "About to end this session, but another role's queue has work waiting \
+         ({list}). Switch role first (`aida role enter <role>`) if you meant to \
+         pick that up."
+    ))
+}
+
+/// STORY-127: per-role queue depth for the current user. Reads the same
+/// queue YAML `aida queue list` / `read_queue_depth` consult (keyed off
+/// `current_user_id`). Returns an empty map on any read/parse failure —
+/// the detectors degrade to silent. trace:STORY-127 | ai:claude
+fn read_queue_role_counts(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, usize> {
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let user = current_user_id(None);
+    let queue_path = project_root
+        .join(".aida-store/registry/queues")
+        .join(format!("{}.yaml", user));
+    let Ok(content) = std::fs::read_to_string(&queue_path) else {
+        return counts;
+    };
+    let Ok(entries) = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&content) else {
+        return counts;
+    };
+    for e in &entries {
+        let role = e
+            .get("for_role")
+            .and_then(serde_yaml::Value::as_str)
+            .unwrap_or("implementer");
+        *counts.entry(role.to_string()).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// STORY-127: does the current user hold an active **reviewer** lease whose
+/// scope is a PR (`PR-N` / `MR-N`) that is still open (unmerged)? Returns
+/// the PR label for the warning, else `None`. Cheap: walks the local lease
+/// set, then a single forge open-PR snapshot keyed by number. The PR is
+/// "unmerged" iff its number appears in the open-PR snapshot.
+/// trace:STORY-127 | ai:claude
+fn active_reviewer_unmerged_pr(project_root: &std::path::Path) -> Option<String> {
+    let leases = list_leases(project_root);
+    // Reviewer leases scope to a PR/MR; the scope string is e.g. "PR-27".
+    let reviewer_pr_scopes: Vec<String> = leases
+        .iter()
+        .filter(|l| {
+            l.role
+                .as_deref()
+                .map(|r| canonical_role_name(r) == "reviewer")
+                .unwrap_or(false)
+        })
+        .filter(|l| pr_number_from_scope(&l.scope).is_some())
+        .map(|l| l.scope.clone())
+        .collect();
+    if reviewer_pr_scopes.is_empty() {
+        return None;
+    }
+    let open_numbers: std::collections::HashSet<u64> = collect_open_prs(project_root)
+        .by_branch
+        .values()
+        .map(|p| p.number)
+        .collect();
+    for scope in reviewer_pr_scopes {
+        if let Some(n) = pr_number_from_scope(&scope) {
+            if open_numbers.contains(&n) {
+                return Some(format!("PR-{n}"));
+            }
+        }
+    }
+    None
+}
+
+/// Parse a PR/MR number out of a lease scope like `PR-27` / `MR-3` / `pr-27`.
+/// trace:STORY-127 | ai:claude
+fn pr_number_from_scope(scope: &str) -> Option<u64> {
+    let s = scope.trim();
+    let rest = s
+        .strip_prefix("PR-")
+        .or_else(|| s.strip_prefix("pr-"))
+        .or_else(|| s.strip_prefix("MR-"))
+        .or_else(|| s.strip_prefix("mr-"))?;
+    rest.parse::<u64>().ok()
+}
+
 fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Option<usize> {
     // BUG-89: route through the canonical helper so the statusline depth
     // counts the same queue file `aida queue list` reads from in this
@@ -44525,6 +54051,117 @@ fn statusline_role_mismatch_enabled(project_dir: &std::path::Path) -> bool {
 /// TASK-244: render the statusline `role:` segment, surfacing a mismatch
 /// between the shell-persistent role (`$AIDA_SESSION_ROLE`, set by `aida
 /// role enter`) and the active AIDA session's role (the lease). When
+/// TASK-645: the one place "what role am I" is answered. An unset (or
+/// blank) `AIDA_SESSION_ROLE` resolves to `implementer` — the read-side
+/// default — so no command ever faces a roleless session. The env var is
+/// never written by this path; it stays unset until the user explicitly
+/// `eval "$(aida role enter <role>)"`s a different role.
+fn effective_role() -> String {
+    effective_role_resolved().0
+}
+
+/// Same resolution as [`effective_role`], but also reports whether the
+/// result is the implicit default (`true`) versus an explicitly-entered
+/// role (`false`). Callers that want to *show* the default-ness (e.g. the
+/// statusline marking `implementer (default)`) use the flag. Pure over the
+/// passed-in value so it is unit-testable without touching the process env.
+fn resolve_effective_role(raw: Option<&str>) -> (String, bool) {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(r) => (canonical_role_name(r), false),
+        None => ("implementer".to_string(), true),
+    }
+}
+
+fn effective_role_resolved() -> (String, bool) {
+    resolve_effective_role(std::env::var("AIDA_SESSION_ROLE").ok().as_deref())
+}
+
+/// TASK-647 (ADR-3): a status whose *production* requires advisor authority —
+/// anything that places a spec into the active execution pipeline (Approved
+/// and beyond). Draft / Rejected / NeedsAttention don't gate (they are not
+/// "approved work" a non-advisor could smuggle past triage).
+fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Approved
+            | RequirementStatus::Planned
+            | RequirementStatus::InProgress
+            | RequirementStatus::Done
+            | RequirementStatus::Completed
+    )
+}
+
+/// TASK-130: resolve the `human_only` marker for a freshly-added spec from its
+/// type plus the explicit `--human-only` / `--no-human-only` flags.
+///
+/// A Spike is, by definition, time-boxed research driven by operator judgment
+/// (candidate selection, experimental design, rubric evaluation, report
+/// writing) — not heads-down implementation. So a Spike defaults to
+/// `human_only = true`, which the orchestrator's pre-pickup gate honors by
+/// skipping it rather than handing it to an implementer agent that would have
+/// to bail or fabricate work. Every other type defaults to `false`.
+///
+/// The flags always win, and they are mutually exclusive at the CLI layer
+/// (`conflicts_with`), so at most one is set:
+/// - `--human-only`     → `true`  (opt any type in)
+/// - `--no-human-only`  → `false` (opt a Spike back out into auto-pickup)
+/// - neither            → the per-type default above
+///
+/// trace:TASK-130 | ai:claude
+fn resolve_human_only(req_type: &RequirementType, human_only: bool, no_human_only: bool) -> bool {
+    if human_only {
+        return true;
+    }
+    if no_human_only {
+        return false;
+    }
+    matches!(req_type, RequirementType::Spike)
+}
+
+/// TASK-647 (ADR-3): "advisor authority" — permission to produce approved+
+/// specs and queue work for execution. Held by an explicit advisor role OR a
+/// human at an interactive terminal (stdin is a TTY). Headless `claude -p`,
+/// spawned agents, and drain/auto captures have neither, so their intake
+/// lands `draft` for advisor triage. This is the hard gate (substrate-as-
+/// bouncer): a soft default would be bypassed by `--status approved`.
+///
+/// NB: the MCP server runs non-TTY but may inherit an advisor `AIDA_SESSION_ROLE`
+/// from the launching shell — it therefore does NOT use this helper and gates
+/// unconditionally (see `tool_add_requirement`).
+/// Pure core of [`has_advisor_authority`] (BUG-460): advisor authority is held
+/// by an advisor role, an interactive (TTY) session, OR an operation that is
+/// corroborated as running under a live orchestrator. The orchestrator case is
+/// the fix: the drain's own auto-queue and its headless implementer/reviewer
+/// phases are *workflow system actions* (advancing a spec through its
+/// lifecycle), not a bare agent self-advancing — and corroboration requires a
+/// token matching the live drain-state run, which a bare agent cannot forge, so
+/// the TASK-647/ADR-3 gate still blocks an un-orchestrated agent.
+/// trace:BUG-460 trace:TASK-647 | ai:claude
+fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
+    role == "advisor" || is_tty || orchestrated
+}
+
+fn has_advisor_authority() -> bool {
+    // BUG-460: a CLI op spawned by (or under) a live --auto-complete drain
+    // inherits AIDA_AUTO_COMPLETE + the run token, so `orchestrator::detect`
+    // corroborates it against the drain-state file. Grant it authority so
+    // --no-human drains can auto-queue the review + let the phase children
+    // mutate; a bare headless agent (no live orchestrator) stays gated.
+    let orchestrated = find_main_worktree_root()
+        .map(|root| {
+            matches!(
+                orchestrator::detect(&root),
+                orchestrator::OrchestratorContext::Orchestrated
+            )
+        })
+        .unwrap_or(false);
+    advisor_authority_from(
+        &effective_role(),
+        std::io::stdin().is_terminal(),
+        orchestrated,
+    )
+}
+
 /// they disagree — and the warning is enabled — both are shown with a
 /// `⚠` glyph so three-way role confusion (shell vs session vs resumed
 /// conversation) is visible at a glance. Returns `(text, is_mismatch)`
@@ -44574,7 +54211,13 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         });
     let project_label = store_name.unwrap_or(project_name);
 
-    let role = std::env::var("AIDA_SESSION_ROLE").ok();
+    // TASK-645: resolve through the one role resolver. An unset/blank
+    // env var becomes the implementer default (marked below) so the
+    // statusline never shows a roleless `(none)`/blank segment.
+    let raw_role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let (effective_role_name, role_is_default) = resolve_effective_role(raw_role.as_deref());
 
     // STORY-79: opportunistic background fetch. Fire-and-forget; uses
     // current state for this render, refreshed state next render.
@@ -44646,7 +54289,10 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     // active role (or all entries when no role is set). Reads the orphan
     // store's queues/<user>.yaml file directly to keep this off the
     // backend's heavier load() path.
-    let queue_depth = read_queue_depth(&project_root, role.as_deref()).unwrap_or(0);
+    // TASK-645: depth for the effective role (implementer when unset), so
+    // the default sees its own queue rather than the all-entries view.
+    let queue_depth =
+        read_queue_depth(&project_root, Some(effective_role_name.as_str())).unwrap_or(0);
 
     let separator = " · ".dimmed().to_string();
     // Brand anchor: Greek transliteration of "AIDA". Same 4-column
@@ -44691,13 +54337,22 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         .ok()
         .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
 
-    if let Some(r) = &role {
+    {
+        let r = &effective_role_name;
         // TASK-244: surface a shell-role vs active-session-role mismatch
         // (e.g. shell persists `implementer` while the only active
         // session is `reviewer`). trace:TASK-244 | ai:claude
+        // TASK-645: a *defaulted* (unset) role can't meaningfully mismatch a
+        // session lease — suppress the warning and tag the segment
+        // `(default)` so the implicit role is visible but unalarming.
         let session_role = lease.as_ref().and_then(|l| l.role.as_deref());
-        let warn_enabled = statusline_role_mismatch_enabled(&project_root);
+        let warn_enabled = !role_is_default && statusline_role_mismatch_enabled(&project_root);
         let (role_text, role_mismatch) = role_segment_text(r, session_role, warn_enabled);
+        let role_text = if role_is_default {
+            format!("{} (default)", role_text)
+        } else {
+            role_text
+        };
         let role_segment = if role_mismatch {
             role_text.red().bold().to_string()
         } else {
@@ -44769,6 +54424,16 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     if queue_depth > 0 {
         parts.push(format!("q:{}", queue_depth));
     }
+    // TASK-648 (ADR-3): the advisor seat owns intake triage, so its statusline
+    // surfaces the draft-inbox depth (untriaged drafts to disposition). Only
+    // for the advisor — other roles don't clear this queue — and only when
+    // non-empty, so a clear inbox stays quiet. trace:TASK-648 | ai:claude
+    if effective_role_name == "advisor" {
+        let inbox_depth = read_draft_inbox_depth(&cache_path);
+        if inbox_depth > 0 {
+            parts.push(format!("inbox:{}", inbox_depth).cyan().to_string());
+        }
+    }
     // Cache freshness: only surface non-fresh states. Fresh is the boring
     // default; rendering it on every prompt is noise.
     //   stale  → red    (cache lags local; next read rebuilds — slow)
@@ -44794,7 +54459,10 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     // either way — without it, three sessions on EPIC-20 (batch3, batch4,
     // batch5) would all render `sess:EPIC-20`, losing the only thing
     // distinguishing them. trace:STORY-53 trace:TASK-60 trace:TASK-282 | ai:claude
-    if role.is_none() {
+    // TASK-645: `role_is_default` is the old `role.is_none()` — no explicit
+    // role entered, so the @<scope> role segment carried no session anchor
+    // and the standalone `sess:` segment still earns its place.
+    if role_is_default {
         if let Some(l) = lease.as_ref() {
             let suffix = derive_session_branch_suffix(&l.scope, &l.branch);
             let label = sess_label_with_suffix(&l.scope, &suffix, SESS_LABEL_MAX);
@@ -45042,7 +54710,801 @@ fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
     match cmd {
         PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
         PlanCommand::Helpers { spec, append } => plan_helpers(spec, append.as_deref()),
+        PlanCommand::Promote { spec, all, dry_run } => {
+            plan_promote(spec.as_deref(), *all, *dry_run)
+        }
+        PlanCommand::Capture { pr, stdout } => plan_capture(pr, *stdout),
     }
+}
+
+// trace:STORY-447 | ai:claude
+fn handle_deps_command(cmd: &DepsCommand) -> Result<()> {
+    match cmd {
+        DepsCommand::Sweep { for_spec, json } => deps_sweep(for_spec.as_deref(), *json),
+    }
+}
+
+/// `aida deps sweep [--for-spec <ID>] [--json]` — list likely dependencies
+/// inferred read-only from the trace graph. For each spec, the candidate
+/// dependencies are other specs that share trace-link files (≥2 shared → high,
+/// 1 → medium) or, weaker, share a parent. It NEVER writes the graph — confirm
+/// a real edge with `aida edit <id> --blocked-by <dep>`. The `--apply`
+/// interactive write-back and the scheduled-advisor variant are deliberately
+/// gated until suggestion quality is observed (operator decision, 2026-06-06).
+/// trace:STORY-447 | ai:claude
+fn deps_sweep(for_spec: Option<&str>, json: bool) -> Result<()> {
+    use aida_core::deps_sweep::{rank_dependencies, sweep_all, SpecSignals};
+    use std::collections::BTreeSet;
+
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+
+    // Map every UUID to its display id so parents (stored as UUIDs) and the
+    // candidate ids line up on a single id space.
+    let mut display_by_uuid: std::collections::HashMap<uuid::Uuid, String> =
+        std::collections::HashMap::new();
+    for req in &store.requirements {
+        display_by_uuid.insert(req.id, req.display_id());
+    }
+
+    // Code-scanned trace comments: spec_id/agreed_id → touched files. The
+    // `wanted` set is every id-string a `// trace:` comment might legitimately
+    // use, so the scan buckets onto the right spec.
+    let mut wanted: HashSet<String> = HashSet::new();
+    for req in &store.requirements {
+        if let Some(s) = &req.spec_id {
+            wanted.insert(s.clone());
+        }
+        if let Some(a) = &req.agreed_id {
+            wanted.insert(a.clone());
+        }
+    }
+    let scanned = scan_trace_graph(&project_root, &wanted);
+
+    // Normalize a path so a stored `./aida-cli/src/main.rs` and a scanned
+    // `aida-cli/src/main.rs` collapse to the same key.
+    let norm = |p: &str| -> String { p.trim_start_matches("./").to_string() };
+
+    // Build display_id → files (stored trace_links + code-scanned comments)
+    // and display_id → parent display_ids for every spec.
+    let mut files_by_spec: std::collections::HashMap<String, BTreeSet<String>> =
+        std::collections::HashMap::new();
+    let mut parents_by_spec: std::collections::HashMap<String, BTreeSet<String>> =
+        std::collections::HashMap::new();
+
+    for req in &store.requirements {
+        let did = req.display_id();
+        let files = files_by_spec.entry(did.clone()).or_default();
+        for link in &req.trace_links {
+            files.insert(norm(&link.file_path));
+        }
+        // Fold in code-scanned hits keyed by either id form.
+        for key in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(hits) = scanned.get(key) {
+                for hit in hits {
+                    files.insert(norm(&hit.file));
+                }
+            }
+        }
+        let parents = parents_by_spec.entry(did).or_default();
+        for rel in &req.relationships {
+            if rel.rel_type == aida_core::RelationshipType::Child {
+                if let Some(pd) = display_by_uuid.get(&rel.target_id) {
+                    parents.insert(pd.clone());
+                }
+            }
+        }
+    }
+
+    // Drop non-discriminating files from the overlap signal: a file touched
+    // by a large share of specs (e.g. `aida-cli/src/main.rs` here — every spec
+    // touches it) carries no coupling signal and would flood every spec with
+    // bogus "medium" hits. `plan helpers` learned the same lesson. A file is
+    // "common" if more than COMMON_FILE_FRAC of all specs touch it (with a
+    // small floor so a tiny store isn't over-pruned). trace:STORY-447
+    {
+        let total = files_by_spec.len().max(1);
+        let mut file_counts: std::collections::HashMap<&str, usize> =
+            std::collections::HashMap::new();
+        for files in files_by_spec.values() {
+            for f in files {
+                *file_counts.entry(f.as_str()).or_default() += 1;
+            }
+        }
+        const COMMON_FILE_FRAC: f64 = 0.20;
+        const COMMON_FILE_FLOOR: usize = 8;
+        let threshold = ((total as f64 * COMMON_FILE_FRAC).ceil() as usize).max(COMMON_FILE_FLOOR);
+        let common: HashSet<String> = file_counts
+            .iter()
+            .filter(|(_, &c)| c > threshold)
+            .map(|(f, _)| (*f).to_string())
+            .collect();
+        if !common.is_empty() {
+            for files in files_by_spec.values_mut() {
+                files.retain(|f| !common.contains(f));
+            }
+        }
+    }
+
+    let signals: Vec<SpecSignals> = store
+        .requirements
+        .iter()
+        .map(|req| {
+            let did = req.display_id();
+            SpecSignals {
+                display_id: did.clone(),
+                files: files_by_spec.get(&did).cloned().unwrap_or_default(),
+                parents: parents_by_spec.get(&did).cloned().unwrap_or_default(),
+            }
+        })
+        .collect();
+
+    // Resolve --for-spec to a display id (accepts SPEC-ID, agreed id, or UUID).
+    let results: Vec<(String, Vec<aida_core::deps_sweep::Suggestion>)> = if let Some(arg) = for_spec
+    {
+        let target = if let Ok(uuid) = uuid::Uuid::parse_str(arg) {
+            store.requirements.iter().find(|r| r.id == uuid)
+        } else {
+            store
+                .requirements
+                .iter()
+                .find(|r| r.matches_id(arg))
+                .or_else(|| store.get_requirement_by_spec_id(arg))
+        }
+        .ok_or_else(|| anyhow::anyhow!("requirement `{arg}` not found"))?;
+        let did = target.display_id();
+        let target_sig = signals
+            .iter()
+            .find(|s| s.display_id == did)
+            .cloned()
+            .unwrap_or(SpecSignals {
+                display_id: did.clone(),
+                files: BTreeSet::new(),
+                parents: BTreeSet::new(),
+            });
+        vec![(did, rank_dependencies(&target_sig, &signals))]
+    } else {
+        sweep_all(&signals)
+    };
+
+    // Cap the weak (same-parent-only) tail per source so a spec under a huge
+    // parent (dozens of sibling bugs) doesn't bury its real file-overlap hits.
+    // File-overlap (high/medium) suggestions are never capped. trace:STORY-447
+    const WEAK_PER_SOURCE_CAP: usize = 5;
+    let mut results = results;
+    for (_, suggestions) in results.iter_mut() {
+        let mut weak_seen = 0usize;
+        suggestions.retain(|s| {
+            if s.confidence == aida_core::deps_sweep::Confidence::Weak {
+                weak_seen += 1;
+                weak_seen <= WEAK_PER_SOURCE_CAP
+            } else {
+                true
+            }
+        });
+    }
+
+    if json {
+        let arr: Vec<serde_json::Value> = results
+            .iter()
+            .map(|(src, suggestions)| {
+                serde_json::json!({
+                    "spec": src,
+                    "suggestions": suggestions.iter().map(|s| serde_json::json!({
+                        "candidate": s.candidate,
+                        "confidence": s.confidence.label(),
+                        "shared_files": s.shared_files,
+                        "same_parent": s.same_parent,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr)?);
+        return Ok(());
+    }
+
+    // Human output.
+    if results.is_empty() || results.iter().all(|(_, s)| s.is_empty()) {
+        if for_spec.is_some() {
+            println!("No likely dependencies inferred for the requested spec.");
+        } else {
+            println!(
+                "No likely dependencies inferred — no two specs share trace-link files or a parent."
+            );
+        }
+        return Ok(());
+    }
+
+    println!(
+        "{}",
+        "Likely dependencies (inferred read-only — confirm before relying on them)".bold()
+    );
+    println!(
+        "  signal: shared trace-link files (high ≥2 / medium 1) · same parent (weak)\n  confirm with: aida edit <id> --blocked-by <dep>\n"
+    );
+
+    for (src, suggestions) in &results {
+        if suggestions.is_empty() {
+            continue;
+        }
+        println!("{src}");
+        for s in suggestions {
+            let conf = match s.confidence {
+                aida_core::deps_sweep::Confidence::High => s.confidence.label().green().to_string(),
+                aida_core::deps_sweep::Confidence::Medium => {
+                    s.confidence.label().yellow().to_string()
+                }
+                aida_core::deps_sweep::Confidence::Weak => {
+                    s.confidence.label().dimmed().to_string()
+                }
+            };
+            let mut detail = String::new();
+            if !s.shared_files.is_empty() {
+                detail = format!(" — shares {}", s.shared_files.join(", "));
+            } else if s.same_parent {
+                detail = " — same parent".to_string();
+            }
+            if s.same_parent && !s.shared_files.is_empty() {
+                detail.push_str(" (+ same parent)");
+            }
+            println!(
+                "    Likely depends on: {} ({}){}",
+                s.candidate, conf, detail
+            );
+        }
+        println!();
+    }
+
+    Ok(())
+}
+
+/// STORY-265: the SPEC-IDs listed on a plan file's `Specs:` header line
+/// (`Specs: STORY-N, BUG-M`). Comma- or whitespace-separated; only the first
+/// `Specs:` line (the header) is read. trace:STORY-265 | ai:claude
+fn parse_plan_specs(content: &str) -> Vec<String> {
+    for line in content.lines() {
+        let t = line.trim();
+        let rest = t
+            .strip_prefix("Specs:")
+            .or_else(|| t.strip_prefix("specs:"));
+        if let Some(rest) = rest {
+            return rest
+                .split([',', ' ', '\t'])
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// STORY-265: find the plan file under `plans_dir` whose `Specs:` header lists
+/// `spec_id` (case-insensitive). Skips `_`-prefixed files (e.g. `_TEMPLATE.md`)
+/// and only scans the header region. Returns the lexicographically-last match
+/// so the newest date-prefixed plan wins. trace:STORY-265 | ai:claude
+fn find_plan_file_for_spec(
+    plans_dir: &std::path::Path,
+    spec_id: &str,
+) -> Option<std::path::PathBuf> {
+    let mut matches: Vec<std::path::PathBuf> = Vec::new();
+    for entry in std::fs::read_dir(plans_dir).ok()?.flatten() {
+        let p = entry.path();
+        if p.extension().and_then(|x| x.to_str()) != Some("md") {
+            continue;
+        }
+        let name = p.file_name().and_then(|x| x.to_str()).unwrap_or("");
+        if name.starts_with('_') {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let head: String = content.lines().take(30).collect::<Vec<_>>().join("\n");
+        if parse_plan_specs(&head)
+            .iter()
+            .any(|s| s.eq_ignore_ascii_case(spec_id))
+        {
+            matches.push(p);
+        }
+    }
+    matches.sort();
+    matches.pop()
+}
+
+/// STORY-265: promote Approved spec(s) to Planned when a plan file exists.
+/// Reads the store read-only to find eligible specs (status Approved AND a
+/// `docs/plans/` file listing the SPEC-ID), then performs the transition via
+/// the proven `aida edit --status planned` path (history + write-through +
+/// the ADR-3 authority gate). trace:STORY-265 | ai:claude
+// ============================================================================
+// `aida plan capture <PR>` — synthesize a docs/plans/ file from a PR's
+// description + commit log. For plans authored via the web `/ultraplan` flow
+// that land a PR directly, leaving no local plan file (TASK-305). The PR
+// description carries the plan summary; the commit log is the step-by-step
+// execution; `gh pr diff --name-only` is the blast radius. We fill the
+// 11-section template so the captured file passes `aida plan verify`.
+// trace:TASK-305 | ai:claude
+// ============================================================================
+
+/// The structured input `synthesize_plan_from_pr` needs, kept separate from the
+/// `gh` subprocess calls so the synthesis is a pure function (PR data → plan
+/// markdown) that can be unit-tested with a fixture. trace:TASK-305 | ai:claude
+#[derive(Debug, Clone, Default)]
+struct CapturedPr {
+    number: u64,
+    title: String,
+    body: String,
+    /// Commit subjects (message headlines), in chronological order.
+    commit_subjects: Vec<String>,
+    /// Files changed, from `gh pr diff --name-only`.
+    changed_files: Vec<String>,
+}
+
+/// Parse a PR argument that may arrive as `65`, `PR-65`, `pr-65`, or `#65`.
+/// trace:TASK-305 | ai:claude
+fn parse_pr_number(arg: &str) -> Result<u64> {
+    let trimmed = arg.trim();
+    let digits = trimmed
+        .trim_start_matches('#')
+        .trim_start_matches("PR-")
+        .trim_start_matches("pr-")
+        .trim_start_matches("Pr-")
+        .trim();
+    digits.parse::<u64>().map_err(|_| {
+        anyhow::anyhow!("could not parse `{arg}` as a PR number (try a bare number like `65`)")
+    })
+}
+
+/// Scan free text for lines that look like test / verification commands so the
+/// captured plan's `## Verification` section is grounded in what the PR author
+/// actually claimed they ran. Matches fenced-code lines and inline `cargo` /
+/// `aida` / `npm` / `make` / `pytest` / `go test` invocations. Returns the
+/// matched lines verbatim (deduped, order-preserving). trace:TASK-305 | ai:claude
+fn extract_verification_commands(body: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut in_fence = false;
+    for raw in body.lines() {
+        let line = raw.trim();
+        if line.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        // Strip a leading list marker / `$` prompt so the heuristic sees the command.
+        let candidate = line
+            .trim_start_matches("- ")
+            .trim_start_matches("* ")
+            .trim_start_matches("$ ")
+            .trim();
+        let looks_like_cmd = candidate.starts_with("cargo ")
+            || candidate.starts_with("aida ")
+            || candidate.starts_with("npm ")
+            || candidate.starts_with("pnpm ")
+            || candidate.starts_with("yarn ")
+            || candidate.starts_with("make ")
+            || candidate.starts_with("pytest")
+            || candidate.starts_with("go test")
+            || candidate.starts_with("./")
+            || candidate.starts_with("bash ");
+        // Inside a fenced block we keep any command-shaped line; outside, only
+        // ones starting with a recognised tool so prose doesn't leak in.
+        if (in_fence && looks_like_cmd) || looks_like_cmd {
+            if !candidate.is_empty() && !out.iter().any(|c| c == candidate) {
+                out.push(candidate.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// Synthesize the 11-section plan markdown from captured PR data. Pure function
+/// (no I/O) so it is unit-tested against a fixture. `date` is injected so the
+/// header is deterministic in tests. Missing-data sections carry an explicit
+/// `<!-- not captured from PR -->` marker rather than being omitted, so the
+/// output still passes `aida plan verify` (which treats Critical Files /
+/// Verification / Followups as hard-required). trace:TASK-305 | ai:claude
+fn synthesize_plan_from_pr(pr: &CapturedPr, date: &str) -> String {
+    const NOT_CAPTURED: &str = "<!-- not captured from PR -->";
+
+    // Spec ids credited across the title + every commit subject — for the
+    // header `Specs:` line. First-seen order, deduped case-insensitively.
+    let mut specs: Vec<String> = Vec::new();
+    let push_specs = |text: &str, acc: &mut Vec<String>| {
+        for id in extract_spec_ids_from_commit(text) {
+            if !acc.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                acc.push(id);
+            }
+        }
+    };
+    push_specs(&pr.title, &mut specs);
+    for subj in &pr.commit_subjects {
+        push_specs(subj, &mut specs);
+    }
+    let specs_line = if specs.is_empty() {
+        NOT_CAPTURED.to_string()
+    } else {
+        specs.join(", ")
+    };
+
+    let title = if pr.title.trim().is_empty() {
+        format!("PR-{}", pr.number)
+    } else {
+        pr.title.trim().to_string()
+    };
+
+    let body = pr.body.trim();
+    let approach = if body.is_empty() {
+        format!(
+            "{NOT_CAPTURED}\n\nThis plan was reconstructed from PR-{} after the fact; the PR \
+             carried no description.",
+            pr.number
+        )
+    } else {
+        body.to_string()
+    };
+
+    let mut md = String::new();
+
+    // ── Header block (the 11th "section": the metadata preamble). ──
+    md.push_str(&format!("# Plan: {title}\n\n"));
+    md.push_str(&format!("Date: {date}\n"));
+    md.push_str(&format!("Specs: {specs_line}\n"));
+    md.push_str("Status: Completed\n");
+    md.push_str(&format!(
+        "Complexity: {} commits, {} files changed (reconstructed from PR)\n",
+        pr.commit_subjects.len(),
+        pr.changed_files.len()
+    ));
+    md.push_str(&format!("Source: web /ultraplan PR-{}\n\n", pr.number));
+    md.push_str(&format!(
+        "<!--\n  Captured by `aida plan capture {}` from the PR description + commit log.\n  \
+         The web /ultraplan flow lands a PR directly without writing a local plan file;\n  \
+         this reconstructs the AIDA plan-archival record after the fact. trace:TASK-305\n-->\n\n",
+        pr.number
+    ));
+
+    // ── Approach (from PR description). ──
+    md.push_str("## Approach\n\n");
+    md.push_str(&approach);
+    md.push_str("\n\n");
+
+    // ── Decisions. Not separable from a free-form PR body. ──
+    md.push_str("## Decisions\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — decisions are not separable from the PR description above. See the \
+         `## Approach` section (the PR body) for the rationale the author recorded.\n\n"
+    ));
+
+    // ── Files (in build-order) — the commit log is the step-by-step execution. ──
+    md.push_str("## Files (in build-order)\n\n");
+    if pr.commit_subjects.is_empty() {
+        md.push_str(&format!("{NOT_CAPTURED} — no commits found on the PR.\n\n"));
+    } else {
+        md.push_str(
+            "Reconstructed from the PR commit log (chronological — each commit is one step):\n\n",
+        );
+        for (i, subj) in pr.commit_subjects.iter().enumerate() {
+            md.push_str(&format!("{}. {}\n", i + 1, subj.trim()));
+        }
+        md.push('\n');
+    }
+
+    // ── Critical Files (hard-required) — from `gh pr diff --name-only`. ──
+    md.push_str("## Critical Files\n\n");
+    if pr.changed_files.is_empty() {
+        md.push_str(&format!(
+            "{NOT_CAPTURED} — no changed files reported for the PR.\n\n"
+        ));
+    } else {
+        for f in &pr.changed_files {
+            md.push_str(&format!("- `{}`\n", f.trim()));
+        }
+        md.push('\n');
+    }
+
+    // ── Reusable helpers. Cannot be derived from a PR after the fact. ──
+    md.push_str("## Reusable helpers (do not reimplement)\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — reusable-helper analysis runs from the trace graph at plan time. \
+         Run `aida plan helpers <SPEC>` if you need it for follow-up work.\n\n"
+    ));
+
+    // ── Risks + gotchas. ──
+    md.push_str("## Risks + gotchas\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — risks were not recorded separately from the PR description.\n\n"
+    ));
+
+    // ── Tests (named). ──
+    md.push_str("## Tests\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — see the `## Verification` section for any test commands the PR \
+         description mentioned.\n\n"
+    ));
+
+    // ── Verification (hard-required) — mine the PR body for command-shaped lines. ──
+    md.push_str("## Verification\n\n");
+    let verif = extract_verification_commands(body);
+    if verif.is_empty() {
+        md.push_str(&format!(
+            "{NOT_CAPTURED} — the PR description named no test/verification commands.\n\n"
+        ));
+    } else {
+        md.push_str("Commands the PR description named as verification:\n\n");
+        md.push_str("```bash\n");
+        for c in &verif {
+            md.push_str(c);
+            md.push('\n');
+        }
+        md.push_str("```\n\n");
+    }
+
+    // ── Followups (hard-required). ──
+    md.push_str("## Followups\n\n");
+    md.push_str(&format!(
+        "{NOT_CAPTURED} — no out-of-scope followups were captured from the PR.\n\n"
+    ));
+
+    // ── Related. ──
+    md.push_str("## Related\n\n");
+    if specs.is_empty() {
+        md.push_str(&format!("- Source: web /ultraplan PR-{}\n", pr.number));
+    } else {
+        md.push_str(&format!("- Specs: {}\n", specs.join(", ")));
+        md.push_str(&format!("- Source: web /ultraplan PR-{}\n", pr.number));
+    }
+
+    md
+}
+
+/// Build the output filename slug for a captured plan: prefer the first
+/// credited spec id, else a slug of the PR title, else `pr-<N>`. Always
+/// suffixed with `-from-pr-<N>` so the provenance is in the path and the file
+/// is deterministic (idempotent re-capture overwrites the same path).
+/// trace:TASK-305 | ai:claude
+fn captured_plan_slug(pr: &CapturedPr) -> String {
+    let mut specs: Vec<String> = Vec::new();
+    for id in extract_spec_ids_from_commit(&pr.title) {
+        specs.push(id);
+    }
+    if specs.is_empty() {
+        for subj in &pr.commit_subjects {
+            for id in extract_spec_ids_from_commit(subj) {
+                specs.push(id);
+                break;
+            }
+            if !specs.is_empty() {
+                break;
+            }
+        }
+    }
+    let base = if let Some(first) = specs.first() {
+        slugify_str(first)
+    } else if !pr.title.trim().is_empty() {
+        let s = slugify_str(&pr.title);
+        // Bound the slug length so filenames stay sane.
+        s.split('-').take(6).collect::<Vec<_>>().join("-")
+    } else {
+        String::new()
+    };
+    if base.is_empty() {
+        format!("pr-{}", pr.number)
+    } else {
+        format!("{base}-from-pr-{}", pr.number)
+    }
+}
+
+/// Fetch a PR's title/body/commit-subjects via `gh pr view --json` and the
+/// changed files via `gh pr diff --name-only`. Isolated from the synthesis so
+/// the pure function stays testable. trace:TASK-305 | ai:claude
+fn fetch_captured_pr(project_root: &std::path::Path, number: u64) -> Result<CapturedPr> {
+    let gh = resolve_gh_binary().ok_or_else(|| {
+        anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+    })?;
+    let n_str = number.to_string();
+
+    let view = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args(["pr", "view", &n_str, "--json", "number,title,body,commits"])
+        .output()
+        .with_context(|| format!("`gh pr view {number}` failed to spawn"))?;
+    if !view.status.success() {
+        anyhow::bail!(
+            "`gh pr view {}` exited {} — {}",
+            number,
+            view.status,
+            String::from_utf8_lossy(&view.stderr).trim()
+        );
+    }
+    let json: serde_json::Value = serde_json::from_slice(&view.stdout)
+        .with_context(|| format!("`gh pr view {number}` returned non-JSON output"))?;
+
+    let title = json
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let body = json
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let commit_subjects: Vec<String> = json
+        .get("commits")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| {
+                    c.get("messageHeadline")
+                        .and_then(|m| m.as_str())
+                        .map(|s| s.to_string())
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Changed files. A diff failure (e.g. the PR is closed and the branch is
+    // gone) is non-fatal — Critical Files just falls back to not-captured.
+    let changed_files: Vec<String> = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args(["pr", "diff", &n_str, "--name-only"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(CapturedPr {
+        number,
+        title,
+        body,
+        commit_subjects,
+        changed_files,
+    })
+}
+
+/// `aida plan capture <PR>` handler. trace:TASK-305 | ai:claude
+fn plan_capture(pr_arg: &str, stdout: bool) -> Result<()> {
+    use colored::Colorize;
+    let number = parse_pr_number(pr_arg)?;
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let captured = fetch_captured_pr(&project_root, number)?;
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let md = synthesize_plan_from_pr(&captured, &date);
+
+    if stdout {
+        print!("{md}");
+        return Ok(());
+    }
+
+    let plans_dir = project_root.join("docs").join("plans");
+    std::fs::create_dir_all(&plans_dir)
+        .with_context(|| format!("could not create {}", plans_dir.display()))?;
+    let slug = captured_plan_slug(&captured);
+    let filename = format!("{date}-{slug}.md");
+    let path = plans_dir.join(&filename);
+    let existed = path.exists();
+    std::fs::write(&path, &md).with_context(|| format!("could not write {}", path.display()))?;
+
+    let verb = if existed { "overwrote" } else { "wrote" };
+    println!(
+        "{} {} {} from PR-{}",
+        "✓".green(),
+        verb,
+        path.display().to_string().bold(),
+        number
+    );
+    println!(
+        "  {}",
+        "review + edit the synthesized sections, then `aida plan verify` it".dimmed()
+    );
+    Ok(())
+}
+
+fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
+    use colored::Colorize;
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let plans_dir = project_root.join("docs").join("plans");
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the requirement store"))?;
+
+    let targets: Vec<String> = if let Some(s) = spec {
+        vec![s.to_string()]
+    } else if all {
+        store
+            .requirements
+            .iter()
+            .filter(|r| r.status == aida_core::RequirementStatus::Approved)
+            .filter_map(|r| r.spec_id.clone())
+            .collect()
+    } else {
+        anyhow::bail!("specify a SPEC-ID to promote, or pass --all to sweep every Approved spec");
+    };
+
+    let (mut eligible, mut promoted, mut skipped) = (0usize, 0usize, 0usize);
+    for sid in targets {
+        let Some(req) = store.requirements.iter().find(|r| {
+            r.spec_id
+                .as_deref()
+                .map(|x| x.eq_ignore_ascii_case(&sid))
+                .unwrap_or(false)
+        }) else {
+            eprintln!("  {} {} not found", "⚠".yellow(), sid);
+            continue;
+        };
+        let real_id = req.spec_id.clone().unwrap_or(sid);
+        if req.status != aida_core::RequirementStatus::Approved {
+            // Only narrate skips for an explicitly-named spec, not the --all sweep.
+            if spec.is_some() {
+                println!(
+                    "  {} {} is {:?}, not Approved — skipped",
+                    "↷".dimmed(),
+                    real_id,
+                    req.status
+                );
+            }
+            skipped += 1;
+            continue;
+        }
+        match find_plan_file_for_spec(&plans_dir, &real_id) {
+            Some(plan) => {
+                eligible += 1;
+                let rel = plan.strip_prefix(&project_root).unwrap_or(&plan);
+                if dry_run {
+                    println!(
+                        "  {} {} → Planned (plan: {})",
+                        "✓".green(),
+                        real_id,
+                        rel.display()
+                    );
+                } else {
+                    let status = std::process::Command::new(std::env::current_exe()?)
+                        .args(["edit", &real_id, "--status", "planned"])
+                        .status()?;
+                    if status.success() {
+                        println!(
+                            "  {} {} → Planned (plan: {})",
+                            "✓".green(),
+                            real_id,
+                            rel.display()
+                        );
+                        promoted += 1;
+                    } else {
+                        eprintln!("  {} {} — status edit failed", "✗".red(), real_id);
+                    }
+                }
+            }
+            None => {
+                if spec.is_some() {
+                    println!(
+                        "  {} {} has no plan file in {} (a plan's `Specs:` header must list {}) — skipped",
+                        "↷".dimmed(),
+                        real_id,
+                        plans_dir.display(),
+                        real_id
+                    );
+                }
+                skipped += 1;
+            }
+        }
+    }
+
+    if dry_run {
+        println!("(dry-run) {eligible} eligible for promotion, {skipped} skipped");
+    } else {
+        println!("{promoted} promoted to Planned, {skipped} skipped");
+    }
+    Ok(())
 }
 
 /// Dispatch `aida changelog <generate|refresh|preview>`. The whole engine
@@ -45670,6 +56132,92 @@ pub(crate) fn scan_trace_graph(
                     .or_default()
                     .push(TraceHit { file: rel, symbol });
             }
+        }
+    }
+    out
+}
+
+/// STORY-511: the resolved state of the change-request (PR/MR) line in
+/// `aida show`'s git-linkage section, decoupled from the git/forge probes
+/// so the *rendering* is a pure function of (forge, state) — and thus
+/// unit-testable with no git repo and no `gh`/`glab` on PATH. EPIC-35
+/// slice 5 makes this section forge-aware: a GitLab repo reads "MR-47"
+/// and "glab not installed", not the GitHub-only "PR-47"/"gh" wording.
+/// trace:STORY-511 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ChangeLinkageState {
+    /// Shipped (merged to the default branch); carries the squash-merge
+    /// change number when one was parsed from the subject.
+    Shipped { number: Option<u64> },
+    /// In flight, an open change was found. `number` + `url`.
+    InFlightFound { number: u64, url: String },
+    /// In flight, the forge CLI ran cleanly and reported no open change.
+    InFlightNoChange,
+    /// In flight, the forge CLI is not on PATH.
+    CliMissing,
+    /// In flight, the forge CLI ran but errored (auth / parse).
+    CliFailed,
+    /// In flight, the forge API was unreachable (transient).
+    Unreachable,
+    /// Work is committed but no local branch holds it.
+    BranchNotFound,
+}
+
+/// STORY-511: render the change-request linkage lines for `aida show`'s
+/// git-linkage section, forge-aware. Returns `(label, value)` pairs of
+/// **plain, uncolored** text in render order (caller applies styling).
+/// The change noun comes from [`crate::forge::ForgeKind::change_noun`]
+/// ("PR" / "MR" / "change") and the CLI name from
+/// [`crate::forge::ForgeKind::cli_name`] ("gh" / "glab" / "the forge CLI")
+/// so a GitLab project reads "MR-47" and "glab not installed" rather than
+/// the GitHub-only wording. Pure: no git, no forge CLI, no I/O — fully
+/// unit-testable in isolation. trace:STORY-511 | ai:claude
+pub(crate) fn format_change_linkage(
+    forge: crate::forge::ForgeKind,
+    state: &ChangeLinkageState,
+) -> Vec<(String, String)> {
+    let noun = forge.change_noun(); // "PR" | "MR" | "change"
+    let cli = forge.cli_name(); // "gh" | "glab" | ""
+                                // Pure-git has no forge CLI binary; name it generically rather than
+                                // printing an empty token in "<cli> not installed".
+    let cli_label = if cli.is_empty() { "the forge CLI" } else { cli };
+    let mut out: Vec<(String, String)> = Vec::new();
+    match state {
+        ChangeLinkageState::Shipped { number } => {
+            out.push(("Branch".to_string(), "merged to main".to_string()));
+            if let Some(num) = number {
+                out.push((noun.to_string(), format!("{noun}-{num}")));
+            }
+        }
+        ChangeLinkageState::InFlightFound { number, url } => {
+            out.push((noun.to_string(), format!("{noun}-{number} {url}")));
+        }
+        ChangeLinkageState::InFlightNoChange => {
+            out.push((noun.to_string(), format!("no {noun} opened yet")));
+        }
+        ChangeLinkageState::CliMissing => {
+            out.push((
+                noun.to_string(),
+                format!("{cli_label} not installed — {noun} state unknown"),
+            ));
+        }
+        ChangeLinkageState::CliFailed => {
+            out.push((
+                noun.to_string(),
+                format!("{cli_label} lookup failed — {noun} state unknown"),
+            ));
+        }
+        ChangeLinkageState::Unreachable => {
+            out.push((
+                noun.to_string(),
+                format!("{noun} API unreachable — {noun} state unknown (transient)"),
+            ));
+        }
+        ChangeLinkageState::BranchNotFound => {
+            out.push((
+                "Branch".to_string(),
+                "work committed but branch not found locally".to_string(),
+            ));
         }
     }
     out
@@ -46534,8 +57082,16 @@ fn render_in_flight_grouped(
             .collect::<Vec<_>>()
             .join("  ");
 
-        match detect_open_pr_for_branch(project_root, branch) {
-            PrLookup::Found(pr) => {
+        // STORY-516: forge-routed; reconstruct OpenPrInfo so the Found block is
+        // unchanged. The `_` arm already covers every non-Found state.
+        // trace:STORY-516 | ai:claude
+        match change_lookup_for_branch(project_root, branch) {
+            crate::forge::ChangeLookup::Found(c) => {
+                let pr = OpenPrInfo {
+                    number: c.id,
+                    title: c.title.unwrap_or_default(),
+                    url: c.url,
+                };
                 println!(
                     "  {} {} — {} spec{}:",
                     format!("PR-{}", pr.number).cyan().bold(),
@@ -46558,7 +57114,7 @@ fn render_in_flight_grouped(
                 let local_state = detect_local_review_state(project_root, all_reqs, pr.number);
                 let ci =
                     if approved.is_none() && matches!(local_state, LocalReviewState::NotStarted) {
-                        probe_ci_state_for_branch(branch)
+                        ci_probe_via_forge(branch) // STORY-516: forge-routed
                     } else {
                         CiProbe::NoSignal(String::new())
                     };
@@ -46683,11 +57239,53 @@ fn render_in_flight_grouped(
             if no_commit.len() == 1 { "" } else { "s" }
         );
         println!("    {} {}", "◐".dimmed(), no_commit.join("  "));
-        println!(
-            "    {} commit the work with `({})` in the message, then open a PR",
-            "▶ Next:".bold(),
-            "SPEC-ID".cyan()
-        );
+        // TASK-671: name the real SPEC-ID (it's the payload the user must type
+        // into the commit trailer — an allowed user-facing id use per TASK-268),
+        // be remote-aware (no "open a PR" for a local-only project with no
+        // origin), and show a literal commit example so the trailer isn't
+        // dropped — the exact mistake that strands a spec in this state.
+        // trace:TASK-671 | ai:claude
+        let has_origin = aida_core::git_ops::has_remote(project_root, "origin");
+        if no_commit.len() == 1 {
+            let id = &no_commit[0];
+            if has_origin {
+                println!(
+                    "    {} commit your change with `({})` in the message, then open a PR — the merge auto-completes it.",
+                    "▶ Next:".bold(),
+                    id.cyan()
+                );
+            } else {
+                println!(
+                    "    {} commit your change with `({})` in the message — that auto-completes it on the next `{}`.",
+                    "▶ Next:".bold(),
+                    id.cyan(),
+                    "aida pull".cyan()
+                );
+            }
+            println!(
+                "            e.g.  {}",
+                format!("git commit -m \"... ({})\"", id).dimmed()
+            );
+        } else {
+            if has_origin {
+                println!(
+                    "    {} commit each with its own `({})` trailer in the message, then open a PR — the merge auto-completes each.",
+                    "▶ Next:".bold(),
+                    "SPEC-ID".cyan()
+                );
+            } else {
+                println!(
+                    "    {} commit each with its own `({})` trailer — that auto-completes each on the next `{}`.",
+                    "▶ Next:".bold(),
+                    "SPEC-ID".cyan(),
+                    "aida pull".cyan()
+                );
+            }
+            println!(
+                "            e.g.  {}",
+                "git commit -m \"... (SPEC-ID)\"".dimmed()
+            );
+        }
     }
 }
 
@@ -46761,19 +57359,21 @@ fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> 
 /// TASK-241: the git-linkage data for a spec — extracted from
 /// [`print_git_linkage`] so the collection (git-only, never gh) is
 /// unit-testable against a temp repo. trace:TASK-241 | ai:claude
-struct GitLinkage {
+// trace:STORY-82 | ai:claude — `pub(crate)` so the MCP `show_requirement`
+// tool can reuse the same git-linkage collection `aida show` renders.
+pub(crate) struct GitLinkage {
     /// (full_sha, short_sha, subject), newest first.
-    commits: Vec<(String, String, String)>,
+    pub(crate) commits: Vec<(String, String, String)>,
     /// (file, symbol) per trace comment — deduped and sorted.
-    files: Vec<(String, Option<String>)>,
+    pub(crate) files: Vec<(String, Option<String>)>,
     /// The newest referencing commit is an ancestor of main.
-    shipped: bool,
+    pub(crate) shipped: bool,
     /// Feature branch holding the work (in-flight case only).
-    branch: Option<String>,
+    pub(crate) branch: Option<String>,
     /// Worktree path checked out at `branch`, if any.
-    worktree: Option<String>,
+    pub(crate) worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
-    shipped_pr: Option<u64>,
+    pub(crate) shipped_pr: Option<u64>,
 }
 
 /// TASK-241: collect the git linkage for `ids` — commits referencing the
@@ -46781,7 +57381,7 @@ struct GitLinkage {
 /// branch/worktree/shipped state. gh-free by design: the in-flight
 /// open-PR lookup happens later, in [`print_git_linkage`].
 /// trace:TASK-241 | ai:claude
-fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
+pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<String> {
@@ -46944,13 +57544,51 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
 
     println!("\n{}:", "Git linkage".green().bold());
 
-    // ---- Branch / worktree / PR (anchored on the newest commit) ----
+    // ---- Branch / worktree / PR-or-MR (anchored on the newest commit) ----
+    // STORY-511: resolve the forge once so the change-request line uses the
+    // right noun ("PR"/"MR") and CLI ("gh"/"glab") — a GitLab repo now reads
+    // "MR-47" + "glab not installed", not the GitHub-only wording. The
+    // (label, value) text is produced by the pure `format_change_linkage`;
+    // this block only adds color + the worktree/branch decoration that
+    // depends on live data. trace:STORY-511 | ai:claude
     if !commits.is_empty() {
-        if shipped {
-            println!("  {}     {}", "Branch".bold(), "merged to main".green());
-            if let Some(num) = shipped_pr {
-                println!("  {}         {}", "PR".bold(), format!("PR-{}", num).cyan());
+        let forge = crate::forge::resolve_forge_kind(project_root);
+        // Helper: print a formatted change-linkage line list with styling.
+        let render = |lines: Vec<(String, String)>, found_url: Option<&str>| {
+            for (label, value) in lines {
+                if label == "Branch" {
+                    // "merged to main" is the only Branch line this path
+                    // produces (in-flight Branch is rendered below with
+                    // worktree decoration).
+                    println!("  {}     {}", "Branch".bold(), value.green());
+                } else if let Some(url) = found_url {
+                    // An open change: split the trailing url so it can be dimmed.
+                    let id_part = value.strip_suffix(url).map(|s| s.trim_end());
+                    match id_part {
+                        Some(id) => {
+                            println!("  {}         {} {}", label.bold(), id.cyan(), url.dimmed())
+                        }
+                        None => println!("  {}         {}", label.bold(), value.cyan()),
+                    }
+                } else {
+                    // Shipped change number, or a dimmed "unknown" diagnostic.
+                    let is_diag = value.contains("unknown")
+                        || value.starts_with("no ")
+                        || value.contains("not installed");
+                    if is_diag {
+                        println!("  {}         {}", label.bold(), value.dimmed());
+                    } else {
+                        println!("  {}         {}", label.bold(), value.cyan());
+                    }
+                }
             }
+        };
+
+        if shipped {
+            render(
+                format_change_linkage(forge, &ChangeLinkageState::Shipped { number: shipped_pr }),
+                None,
+            );
         } else {
             match branch.as_deref() {
                 Some(b) => {
@@ -46964,37 +57602,35 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                         wt,
                         "in flight".yellow()
                     );
-                    match detect_open_pr_for_branch(project_root, b) {
-                        PrLookup::Found(pr) => println!(
-                            "  {}         {} {}",
-                            "PR".bold(),
-                            format!("PR-{}", pr.number).cyan(),
-                            pr.url.dimmed()
-                        ),
-                        PrLookup::NoOpenPr => {
-                            println!("  {}         {}", "PR".bold(), "no PR opened yet".dimmed())
-                        }
-                        PrLookup::GhMissing => println!(
-                            "  {}         {}",
-                            "PR".bold(),
-                            "gh not installed — PR state unknown".dimmed()
-                        ),
-                        PrLookup::GhFailed(_) => println!(
-                            "  {}         {}",
-                            "PR".bold(),
-                            "gh lookup failed — PR state unknown".dimmed()
-                        ),
-                        PrLookup::GhUnreachable(_) => println!(
-                            "  {}         {}",
-                            "PR".bold(),
-                            "GH API unreachable — PR state unknown (transient)".dimmed()
-                        ),
-                    }
+                    // STORY-516: forge-routed lookup → STORY-511 forge-aware
+                    // rendering. trace:STORY-516 trace:STORY-511 | ai:claude
+                    let (state, url): (ChangeLinkageState, Option<String>) =
+                        match change_lookup_for_branch(project_root, b) {
+                            crate::forge::ChangeLookup::Found(c) => (
+                                ChangeLinkageState::InFlightFound {
+                                    number: c.id,
+                                    url: c.url.clone(),
+                                },
+                                Some(c.url),
+                            ),
+                            crate::forge::ChangeLookup::NoChange => {
+                                (ChangeLinkageState::InFlightNoChange, None)
+                            }
+                            crate::forge::ChangeLookup::CliMissing => {
+                                (ChangeLinkageState::CliMissing, None)
+                            }
+                            crate::forge::ChangeLookup::CliFailed(_) => {
+                                (ChangeLinkageState::CliFailed, None)
+                            }
+                            crate::forge::ChangeLookup::Unreachable(_) => {
+                                (ChangeLinkageState::Unreachable, None)
+                            }
+                        };
+                    render(format_change_linkage(forge, &state), url.as_deref());
                 }
-                None => println!(
-                    "  {}     {}",
-                    "Branch".bold(),
-                    "work committed but branch not found locally".yellow()
+                None => render(
+                    format_change_linkage(forge, &ChangeLinkageState::BranchNotFound),
+                    None,
                 ),
             }
         }
@@ -48008,6 +58644,22 @@ fn handle_ultraplan_command(
     no_comments: bool,
 ) -> Result<()> {
     let project_root = find_project_root()?;
+    // TASK-304: `[ultraplan] mode = "never"` disables the integration for
+    // this project — refuse with a message and write nothing to the
+    // clipboard. Printed to stderr so `--json` / `--stdout` consumers see a
+    // clean (empty) stdout. trace:TASK-304 | ai:claude
+    if read_ultraplan_config(&project_root).mode == UltraplanMode::Never {
+        eprintln!(
+            "{} `aida ultraplan` is disabled for this project \
+             (`[ultraplan] mode = \"never\"` in .aida/config.toml).",
+            "Note:".yellow().bold()
+        );
+        eprintln!(
+            "  {}",
+            "Set mode = \"on-demand\" or \"suggested\" to re-enable.".dimmed()
+        );
+        return Ok(());
+    }
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
     let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
@@ -48063,6 +58715,14 @@ fn handle_ultraplan_command(
         println!(
             "  {}",
             "paste it into a Claude Code session, prefixed with /ultraplan".dimmed()
+        );
+        // TASK-305: the web /ultraplan flow lands a PR directly without
+        // writing a local plan file. Nudge the user to reconcile it back
+        // into docs/plans/ once that PR lands.
+        println!(
+            "  {}",
+            "web flow? after the PR lands, run `aida plan capture <PR>` to archive the plan"
+                .dimmed()
         );
     } else {
         eprintln!(
@@ -48733,9 +59393,13 @@ fn handle_dev_status() -> Result<()> {
         if active {
             "ACTIVE".green().to_string()
         } else {
-            "(not active — `eval \"$(aida dev activate)\"` to enable)"
-                .yellow()
-                .to_string()
+            // trace:TASK-667 — wrapper-correct activate form.
+            format!(
+                "(not active — `{}` to enable)",
+                eval_subcommand_hint("dev activate")
+            )
+            .yellow()
+            .to_string()
         }
     );
     if active {
@@ -48868,6 +59532,31 @@ fn handle_dev_status() -> Result<()> {
     Ok(())
 }
 
+/// TASK-667: render a runtime hint for one of the shell-modifying subcommands
+/// (`role enter <role>`, `role end`, `role add <name>`, `session start`,
+/// `session end`, `dev activate`, `dev deactivate`) in the form the caller's
+/// shell will actually honor.
+///
+/// The `aida()` wrapper installed by `aida dev shell-init` auto-evals these
+/// subcommands, so under the wrapper the BARE form (`aida role enter <role>`)
+/// is correct — the function evals the binary's stdout. Printing
+/// `eval "$(aida role enter <role>)"` there double-evals (the inner eval runs
+/// in a subshell) and the shell change is silently lost — the long-standing
+/// double-eval footgun.
+///
+/// Without the wrapper (raw binary on PATH), the bare form would just print
+/// shell code that never executes, so the `eval "$(...)"` form is required.
+///
+/// The wrapper signals its presence via `AIDA_SHELL_WRAPPER` (exported from
+/// SHELL_HELPERS), which is how we branch.
+fn eval_subcommand_hint(subcommand: &str) -> String {
+    if std::env::var_os("AIDA_SHELL_WRAPPER").is_some() {
+        format!("aida {subcommand}")
+    } else {
+        format!("eval \"$(aida {subcommand})\"")
+    }
+}
+
 /// Shell helpers emitted by `aida dev shell-init`. A single `aida()` wrapper
 /// function — pyenv/rbenv style. For most subcommands it just delegates to
 /// the binary. For the handful of eval-only subcommands (dev activate, dev
@@ -48885,6 +59574,15 @@ const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # automatically eval'd so they take effect here, not in the subprocess.
 #
 # Bypass the wrapper with `command aida ...` if you need raw stdout.
+
+# trace:TASK-667 — signal the wrapper's presence so the binary tailors its
+# auto-eval hints. When this is set, the `aida()` function below auto-evals
+# the shell-modifying subcommands, so the binary prints the BARE form
+# (`aida role enter <role>`); printing `eval "$(...)"` would double-eval and
+# lose the effect. The value lists the auto-evaled verb groups for any future
+# wrapper-aware decisions.
+export AIDA_SHELL_WRAPPER='role,session,dev'
+
 aida() {
     # Take the first two positional words verbatim — that's enough to
     # disambiguate every eval-required subcommand we have.
@@ -49525,9 +60223,11 @@ fn handle_dev_release(bump: &str) -> Result<()> {
                 .filter(|p| is_aida_repo(p))
         })
         .ok_or_else(|| {
+            // trace:TASK-667 — wrapper-correct activate form.
             anyhow::anyhow!(
                 "Not in an aida repo. cd into the aida checkout, set AIDA_DEV_REPO, \
-                 or run `eval \"$(aida dev activate)\"` first."
+                 or run `{}` first.",
+                eval_subcommand_hint("dev activate")
             )
         })?;
 
@@ -49563,6 +60263,21 @@ fn handle_dev_release(bump: &str) -> Result<()> {
             }
         }
         println!();
+    }
+
+    // STORY-127 detector (3): warn (don't block) when there are open PRs the
+    // release tag will not include. A single batched `gh pr list` snapshot.
+    // trace:STORY-127 | ai:claude
+    {
+        let open_numbers: Vec<u64> = collect_open_prs(&repo)
+            .by_branch
+            .values()
+            .map(|p| p.number)
+            .collect();
+        if let Some(msg) = release_unmerged_pr_warning(&open_numbers) {
+            eprintln!("  {} {}", "Warning:".yellow().bold(), msg);
+            println!();
+        }
     }
 
     // ── Step 2/5: run release.sh ─────────────────────────────────────────
@@ -51059,11 +61774,13 @@ fn handle_push_command(
                 && branch != "main"
                 && branch != "master"
                 && matches!(
-                    detect_open_pr_for_branch(&project_root, &branch),
-                    PrLookup::NoOpenPr
+                    change_lookup_for_branch(&project_root, &branch),
+                    crate::forge::ChangeLookup::NoChange
                 )
             {
-                if let PrLookup::Found(pr) = detect_merged_pr_for_branch(&project_root, &branch) {
+                if let PrLookup::Found(pr) =
+                    detect_merged_pr_for_branch_via_forge(&project_root, &branch)
+                {
                     eprintln!(
                         "{} branch {} was the head of {} which already merged.",
                         "⚠".yellow().bold(),
@@ -51378,6 +62095,23 @@ fn handle_pull_command(
                         (Some(a), Some(b)) => a == b,
                         _ => false,
                     };
+                    // STORY-127 detectors (1)+(2): a no-op code pull. If the
+                    // user holds a reviewer lease on an unmerged PR, this is
+                    // the PR-27-style "ran catch-up before the merge happened"
+                    // mistake — warn so they wait for the merge. Otherwise a
+                    // quiet one-liner. Suppressed in --quiet (orchestrator /
+                    // scripted) runs. trace:STORY-127 | ai:claude
+                    if pull_was_noop && !quiet {
+                        let reviewer_pr = active_reviewer_unmerged_pr(&project_root);
+                        if let Some(msg) = pull_noop_warning(true, reviewer_pr.as_deref()) {
+                            let tag = if reviewer_pr.is_some() {
+                                "Warning:".yellow().bold()
+                            } else {
+                                "Note:".dimmed()
+                            };
+                            eprintln!("  {} {}", tag, msg);
+                        }
+                    }
                     let scan_pre: Option<&str> = if pull_was_noop {
                         None
                     } else {
@@ -51592,6 +62326,31 @@ fn handle_pull_command(
                 );
                 store_failed = Some(format!("store leg pull_rebase failed: {}", e));
             }
+        }
+    }
+
+    // STORY-262: no-daemon scheduled advisor tasks. After the legs settle,
+    // evaluate registered schedules (`.aida/schedules.toml`) and file a TASK
+    // into the target role's queue for each that's due. Best-effort: a
+    // failure prints a warning but does NOT change `aida pull`'s exit code
+    // (that stays bound to the code+store legs per the BUG-254 contract).
+    // trace:STORY-262 | ai:claude
+    match fire_schedules(&project_root, store_path, None, quiet) {
+        Ok(fired) if !fired.is_empty() && !quiet => {
+            println!(
+                "  {} {} scheduled task{} filed",
+                "Schedules:".cyan().bold(),
+                fired.len(),
+                if fired.len() == 1 { "" } else { "s" },
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!(
+                "  {} schedule evaluation failed: {} (no scheduled tasks filed this pull)",
+                "Warning:".yellow().bold(),
+                e,
+            );
         }
     }
 
@@ -52114,6 +62873,21 @@ fn handle_fetch_command(
                             pre.as_deref(),
                             post.as_deref(),
                         );
+                        // STORY-127 detector (2): now that the remote ref is
+                        // fresh, a cheap local-vs-origin SHA compare. If they
+                        // already match, a subsequent `git pull` / `aida pull`
+                        // would be a no-op — say so in one line so the user
+                        // doesn't run catch-up commands expecting changes.
+                        // trace:STORY-127 | ai:claude
+                        let local = git_ops::head_sha(&project_root).ok();
+                        if local_main_already_at_origin(local.as_deref(), post.as_deref()) {
+                            println!(
+                                "  {} local {} already at origin/{} — `aida pull` would be a no-op.",
+                                "Note:".dimmed(),
+                                branch,
+                                branch
+                            );
+                        }
                     }
                 }
                 Err(e) => {
@@ -53891,6 +64665,7 @@ mod queue_work_tests {
             for_role: for_role.map(String::from),
             for_scope: for_scope.map(String::from),
             for_session: None,
+            added_by_machine: None,
         }
     }
 
@@ -53987,7 +64762,7 @@ mod queue_work_tests {
         let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "reviewer"),
+            derive_queue_work_prompt(&plan, "reviewer", false),
             "/aida-review --pr 11"
         );
     }
@@ -53997,7 +64772,10 @@ mod queue_work_tests {
     fn prompt_reviewer_non_pr_is_bare() {
         let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
-        assert_eq!(derive_queue_work_prompt(&plan, "reviewer"), "/aida-review");
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "reviewer", false),
+            "/aida-review"
+        );
     }
 
     /// Implementer + item mode → `/aida-pickup <ID>` (focus directive).
@@ -54013,7 +64791,7 @@ mod queue_work_tests {
             anchor_title: "title".into(),
         };
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer"),
+            derive_queue_work_prompt(&plan, "implementer", false),
             "/aida-pickup BUG-83"
         );
     }
@@ -54026,7 +64804,7 @@ mod queue_work_tests {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer"),
+            derive_queue_work_prompt(&plan, "implementer", false),
             "/aida-pickup --auto-first"
         );
     }
@@ -54040,9 +64818,42 @@ mod queue_work_tests {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
         assert_eq!(
-            derive_queue_work_prompt(&plan, "implementer"),
+            derive_queue_work_prompt(&plan, "implementer", false),
             "/aida-pickup --auto-first"
         );
+    }
+
+    /// STORY-265: plan-only mode runs /aida-plan (not /aida-pickup) with the
+    /// item focus, so the session writes a plan instead of implementing.
+    #[test]
+    fn prompt_plan_only_runs_aida_plan() {
+        let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = QueueWorkPlan {
+            mode: QueueWorkMode::Item,
+            entries: vec![e],
+            scope: "EPIC-20".into(),
+            review_target: None,
+            anchor_display: "BUG-83".into(),
+            anchor_title: "title".into(),
+        };
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "implementer", true),
+            "/aida-plan BUG-83"
+        );
+    }
+
+    /// STORY-265: plan-only defaults the permission mode to `plan` (read-only),
+    /// overriding env/config/bypass — but an explicit --permission-mode wins.
+    #[test]
+    fn plan_only_defaults_permission_to_plan_but_flag_wins() {
+        // no explicit flag: plan-only forces read-only `plan` even with bypass on
+        let (m, o) = resolve_queue_work_permission_mode(None, Some("auto"), None, true, true);
+        assert_eq!(m.as_deref(), Some("plan"));
+        assert!(o.contains("plan-only"));
+        // explicit --permission-mode flag still wins over plan-only
+        let (m, _) =
+            resolve_queue_work_permission_mode(Some("acceptEdits"), None, None, false, true);
+        assert_eq!(m.as_deref(), Some("acceptEdits"));
     }
 
     /// Title shape "Review PR-11: …" overrides for_scope and parent
@@ -54204,8 +65015,13 @@ mod queue_work_tests {
     /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_flag_wins() {
-        let (m, o) =
-            resolve_queue_work_permission_mode(Some("plan"), Some("auto"), Some("default"), true);
+        let (m, o) = resolve_queue_work_permission_mode(
+            Some("plan"),
+            Some("auto"),
+            Some("default"),
+            true,
+            false,
+        );
         assert_eq!(m.as_deref(), Some("plan"));
         assert_eq!(o, "--permission-mode flag");
     }
@@ -54214,7 +65030,8 @@ mod queue_work_tests {
     /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_env_beats_config() {
-        let (m, o) = resolve_queue_work_permission_mode(None, Some("auto"), Some("default"), true);
+        let (m, o) =
+            resolve_queue_work_permission_mode(None, Some("auto"), Some("default"), true, false);
         assert_eq!(m.as_deref(), Some("auto"));
         assert_eq!(o, "AIDA_PERMISSION_MODE env");
     }
@@ -54223,7 +65040,8 @@ mod queue_work_tests {
     /// trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_config_beats_worktree_default() {
-        let (m, o) = resolve_queue_work_permission_mode(None, None, Some("acceptEdits"), true);
+        let (m, o) =
+            resolve_queue_work_permission_mode(None, None, Some("acceptEdits"), true, false);
         assert_eq!(m.as_deref(), Some("acceptEdits"));
         assert_eq!(o, ".aida/config.toml");
     }
@@ -54232,7 +65050,7 @@ mod queue_work_tests {
     /// bypassPermissions. trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_bypass_knob_injects_bypass() {
-        let (m, o) = resolve_queue_work_permission_mode(None, None, None, true);
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, true, false);
         assert_eq!(m.as_deref(), Some("bypassPermissions"));
         assert_eq!(o, "[agents] bypass knob");
     }
@@ -54242,7 +65060,7 @@ mod queue_work_tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_faithful_default_is_native() {
-        let (m, o) = resolve_queue_work_permission_mode(None, None, None, false);
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, false, false);
         assert_eq!(m, None);
         assert_eq!(o, "native (faithful default)");
     }
@@ -54252,7 +65070,7 @@ mod queue_work_tests {
     /// resolution falls through to the bypass knob. trace:TASK-84 trace:STORY-495 | ai:claude
     #[test]
     fn permission_mode_empty_strings_are_ignored() {
-        let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true);
+        let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true, false);
         assert_eq!(m.as_deref(), Some("bypassPermissions"));
         assert_eq!(o, "[agents] bypass knob");
     }
@@ -54286,6 +65104,73 @@ mod queue_work_tests {
     #[test]
     fn autonomy_mode_no_human_beats_zen() {
         assert_eq!(resolve_autonomy_mode(true, true), AutonomyMode::NoHuman);
+    }
+
+    // --- resolve_drain_alias (TASK-578) -----------------------------------
+
+    /// `--drain` off is a pure identity map — the operator's flags pass through
+    /// untouched. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_off_is_identity() {
+        let r = resolve_drain_alias(
+            false,
+            Some("through-ci"),
+            Some("reviewer-only"),
+            Some(3),
+            10,
+        );
+        assert_eq!(r.auto_complete.as_deref(), Some("through-ci"));
+        assert_eq!(r.no_human.as_deref(), Some("reviewer-only"));
+        assert_eq!(r.max, Some(3));
+
+        let empty = resolve_drain_alias(false, None, None, None, 10);
+        assert_eq!(empty.auto_complete, None);
+        assert_eq!(empty.no_human, None);
+        assert_eq!(empty.max, None);
+    }
+
+    /// Bare `--drain` expands to the full headless drain bounded by the queue
+    /// size. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_bare_expands_to_full_headless_queue_sized() {
+        let r = resolve_drain_alias(true, None, None, None, 7);
+        assert_eq!(r.auto_complete.as_deref(), Some("full"));
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert_eq!(r.max, Some(7));
+    }
+
+    /// An unknown / empty queue size falls back to the spec's `--max 99`.
+    /// trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_unknown_queue_size_falls_back_to_99() {
+        let r = resolve_drain_alias(true, None, None, None, 0);
+        assert_eq!(r.max, Some(99));
+    }
+
+    /// Explicit flags always win over the `--drain` defaults — the alias never
+    /// overwrites an operator-supplied value. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_explicit_flags_override_defaults() {
+        let r = resolve_drain_alias(
+            true,
+            Some("through-merge"),
+            Some("reviewer-only"),
+            Some(2),
+            50,
+        );
+        assert_eq!(r.auto_complete.as_deref(), Some("through-merge"));
+        assert_eq!(r.no_human.as_deref(), Some("reviewer-only"));
+        assert_eq!(r.max, Some(2));
+    }
+
+    /// Mixed: `--drain --max 3` keeps the explicit cap but still defaults the
+    /// autonomy fields. trace:TASK-578 | ai:claude
+    #[test]
+    fn drain_alias_partial_override_keeps_other_defaults() {
+        let r = resolve_drain_alias(true, None, None, Some(3), 50);
+        assert_eq!(r.auto_complete.as_deref(), Some("full"));
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert_eq!(r.max, Some(3));
     }
 
     // --- TASK-306: --no-human kickoff gate --------------------------------
@@ -54587,6 +65472,10 @@ mod queue_work_tests {
         // which bounces when the spec has no recorded claude session.
         assert!(!msg.contains("--resume"), "msg: {msg}");
         assert!(msg.contains("auto-bump"), "msg: {msg}");
+        // TASK-240: a Done spec's PR author gets a merge-now path, routed via
+        // `aida show` (which prints the PR number) so the command is honest.
+        assert!(msg.contains("gh pr merge"), "msg: {msg}");
+        assert!(msg.contains("aida show STORY-86"), "msg: {msg}");
     }
 
     #[test]
@@ -54912,6 +65801,7 @@ mod queue_work_tests {
                 for_role: Some("reviewer".into()),
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             })
             .unwrap();
     }
@@ -54956,9 +65846,85 @@ mod queue_work_tests {
             "PR-N pickup must set review_target so it routes to the reviewer"
         );
         assert_eq!(
-            derive_queue_work_prompt(&plan, "reviewer"),
+            derive_queue_work_prompt(&plan, "reviewer", false),
             "/aida-review --pr 457"
         );
+    }
+
+    /// TASK-630 (BUG-250 criterion 5): the held-state re-entry decision is a pure
+    /// function, so it can be exercised exhaustively with no Storage, worktree,
+    /// or launcher. A deliberate PR-hold parks the spec Done + dequeued with a
+    /// marker; `--resume` against that combination is the ONLY case that may
+    /// re-enter. Every other state, a missing marker, or a non-resume invocation
+    /// must NOT — those keep the existing recovery hints. trace:TASK-630 | ai:claude
+    #[test]
+    fn held_resume_reentry_only_for_resume_done_and_marked() {
+        use RequirementStatus::*;
+
+        // The one re-enterable combination: explicit --resume, Done status,
+        // hold marker present.
+        assert!(
+            held_resume_reentry_allowed(true, &Done, true),
+            "resume + Done + hold marker is the deliberate-hold re-entry case"
+        );
+
+        // No --resume → never re-enter (a plain `queue work <spec>` keeps its
+        // status-aware not-queued hint).
+        assert!(
+            !held_resume_reentry_allowed(false, &Done, true),
+            "without --resume a held Done spec is not auto-re-entered"
+        );
+
+        // Marker absent → not a deliberate hold; leave it to the Done hint
+        // (rework / wait-for-merge).
+        assert!(
+            !held_resume_reentry_allowed(true, &Done, false),
+            "no hold marker → not a deliberate hold, no re-entry"
+        );
+
+        // Held re-entry is Done-specific: a hold marker against any other status
+        // must not unlock resume (defensive — a held spec is always Done).
+        for status in [
+            Draft,
+            Approved,
+            Planned,
+            InProgress,
+            Completed,
+            Rejected,
+            NeedsAttention,
+        ] {
+            assert!(
+                !held_resume_reentry_allowed(true, &status, true),
+                "held re-entry must be Done-only; {status:?} must not re-enter"
+            );
+        }
+    }
+
+    /// TASK-630: a held-spec resume plan is an Item-mode pickup anchored on the
+    /// spec itself (its own id is the lease scope — the implementer worktree the
+    /// dormant session lives in), with exactly one entry. This is what lets the
+    /// rest of `handle_queue_work` resume the session unchanged.
+    /// trace:TASK-630 | ai:claude
+    #[test]
+    fn held_resume_plan_is_item_scoped_to_the_spec() {
+        let mut req = aida_core::Requirement::new("held work".to_string(), String::new());
+        req.spec_id = Some("STORY-306".to_string());
+        req.status = RequirementStatus::Done;
+
+        let plan = held_resume_plan(&req, "test-user");
+
+        assert_eq!(plan.mode, QueueWorkMode::Item);
+        assert_eq!(plan.entries.len(), 1, "exactly the held spec, no cluster");
+        assert_eq!(plan.anchor_display, "STORY-306");
+        assert_eq!(
+            plan.scope, "STORY-306",
+            "scope is the spec's own id (its implementer worktree)"
+        );
+        assert!(
+            plan.review_target.is_none(),
+            "a held implementer spec is not a PR-review pickup"
+        );
+        assert_eq!(plan.entries[0].spec_id, "STORY-306");
     }
 
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
@@ -55099,6 +66065,49 @@ mod queue_rework_tests {
         ] {
             // Just confirm the function doesn't panic on any variant.
             let _ = rework_smart_target(s);
+        }
+    }
+}
+
+#[cfg(test)]
+mod eval_subcommand_hint_tests {
+    //! TASK-667: the shell wrapper exports AIDA_SHELL_WRAPPER; the binary
+    //! must then emit the BARE auto-eval hint (the `aida()` function evals
+    //! the binary's stdout, so `eval "$(...)"` would double-eval). Without
+    //! the wrapper, the `eval "$(...)"` form is required. trace:TASK-667
+    use super::eval_subcommand_hint;
+
+    // Single test (not split) so the two branches mutate AIDA_SHELL_WRAPPER
+    // sequentially — env vars are process-global and tests run in parallel.
+    #[test]
+    fn bare_when_wrapper_set_eval_form_when_unset() {
+        let prev = std::env::var_os("AIDA_SHELL_WRAPPER");
+
+        // Wrapper present → bare form (no eval wrapping).
+        std::env::set_var("AIDA_SHELL_WRAPPER", "role,session,dev");
+        assert_eq!(
+            eval_subcommand_hint("role enter advisor"),
+            "aida role enter advisor"
+        );
+        // Even an empty value counts as present (var set by the wrapper).
+        std::env::set_var("AIDA_SHELL_WRAPPER", "");
+        assert_eq!(eval_subcommand_hint("dev activate"), "aida dev activate");
+
+        // Wrapper absent → eval "$(...)" form (raw binary on PATH).
+        std::env::remove_var("AIDA_SHELL_WRAPPER");
+        assert_eq!(
+            eval_subcommand_hint("role enter advisor"),
+            "eval \"$(aida role enter advisor)\""
+        );
+        assert_eq!(
+            eval_subcommand_hint("session end"),
+            "eval \"$(aida session end)\""
+        );
+
+        // Restore whatever the test environment had.
+        match prev {
+            Some(v) => std::env::set_var("AIDA_SHELL_WRAPPER", v),
+            None => std::env::remove_var("AIDA_SHELL_WRAPPER"),
         }
     }
 }
@@ -56390,6 +67399,7 @@ fn print_status_json(
     ctx: &UserStatusContext,
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
+    project_root: &std::path::Path,
     queue_only: bool,
     ci_only: bool,
     awaiting: &awaiting_you::AwaitingReport,
@@ -56519,12 +67529,127 @@ fn print_status_json(
             }),
         );
 
+        // TASK-662: machine-readable findings detail (count + per-finding
+        // rows), mirroring the text Findings section — draft-filtered so the
+        // count matches `aida findings list`. trace:TASK-662 | ai:claude
+        {
+            let f_filter = aida_core::ListFilter {
+                status: Some("draft".to_string()),
+                ..Default::default()
+            };
+            if let Ok(summaries) = backend.list_summaries(&f_filter) {
+                let sections = crate::findings::build_findings_view(
+                    &summaries,
+                    &crate::findings::FindingsFilter::default(),
+                );
+                let total = crate::findings::count_findings(&sections);
+                let mut items = Vec::new();
+                let mut current_ids: Vec<String> = Vec::new();
+                for section in &sections {
+                    let source = section.source.label();
+                    for group in &section.groups {
+                        for row in &group.rows {
+                            current_ids.push(row.display_id.clone());
+                            items.push(json!({
+                                "id": row.display_id,
+                                "source": source,
+                                "origin": group.origin,
+                                "severity": row.severity.label(),
+                                "kind": row.kind,
+                                "recurrence": row.recurrence,
+                                "title": row.title,
+                            }));
+                        }
+                    }
+                }
+                // TASK-662: delta-since-last-run. Diff the current finding IDs
+                // against the snapshot persisted on the previous `aida status`
+                // run, then re-baseline. `delta` is null on the very first run
+                // (no prior snapshot to diff). trace:TASK-662 | ai:claude
+                let previous = read_last_findings(project_root);
+                let delta = compute_findings_delta(previous.as_deref(), &current_ids);
+                write_last_findings(project_root, &current_ids);
+                let delta_json = match &delta {
+                    Some(d) => serde_json::to_value(d).unwrap_or(serde_json::Value::Null),
+                    None => serde_json::Value::Null,
+                };
+                out.insert(
+                    "findings".to_string(),
+                    json!({ "pending": total, "items": items, "delta": delta_json }),
+                );
+            }
+        }
+
         // SPIKE-30: emit the same Claude Code cross-substrate view machine-
         // readable when the operator passes `--json`. Absent when the
         // `claude` binary isn't on PATH — graceful no-op, not an error key.
         if let Some(value) = claude_code_status_json() {
             out.insert("claude_code".to_string(), value);
         }
+
+        // STORY-456: unified worktrees + open-PRs + recently-merged panes,
+        // mirroring the text sections so machine consumers get the same merge
+        // (worktree + lease + liveness + ahead + PR + obsolescence verdict).
+        // Always present (possibly empty arrays) so consumers needn't guard on
+        // key-absence. trace:STORY-456 | ai:claude
+        let main_root = main_worktree_root_from(project_root);
+        let worktree_rows = collect_worktree_status_rows(&main_root);
+        out.insert(
+            "worktrees".to_string(),
+            json!(worktree_rows
+                .iter()
+                .map(|r| json!({
+                    "path": r.path.display().to_string(),
+                    "branch": r.branch,
+                    "tied_spec": r.tied_spec,
+                    "lease_scope": r.lease_scope,
+                    "live": r.has_live,
+                    "dirty_count": r.dirty_count,
+                    "ahead_main": r.ahead,
+                    "pr_number": r.pr_number,
+                    "pr_ci": r.pr_ci,
+                    "pr_mergeable": r.pr_mergeable,
+                    "obsolete": r.obsolete,
+                }))
+                .collect::<Vec<_>>()),
+        );
+        let open_pr_snapshot = collect_open_prs(&main_root);
+        let mut open_prs: Vec<&status_cleanup::OpenPrItem> =
+            open_pr_snapshot.by_branch.values().collect();
+        open_prs.sort_by_key(|p| p.number);
+        out.insert(
+            "open_prs".to_string(),
+            json!(open_prs
+                .iter()
+                .map(|p| {
+                    let merge = p.mergeable.as_deref().unwrap_or("UNKNOWN");
+                    json!({
+                        "number": p.number,
+                        "title": p.title,
+                        "head_branch": p.head_branch,
+                        "ci": p.ci_rollup,
+                        "mergeable": p.mergeable,
+                        "review_decision": p.review_decision,
+                        "next_step": open_pr_next_step(
+                            p.ci_rollup.as_deref().unwrap_or("?"),
+                            &merge.to_ascii_uppercase(),
+                            p.review_decision.as_deref(),
+                        ),
+                    })
+                })
+                .collect::<Vec<_>>()),
+        );
+        out.insert(
+            "recently_merged".to_string(),
+            json!(collect_recently_merged_prs(&main_root, 5)
+                .iter()
+                .map(|(number, title, when)| json!({
+                    "number": number,
+                    "title": title,
+                    "merged_at": when,
+                }))
+                .collect::<Vec<_>>()),
+        );
     }
     println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
@@ -56696,6 +67821,7 @@ mod task_490_status_in_progress_tests {
                 for_role: Some("implementer".into()),
                 for_scope: None,
                 for_session: None,
+                added_by_machine: None,
             };
             backend.queue_add(entry).unwrap();
             store.requirements.push(r);
@@ -56714,6 +67840,7 @@ mod task_490_status_in_progress_tests {
             for_role: Some("implementer".into()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         backend.queue_add(buried_entry).unwrap();
         store.requirements.push(buried);
@@ -57606,6 +68733,68 @@ fn collect_cleanup_report(
     // ── Detector 8: Orphan Claude Code project dirs ──
     let orphan_project_dirs = collect_orphan_project_dirs();
 
+    // ── Detector 9 (STORY-469 Guard 3): claimed-Done-vs-substrate divergence ──
+    // A spec whose status is Done/Completed but whose local reality contradicts
+    // the claim — an agent's "I shipped" the substrate doesn't corroborate. Two
+    // signals fire (see `detect_claimed_done_divergence`): (1) an active lease +
+    // a dirty worktree (uncommitted work despite Done), (2) no commit references
+    // the spec AND no PR exists. We build a filesystem-derived input row per
+    // Done/Completed spec, then the pure detector decides. trace:STORY-469
+    let landed_spec_ids: std::collections::HashSet<String> =
+        scan_default_branch_for_spec_landings(project_root, 200)
+            .into_iter()
+            .map(|(id, _)| id.to_ascii_uppercase())
+            .collect();
+    // Map a spec's active-lease worktree (Live/Dormant) to its dirty count.
+    let mut claimed_done_inputs = Vec::new();
+    for req in &store.requirements {
+        if !matches!(
+            req.status,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ) {
+            continue;
+        }
+        let Some(spec_id) = req.spec_id.as_deref() else {
+            continue;
+        };
+        let active_lease = lease_states.iter().find(|(l, s)| {
+            l.scope == spec_id && matches!(s, LeaseState::Live | LeaseState::Dormant)
+        });
+        let (has_active_lease, branch, modified_files, age_hours) = match active_lease {
+            Some((l, _)) => {
+                let dirty = if l.worktree_path.exists() {
+                    worktree_dirty_entries(&l.worktree_path).len()
+                } else {
+                    0
+                };
+                (
+                    true,
+                    Some(l.branch.clone()),
+                    dirty,
+                    now.signed_duration_since(l.started_at).num_hours(),
+                )
+            }
+            None => (false, None, 0, 0),
+        };
+        let branch_name = spec_id.to_ascii_lowercase();
+        let has_commit = landed_spec_ids.contains(&spec_id.to_ascii_uppercase());
+        let has_pr =
+            open_pr_branches.contains(&branch_name) || ever_pr_branches.contains(&branch_name);
+        claimed_done_inputs.push(status_cleanup::ClaimedDoneInput {
+            spec_id: spec_id.to_string(),
+            title: req.title.clone(),
+            status: format!("{:?}", req.status),
+            has_active_lease,
+            branch,
+            modified_files,
+            age_hours,
+            has_commit,
+            has_pr,
+        });
+    }
+    let claimed_done_diverged =
+        status_cleanup::detect_claimed_done_divergence(&claimed_done_inputs);
+
     status_cleanup::CleanupReport {
         uncommitted_wip,
         sticky_in_progress,
@@ -57615,6 +68804,10 @@ fn collect_cleanup_report(
         dormant_leases,
         stale_reviewer_leases,
         orphan_project_dirs,
+        claimed_done_diverged,
+        // STORY-508/TASK-651: resolve the active forge so the open-change hint
+        // names the right CLI (gh/glab) or none (pure-git).
+        forge_kind: Some(crate::forge::resolve_forge_kind(project_root)),
     }
 }
 
@@ -57976,7 +69169,18 @@ fn print_status_hygiene_section(
         });
     }
 
-    if findings.is_empty() {
+    // TASK-673: a one-line count of Completed specs git can't corroborate. The
+    // full listing + remediation lives in `aida doctor`; here we just surface
+    // the integrity tripwire so the substrate polices its own completion claim
+    // even on a quick `aida status`. Honors AIDA_DOCTOR_COMPLETED_SINCE for the
+    // legacy-history exemption. trace:TASK-673 | ai:claude
+    let integrity_since = std::env::var("AIDA_DOCTOR_COMPLETED_SINCE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let uncorroborated =
+        scan_completed_without_commit(project_root, store, integrity_since.as_deref()).len();
+
+    if findings.is_empty() && uncorroborated == 0 {
         return Ok(());
     }
 
@@ -58014,9 +69218,101 @@ fn print_status_hygiene_section(
         let overflow = total - limit;
         println!("    • +{} more (run aida doctor)", overflow);
     }
+
+    if uncorroborated > 0 {
+        println!(
+            "  {} {} Completed spec{} with no corroborating commit (run {})",
+            "⚠".yellow(),
+            uncorroborated,
+            if uncorroborated == 1 { "" } else { "s" },
+            "aida doctor --category completed-without-commit".cyan()
+        );
+    }
     println!();
 
     Ok(())
+}
+
+/// True for summaries that represent real, user-authored requirements — i.e.
+/// the rows `aida list` shows by default. META rows (AI-prompt customization
+/// seeded by `aida init`, e.g. META-001..006) are plumbing, not work, and are
+/// hidden from `aida list`'s default view (BUG-27). The `aida status`
+/// Requirements panel must apply the same exclusion so its Total / per-status
+/// counts reconcile with `aida list` instead of reporting phantom Draft rows
+/// on a fresh store (BUG-415).
+///
+/// `req_type` is the cache's stored Debug form of `RequirementType`
+/// (e.g. "Meta", "Task", "Bug"); the comparison is case-insensitive to be
+/// robust against casing drift in the projection.
+// trace:BUG-415 | ai:claude
+fn is_real_requirement_summary(req_type: &str) -> bool {
+    !req_type.eq_ignore_ascii_case("meta")
+}
+
+#[cfg(test)]
+mod bug415_status_count_tests {
+    use super::is_real_requirement_summary;
+
+    #[test]
+    fn meta_rows_are_excluded_case_insensitively() {
+        // Cache stores the Debug form ("Meta"); guard against casing drift.
+        assert!(!is_real_requirement_summary("Meta"));
+        assert!(!is_real_requirement_summary("meta"));
+        assert!(!is_real_requirement_summary("META"));
+    }
+
+    #[test]
+    fn real_requirement_types_are_counted() {
+        for t in [
+            "Task",
+            "Bug",
+            "Story",
+            "Epic",
+            "Functional",
+            "NonFunctional",
+            "System",
+            "User",
+            "Spike",
+            "Sprint",
+            "Folder",
+            "Doc",
+        ] {
+            assert!(
+                is_real_requirement_summary(t),
+                "{t} should be counted as a real requirement"
+            );
+        }
+    }
+
+    #[test]
+    fn fresh_store_counts_match_list() {
+        // Reproduces BUG-415: a fresh distributed store seeds 6 Draft META
+        // rows (META-001..006) plus the single Approved onboarding TASK.
+        // Counting real rows must yield 1 (matching `aida list --all`), not 7.
+        let fresh_store = [
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Meta", "Draft"),
+            ("Task", "Approved"),
+        ];
+        let real = fresh_store
+            .iter()
+            .filter(|(t, _)| is_real_requirement_summary(t))
+            .count();
+        assert_eq!(real, 1, "fresh store should report 1 real requirement");
+
+        let draft = fresh_store
+            .iter()
+            .filter(|(t, s)| is_real_requirement_summary(t) && *s == "Draft")
+            .count();
+        assert_eq!(
+            draft, 0,
+            "the 6 META Draft rows must not be counted as Draft"
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -58082,10 +69378,15 @@ fn handle_status_command_distributed(
 
     if json {
         let awaiting_report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
+        // TASK-662: persist the findings-delta snapshot against the main
+        // worktree root so the baseline is consistent regardless of cwd —
+        // same root the text path's `last-status.toml` uses. trace:TASK-662
+        let delta_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
         return print_status_json(
             &user_ctx,
             backend,
             store_path,
+            &delta_root,
             queue_only,
             ci_only,
             &awaiting_report,
@@ -58122,6 +69423,56 @@ fn handle_status_command_distributed(
     }
     print_status_queue_section(&user_ctx, false);
 
+    // TASK-648 (ADR-3): surface the draft-inbox depth. Drafts are untriaged
+    // intake awaiting an advisor disposition (keep → queue / backlog → archive
+    // / unclear → needs-attention). Shown only when non-empty so an empty
+    // inbox stays quiet, and reads like a queue to clear. trace:TASK-648
+    // BUG-464: exclude META (and other non-triageable seed rows) the same way
+    // `aida list` hides META by default — otherwise a fresh `aida init` reports
+    // its 6 seeded META prompts as "6 untriaged drafts", sending a brand-new
+    // user to /aida-triage for AI-prompt templates that aren't real intake.
+    // trace:BUG-464 | ai:claude
+    let draft_inbox = backend
+        .list_summaries(&aida_core::ListFilter {
+            status: Some("draft".to_string()),
+            ..Default::default()
+        })
+        .map(|v| {
+            v.iter()
+                .filter(|r| !r.req_type.eq_ignore_ascii_case("meta"))
+                .count()
+        })
+        .unwrap_or(0);
+    if draft_inbox > 0 {
+        println!(
+            "  {} {} untriaged draft{} — clear with {}",
+            "Inbox:".bold().yellow(),
+            draft_inbox,
+            if draft_inbox == 1 { "" } else { "s" },
+            "/aida-triage".cyan()
+        );
+        println!();
+    }
+
+    // TASK-502: surface urgent (notify'd) agent briefs from the `.pending`
+    // sentinels, so an idle agent's `aida status` flags work routed to it
+    // without a heartbeat. Filtered to the current agent when identifiable,
+    // else all agents. trace:TASK-502 | ai:claude
+    let pending_briefs = collect_pending_brief_counts(&project_root);
+    if !pending_briefs.is_empty() {
+        for (agent, count) in &pending_briefs {
+            println!(
+                "  {} {} pending brief{} for {} — run {}",
+                "📬".to_string(),
+                count,
+                if *count == 1 { "" } else { "s" },
+                agent.cyan(),
+                format!("aida brief list --for-agent {agent}").cyan()
+            );
+        }
+        println!();
+    }
+
     // TASK-294: a one-line pending-directive summary so the worker control
     // channel has the same visibility as the work queue. Silent when the
     // directive file is empty/absent.
@@ -58133,6 +69484,42 @@ fn handle_status_command_distributed(
 
     print_status_agents_section(&user_ctx);
     print_status_claude_code_section(&project_root);
+
+    // STORY-456: unified worktrees + open-PRs + recently-merged panes —
+    // git worktree + session lease + liveness + commits-ahead + open PR in
+    // one view, then the open-PR queue and a recently-merged tail for
+    // orientation. All display-only; each silent when empty. The PR data is a
+    // single batched gh snapshot per section, not a call per row.
+    // trace:STORY-456 | ai:claude
+    print_status_worktrees_section(&project_root);
+    print_status_open_prs_section(&project_root);
+    print_status_recently_merged_section(&project_root, 5);
+
+    // TASK-539: pending-findings backlog — silent when empty. Surfaced before
+    // the working-tree section so triage-able items are visible without
+    // remembering `aida findings list`. trace:TASK-539 | ai:claude
+    print_status_findings_section(backend);
+
+    // STORY-457: working-tree state — modified / staged / untracked (with
+    // safe-to-remove cruft auto-flagged). Display-only; silent when clean.
+    // Reads the main worktree so it's consistent regardless of cwd.
+    // trace:STORY-457 | ai:claude
+    let wt_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+    print_status_working_tree_section(&wt_root);
+
+    // STORY-49: warn when the code HEAD's paired store SHA (`Aida-Store:`
+    // trailer) has drifted from the current orphan-store HEAD. Warn-only —
+    // the cheap, high-signal half of EPIC-21 v2; the full read-only
+    // `aida store checkout` time-travel is deferred. Silent unless there's an
+    // unambiguous drift signal. trace:STORY-49 | ai:claude
+    print_status_store_drift_section(&wt_root);
+
+    // STORY-410: one-line substrate-drift notice. The opt-in memory pack
+    // grows inside the aida binary; a project that scaffolded it months ago
+    // has no other signal that it's behind. Only shown when the pack EXISTS
+    // locally and is behind — a project that never opted into `--with-memories`
+    // stays quiet (no nag to adopt a feature they declined). trace:STORY-410
+    print_status_memory_drift_section();
 
     println!("{}", "─── Project ───".bold());
     let name = if store.name.is_empty() {
@@ -58148,16 +69535,26 @@ fn handle_status_command_distributed(
     println!("  Store path:   {}", store_path.display());
     println!();
 
-    // Requirement counts grouped by status — count everything including
-    // archived rows so the project total reflects all on-disk specs.
+    // Requirement counts grouped by status. Archived rows are included so
+    // the project total reflects all on-disk specs, but META rows (AI-prompt
+    // customization seeded by `aida init`) are excluded so the Requirements
+    // panel agrees with `aida list`. `aida list` hides META by default
+    // (BUG-27); counting them here made `aida status` report a phantom
+    // "Total 7 / Draft 6" on a fresh store (1 real TASK + 6 Draft META) while
+    // `aida list --all` showed only the single real requirement, eroding
+    // trust in the counts. trace:BUG-415 | ai:claude
     let summaries = backend.list_summaries(&aida_core::ListFilter {
         archive: aida_core::ArchiveFilter::Both,
         ..Default::default()
     })?;
-    let total = summaries.len();
+    let real: Vec<&aida_core::db::RequirementSummary> = summaries
+        .iter()
+        .filter(|s| is_real_requirement_summary(&s.req_type))
+        .collect();
+    let total = real.len();
     let mut by_status: std::collections::BTreeMap<String, usize> =
         std::collections::BTreeMap::new();
-    for s in &summaries {
+    for s in &real {
         *by_status.entry(s.status.clone()).or_insert(0) += 1;
     }
     println!("{}", "─── Requirements ───".bold());
@@ -58167,15 +69564,20 @@ fn handle_status_command_distributed(
     }
     println!();
 
-    // Cache state.
+    // Cache state. This row is a cache-freshness integrity check, so it
+    // compares the cache's raw row count against the store's raw row count —
+    // both include META rows, otherwise a healthy cache would falsely read
+    // "Rows: 7 (store has 1)". The META exclusion above is a display concern
+    // for the Requirements panel only. trace:BUG-415 | ai:claude
     let cache = backend.cache();
     let cached = cache.requirement_count()?;
+    let store_rows = summaries.len();
     let recorded_sha = cache.source_head_sha()?.unwrap_or_default();
     let actual_sha = aida_core::git_ops::head_sha(store_path).unwrap_or_default();
     let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
     println!("{}", "─── Cache ───".bold());
     println!("  Path:         {}", cache.path().display());
-    println!("  Rows:         {} (store has {})", cached, total);
+    println!("  Rows:         {} (store has {})", cached, store_rows);
     println!(
         "  Status:       {}",
         if stale && !actual_sha.is_empty() {
@@ -58320,6 +69722,19 @@ fn print_scaffolding_freshness(
         if on_disk == artifact.content.as_bytes() {
             matches += 1;
             continue;
+        }
+        // .claude/AIDA.md's `## Claude Code skills` section is gated by
+        // generate_skills, but this drift check always regenerates with the
+        // default (skills-on) config — it has no record of an `aida init
+        // --no-skills`. A raw byte compare would therefore flag a clean
+        // --no-skills init as STALE-on-arrival. Use the section-tolerant
+        // matcher for AIDA.md instead. trace:TASK-125 | ai:claude
+        if artifact.path.file_name().and_then(|s| s.to_str()) == Some("AIDA.md") {
+            let on_disk_str = String::from_utf8_lossy(&on_disk);
+            if aida_core::scaffolding::aida_md_matches(&on_disk_str, &artifact.content) {
+                matches += 1;
+                continue;
+            }
         }
         match FileCategory::from_path(&artifact.path) {
             FileCategory::Template => template_drift.push(artifact.path.clone()),
@@ -61742,6 +73157,12 @@ fn handle_trace_command(cmd: &TraceCommand, storage: &Storage) -> Result<()> {
         } => {
             trace_sweep(storage, *limit, branch.as_deref(), *dry_run, *verbose)?;
         }
+        TraceCommand::Gate { range, json } => {
+            handle_trace_gate(range.as_deref(), *json)?;
+        }
+        TraceCommand::Coverage { range, json, block } => {
+            handle_trace_coverage(range.as_deref(), *json, *block)?;
+        }
     }
     Ok(())
 }
@@ -62793,6 +74214,1094 @@ pub(crate) fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     out
 }
 
+// ============================================================================
+// STORY-498: CI spec-id validity gate (MVP slice of EPIC-34)
+//
+// Walk a commit range, resolve every `(SPEC-ID)` subject trailer against the
+// live requirement graph, and FAIL when a trailer references a SPEC-ID that
+// does not exist or is rejected — a dead/dangling provenance link. Promotes
+// AIDA's headline guarantee (code traces to a *live* requirement) from a
+// client-side message-grammar check into a server-side validity gate that is
+// non-bypassable from a dev machine (`git commit --no-verify` cannot dodge a
+// CI step). Reuses the existing `(SPEC-ID)` trailer parser and honours the
+// TASK-488 mechanical-commit exemption (a commit with no trailer carries
+// nothing to validate, matching the "no REQ-ID needed" rule for mechanical /
+// release / docs commits).
+// ============================================================================
+
+/// Why a trailer reference fails the validity gate. trace:STORY-498 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum TrailerVerdict {
+    /// The id does not resolve to any spec in the requirement graph (a
+    /// hallucinated or typo'd id, or a since-deleted spec).
+    Nonexistent,
+    /// The id resolves but the spec is rejected — a dead provenance link.
+    Rejected,
+}
+
+impl TrailerVerdict {
+    fn reason(&self) -> &'static str {
+        match self {
+            TrailerVerdict::Nonexistent => "does not exist in the requirement graph",
+            TrailerVerdict::Rejected => "resolves to a rejected spec",
+        }
+    }
+}
+
+/// One offending `(SPEC-ID)` reference found by the gate. trace:STORY-498 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct TrailerViolation {
+    /// Short SHA of the offending commit.
+    sha: String,
+    /// The commit subject (for the human-readable failure message).
+    subject: String,
+    /// The id that failed to resolve / resolved to a dead spec.
+    spec_id: String,
+    verdict: TrailerVerdict,
+}
+
+/// How a SPEC-ID resolves against the live requirement graph — the result the
+/// pure validation core consumes so it stays independent of the store/git.
+/// trace:STORY-498 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SpecResolution {
+    /// Resolves to a live (non-rejected) spec — passes.
+    Live,
+    /// Resolves to a rejected spec — a dead reference.
+    Rejected,
+    /// Resolves to nothing.
+    Missing,
+}
+
+/// Pure, testable core of the validity gate: given commits as
+/// `(short_sha, subject)` pairs and a resolver that classifies each SPEC-ID
+/// against the graph, return every offending reference.
+///
+/// Exemptions baked in here (matching the auto-bump scan + TASK-488):
+/// - Plan commits (`docs(plans): …`) are skipped — their trailer names what is
+///   planned, not what shipped, so a planned-but-not-yet-real id is legitimate.
+/// - A commit with no `(SPEC-ID)` trailer is skipped — there is nothing to
+///   validate (mechanical / release / docs commits with "no REQ-ID needed").
+///
+/// trace:STORY-498 | ai:claude
+fn validate_trailer_references<F>(
+    commits: &[(String, String)],
+    mut resolve: F,
+) -> Vec<TrailerViolation>
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    let mut violations = Vec::new();
+    for (sha, subject) in commits {
+        if is_plan_commit_subject(subject) {
+            continue;
+        }
+        for id in extract_spec_ids_from_commit(subject) {
+            let verdict = match resolve(&id) {
+                SpecResolution::Live => continue,
+                SpecResolution::Rejected => TrailerVerdict::Rejected,
+                SpecResolution::Missing => TrailerVerdict::Nonexistent,
+            };
+            violations.push(TrailerViolation {
+                sha: sha.clone(),
+                subject: subject.clone(),
+                spec_id: id,
+                verdict,
+            });
+        }
+    }
+    violations
+}
+
+/// Resolve the commit range to scan. Explicit `--range` wins; otherwise scan
+/// the commits this branch adds over the default branch
+/// (`<default-branch>..HEAD`), falling back to `HEAD~20..HEAD` when no default
+/// branch resolves (e.g. a shallow CI checkout or a repo with no main).
+/// trace:STORY-498 | ai:claude
+fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> String {
+    if let Some(r) = range {
+        return r.to_string();
+    }
+    if let Some(default_ref) = resolve_default_branch_ref(project_root) {
+        // `<base>..HEAD`: the commits HEAD has that the default branch doesn't.
+        return format!("{default_ref}..HEAD");
+    }
+    "HEAD~20..HEAD".to_string()
+}
+
+/// Resolve a single SPEC-ID against a loaded store, mirroring the trace-gate
+/// resolver. When `store` is `None` (no requirement store reachable) every id
+/// resolves `Live` — failing every id would block legitimate ships on a
+/// checkout without store access, so the safe default is to surface the
+/// missing-store condition separately (callers warn) rather than refuse.
+/// Shared by `aida trace gate` (STORY-498) and the client-side ship/done guard.
+/// trace:STORY-498 trace:STORY-469 | ai:claude
+fn resolve_spec_in_store(store: Option<&aida_core::RequirementsStore>, id: &str) -> SpecResolution {
+    let Some(store) = store else {
+        return SpecResolution::Live;
+    };
+    let want = id.to_ascii_uppercase();
+    let found = store.requirements.iter().find(|r| {
+        r.spec_id
+            .as_deref()
+            .map(|s| s.eq_ignore_ascii_case(&want))
+            .unwrap_or(false)
+            || r.agreed_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+    });
+    match found {
+        None => SpecResolution::Missing,
+        Some(r) if matches!(r.status, RequirementStatus::Rejected) => SpecResolution::Rejected,
+        Some(_) => SpecResolution::Live,
+    }
+}
+
+/// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
+/// pure validator against the live store, prints the result, and exits non-zero
+/// (code 1) when any commit references a dead/dangling SPEC-ID.
+/// trace:STORY-498 | ai:claude
+/// Read `(short_sha, subject)` rows for a git range. A unit separator keeps
+/// subjects with arbitrary punctuation intact. Returns an error only when git
+/// itself fails (bad range, no git). Shared by the trace gate and the
+/// client-side ship/done guard. trace:STORY-498 trace:STORY-469 | ai:claude
+fn read_commits_in_range(
+    project_root: &std::path::Path,
+    range: &str,
+) -> Result<Vec<(String, String)>> {
+    use std::process::Command as PCmd;
+    let output = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--no-merges", "--pretty=format:%h\x1f%s", range])
+        .output();
+    match output {
+        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter_map(|line| {
+                let (sha, subject) = line.split_once('\x1f')?;
+                let subject = subject.trim();
+                if subject.is_empty() {
+                    return None;
+                }
+                Some((sha.to_string(), subject.to_string()))
+            })
+            .collect()),
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr);
+            anyhow::bail!("git log failed for range `{range}`: {}", err.trim());
+        }
+        Err(e) => anyhow::bail!("could not run git: {e}"),
+    }
+}
+
+// ============================================================================
+// STORY-469 Guard 1: client-side trailer spec-ID validation at ship/done.
+//
+// STORY-498 shipped a SERVER-side (CI) version of this check. Guard 1 is its
+// client-side twin: it runs in `aida pr ship` and `aida queue done` so a
+// hallucinated/typo'd/dead spec-ID is caught BEFORE the commit reaches the PR
+// or the spec is flipped to Done — never lands in shared git history. It reuses
+// the same pure validator (`validate_trailer_references`) + resolver
+// (`resolve_spec_in_store`) as the gate; only the call site differs.
+// ============================================================================
+
+/// Format the human-readable refusal lines for client-side trailer violations.
+/// Pure (takes pre-computed violations) so it's unit-testable in isolation.
+/// `surface` names the command for the message ("pr ship" / "queue done").
+/// trace:STORY-469 | ai:claude
+fn format_trailer_guard_refusal(surface: &str, violations: &[TrailerViolation]) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "✗ {surface}: {} commit trailer reference(s) name a spec that does not resolve:",
+        violations.len()
+    ));
+    for v in violations {
+        lines.push(format!(
+            "  {} ({}) {} — {}",
+            v.sha,
+            v.spec_id,
+            v.verdict.reason(),
+            v.subject
+        ));
+    }
+    lines.push(String::new());
+    lines.push(
+        "A commit's `(SPEC-ID)` trailer must name a live requirement — typo? hallucination? \
+         since-rejected? Check `aida show <SPEC-ID>` and fix the trailer (`git commit --amend` / \
+         interactive rebase) before retrying, or re-run with --force to bypass."
+            .to_string(),
+    );
+    lines
+}
+
+/// Guard 1: validate that every `(SPEC-ID)` trailer on the commits this branch
+/// adds over the default branch resolves to a live (non-rejected) spec. Refuses
+/// (exits 1) on any dead/dangling reference unless `force` is set. A no-op when
+/// the branch is the default branch (nothing to ship) or no store is reachable
+/// (cannot corroborate — surfaced as a soft warning, never a hard refusal, so a
+/// store-less checkout can still ship). `surface` names the calling command.
+/// trace:STORY-469 | ai:claude
+fn run_client_trailer_guard(project_root: &std::path::Path, surface: &str, force: bool) {
+    if force {
+        return;
+    }
+    let range = resolve_gate_range(project_root, None);
+    let commits = match read_commits_in_range(project_root, &range) {
+        Ok(c) => c,
+        Err(e) => {
+            // Git read failed (e.g. shallow checkout, unresolved range). The
+            // guard cannot corroborate; surface softly and proceed — failing
+            // the ship/done on a git hiccup would be worse than the miss.
+            eprintln!(
+                "{} {surface}: trailer spec-ID check skipped — {}",
+                "warning:".yellow().bold(),
+                e
+            );
+            return;
+        }
+    };
+    if commits.is_empty() {
+        return;
+    }
+    let store = load_store_for_lookup(project_root);
+    if store.is_none() {
+        eprintln!(
+            "{} {surface}: trailer spec-ID check skipped — no requirement store reachable. \
+             Run where the store is attached (`aida cache rebuild`) to enforce.",
+            "warning:".yellow().bold()
+        );
+        return;
+    }
+    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
+    let violations = validate_trailer_references(&commits, resolve);
+    if violations.is_empty() {
+        return;
+    }
+    for line in format_trailer_guard_refusal(surface, &violations) {
+        eprintln!("{line}");
+    }
+    std::process::exit(1);
+}
+
+/// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
+/// pure validator against the live store, prints the result, and exits non-zero
+/// (code 1) when any commit references a dead/dangling SPEC-ID.
+/// trace:STORY-498 | ai:claude
+fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let range = resolve_gate_range(&project_root, range);
+
+    let commits = read_commits_in_range(&project_root, &range)?;
+
+    // Load the live requirement graph once, then resolve each id against it.
+    let store = load_store_for_lookup(&project_root);
+    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
+
+    if store.is_none() {
+        eprintln!(
+            "⚠ trace gate: no requirement store reachable from {} — cannot validate references. \
+             Ensure the gate runs where the store is attached (`aida cache rebuild` / fresh-clone \
+             auto-attach).",
+            project_root.display()
+        );
+    }
+
+    let violations = validate_trailer_references(&commits, resolve);
+
+    if json {
+        let payload = serde_json::json!({
+            "range": range,
+            "commits_scanned": commits.len(),
+            "violations": violations,
+            "ok": violations.is_empty(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else if violations.is_empty() {
+        println!(
+            "✓ trace gate: {} commit(s) in `{}` — every (SPEC-ID) trailer resolves to a live spec",
+            commits.len(),
+            range
+        );
+    } else {
+        eprintln!(
+            "✗ trace gate: {} dead/dangling SPEC-ID reference(s) in `{}`:",
+            violations.len(),
+            range
+        );
+        for v in &violations {
+            eprintln!(
+                "  {} ({}) {} — {}",
+                v.sha,
+                v.spec_id,
+                v.verdict.reason(),
+                v.subject
+            );
+        }
+        eprintln!(
+            "\nA commit's `(SPEC-ID)` trailer must name a live requirement. Fix the trailer to a \
+             real, non-rejected id (or file the missing spec), then amend/re-commit."
+        );
+    }
+
+    if !violations.is_empty() {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+// ============================================================================
+// STORY-499: diff-level trace-COVERAGE check (gap #1 of EPIC-34).
+//
+// STORY-498 shut gaps #2 + #3: `aida trace gate` validates that every commit
+// `(SPEC-ID)` *trailer* resolves to a live spec. STORY-499 closes gap #1 —
+// COVERAGE: does the changed CODE in a diff actually carry the required
+// provenance (`// trace:` anchor OR a live commit trailer), per the SPIKE-47
+// definition? It is report-only by default (SPIKE-47 §5/§6: a coverage gate's
+// failure mode is adoption death; ship it report-first, flip to block after a
+// calibration period).
+//
+// The hard part is precision without false positives. SPIKE-47 settled the
+// definition deterministically:
+//   - UNIT: the changed source hunk (NOT line, NOT function — §2).
+//   - EXEMPTIONS: a two-layer, explicit, audited list (§3) — commit-level
+//     (reusing STORY-498's plan/no-trailer machinery) + file/path-level
+//     (tests, generated, docs, config, vendored) + hunk-level (pure deletion,
+//     whitespace/fmt-only, comment-only, trivial one-liner).
+//   - ATTRIBUTION (§4.2): a coverable hunk is COVERED if ANY of — an in-hunk
+//     `// trace:<live-id>`; a `// trace:` within N lines ABOVE the hunk in the
+//     post-change file; a module-level `//! trace:`; OR the commit carries a
+//     live `(SPEC-ID)` trailer (the floor — STORY-498 already enforces this for
+//     validity, so the default world is fully covered and the gate stays
+//     silent).
+//
+// The CORE (`compute_diff_coverage`) is a PURE, fully-isolated-tested fn: it
+// takes parsed hunks + per-file post-change content + a commit-trailer-covered
+// flag + an anchor resolver, and returns the per-hunk classification + ratio.
+// No git, no store, no I/O. The CLI handler gathers those inputs from git and
+// the live graph and calls it. trace:STORY-499 | ai:claude
+// ============================================================================
+
+/// Why a coverable hunk is exempt from the coverage denominator. Every
+/// exemption is reported (never silently dropped) per SPIKE-47 §3.
+/// trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CoverageExemption {
+    /// File path matched a test glob (SPIKE-47 F1).
+    TestFile,
+    /// File path / generated-marker matched (SPIKE-47 F2).
+    Generated,
+    /// Non-source / docs / prose extension (SPIKE-47 F3).
+    DocOrProse,
+    /// Config / data / lockfile (SPIKE-47 F4).
+    ConfigData,
+    /// Vendored / third-party path (SPIKE-47 F5).
+    Vendored,
+    /// Hunk with only deletions (SPIKE-47 H1).
+    PureDeletion,
+    /// Hunk whose added lines are only comments / blank (SPIKE-47 H2/H4).
+    CommentOrBlankOnly,
+    /// Hunk net change ≤ trivial threshold (SPIKE-47 H4).
+    Trivial,
+}
+
+impl CoverageExemption {
+    fn reason(&self) -> &'static str {
+        match self {
+            CoverageExemption::TestFile => "test file",
+            CoverageExemption::Generated => "generated code",
+            CoverageExemption::DocOrProse => "docs / non-source",
+            CoverageExemption::ConfigData => "config / data / lockfile",
+            CoverageExemption::Vendored => "vendored / third-party",
+            CoverageExemption::PureDeletion => "pure deletion",
+            CoverageExemption::CommentOrBlankOnly => "comment / blank only",
+            CoverageExemption::Trivial => "trivial change",
+        }
+    }
+}
+
+/// How a coverable hunk earned its coverage (SPIKE-47 §4.2). Cheapest-first.
+/// trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CoverageSource {
+    /// A `// trace:<live-id>` appears in the hunk's added lines (§4.2.1).
+    InHunkAnchor,
+    /// A `// trace:<live-id>` sits within N lines above the hunk (§4.2.2).
+    ProximityAnchor,
+    /// A module-level `//! trace:<live-id>` covers the whole file (§4.2.3).
+    FileAnchor,
+    /// The hunk's commit carries a live `(SPEC-ID)` trailer (§4.2.4 — the floor).
+    CommitTrailer,
+}
+
+/// The classification of one changed hunk. trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct HunkVerdict {
+    /// File the hunk lives in (post-change path).
+    file: String,
+    /// 1-based start line of the hunk in the post-change file.
+    new_start: usize,
+    /// Number of added/modified lines in the hunk.
+    added_lines: usize,
+    /// `Some(reason)` when the hunk is exempt from the denominator.
+    exempt: Option<CoverageExemption>,
+    /// `Some(source)` when the hunk is covered. `None` + not-exempt = a
+    /// reported uncovered coverable hunk.
+    covered: Option<CoverageSource>,
+}
+
+impl HunkVerdict {
+    /// A coverable hunk that is NOT covered — the thing the gate reports.
+    fn is_uncovered_coverable(&self) -> bool {
+        self.exempt.is_none() && self.covered.is_none()
+    }
+    fn is_coverable(&self) -> bool {
+        self.exempt.is_none()
+    }
+}
+
+/// One parsed changed hunk fed into the pure core. trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedHunk {
+    /// Post-change file path.
+    file: String,
+    /// 1-based start line of the hunk in the post-change file.
+    new_start: usize,
+    /// The `+` (added) line bodies, in order, with the leading `+` stripped.
+    added: Vec<String>,
+    /// The `-` (removed) line bodies, with the leading `-` stripped.
+    removed: Vec<String>,
+}
+
+/// Aggregate coverage result returned by the pure core. trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+struct DiffCoverage {
+    hunks: Vec<HunkVerdict>,
+}
+
+impl DiffCoverage {
+    fn coverable(&self) -> usize {
+        self.hunks.iter().filter(|h| h.is_coverable()).count()
+    }
+    fn covered(&self) -> usize {
+        self.hunks
+            .iter()
+            .filter(|h| h.is_coverable() && h.covered.is_some())
+            .count()
+    }
+    fn exempt(&self) -> usize {
+        self.hunks.iter().filter(|h| h.exempt.is_some()).count()
+    }
+    fn uncovered(&self) -> Vec<&HunkVerdict> {
+        self.hunks
+            .iter()
+            .filter(|h| h.is_uncovered_coverable())
+            .collect()
+    }
+    /// `covered / coverable`. 1.0 when there is nothing coverable (vacuously
+    /// fully covered — an all-exempt diff passes). trace:STORY-499 | ai:claude
+    fn ratio(&self) -> f64 {
+        let coverable = self.coverable();
+        if coverable == 0 {
+            return 1.0;
+        }
+        self.covered() as f64 / coverable as f64
+    }
+}
+
+/// Default source extensions that REQUIRE coverage. Mirrors `aida trace scan
+/// --extensions` default (`rs`); extensible per-repo (SPIKE-47 §2.1.2).
+/// trace:STORY-499 | ai:claude
+const COVERAGE_SOURCE_EXTENSIONS: &[&str] = &["rs", "py", "ts", "tsx", "js", "jsx", "go", "java"];
+
+/// SPIKE-47 §3.2 file/path-level exemption classifier. Returns `Some(reason)`
+/// when the whole file is exempt, `None` when its changed source hunks are
+/// coverable. Deterministic — globs/extensions only, no parsing. PURE.
+/// trace:STORY-499 | ai:claude
+fn classify_coverage_file(path: &str, generated_header: Option<&str>) -> Option<CoverageExemption> {
+    let lower = path.to_ascii_lowercase();
+    let segments: Vec<&str> = lower.split('/').collect();
+
+    // F5: vendored / third-party.
+    if segments
+        .iter()
+        .any(|s| matches!(*s, "vendor" | "node_modules" | "third_party" | "target"))
+    {
+        return Some(CoverageExemption::Vendored);
+    }
+
+    // F2: generated — path globs OR an in-file generated marker.
+    if segments.iter().any(|s| *s == "generated")
+        || lower.contains(".gen.")
+        || lower.ends_with(".gen.rs")
+    {
+        return Some(CoverageExemption::Generated);
+    }
+    if let Some(header) = generated_header {
+        let h = header.to_ascii_lowercase();
+        if h.contains("@generated") || h.contains("do not edit") || h.contains("auto-generated") {
+            return Some(CoverageExemption::Generated);
+        }
+    }
+
+    // F1: tests — `tests/` segment, or a test-named file.
+    let file_name = segments.last().copied().unwrap_or("");
+    if segments.iter().any(|s| *s == "tests")
+        || file_name.starts_with("test_")
+        || file_name.contains("_test.")
+        || file_name.contains(".test.")
+        || file_name.ends_with("_test")
+    {
+        return Some(CoverageExemption::TestFile);
+    }
+
+    // Extension-based classification.
+    let ext = lower.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+
+    // F3: docs / prose — non-source extensions, or anything under `docs/`.
+    if segments.iter().any(|s| *s == "docs")
+        || matches!(ext, "md" | "txt" | "rst" | "adoc" | "html" | "css" | "svg")
+    {
+        return Some(CoverageExemption::DocOrProse);
+    }
+
+    // F4: config / data / lockfiles.
+    if lower.ends_with(".lock")
+        || file_name == ".gitignore"
+        || matches!(
+            ext,
+            "toml" | "yaml" | "yml" | "json" | "ini" | "cfg" | "lock"
+        )
+    {
+        return Some(CoverageExemption::ConfigData);
+    }
+
+    // Coverable only when the extension is in the source set.
+    if COVERAGE_SOURCE_EXTENSIONS.contains(&ext) {
+        return None;
+    }
+    // Unknown / non-source extension → not coverable (treated as prose).
+    Some(CoverageExemption::DocOrProse)
+}
+
+/// True when a single source line is comment-only or blank, for the common
+/// comment leaders (`//`, `///`, `//!`, `#`, `*`, `/*`, `*/`, `<!--`). PURE.
+/// Used by the comment-only hunk exemption (SPIKE-47 H4). trace:STORY-499 | ai:claude
+fn coverage_line_is_comment_or_blank(line: &str) -> bool {
+    let t = line.trim();
+    if t.is_empty() {
+        return true;
+    }
+    t.starts_with("//")
+        || t.starts_with('#')
+        || t.starts_with('*')
+        || t.starts_with("/*")
+        || t.starts_with("*/")
+        || t.starts_with("<!--")
+        || t.starts_with("-->")
+}
+
+/// SPIKE-47 §3.3 hunk-level exemption classifier. Returns `Some(reason)` when
+/// a hunk (in an already-coverable file) is exempt. `trivial_max_lines` is the
+/// configurable trivial-change floor (default 1). PURE. trace:STORY-499 | ai:claude
+fn classify_coverage_hunk(
+    hunk: &ParsedHunk,
+    trivial_max_lines: usize,
+) -> Option<CoverageExemption> {
+    // H1: pure deletion — removed lines, no additions.
+    if hunk.added.is_empty() {
+        return Some(CoverageExemption::PureDeletion);
+    }
+
+    // H2 (fmt/whitespace) collapses into H1 once whitespace is normalized: a
+    // whitespace-only reflow has `+`/`-` lines equal after trimming, so it
+    // carries no net coverable addition. Detect by comparing the whitespace-
+    // normalized added vs removed multisets.
+    let norm = |lines: &[String]| -> Vec<String> {
+        lines
+            .iter()
+            .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|l| !l.is_empty())
+            .collect()
+    };
+    let mut added_norm = norm(&hunk.added);
+    let mut removed_norm = norm(&hunk.removed);
+    added_norm.sort();
+    removed_norm.sort();
+    if !added_norm.is_empty() && added_norm == removed_norm {
+        // Whitespace-only reflow (no net content change) → fmt-only.
+        return Some(CoverageExemption::CommentOrBlankOnly);
+    }
+
+    // H4 (comment-only): every added line is a comment or blank.
+    if hunk
+        .added
+        .iter()
+        .all(|l| coverage_line_is_comment_or_blank(l))
+    {
+        return Some(CoverageExemption::CommentOrBlankOnly);
+    }
+
+    // H4 (trivial): net effective added lines (non-blank, non-comment) at or
+    // below the threshold.
+    let effective_added = hunk
+        .added
+        .iter()
+        .filter(|l| !coverage_line_is_comment_or_blank(l))
+        .count();
+    if effective_added <= trivial_max_lines {
+        return Some(CoverageExemption::Trivial);
+    }
+
+    None
+}
+
+/// SPIKE-47 trace-anchor grammar (reused verbatim from `aida trace gate`):
+/// matches `trace:<SPEC-ID>` regardless of comment leader. PURE compile.
+/// trace:STORY-499 | ai:claude
+fn coverage_anchor_re() -> regex::Regex {
+    regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap()
+}
+
+/// True when `line` carries a `// trace:<id>` whose id resolves Live via
+/// `resolve`. Module-level `//!` anchors and `///` doc anchors all match (the
+/// regex keys off the `trace:` token, not the leader). PURE (resolver injected).
+/// trace:STORY-499 | ai:claude
+fn coverage_line_has_live_anchor<F>(line: &str, re: &regex::Regex, resolve: &mut F) -> bool
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    re.captures_iter(line).any(|cap| {
+        let id = &cap[1];
+        matches!(resolve(id), SpecResolution::Live)
+    })
+}
+
+/// Attribute one hunk to a coverage source, per SPIKE-47 §4.2 (cheapest-first):
+///   1. in-hunk anchor (added lines)
+///   2. proximity anchor (≤ `proximity_lines` ABOVE the hunk in the post-change file)
+///   3. file-level `//!` anchor anywhere in the file
+///   4. commit-trailer fallback (the floor)
+/// `post_change_lines` is the full post-change file (1-based logical, passed as a
+/// slice). PURE — resolver + content injected, no I/O. trace:STORY-499 | ai:claude
+fn attribute_hunk_coverage<F>(
+    hunk: &ParsedHunk,
+    post_change_lines: &[String],
+    commit_trailer_covered: bool,
+    proximity_lines: usize,
+    re: &regex::Regex,
+    resolve: &mut F,
+) -> Option<CoverageSource>
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    // 1. In-hunk anchor.
+    if hunk
+        .added
+        .iter()
+        .any(|l| coverage_line_has_live_anchor(l, re, resolve))
+    {
+        return Some(CoverageSource::InHunkAnchor);
+    }
+
+    // 2. Proximity anchor — scan ABOVE-only (§4.2 rule 2 + risk #2). The hunk
+    // starts at 1-based `new_start`; lines above are indices [start-1-N, start-1)
+    // in the 0-based file vector.
+    if hunk.new_start >= 1 {
+        let start_idx = hunk.new_start.saturating_sub(1); // 0-based first hunk line
+        let from = start_idx.saturating_sub(proximity_lines);
+        for line in post_change_lines.iter().take(start_idx).skip(from) {
+            if coverage_line_has_live_anchor(line, re, resolve) {
+                return Some(CoverageSource::ProximityAnchor);
+            }
+        }
+    }
+
+    // 3. File-level `//!` module anchor anywhere in the file.
+    if post_change_lines
+        .iter()
+        .any(|l| l.trim_start().starts_with("//!") && coverage_line_has_live_anchor(l, re, resolve))
+    {
+        return Some(CoverageSource::FileAnchor);
+    }
+
+    // 4. Commit-trailer fallback — the floor.
+    if commit_trailer_covered {
+        return Some(CoverageSource::CommitTrailer);
+    }
+
+    None
+}
+
+/// The PURE, fully-isolated core of the coverage gate. Given parsed hunks, the
+/// post-change content of each touched file, a per-file generated-header probe,
+/// a per-hunk commit-trailer-covered flag, and an anchor resolver, classify
+/// every hunk (exempt / covered / uncovered-coverable) per the SPIKE-47
+/// definition. NO git, NO store, NO I/O — every dependency is an argument.
+///
+/// `files`: post-change line content keyed by path (the file the hunk lives in).
+/// `generated_headers`: first-lines blob per path (for the §3.2 generated-marker
+///   probe); absent ⇒ probe skipped.
+/// `commit_trailer_covered`: per-file flag — does the file's commit carry a live
+///   `(SPEC-ID)` trailer? (the §4.2.4 floor).
+/// trace:STORY-499 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn compute_diff_coverage<F>(
+    hunks: &[ParsedHunk],
+    files: &std::collections::HashMap<String, Vec<String>>,
+    generated_headers: &std::collections::HashMap<String, String>,
+    commit_trailer_covered: &std::collections::HashMap<String, bool>,
+    proximity_lines: usize,
+    trivial_max_lines: usize,
+    mut resolve: F,
+) -> DiffCoverage
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    let re = coverage_anchor_re();
+    let mut out = Vec::with_capacity(hunks.len());
+    for hunk in hunks {
+        let added_lines = hunk.added.len();
+
+        // File-level exemption first (cheapest; whole file dropped).
+        if let Some(reason) = classify_coverage_file(
+            &hunk.file,
+            generated_headers.get(&hunk.file).map(|s| s.as_str()),
+        ) {
+            out.push(HunkVerdict {
+                file: hunk.file.clone(),
+                new_start: hunk.new_start,
+                added_lines,
+                exempt: Some(reason),
+                covered: None,
+            });
+            continue;
+        }
+
+        // Hunk-level exemption.
+        if let Some(reason) = classify_coverage_hunk(hunk, trivial_max_lines) {
+            out.push(HunkVerdict {
+                file: hunk.file.clone(),
+                new_start: hunk.new_start,
+                added_lines,
+                exempt: Some(reason),
+                covered: None,
+            });
+            continue;
+        }
+
+        // Coverable — attribute coverage.
+        let empty = Vec::new();
+        let post = files.get(&hunk.file).unwrap_or(&empty);
+        let trailer_covered = commit_trailer_covered
+            .get(&hunk.file)
+            .copied()
+            .unwrap_or(false);
+        let covered = attribute_hunk_coverage(
+            hunk,
+            post,
+            trailer_covered,
+            proximity_lines,
+            &re,
+            &mut resolve,
+        );
+        out.push(HunkVerdict {
+            file: hunk.file.clone(),
+            new_start: hunk.new_start,
+            added_lines,
+            exempt: None,
+            covered,
+        });
+    }
+    DiffCoverage { hunks: out }
+}
+
+/// Parse `git diff --unified=0` output into `ParsedHunk`s. PURE (takes the raw
+/// diff text). Tracks the current `+++ b/<path>` file and each `@@ -a,b +c,d @@`
+/// header to assign `new_start` and split `+`/`-` line bodies. Skips
+/// `/dev/null` (deleted-file) targets. trace:STORY-499 | ai:claude
+fn parse_unified_diff_hunks(diff: &str) -> Vec<ParsedHunk> {
+    let hunk_re = regex::Regex::new(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@").unwrap();
+    let mut hunks: Vec<ParsedHunk> = Vec::new();
+    let mut current_file: Option<String> = None;
+    let mut cur: Option<ParsedHunk> = None;
+
+    let flush = |cur: &mut Option<ParsedHunk>, hunks: &mut Vec<ParsedHunk>| {
+        if let Some(h) = cur.take() {
+            if !h.added.is_empty() || !h.removed.is_empty() {
+                hunks.push(h);
+            }
+        }
+    };
+
+    for line in diff.lines() {
+        if let Some(rest) = line.strip_prefix("+++ ") {
+            flush(&mut cur, &mut hunks);
+            let path = rest.trim();
+            current_file = if path == "/dev/null" {
+                None
+            } else {
+                // Strip the `b/` prefix git prepends.
+                Some(path.strip_prefix("b/").unwrap_or(path).to_string())
+            };
+            continue;
+        }
+        if line.starts_with("--- ") || line.starts_with("diff --git") {
+            continue;
+        }
+        if let Some(cap) = hunk_re.captures(line) {
+            flush(&mut cur, &mut hunks);
+            if let Some(file) = &current_file {
+                let new_start: usize = cap[1].parse().unwrap_or(1);
+                cur = Some(ParsedHunk {
+                    file: file.clone(),
+                    new_start,
+                    added: Vec::new(),
+                    removed: Vec::new(),
+                });
+            }
+            continue;
+        }
+        if let Some(h) = cur.as_mut() {
+            if let Some(body) = line.strip_prefix('+') {
+                h.added.push(body.to_string());
+            } else if let Some(body) = line.strip_prefix('-') {
+                h.removed.push(body.to_string());
+            }
+        }
+    }
+    flush(&mut cur, &mut hunks);
+    hunks
+}
+
+/// Read the unified diff for a range, `git diff -M -w --unified=0 <base>..HEAD`.
+/// `-M` enables rename detection (renamed files emit no content hunks → §3.3 H3),
+/// `-w` ignores whitespace so fmt-only reflows produce no hunks (§3.3 H2).
+/// trace:STORY-499 | ai:claude
+fn read_diff_for_range(project_root: &std::path::Path, range: &str) -> Result<String> {
+    use std::process::Command as PCmd;
+    let output = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["diff", "-M", "-w", "--unified=0", range])
+        .output();
+    match output {
+        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).to_string()),
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr);
+            anyhow::bail!("git diff failed for range `{range}`: {}", err.trim());
+        }
+        Err(e) => anyhow::bail!("could not run git: {e}"),
+    }
+}
+
+/// Read the post-change content of a file at HEAD (or the working tree) as a
+/// line vector, for the proximity / file-level anchor scan (§4.2). Tries the
+/// on-disk file first (the merged tree in CI checkout), falling back to
+/// `git show HEAD:<path>`. Returns an empty vec when neither resolves (the hunk
+/// can still be covered by an in-hunk anchor or the commit trailer).
+/// trace:STORY-499 | ai:claude
+fn read_post_change_file(project_root: &std::path::Path, path: &str) -> Vec<String> {
+    let on_disk = project_root.join(path);
+    if let Ok(content) = std::fs::read_to_string(&on_disk) {
+        return content.lines().map(|l| l.to_string()).collect();
+    }
+    use std::process::Command as PCmd;
+    if let Ok(o) = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["show", &format!("HEAD:{path}")])
+        .output()
+    {
+        if o.status.success() {
+            return String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.to_string())
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// For each touched file, determine whether ANY commit in `range` that touches
+/// it carries a live `(SPEC-ID)` trailer (the §4.2.4 floor). Conservative and
+/// cheap: if any non-plan commit referencing a live spec touched the file, its
+/// hunks get the trailer-floor. Returns a per-file flag map. trace:STORY-499 | ai:claude
+fn compute_trailer_floor<F>(
+    project_root: &std::path::Path,
+    range: &str,
+    files: &[String],
+    resolve: &mut F,
+) -> std::collections::HashMap<String, bool>
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    use std::process::Command as PCmd;
+    let mut out = std::collections::HashMap::new();
+    for file in files {
+        // Commits in range that touched this file, with subjects.
+        let covered = PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args([
+                "log",
+                "--no-merges",
+                "--pretty=format:%s",
+                range,
+                "--",
+                file,
+            ])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout).lines().any(|subject| {
+                    if is_plan_commit_subject(subject) {
+                        return false;
+                    }
+                    extract_spec_ids_from_commit(subject)
+                        .iter()
+                        .any(|id| matches!(resolve(id), SpecResolution::Live))
+                })
+            })
+            .unwrap_or(false);
+        out.insert(file.clone(), covered);
+    }
+    out
+}
+
+/// CLI handler for `aida trace coverage`. Gathers the diff + post-change files +
+/// commit-trailer floor + live-graph resolver from git/the store, runs the pure
+/// `compute_diff_coverage` core, prints a report, and exits non-zero ONLY when
+/// `block` posture is active and a coverable hunk is uncovered. Default posture
+/// is report-only (CI-success regardless) per SPIKE-47 §5/§6. trace:STORY-499 | ai:claude
+fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let range = resolve_gate_range(&project_root, range);
+
+    let diff = read_diff_for_range(&project_root, &range)?;
+    let hunks = parse_unified_diff_hunks(&diff);
+
+    // The live requirement graph (for anchor/trailer resolution).
+    let store = load_store_for_lookup(&project_root);
+    if store.is_none() {
+        eprintln!(
+            "⚠ trace coverage: no requirement store reachable from {} — anchor/trailer ids cannot \
+             be confirmed live (every id is treated as live; coverage may be over-counted). Run \
+             where the store is attached (`aida cache rebuild`).",
+            project_root.display()
+        );
+    }
+
+    // Distinct touched files (post-change paths).
+    let mut touched: Vec<String> = hunks.iter().map(|h| h.file.clone()).collect();
+    touched.sort();
+    touched.dedup();
+
+    // Post-change content + generated-marker headers per file.
+    let mut files = std::collections::HashMap::new();
+    let mut generated_headers = std::collections::HashMap::new();
+    for path in &touched {
+        let lines = read_post_change_file(&project_root, path);
+        let header: String = lines.iter().take(5).cloned().collect::<Vec<_>>().join("\n");
+        generated_headers.insert(path.clone(), header);
+        files.insert(path.clone(), lines);
+    }
+
+    // Commit-trailer floor per file.
+    let mut floor_resolve =
+        |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
+    let trailer_floor = compute_trailer_floor(&project_root, &range, &touched, &mut floor_resolve);
+
+    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
+    let coverage = compute_diff_coverage(
+        &hunks,
+        &files,
+        &generated_headers,
+        &trailer_floor,
+        5, // proximity_lines (SPIKE-47 §4.2 default N=5)
+        1, // trivial_max_lines (SPIKE-47 §3.3 H4 default)
+        resolve,
+    );
+
+    let uncovered = coverage.uncovered();
+    let posture = if block { "block" } else { "report" };
+
+    // Audited exemption breakdown — SPIKE-47 §3 requires every exemption to be
+    // reported (never silently dropped). trace:STORY-499 | ai:claude
+    let mut exempt_breakdown: std::collections::BTreeMap<&'static str, usize> =
+        std::collections::BTreeMap::new();
+    for h in &coverage.hunks {
+        if let Some(reason) = h.exempt {
+            *exempt_breakdown.entry(reason.reason()).or_insert(0) += 1;
+        }
+    }
+
+    if json {
+        let payload = serde_json::json!({
+            "range": range,
+            "posture": posture,
+            "hunks_total": coverage.hunks.len(),
+            "coverable": coverage.coverable(),
+            "covered": coverage.covered(),
+            "exempt": coverage.exempt(),
+            "exempt_breakdown": exempt_breakdown,
+            "uncovered": uncovered.len(),
+            "ratio": coverage.ratio(),
+            "uncovered_hunks": uncovered,
+            "ok": uncovered.is_empty(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!(
+            "trace coverage [{posture}]: {} hunk(s) in `{}` — {} coverable, {} covered, {} exempt \
+             (ratio {:.0}%)",
+            coverage.hunks.len(),
+            range,
+            coverage.coverable(),
+            coverage.covered(),
+            coverage.exempt(),
+            coverage.ratio() * 100.0,
+        );
+        if !exempt_breakdown.is_empty() {
+            let summary = exempt_breakdown
+                .iter()
+                .map(|(reason, n)| format!("{n} {reason}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!("  exempt: {summary}");
+        }
+        if uncovered.is_empty() {
+            println!("✓ every coverable changed hunk carries trace coverage");
+        } else {
+            eprintln!("⚠ {} uncovered coverable hunk(s):", uncovered.len());
+            for h in &uncovered {
+                eprintln!(
+                    "  {}:{} (+{} line(s)) — no // trace: anchor and no live commit trailer",
+                    h.file, h.new_start, h.added_lines
+                );
+            }
+            eprintln!(
+                "\nAdd a `// trace:<SPEC-ID>` near the change (or ensure the commit carries a live \
+                 `(SPEC-ID)` trailer). Tests / generated / docs / config / trivial changes are \
+                 exempt automatically."
+            );
+        }
+    }
+
+    // Report-only by default (CI succeeds); only `block` posture exits non-zero.
+    if block && !uncovered.is_empty() {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
 /// Extract a trailing `(#N)` PR-number suffix from a commit subject (the
 /// shape `gh` writes when squash-merging a PR). Returns None when the
 /// subject doesn't end with `(#<digits>)`. trace:BUG-102 | ai:claude
@@ -62809,6 +75318,81 @@ pub(crate) fn extract_pr_number_from_commit_subject(message: &str) -> Option<u64
         return None;
     }
     digits.parse::<u64>().ok()
+}
+
+/// True when `subject` references any of `ids` as a real spec-completion
+/// reference — i.e. the id appears in the commit's trailing `(REQ-ID)` group
+/// or leading `SPEC-ID:` prefix, the same shapes the auto-bump scan honours
+/// (`extract_spec_ids_from_commit`). Plan commits (`docs(plans): …`) are NOT a
+/// completion signal, so they never count even when they name the id.
+///
+/// This is the testable core of TASK-579: when a finding is promoted, its
+/// origin-ID may already have a merged fix referencing it (the fix shipped
+/// against the id the finding carried *before* it became real work). Matching
+/// is case-insensitive so `task-1-097` in a subject matches `TASK-1-097`.
+/// trace:TASK-579 | ai:claude
+fn commit_subject_references_id(subject: &str, ids: &[String]) -> bool {
+    if is_plan_commit_subject(subject) {
+        return false;
+    }
+    let referenced = extract_spec_ids_from_commit(subject);
+    ids.iter().any(|wanted| {
+        referenced
+            .iter()
+            .any(|got| got.eq_ignore_ascii_case(wanted))
+    })
+}
+
+/// Scan the default branch's recent git log for a merged commit that references
+/// any of `ids` (a finding's spec-id + agreed-id). Returns the first matching
+/// `(short_sha, subject)` — first as in newest-first git-log order, so the most
+/// recent landing wins. Returns `None` when no merged commit references the ids,
+/// when there's no resolvable default branch, or when git is unavailable.
+///
+/// Used by `aida findings promote` so a finding whose underlying fix already
+/// shipped against its origin-ID can warn / auto-complete instead of being
+/// queued as fresh (no-op) work. trace:TASK-579 | ai:claude
+fn find_merged_commit_referencing_ids(
+    project_root: &std::path::Path,
+    ids: &[String],
+) -> Option<(String, String)> {
+    use std::process::Command as ProcessCommand;
+
+    if ids.is_empty() {
+        return None;
+    }
+
+    // Resolve a default-branch ref to scan. Reuse the shared resolver so this
+    // matches `aida db reconcile-status` / auto-bump branch semantics: prefer
+    // origin/HEAD, fall back to origin/main|master then local main|master.
+    let branch_ref = resolve_default_branch_ref(project_root)?;
+
+    let log_out = ProcessCommand::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "log",
+            "--max-count=500",
+            "--pretty=format:%h%x09%s",
+            &branch_ref,
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    let log_str = String::from_utf8_lossy(&log_out.stdout);
+
+    for line in log_str.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let sha = parts.next().unwrap_or("").trim();
+        let subject = parts.next().unwrap_or("").trim();
+        if sha.is_empty() || subject.is_empty() {
+            continue;
+        }
+        if commit_subject_references_id(subject, ids) {
+            return Some((sha.to_string(), subject.to_string()));
+        }
+    }
+    None
 }
 
 /// Parse the PR number out of a review-story title. Titles are filed by
@@ -65806,6 +78390,54 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
     })
 }
 
+/// TASK-618: detect the silent cross-machine queue-collision hazard.
+///
+/// The distributed queue shards per `user_id`: each writes
+/// `registry/queues/<user_id>.yaml` inside the orphan `aida-store` branch.
+/// Distinct users (`alice.yaml` / `bob.yaml`) never collide — that's the
+/// intended sharding. The hazard is when *two different machines* resolve
+/// to the SAME `user_id` and therefore write the SAME file: their
+/// concurrent commits produce a merge conflict on the next `aida db sync`
+/// rebase (or a rejected non-ff push). This is acute for the BUG-89
+/// `"default"` fallback — common in CI/containers where `$USER` /
+/// `$AIDA_USER` / `$USERNAME` are all unset, so multiple unconfigured
+/// clones silently share one `default.yaml`.
+///
+/// Per the operator decision on TASK-618 we only WARN (cheap, targets the
+/// actual silent case) rather than building conflict-tolerant YAML merges.
+/// The warning fires only for the genuinely dangerous shape: the resolved
+/// id is the `"default"` fallback AND the existing `default.yaml` already
+/// carries at least one entry stamped with a DIFFERENT machine fingerprint
+/// than this clone's.
+///
+/// Pure over its inputs so it's directly unit-testable: pass the resolved
+/// `user_id`, this machine's fingerprint, and the iterator of
+/// already-on-disk `added_by_machine` values. Returns the foreign
+/// fingerprint to name in the warning, or `None` when no warning is due.
+/// Entries with no recorded fingerprint (`None` — pre-TASK-618 or non-CLI
+/// writers) are ignored: we can't attribute them to a machine, so they
+/// never trigger a false alarm.
+/// trace:TASK-618 | ai:claude
+fn default_queue_collision_fingerprint<'a, I>(
+    user_id: &str,
+    this_machine: &str,
+    existing_fingerprints: I,
+) -> Option<String>
+where
+    I: IntoIterator<Item = Option<&'a str>>,
+{
+    if user_id != "default" {
+        return None;
+    }
+    existing_fingerprints.into_iter().flatten().find_map(|fp| {
+        if !fp.is_empty() && fp != this_machine {
+            Some(fp.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 /// Resolve `--for <role>` / `--all` / active-session-role into the
 /// effective queue role filter. Returns `(role_filter, only_unrouted)`:
 /// `only_unrouted=true` means filter to entries with no `for_role`
@@ -66926,6 +79558,25 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             } // end of `if !skip_regular_render { ... }` — trace:TASK-222
 
+            // TASK-304: surface the ultraplan suggestion for the head row
+            // (the first pickable entry) under `[ultraplan] mode =
+            // "suggested"`. Mirrors the nudge `aida queue next` / `work`
+            // already print, so all three pickup surfaces agree.
+            // trace:TASK-304 | ai:claude
+            if !skip_regular_render {
+                if let Some(head) = entries.first() {
+                    if let Some(req) = store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == head.requirement_id)
+                    {
+                        if let Ok(root) = find_project_root() {
+                            print_ultraplan_suggestion_hint(&root, req);
+                        }
+                    }
+                }
+            }
+
             // STORY-333: ahead-of-blocker warning. Surface every queued
             // entry (pickable OR blocked) whose blocked-by target is
             // ALSO queued at a later position — the operator queued the
@@ -67110,6 +79761,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             global,
             force,
         } => {
+            // TASK-647 (ADR-3): queue-for-work is an advisor-authority act —
+            // it commits a spec to the execution pipeline. A non-advisor,
+            // non-TTY caller (headless agent, drain capture) is refused; they
+            // file drafts and let the advisor triage + queue. Internal Rust
+            // callers (orchestrator) use `storage.queue_add()` directly and
+            // bypass this CLI gate. trace:TASK-647 | ai:claude
+            if !has_advisor_authority() {
+                anyhow::bail!(
+                    "queuing work for execution needs advisor authority (advisor role or an \
+                     interactive session). File the spec for advisor triage instead, or run \
+                     as the advisor."
+                );
+            }
             let user_id = get_user(user);
             let store = storage.load()?;
 
@@ -67284,6 +79948,32 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // trace:STORY-333 | ai:claude
             warn_if_queued_ahead_of_blocker(req, position, &store, &storage, &user_id);
 
+            // TASK-618: warn on the silent cross-machine collision hazard.
+            // When the queue user_id is the BUG-89 "default" fallback and a
+            // remote default.yaml already carries entries from a DIFFERENT
+            // machine, two clones are about to write the same orphan-branch
+            // file → merge conflict on the next sync rebase. Stamp this
+            // clone's fingerprint so the next add can make the same check.
+            // trace:TASK-618 | ai:claude
+            let this_machine = hostname();
+            if let Ok(existing) = storage.queue_list(&user_id, true) {
+                if let Some(other) = default_queue_collision_fingerprint(
+                    &user_id,
+                    &this_machine,
+                    existing.iter().map(|e| e.added_by_machine.as_deref()),
+                ) {
+                    eprintln!(
+                        "{} This queue is using the shared '{}' user id and already has \
+                         entries from another machine ('{}'). Two machines writing the \
+                         same queue can collide on the next sync. Set a distinct user id \
+                         per machine (export AIDA_USER=<name>) to keep queues separate.",
+                        "warning:".yellow().bold(),
+                        "default".bold(),
+                        other.bold(),
+                    );
+                }
+            }
+
             let entry = aida_core::QueueEntry {
                 user_id: user_id.clone(),
                 requirement_id: req.id,
@@ -67294,6 +79984,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 for_role: r#for.clone(),
                 for_scope: for_scope_routing.clone(),
                 for_session: for_session_routing.clone(),
+                added_by_machine: Some(this_machine),
             };
             storage.queue_add(entry)?;
             // BUG-65: bump role activity on queue-add so statusline tracks
@@ -67633,14 +80324,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
         // trace:TASK-537 | ai:claude
         QueueCommand::Prune {
             orphaned,
+            merged,
             dry_run,
             user,
             r#for,
         } => {
-            if !*orphaned {
+            if !*orphaned && !*merged {
                 anyhow::bail!(
                     "no prune predicate specified — pass `--orphaned` to remove queue \
-                     entries whose backing spec no longer exists"
+                     entries whose backing spec no longer exists, or `--merged` to remove \
+                     auto-queued reviewer entries whose PR has already merged"
                 );
             }
             let user_id = get_user(user);
@@ -67649,21 +80342,73 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let existing_ids: std::collections::HashSet<uuid::Uuid> =
                 store.requirements.iter().map(|r| r.id).collect();
 
-            // Find queue entries whose backing requirement isn't in the store
-            // and (optionally) match the role filter.
-            let orphans: Vec<&aida_core::models::QueueEntry> = entries
-                .iter()
-                .filter(|e| !existing_ids.contains(&e.requirement_id))
-                .filter(|e| match (r#for.as_deref(), e.for_role.as_deref()) {
-                    (None, _) => true,
-                    (Some(want), Some(have)) => want.eq_ignore_ascii_case(have),
-                    (Some(_), None) => false,
-                })
-                .collect();
+            let role_matches = |e: &&aida_core::models::QueueEntry| match (
+                r#for.as_deref(),
+                e.for_role.as_deref(),
+            ) {
+                (None, _) => true,
+                (Some(want), Some(have)) => want.eq_ignore_ascii_case(have),
+                (Some(_), None) => false,
+            };
+
+            // Collect prune targets from whichever predicates were passed,
+            // deduped by requirement id (a row can match more than one).
+            // trace:TASK-593 | ai:claude
+            let mut seen: std::collections::HashSet<uuid::Uuid> = std::collections::HashSet::new();
+            let mut orphans: Vec<&aida_core::models::QueueEntry> = Vec::new();
+
+            if *orphaned {
+                for e in entries
+                    .iter()
+                    .filter(|e| !existing_ids.contains(&e.requirement_id))
+                    .filter(role_matches)
+                {
+                    if seen.insert(e.requirement_id) {
+                        orphans.push(e);
+                    }
+                }
+            }
+
+            if *merged {
+                // TASK-593: a review row ("Review PR-N: …") whose PR has merged
+                // outside the reviewer's `aida queue done` flow lingers because
+                // its backing spec is often still non-terminal (the orphaned
+                // predicate only catches deleted specs). Match review rows by
+                // title, parse the PR number, and confirm merge state via gh.
+                let by_id: std::collections::HashMap<uuid::Uuid, &aida_core::Requirement> =
+                    store.requirements.iter().map(|r| (r.id, r)).collect();
+                let project_root = find_project_root()?;
+                let mut sink = network_retry::NoopSink;
+                for e in entries.iter().filter(role_matches) {
+                    if seen.contains(&e.requirement_id) {
+                        continue;
+                    }
+                    let Some(req) = by_id.get(&e.requirement_id) else {
+                        continue; // missing spec → that's the --orphaned case
+                    };
+                    let Some(pr) = parse_review_story_pr_number(&req.title) else {
+                        continue; // not an auto-queued review row
+                    };
+                    if pr_is_merged_with_sink(&project_root, pr as u32, &mut sink) == Some(true)
+                        && seen.insert(e.requirement_id)
+                    {
+                        orphans.push(e);
+                    }
+                }
+            }
+
+            // Predicate-neutral noun for the result messages.
+            let noun = if *orphaned && *merged {
+                "stale"
+            } else if *merged {
+                "merged-PR"
+            } else {
+                "orphan"
+            };
 
             if orphans.is_empty() {
                 println!(
-                    "{} No orphan queue entries found{}",
+                    "{} No {noun} queue entries found{}",
                     "✓".green(),
                     if r#for.is_some() {
                         format!(" for role {}", r#for.as_deref().unwrap())
@@ -67674,7 +80419,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             } else {
                 let n = orphans.len();
                 println!(
-                    "{} {} orphan queue entr{} ({})",
+                    "{} {} {noun} queue entr{} ({})",
                     if *dry_run {
                         "ℹ".yellow()
                     } else {
@@ -67711,7 +80456,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         storage.queue_remove(&user_id, &e.requirement_id)?;
                     }
                     println!(
-                        "{} Removed {} orphan queue entr{}",
+                        "{} Removed {} {noun} queue entr{}",
                         "✓".green(),
                         n.to_string().bold(),
                         if n == 1 { "y" } else { "ies" },
@@ -68169,6 +80914,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         "aida queue done".cyan(),
                         spec_id
                     );
+                    // TASK-304: surface the ultraplan suggestion for a chunky
+                    // head spec under `[ultraplan] mode = "suggested"`. This
+                    // is the surface `/aida-pickup` renders via `aida queue
+                    // next`. trace:TASK-304 | ai:claude
+                    if let Some(r) = req {
+                        if let Ok(root) = find_project_root() {
+                            print_ultraplan_suggestion_hint(&root, r);
+                        }
+                    }
                 }
             }
         }
@@ -68260,18 +81014,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                                 );
                             }
                             if commits_ahead.unwrap_or(0) > 0 {
-                                let pr_state = match detect_open_pr_for_branch(
+                                // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+                                let pr_state = match change_lookup_for_branch(
                                     &project_root,
                                     &branch,
                                 ) {
-                                    PrLookup::Found(pr) => workflow_hints::PrState::Open(pr.number),
-                                    PrLookup::NoOpenPr => workflow_hints::PrState::Absent,
-                                    PrLookup::GhMissing
-                                    | PrLookup::GhFailed(_)
-                                    | PrLookup::GhUnreachable(_) => {
+                                    crate::forge::ChangeLookup::Found(c) => {
+                                        workflow_hints::PrState::Open(c.id)
+                                    }
+                                    crate::forge::ChangeLookup::NoChange => {
+                                        workflow_hints::PrState::Absent
+                                    }
+                                    crate::forge::ChangeLookup::CliMissing
+                                    | crate::forge::ChangeLookup::CliFailed(_)
+                                    | crate::forge::ChangeLookup::Unreachable(_) => {
                                         eprintln!(
                                             "{} queue-done PR-check proceeding without `gh` confirmation \
-                                             (PrLookup::Unknown). Gate may not fire if PR actually missing.",
+                                             (lookup unknown). Gate may not fire if PR actually missing.",
                                             "warning:".yellow().bold()
                                         );
                                         workflow_hints::PrState::Unknown
@@ -68311,6 +81070,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     display_id,
                     flag
                 );
+            }
+
+            // STORY-469 Guard 1: validate trailer spec-IDs before flipping the
+            // spec to Done. Catch a hallucinated / typo'd / since-rejected
+            // `(SPEC-ID)` trailer on this branch's commits BEFORE the spec is
+            // marked Done (and before the branch's commits — already authored —
+            // ride a later merge into shared history). Reuses the STORY-498
+            // gate's pure validator + store resolver, client-side. `--force`
+            // bypasses (matching its existing "I know what I'm doing" role for
+            // the PR check above). trace:STORY-469 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                run_client_trailer_guard(&project_root, "queue done", *force);
             }
 
             if !yes {
@@ -68445,6 +81216,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             count,
             permission_mode,
             no_launch,
+            plan_only,
             role,
             no_pull,
             type_filter,
@@ -68463,6 +81235,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             list_sessions,
             session_id,
             auto_complete,
+            drain,
             json,
             max,
             max_failures,
@@ -68471,6 +81244,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             resume_drain,
             drain_id,
             resume_dry_run,
+            from_pr,
             no_human,
             escalate_blocks,
             escalate_defaults,
@@ -68481,12 +81255,41 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             calibrate,
             no_calibrate,
             allow_stale_base,
+            allow_intermediate_only,
             no_auto_rebase,
             complexity,
             assist_est,
             effort,
             strict,
         } => {
+            let user_id = get_user(user);
+            // TASK-578: expand the `--drain` discoverability alias into the
+            // underlying `--auto-complete --no-human=both --max <queue-size>`
+            // state before anything downstream reads those flags. `--drain` only
+            // sets state — every guard, dispatch, and orchestrator path below
+            // behaves exactly as if the operator had typed the long form. The
+            // drivable queue size feeds the `--max` default (the bare-queue
+            // drain N); a best-effort `0` falls back to 99 inside the resolver.
+            // Explicit flags always win. trace:TASK-578 | ai:claude
+            let drain_queue_size = if *drain {
+                drivable_queued_count(storage, &user_id).unwrap_or(0)
+            } else {
+                0
+            };
+            let drain_resolution = resolve_drain_alias(
+                *drain,
+                auto_complete.as_deref(),
+                no_human.as_deref(),
+                *max,
+                drain_queue_size,
+            );
+            // Shadow the raw flags with their drain-resolved values. `max` is
+            // only re-applied on routes where it is meaningful (the bare-queue
+            // nextN drain and a batch drain); on the single-spec path the
+            // existing `--max` rejection still applies, so keep `max` itself the
+            // operator-supplied value there. trace:TASK-578 | ai:claude
+            let auto_complete = &drain_resolution.auto_complete;
+            let no_human = &drain_resolution.no_human;
             // TASK-560: reject --resume + --auto-complete with a message that
             // explains the conflict and names both recovery paths, instead of
             // clap's terse "cannot be used with". trace:TASK-560 | ai:claude
@@ -68495,7 +81298,6 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             {
                 anyhow::bail!(msg);
             }
-            let user_id = get_user(user);
             // TASK-307: propagate the headless-tee flag the same way
             // `--zen` propagates via `AIDA_ZEN` — set the env var once at
             // the top and every downstream child (the direct headless
@@ -68727,6 +81529,16 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if let Some(m) = phase_ceiling_minutes {
                     std::env::set_var("AIDA_PHASE_CEILING_MINUTES", m.to_string());
                 }
+                // TASK-480: propagate the intermediate-only opt-out to the
+                // orchestrator phase-3 reviewer pre-flight via an env var
+                // (same pattern as the BUG-420 watchdog flags) so we don't
+                // thread the bool through every batch/nextN/auto-complete
+                // handler signature. The single-spec `handle_queue_work`
+                // path below also receives it explicitly.
+                // trace:TASK-480 | ai:claude
+                if *allow_intermediate_only {
+                    std::env::set_var("AIDA_ALLOW_INTERMEDIATE_ONLY", "1");
+                }
                 // STORY-492: `--resume-drain` is its own entry — read the crashed
                 // drain-state, gate on PID-liveness, reconcile from reality, and
                 // re-enter (or `--dry-run` preview). It never returns. Routed
@@ -68823,6 +81635,31 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         );
                     }
                 }
+                // TASK-578: a bare `--drain` (no batch, no positional spec, no
+                // `nextN` keyword) drains the whole drivable queue. It expands to
+                // a `nextN` drain where N is the resolved drain `--max` (the
+                // queue size, an explicit `--max`, or the 99 fallback). Routing
+                // through the existing nextN orchestrator gives us the
+                // skip-undrivable + per-member-lifecycle behaviour for free.
+                // trace:TASK-578 | ai:claude
+                if *drain && effective_id.is_none() {
+                    let n = drain_resolution.max.unwrap_or(99).max(1);
+                    handle_auto_complete_next_n(
+                        storage,
+                        &user_id,
+                        n,
+                        variant,
+                        *json,
+                        permission_mode.as_deref(),
+                        no_human_mode,
+                        escalate_mode,
+                        *steal,
+                        *force_claim,
+                        *allow_stale_base,
+                        *no_auto_rebase,
+                        *max_failures,
+                    );
+                }
                 // `--max` only bounds a batch drain — reject it on the
                 // single-spec path so the flag never silently no-ops.
                 // trace:TASK-285 | ai:claude
@@ -68841,6 +81678,28 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     Some(s) => s.to_string(),
                     None => resolve_auto_complete_head(storage, &user_id)?,
                 };
+                // TASK-405: `--from-pr` — implementation shipped OUTSIDE the
+                // orchestrator (a PR is already open). Drive phases 3-6 only,
+                // skipping the implementer. Routed here on the single-spec path
+                // (batch / nextN drains exit above). The shared `--resume-dry-run`
+                // flag previews the plan. trace:TASK-405 | ai:claude
+                if *from_pr {
+                    handle_from_pr(
+                        storage,
+                        &user_id,
+                        &spec,
+                        variant,
+                        *resume_dry_run,
+                        *json,
+                        permission_mode.as_deref(),
+                        no_human_mode,
+                        escalate_mode,
+                        *steal,
+                        *force_claim,
+                        *allow_stale_base,
+                        *no_auto_rebase,
+                    );
+                }
                 handle_auto_complete(
                     storage,
                     &user_id,
@@ -68970,6 +81829,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // STORY-281: opt out of the reviewer pre-flight stale-base
                 // refusal. trace:STORY-281 | ai:claude
                 *allow_stale_base,
+                // TASK-480: opt out of the reviewer pre-flight
+                // intermediate-only refusal. trace:TASK-480 | ai:claude
+                *allow_intermediate_only,
                 // STORY-439: pickup-time calibration capture. Each value
                 // writes to .aida/complexity-calibration/<SPEC>.yaml AND
                 // stamps a tag on the spec.
@@ -68977,6 +81839,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 *assist_est,
                 *effort,
                 *strict,
+                // STORY-265: plan-only mode — launch /aida-plan in `plan`
+                // permission mode instead of /aida-pickup implement.
+                *plan_only,
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -69030,6 +81895,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 *no_pull,
                 user.as_deref(),
             )?;
+        }
+        // STORY-384: failed-phase-1 recovery wizard — inspect state, recommend a
+        // recovery path, step through it. A front-end over existing primitives.
+        // trace:STORY-384 | ai:claude
+        QueueCommand::Recover {
+            id,
+            dry_run,
+            auto,
+            user,
+        } => {
+            let user_id = current_user_id(user.as_deref());
+            handle_queue_recover(storage, &user_id, id, *dry_run, *auto)?;
         }
     }
     Ok(())
@@ -69992,6 +82869,7 @@ fn handle_queue_rework(
         for_role: for_role_resolved.clone(),
         for_scope: None,
         for_session: None,
+        added_by_machine: None,
     };
     storage.queue_add(entry)?;
     record_role_activity(&spec_id, "queue-add");
@@ -70038,10 +82916,12 @@ fn handle_queue_rework(
             /* batch_name */ None,
             /* quiet */ false,
             /* allow_stale_base */ false,
+            /* allow_intermediate_only */ false,
             /* complexity */ None,
             /* assist_est */ None,
             /* effort */ None,
             /* strict */ false,
+            /* plan_only */ false,
         )?;
     } else {
         println!(
@@ -70171,6 +83051,7 @@ fn resolve_queue_work_plan(
                     for_role: Some(role.clone()),
                     for_scope: None,
                     for_session: None,
+                    added_by_machine: None,
                 };
                 storage.queue_add(entry)?;
                 let display_id = req
@@ -70254,11 +83135,30 @@ fn resolve_queue_work_plan(
                         listed
                     )
                 };
-                anyhow::anyhow!(
-                    "queue is empty for {}; pass an id explicitly or run `aida queue list`{}",
-                    role_filter.as_deref().unwrap_or("any role"),
-                    suffix
-                )
+                // BUG-465: on a FRESH project (no real, non-META specs yet) the
+                // queue is legitimately empty — guide the new user's first
+                // action instead of dead-ending with a bare error. EPIC-37:
+                // fresh init -> first `queue work` must be boring and correct.
+                // trace:BUG-465 | ai:claude
+                let has_real_specs = store
+                    .requirements
+                    .iter()
+                    .any(|r| !matches!(r.req_type, aida_core::RequirementType::Meta));
+                if !has_real_specs && skipped_unpickable.is_empty() {
+                    anyhow::anyhow!(
+                        "Your queue is empty — looks like a fresh project. Get started:\n  \
+                         1. File a spec:  aida add --title \"<what you're building>\" --type task --status approved\n  \
+                         2. Queue it:     aida queue add <SPEC-ID>   (the id printed by step 1)\n  \
+                         3. Work it:      aida queue work\n  \
+                         Browse anytime with `aida list`."
+                    )
+                } else {
+                    anyhow::anyhow!(
+                        "queue is empty for {}; pass an id explicitly or run `aida queue list`{}",
+                        role_filter.as_deref().unwrap_or("any role"),
+                        suffix
+                    )
+                }
             })?;
         if !skipped_unpickable.is_empty() {
             let listed = skipped_unpickable
@@ -70606,10 +83506,17 @@ fn format_queue_work_not_queued_error(
         // including one with no recorded claude session — so it stays
         // `--work` (a fresh session), not `--work --resume` (which needs a
         // prior session and bounces when there isn't one). trace:BUG-236
+        // TASK-240: a Done spec usually means "PR open, awaiting merge". If the
+        // user authored that PR they may want to merge it NOW rather than wait —
+        // point them at the merge path. We can't name the PR number here (no gh
+        // lookup in this pure builder), so route via `aida show` which prints the
+        // PR linkage, keeping every suggested command honest/runnable.
+        // trace:TASK-240 | ai:claude
         RequirementStatus::Done => format!(
             "`{display_id}` isn't queued. Status is Done (work finished on a branch).\n  \
              If review found issues and more commits are needed: `aida queue rework {display_id} --work`\n  \
-             If just waiting for merge: nothing to do — auto-bump fires when the PR merges."
+             If the PR is yours and you want to merge now (CI green): find it with `aida show {display_id}`, then `gh pr merge <PR> --squash --delete-branch`.\n  \
+             Otherwise nothing to do — auto-bump fires when the PR merges."
         ),
         RequirementStatus::Completed => format!(
             "`{display_id}` is Completed (already shipped). Nothing to work on.\n  \
@@ -70625,6 +83532,68 @@ fn format_queue_work_not_queued_error(
              Review the reason with `aida show {display_id}`, then triage:\n  \
              resume with `aida edit {display_id} --status in-progress`, or drop it with `--status rejected`."
         ),
+    }
+}
+
+/// TASK-630: the held-state re-entry decision, isolated so it is unit-testable
+/// without a Storage handle, a worktree, or a launcher.
+///
+/// A deliberate *push-branch, hold-PR* finish (BUG-250) leaves the spec **Done**
+/// + dequeued with a persisted hold marker at `.aida/pr-holds/<spec>.json`. The
+/// plain `aida queue work <spec>` recovery hints (rework / wait-for-merge) don't
+/// fit that state — the operator is neither reworking nor waiting for a merge;
+/// they're re-entering the dormant implementer worktree to run the manual gate
+/// and *then* open the deferred PR. `--resume` against such a spec should flow
+/// through the verb's normal lease/pull/worktree bookkeeping instead of bailing.
+///
+/// The decision is deliberately narrow: re-entry is allowed **only** when the
+/// operator explicitly asked to resume (`resume == true`), the spec is in the
+/// Done state (the state a deliberate hold parks it in), AND a hold marker is
+/// present. A queued / Completed / NeedsAttention spec, or a Done spec with no
+/// hold marker, is left to the existing recovery hints — a held re-entry is a
+/// distinct state, not a blanket "resume any Done spec". trace:TASK-630 | ai:claude
+fn held_resume_reentry_allowed(
+    resume: bool,
+    status: &RequirementStatus,
+    hold_marker_present: bool,
+) -> bool {
+    resume && hold_marker_present && *status == RequirementStatus::Done
+}
+
+/// TASK-630: build the Item-mode plan for a held-spec `--resume` re-entry.
+///
+/// A held spec is Done + dequeued, so there is no real `QueueEntry` to anchor
+/// the plan on. We synthesise one (scoped to the spec's own id, matching the
+/// implementer worktree the held session lives in) so the rest of
+/// `handle_queue_work` — lease bookkeeping, worktree resolution, the
+/// `QueueWorkLaunch::Resume` re-entry — runs unchanged. trace:TASK-630 | ai:claude
+fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> QueueWorkPlan {
+    let synthetic = aida_core::QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id: req.id.clone(),
+        position: 0,
+        added_by: user_id.to_string(),
+        note: None,
+        added_at: chrono::Utc::now(),
+        for_role: Some("implementer".to_string()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    let (scope, review_target) = derive_scope_from_entry(&synthetic, req);
+    let anchor_display = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| scope.clone());
+    let resolved = build_resolved_entry(synthetic, req);
+    QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![resolved],
+        scope,
+        review_target,
+        anchor_display,
+        anchor_title: req.title.clone(),
     }
 }
 
@@ -70780,13 +83749,22 @@ fn infer_queue_work_role(
 ///                argument) still pauses to confirm.
 ///                trace:TASK-86 trace:TASK-548 | ai:claude
 /// trace:STORY-42 | ai:claude
-fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
+fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str, plan_only: bool) -> String {
     let role_lower = role.to_ascii_lowercase();
     if role_lower == "reviewer" {
         if let Some((_, n)) = plan.review_target {
             return format!("/aida-review --pr {}", n);
         }
         return "/aida-review".to_string();
+    }
+    // STORY-265: plan-only mode runs the planning skill instead of pickup —
+    // produce a docs/plans/ file, no code. (Reviewer handled above; plan-only
+    // is an implementer-side mode.)
+    if plan_only {
+        if plan.mode == QueueWorkMode::Item {
+            return format!("/aida-plan {}", plan.anchor_display);
+        }
+        return "/aida-plan".to_string();
     }
     // Implementer (and unknown roles): /aida-pickup with optional focus.
     if plan.mode == QueueWorkMode::Item {
@@ -70854,6 +83832,10 @@ fn handle_queue_work(
     // Only meaningful when scope resolves to a PR + role is reviewer;
     // ignored on every other pickup. trace:STORY-281 | ai:claude
     allow_stale_base: bool,
+    // TASK-480: opt out of the reviewer pre-flight intermediate-only
+    // refusal. Same scoping as allow_stale_base — only meaningful for a
+    // reviewer pickup of a GitHub PR. trace:TASK-480 | ai:claude
+    allow_intermediate_only: bool,
     // STORY-439: pickup-time complexity + assistance estimate. Each
     // value writes a slot to `.aida/complexity-calibration/<SPEC>.yaml`
     // AND stamps a `complexity:<level>` / `estimated-assistance:<level>`
@@ -70865,6 +83847,11 @@ fn handle_queue_work(
     effort: Option<effort_calibration::EffortBucket>,
     // trace:TASK-547 | ai:antigravity
     strict: bool,
+    // STORY-265: plan-only mode — run /aida-plan (not /aida-pickup) in `plan`
+    // permission mode so the session writes a docs/plans/ file without
+    // touching code; promote Approved -> Planned afterward via
+    // `aida plan promote`. trace:STORY-265 | ai:claude
+    plan_only: bool,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -70873,7 +83860,77 @@ fn handle_queue_work(
         uuid::Uuid::parse_str(sid)
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
-    let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter, strict)?;
+    // TASK-630: a deliberate PR-hold (BUG-250) parks the spec Done + dequeued
+    // with a persisted marker at `.aida/pr-holds/<spec>.json`. Normal queue
+    // resolution then bails ("isn't queued. Status is Done") — wrong for a
+    // re-entry. When the operator explicitly `--resume`s such a spec, recognise
+    // the hold as a re-enterable state and synthesise an Item-mode plan so the
+    // rest of the verb (lease/pull/worktree + QueueWorkLaunch::Resume) runs
+    // unchanged. We try the normal resolution first; only on its failure do we
+    // consult the marker, so a still-queued or non-held spec keeps its existing
+    // behaviour exactly. trace:TASK-630 | ai:claude
+    let plan = match resolve_queue_work_plan(storage, user_id, arg, type_filter, strict) {
+        Ok(plan) => plan,
+        Err(e) => match arg.filter(|_| resume.is_some()) {
+            Some(arg_str) => {
+                let store = storage.load()?;
+                let held = store
+                    .requirements
+                    .iter()
+                    .find(|r| spec_matches(r, arg_str))
+                    .and_then(|req| {
+                        let main_root = find_main_worktree_root().ok()?;
+                        let display = req
+                            .agreed_id
+                            .as_deref()
+                            .or(req.spec_id.as_deref())
+                            .unwrap_or(arg_str);
+                        let marker = punt::hold_signal_path(&main_root, display);
+                        let present = punt::read_hold_signal(&marker).is_some();
+                        held_resume_reentry_allowed(true, &req.status, present)
+                            .then(|| held_resume_plan(req, user_id))
+                    });
+                match held {
+                    Some(plan) => plan,
+                    None => return Err(e),
+                }
+            }
+            None => return Err(e),
+        },
+    };
+
+    // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
+    // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
+    // the no-arg form (the operator hasn't already chosen a spec) gets the
+    // nudge; an explicit `aida queue work SPEC` is already a deliberate
+    // choice. Best-effort and read-only — never perturbs the pickup.
+    // trace:TASK-304 | ai:claude
+    if arg.is_none() && !list_sessions {
+        if let Ok(root) = find_project_root() {
+            if let Ok(store) = storage.load() {
+                if let Some(req) = store.get_requirement_by_spec_id(&plan.anchor_display) {
+                    print_ultraplan_suggestion_hint(&root, req);
+                }
+            }
+        }
+    }
+
+    // TASK-516: warn before picking up a spec whose imported plan is still
+    // awaiting master review (tagged `plan-review:pending`). The plan is
+    // archived but NOT yet canonical — the master hasn't signed off, so
+    // riding it into the implementer session as the brief would treat an
+    // unreviewed plan as load-bearing. Best-effort, read-only; never blocks
+    // the pickup (this minimal slice warns, it doesn't gate).
+    // trace:TASK-516 | ai:claude
+    if !list_sessions {
+        if let Ok(store) = storage.load() {
+            if let Some(req) = store.get_requirement_by_spec_id(&plan.anchor_display) {
+                if let Some(msg) = plan_review_warning(&req.tags, &plan.anchor_display) {
+                    eprintln!("{msg}");
+                }
+            }
+        }
+    }
 
     // STORY-439: capture pickup-time complexity + assistance estimate
     // ASAP after plan resolution — we know the anchor spec, the project
@@ -70979,12 +84036,13 @@ fn handle_queue_work(
         env_mode.as_deref(),
         config_mode.as_deref(),
         bypass_knob,
+        plan_only,
     );
     if permission_mode.is_none() {
         maybe_show_faithful_launcher_notice();
     }
 
-    let prompt = derive_queue_work_prompt(&plan, &role);
+    let prompt = derive_queue_work_prompt(&plan, &role, plan_only);
 
     // STORY-281: reviewer pre-flight stale-base check. Fires only when
     // the resolved scope is a GitHub PR AND the inferred role is the
@@ -71032,6 +84090,63 @@ fn handle_queue_work(
                     Err(e) => {
                         eprintln!(
                             "  {} pre-flight stale-base check for PR-{pr_n} failed \
+                             ({e}); proceeding with reviewer",
+                            "⚠".yellow().bold()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // TASK-480: reviewer pre-flight intermediate-only check. Sibling
+    // substrate-as-bouncer gate to the STORY-281 stale-base refusal
+    // above — same scoping (reviewer + GitHub PR + launching). Refuses a
+    // PR whose diff is exclusively intermediate/generated paths (build
+    // outputs, gitignored files, lockfiles with no source change)
+    // because such a fix is not reproducible. The check is a
+    // PROGRAMMATIC GATE here, not skill-template instruction text
+    // (BUG-280-class lesson). Fails open on infra error.
+    //
+    //   Clean                   → silent proceed
+    //   SourcePlusIntermediate  → warning, proceed (flag-but-allow)
+    //   IntermediateOnly        → refuse unless --allow-intermediate-only
+    //
+    // trace:TASK-480 | ai:claude
+    if !no_launch && role == "reviewer" {
+        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+            if let Some(root) = project_root_for_config.as_deref() {
+                let allow = allow_intermediate_only
+                    || std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
+                        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                        .unwrap_or(false);
+                match preflight_intermediate_only_check(root, pr_n) {
+                    Ok(pr_rebase::IntermediateOnlyOutcome::Clean) => {}
+                    Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate {
+                        intermediate,
+                    }) => {
+                        eprintln!(
+                            "  {} {}",
+                            "⚠".yellow().bold(),
+                            pr_rebase::intermediate_only_warn_message(pr_n, &intermediate).yellow()
+                        );
+                    }
+                    Ok(pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { intermediate }) => {
+                        let msg = pr_rebase::intermediate_only_block_message(pr_n, &intermediate);
+                        if allow {
+                            eprintln!(
+                                "  {} intermediate-only diff detected; \
+                                 `--allow-intermediate-only` is set, proceeding.\n{}",
+                                "⚠".yellow().bold(),
+                                msg.yellow()
+                            );
+                        } else {
+                            anyhow::bail!(msg);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "  {} pre-flight intermediate-only check for PR-{pr_n} failed \
                              ({e}); proceeding with reviewer",
                             "⚠".yellow().bold()
                         );
@@ -71248,15 +84363,41 @@ fn handle_queue_work(
                     continue;
                 }
                 orchestrator::AutoReleaseDecision::DormantDirty { dirty_entries } => {
+                    // TASK-402 (friction #3 + #4): a dormant lease with a dirty
+                    // worktree is the canonical resume-after-failure state — the
+                    // process died mid-implementation (orphaned) and the
+                    // unfinished work lives uncommitted in that exact worktree.
+                    // The bare message ("commit/stash, or --force to discard")
+                    // omits the one option that keeps the WIP: resume into the
+                    // existing worktree. `--steal` would remove the worktree the
+                    // WIP lives in, so name it as the destructive path, not the
+                    // default. trace:TASK-402 | ai:claude
+                    let resume_hint = if resume.is_some() {
+                        format!(
+                            " You passed --resume: keep this worktree and re-attach \
+                             to the recorded session — re-run with \
+                             `aida queue work {} --resume <session-uuid>` \
+                             (--list-sessions shows the uuid).",
+                            plan.scope
+                        )
+                    } else {
+                        format!(
+                            " To keep the work, resume into this worktree: \
+                             `aida queue work {} --resume` (bare = most-recent session). \
+                             Only commit/stash or `aida session end {} --force` (discards) \
+                             if you intend to abandon it.",
+                            plan.scope,
+                            &conflict.id[..conflict.id.len().min(8)]
+                        )
+                    };
                     anyhow::bail!(
-                        "lease {} for scope `{}` is dormant but its worktree has {} \
-                         uncommitted change(s) at {} — commit/stash them first, or \
-                         `aida session end {} --force` to discard, then retry.",
+                        "lease {} for scope `{}` looks orphaned (dormant process, \
+                         worktree has {} uncommitted change(s) at {}).{}",
                         &conflict.id[..conflict.id.len().min(8)],
                         plan.scope,
                         dirty_entries,
                         conflict.worktree_path.display(),
-                        &conflict.id[..conflict.id.len().min(8)]
+                        resume_hint
                     );
                 }
                 orchestrator::AutoReleaseDecision::Live => {
@@ -71265,9 +84406,18 @@ fn handle_queue_work(
             }
 
             if !steal {
+                // TASK-402 (friction #4): the lease is live (the auto-release
+                // sweep above handles dormant/orphaned leases). Warn that
+                // `--steal` ends the session AND removes its worktree — so if
+                // there is unfinished work in that worktree, `--resume` (which
+                // re-attaches in place) is the work-preserving path, not
+                // `--steal`. trace:TASK-402 | ai:claude
                 anyhow::bail!(
-                    "scope `{}` is owned by lease {} ({}, worktree: {}) — pass --steal to end \
-                     that session first and take over, or `aida session end {}` manually.",
+                    "scope `{}` is owned by lease {} ({}, worktree: {}) — \
+                     to take over: `--steal` ends that session and removes its \
+                     worktree (work there is lost unless committed), \
+                     or `--resume` re-attaches to it in place (keeps the worktree), \
+                     or `aida session end {}` manually.",
                     plan.scope,
                     &conflict.id[..conflict.id.len().min(8)],
                     conflict.role.as_deref().unwrap_or("(unset)"),
@@ -71328,6 +84478,17 @@ fn handle_queue_work(
         }
     }
 
+    // TASK-619: capture the anchor spec's status from the *local* (pre-pull)
+    // view so we can detect whether the pull below reveals that another
+    // machine claimed the spec under us. Best-effort + read-only — a load
+    // failure just yields None, which makes the guard a no-op.
+    // trace:TASK-619 | ai:claude
+    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+        store
+            .get_requirement_by_spec_id(&plan.scope)
+            .map(|r| r.status.clone())
+    });
+
     // Pull the orphan store before resolving the worktree — keeps the
     // queue + req view fresh for the new session. Best-effort: a
     // failed pull (offline, divergent) prints a note and continues
@@ -71339,6 +84500,45 @@ fn handle_queue_work(
                 "⚠".yellow().bold(),
                 format!("pre-pickup pull failed; proceeding with local view: {}", e).yellow()
             );
+        }
+    }
+
+    // TASK-619: cross-machine duplicate-pickup guard. Session leases are
+    // machine-local (.aida/sessions/, gitignored), so the only shared
+    // "someone is on this" signal across machines is the git-canonical
+    // status flip — which is eventually-consistent. Now that we've pulled
+    // the latest store, re-read the anchor spec's status and refuse if it
+    // was claimed/shipped elsewhere in the window between planning this
+    // pickup and now. The existing BUG-379 preflight in `session_start`
+    // catches stuck-InProgress-without-lease; this guard specifically names
+    // the cross-machine dup-pickup case with a recovery hint and respects
+    // --force-claim / orchestrator-corroboration / review sessions.
+    // trace:TASK-619 | ai:claude
+    if !no_pull {
+        let status_after_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+            store
+                .get_requirement_by_spec_id(&plan.scope)
+                .map(|r| r.status.clone())
+        });
+        let orchestrator_corroborated = {
+            let root = project_root_for_config
+                .clone()
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            orchestrator::detect(&root).is_orchestrated()
+        };
+        let is_review_session = plan.review_target.is_some()
+            || role == "reviewer"
+            || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
+        if let DupPickupDecision::Refuse(msg) = dup_pickup_recheck(
+            &plan.anchor_display,
+            status_before_pull.as_ref(),
+            status_after_pull.as_ref(),
+            force_claim,
+            orchestrator_corroborated,
+            is_review_session,
+        ) {
+            anyhow::bail!("{}", msg);
         }
     }
 
@@ -71411,6 +84611,24 @@ fn handle_queue_work(
                 plan.scope
             )
         })?;
+
+    // TASK-99: warn (don't auto-pull) when the base the new worktree forked
+    // from is behind origin/main. Closes the visibility half of the
+    // 2026-05-13 stale-base pain cheaply: the operator sees the drift at
+    // pickup and can `aida rebase` before the session accumulates work on a
+    // stale base. We deliberately do NOT auto-pull here — that risks
+    // surprising the worktree; the orchestrator drain (fresh main per-phase)
+    // and the rebase verb own divergence handling. Best-effort + silent on
+    // missing data (no origin/main → fresh clone / offline).
+    // trace:TASK-99 | ai:claude
+    {
+        let base_ref = resolved_base.as_deref().unwrap_or("main");
+        if let Some(behind) = commits_behind_origin_main(&project_root, base_ref) {
+            if let Some(msg) = behind_origin_warning(behind, "main") {
+                eprintln!("  {} {}", "⚠".yellow().bold(), msg.yellow());
+            }
+        }
+    }
 
     // STORY-248: register the stacked-branch entry in `.aida/stacks.json`
     // so `aida pull --auto`'s cascade can find it when the parent merges.
@@ -72175,15 +85393,16 @@ fn gather_state_snapshot(
     });
 
     let pr = match branch.as_ref() {
-        Some(b) => match detect_open_pr_for_branch(&project_root, &b.name) {
-            PrLookup::Found(info) => PrRow::Open {
-                number: info.number,
-                url: info.url,
+        // STORY-516: forge-routed. trace:STORY-516 | ai:claude
+        Some(b) => match change_lookup_for_branch(&project_root, &b.name) {
+            crate::forge::ChangeLookup::Found(c) => PrRow::Open {
+                number: c.id,
+                url: c.url,
             },
-            PrLookup::NoOpenPr => PrRow::None,
-            PrLookup::GhMissing => PrRow::GhMissing,
-            PrLookup::GhUnreachable(detail) => PrRow::GhUnreachable { detail },
-            PrLookup::GhFailed(detail) => PrRow::GhFailed { detail },
+            crate::forge::ChangeLookup::NoChange => PrRow::None,
+            crate::forge::ChangeLookup::CliMissing => PrRow::GhMissing,
+            crate::forge::ChangeLookup::Unreachable(detail) => PrRow::GhUnreachable { detail },
+            crate::forge::ChangeLookup::CliFailed(detail) => PrRow::GhFailed { detail },
         },
         None => PrRow::None,
     };
@@ -72618,17 +85837,121 @@ fn no_human_scope_line(mode: auto_complete::NoHumanMode) -> &'static str {
 /// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` for an unattended run. STORY-276: `both` is
 /// now a shipped mode, so it is acknowledged like `reviewer-only` rather than
 /// rejected; the banner wording differs by mode. trace:TASK-306, STORY-276
-fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
-    let acknowledged = std::env::var("AIDA_NO_HUMAN_ACKNOWLEDGED")
+/// TASK-394: machine-wide `--no-human` acknowledgement marker
+/// (`~/.aida/no-human-acknowledged`) — persists across every project on the host.
+fn no_human_machine_marker() -> Option<std::path::PathBuf> {
+    dirs::home_dir().map(|h| h.join(".aida").join("no-human-acknowledged"))
+}
+
+/// TASK-394: project-scoped marker (`.aida/no-human-acknowledged`) — fresh per
+/// project, so the safety prompt returns on a new clone unless re-acked.
+fn no_human_project_marker() -> std::path::PathBuf {
+    std::path::Path::new(".aida").join("no-human-acknowledged")
+}
+
+/// TASK-394: is `--no-human` acknowledged via any channel? Returns the source
+/// label for the reminder line. Checked order: env var (existing path) → machine
+/// marker → project marker. An overnight loop acks once (the marker) instead of
+/// re-exporting the env var per iteration. trace:TASK-394 | ai:claude
+fn no_human_ack_source() -> Option<&'static str> {
+    if std::env::var("AIDA_NO_HUMAN_ACKNOWLEDGED")
         .map(|v| v == "1")
-        .unwrap_or(false);
+        .unwrap_or(false)
+    {
+        return Some("AIDA_NO_HUMAN_ACKNOWLEDGED");
+    }
+    if no_human_machine_marker()
+        .map(|p| p.exists())
+        .unwrap_or(false)
+    {
+        return Some("~/.aida/no-human-acknowledged");
+    }
+    if no_human_project_marker().exists() {
+        return Some(".aida/no-human-acknowledged");
+    }
+    None
+}
+
+/// TASK-394: `aida no-human acknowledge|revoke|status` — manage the persistent
+/// `--no-human` scope-acknowledgement marker so an unattended loop acks once
+/// rather than re-exporting AIDA_NO_HUMAN_ACKNOWLEDGED per iteration.
+/// trace:TASK-394 | ai:claude
+fn handle_no_human_command(cmd: &cli::NoHumanCommand) -> Result<()> {
+    let marker_for = |project: bool| -> Result<std::path::PathBuf> {
+        if project {
+            Ok(no_human_project_marker())
+        } else {
+            no_human_machine_marker()
+                .ok_or_else(|| anyhow::anyhow!("could not resolve home directory for the marker"))
+        }
+    };
+    match cmd {
+        cli::NoHumanCommand::Acknowledge { project } => {
+            let path = marker_for(*project)?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&path, "acknowledged\n")
+                .with_context(|| format!("writing {}", path.display()))?;
+            let scope = if *project {
+                "this project"
+            } else {
+                "this machine"
+            };
+            println!(
+                "{} --no-human acknowledged for {} ({}). Future drains skip the scope prompt.",
+                "✓".green(),
+                scope,
+                path.display()
+            );
+            if *project {
+                println!(
+                    "  {}",
+                    "Note: .aida/no-human-acknowledged is gitignored runtime state (per-clone)."
+                        .dimmed()
+                );
+            }
+            Ok(())
+        }
+        cli::NoHumanCommand::Revoke { project } => {
+            let path = marker_for(*project)?;
+            if path.exists() {
+                std::fs::remove_file(&path)
+                    .with_context(|| format!("removing {}", path.display()))?;
+                println!(
+                    "{} revoked {} — the scope prompt will return.",
+                    "✓".green(),
+                    path.display()
+                );
+            } else {
+                println!("(no acknowledgement marker at {})", path.display());
+            }
+            Ok(())
+        }
+        cli::NoHumanCommand::Status => {
+            match no_human_ack_source() {
+                Some(src) => println!("{} --no-human is acknowledged (via {}).", "✓".green(), src),
+                None => println!(
+                    "{} --no-human is NOT acknowledged — the scope prompt will fire. \
+                     Run `aida no-human acknowledge` to persist it.",
+                    "○".dimmed()
+                ),
+            }
+            Ok(())
+        }
+    }
+}
+
+fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
+    let ack_source = no_human_ack_source();
     let both = mode.wants_headless_implementer();
-    match classify_no_human_gate(acknowledged) {
+    match classify_no_human_gate(ack_source.is_some()) {
         NoHumanGate::Acknowledged => {
             eprintln!(
-                "  {} {} (acknowledged via AIDA_NO_HUMAN_ACKNOWLEDGED)",
+                "  {} {} (acknowledged via {})",
                 "ℹ".cyan(),
                 no_human_scope_line(mode),
+                ack_source.unwrap_or("acknowledgement"),
             );
             Ok(())
         }
@@ -72664,7 +85987,13 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
             eprintln!(
                 "   {}",
                 "Set AIDA_NO_HUMAN_ACKNOWLEDGED=1 to skip this prompt on an \
-                 unattended run."
+                 unattended run,"
+                    .dimmed()
+            );
+            eprintln!(
+                "   {}",
+                "or `aida no-human acknowledge` once to persist it across runs \
+                 (per machine; --project to scope to this repo). trace:TASK-394"
                     .dimmed()
             );
             eprintln!();
@@ -72724,7 +86053,7 @@ fn probe_resume_facts(
     // PR number: prefer what drain-state recorded; else look it up by spec.
     let mut pr = member.and_then(|m| m.pr);
     if pr.is_none() {
-        if let PrLookup::Found(p) = detect_open_pr_for_spec(project_root, spec) {
+        if let PrLookup::Found(p) = detect_open_pr_for_spec_via_forge(project_root, spec) {
             pr = Some(p.number as u32);
         }
     }
@@ -72752,7 +86081,7 @@ fn probe_resume_facts(
     let ci_green = pr_merged
         || branch
             .as_deref()
-            .map(|b| matches!(probe_ci_state_for_branch(b), CiProbe::Green { .. }))
+            .map(|b| matches!(ci_probe_via_forge(b), CiProbe::Green { .. })) // STORY-516
             .unwrap_or(false);
 
     // reviewed — an Approved verdict file exists for the PR.
@@ -73007,6 +86336,539 @@ fn handle_drain_resume(
             );
             std::process::exit(result.exit_code);
         }
+    }
+}
+
+/// TASK-405: the `--from-pr` entry point — PR-only invocation. Implementation
+/// shipped OUTSIDE the orchestrator (a PR is already open for `spec`), so drive
+/// the remaining phases (reviewer → CI → merge → pull → build) WITHOUT
+/// re-running the implementer. Probes the PR's real state, decides the entry
+/// phase (or a clean refusal) via the pure [`drain_resume::from_pr_plan`], and
+/// — unless `--dry-run` (the shared `--resume-dry-run` flag) — re-enters at that
+/// phase via `run_auto_complete`'s resume-entry seam. Never returns.
+///
+/// Distinct from `handle_drain_resume`: there is no crashed drain-state file,
+/// no PID-liveness gate (the implementer ran elsewhere, possibly by hand), and
+/// the entry phase is computed straight from probed PR/spec reality.
+/// trace:TASK-405 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_from_pr(
+    storage: &Storage,
+    user_id: &str,
+    spec: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    dry_run: bool,
+    json: bool,
+    permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
+    steal: bool,
+    force_claim: bool,
+    allow_stale_base: bool,
+    no_auto_rebase: bool,
+) -> ! {
+    let project_root = match storage.path().parent() {
+        Some(p) => p.to_path_buf(),
+        None => {
+            eprintln!(
+                "{} cannot derive project root from the store path",
+                "✗".red().bold()
+            );
+            std::process::exit(1);
+        }
+    };
+
+    // Probe the world for this spec's PR + per-phase postconditions. Passing
+    // `member: None` is exactly the standalone-PR case `probe_resume_facts`
+    // already handles (it falls back to a forge lookup by spec when drain-state
+    // recorded no PR). trace:TASK-405 | ai:claude
+    let (facts, branch, pr) = probe_resume_facts(&project_root, storage, spec, None);
+    let pr_exists = pr.is_some();
+
+    match drain_resume::from_pr_plan(pr_exists, &facts) {
+        drain_resume::FromPrOutcome::RefuseAlreadyCompleted => {
+            eprintln!(
+                "{} `{}` is already Completed — the merge already promoted it; nothing to drive.",
+                "✗".red().bold(),
+                spec
+            );
+            eprintln!(
+                "  {} `--from-pr` engages the orchestrator on an OPEN PR — there is no open work here.",
+                "→".dimmed()
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::RefuseNoPr => {
+            eprintln!(
+                "{} no open PR found for `{}` — nothing to drive with `--from-pr`.",
+                "✗".red().bold(),
+                spec
+            );
+            eprintln!(
+                "  {} `--from-pr` drives phases 3-6 on a PR shipped outside the orchestrator. \
+                 To run the FULL pipeline (implementer first) drop `--from-pr`.",
+                "→".dimmed()
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::RefuseAlreadyMerged => {
+            eprintln!(
+                "{} {} is already merged — the merge already happened, so there is nothing to drive.",
+                "✗".red().bold(),
+                pr.map(|n| format!("PR-{n}")).unwrap_or_else(|| "the PR".into())
+            );
+            eprintln!(
+                "  {} run `aida pull` to auto-bump `{}` Done → Completed.",
+                "→".dimmed(),
+                spec
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::DriveFrom(start_phase) => {
+            println!(
+                "{} driving `{}` from phase {} ({}) — implementation shipped outside the \
+                 orchestrator (skipping the implementer phase).",
+                "↩".cyan().bold(),
+                spec,
+                start_phase.index(),
+                start_phase.slug()
+            );
+            if let Some(n) = pr {
+                println!("  {} seeded PR-{}", "→".dimmed(), n);
+            }
+            if dry_run {
+                println!(
+                    "  {} --resume-dry-run — not re-entering. Drop it to drive the PR.",
+                    "→".dimmed()
+                );
+                std::process::exit(0);
+            }
+            // The implementer ran outside the orchestrator and may hold a stale
+            // lease on this scope; release a dead/clean one so the reviewer
+            // phase (which resolves PR→spec) doesn't collide. Same guard the
+            // resume path applies (BUG-438). trace:TASK-405 | ai:claude
+            release_dead_leases_for_resume(&project_root, spec);
+            let resume_entry = Some(ResumeEntry {
+                start_phase,
+                branch,
+                pr,
+            });
+            let result = run_auto_complete(
+                storage,
+                user_id,
+                spec,
+                variant,
+                json,
+                permission_mode,
+                no_human,
+                escalate_mode,
+                // A standalone `--from-pr` drive owns its drain-state file.
+                true,
+                steal,
+                force_claim,
+                allow_stale_base,
+                no_auto_rebase,
+                resume_entry,
+            );
+            std::process::exit(result.exit_code);
+        }
+    }
+}
+
+/// STORY-384: `aida queue recover <id>` — the failed-phase-1 recovery wizard.
+///
+/// Inspects the spec's recovery-relevant state (lease, branch, worktree, PR),
+/// derives the recommended recovery path via the pure
+/// [`queue_recover::recommend`], prints the inspection + recommendation, and —
+/// unless `--dry-run` — steps through the recovery, confirming destructive ops
+/// (push, PR-create, session end) unless `--auto`.
+///
+/// A FRONT-END over existing primitives: the probes reuse the same lease/PR/git
+/// helpers the orchestrator and `aida session leases` use; the execution shells
+/// out to `aida` subcommands (`queue work --from-pr`, `pull`, `session end`,
+/// `queue add`) and `git` / `gh` rather than reimplementing them.
+/// trace:STORY-384 | ai:claude
+fn handle_queue_recover(
+    storage: &Storage,
+    user_id: &str,
+    spec_query: &str,
+    dry_run: bool,
+    auto: bool,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    // Resolve the spec id + status from the store (canonical SPEC-ID, status
+    // for display). A spec we can't find still gets a best-effort recovery
+    // using the query string verbatim, but we warn.
+    let store = storage.load().ok();
+    let (spec, status_label, spec_completed) = match store.as_ref().and_then(|s| {
+        s.requirements.iter().find(|r| {
+            r.spec_id.as_deref() == Some(spec_query)
+                || r.agreed_id.as_deref() == Some(spec_query)
+                || r.id.to_string() == spec_query
+        })
+    }) {
+        Some(req) => {
+            let id = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| spec_query.to_string());
+            (
+                id,
+                req.status.to_string(),
+                req.status == RequirementStatus::Completed,
+            )
+        }
+        None => {
+            eprintln!(
+                "{} no spec matched `{}` in the store — probing git/PR state by the id verbatim.",
+                "⚠".yellow(),
+                spec_query
+            );
+            (spec_query.to_string(), "<unknown>".to_string(), false)
+        }
+    };
+
+    // --- Inspection: probe the world for this spec. ---
+    // Reuse the orchestrator's PR/branch/CI/reviewed/merged probe (the same
+    // helper `--from-pr` and `--resume-drain` use). `member: None` is the
+    // standalone-PR case it already handles. trace:STORY-384 | ai:claude
+    let (facts, pr_branch, pr) = probe_resume_facts(&project_root, storage, &spec, None);
+
+    // Lease state — does a session still hold this spec's scope?
+    let leases = list_leases(&project_root);
+    let lease = find_lease_by_spec(&spec, &leases).ok();
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let lease_state = lease.as_ref().map(|l| {
+        let worktree_exists = l.worktree_path.exists();
+        let has_live = live
+            .iter()
+            .any(|s| !s.stale_cwd && s.cwd.starts_with(&l.worktree_path));
+        let age_hours = now.signed_duration_since(l.started_at).num_hours();
+        classify_lease_state(worktree_exists, has_live, age_hours)
+    });
+
+    // The branch we inspect for commits-ahead / dirty: prefer the lease's
+    // branch (where a phase-1 implementer committed), else the PR head branch.
+    let branch = lease
+        .as_ref()
+        .map(|l| l.branch.clone())
+        .or_else(|| pr_branch.clone());
+
+    // Commits ahead of origin/main on the branch (work that exists but may not
+    // have shipped). Probe against the lease worktree if present, else root.
+    let probe_repo = lease
+        .as_ref()
+        .map(|l| l.worktree_path.clone())
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| project_root.clone());
+    let commits_ahead = branch
+        .as_deref()
+        .and_then(|b| branch_commits_ahead_main(&probe_repo, b))
+        .unwrap_or(0);
+
+    // Branch pushed? A PR implies a pushed branch; otherwise probe origin.
+    let branch_pushed = pr.is_some()
+        || branch
+            .as_deref()
+            .map(|b| {
+                matches!(
+                    probe_branch_on_origin(&project_root, b),
+                    BranchOriginProbe::Present
+                )
+            })
+            .unwrap_or(false);
+
+    // Worktree dirty? Only meaningful when a lease worktree exists.
+    let dirty_entries = lease
+        .as_ref()
+        .filter(|l| l.worktree_path.exists())
+        .map(|l| worktree_dirty_entries(&l.worktree_path))
+        .unwrap_or_default();
+    let uncommitted_changes = !dirty_entries.is_empty();
+
+    let state = queue_recover::RecoverState {
+        spec_completed: spec_completed || facts.spec_completed,
+        pr_exists: pr.is_some(),
+        pr_merged: facts.pr_merged,
+        commits_ahead,
+        branch_pushed,
+        uncommitted_changes,
+        lease_held: lease.is_some(),
+    };
+
+    // --- Print the inspection result. ---
+    println!(
+        "{} recovery inspection for {}",
+        "🔎".to_string(),
+        spec.bold()
+    );
+    println!("  {:<14} {}", "status".dimmed(), status_label);
+    match (&lease, lease_state) {
+        (Some(l), Some(st)) => println!(
+            "  {:<14} {} {} (id {}, branch {})",
+            "lease".dimmed(),
+            st.glyph(),
+            st.label(),
+            &l.id[..l.id.len().min(8)],
+            l.branch
+        ),
+        _ => println!("  {:<14} none", "lease".dimmed()),
+    }
+    match &branch {
+        Some(b) => println!(
+            "  {:<14} {} — {} commit(s) ahead of origin/main, {}",
+            "branch".dimmed(),
+            b,
+            commits_ahead,
+            if branch_pushed {
+                "pushed"
+            } else {
+                "NOT pushed"
+            }
+        ),
+        None => println!("  {:<14} none", "branch".dimmed()),
+    }
+    if uncommitted_changes {
+        println!(
+            "  {:<14} {} uncommitted change(s)",
+            "worktree".dimmed(),
+            dirty_entries.len()
+        );
+        for e in dirty_entries.iter().take(3) {
+            println!("                   {}", e.dimmed());
+        }
+        if dirty_entries.len() > 3 {
+            println!(
+                "                   {} … and {} more",
+                "".dimmed(),
+                dirty_entries.len() - 3
+            );
+        }
+    } else {
+        println!("  {:<14} clean", "worktree".dimmed());
+    }
+    match pr {
+        Some(n) if facts.pr_merged => println!("  {:<14} PR-{} (merged)", "pr".dimmed(), n),
+        Some(n) => println!("  {:<14} PR-{} (open)", "pr".dimmed(), n),
+        None => println!("  {:<14} none", "pr".dimmed()),
+    }
+    println!();
+
+    // --- Recommendation. ---
+    let action = queue_recover::recommend(&state);
+    println!(
+        "{} recommended: {}",
+        "→".cyan().bold(),
+        recover_action_label(action).bold()
+    );
+    println!("  {} {}", "rationale:".dimmed(), action.rationale());
+    println!();
+
+    if dry_run {
+        println!(
+            "{} --dry-run — not executing. Drop it to run the recovery.",
+            "ⓘ".cyan()
+        );
+        return Ok(());
+    }
+
+    // --- Execution. ---
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    // Helper: run an `aida` subcommand from the project root, surfacing its
+    // exit code. Non-zero leaves the state visible for manual resume.
+    let run_aida = |args: &[&str]| -> std::io::Result<std::process::ExitStatus> {
+        println!("  {} aida {}", "▸".cyan(), args.join(" "));
+        std::process::Command::new(&aida)
+            .current_dir(&project_root)
+            .args(args)
+            .status()
+    };
+    let run_git =
+        |args: &[&str], cwd: &std::path::Path| -> std::io::Result<std::process::ExitStatus> {
+            println!("  {} git {}", "▸".cyan(), args.join(" "));
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .status()
+        };
+    // Confirm a destructive op unless --auto. Non-interactive (no TTY) defaults
+    // to NO so a scripted run without --auto never silently ships.
+    let confirm = |what: &str| -> bool {
+        if auto {
+            return true;
+        }
+        prompt_yes_no(&format!("  {} {} [y/N] ", "?".yellow(), what), false).unwrap_or(false)
+    };
+
+    match action {
+        queue_recover::RecoverAction::AlreadyCompleted => {
+            println!(
+                "{} `{}` is already Completed — nothing to recover.",
+                "✓".green().bold(),
+                spec
+            );
+            if state.lease_held && confirm("end the leaked lease for this spec?") {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+        }
+        queue_recover::RecoverAction::AlreadyMergedPull => {
+            println!(
+                "{} the PR merged — pulling to auto-bump `{}` Done → Completed.",
+                "↩".cyan().bold(),
+                spec
+            );
+            let _ = run_aida(&["pull"]);
+            if state.lease_held && confirm("end the leaked lease for this spec?") {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+        }
+        queue_recover::RecoverAction::DrivePhasesFromPr => {
+            if !confirm("drive phases 3-6 on the open PR (reviewer → merge → pull → build)?")
+            {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            // Reuse the TASK-405 PR-only orchestrator path.
+            let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+        }
+        queue_recover::RecoverAction::PushOpenPrDrive => {
+            let Some(b) = branch.as_deref() else {
+                eprintln!(
+                    "{} no branch to push for `{}` — cannot recover automatically.",
+                    "✗".red().bold(),
+                    spec
+                );
+                return Ok(());
+            };
+            if !confirm(&format!("push `{b}`, open a PR, then drive phases 3-6?")) {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            if !push_st.success() {
+                eprintln!(
+                    "{} push failed — resolve manually, then re-run `aida queue recover {}`.",
+                    "✗".red().bold(),
+                    spec
+                );
+                return Ok(());
+            }
+            // Open the PR (gh fills title/body from the branch commits).
+            let pr_st = std::process::Command::new("gh")
+                .current_dir(&probe_repo)
+                .args(["pr", "create", "--fill"])
+                .status();
+            println!("  {} gh pr create --fill", "▸".cyan());
+            match pr_st {
+                Ok(s) if s.success() => {
+                    // Now drive phases 3-6 on the freshly-opened PR.
+                    let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+                }
+                _ => {
+                    eprintln!(
+                        "{} `gh pr create` failed — open the PR manually, then run \
+                         `aida queue recover {}` again (it will take the drive-from-PR path).",
+                        "✗".red().bold(),
+                        spec
+                    );
+                }
+            }
+        }
+        queue_recover::RecoverAction::WipCommitPushDrive => {
+            if !confirm("commit the WIP, then push + open PR + drive phases 3-6?") {
+                println!(
+                    "{} skipped — commit/stash the WIP yourself, then re-run.",
+                    "ⓘ".cyan()
+                );
+                return Ok(());
+            }
+            let _ = run_git(&["add", "-A"], &probe_repo)?;
+            let _ = run_git(
+                &["commit", "-m", &format!("wip: recover {spec}")],
+                &probe_repo,
+            )?;
+            let Some(b) = branch.as_deref() else {
+                eprintln!("{} no branch to push.", "✗".red().bold());
+                return Ok(());
+            };
+            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            if !push_st.success() {
+                eprintln!("{} push failed — resolve manually.", "✗".red().bold());
+                return Ok(());
+            }
+            println!("  {} gh pr create --fill", "▸".cyan());
+            let pr_st = std::process::Command::new("gh")
+                .current_dir(&probe_repo)
+                .args(["pr", "create", "--fill"])
+                .status();
+            if matches!(pr_st, Ok(s) if s.success()) {
+                let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+            } else {
+                eprintln!(
+                    "{} `gh pr create` failed — open the PR manually, then re-run recover.",
+                    "✗".red().bold()
+                );
+            }
+        }
+        queue_recover::RecoverAction::WipCommitPark => {
+            println!(
+                "{} preserving uncommitted work as a WIP commit (parked for resumption).",
+                "ⓘ".cyan()
+            );
+            if !confirm("commit the WIP on the branch and park (no PR)?") {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            let _ = run_git(&["add", "-A"], &probe_repo)?;
+            let _ = run_git(
+                &["commit", "-m", &format!("wip: recover {spec} (parked)")],
+                &probe_repo,
+            )?;
+            println!(
+                "{} WIP committed. Resume later with `aida queue work {} --resume`.",
+                "✓".green().bold(),
+                spec
+            );
+        }
+        queue_recover::RecoverAction::EndAndRequeue => {
+            println!(
+                "{} nothing was shipped — ending the lease and re-queueing `{}` for a fresh attempt.",
+                "↩".cyan().bold(),
+                spec
+            );
+            if !confirm("end the session and re-queue the spec?") {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            if state.lease_held {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+            // Re-queue for the spec's owner. queue add is advisor-gated in
+            // non-TTY contexts, so route the role explicitly.
+            let _ = run_aida(&["queue", "add", &spec, "--user", user_id]);
+        }
+    }
+
+    Ok(())
+}
+
+/// STORY-384: short human label for a recovery action (the recommendation
+/// headline). The longer "why" is [`queue_recover::RecoverAction::rationale`].
+/// trace:STORY-384 | ai:claude
+fn recover_action_label(action: queue_recover::RecoverAction) -> &'static str {
+    use queue_recover::RecoverAction as A;
+    match action {
+        A::AlreadyCompleted => "already completed — nothing to recover",
+        A::AlreadyMergedPull => "pull to auto-bump the merged PR",
+        A::DrivePhasesFromPr => "drive phases 3-6 on the open PR",
+        A::PushOpenPrDrive => "push + open PR + drive phases 3-6",
+        A::WipCommitPushDrive => "commit WIP + push + open PR + drive phases 3-6",
+        A::WipCommitPark => "commit WIP and park for resumption",
+        A::EndAndRequeue => "end the lease and re-queue",
     }
 }
 
@@ -73309,6 +87171,7 @@ fn run_auto_complete(
         started_at,
         completed_at,
         json,
+        lifecycle_skip,
     );
 
     // STORY-301: a single-spec drain owns the file — clear it now the run is
@@ -74939,6 +88802,7 @@ fn record_auto_complete_run(
     started_at: chrono::DateTime<chrono::Utc>,
     completed_at: chrono::DateTime<chrono::Utc>,
     json: bool,
+    lifecycle_skip: auto_complete::LifecycleSkip,
 ) {
     if !usage::is_enabled(Some(project_root)) {
         return;
@@ -74972,6 +88836,7 @@ fn record_auto_complete_run(
         drafted_bug: None,
         binary_sha: build_sha_short(),
         auto_rebase: driver.auto_rebase_events.clone(),
+        lifecycle_skips: lifecycle_skip.active_tokens(),
     };
 
     // On a phase failure, attach a Draft BUG. Reuse the BUG from a recent
@@ -75662,6 +89527,180 @@ mod read_verdict_file_tests {
     }
 }
 
+/// TASK-262: cover the `RealPhaseDriver` subprocess-wiring seams that drive the
+/// orchestrator's real phases — the argv each phase hands to its `aida`
+/// subprocess, plus the lease-discovery multiplicity (0/1/N) that decides
+/// whether phase 1 succeeds or emits a candidate-listing failure. STORY-246
+/// shipped the orchestrator with full `MockPhaseDriver` coverage but left the
+/// real driver's command-building seams untested; these close that gap without
+/// ever spawning `claude`/`aida`/`git`. Every test is fully isolated (its own
+/// `tempfile::tempdir`, no shared CWD/HOME, no real git ops) to avoid the
+/// BUG-463-class flakiness.
+// trace:TASK-262 | ai:claude
+#[cfg(test)]
+mod real_phase_driver_wiring_tests {
+    use super::{
+        build_auto_punt_args, build_phase3_auto_rebase_args, find_orchestrated_lease,
+        RealPhaseDriver,
+    };
+
+    /// Mint a session lease + its manifest under `<root>/.aida/sessions/`,
+    /// exactly as `aida queue work --session-id` would, so lease discovery has
+    /// something real to resolve against. trace:TASK-262 | ai:claude
+    fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: Option<&str>) {
+        let sessions = root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(
+            sessions.join(format!("{lease_id}.toml")),
+            format!(
+                "id = \"{lease_id}\"\nbranch = \"{branch}\"\nworktree_path = \"/tmp/{lease_id}\"\n"
+            ),
+        )
+        .unwrap();
+        let manifest = crate::session_manifest::SessionManifest {
+            session_id: lease_id.to_string(),
+            planned_at: chrono::Utc::now(),
+            plan_source: "queue work".to_string(),
+            claude_session_id: claude_id.map(str::to_string),
+            batch_name: None,
+            plan: None,
+            items: vec![],
+        };
+        crate::session_manifest::save(
+            &crate::session_manifest::manifest_path(root, lease_id),
+            &manifest,
+        )
+        .unwrap();
+    }
+
+    /// Build a minimal interactive `RealPhaseDriver` rooted at an isolated
+    /// tempdir. Reads only that tempdir's (absent) `[drain]` config, so it
+    /// never touches the real project. trace:TASK-262 | ai:claude
+    fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
+        RealPhaseDriver::new(
+            root.to_path_buf(),
+            spec.to_string(),
+            None,
+            false,
+            None,
+            "run-token".to_string(),
+            false,
+            false,
+            false,
+            false,
+            crate::auto_complete::LifecycleSkip::default(),
+        )
+    }
+
+    #[test]
+    fn phase3_auto_rebase_argv_is_pr_rebase_no_smoke() {
+        // The reviewer-phase auto-rebase subprocess must run exactly
+        // `aida pr rebase <N> --no-smoke` — the `--no-smoke` flag is
+        // load-bearing (the orchestrator drives the rebase non-interactively).
+        assert_eq!(
+            build_phase3_auto_rebase_args(193),
+            vec!["pr", "rebase", "193", "--no-smoke"],
+        );
+    }
+
+    #[test]
+    fn auto_punt_argv_carries_design_fork_reason_and_lean() {
+        // The headless-implementer punt subprocess must run
+        // `aida punt <spec> --category design-fork --reason <r> --lean <l>`.
+        let args = build_auto_punt_args("TASK-262", "two viable schemas", "schema A");
+        assert_eq!(
+            args,
+            vec![
+                "punt",
+                "TASK-262",
+                "--category",
+                "design-fork",
+                "--reason",
+                "two viable schemas",
+                "--lean",
+                "schema A",
+            ],
+        );
+        // The reason/lean are passed as discrete argv elements (not shell-
+        // joined), so spaces in them can never split into extra args.
+        let i = args.iter().position(|a| a == "--reason").unwrap();
+        assert_eq!(args[i + 1], "two viable schemas");
+    }
+
+    #[test]
+    fn discover_lease_zero_candidates_reports_no_session_started() {
+        // Multiplicity 0: no lease ever appeared. The failure message tells the
+        // operator the session never started — never lists phantom candidates.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".aida").join("sessions")).unwrap();
+        let d = driver(root, "TASK-262");
+        let err = d
+            .discover_orchestrated_lease("aaaaaaaa-1111-7000-8000-000000000000")
+            .unwrap_err();
+        assert!(
+            err.reason.contains("no session lease appeared"),
+            "0-candidate failure should say the session never started; got {:?}",
+            err.reason
+        );
+    }
+
+    #[test]
+    fn discover_lease_one_match_resolves_branch_and_worktree() {
+        // Multiplicity 1: the orchestrated session's claude id pins exactly one
+        // lease; discovery returns its (id, branch, worktree).
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let claude_id = "bbbbbbbb-2222-7000-8000-000000000000";
+        mint_lease(root, "019e9999-cccc", "task-262-branch", Some(claude_id));
+        // Cross-check the underlying free fn agrees with the method seam.
+        assert_eq!(
+            find_orchestrated_lease(root, claude_id),
+            Some((
+                "019e9999-cccc".to_string(),
+                "task-262-branch".to_string(),
+                std::path::PathBuf::from("/tmp/019e9999-cccc"),
+            )),
+        );
+        let d = driver(root, "TASK-262");
+        let (lease_id, branch, worktree) = d.discover_orchestrated_lease(claude_id).unwrap();
+        assert_eq!(lease_id, "019e9999-cccc");
+        assert_eq!(branch, "task-262-branch");
+        assert_eq!(worktree, std::path::PathBuf::from("/tmp/019e9999-cccc"));
+    }
+
+    #[test]
+    fn discover_lease_n_candidates_unmatched_id_lists_them_diagnostically() {
+        // Multiplicity N: several concurrent leases on disk, but the
+        // orchestrator's claude id matches none of them (e.g. the manifest
+        // write raced). The failure must (a) suggest bare `--resume` and
+        // (b) list the live lease ids for diagnosis only.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        mint_lease(
+            root,
+            "019e1111-aaaa",
+            "feature-a",
+            Some("11111111-aaaa-7000-8000-000000000000"),
+        );
+        mint_lease(root, "019e2222-bbbb", "feature-b", None);
+        let d = driver(root, "TASK-262");
+        let err = d
+            .discover_orchestrated_lease("no-such-claude-id")
+            .unwrap_err();
+        assert!(
+            err.reason.contains("--resume"),
+            "N-candidate failure should suggest bare --resume; got {:?}",
+            err.reason
+        );
+        assert!(
+            err.reason.contains("019e1111-aaaa") && err.reason.contains("019e2222-bbbb"),
+            "N-candidate failure should list the live lease ids; got {:?}",
+            err.reason
+        );
+    }
+}
+
 /// Read a spec's current status straight from the git-canonical store —
 /// ground truth for the BUG-241 reconcile step. A spec the implementer (or a
 /// human) marked Completed needed no further work, even when the phase
@@ -76270,6 +90309,39 @@ fn build_implementer_phase_args(
     args
 }
 
+/// TASK-262: the argv `RealPhaseDriver::attempt_phase3_auto_rebase` hands to
+/// the `aida` subprocess for a one-shot clean rebase of the reviewer-phase PR.
+/// Factored out of the inline `Command` builder so the subprocess wiring (the
+/// `pr rebase <N> --no-smoke` contract) is unit-testable without spawning.
+// trace:TASK-262 | ai:claude
+fn build_phase3_auto_rebase_args(pr_number: u64) -> Vec<String> {
+    vec![
+        "pr".into(),
+        "rebase".into(),
+        pr_number.to_string(),
+        "--no-smoke".into(),
+    ]
+}
+
+/// TASK-262: the argv `RealPhaseDriver::auto_punt_text_question` hands to the
+/// `aida` subprocess to record a headless implementer's design-fork punt.
+/// Factored out of the inline `Command` builder so the subprocess wiring (the
+/// `punt <spec> --category design-fork --reason <r> --lean <l>` contract) is
+/// unit-testable without spawning.
+// trace:TASK-262 | ai:claude
+fn build_auto_punt_args(spec: &str, reason: &str, lean: &str) -> Vec<String> {
+    vec![
+        "punt".into(),
+        spec.into(),
+        "--category".into(),
+        "design-fork".into(),
+        "--reason".into(),
+        reason.into(),
+        "--lean".into(),
+        lean.into(),
+    ]
+}
+
 /// TASK-136 / BUG-420: drain-reliability tunables for the orchestrator's phase
 /// loop. Resolved once per `RealPhaseDriver` from the `[drain]` section of
 /// `.aida/config.toml`, then overridden by env vars (which the `queue work`
@@ -76446,12 +90518,42 @@ impl PhaseWatchdog {
         }
         let worktree = self.worktree.clone().unwrap();
 
-        if let Some(sig) = Self::progress_signature(&worktree) {
+        // BUG-453: progress = worktree change OR headless-log growth. The log
+        // grows whenever the session emits events (reads, thoughts, edits), so a
+        // productive-but-currently-reading implementer keeps resetting the timer
+        // and is no longer false-killed; a genuinely hung/crashed session stops
+        // emitting (log static) and the worktree stays static, so the no-progress
+        // check still trips, and the wall-clock ceiling backstops a runaway.
+        // trace:BUG-453 | ai:claude
+        let wt_sig = Self::progress_signature(&worktree);
+        let log_len = headless_log_len(&self.project_root, &self.session_id);
+        let combined = match (wt_sig, log_len) {
+            (Some(w), Some(l)) => Some(format!("{w}|log:{l}")),
+            (Some(w), None) => Some(w),
+            (None, Some(l)) => Some(format!("log:{l}")),
+            (None, None) => None,
+        };
+        if let Some(sig) = combined {
             if self.last_sig.as_deref() != Some(sig.as_str()) {
                 self.last_sig = Some(sig);
                 self.last_progress = now;
             }
         }
+
+        // TASK-298: a `--no-human` headless run that hit a permission gate (or
+        // reported an `is_error` envelope) is silently stuck — `claude -p`
+        // exits 0 even when it bailed (SPIKE-7), so neither the natural-exit
+        // path nor the no-progress timer would catch it promptly. The log
+        // keeps the offending event, so scan it and trip the watchdog
+        // *immediately* with the specific reason rather than waiting out the
+        // no-progress / ceiling window. trace:TASK-298 | ai:claude
+        if let Some(reason) = read_headless_log_for_session(&self.project_root, &self.session_id)
+            .as_deref()
+            .and_then(headless_log_permission_stall)
+        {
+            return Some(reason);
+        }
+
         auto_complete::watchdog_verdict(
             now.duration_since(self.last_progress),
             now.duration_since(self.phase_start),
@@ -76617,6 +90719,16 @@ enum Phase3StaleOverlapAction {
 /// *transient* GH-API outage that leaves it unable to confirm a PR — only the
 /// last case is retried (with the [`auto_complete::gh_verify_backoff_schedule`]
 /// backoff). trace:TASK-136 | ai:claude
+/// BUG-444: given that BOTH phase-1 PR lookups returned empty-but-successful,
+/// decide whether that's a *definitive* no-PR (the branch was never pushed) or a
+/// *retryable* eventual-consistency window (the branch is on origin, so a PR
+/// likely exists but isn't indexed yet). Only an `Absent` branch is a definitive
+/// NoPr; `Present` and `LsRemoteFailed` both retry. Pure so the keystone
+/// decision is unit-tested without gh/git. trace:BUG-444 | ai:claude
+fn empty_phase1_lookup_is_definitive_nopr(origin: &BranchOriginProbe) -> bool {
+    matches!(origin, BranchOriginProbe::Absent)
+}
+
 enum Phase1PrResolve {
     /// An open PR was found (directly or recovered via the spec-id search).
     Found(OpenPrInfo),
@@ -76721,10 +90833,9 @@ impl RealPhaseDriver {
                 "↻".cyan()
             );
         }
-        let pr_arg = pr_number.to_string();
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
-            .args(["pr", "rebase", pr_arg.as_str(), "--no-smoke"])
+            .args(build_phase3_auto_rebase_args(pr_number))
             .status();
         match status {
             Ok(s) if s.success() => {
@@ -76795,16 +90906,7 @@ impl RealPhaseDriver {
         let punt = pending_text_question_from_headless_log(&content)?;
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(worktree_path)
-            .args([
-                "punt",
-                &self.spec,
-                "--category",
-                "design-fork",
-                "--reason",
-                &punt.detail,
-                "--lean",
-                &punt.lean,
-            ])
+            .args(build_auto_punt_args(&self.spec, &punt.detail, &punt.lean))
             .env("AIDA_SESSION_ROLE", "implementer")
             .status()
             .ok()?;
@@ -76823,8 +90925,10 @@ impl RealPhaseDriver {
     /// from parallel user sessions or nested `/aida-pickup`, and immune to
     /// the `.manifest.toml` companion file that the old lease-set diff
     /// miscounted as a second lease (the BUG-114 phase-1 failure). On a miss,
-    /// the error names the candidate lease ids so the user can resume one.
-    /// trace:BUG-114 | ai:claude
+    /// the error suggests bare `--resume` (continues the most recent recorded
+    /// claude session) and lists the candidate lease ids as diagnostic-only —
+    /// they are lease ids, not `--resume` arguments (TASK-271).
+    /// trace:BUG-114 trace:TASK-271 | ai:claude
     fn discover_orchestrated_lease(
         &self,
         claude_session_id: &str,
@@ -76836,13 +90940,21 @@ impl RealPhaseDriver {
                     "no session lease appeared — `aida queue work` did not start a session",
                 )
             } else {
+                // TASK-271: suggest BARE `--resume` (continues the most recent
+                // recorded claude session for the scope) — never paste a listed
+                // id into `--resume`, because these are LEASE ids and `--resume`
+                // resolves against claude SESSION ids, so a pasted lease id hits
+                // a second clean error. The lease list is diagnostic-only.
+                // trace:TASK-271 trace:BUG-114 | ai:claude
                 auto_complete::PhaseFailure::new(format!(
                     "could not match the orchestrated session (claude id {}) to a \
-                     session lease. Candidate lease(s): {}. Resume one manually with \
-                     `aida queue work {} --resume <session-id>`.",
+                     session lease. Resume the most recent recorded session with \
+                     `aida queue work {} --resume` (bare — no id needed). \
+                     Active lease id(s), for diagnosis only (NOT `--resume` \
+                     arguments — these are lease ids, not claude session ids): {}.",
                     &claude_session_id[..claude_session_id.len().min(8)],
-                    candidates.join(", "),
                     self.spec,
+                    candidates.join(", "),
                 ))
             }
         })
@@ -76895,7 +91007,7 @@ impl RealPhaseDriver {
         match self
             .branch
             .as_deref()
-            .map(|b| detect_merged_pr_for_branch(&self.project_root, b))
+            .map(|b| detect_merged_pr_for_branch_via_forge(&self.project_root, b))
         {
             Some(PrLookup::Found(pr)) => matches!(
                 pr_credit_match_with_sink(
@@ -77093,42 +91205,91 @@ impl RealPhaseDriver {
     /// fallback and the BUG-257 `git ls-remote` narrowing. Mutates `self.branch`
     /// when the spec-id search recovers a swapped branch. trace:TASK-136
     fn detect_phase1_pr(&mut self, branch: &str) -> Phase1PrResolve {
-        match detect_open_pr_for_branch(&self.project_root, branch) {
-            PrLookup::Found(pr) => Phase1PrResolve::Found(pr),
-            PrLookup::NoOpenPr => match detect_open_pr_for_spec(&self.project_root, &self.spec) {
-                PrLookup::Found(pr) => {
-                    // Realign the branch so the CI / merge phases probe the
-                    // PR's actual head, not the worktree HEAD the branch-keyed
-                    // lookup just missed on. trace:BUG-223
-                    if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
-                        self.branch = Some(head);
-                    }
-                    eprintln!(
-                        "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
+        // STORY-516: forge-routed branch lookup (view op). The inner spec-id
+        // search (detect_open_pr_for_spec) is the LIST op — routed in a later
+        // slice — so it stays PrLookup here. The BUG-444/BUG-257 narrowing
+        // bodies are unchanged; only the outer variant names move to
+        // ChangeLookup. trace:STORY-516 trace:BUG-444 trace:BUG-257 | ai:claude
+        match change_lookup_for_branch(&self.project_root, branch) {
+            crate::forge::ChangeLookup::Found(c) => Phase1PrResolve::Found(OpenPrInfo {
+                number: c.id,
+                title: c.title.unwrap_or_default(),
+                url: c.url,
+            }),
+            crate::forge::ChangeLookup::NoChange => {
+                match detect_open_pr_for_spec_via_forge(&self.project_root, &self.spec) {
+                    PrLookup::Found(pr) => {
+                        // Realign the branch so the CI / merge phases probe the
+                        // PR's actual head, not the worktree HEAD the branch-keyed
+                        // lookup just missed on. trace:BUG-223
+                        if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
+                            self.branch = Some(head);
+                        }
+                        eprintln!(
+                            "  {} no open PR on branch `{}` — recovered PR-{} via a `{}` \
                          search (the implementer branch was swapped by /aida-pr's \
                          merged-branch guard)",
-                        "ⓘ".cyan(),
-                        branch,
-                        pr.number,
-                        self.spec,
-                    );
-                    Phase1PrResolve::Found(pr)
+                            "ⓘ".cyan(),
+                            branch,
+                            pr.number,
+                            self.spec,
+                        );
+                        Phase1PrResolve::Found(pr)
+                    }
+                    // BUG-444: both the `--head` and `--search` lookups returned
+                    // empty-BUT-SUCCESSFUL. These are eventually-consistent GitHub
+                    // LIST queries (`--search` hits the search index, which lags PR
+                    // creation by seconds), so an empty result right after
+                    // `/aida-pr` ran `gh pr create` does NOT mean "no PR" — it
+                    // usually means "not indexed yet". If the branch is on origin
+                    // the session pushed, so a PR very likely exists: RETRY within
+                    // the eventual-consistency window (reusing the TASK-136 backoff)
+                    // instead of declaring a false NoPr. Only a branch that is
+                    // genuinely absent from origin is an immediate NoPr (the session
+                    // never pushed). This was the dominant drain-failure cause:
+                    // ~98% of sessions ship a PR, yet a whole batch could false-fail
+                    // by racing the index. trace:BUG-444 EPIC-33 | ai:claude
+                    _ => {
+                        let origin = probe_branch_on_origin(&self.project_root, branch);
+                        if empty_phase1_lookup_is_definitive_nopr(&origin) {
+                            Phase1PrResolve::NoPr
+                        } else {
+                            let reason = match origin {
+                                BranchOriginProbe::Present => format!(
+                                    "no open PR indexed yet for `{branch}` (and the \
+                                 `{spec}` search), but the branch is on origin — \
+                                 likely GitHub eventual-consistency lag after \
+                                 `gh pr create`",
+                                    spec = self.spec
+                                ),
+                                _ => format!(
+                                    "no open PR found for `{branch}` and `git ls-remote` \
+                                 could not confirm whether the branch is on origin — \
+                                 retrying before concluding no PR exists"
+                                ),
+                            };
+                            Phase1PrResolve::Retry(reason)
+                        }
+                    }
                 }
-                _ => Phase1PrResolve::NoPr,
-            },
-            PrLookup::GhMissing => Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::MissingTool,
-                "`gh` is not on PATH — auto-complete needs it to track the PR",
-            )),
-            PrLookup::GhFailed(why) => Phase1PrResolve::Fail(auto_complete::PhaseFailure::new(
-                format!("could not look up the PR for `{branch}`: {why}"),
-            )),
+            }
+            crate::forge::ChangeLookup::CliMissing => {
+                Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::MissingTool,
+                    "`gh` is not on PATH — auto-complete needs it to track the PR",
+                ))
+            }
+            crate::forge::ChangeLookup::CliFailed(why) => {
+                Phase1PrResolve::Fail(auto_complete::PhaseFailure::new(format!(
+                    "could not look up the PR for `{branch}`: {why}"
+                )))
+            }
             // BUG-257: the GH API was unreachable — *transient*, not "no PR".
             // Narrow with `git ls-remote` (git protocol, separate from the
             // HTTPS API): if the branch isn't on origin no PR can exist, so
             // that collapses to a genuine NoPR failure. Otherwise it is a
             // retryable inconclusive. trace:BUG-257 TASK-136 | ai:claude
-            PrLookup::GhUnreachable(why) => {
+            crate::forge::ChangeLookup::Unreachable(why) => {
                 match probe_branch_on_origin(&self.project_root, branch) {
                     BranchOriginProbe::Absent => {
                         Phase1PrResolve::Fail(auto_complete::PhaseFailure::of(
@@ -77292,11 +91453,27 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             .as_deref()
                             .and_then(claude_log_indicates_api_outage)
                     {
-                        let hint = format!(
-                            "Anthropic API was unavailable; resume with: \
-                             `aida queue work {spec} --resume {session_uuid}`",
-                            spec = self.spec,
+                        // TASK-402 (friction #1 + #5): make this retry hint
+                        // paste-ready. The headless implementer ran in a
+                        // sibling worktree, so `claude --resume` (project-slug
+                        // scoped by cwd) is invisible from the main repo — emit
+                        // the `cd <worktree>` step alongside the *full* session
+                        // UUID. trace:TASK-402 | ai:claude
+                        let resume_base =
+                            format!("aida queue work {} --resume {}", self.spec, session_uuid);
+                        let resume_cmd = resume_command_with_cwd(
+                            &resume_base,
+                            self.implementer_worktree
+                                .as_deref()
+                                .map(|p| p.to_string_lossy())
+                                .as_deref(),
+                            std::env::current_dir()
+                                .ok()
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .as_deref(),
                         );
+                        let hint =
+                            format!("Anthropic API was unavailable; resume with: `{resume_cmd}`");
                         return Ok(auto_complete::ImplementerOutcome::Inconclusive {
                             reason: format!(
                                 "Anthropic API outage during the headless implementer: {reason_line}"
@@ -77450,6 +91627,41 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => {
+                // BUG-459: substrate-as-bouncer for the "implementer committed
+                // its work but asked 'want me to push + open a PR?' instead of
+                // acting" headless no-op. The skill already forbids this, but a
+                // confident model still does it occasionally — so don't depend on
+                // model compliance: if the branch has real commits ahead of main,
+                // the work IS there and recoverable, so the ORCHESTRATOR opens the
+                // PR itself (reusing the forge-routed pr_ship_create_pr) rather
+                // than failing/punting. trace:BUG-459 | ai:claude
+                let ahead = branch_commits_ahead_main(&self.project_root, &branch).unwrap_or(0);
+                if ahead > 0 {
+                    match pr_ship_create_pr(&self.project_root, &branch) {
+                        Ok(pr) => {
+                            if !self.json {
+                                eprintln!(
+                                    "  {} implementer left {} commit(s) with no PR — opened PR-{} \
+                                     for it (BUG-459 recovery)",
+                                    "ⓘ".cyan(),
+                                    ahead,
+                                    pr
+                                );
+                            }
+                            self.pr_number = Some(pr as u32);
+                            return Ok(auto_complete::ImplementerOutcome::PrOpened);
+                        }
+                        Err(e) => {
+                            if !self.json {
+                                eprintln!(
+                                    "  {} could not auto-open a PR for the committed work \
+                                     ({e:#}) — falling back to punt/fail",
+                                    "⚠".yellow()
+                                );
+                            }
+                        }
+                    }
+                }
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
                     return Ok(auto_complete::ImplementerOutcome::Punted { reason });
                 }
@@ -77475,7 +91687,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // lifecycle:no-ci-wait / lifecycle:trivial. The non-waiting path still
         // records the PR number and still ends the implementer lease below;
         // it just lets CI finish in parallel with review/merge. trace:STORY-442
-        let mut probe = probe_ci_state_for_branch(&branch);
+        let mut probe = ci_probe_via_forge(&branch); // STORY-516: forge-routed
         if matches!(probe, CiProbe::InProgress { .. }) && self.lifecycle_skip.no_ci_wait {
             eprintln!(
                 "  {} CI still running on `{}` — skipping wait per lifecycle tag.",
@@ -77491,7 +91703,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             probe = if self.json {
                 wait_for_ci_terminal(&branch)
             } else {
-                watch_ci_for_context(&branch, self.no_human.is_some())
+                watch_ci_for_context_via_forge(&branch, self.no_human.is_some())
+                // STORY-516
             };
         }
 
@@ -77655,6 +91868,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
 
+        // TASK-480: pre-flight intermediate-only check — sibling
+        // substrate-as-bouncer gate to the stale-base loop above. Refuse
+        // the reviewer (park NeedsAttention via PhaseFailure) when the
+        // PR's diff is exclusively intermediate/generated paths, because
+        // the fix is not reproducible. `--allow-intermediate-only`
+        // (env `AIDA_ALLOW_INTERMEDIATE_ONLY`) opts out. Fails open on
+        // infra error, same as stale-base. trace:TASK-480 | ai:claude
+        {
+            let allow = std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            match preflight_intermediate_only_check(&self.project_root, pr as u64) {
+                Ok(pr_rebase::IntermediateOnlyOutcome::Clean) => {}
+                Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate { intermediate }) => {
+                    eprintln!(
+                        "  {} {}",
+                        "⚠".yellow().bold(),
+                        pr_rebase::intermediate_only_warn_message(pr as u64, &intermediate)
+                            .yellow()
+                    );
+                }
+                Ok(pr_rebase::IntermediateOnlyOutcome::IntermediateOnly { intermediate }) => {
+                    let msg = pr_rebase::intermediate_only_block_message(pr as u64, &intermediate);
+                    if allow {
+                        eprintln!(
+                            "  {} intermediate-only diff detected; \
+                             `--allow-intermediate-only` set, proceeding.\n{}",
+                            "⚠".yellow().bold(),
+                            msg.yellow()
+                        );
+                    } else {
+                        return Err(auto_complete::PhaseFailure::new(msg));
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  {} pre-flight intermediate-only check failed ({e}); \
+                         proceeding with reviewer",
+                        "⚠".yellow().bold()
+                    );
+                }
+            }
+        }
+
         let mode = read_review_mode(&self.project_root);
         if mode == "delegated" {
             eprintln!(
@@ -77663,6 +91920,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 pr
             );
 
+            // The MissingTool guard also provides `gh` for the downstream
+            // check-run polling (step 2), which is not part of the comment op.
             let gh = resolve_gh_binary().ok_or_else(|| {
                 auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::MissingTool,
@@ -77670,27 +91929,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             })?;
 
-            // 1. Trigger review via PR comment: gh pr comment <PR> --body "@claude review once"
-            let comment_status = std::process::Command::new(&gh)
-                .current_dir(&self.project_root)
-                .args([
-                    "pr",
-                    "comment",
-                    &pr.to_string(),
-                    "--body",
-                    "@claude review once",
-                ])
-                .status()
-                .map_err(|e| {
-                    auto_complete::PhaseFailure::of(
-                        auto_complete::FailureKind::Spawn,
-                        format!("could not spawn `gh pr comment`: {e}"),
-                    )
-                })?;
-
-            if !comment_status.success() {
+            // 1. Trigger review via PR comment (STORY-516: forge-routed `gh pr
+            // comment`). trace:STORY-516 | ai:claude
+            let review_change = crate::forge::ChangeRef {
+                id: pr as u64,
+                url: String::new(),
+                branch: String::new(),
+                base: String::new(),
+                title: None,
+            };
+            if let Err(e) = crate::forge::forge_for(&self.project_root)
+                .comment(&review_change, "@claude review once")
+            {
                 return Err(auto_complete::PhaseFailure::new(format!(
-                    "failed to comment on PR {pr} to trigger delegated review"
+                    "failed to comment on PR {pr} to trigger delegated review: {e:#}"
                 )));
             }
 
@@ -77967,20 +92219,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
-        let gh = resolve_gh_binary().ok_or_else(|| {
-            auto_complete::PhaseFailure::of(
+        // STORY-516/TASK-669: keep the `gh`-on-PATH guard as a MissingTool
+        // (non-shelvable → stop-the-drain) pre-check. An env failure should halt
+        // the batch, not shelve every member. The orchestrator is GitHub-only
+        // today; a GitLab orchestrator would make this forge-aware.
+        if resolve_gh_binary().is_none() {
+            return Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::MissingTool,
                 "`gh` is not on PATH — cannot merge the PR",
-            )
-        })?;
-        let pr_str = pr.to_string();
-        // BUG-286: wrap the orchestrator-side `gh pr merge` through the retry
-        // helper so a sub-second network blip (the 2026-05-21 BUG-286 symptom)
-        // is absorbed instead of stalling the drain mid-phase-4. Retry events
-        // surface to stderr (so a user watching the drain sees them live) and
-        // to `.aida/drain-state.json` (so post-hoc analysis can correlate).
-        // trace:BUG-286 | ai:claude
-        let cfg = network_retry::RetryConfig::load(&self.project_root);
+            ));
+        }
+        // BUG-286/TASK-669: route the phase-4 merge through Forge::merge_change,
+        // passing a DualSink (stderr + drain-state) so transient-blip retry
+        // events still correlate into `.aida/drain-state.json` for post-hoc
+        // analysis. merge_change reuses the SPEC-410-pinned argv (`pr merge <pr>
+        // --squash --delete-branch`, byte-identical) and the same network_retry
+        // wrapper, and owns the gh subprocess — so the prior raw gh-stdout echo
+        // is replaced by AIDA's own ✓ line (consistent with `aida pr ship`). A
+        // failed merge returns the unified Err → a shelvable `Failed`
+        // PhaseFailure, matching the previous non-zero-exit behaviour.
+        // trace:STORY-516 trace:TASK-669 trace:BUG-286 | ai:claude
         let mut stderr_sink = network_retry::StderrSink;
         let mut state_sink = drain_state::DrainStateSink {
             project_root: &self.project_root,
@@ -77995,36 +92253,24 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             a: &mut stderr_sink,
             b: &mut state_sink,
         };
-        let label = format!("gh pr merge {pr} --squash --delete-branch");
-        let out = network_retry::run_with_retry(&label, &cfg, &mut sink, || {
-            let mut c = std::process::Command::new(&gh);
-            c.current_dir(&self.project_root).args([
-                "pr",
-                "merge",
-                &pr_str,
-                "--squash",
-                "--delete-branch",
-            ]);
-            c
-        })
-        .map_err(|e| {
-            auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::Spawn,
-                format!("could not run `gh pr merge`: {e}"),
-            )
-        })?;
-        // Echo the captured streams so the user sees gh's confirmation
-        // (`✓ Squashed and merged pull request #N`) — `run_with_retry` uses
-        // `.output()` to inspect stderr, which swallows the live tty stream
-        // the old `.status()` path passed through.
-        use std::io::Write;
-        let _ = std::io::stdout().write_all(&out.stdout);
-        let _ = std::io::stderr().write_all(&out.stderr);
-        if !out.status.success() {
-            return Err(auto_complete::PhaseFailure::new(format!(
-                "`gh pr merge {pr}` failed"
-            )));
-        }
+        let change_ref = crate::forge::ChangeRef {
+            id: pr as u64,
+            url: String::new(),
+            branch: String::new(),
+            base: String::new(),
+            title: None,
+        };
+        let opts = crate::forge::MergeOptions {
+            method: crate::forge::MergeMethod::Squash,
+            squash_subject: None,
+            delete_branch: true,
+        };
+        crate::forge::forge_for(&self.project_root)
+            .merge_change(&change_ref, &opts, &mut sink)
+            .map_err(|e| {
+                auto_complete::PhaseFailure::new(format!("`gh pr merge {pr}` failed: {e:#}"))
+            })?;
+        println!("  {} merged PR-{}", "✓".green(), pr);
         Ok(())
     }
 
@@ -78081,6 +92327,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             pr_number: self.pr_number,
             implementer_session: self.implementer_lease.clone(),
             ci_run_id: self.ci_run_id.clone(),
+            // STORY-508/TASK-651: resolve the active forge so recovery hints
+            // name the right CLI when a phase fails.
+            forge: crate::forge::resolve_forge_kind(&self.project_root),
         }
     }
 
@@ -78574,36 +92823,43 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         // A ship opens a PR — a spec-id lookup is branch-independent and
         // robust, with the recorded branch as a fallback.
-        let pr = match detect_open_pr_for_spec(&self.project_root, &self.spec) {
-            PrLookup::Found(pr) => Some(pr),
-            PrLookup::NoOpenPr => self.branch.as_deref().and_then(|b| {
-                match detect_open_pr_for_branch(&self.project_root, b) {
-                    PrLookup::Found(pr) => Some(pr),
-                    _ => None,
+        let pr =
+            match detect_open_pr_for_spec_via_forge(&self.project_root, &self.spec) {
+                PrLookup::Found(pr) => Some(pr),
+                // STORY-516: inner branch lookup forge-routed (the outer spec search
+                // is the list op, routed later). trace:STORY-516 | ai:claude
+                PrLookup::NoOpenPr => self.branch.as_deref().and_then(|b| {
+                    match change_lookup_for_branch(&self.project_root, b) {
+                        crate::forge::ChangeLookup::Found(c) => Some(OpenPrInfo {
+                            number: c.id,
+                            title: c.title.unwrap_or_default(),
+                            url: c.url,
+                        }),
+                        _ => None,
+                    }
+                }),
+                PrLookup::GhMissing => {
+                    return Err(PhaseFailure::of(
+                        FailureKind::MissingTool,
+                        "`gh` is not on PATH — auto-complete needs it to track the PR",
+                    ));
                 }
-            }),
-            PrLookup::GhMissing => {
-                return Err(PhaseFailure::of(
-                    FailureKind::MissingTool,
-                    "`gh` is not on PATH — auto-complete needs it to track the PR",
-                ));
-            }
-            PrLookup::GhFailed(why) => {
-                return Err(PhaseFailure::new(format!(
-                    "could not look up the PR after the implementer resume: {why}"
-                )));
-            }
-            // BUG-257: a transient GH-API outage on the resumed-implementer PR
-            // lookup is Inconclusive, not a failure. Drain pauses; the next
-            // retry re-attempts the lookup once the API is reachable.
-            // trace:BUG-257 | ai:claude
-            PrLookup::GhUnreachable(why) => {
-                return Ok(ImplementerOutcome::Inconclusive {
-                    reason: format!("GH API unreachable after the implementer resume: {why}"),
-                    retry_hint: None,
-                });
-            }
-        };
+                PrLookup::GhFailed(why) => {
+                    return Err(PhaseFailure::new(format!(
+                        "could not look up the PR after the implementer resume: {why}"
+                    )));
+                }
+                // BUG-257: a transient GH-API outage on the resumed-implementer PR
+                // lookup is Inconclusive, not a failure. Drain pauses; the next
+                // retry re-attempts the lookup once the API is reachable.
+                // trace:BUG-257 | ai:claude
+                PrLookup::GhUnreachable(why) => {
+                    return Ok(ImplementerOutcome::Inconclusive {
+                        reason: format!("GH API unreachable after the implementer resume: {why}"),
+                        retry_hint: None,
+                    });
+                }
+            };
         match pr {
             Some(pr) => {
                 self.pr_number = Some(pr.number as u32);
@@ -78692,9 +92948,17 @@ fn resolve_queue_work_permission_mode(
     env: Option<&str>,
     config: Option<&str>,
     bypass_knob: bool,
+    plan_only: bool,
 ) -> (Option<String>, &'static str) {
     if let Some(m) = flag.filter(|s| !s.is_empty()) {
         return (Some(m.to_string()), "--permission-mode flag");
+    }
+    // STORY-265: a plan-only session is read-only by default — it writes a
+    // docs/plans/ file, not code. An explicit --permission-mode flag (above)
+    // still wins; otherwise `plan` overrides env/config/bypass so the planning
+    // session can't edit code even on a bypass-by-default project.
+    if plan_only {
+        return (Some("plan".to_string()), "--plan-only (read-only default)");
     }
     if let Some(m) = env.filter(|s| !s.is_empty()) {
         return (Some(m.to_string()), "AIDA_PERMISSION_MODE env");
@@ -78736,6 +93000,53 @@ fn resolve_autonomy_mode(zen_flag: bool, no_human: bool) -> AutonomyMode {
         (true, _) => AutonomyMode::NoHuman,
         (false, true) => AutonomyMode::Zen,
         (false, false) => AutonomyMode::Default,
+    }
+}
+
+/// Resolved flag values after expanding the `aida queue work --drain` alias
+/// (TASK-578). `--drain` is pure discoverability sugar: it sets the same
+/// internal state that `--auto-complete --no-human=both --max <queue-size>`
+/// already produced. Explicit flags always win, so `--drain
+/// --no-human=reviewer-only` keeps `reviewer-only`,
+/// `--drain --auto-complete=through-ci` keeps the early stop, and an explicit
+/// `--max N` caps the drain instead of using the queue size.
+/// trace:TASK-578 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DrainResolution {
+    auto_complete: Option<String>,
+    no_human: Option<String>,
+    max: Option<usize>,
+}
+
+/// Expand the `--drain` alias into the underlying auto-complete / no-human / max
+/// state. When `drain` is false this is an identity map over the caller's flags.
+/// When `drain` is true the unset fields take the drain defaults — full
+/// auto-complete, fully-headless (`both`), and a `--max` of the drivable queue
+/// size (falling back to 99 when the size is unknown / zero, per the spec). An
+/// explicitly-supplied flag is never overwritten. `queue_size` is the number of
+/// drivable queued items the caller has already resolved (0 ⇒ unknown). The
+/// function is pure so the expansion can be unit-tested without a live queue.
+/// trace:TASK-578 | ai:claude
+fn resolve_drain_alias(
+    drain: bool,
+    auto_complete: Option<&str>,
+    no_human: Option<&str>,
+    max: Option<usize>,
+    queue_size: usize,
+) -> DrainResolution {
+    if !drain {
+        return DrainResolution {
+            auto_complete: auto_complete.map(str::to_string),
+            no_human: no_human.map(str::to_string),
+            max,
+        };
+    }
+    DrainResolution {
+        auto_complete: Some(auto_complete.unwrap_or("full").to_string()),
+        no_human: Some(no_human.unwrap_or("both").to_string()),
+        // Explicit --max wins; otherwise bound the drain to the queue size, or
+        // fall back to 99 when the size is unknown (the spec's "--max 99").
+        max: Some(max.unwrap_or(if queue_size > 0 { queue_size } else { 99 })),
     }
 }
 
@@ -79035,6 +93346,22 @@ impl QueueWorkLaunch {
     }
 }
 
+/// TASK-402: does `s` look like an AIDA *lease* id rather than a Claude
+/// *session* UUID? A lease id is a hyphenless hex run (e.g. `019e45cfc559`,
+/// the short form printed by `✓ session … started`); a Claude session UUID
+/// always carries hyphens (`019e45cf-acea-73c1-9476-…`). The orchestrator's
+/// phase-1 banner prominently shows the lease id, so pasting *that* into
+/// `--resume <id>` is the #1 recovery papercut — it never prefix-matches a
+/// recorded session. Detect the shape so we can point at the right id form
+/// instead of the generic "no recorded session" miss. Pure + heuristic.
+/// trace:TASK-402 | ai:claude
+fn looks_like_lease_id(s: &str) -> bool {
+    !s.is_empty()
+        && !s.contains('-')
+        && (8..=16).contains(&s.len())
+        && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// TASK-112: resolve a (possibly truncated) session id against the
 /// recorded sessions for a scope. Returns the full id on a unique match;
 /// a non-matching value of UUID-ish length is passed through verbatim
@@ -79047,6 +93374,18 @@ fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
     match matches.len() {
         1 => Ok(matches[0].clone()),
         0 if requested.len() >= 16 => Ok(requested.to_string()),
+        // TASK-402 (friction #1): the pasted value has the shape of an AIDA
+        // lease id, not a Claude session UUID. The banner that advertised
+        // `✓ session <lease> started` is the trap — `--resume` wants the
+        // Claude session UUID. Name the mismatch and point at the right id.
+        // trace:TASK-402 | ai:claude
+        0 if looks_like_lease_id(requested) => anyhow::bail!(
+            "`{}` looks like an AIDA lease id, but --resume needs the Claude \
+             session UUID (e.g. 019e45cf-acea-73c1-…) — run \
+             `aida queue work <scope> --list-sessions` to see the resumable \
+             session ids (or pass bare `--resume` to take the most recent)",
+            requested
+        ),
         0 => anyhow::bail!(
             "no recorded claude session matches `{}` — run \
              `aida queue work <scope> --list-sessions` to see recorded ids",
@@ -79175,15 +93514,56 @@ fn print_scope_sessions(scope: &str) -> Result<()> {
         println!("  {}", session::format_session_line(m));
     }
     println!();
+    // TASK-402 (friction #1 + #5): make the resume hint paste-ready. Show the
+    // *full* Claude session UUID (the id `--resume` actually needs — not the
+    // AIDA lease id the kickoff banner shows, and not the 8-char prefix in the
+    // table above) and, when the session's recorded worktree differs from the
+    // current cwd, prepend the `cd <worktree>` step so a headless session
+    // launched in a sibling worktree is resumable in one paste.
+    // trace:TASK-402 | ai:claude
+    let most_recent = &sessions[0];
+    let resume_cmd = paste_ready_resume_command(scope, most_recent);
+    println!("  {}", "resume the most recent:".dimmed());
+    println!("    {}", resume_cmd.cyan());
+    println!();
     println!(
         "  {}",
         format!(
-            "resume one:  aida queue work {} --resume <session-id>",
+            "(or `aida queue work {} --resume <full-session-uuid>` for a specific one above)",
             scope
         )
         .dimmed()
     );
     Ok(())
+}
+
+/// TASK-402: assemble a single paste-ready resume command for a recorded
+/// session. Uses the FULL session UUID (`--resume` rejects the AIDA lease id
+/// and a truncated prefix can be ambiguous) and, when the session's recorded
+/// worktree is known and is not the current cwd, prepends `cd <worktree> && `
+/// so a headless session launched in a sibling worktree (Claude's `--resume`
+/// is project-slug scoped — invisible from the main repo's cwd) resumes in one
+/// paste. Pure given the cwd argument resolved by the caller.
+/// trace:TASK-402 | ai:claude
+fn paste_ready_resume_command(scope: &str, m: &session::SessionMeta) -> String {
+    let base = format!("aida queue work {} --resume {}", scope, m.id);
+    let current = std::env::current_dir()
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned());
+    resume_command_with_cwd(&base, m.last_cwd.as_deref(), current.as_deref())
+}
+
+/// TASK-402: pure helper — prepend a `cd <worktree> && ` step when the
+/// session's recorded worktree is known and differs from the current cwd.
+/// Keeps the cwd-resolution side effect out so it's unit-testable.
+/// trace:TASK-402 | ai:claude
+fn resume_command_with_cwd(base: &str, worktree: Option<&str>, current: Option<&str>) -> String {
+    match worktree {
+        Some(wt) if !wt.is_empty() && Some(wt) != current => {
+            format!("cd {} && {}", wt, base)
+        }
+        _ => base.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -79214,6 +93594,66 @@ mod queue_work_resume_tests {
     fn resolve_resume_id_short_no_match_errs() {
         let recorded: Vec<String> = vec![];
         assert!(resolve_resume_id(&recorded, "abc").is_err());
+    }
+
+    // TASK-402 (friction #1): a pasted AIDA lease id is recognised by shape
+    // and the error names the right id form instead of the generic miss.
+    // trace:TASK-402 | ai:claude
+    #[test]
+    fn looks_like_lease_id_distinguishes_lease_from_uuid() {
+        // AIDA lease ids: hyphenless hex, 8-16 chars.
+        assert!(looks_like_lease_id("019e45cfc559"));
+        assert!(looks_like_lease_id("019e45cf"));
+        // Claude session UUIDs carry hyphens — not a lease id.
+        assert!(!looks_like_lease_id("019e45cf-acea-73c1-9476-d044fe19d8e4"));
+        // A bare short prefix the user typed is too short / not full hex run.
+        assert!(!looks_like_lease_id("abc"));
+        assert!(!looks_like_lease_id(""));
+        // Non-hex characters disqualify it.
+        assert!(!looks_like_lease_id("zzzzzzzz"));
+    }
+
+    #[test]
+    fn resolve_resume_id_lease_shaped_miss_points_at_uuid() {
+        // The user pasted the lease id from the kickoff banner. No recorded
+        // session matches, but the message must call out the lease-vs-UUID
+        // confusion, not the generic "no recorded session" miss.
+        let recorded: Vec<String> = vec!["019e45cf-acea-73c1-9476-d044fe19d8e4".to_string()];
+        let err = resolve_resume_id(&recorded, "019e45cfc559").unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(msg.contains("lease id"), "msg: {msg}");
+        assert!(msg.contains("uuid"), "msg: {msg}");
+    }
+
+    // TASK-402 (friction #5): the resume command is paste-ready — it prepends
+    // the `cd <worktree>` step only when the recorded worktree differs from
+    // the current cwd. trace:TASK-402 | ai:claude
+    #[test]
+    fn resume_command_prepends_cd_when_worktree_differs() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd = resume_command_with_cwd(
+            base,
+            Some("/home/joe/ai/aida-task-358"),
+            Some("/home/joe/ai/aida"),
+        );
+        assert_eq!(cmd, format!("cd /home/joe/ai/aida-task-358 && {base}"));
+    }
+
+    #[test]
+    fn resume_command_omits_cd_when_worktree_matches_cwd() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd =
+            resume_command_with_cwd(base, Some("/home/joe/ai/aida"), Some("/home/joe/ai/aida"));
+        assert_eq!(cmd, base);
+    }
+
+    #[test]
+    fn resume_command_omits_cd_when_worktree_unknown() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd = resume_command_with_cwd(base, None, Some("/home/joe/ai/aida"));
+        assert_eq!(cmd, base);
+        let cmd_empty = resume_command_with_cwd(base, Some(""), Some("/home/joe/ai/aida"));
+        assert_eq!(cmd_empty, base);
     }
 
     #[test]
@@ -81516,7 +95956,7 @@ mod story_255_discipline_pack_tests {
     fn memory_pack_writes_marked_files_with_marker_and_checksum() {
         let dir = tempfile::tempdir().unwrap();
         let mem = dir.path().join("memory");
-        let report = scaffold_memory_pack_into(&mem, false).unwrap();
+        let report = scaffold_memory_pack_into(&mem, false, None).unwrap();
 
         assert!(
             report.written >= 10,
@@ -81557,11 +95997,89 @@ mod story_255_discipline_pack_tests {
         assert!(index.contains("](feedback_run_help_before_suggesting_flags.md)"));
     }
 
+    /// STORY-362: the `--focus <subsystem>` loading filter. A memory tagged
+    /// `subsystem: X` loads only under `--focus X`; an untagged memory is
+    /// universal and loads regardless of focus (or its absence).
+    /// trace:STORY-362 | ai:claude
+    #[test]
+    fn memory_focus_filter_loads_universal_plus_matching_subsystem() {
+        // Hand-built templates — fully isolated, no embedded pack, no $HOME,
+        // no filesystem.
+        let universal = "---\nname: universal_mem\ntype: feedback\n---\nBody.\n";
+        let orchestrator = concat!(
+            "---\nname: orch_mem\nsubsystem: orchestrator\ntype: feedback\n---\n",
+            "Body.\n"
+        );
+        let storage = "---\nname: store_mem\nsubsystem: storage\ntype: feedback\n---\nBody.\n";
+
+        // No focus → everything loads (full pack).
+        assert!(memory_matches_focus(universal, None));
+        assert!(memory_matches_focus(orchestrator, None));
+        assert!(memory_matches_focus(storage, None));
+
+        // --focus orchestrator → universal + the orchestrator memory load;
+        // the storage-tagged memory does not.
+        assert!(
+            memory_matches_focus(universal, Some("orchestrator")),
+            "untagged memory must be universal under any focus"
+        );
+        assert!(
+            memory_matches_focus(orchestrator, Some("orchestrator")),
+            "subsystem-matching memory must load under its focus"
+        );
+        assert!(
+            !memory_matches_focus(storage, Some("orchestrator")),
+            "non-matching subsystem memory must NOT load under a different focus"
+        );
+
+        // Match is case-insensitive on the subsystem value.
+        assert!(memory_matches_focus(orchestrator, Some("Orchestrator")));
+
+        // Malformed / frontmatter-less content is treated as universal.
+        assert!(memory_matches_focus("no frontmatter here", Some("storage")));
+    }
+
+    /// STORY-362: end-to-end through the scaffold writer — only universal +
+    /// matching-subsystem memories land on disk under `--focus`.
+    /// trace:STORY-362 | ai:claude
+    #[test]
+    fn memory_pack_focus_scopes_written_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        // The embedded pack is currently all-universal (untagged), so a focus
+        // on any subsystem still writes the full universal set — and crucially
+        // no fewer than the unfocused run for the universal members. Compare a
+        // focused run against an unfocused baseline: every file the focused run
+        // wrote must be one the baseline also wrote (subset), and every member
+        // it kept is universal.
+        let focused =
+            scaffold_memory_pack_into(&mem, false, Some("nonexistent-subsystem")).unwrap();
+        // All embedded members are untagged today → all universal → all written.
+        assert!(
+            focused.written >= 10,
+            "untagged (universal) memories must always load under any focus, got {}",
+            focused.written
+        );
+        // Every written file is genuinely universal (no subsystem tag).
+        for entry in std::fs::read_dir(&mem).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().unwrap() == "MEMORY.md" {
+                continue;
+            }
+            let body = std::fs::read_to_string(&path).unwrap();
+            let (fm, _) = split_md_frontmatter(&body).unwrap();
+            assert!(
+                frontmatter_field(fm, "subsystem").is_none(),
+                "{path:?} carries a subsystem tag but was written under a non-matching focus"
+            );
+        }
+    }
+
     #[test]
     fn memory_pack_refresh_overlays_pristine_skips_edited() {
         let dir = tempfile::tempdir().unwrap();
         let mem = dir.path().join("memory");
-        let first = scaffold_memory_pack_into(&mem, false).unwrap();
+        let first = scaffold_memory_pack_into(&mem, false, None).unwrap();
         assert!(first.written >= 10);
 
         // (a) User-edit one file's body — must be kept on refresh.
@@ -81584,7 +96102,7 @@ mod story_255_discipline_pack_tests {
                 .replacen("---\n", "---\nstaleField: x\n", 1);
         std::fs::write(&stale, &stale_v1).unwrap();
 
-        let report = scaffold_memory_pack_into(&mem, true).unwrap();
+        let report = scaffold_memory_pack_into(&mem, true, None).unwrap();
         assert_eq!(report.written, 0, "all files already exist on refresh");
         assert_eq!(report.kept_edited, 1, "the body-edited file is kept");
         assert_eq!(report.kept_user, 1, "the unmarked user file is kept");
@@ -81669,5 +96187,289 @@ mod story_255_discipline_pack_tests {
             MemoryDisposition::Pristine,
             "a CRLF copy of a pristine scaffold must still be Pristine"
         );
+    }
+
+    // ── STORY-410: existing-project substrate-drift discovery ──────────────
+
+    /// A fresh dir that never scaffolded the pack reports every master member
+    /// as Missing — `behind()` equals the full master count and nothing is
+    /// up-to-date / edited / user-owned. trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_empty_dir_reports_all_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory"); // does not exist
+        let report = compute_memory_drift_into(&mem).unwrap();
+
+        assert!(
+            report.rows.len() >= 10,
+            "sanity: a populated master pack, got {}",
+            report.rows.len()
+        );
+        assert_eq!(report.missing(), report.rows.len());
+        assert_eq!(report.behind(), report.rows.len());
+        assert_eq!(report.up_to_date(), 0);
+        assert_eq!(report.stale(), 0);
+        assert_eq!(report.edited(), 0);
+        assert_eq!(report.user_owned(), 0);
+    }
+
+    /// A freshly-scaffolded dir is fully up to date: zero drift, every member
+    /// matches the master byte-for-byte. trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_freshly_scaffolded_dir_is_current() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        let written = scaffold_memory_pack_into(&mem, false, None).unwrap();
+        assert!(written.written >= 10);
+
+        let report = compute_memory_drift_into(&mem).unwrap();
+        assert_eq!(report.behind(), 0, "a fresh scaffold must not be behind");
+        assert_eq!(report.missing(), 0);
+        assert_eq!(report.stale(), 0);
+        assert_eq!(
+            report.up_to_date(),
+            report.rows.len(),
+            "every member matches master"
+        );
+    }
+
+    /// The three drift dispositions are classified correctly: a deleted file
+    /// → Missing, a body-edited file → Edited (kept by refresh), an unmarked
+    /// user file → UserOwned, a benign-frontmatter-mutated pristine file →
+    /// Stale (refresh would overlay it). trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_classifies_missing_stale_edited_and_user_owned() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory");
+        scaffold_memory_pack_into(&mem, false, None).unwrap();
+
+        // (a) Missing: delete one scaffolded file.
+        let missing = mem.join("feedback_run_help_before_suggesting_flags.md");
+        std::fs::remove_file(&missing).unwrap();
+
+        // (b) Edited: change a scaffolded file's body → checksum mismatch.
+        let edited = mem.join("feedback_verify_before_filing.md");
+        let mut body = std::fs::read_to_string(&edited).unwrap();
+        body.push_str("\n\nUSER EDIT.\n");
+        std::fs::write(&edited, &body).unwrap();
+
+        // (c) UserOwned: replace a file with an unmarked one.
+        let user_owned = mem.join("feedback_goal_prompt_phrasing.md");
+        std::fs::write(&user_owned, "---\nname: mine\n---\n\nmine\n").unwrap();
+
+        // (d) Stale: pristine body, but a benign extra frontmatter line makes
+        //     the on-disk bytes differ from the current master scaffold.
+        let stale = mem.join("feedback_pause_for_design_input.md");
+        let stale_v1 =
+            std::fs::read_to_string(&stale)
+                .unwrap()
+                .replacen("---\n", "---\nstaleField: x\n", 1);
+        std::fs::write(&stale, &stale_v1).unwrap();
+
+        let report = compute_memory_drift_into(&mem).unwrap();
+
+        let find = |name: &str| {
+            report
+                .rows
+                .iter()
+                .find(|r| r.name == name)
+                .unwrap_or_else(|| panic!("row {name} present"))
+                .state
+        };
+        assert_eq!(
+            find("feedback_run_help_before_suggesting_flags.md"),
+            MemoryDriftState::Missing
+        );
+        assert_eq!(
+            find("feedback_verify_before_filing.md"),
+            MemoryDriftState::Edited
+        );
+        assert_eq!(
+            find("feedback_goal_prompt_phrasing.md"),
+            MemoryDriftState::UserOwned
+        );
+        assert_eq!(
+            find("feedback_pause_for_design_input.md"),
+            MemoryDriftState::Stale
+        );
+
+        // behind() counts only missing + stale; edited/user-owned are kept.
+        assert_eq!(report.missing(), 1);
+        assert_eq!(report.stale(), 1);
+        assert_eq!(report.edited(), 1);
+        assert_eq!(report.user_owned(), 1);
+        assert_eq!(report.behind(), 2);
+    }
+
+    /// Every drift row carries a label + (usually) a description sourced from
+    /// the master template's frontmatter, so the report is human-readable.
+    /// trace:STORY-410 | ai:claude
+    #[test]
+    fn drift_rows_carry_labels_and_descriptions() {
+        let dir = tempfile::tempdir().unwrap();
+        let mem = dir.path().join("memory"); // empty → all missing
+        let report = compute_memory_drift_into(&mem).unwrap();
+
+        // Labels are never empty (fall back to filename).
+        assert!(report.rows.iter().all(|r| !r.label.is_empty()));
+        // The bundled memories carry descriptions, so most rows have one.
+        let with_desc = report
+            .rows
+            .iter()
+            .filter(|r| !r.description.is_empty())
+            .count();
+        assert!(
+            with_desc >= report.rows.len() / 2,
+            "expected most rows to carry a description, {with_desc}/{}",
+            report.rows.len()
+        );
+    }
+}
+
+/// STORY-127: unit tests for the Scope-B runtime anti-pattern detector
+/// predicates. Each predicate is pure over its inputs so the warning
+/// conditions are exercised without git/forge/queue I/O.
+/// trace:STORY-127 | ai:claude
+#[cfg(test)]
+mod story_127_antipattern_detectors {
+    use super::*;
+    use std::collections::HashMap;
+
+    // ── Detector (1): aida pull no-op with a pending review ──────────────
+    #[test]
+    fn pull_noop_warns_loudly_when_reviewer_lease_on_unmerged_pr() {
+        let msg = pull_noop_warning(true, Some("PR-27"))
+            .expect("a no-op with a pending review should warn");
+        assert!(msg.contains("PR-27"), "warning should name the PR: {msg}");
+        assert!(
+            msg.to_lowercase().contains("wait"),
+            "warning should suggest waiting: {msg}"
+        );
+    }
+
+    #[test]
+    fn pull_noop_quiet_note_when_no_pending_review() {
+        let msg = pull_noop_warning(true, None).expect("a no-op still gets a one-liner");
+        assert!(
+            msg.to_lowercase().contains("up to date"),
+            "plain note should say up to date: {msg}"
+        );
+        // No PR alarm when there's no reviewer lease.
+        assert!(!msg.contains("PR-"));
+    }
+
+    #[test]
+    fn pull_that_advanced_never_warns() {
+        assert!(pull_noop_warning(false, Some("PR-27")).is_none());
+        assert!(pull_noop_warning(false, None).is_none());
+    }
+
+    // ── Detector (2): git pull no-op (local main == origin/main) ─────────
+    #[test]
+    fn local_main_at_origin_is_true_only_when_shas_match() {
+        assert!(local_main_already_at_origin(Some("abc123"), Some("abc123")));
+        assert!(!local_main_already_at_origin(
+            Some("abc123"),
+            Some("def456")
+        ));
+    }
+
+    #[test]
+    fn local_main_at_origin_is_false_when_a_sha_is_unknown_or_empty() {
+        assert!(!local_main_already_at_origin(None, Some("abc123")));
+        assert!(!local_main_already_at_origin(Some("abc123"), None));
+        assert!(!local_main_already_at_origin(None, None));
+        assert!(!local_main_already_at_origin(Some(""), Some("")));
+    }
+
+    // ── Detector (3): release with unmerged PRs ──────────────────────────
+    #[test]
+    fn release_warns_for_a_single_unmerged_pr() {
+        let msg = release_unmerged_pr_warning(&[27]).expect("one open PR should warn");
+        assert!(msg.contains("PR-27"), "should name the PR: {msg}");
+        assert!(msg.contains("1 open PR "), "singular phrasing: {msg}");
+        assert!(msg.contains(" is "), "singular verb: {msg}");
+    }
+
+    #[test]
+    fn release_warns_for_multiple_unmerged_prs_sorted_and_deduped() {
+        let msg = release_unmerged_pr_warning(&[31, 27, 27, 5]).expect("open PRs should warn");
+        // sorted ascending + deduped
+        assert!(msg.contains("PR-5, PR-27, PR-31"), "sorted+deduped: {msg}");
+        assert!(msg.contains("3 open PRs"), "plural count: {msg}");
+        assert!(msg.contains(" are "), "plural verb: {msg}");
+    }
+
+    #[test]
+    fn release_does_not_warn_with_no_open_prs() {
+        assert!(release_unmerged_pr_warning(&[]).is_none());
+    }
+
+    // ── Detector (4): session end with cross-role queue waiting ──────────
+    fn counts(pairs: &[(&str, usize)]) -> HashMap<String, usize> {
+        pairs.iter().map(|(r, c)| (r.to_string(), *c)).collect()
+    }
+
+    #[test]
+    fn cross_role_lists_other_roles_with_waiting_work() {
+        let c = counts(&[("reviewer", 3), ("implementer", 2), ("advisor", 0)]);
+        let waiting = cross_role_queue_waiting(Some("reviewer"), &c);
+        // reviewer (the ending role) and advisor (zero) excluded; implementer left.
+        assert_eq!(waiting, vec![("implementer".to_string(), 2)]);
+    }
+
+    #[test]
+    fn cross_role_excludes_only_the_ending_role() {
+        let c = counts(&[("reviewer", 1), ("implementer", 4)]);
+        let waiting = cross_role_queue_waiting(Some("implementer"), &c);
+        assert_eq!(waiting, vec![("reviewer".to_string(), 1)]);
+    }
+
+    #[test]
+    fn cross_role_is_sorted_by_role_name() {
+        let c = counts(&[("reviewer", 1), ("advisor", 2)]);
+        let waiting = cross_role_queue_waiting(Some("implementer"), &c);
+        assert_eq!(
+            waiting,
+            vec![("advisor".to_string(), 2), ("reviewer".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn cross_role_with_unknown_ending_role_includes_all_waiting() {
+        let c = counts(&[("reviewer", 1), ("implementer", 2)]);
+        let waiting = cross_role_queue_waiting(None, &c);
+        assert_eq!(
+            waiting,
+            vec![("implementer".to_string(), 2), ("reviewer".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn session_end_warning_renders_singular_and_plural() {
+        let one = session_end_cross_role_warning(&[("reviewer".to_string(), 1)]).unwrap();
+        assert!(one.contains("reviewer has 1 item"), "singular: {one}");
+        assert!(!one.contains("1 items"));
+        let many = session_end_cross_role_warning(&[("implementer".to_string(), 3)]).unwrap();
+        assert!(many.contains("implementer has 3 items"), "plural: {many}");
+    }
+
+    #[test]
+    fn session_end_warning_is_none_when_nothing_waiting() {
+        assert!(session_end_cross_role_warning(&[]).is_none());
+        let empty = cross_role_queue_waiting(Some("reviewer"), &counts(&[("reviewer", 5)]));
+        assert!(session_end_cross_role_warning(&empty).is_none());
+    }
+
+    // ── PR-scope parsing for the reviewer-lease query ────────────────────
+    #[test]
+    fn pr_number_from_scope_parses_pr_and_mr_forms() {
+        assert_eq!(pr_number_from_scope("PR-27"), Some(27));
+        assert_eq!(pr_number_from_scope("pr-3"), Some(3));
+        assert_eq!(pr_number_from_scope("MR-12"), Some(12));
+        assert_eq!(pr_number_from_scope(" PR-99 "), Some(99));
+        assert_eq!(pr_number_from_scope("STORY-127"), None);
+        assert_eq!(pr_number_from_scope("PR-abc"), None);
+        assert_eq!(pr_number_from_scope(""), None);
     }
 }

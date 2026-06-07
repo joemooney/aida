@@ -53,6 +53,17 @@ pub(crate) struct CleanupReport {
     /// longer exists. Pure cleanup — covered by
     /// `aida session prune --orphans`.
     pub orphan_project_dirs: Vec<OrphanProjectDirItem>,
+    /// STORY-469 Guard 3: specs whose substrate status claims Done/Completed
+    /// but whose local reality (an active lease + a dirty worktree, and/or no
+    /// commit + no PR) contradicts the claim — an agent's "I shipped" that the
+    /// substrate doesn't corroborate. Loss-/trust-risky: the operator sees the
+    /// divergence at status time instead of trusting the verbal claim.
+    pub claimed_done_diverged: Vec<ClaimedDoneDivergedItem>,
+    /// STORY-508/TASK-651: the project's active forge, so the open-PR hint
+    /// names the right CLI (gh/glab) or none (pure-git). `None` means "not
+    /// resolved" (e.g. a `default()`-built report in a test) — rendered as
+    /// GitHub for back-compat. Set by `collect_cleanup_report`.
+    pub forge_kind: Option<crate::forge::ForgeKind>,
 }
 
 /// A worktree with uncommitted modifications. Surfaces the path + lease
@@ -157,6 +168,34 @@ pub(crate) struct OrphanProjectDirItem {
     pub jsonl_count: usize,
 }
 
+/// STORY-469 Guard 3: a spec whose status claims Done/Completed but whose
+/// local reality contradicts the claim. `kind` names which contradiction
+/// fired so the renderer can word the recovery hint precisely.
+/// trace:STORY-469 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct ClaimedDoneDivergedItem {
+    pub spec_id: String,
+    pub title: String,
+    /// The spec's substrate status word ("Done" / "Completed").
+    pub claimed_status: String,
+    pub kind: DivergenceKind,
+}
+
+/// Why a claimed-Done spec is flagged as diverged. trace:STORY-469 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DivergenceKind {
+    /// An active lease covers the spec AND the worktree has uncommitted
+    /// modifications — work is still on disk despite the Done claim.
+    DirtyWorktree {
+        branch: String,
+        modified_files: usize,
+        age_hours: i64,
+    },
+    /// The spec is Done but no commit references it and no PR exists — the
+    /// "I shipped" claim has no substrate evidence.
+    NoCommitNoPr,
+}
+
 impl CleanupReport {
     /// Total number of items across every category. Zero means nothing
     /// needs attention — the renderer prints a single all-clear line.
@@ -169,6 +208,7 @@ impl CleanupReport {
             + self.dormant_leases.len()
             + self.stale_reviewer_leases.len()
             + self.orphan_project_dirs.len()
+            + self.claimed_done_diverged.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -194,7 +234,8 @@ impl CleanupReport {
             + self.missed_auto_bump.len()
             + self.open_prs.len()
             + self.dormant_leases.len()
-            + self.stale_reviewer_leases.len();
+            + self.stale_reviewer_leases.len()
+            + self.claimed_done_diverged.len();
         if project_scoped_count == 0 {
             return None;
         }
@@ -215,6 +256,13 @@ impl CleanupReport {
                 "  • Uncommitted work at risk ({}): {}",
                 self.uncommitted_wip.len(),
                 self.uncommitted_wip[0].branch.dimmed(),
+            ));
+        }
+        if !self.claimed_done_diverged.is_empty() {
+            lines.push(format!(
+                "  • Claimed Done but substrate disagrees ({}): {}",
+                self.claimed_done_diverged.len(),
+                self.claimed_done_diverged[0].spec_id.dimmed(),
             ));
         }
         if !self.sticky_in_progress.is_empty() {
@@ -332,6 +380,26 @@ impl CleanupReport {
                     "decoded_cwd": i.decoded_cwd,
                     "jsonl_count": i.jsonl_count,
                 })).collect::<Vec<_>>(),
+                "claimed_done_diverged": self.claimed_done_diverged.iter().map(|i| {
+                    let (kind, branch, modified_files, age_hours) = match &i.kind {
+                        DivergenceKind::DirtyWorktree { branch, modified_files, age_hours } => (
+                            "dirty_worktree",
+                            Some(branch.clone()),
+                            Some(*modified_files),
+                            Some(*age_hours),
+                        ),
+                        DivergenceKind::NoCommitNoPr => ("no_commit_no_pr", None, None, None),
+                    };
+                    serde_json::json!({
+                        "spec_id": i.spec_id,
+                        "title": i.title,
+                        "claimed_status": i.claimed_status,
+                        "kind": kind,
+                        "branch": branch,
+                        "modified_files": modified_files,
+                        "age_hours": age_hours,
+                    })
+                }).collect::<Vec<_>>(),
             }
         })
     }
@@ -354,10 +422,11 @@ impl CleanupReport {
         let cap = if verbose { usize::MAX } else { 3 };
 
         render_uncommitted_wip(&self.uncommitted_wip, cap, &mut w)?;
+        render_claimed_done_diverged(&self.claimed_done_diverged, cap, &mut w)?;
         render_sticky_in_progress(&self.sticky_in_progress, cap, &mut w)?;
         render_branches_ahead(&self.branches_ahead_no_pr, cap, &mut w)?;
         render_missed_auto_bump(&self.missed_auto_bump, cap, &mut w)?;
-        render_open_prs(&self.open_prs, cap, &mut w)?;
+        render_open_prs(&self.open_prs, self.forge_kind, cap, &mut w)?;
         render_dormant_leases(&self.dormant_leases, cap, &mut w)?;
         render_stale_reviewer_leases(&self.stale_reviewer_leases, cap, &mut w)?;
         render_orphan_project_dirs(&self.orphan_project_dirs, cap, &mut w)?;
@@ -369,6 +438,9 @@ impl CleanupReport {
         let mut healthy_lines: Vec<&str> = Vec::new();
         if self.uncommitted_wip.is_empty() {
             healthy_lines.push("No uncommitted work at risk.");
+        }
+        if self.claimed_done_diverged.is_empty() {
+            healthy_lines.push("No specs claiming Done that the substrate contradicts.");
         }
         if self.sticky_in_progress.is_empty() {
             healthy_lines.push("No specs In Progress without an active lease.");
@@ -570,14 +642,24 @@ fn render_missed_auto_bump(
     Ok(())
 }
 
-fn render_open_prs(items: &[OpenPrItem], cap: usize, w: &mut impl Write) -> std::io::Result<()> {
+fn render_open_prs(
+    items: &[OpenPrItem],
+    forge_kind: Option<crate::forge::ForgeKind>,
+    cap: usize,
+    w: &mut impl Write,
+) -> std::io::Result<()> {
     if items.is_empty() {
         return Ok(());
     }
+    // STORY-508/TASK-651: forge-aware noun + command chain. Unresolved (test
+    // default()) renders as GitHub for back-compat.
+    let kind = forge_kind.unwrap_or(crate::forge::ForgeKind::GitHub);
+    let noun = kind.change_noun();
     writeln!(
         w,
-        "{} Open PRs awaiting review/merge ({}):",
+        "{} Open {}s awaiting review/merge ({}):",
         "⚠".yellow(),
+        noun,
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -596,10 +678,23 @@ fn render_open_prs(items: &[OpenPrItem], cap: usize, w: &mut impl Write) -> std:
         }
     }
     print_overflow(items.len(), cap, w)?;
-    writeln!(
-        w,
-        "    → `gh pr checks <N> --watch && gh pr merge <N> --squash --delete-branch && aida pull`"
-    )?;
+    // STORY-508/TASK-651: the watch→merge→pull hint, in each forge's command
+    // shape (gh checks/--delete-branch vs glab ci status/--remove-source-branch;
+    // pure-git names no forge CLI).
+    let chain = match kind {
+        crate::forge::ForgeKind::GitHub => {
+            "`gh pr checks <N> --watch && gh pr merge <N> --squash --delete-branch && aida pull`"
+                .to_string()
+        }
+        crate::forge::ForgeKind::GitLab => {
+            "`glab ci status && glab mr merge <N> --squash --remove-source-branch && aida pull`"
+                .to_string()
+        }
+        crate::forge::ForgeKind::None => {
+            "merge each change to your default branch, then `aida pull`".to_string()
+        }
+    };
+    writeln!(w, "    → {chain}")?;
     writeln!(w)?;
     Ok(())
 }
@@ -724,6 +819,139 @@ fn render_orphan_project_dirs(
     writeln!(w, "    → `aida session prune --orphans`")?;
     writeln!(w)?;
     Ok(())
+}
+
+fn render_claimed_done_diverged(
+    items: &[ClaimedDoneDivergedItem],
+    cap: usize,
+    w: &mut impl Write,
+) -> std::io::Result<()> {
+    if items.is_empty() {
+        return Ok(());
+    }
+    writeln!(
+        w,
+        "{} Claimed Done but substrate disagrees ({}):",
+        "⚠".yellow(),
+        items.len()
+    )?;
+    for item in items.iter().take(cap) {
+        match &item.kind {
+            DivergenceKind::DirtyWorktree {
+                branch,
+                modified_files,
+                age_hours,
+            } => {
+                writeln!(
+                    w,
+                    "    {} ({}) worktree on `{}` has {} modified file{} ({}h) — uncommitted, yet spec is {}.",
+                    item.spec_id.yellow(),
+                    item.title.dimmed(),
+                    branch.dimmed(),
+                    modified_files,
+                    if *modified_files == 1 { "" } else { "s" },
+                    age_hours,
+                    item.claimed_status,
+                )?;
+                writeln!(
+                    w,
+                    "      → commit + `aida pr ship`, or reopen the spec (`aida edit {} --status in-progress`).",
+                    item.spec_id
+                )?;
+            }
+            DivergenceKind::NoCommitNoPr => {
+                writeln!(
+                    w,
+                    "    {} ({}) is {} but no commit references it and no PR exists.",
+                    item.spec_id.yellow(),
+                    item.title.dimmed(),
+                    item.claimed_status,
+                )?;
+                writeln!(
+                    w,
+                    "      → verify the work actually shipped, or reopen (`aida edit {} --status in-progress`).",
+                    item.spec_id
+                )?;
+            }
+        }
+    }
+    print_overflow(items.len(), cap, w)?;
+    writeln!(w)?;
+    Ok(())
+}
+
+/// One spec's local-vs-substrate facts, fed to [`detect_claimed_done_divergence`].
+/// Pure data so the detector is filesystem-free and unit-testable; `main.rs`
+/// gathers these from leases + git + the store. trace:STORY-469 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct ClaimedDoneInput {
+    pub spec_id: String,
+    pub title: String,
+    /// The spec's substrate status word ("Done" / "Completed" / other).
+    pub status: String,
+    /// True when an active (live or dormant) lease covers this spec.
+    pub has_active_lease: bool,
+    /// Branch the lease covers (for the dirty-worktree message).
+    pub branch: Option<String>,
+    /// Count of uncommitted modifications in the lease's worktree (0 = clean).
+    pub modified_files: usize,
+    /// Lease age in hours (for the message).
+    pub age_hours: i64,
+    /// True when at least one commit references this spec (subject trailer or
+    /// landed commit) — substrate evidence the work exists.
+    pub has_commit: bool,
+    /// True when an open or merged PR exists for the spec's branch.
+    pub has_pr: bool,
+}
+
+/// STORY-469 Guard 3 (pure core): flag specs whose status claims Done/Completed
+/// but whose local reality contradicts the claim. Two contradictions fire:
+///   1. an active lease + a dirty worktree (work still on disk despite Done), and
+///   2. no commit references the spec AND no PR exists (no shipping evidence).
+/// Specs whose status is not Done/Completed are never flagged here (sticky
+/// In-Progress is a separate category). Returns the diverged items in input
+/// order. trace:STORY-469 | ai:claude
+pub(crate) fn detect_claimed_done_divergence(
+    inputs: &[ClaimedDoneInput],
+) -> Vec<ClaimedDoneDivergedItem> {
+    let mut out = Vec::new();
+    for input in inputs {
+        let claims_done = input.status.eq_ignore_ascii_case("done")
+            || input.status.eq_ignore_ascii_case("completed");
+        if !claims_done {
+            continue;
+        }
+        // Contradiction 1: active lease + dirty worktree. Highest signal — the
+        // agent declared Done while uncommitted work sits in the worktree.
+        if input.has_active_lease && input.modified_files > 0 {
+            out.push(ClaimedDoneDivergedItem {
+                spec_id: input.spec_id.clone(),
+                title: input.title.clone(),
+                claimed_status: input.status.clone(),
+                kind: DivergenceKind::DirtyWorktree {
+                    branch: input
+                        .branch
+                        .clone()
+                        .unwrap_or_else(|| "(detached)".to_string()),
+                    modified_files: input.modified_files,
+                    age_hours: input.age_hours,
+                },
+            });
+            continue;
+        }
+        // Contradiction 2: no commit + no PR. The Done claim has no substrate
+        // evidence at all (a `Completed` spec is merge-driven so it always has
+        // a commit — this realistically only fires for `Done`).
+        if !input.has_commit && !input.has_pr {
+            out.push(ClaimedDoneDivergedItem {
+                spec_id: input.spec_id.clone(),
+                title: input.title.clone(),
+                claimed_status: input.status.clone(),
+                kind: DivergenceKind::NoCommitNoPr,
+            });
+        }
+    }
+    out
 }
 
 fn print_overflow(total: usize, cap: usize, w: &mut impl Write) -> std::io::Result<()> {
@@ -883,6 +1111,36 @@ mod tests {
         assert!(out.contains("Total: 8 items need attention"));
     }
 
+    // STORY-508/TASK-651: the open-change section is forge-aware — GitLab gets
+    // "Open MRs" + glab commands, pure-git names no forge CLI.
+    #[test]
+    fn open_changes_hint_is_forge_aware() {
+        colored::control::set_override(false);
+        let mut report = CleanupReport::default();
+        report.open_prs.push(OpenPrItem {
+            number: 42,
+            title: "t".into(),
+            head_branch: "b".into(),
+            ci_rollup: Some("pass".into()),
+            mergeable: Some("clean".into()),
+            review_decision: None,
+        });
+
+        report.forge_kind = Some(crate::forge::ForgeKind::GitLab);
+        let gitlab = render_to_string(&report, false);
+        assert!(gitlab.contains("Open MRs awaiting"), "{gitlab}");
+        assert!(gitlab.contains("glab mr merge"), "{gitlab}");
+        assert!(gitlab.contains("glab ci status"), "{gitlab}");
+        assert!(!gitlab.contains("gh pr"), "{gitlab}");
+
+        report.forge_kind = Some(crate::forge::ForgeKind::None);
+        let pure = render_to_string(&report, false);
+        assert!(pure.contains("Open changes awaiting"), "{pure}");
+        assert!(!pure.contains("gh pr"), "{pure}");
+        assert!(!pure.contains("glab "), "{pure}");
+        colored::control::unset_override();
+    }
+
     #[test]
     fn cap_applied_without_verbose() {
         colored::control::set_override(false);
@@ -924,13 +1182,13 @@ mod tests {
         assert!(out.contains("No dormant leases."));
         assert!(out.contains("No orphan Claude Code project dirs."));
         // The one populated category must NOT appear in the Healthy block.
-        // We assert that by checking the line count: 7 empty categories =>
-        // 7 healthy lines.
+        // We assert that by checking the line count: 8 empty categories =>
+        // 8 healthy lines (STORY-469 added the claimed-Done-divergence one).
         let healthy_count = out
             .lines()
             .filter(|l| l.trim_start().starts_with("✓"))
             .count();
-        assert_eq!(healthy_count, 7);
+        assert_eq!(healthy_count, 8);
     }
 
     /// BUG-376: a dormant lease whose scope is a Done/Completed spec is
@@ -1055,6 +1313,157 @@ mod tests {
         assert_eq!(
             v["categories"]["uncommitted_wip"].as_array().unwrap().len(),
             0
+        );
+    }
+
+    // ── STORY-469 Guard 3: claimed-Done-vs-substrate divergence ──
+
+    fn done_input(spec_id: &str) -> ClaimedDoneInput {
+        ClaimedDoneInput {
+            spec_id: spec_id.to_string(),
+            title: format!("{spec_id} title"),
+            status: "Done".to_string(),
+            has_active_lease: false,
+            branch: None,
+            modified_files: 0,
+            age_hours: 0,
+            // Default to "has evidence" so the no-commit-no-pr signal only
+            // fires when a test explicitly removes it.
+            has_commit: true,
+            has_pr: true,
+        }
+    }
+
+    #[test]
+    fn guard3_flags_done_spec_with_dirty_worktree() {
+        let inputs = vec![ClaimedDoneInput {
+            has_active_lease: true,
+            branch: Some("task-542".to_string()),
+            modified_files: 3,
+            age_hours: 6,
+            ..done_input("TASK-542")
+        }];
+        let out = detect_claimed_done_divergence(&inputs);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].spec_id, "TASK-542");
+        assert_eq!(
+            out[0].kind,
+            DivergenceKind::DirtyWorktree {
+                branch: "task-542".to_string(),
+                modified_files: 3,
+                age_hours: 6,
+            }
+        );
+    }
+
+    #[test]
+    fn guard3_flags_done_spec_with_no_commit_and_no_pr() {
+        let inputs = vec![ClaimedDoneInput {
+            has_commit: false,
+            has_pr: false,
+            ..done_input("STORY-487")
+        }];
+        let out = detect_claimed_done_divergence(&inputs);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].spec_id, "STORY-487");
+        assert_eq!(out[0].kind, DivergenceKind::NoCommitNoPr);
+    }
+
+    #[test]
+    fn guard3_dirty_worktree_takes_precedence_over_no_evidence() {
+        // A Done spec that is BOTH dirty AND has no commit/PR is reported once,
+        // under the higher-signal dirty-worktree kind.
+        let inputs = vec![ClaimedDoneInput {
+            has_active_lease: true,
+            branch: Some("task-9".to_string()),
+            modified_files: 1,
+            has_commit: false,
+            has_pr: false,
+            ..done_input("TASK-9")
+        }];
+        let out = detect_claimed_done_divergence(&inputs);
+        assert_eq!(out.len(), 1, "reported once, not twice");
+        assert!(matches!(out[0].kind, DivergenceKind::DirtyWorktree { .. }));
+    }
+
+    #[test]
+    fn guard3_no_false_positive_on_clean_done_spec() {
+        // The normal happy path: Done with a commit + a PR, clean worktree (or
+        // no lease at all). Must NOT be flagged.
+        let inputs = vec![
+            done_input("TASK-1"),
+            ClaimedDoneInput {
+                has_active_lease: true,
+                branch: Some("task-2".to_string()),
+                modified_files: 0, // clean
+                ..done_input("TASK-2")
+            },
+        ];
+        let out = detect_claimed_done_divergence(&inputs);
+        assert!(out.is_empty(), "got false positives: {out:?}");
+    }
+
+    #[test]
+    fn guard3_ignores_non_done_specs() {
+        // An In-Progress spec (even dirty / no commit) is NOT this category's
+        // concern — sticky-in-progress covers it.
+        let inputs = vec![ClaimedDoneInput {
+            status: "InProgress".to_string(),
+            has_active_lease: true,
+            modified_files: 5,
+            has_commit: false,
+            has_pr: false,
+            ..done_input("TASK-3")
+        }];
+        let out = detect_claimed_done_divergence(&inputs);
+        assert!(out.is_empty(), "non-Done spec should be skipped: {out:?}");
+    }
+
+    #[test]
+    fn guard3_completed_status_also_qualifies() {
+        let inputs = vec![ClaimedDoneInput {
+            status: "Completed".to_string(),
+            has_commit: false,
+            has_pr: false,
+            ..done_input("TASK-4")
+        }];
+        let out = detect_claimed_done_divergence(&inputs);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].claimed_status, "Completed");
+    }
+
+    #[test]
+    fn guard3_counts_in_total_and_json_and_render() {
+        let mut report = CleanupReport::default();
+        report.claimed_done_diverged = detect_claimed_done_divergence(&[ClaimedDoneInput {
+            has_active_lease: true,
+            branch: Some("task-542".to_string()),
+            modified_files: 3,
+            age_hours: 6,
+            ..done_input("TASK-542")
+        }]);
+        assert_eq!(report.total(), 1);
+
+        let v = report.to_json();
+        assert_eq!(v["total"].as_u64(), Some(1));
+        assert_eq!(
+            v["categories"]["claimed_done_diverged"][0]["spec_id"].as_str(),
+            Some("TASK-542")
+        );
+        assert_eq!(
+            v["categories"]["claimed_done_diverged"][0]["kind"].as_str(),
+            Some("dirty_worktree")
+        );
+
+        let rendered = render_to_string(&report, false);
+        assert!(
+            rendered.contains("Claimed Done but substrate disagrees"),
+            "render: {rendered}"
+        );
+        assert!(rendered.contains("TASK-542"), "render: {rendered}");
+        assert!(
+            rendered.contains("3 modified files"),
+            "render shows the modified count: {rendered}"
         );
     }
 }

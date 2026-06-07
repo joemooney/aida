@@ -12,11 +12,13 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md) | Precise words for each lifecycle state — committed vs pushed vs merged vs completed vs released |
 | [`machinery-glossary.md`](machinery-glossary.md) | One-paragraph definitions of AIDA's orchestration / session / autonomy machinery — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode |
 | [`tag-conventions.md`](tag-conventions.md) | The `aida:<subcommand>` colon-namespaced tag convention, plus the flat behavior/provenance namespace and existing colon namespaces (`batch:`, `lifecycle:`, …) |
-| [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, and parallel-choice vs sequential-step UI |
+| [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, parallel-choice vs sequential-step UI, planning-pass file hygiene, and why recursive-failure-risk fixes ship at the keyboard not the drain |
+| [`backlog-grooming.md`](backlog-grooming.md) | Grooming the Approved/Planned backlog — bucketing by tag/type/priority, what to queue vs archive vs escalate, and the file-overlap conflict heuristic |
 | [`git-sync-and-review.md`](git-sync-and-review.md) | Recovering when `aida pull` refuses (divergent branches) + the `aida review prompt` workflow — read-on-demand detail kept out of the always-in-context `AIDA.md` |
 | [`session-discipline.md`](session-discipline.md) | Per-session habits — verify before filing, pause for design input, trust the reviewer, and more |
 | [`skill-prompt-kinds.md`](skill-prompt-kinds.md) | Classifying `AskUserQuestion` prompts into mechanical vs design-fork kind, and their `--zen` pause behavior |
 | [`substrate-as-bouncer.md`](substrate-as-bouncer.md) | The substrate-as-bouncer principle, detailing the pre-commit gitignored check hook and reviewer PR gates |
+| [`agent-agnostic-vs-claude-specific.md`](agent-agnostic-vs-claude-specific.md) | Which discipline is universal (enforced by substrate gates, every agent) vs Claude Code-shaped convenience (`.claude/skills`, slash commands, memory pack) — so Codex/Antigravity users can tell the load-bearing from the optional |
 | [`brief-polling.md`](brief-polling.md) | How agents should poll AIDA's brief surface — the scratchpad-drift failure mode and the `aida queue done` pending-brief banner |
 | [`robust-project-root-resolution.md`](robust-project-root-resolution.md) | Project-root resolution fallbacks, explaining how skill-rendering gracefully handles missing git repositories |
 

@@ -14,25 +14,24 @@ to catch integration failures that unit tests around `tool_descriptors()` miss:
 - MCP writes are visible to local CLI reads
 - coordination tools round-trip through `.aida/` files
 
-The suite is staged so it can land while still-open bugs are in flight:
+The suite runs the full roundtrip by default:
 
 1. `initialize`, `tools/list descriptors`, and the CLI-to-MCP read direction
-   pass today — they validate the TASK-440 outputSchema closure, basic resource
-   access, MCP error envelopes, and confirm the MCP server can read what the
-   local CLI wrote.
+   validate the TASK-440 outputSchema closure, basic resource access, MCP error
+   envelopes, and confirm the MCP server can read what the local CLI wrote.
 
-2. `--require-agent-contract` validates the field names documented for external
+2. The MCP-write -> CLI-read direction and the coordination-tool round trips run
+   by default. These were staged behind a gate while BUG-310 (MCP writes
+   reporting success without persisting to the canonical store) was in flight;
+   BUG-310 has shipped, so the full roundtrip is the default gate now (TASK-453).
+
+3. `--require-agent-contract` validates the field names documented for external
    agents in `docs/agents/cross-agent-onboarding.md`. Keep this gated while MCP
    docs and descriptors are converging.
 
-3. The remaining tests exercise the MCP-write -> CLI-read direction and the
-   coordination-tool round trips. They are gated behind
-   `--require-mcp-write-roundtrip` so the default smoke path can land before
-   every deployment environment is ready to treat MCP writes as required.
-   Enable this gate in CI once the MCP server is the supported Codex path.
-
 trace:TASK-451 | ai:codex
 trace:BUG-310 | ai:codex
+trace:TASK-453 | ai:claude
 trace:TASK-549 | ai:antigravity
 """
 
@@ -485,13 +484,30 @@ def test_spec_graph_round_trips(client: McpClient, spec: str, strict: bool) -> N
     searched = content_text(client.tool("search_requirements", {"query": "visibility probe"}))
     require(spec in searched, f"search_requirements missing {spec}:\n{searched}")
 
-    updated = client.tool("update_requirement", {"id": spec, "status": "planned"})
+    # BUG-449: use an implementer-legitimate transition (Planned is advisor-gated
+    # via MCP — asserted negatively below).
+    updated = client.tool("update_requirement", {"id": spec, "status": "in-progress"})
     require_structured_content_if_requested(updated, "update_requirement", strict)
     shown_after = content_text(client.tool("show_requirement", {"id": spec}))
     require(
-        "Planned" in shown_after or "planned" in shown_after,
+        "In Progress" in shown_after or "in-progress" in shown_after or "InProgress" in shown_after,
         f"show_requirement did not reflect status update:\n{shown_after}",
     )
+
+    # BUG-449: MCP must not self-advance a spec into an advisor-gated
+    # (Planned/Approved) or merge-driven (Completed) status — the
+    # add-then-update bypass. Use the raw request path since client.tool()
+    # raises on the isError envelope we expect here.
+    for gated_status in ("planned", "completed"):
+        resp = client.request(
+            "tools/call",
+            {"name": "update_requirement", "arguments": {"id": spec, "status": gated_status}},
+        )
+        result = resp.get("result")
+        require(
+            isinstance(result, dict) and result.get("isError") is True,
+            f"update_requirement should refuse {gated_status} via MCP (BUG-449): {resp}",
+        )
 
 
 def test_coordination_round_trips(client: McpClient, strict: bool) -> None:
@@ -598,8 +614,23 @@ def test_finding_round_trip(client: McpClient) -> None:
     findings = content_text(client.tool("list_findings", {"source": "review", "pr": 162}))
     require(spec in findings, f"list_findings missing filed finding {spec}:\n{findings}")
 
-    triaged = content_text(client.tool("triage_finding", {"id": spec, "action": "promote", "reason": "stdio suite"}))
-    require("promote" in triaged.lower(), f"unexpected triage_finding response:\n{triaged}")
+    # TASK-681: `promote` sets the finding Approved — the advisor's triage
+    # decision — so MCP must refuse it (same gate update_requirement applies
+    # under BUG-449). Use the raw request path since client.tool() raises on
+    # the isError envelope we expect here.
+    resp = client.request(
+        "tools/call",
+        {"name": "triage_finding", "arguments": {"id": spec, "action": "promote", "reason": "stdio suite"}},
+    )
+    result = resp.get("result")
+    require(
+        isinstance(result, dict) and result.get("isError") is True,
+        f"triage_finding promote should be advisor-gated via MCP (TASK-681): {resp}",
+    )
+
+    # `dismiss` (Rejected) is implementer-legitimate and stays allowed.
+    dismissed = content_text(client.tool("triage_finding", {"id": spec, "action": "dismiss", "reason": "stdio suite"}))
+    require("dismiss" in dismissed.lower(), f"unexpected triage_finding dismiss response:\n{dismissed}")
 
 
 def run_test(name: str, fn: Callable[[], Any]) -> Any:

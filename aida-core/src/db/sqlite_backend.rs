@@ -572,6 +572,9 @@ impl SqliteBackend {
                 attachments,
                 trace_links,
                 gitlab_issues,
+                // STORY-476: legacy centralized SQLite backend is deprecated
+                // and does not persist external refs. trace:STORY-476 | ai:claude
+                external_refs: Vec::new(),
                 implementation_info,
                 ai_evaluation,
                 // STORY-332: the legacy centralized SQLite backend is
@@ -586,6 +589,9 @@ impl SqliteBackend {
                 // un-pickability is a git-canonical concern.
                 // trace:STORY-333 | ai:claude
                 human_only: false,
+                // STORY-522: legacy centralized backend — not persisted.
+                // trace:STORY-522 | ai:claude
+                decision_request: None,
                 version,
             });
         }
@@ -1501,6 +1507,9 @@ impl DatabaseBackend for SqliteBackend {
                     attachments,
                     trace_links,
                     gitlab_issues,
+                    // STORY-476: legacy centralized backend — not persisted.
+                    // trace:STORY-476 | ai:claude
+                    external_refs: Vec::new(),
                     implementation_info,
                     ai_evaluation,
                     // STORY-332: legacy centralized backend — not persisted.
@@ -1511,6 +1520,8 @@ impl DatabaseBackend for SqliteBackend {
                     // STORY-333: legacy centralized backend — not persisted.
                     // trace:STORY-333 | ai:claude
                     human_only: false,
+                    // trace:STORY-522 | ai:claude
+                    decision_request: None,
                     version,
                 }))
             }
@@ -1684,6 +1695,7 @@ impl DatabaseBackend for SqliteBackend {
                     for_role: None,
                     for_scope: None,
                     for_session: None,
+                    added_by_machine: None,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;

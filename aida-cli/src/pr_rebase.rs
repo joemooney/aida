@@ -350,6 +350,217 @@ pub fn stale_base_warn_message(n: u64, behind: u32) -> String {
     )
 }
 
+// ---------------------------------------------------------------------------
+// TASK-480: intermediate / generated-only diff classifier.
+//
+// Sibling substrate-as-bouncer gate to the STORY-281 stale-base check.
+// LLMs frequently "fix" a problem by editing an intermediate build
+// product (target/, build/, dist/, node_modules/, a vendored lockfile,
+// generated code) instead of the source that produces it. Such a fix
+// is not reproducible — it's overwritten on the next build. The
+// reviewer phase is the right substrate layer to catch it because it
+// already reads the diff against the base.
+//
+// Per the BUG-280-class lesson (feedback_substrate_as_bouncer_not_rules):
+// this is a PROGRAMMATIC GATE in the reviewer code path, NOT instruction
+// text in the skill template. A rule in CLAUDE.md / a memory / a skill
+// does not stop a confident LLM; a gate does.
+// ---------------------------------------------------------------------------
+
+/// Per-path classification used by [`classify_intermediate_only`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathClass {
+    /// Tracked-in-git, non-ignored, not in a known-generated path.
+    Source,
+    /// Matches a `.gitignore` pattern or a known-generated path
+    /// (`target/`, `build/`, `dist/`, `node_modules/`, …) — an
+    /// intermediate build product, not source.
+    Intermediate,
+}
+
+/// Verdict for the reviewer's intermediate-only pre-flight, mirroring
+/// the [`StaleBaseOutcome`] shape (silent / warn / refuse).
+/// trace:TASK-480 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IntermediateOnlyOutcome {
+    /// Diff is empty, or source-majority with at most minor intermediate
+    /// noise — proceed silently.
+    Clean,
+    /// Diff contains both source and intermediate paths, intermediate is
+    /// a minority → no; actually a *majority* (more intermediate than
+    /// source) → flag-but-allow. Carries the intermediate paths for the
+    /// flag message.
+    SourcePlusIntermediate { intermediate: Vec<String> },
+    /// Diff contains ONLY intermediate paths — refuse: the fix is not
+    /// reproducible. Carries the offending paths.
+    IntermediateOnly { intermediate: Vec<String> },
+}
+
+/// Known-generated / intermediate path heuristics, independent of the
+/// project's `.gitignore`. These are the directories and file shapes
+/// that are build products across the common ecosystems even when a
+/// project forgets to ignore them. Pure + unit-tested so the heuristic
+/// set is pinned. trace:TASK-480 | ai:claude
+pub fn path_looks_generated(path: &str) -> bool {
+    // Normalise leading "./" and Windows separators so the segment
+    // matching below is uniform.
+    let norm = path.replace('\\', "/");
+    let norm = norm.strip_prefix("./").unwrap_or(&norm);
+    let segments: Vec<&str> = norm.split('/').filter(|s| !s.is_empty()).collect();
+
+    // Directory-anchored build outputs: a path is generated if any of
+    // these names appears as a path segment (e.g. `target/`, but also a
+    // nested `crate/target/debug/foo`).
+    const GENERATED_DIRS: &[&str] = &[
+        "target",       // Rust / sbt
+        "build",        // Gradle / CMake / many
+        "dist",         // JS bundlers, Python sdists
+        "node_modules", // npm/yarn/pnpm
+        ".next",        // Next.js
+        ".nuxt",        // Nuxt
+        "out",          // Next.js export / tsc out
+        ".gradle",      // Gradle cache
+        "__pycache__",  // CPython bytecode cache
+        ".pytest_cache",
+        ".mypy_cache",
+        "coverage",
+        ".venv",
+        "venv",
+        "vendor", // Go / PHP vendored deps
+        ".aida-store",
+    ];
+    if segments.iter().any(|s| GENERATED_DIRS.contains(s)) {
+        return true;
+    }
+
+    // File-shape build products by suffix / basename.
+    let base = segments.last().copied().unwrap_or("");
+    const GENERATED_SUFFIXES: &[&str] = &[
+        ".pyc", ".pyo", ".class", ".o", ".obj", ".a", ".rlib", ".rmeta", ".bin", ".exe", ".dll",
+        ".so", ".dylib", ".min.js", ".min.css", ".map", // sourcemaps
+    ];
+    if GENERATED_SUFFIXES.iter().any(|sfx| base.ends_with(sfx)) {
+        return true;
+    }
+
+    // Lockfiles are *coincidental* regeneration, not source — they
+    // count as intermediate so a lockfile-only diff is refused, but a
+    // lockfile alongside a real source change is flagged-but-allowed
+    // (the SourcePlusIntermediate path).
+    const LOCKFILES: &[&str] = &[
+        "Cargo.lock",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "poetry.lock",
+        "Pipfile.lock",
+        "composer.lock",
+        "Gemfile.lock",
+    ];
+    if LOCKFILES.contains(&base) {
+        return true;
+    }
+
+    false
+}
+
+/// Classify one path. `is_gitignored` is the project's own answer
+/// (`git check-ignore`) for that path; we OR it with the
+/// ecosystem-wide [`path_looks_generated`] heuristic so a project that
+/// forgot to ignore `target/` is still caught. trace:TASK-480 | ai:claude
+pub fn classify_path(path: &str, is_gitignored: bool) -> PathClass {
+    if is_gitignored || path_looks_generated(path) {
+        PathClass::Intermediate
+    } else {
+        PathClass::Source
+    }
+}
+
+/// Pure classifier: given the PR's changed paths and a predicate that
+/// answers "is this path gitignored in the repo?", decide whether the
+/// reviewer should proceed silently, flag, or refuse.
+///
+/// Rules (matching the TASK-480 acceptance):
+/// * ONLY intermediate paths → [`IntermediateOnlyOutcome::IntermediateOnly`]
+///   (refuse — the fix is not reproducible).
+/// * BOTH source + intermediate where intermediate is the *majority*
+///   (more intermediate than source) → flag-but-allow.
+/// * SOURCE-majority (intermediate ≤ half), source-only, or empty → clean.
+///
+/// Refusal is reserved for the unambiguous "no source at all" case so we
+/// never block a real fix on a heuristic; a mixed diff is at most
+/// flagged. trace:TASK-480 | ai:claude
+pub fn classify_intermediate_only(
+    files: &[String],
+    is_gitignored: impl Fn(&str) -> bool,
+) -> IntermediateOnlyOutcome {
+    let mut source: Vec<String> = Vec::new();
+    let mut intermediate: Vec<String> = Vec::new();
+    for f in files {
+        match classify_path(f, is_gitignored(f)) {
+            PathClass::Source => source.push(f.clone()),
+            PathClass::Intermediate => intermediate.push(f.clone()),
+        }
+    }
+
+    if intermediate.is_empty() {
+        // Source-only (or empty diff) — nothing to flag.
+        return IntermediateOnlyOutcome::Clean;
+    }
+    if source.is_empty() {
+        return IntermediateOnlyOutcome::IntermediateOnly { intermediate };
+    }
+    // Mixed. Intermediate a minority (≤ half) → clean (minor noise).
+    // Otherwise (intermediate is the majority) flag-but-allow.
+    let total = source.len() + intermediate.len();
+    if intermediate.len() * 2 <= total {
+        IntermediateOnlyOutcome::Clean
+    } else {
+        IntermediateOnlyOutcome::SourcePlusIntermediate { intermediate }
+    }
+}
+
+/// Refusal message for [`IntermediateOnlyOutcome::IntermediateOnly`].
+/// Pinned by unit tests — first-users (and the headless orchestrator's
+/// logs) see this string and the verdict text is contract-visible.
+/// trace:TASK-480 | ai:claude
+pub fn intermediate_only_block_message(n: u64, intermediate: &[String]) -> String {
+    let mut msg = format!(
+        "PR-{n} changes only intermediate/generated files — refusing to review: \
+         this fix is not reproducible (these paths are overwritten on the next \
+         build). Modify the source code or build scripts that produce them.\n\n"
+    );
+    msg.push_str("Intermediate/generated paths:\n");
+    for f in intermediate.iter().take(10) {
+        msg.push_str(&format!("  {f}\n"));
+    }
+    if intermediate.len() > 10 {
+        msg.push_str(&format!("  … and {} more\n", intermediate.len() - 10));
+    }
+    msg.push_str(
+        "\nIf this PR is a deliberate regeneration of checked-in build output, \
+         pass `--allow-intermediate-only` to proceed.",
+    );
+    msg
+}
+
+/// Flag message for [`IntermediateOnlyOutcome::SourcePlusIntermediate`].
+/// Same pinning rationale. trace:TASK-480 | ai:claude
+pub fn intermediate_only_warn_message(n: u64, intermediate: &[String]) -> String {
+    let count = intermediate.len();
+    let plural = if count == 1 { "" } else { "s" };
+    let shown: Vec<&str> = intermediate.iter().take(5).map(|s| s.as_str()).collect();
+    let mut list = shown.join(", ");
+    if count > 5 {
+        list.push_str(&format!(", … (+{})", count - 5));
+    }
+    format!(
+        "PR-{n} touches {count} intermediate/generated path{plural} alongside source \
+         ({list}) — proceeding with reviewer; confirm the generated files are an \
+         intended side effect of the source change, not the fix itself."
+    )
+}
+
 /// Parse the stdout from `git merge-tree --write-tree --name-only
 /// <base> <head>`. On a clean merge, stdout is the resulting tree's
 /// SHA on a single line. On a conflict, merge-tree exits non-zero
@@ -897,5 +1108,171 @@ enforcement = "warn"
             "expected no conflicting files on clean merge, got {:?}",
             files
         );
+    }
+
+    // --- TASK-480: intermediate / generated-only diff classifier ---
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Default gitignore predicate for tests: nothing the project
+    /// explicitly ignores — so the classifier relies on the
+    /// ecosystem-wide `path_looks_generated` heuristic alone.
+    fn no_ignores(_: &str) -> bool {
+        false
+    }
+
+    #[test]
+    fn path_looks_generated_catches_build_dirs() {
+        assert!(path_looks_generated("target/debug/foo.bin"));
+        assert!(path_looks_generated("target/release/aida"));
+        assert!(path_looks_generated("./target/debug/foo"));
+        assert!(path_looks_generated("crate/target/debug/x"));
+        assert!(path_looks_generated("build/output.o"));
+        assert!(path_looks_generated("dist/bundle.js"));
+        assert!(path_looks_generated("node_modules/left-pad/index.js"));
+        assert!(path_looks_generated("app/__pycache__/mod.cpython-311.pyc"));
+        assert!(path_looks_generated("frontend\\dist\\app.js")); // windows sep
+    }
+
+    #[test]
+    fn path_looks_generated_catches_build_suffixes_and_lockfiles() {
+        assert!(path_looks_generated("a/b/thing.pyc"));
+        assert!(path_looks_generated("x.class"));
+        assert!(path_looks_generated("lib/foo.so"));
+        assert!(path_looks_generated("bundle.min.js"));
+        assert!(path_looks_generated("Cargo.lock"));
+        assert!(path_looks_generated("frontend/package-lock.json"));
+    }
+
+    #[test]
+    fn path_looks_generated_passes_real_source() {
+        assert!(!path_looks_generated("src/main.rs"));
+        assert!(!path_looks_generated("aida-cli/src/pr_rebase.rs"));
+        assert!(!path_looks_generated("Cargo.toml"));
+        assert!(!path_looks_generated("README.md"));
+        assert!(!path_looks_generated("build.rs")); // a build *script* is source
+                                                    // NOTE: a `build/` directory segment IS treated as generated
+                                                    // (e.g. `docs/build/notes.md` would be flagged). That's an
+                                                    // accepted false-positive risk — the classifier only *refuses*
+                                                    // when the WHOLE diff is intermediate, and `git check-ignore`
+                                                    // overrides via the gitignore predicate when the project tracks
+                                                    // such a path. We don't try to disambiguate here.
+    }
+
+    #[test]
+    fn classify_path_honors_gitignore_predicate() {
+        // A path the heuristic would call source, but the project
+        // gitignores → intermediate.
+        assert_eq!(
+            classify_path("generated/api.rs", true),
+            PathClass::Intermediate
+        );
+        assert_eq!(classify_path("src/main.rs", false), PathClass::Source);
+    }
+
+    #[test]
+    fn intermediate_only_diff_is_refused() {
+        let files = v(&["target/debug/foo.bin", "target/release/aida"]);
+        let out = classify_intermediate_only(&files, no_ignores);
+        match out {
+            IntermediateOnlyOutcome::IntermediateOnly { intermediate } => {
+                assert_eq!(intermediate.len(), 2);
+            }
+            other => panic!("expected IntermediateOnly, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn gitignored_only_diff_is_refused_even_without_known_path() {
+        // Project-specific generated dir not in the heuristic list, but
+        // gitignored → still refused.
+        let files = v(&["gen/proto/api.pb.rs"]);
+        let out = classify_intermediate_only(&files, |p| p.starts_with("gen/"));
+        assert!(matches!(
+            out,
+            IntermediateOnlyOutcome::IntermediateOnly { .. }
+        ));
+    }
+
+    #[test]
+    fn source_only_diff_is_clean() {
+        let files = v(&["src/main.rs", "src/lib.rs"]);
+        assert_eq!(
+            classify_intermediate_only(&files, no_ignores),
+            IntermediateOnlyOutcome::Clean
+        );
+    }
+
+    #[test]
+    fn empty_diff_is_clean() {
+        assert_eq!(
+            classify_intermediate_only(&[], no_ignores),
+            IntermediateOnlyOutcome::Clean
+        );
+    }
+
+    #[test]
+    fn source_with_minor_lockfile_noise_is_clean() {
+        // Dependency-add: real source change + regenerated lockfile.
+        // Intermediate (1) is a minority of the 3 → clean.
+        let files = v(&["Cargo.toml", "src/deps.rs", "Cargo.lock"]);
+        assert_eq!(
+            classify_intermediate_only(&files, no_ignores),
+            IntermediateOnlyOutcome::Clean
+        );
+    }
+
+    #[test]
+    fn source_majority_with_one_artifact_is_clean() {
+        // 2 source : 1 binary artifact → intermediate ≤ half → clean.
+        let files = v(&["src/a.rs", "src/b.rs", "target/debug/a.bin"]);
+        assert_eq!(
+            classify_intermediate_only(&files, no_ignores),
+            IntermediateOnlyOutcome::Clean
+        );
+    }
+
+    #[test]
+    fn intermediate_majority_with_one_source_is_flagged() {
+        // 1 source : 3 intermediate → intermediate is the majority →
+        // allow but flag.
+        let files = v(&[
+            "src/foo.rs",
+            "target/debug/a.bin",
+            "target/debug/b.bin",
+            "target/release/c",
+        ]);
+        match classify_intermediate_only(&files, no_ignores) {
+            IntermediateOnlyOutcome::SourcePlusIntermediate { intermediate } => {
+                assert_eq!(intermediate.len(), 3);
+            }
+            other => panic!("expected SourcePlusIntermediate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn block_message_names_paths_and_recovery_flag() {
+        let msg = intermediate_only_block_message(42, &v(&["target/debug/foo.bin"]));
+        assert!(msg.contains("PR-42"), "{msg}");
+        assert!(msg.contains("not reproducible"), "{msg}");
+        assert!(msg.contains("target/debug/foo.bin"), "{msg}");
+        assert!(msg.contains("--allow-intermediate-only"), "{msg}");
+    }
+
+    #[test]
+    fn block_message_truncates_long_lists() {
+        let many: Vec<String> = (0..15).map(|i| format!("target/debug/f{i}.bin")).collect();
+        let msg = intermediate_only_block_message(1, &many);
+        assert!(msg.contains("… and 5 more"), "{msg}");
+    }
+
+    #[test]
+    fn warn_message_names_count_and_pr() {
+        let msg = intermediate_only_warn_message(7, &v(&["Cargo.lock", "target/debug/a.bin"]));
+        assert!(msg.contains("PR-7"), "{msg}");
+        assert!(msg.contains("2 intermediate"), "{msg}");
+        assert!(msg.contains("Cargo.lock"), "{msg}");
     }
 }

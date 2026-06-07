@@ -28,22 +28,35 @@
 //! MCP-speaking agent (Codex, Cursor, …) can use to participate in the
 //! same drains. See `docs/architecture/mcp-coordination-surface.md`.
 //!
-//! # Output schemas (TASK-440 — Path A: descriptor-only)
+//! # Output schemas (TASK-440 Path A + STORY-399 Path B)
 //!
 //! Every tool descriptor in `tool_descriptors()` carries an `outputSchema`
-//! that documents the **MCP text-envelope** shape its responses take today
-//! plus a per-tool `description` summarizing what the text payload conveys.
+//! that documents the **MCP text-envelope** shape its responses take plus a
+//! per-tool `description` summarizing what the text payload conveys.
 //! Schema-driven clients (Codex, Cursor, …) get useful discoverability
 //! instead of opaque-shape responses.
 //!
-//! **Runtime behavior is unchanged.** Every tool still returns the
-//! `{ content: [{ type: "text", text: "..." }] }` envelope it returned
-//! before. This is the **Path A** scope: declare the schema, do not yet
-//! emit `structuredContent` matching it. Reshaping tool responses to emit
-//! structured payloads alongside (or instead of) the text envelope is
-//! tracked separately as **STORY-399** — the Path B follow-up. That story
-//! owns the backward-compatibility call for clients that consume today's
-//! text envelopes.
+//! **Path A (TASK-440)** declared those schemas. **Path B (STORY-399)** makes
+//! successful responses *also* emit a `structuredContent` object matching the
+//! declared schema, so schema-driven clients get a machine-readable result
+//! without parsing the human text. The decision is **additive** (acceptance
+//! option (a)): the `{ content: [{ type: "text", text: "..." }] }` text
+//! envelope is preserved byte-for-byte for legacy text consumers (Claude
+//! Code), and `structuredContent` is layered alongside it. Error responses
+//! keep the STORY-401 `{ isError: true, structuredError: { … } }` shape and do
+//! not carry `structuredContent`. See `handle_tools_call` and
+//! `text_envelope_output_schema`.
+//!
+//! # Tool profiles (STORY-474)
+//!
+//! The full surface is gated behind a named **profile** — a capability tier
+//! (`read-only` < `coordination` < `operator` < `admin`/`full`). `read-only`
+//! excludes every write tool and is the recommended safe default for untrusted /
+//! marketplace clients; the built-in default stays `full` for backwards
+//! compatibility. Resolve order: `AIDA_MCP_PROFILE` env → `[mcp] profile` in
+//! `.aida/config.toml` → `full`. The profile is enforced at BOTH `tools/list`
+//! (advertise) and `tools/call` (reject above-tier calls). See `McpProfile`,
+//! `tool_min_profile`, and `resolve_mcp_profile`.
 
 use std::cmp::Ordering;
 use std::ffi::OsString;
@@ -277,6 +290,169 @@ struct JsonRpcError {
     data: Option<Value>,
 }
 
+// ============================================================================
+// Stable MCP error shapes (STORY-401)
+// ============================================================================
+//
+// MCP clients (Codex, Cursor, future agents) need predictable, machine-readable
+// errors instead of free-form text. Every tool error path now renders into:
+//
+//   {
+//     "content": [{ "type": "text", "text": "<tool>: <code>: <message>" }],
+//     "isError": true,
+//     "structuredError": { "code", "message", "tool", "recoverable" }
+//   }
+//
+// `code` is a stable enum (`invalid_arg`, `not_found`, `conflict`, `io_error`,
+// `permission_denied`, `internal`) so clients can branch on it. The text
+// envelope stays additive and back-compatible — it's still `isError: true` with
+// a human-readable string that contains the underlying message.
+//
+// Tool functions keep returning `Result<String, String>`; the dispatch boundary
+// (`handle_tools_call`) classifies the error string into an `McpError` using the
+// `McpError::classify` heuristics. Centralizing here means a single, audited
+// mapping rather than 30 hand-edited error sites. trace:STORY-401 | ai:claude
+
+/// Stable, machine-readable error code shared across all MCP tools.
+///
+/// The string form is what lands in the `structuredError.code` field and in the
+/// `<tool>: <code>: <message>` text envelope, so these values are a contract —
+/// add new variants, never rename existing ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum McpErrorCode {
+    /// The caller passed a missing/blank/malformed argument. Recoverable: fix
+    /// the input and retry.
+    InvalidArg,
+    /// A referenced entity (spec, finding, lease, brief, tool, resource) does
+    /// not exist. Recoverable: the caller may retry with a valid identifier.
+    NotFound,
+    /// The request conflicts with current state (already exists, gated
+    /// transition, duplicate claim). Not recoverable by retrying the same input.
+    Conflict,
+    /// Permission/authority denied (e.g. MCP may not self-advance an
+    /// advisor-gated status). Not recoverable by retrying the same input.
+    PermissionDenied,
+    /// Filesystem / IO failure while reading or writing the substrate.
+    /// Not recoverable by the caller without operator intervention.
+    IoError,
+    /// Anything we could not classify — treated as a server-side fault.
+    Internal,
+}
+
+impl McpErrorCode {
+    /// Stable string identifier emitted in the envelope.
+    fn as_str(self) -> &'static str {
+        match self {
+            McpErrorCode::InvalidArg => "invalid_arg",
+            McpErrorCode::NotFound => "not_found",
+            McpErrorCode::Conflict => "conflict",
+            McpErrorCode::PermissionDenied => "permission_denied",
+            McpErrorCode::IoError => "io_error",
+            McpErrorCode::Internal => "internal",
+        }
+    }
+
+    /// Whether a client can plausibly retry after correcting its input.
+    /// `invalid_arg` / `not_found` are caller-fixable; the rest are structural.
+    fn recoverable(self) -> bool {
+        matches!(self, McpErrorCode::InvalidArg | McpErrorCode::NotFound)
+    }
+}
+
+/// A structured MCP tool error: a stable `code`, a one-line `message`, the
+/// originating `tool`, and a `recoverable` hint. trace:STORY-401 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct McpError {
+    code: McpErrorCode,
+    message: String,
+    tool: String,
+}
+
+impl McpError {
+    fn new(tool: &str, code: McpErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            tool: tool.to_string(),
+        }
+    }
+
+    /// Classify a free-form error string (as produced by the tool functions)
+    /// into a stable `McpError`. The heuristics key off the well-known phrases
+    /// the tool functions use (`Missing required parameter`, `not found`,
+    /// `already exists`, gate-refusal text, …). Unknown shapes fall back to
+    /// `internal` so the envelope is always well-formed.
+    fn classify(tool: &str, raw: &str) -> Self {
+        let lower = raw.to_lowercase();
+        let code = if lower.contains("missing required parameter")
+            || lower.contains("cannot be empty")
+            || lower.contains("must be a string")
+            || lower.contains("must not contain")
+            || lower.starts_with("invalid ")
+            || lower.contains("invalid punt category")
+            || lower.contains("invalid brief path")
+            || lower.starts_with("unknown source")
+            || lower.starts_with("unknown action")
+        {
+            McpErrorCode::InvalidArg
+        } else if lower.contains("unknown tool")
+            || lower.contains("unknown resource")
+            || lower.contains("not found")
+        {
+            McpErrorCode::NotFound
+        } else if lower.contains("already exists")
+            || lower.contains("already acked")
+            || lower.contains("already claimed")
+            || lower.contains("conflict")
+        {
+            McpErrorCode::Conflict
+        } else if lower.contains("not advisor authority")
+            || lower.contains("advisor-gated")
+            || lower.contains("must not self-advance")
+            || lower.contains("refus")
+            || lower.contains("permission denied")
+            || lower.contains("not permitted")
+            || lower.contains("forbidden")
+        {
+            McpErrorCode::PermissionDenied
+        } else if lower.contains("io error")
+            || lower.contains("no such file")
+            || lower.contains("permission")
+            || lower.contains("os error")
+        {
+            McpErrorCode::IoError
+        } else {
+            McpErrorCode::Internal
+        };
+        Self::new(tool, code, raw.to_string())
+    }
+
+    /// Short, machine-friendly one-line text: `<tool>: <code>: <message>`.
+    /// This is what lands on the `content` text array (back-compatible: still a
+    /// string that contains the underlying message).
+    fn envelope_text(&self) -> String {
+        format!("{}: {}: {}", self.tool, self.code.as_str(), self.message)
+    }
+
+    /// The full MCP tools/call result value with `isError: true`, the text
+    /// content array, and the additive `structuredError` payload.
+    fn to_result_value(&self) -> Value {
+        json!({
+            "content": [{
+                "type": "text",
+                "text": self.envelope_text()
+            }],
+            "isError": true,
+            "structuredError": {
+                "code": self.code.as_str(),
+                "message": self.message,
+                "tool": self.tool,
+                "recoverable": self.code.recoverable()
+            }
+        })
+    }
+}
+
 impl JsonRpcResponse {
     fn success(id: Value, result: Value) -> Self {
         Self {
@@ -403,6 +579,9 @@ struct McpServer<'a> {
     storage: &'a Storage,
     /// Project root for resolving `.aida/` coordination files. STORY-361.
     project_root: PathBuf,
+    /// Active tool profile governing which tools are advertised + callable.
+    /// trace:STORY-474 | ai:claude
+    profile: McpProfile,
 }
 
 /// Helper to get the display spec_id from a Requirement
@@ -410,11 +589,82 @@ fn spec_id(r: &Requirement) -> &str {
     r.spec_id.as_deref().unwrap_or("?")
 }
 
+/// STORY-82: render a `## Git linkage` Markdown section for a spec, reusing
+/// the same collection `aida show` walks (referencing commits, feature
+/// branch / worktree, shipped state, PR). `verbose` expands the per-commit
+/// and trace-file lists, matching `aida show --verbose`. Returns an empty
+/// string when there is no git context, so callers can append unconditionally.
+// trace:STORY-82 | ai:claude
+fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> String {
+    let ids = vec![spec_id.to_string()];
+    let linkage = crate::collect_git_linkage(project_root, &ids);
+
+    if linkage.commits.is_empty() && linkage.files.is_empty() {
+        return "\n## Git linkage\n\nNo commits or trace comments reference this spec yet.\n"
+            .to_string();
+    }
+
+    let mut out = String::from("\n## Git linkage\n\n");
+
+    let state = if linkage.shipped {
+        match linkage.shipped_pr {
+            Some(pr) => format!("shipped (merged via PR #{})", pr),
+            None => "shipped (merged to the default branch)".to_string(),
+        }
+    } else if let Some(branch) = &linkage.branch {
+        format!("in flight on branch `{}`", branch)
+    } else {
+        "referenced (not yet on the default branch)".to_string()
+    };
+    out.push_str(&format!("- **State:** {}\n", state));
+
+    if let Some(worktree) = &linkage.worktree {
+        out.push_str(&format!("- **Worktree:** {}\n", worktree));
+    }
+
+    out.push_str(&format!("- **Commits:** {}\n", linkage.commits.len()));
+    if verbose {
+        for (_, short, subject) in &linkage.commits {
+            out.push_str(&format!("  - {} {}\n", short, subject));
+        }
+    } else if let Some((_, short, subject)) = linkage.commits.first() {
+        out.push_str(&format!("  - latest: {} {}\n", short, subject));
+    }
+
+    out.push_str(&format!("- **Traced files:** {}\n", linkage.files.len()));
+    if verbose {
+        for (file, symbol) in &linkage.files {
+            match symbol {
+                Some(sym) => out.push_str(&format!("  - {} ({})\n", file, sym)),
+                None => out.push_str(&format!("  - {}\n", file)),
+            }
+        }
+    }
+
+    out
+}
+
 impl<'a> McpServer<'a> {
     fn new(storage: &'a Storage, project_root: PathBuf) -> Self {
+        // trace:STORY-474 | ai:claude — resolve the active profile from env /
+        // config at construction (no CLI override here; the override path is
+        // exercised via `with_profile`).
+        let profile = resolve_mcp_profile(&project_root, None);
         Self {
             storage,
             project_root,
+            profile,
+        }
+    }
+
+    /// Construct with an explicit profile, bypassing env/config resolution.
+    /// Used by tests and any future CLI `--profile` override. trace:STORY-474
+    #[cfg(test)]
+    fn with_profile(storage: &'a Storage, project_root: PathBuf, profile: McpProfile) -> Self {
+        Self {
+            storage,
+            project_root,
+            profile,
         }
     }
 
@@ -467,12 +717,38 @@ impl<'a> McpServer<'a> {
     }
 
     fn handle_tools_list(&self, id: &Value) -> JsonRpcResponse {
-        JsonRpcResponse::success(id.clone(), json!({ "tools": tool_descriptors() }))
+        // trace:STORY-474 | ai:claude — advertise only the tools the active
+        // profile exposes, each tagged with the tier that admits it.
+        JsonRpcResponse::success(
+            id.clone(),
+            json!({ "tools": tool_descriptors_for_profile(self.profile) }),
+        )
     }
 
     fn handle_tools_call(&self, id: &Value, params: &Value) -> JsonRpcResponse {
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+
+        // trace:STORY-474 | ai:claude — the profile is a real boundary, not just
+        // a discovery filter: reject a tool that exists but is above the active
+        // tier, even if a client calls it by name. Unknown tools fall through to
+        // the dispatch's own "Unknown tool" error below.
+        if tool_name != "" && is_known_tool(tool_name) && !tool_in_profile(tool_name, self.profile)
+        {
+            return JsonRpcResponse::success(
+                id.clone(),
+                McpError::classify(
+                    tool_name,
+                    &format!(
+                        "tool '{}' not permitted: requires the '{}' profile but the server is running the '{}' profile (set AIDA_MCP_PROFILE or [mcp] profile to widen the surface)",
+                        tool_name,
+                        tool_min_profile(tool_name).as_str(),
+                        self.profile.as_str()
+                    ),
+                )
+                .to_result_value(),
+            );
+        }
 
         let result = match tool_name {
             // Spec-graph tools
@@ -521,24 +797,34 @@ impl<'a> McpServer<'a> {
         };
 
         match result {
-            Ok(content) => JsonRpcResponse::success(
-                id.clone(),
-                json!({
-                    "content": [{
-                        "type": "text",
-                        "text": content
-                    }]
-                }),
-            ),
+            // STORY-399 (Path B): emit `structuredContent` matching the declared
+            // `outputSchema` alongside the text envelope. Additive — the text
+            // `content` array is preserved verbatim so legacy text consumers
+            // (Claude Code) keep working; schema-driven clients (Codex, Cursor)
+            // read the same logical payload out of `structuredContent` without
+            // parsing the human string. trace:STORY-399 | ai:claude
+            Ok(content) => {
+                let content_array = json!([{
+                    "type": "text",
+                    "text": content
+                }]);
+                JsonRpcResponse::success(
+                    id.clone(),
+                    json!({
+                        "content": content_array,
+                        "structuredContent": {
+                            "content": content_array
+                        }
+                    }),
+                )
+            }
+            // STORY-401: render the free-form tool error into a stable,
+            // machine-readable envelope — `isError: true`, a short
+            // `<tool>: <code>: <message>` text, and a `structuredError`
+            // payload clients can branch on. trace:STORY-401 | ai:claude
             Err(e) => JsonRpcResponse::success(
                 id.clone(),
-                json!({
-                    "content": [{
-                        "type": "text",
-                        "text": format!("Error: {}", e)
-                    }],
-                    "isError": true
-                }),
+                McpError::classify(tool_name, &e).to_result_value(),
             ),
         }
     }
@@ -593,6 +879,7 @@ impl<'a> McpServer<'a> {
     // Spec-graph tool implementations
     // ========================================================================
 
+    // trace:STORY-82 | ai:claude
     fn tool_list_requirements(&self, args: &Value) -> Result<String, String> {
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let status_filter = args.get("status").and_then(|v| v.as_str());
@@ -600,6 +887,75 @@ impl<'a> McpServer<'a> {
         let priority_filter = args.get("priority").and_then(|v| v.as_str());
         let feature_filter = args.get("feature").and_then(|v| v.as_str());
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+
+        // STORY-82: tags filter — CSV, AND-match (a row must carry ALL of them),
+        // mirroring the `aida list --tags` semantic.
+        let tag_filters: Vec<String> = args
+            .get("tags")
+            .and_then(|v| v.as_str())
+            .map(|s| {
+                s.split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // STORY-82: batch filter — shorthand for the `batch:<NAME>` tag,
+        // matching `aida list --batch`.
+        let batch_tag = args
+            .get("batch")
+            .and_then(|v| v.as_str())
+            .map(|b| format!("batch:{}", b.trim()))
+            .filter(|b| b != "batch:");
+
+        // STORY-82: role/for filter — requirements don't carry a role field
+        // (that's a queue-routing concept), so we match a `role:<value>` tag
+        // on the spec. `for` is an accepted alias for `role`.
+        let role_tag = args
+            .get("role")
+            .or_else(|| args.get("for"))
+            .and_then(|v| v.as_str())
+            .map(|r| format!("role:{}", r.trim().to_ascii_lowercase()))
+            .filter(|r| r != "role:");
+
+        // STORY-82: parent filter — direct children of <parent>, found via the
+        // parent's outgoing `Parent` relationship edges (mirrors
+        // `aida list --parent`).
+        let parent_child_ids: Option<std::collections::HashSet<uuid::Uuid>> =
+            match args.get("parent").and_then(|v| v.as_str()) {
+                Some(parent_ref) => {
+                    let parent = store
+                        .get_requirement_by_spec_id(parent_ref)
+                        .ok_or_else(|| format!("parent '{}': requirement not found", parent_ref))?;
+                    Some(
+                        parent
+                            .relationships
+                            .iter()
+                            .filter(|rel| rel.rel_type == RelationshipType::Parent)
+                            .map(|rel| rel.target_id)
+                            .collect(),
+                    )
+                }
+                None => None,
+            };
+
+        // STORY-82: in_flight filter — restrict to specs with a live session
+        // or MCP-claim lease. Lease scopes are matched case-insensitively
+        // against the spec id (the lease `scope` records the owned spec/epic).
+        let in_flight_only = args
+            .get("in_flight")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let in_flight_scopes: std::collections::HashSet<String> = if in_flight_only {
+            list_leases(&self.project_root)
+                .into_iter()
+                .map(|l| l.scope.to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
 
         let filtered: Vec<&Requirement> = store
             .requirements
@@ -622,6 +978,34 @@ impl<'a> McpServer<'a> {
                 }
                 if let Some(feature) = feature_filter {
                     if !r.feature.eq_ignore_ascii_case(feature) {
+                        return false;
+                    }
+                }
+                // AND-match every requested tag (case-sensitive, matching the CLI).
+                for want in &tag_filters {
+                    if !r.tags.contains(want) {
+                        return false;
+                    }
+                }
+                if let Some(b) = &batch_tag {
+                    if !r.tags.contains(b) {
+                        return false;
+                    }
+                }
+                if let Some(role) = &role_tag {
+                    let has_role = r.tags.iter().any(|t| t.eq_ignore_ascii_case(role));
+                    if !has_role {
+                        return false;
+                    }
+                }
+                if let Some(child_ids) = &parent_child_ids {
+                    if !child_ids.contains(&r.id) {
+                        return false;
+                    }
+                }
+                if in_flight_only {
+                    let sid = spec_id(r).to_ascii_lowercase();
+                    if sid == "?" || !in_flight_scopes.contains(&sid) {
                         return false;
                     }
                 }
@@ -648,16 +1032,29 @@ impl<'a> McpServer<'a> {
         Ok(output)
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_show_requirement(&self, args: &Value) -> Result<String, String> {
         let id = args
             .get("id")
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: id")?;
+        // STORY-82: git linkage on by default, matching `aida show` (the
+        // CLI default; `aida show --no-git` suppresses it). `verbose`
+        // expands the section like `aida show --verbose`.
+        let include_git = args
+            .get("include_git")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let verbose = args
+            .get("verbose")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let req = store
             .get_requirement_by_spec_id(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
+        let canonical_id = spec_id(req).to_string();
 
         let mut output = format!(
             "# {} — {}\n\n\
@@ -713,9 +1110,21 @@ impl<'a> McpServer<'a> {
             }
         }
 
+        // STORY-82: git linkage — reuse the same collection `aida show`
+        // renders so MCP clients see commits / branch / PR / shipped state.
+        // Off when include_git=false (the `aida show --no-git` view).
+        if include_git {
+            output.push_str(&render_git_linkage_md(
+                &self.project_root,
+                &canonical_id,
+                verbose,
+            ));
+        }
+
         Ok(output)
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_add_requirement(&self, args: &Value) -> Result<String, String> {
         let title = args
             .get("title")
@@ -738,18 +1147,38 @@ impl<'a> McpServer<'a> {
                 type_arg, VALID_MCP_REQUIREMENT_TYPES
             )
         })?;
-        let status = args
+        let requested_status = args
             .get("status")
             .and_then(|v| v.as_str())
             .and_then(parse_status)
             .unwrap_or(RequirementStatus::Draft);
-        if status == RequirementStatus::NeedsAttention {
+        if requested_status == RequirementStatus::NeedsAttention {
             return Err(
                 "cannot create a requirement with status `needs-attention` — \
                  it is reached only by punting In-Progress work"
                     .to_string(),
             );
         }
+        // TASK-647 (ADR-3): the MCP server is an intake surface used by agents
+        // (always non-interactive, and it may inherit an advisor role from the
+        // launching shell — so it cannot be trusted as advisor authority).
+        // Producing an approved+ spec is the advisor's triage decision, so MCP
+        // intake always lands `draft` regardless of the requested status; the
+        // result tells the agent it is queued for advisor triage.
+        // trace:TASK-647 | ai:claude
+        let intake_downgraded = matches!(
+            requested_status,
+            RequirementStatus::Approved
+                | RequirementStatus::Planned
+                | RequirementStatus::InProgress
+                | RequirementStatus::Done
+                | RequirementStatus::Completed
+        );
+        let status = if intake_downgraded {
+            RequirementStatus::Draft
+        } else {
+            requested_status
+        };
         let priority = args
             .get("priority")
             .and_then(|v| v.as_str())
@@ -757,10 +1186,46 @@ impl<'a> McpServer<'a> {
             .unwrap_or(RequirementPriority::Medium);
 
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // STORY-82: resolve an optional parent BEFORE allocating the new id,
+        // so a bad/terminal parent fails without leaving an orphan spec.
+        // Mirrors `aida add --parent`'s pre-resolution + terminal guard.
+        let parent_link: Option<(uuid::Uuid, String)> = match args
+            .get("parent")
+            .and_then(|v| v.as_str())
+        {
+            Some(parent_ref) => {
+                let parent = store.get_requirement_by_spec_id(parent_ref).ok_or_else(|| {
+                        format!(
+                            "parent '{}' not found — refusing to create a child without a valid parent",
+                            parent_ref
+                        )
+                    })?;
+                if crate::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                            "parent {} is {} — adding new children to a closed parent is usually a mistake.",
+                            parent.spec_id.as_deref().unwrap_or("?"),
+                            parent.status,
+                        ));
+                }
+                Some((parent.id, parent.spec_id.clone().unwrap_or_default()))
+            }
+            None => None,
+        };
+
         let mut req = Requirement::new(title.to_string(), description.to_string());
         req.req_type = req_type;
         req.status = status;
         req.priority = priority;
+
+        // STORY-82: optional feature category + owner (mirrors `aida add
+        // --feature` / `--owner`).
+        if let Some(feature) = args.get("feature").and_then(|v| v.as_str()) {
+            req.feature = feature.to_string();
+        }
+        if let Some(owner) = args.get("owner").and_then(|v| v.as_str()) {
+            req.owner = owner.to_string();
+        }
 
         // Optional tags
         if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
@@ -779,32 +1244,160 @@ impl<'a> McpServer<'a> {
         })?;
         store.add_requirement_with_id(req, None, Some(type_prefix.as_str()));
 
-        let new_spec_id = store
+        let (new_spec_id, new_id) = store
             .requirements
             .last()
-            .and_then(|r| r.spec_id.clone())
-            .unwrap_or_else(|| "?".to_string());
+            .map(|r| (r.spec_id.clone().unwrap_or_else(|| "?".to_string()), r.id))
+            .unwrap_or_else(|| ("?".to_string(), uuid::Uuid::nil()));
+
+        // STORY-82: link the parent (Parent→child on parent, Child→parent on
+        // the new req via the bidirectional inverse) once the id exists.
+        if let Some((parent_id, _parent_spec)) = &parent_link {
+            store
+                .add_relationship(parent_id, RelationshipType::Parent, &new_id, true)
+                .map_err(|e| e.to_string())?;
+        }
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
 
-        Ok(format!("Requirement added: {} — {}", new_spec_id, title))
+        // STORY-82: note the parent link in the result so the agent sees the
+        // edge landed.
+        let parent_note = match &parent_link {
+            Some((_, parent_spec)) if !parent_spec.is_empty() => {
+                format!(" (linked under {})", parent_spec)
+            }
+            _ => String::new(),
+        };
+
+        // TASK-647 (ADR-3): if a requested approved+ status was held back, say
+        // so in the result so the agent knows it is awaiting advisor triage.
+        if intake_downgraded {
+            Ok(format!(
+                "Requirement added: {} — {}{} (filed as draft, queued for advisor triage; \
+                 requested status needs advisor authority)",
+                new_spec_id, title, parent_note
+            ))
+        } else {
+            Ok(format!(
+                "Requirement added: {} — {}{}",
+                new_spec_id, title, parent_note
+            ))
+        }
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_update_requirement(&self, args: &Value) -> Result<String, String> {
+        // (see mcp_status_gate_message below for the BUG-449 status gate)
         let id = args
             .get("id")
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: id")?;
 
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // STORY-82: resolve the target req id + (optional) parent up front,
+        // while we still hold a shared borrow, so the parent re-parent edge
+        // can be applied after the mutable field-edit borrow is dropped
+        // (the source and parent are two distinct records).
+        let target_id = store
+            .get_requirement_by_spec_id(id)
+            .ok_or_else(|| format!("Requirement '{}' not found", id))?
+            .id;
+        let parent_link: Option<(uuid::Uuid, String)> = match args
+            .get("parent")
+            .and_then(|v| v.as_str())
+        {
+            Some(parent_ref) => {
+                let parent = store
+                    .get_requirement_by_spec_id(parent_ref)
+                    .ok_or_else(|| format!("parent '{}' not found", parent_ref))?;
+                if crate::is_terminal_status(&parent.status) {
+                    return Err(format!(
+                            "parent {} is {} — re-parenting under a closed parent is usually a mistake.",
+                            parent.spec_id.as_deref().unwrap_or("?"),
+                            parent.status,
+                        ));
+                }
+                if parent.id == target_id {
+                    return Err("a requirement cannot be its own parent".to_string());
+                }
+                Some((parent.id, parent.spec_id.clone().unwrap_or_default()))
+            }
+            None => None,
+        };
+
         let req = store
             .get_requirement_by_spec_id_mut(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
         let mut changes = Vec::new();
 
+        // STORY-82: title.
+        if let Some(title) = args.get("title").and_then(|v| v.as_str()) {
+            if title != req.title {
+                changes.push(format!("title: {} → {}", req.title, title));
+                req.title = title.to_string();
+            }
+        }
+
+        // STORY-82: type. Does not renumber the existing SPEC-ID.
+        if let Some(type_arg) = args.get("type").and_then(|v| v.as_str()) {
+            let new_type = parse_requirement_type(type_arg).ok_or_else(|| {
+                format!(
+                    "Invalid requirement type '{}'. Valid types: {}",
+                    type_arg, VALID_MCP_REQUIREMENT_TYPES
+                )
+            })?;
+            if new_type != req.req_type {
+                changes.push(format!("type: {} → {}", req.req_type, new_type));
+                req.req_type = new_type;
+            }
+        }
+
+        // STORY-82: priority.
+        if let Some(priority_arg) = args.get("priority").and_then(|v| v.as_str()) {
+            let new_priority = parse_priority(priority_arg).ok_or_else(|| {
+                format!(
+                    "Invalid priority '{}'. Valid: high, medium, low",
+                    priority_arg
+                )
+            })?;
+            if new_priority != req.priority {
+                changes.push(format!("priority: {} → {}", req.priority, new_priority));
+                req.priority = new_priority;
+            }
+        }
+
+        // STORY-82: tags — replace the set with the provided list.
+        if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
+            let new_tags: std::collections::HashSet<String> = tag_arr
+                .iter()
+                .filter_map(|t| t.as_str().map(str::to_string))
+                .collect();
+            if new_tags != req.tags {
+                changes.push("tags updated".to_string());
+                req.tags = new_tags;
+            }
+        }
+
         if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
             if let Some(new_status) = parse_status(status) {
+                // BUG-449 (TASK-647/ADR-3 caller parity): MCP is not advisor
+                // authority (the launching shell isn't the advisor seat), so it
+                // must not self-advance a spec into a status that is the
+                // advisor's triage decision (Approved/Planned) or that is
+                // merge-driven (Completed/Released — set by a (SPEC-ID) commit
+                // landing on the default branch, STORY-86). add_requirement
+                // already downgrades these to Draft on intake; without the same
+                // gate here, add-then-update was a one-line bypass that let an
+                // agent self-mark Completed on uncommitted code. Implementer-
+                // legitimate transitions (InProgress/Done/NeedsAttention/Draft/
+                // Rejected) stay allowed. trace:BUG-449 | ai:claude
+                if new_status != req.status {
+                    if let Some(msg) = mcp_status_gate_message(&new_status) {
+                        return Err(msg);
+                    }
+                }
                 if let Some(msg) =
                     aida_core::forbidden_attention_transition(&req.status, &new_status)
                 {
@@ -820,6 +1413,23 @@ impl<'a> McpServer<'a> {
             req.description = desc.to_string();
         }
 
+        // STORY-82: re-parent — the mutable `req` borrow is dropped here, so we
+        // can mutate both the new parent and the target via add_relationship
+        // (Parent→child on parent, Child→parent inverse on the target).
+        if let Some((parent_id, parent_spec)) = &parent_link {
+            store
+                .add_relationship(parent_id, RelationshipType::Parent, &target_id, true)
+                .map_err(|e| e.to_string())?;
+            changes.push(format!(
+                "parent: linked under {}",
+                if parent_spec.is_empty() {
+                    "?"
+                } else {
+                    parent_spec.as_str()
+                }
+            ));
+        }
+
         if changes.is_empty() {
             return Ok(format!("No changes applied to {}", id));
         }
@@ -828,6 +1438,7 @@ impl<'a> McpServer<'a> {
         Ok(format!("Updated {}: {}", id, changes.join(", ")))
     }
 
+    // trace:STORY-82 | ai:claude
     fn tool_search_requirements(&self, args: &Value) -> Result<String, String> {
         let query = args
             .get("query")
@@ -836,18 +1447,43 @@ impl<'a> McpServer<'a> {
 
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let query_lower = query.to_lowercase();
+        // STORY-82: optional type/status narrowing (mirrors `aida search`).
+        let type_filter = args.get("type").and_then(|v| v.as_str());
+        let status_filter = args.get("status").and_then(|v| v.as_str());
 
         let matches: Vec<&Requirement> = store
             .requirements
             .iter()
             .filter(|r| {
-                r.title.to_lowercase().contains(&query_lower)
+                // STORY-476: external issue refs are searchable here too, so
+                // an MCP client can find a spec by its linear:/jira:/github:
+                // pointer — matching the CLI FTS surface.
+                let ref_match = r
+                    .external_refs
+                    .iter()
+                    .any(|er| er.to_lowercase().contains(&query_lower));
+                let text_match = ref_match
+                    || r.title.to_lowercase().contains(&query_lower)
                     || r.description.to_lowercase().contains(&query_lower)
                     || r.spec_id
                         .as_deref()
                         .unwrap_or("")
                         .to_lowercase()
-                        .contains(&query_lower)
+                        .contains(&query_lower);
+                if !text_match {
+                    return false;
+                }
+                if let Some(type_name) = type_filter {
+                    if !mcp_filter_eq(&r.req_type.to_string(), type_name) {
+                        return false;
+                    }
+                }
+                if let Some(status) = status_filter {
+                    if !mcp_filter_eq(&r.status.to_string(), status) {
+                        return false;
+                    }
+                }
+                true
             })
             .collect();
 
@@ -1564,6 +2200,25 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        // TASK-681 (EPIC-38) caller-parity audit: promoting a finding sets it
+        // `Approved`, which is the advisor's triage decision — exactly the
+        // transition `mcp_status_gate_message` refuses on the
+        // update_requirement path (BUG-449). Without this gate,
+        // `triage_finding promote` was a one-tool bypass that let an untrusted
+        // MCP caller self-grant Approved status on a draft finding. Apply the
+        // same gate before mutating; `dismiss` (Rejected) is implementer-
+        // legitimate and stays allowed. The gate is keyed off the target
+        // status so it stays in lockstep if the gated-status set ever changes.
+        // trace:TASK-681 | ai:claude
+        let new_status = match action.to_ascii_lowercase().as_str() {
+            "promote" => RequirementStatus::Approved,
+            "dismiss" => RequirementStatus::Rejected,
+            other => return Err(format!("unknown action '{}'", other)),
+        };
+        if let Some(msg) = mcp_status_gate_message(&new_status) {
+            return Err(msg);
+        }
+
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
         let req = store
             .get_requirement_by_spec_id_mut(id)
@@ -1573,26 +2228,17 @@ impl<'a> McpServer<'a> {
             return Err(format!("{} is not a finding (no from-* tag)", id));
         }
 
-        match action.to_ascii_lowercase().as_str() {
-            "promote" => {
-                req.status = RequirementStatus::Approved;
-                if let Some(r) = reason {
-                    req.add_comment(Comment::new(
-                        "mcp".to_string(),
-                        format!("promoted via MCP: {}", r),
-                    ));
-                }
-            }
-            "dismiss" => {
-                req.status = RequirementStatus::Rejected;
-                if let Some(r) = reason {
-                    req.add_comment(Comment::new(
-                        "mcp".to_string(),
-                        format!("dismissed via MCP: {}", r),
-                    ));
-                }
-            }
-            other => return Err(format!("unknown action '{}'", other)),
+        let verb = if new_status == RequirementStatus::Approved {
+            "promoted"
+        } else {
+            "dismissed"
+        };
+        req.status = new_status;
+        if let Some(r) = reason {
+            req.add_comment(Comment::new(
+                "mcp".to_string(),
+                format!("{} via MCP: {}", verb, r),
+            ));
         }
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
@@ -1927,10 +2573,15 @@ impl<'a> McpServer<'a> {
         };
         write_atomic(&path, content.as_bytes()).map_err(|e| e.to_string())?;
         match std::fs::rename(&path, &acked_path) {
-            Ok(()) => Ok(format!(
-                "acked: {}",
-                brief_display_path(&self.project_root, &acked_path)
-            )),
+            Ok(()) => {
+                // TASK-502: keep the `.pending` sentinel in sync when an agent
+                // acks through MCP, same as the CLI ack path.
+                crate::clear_pending_brief(&path);
+                Ok(format!(
+                    "acked: {}",
+                    brief_display_path(&self.project_root, &acked_path)
+                ))
+            }
             Err(e) if acked_path.exists() => Ok(format!(
                 "already_acked: {}",
                 brief_display_path(&self.project_root, &acked_path)
@@ -2043,6 +2694,29 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
         "completed" => Some(RequirementStatus::Completed),
         "rejected" => Some(RequirementStatus::Rejected),
         "needsattention" => Some(RequirementStatus::NeedsAttention),
+        _ => None,
+    }
+}
+
+/// BUG-449: status transitions an MCP caller may NOT make itself, with the
+/// message explaining why. `None` = the transition is allowed. Mirrors the
+/// `add_requirement` intake gate (TASK-647 / ADR-3) on the update path so
+/// `add`-then-`update` isn't a one-line bypass of advisor authority. MCP is
+/// never advisor authority (unlike the CLI, which can be the advisor seat or
+/// orchestrator-corroborated), so this stays strict regardless of context.
+/// trace:BUG-449 | ai:claude
+fn mcp_status_gate_message(new_status: &RequirementStatus) -> Option<String> {
+    match new_status {
+        RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
+            "Cannot set status to {new_status} via MCP: approving or planning a spec is the \
+             advisor's triage decision and needs advisor authority. File the spec and let the \
+             advisor promote it, or run the CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
+        )),
+        RequirementStatus::Completed => Some(format!(
+            "Cannot set status to {new_status} via MCP: this is set automatically when a \
+             (SPEC-ID) commit lands on the default branch (merge-driven auto-bump), not by hand. \
+             Mark the work `done` and let the merge promote it."
+        )),
         _ => None,
     }
 }
@@ -2207,40 +2881,286 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 // ============================================================================
+// Tool profiles — conservative safe-default surface (STORY-474)
+// ============================================================================
+
+// trace:STORY-474 | ai:claude
+//
+// MCP tool profiles let an operator expose a conservative slice of the tool
+// surface to an untrusted / exploratory / remote client while keeping the full
+// coordination + admin surface available to trusted agents. The profile is a
+// *capability tier*: each higher tier is a strict superset of the one below it.
+//
+//   read-only     — pure reads only (list/show/search/query/history/read_*).
+//                   Excludes EVERY write tool. The recommended marketplace /
+//                   untrusted-client default.
+//   coordination  — read-only + the file-substrate coordination writes an
+//                   agent needs to participate in a drain (post/resolve/escalate
+//                   punts, file/triage findings, claim/release tasks, post/ack
+//                   directives, ack briefs, send messages, add comments,
+//                   add relationships). No spec create/edit.
+//   operator      — coordination + spec-graph writes (add_requirement,
+//                   update_requirement). Full day-to-day surface.
+//   admin / full  — every tool. (Today `admin` == `full`; the name is reserved
+//                   so a future privileged-only tool can land at the admin tier
+//                   without churning the public profile vocabulary.)
+//
+// Resolution order (first match wins): `--profile <p>` CLI flag → `AIDA_MCP_PROFILE`
+// env → `[mcp] profile` in `.aida/config.toml` → the built-in default (`full`,
+// for backwards compatibility with existing trusted installs). Marketplace /
+// untrusted installs should set `profile = "read-only"` explicitly — see
+// `docs/agents/aida-mcp-install-matrix.md`.
+//
+// Gating happens in TWO places so the profile is a real security boundary, not
+// just a discovery hint: `tools/list` advertises only in-profile tools, and
+// `tools/call` REJECTS an out-of-profile tool with a stable error even if a
+// client calls it by name anyway.
+
+/// Capability tier governing which MCP tools are exposed. Ordered low→high;
+/// each tier admits every tool of the tiers below it. trace:STORY-474 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum McpProfile {
+    /// Pure reads only — the conservative safe default for untrusted clients.
+    ReadOnly,
+    /// Reads + coordination-substrate writes (no spec create/edit).
+    Coordination,
+    /// Coordination + spec-graph writes (add/update requirement).
+    Operator,
+    /// Everything (reserved tier for future privileged-only tools).
+    Admin,
+    /// Everything — the built-in backwards-compatible default.
+    Full,
+}
+
+impl McpProfile {
+    /// Parse a profile token. Accepts hyphen / underscore / space spellings and
+    /// is case-insensitive. `admin` and `full` both expose every tool today.
+    /// Returns `None` for an unknown token so callers can fall back + warn.
+    pub fn from_token(s: &str) -> Option<Self> {
+        match s
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['_', ' '], "-")
+            .as_str()
+        {
+            "read-only" | "readonly" | "ro" => Some(Self::ReadOnly),
+            "coordination" | "coord" => Some(Self::Coordination),
+            "operator" | "op" => Some(Self::Operator),
+            "admin" => Some(Self::Admin),
+            "full" | "all" => Some(Self::Full),
+            _ => None,
+        }
+    }
+
+    /// The canonical lowercase token for this profile.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::Coordination => "coordination",
+            Self::Operator => "operator",
+            Self::Admin => "admin",
+            Self::Full => "full",
+        }
+    }
+}
+
+impl Default for McpProfile {
+    /// Backwards-compatible default: existing installs see the full surface.
+    /// Untrusted / marketplace installs should opt into `read-only` explicitly.
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
+/// The minimum profile tier at which a given tool (by name) becomes available.
+/// This is the single source of truth for the profile→toolset mapping, kept as
+/// a pure fn so the selection logic is unit-testable without a server.
+///
+/// Unknown tool names map to `Admin` (the most restrictive non-`full` tier) so a
+/// newly-added tool is never accidentally exposed to a `read-only` client before
+/// it has been deliberately classified here. trace:STORY-474 | ai:claude
+pub fn tool_min_profile(tool_name: &str) -> McpProfile {
+    match tool_name {
+        // ---- Pure reads (read-only tier) ----
+        "list_requirements"
+        | "show_requirement"
+        | "search_requirements"
+        | "query_graph"
+        | "list_features"
+        | "history"
+        | "read_inbox"
+        | "list_punts"
+        | "read_punt"
+        | "list_findings"
+        | "list_active_leases"
+        | "list_directives"
+        | "list_briefs"
+        | "read_brief" => McpProfile::ReadOnly,
+
+        // ---- Coordination-substrate writes (coordination tier) ----
+        "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
+        | "escalate_punt" | "file_finding" | "triage_finding" | "claim_task" | "release_task"
+        | "post_directive" | "ack_directive" | "ack_brief" => McpProfile::Coordination,
+
+        // ---- Spec-graph writes (operator tier) ----
+        "add_requirement" | "update_requirement" => McpProfile::Operator,
+
+        // Unknown / not-yet-classified tools: gate at the most restrictive
+        // non-full tier so they never leak into a conservative profile.
+        _ => McpProfile::Admin,
+    }
+}
+
+/// True when `tool_name` is exposed under `profile`. trace:STORY-474 | ai:claude
+pub fn tool_in_profile(tool_name: &str, profile: McpProfile) -> bool {
+    profile >= tool_min_profile(tool_name)
+}
+
+/// True when `tool_name` is a tool AIDA actually serves (appears in
+/// `tool_descriptors()`). Used to distinguish "above your profile" from "no such
+/// tool" at call time. trace:STORY-474 | ai:claude
+pub fn is_known_tool(tool_name: &str) -> bool {
+    tool_descriptors()
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .any(|t| t.get("name").and_then(|v| v.as_str()) == Some(tool_name))
+        })
+        .unwrap_or(false)
+}
+
+/// The set of tool names (in `tool_descriptors()` order) exposed under
+/// `profile`. Pure fn over the descriptor list — the unit-tested core of the
+/// profile→toolset selection. trace:STORY-474 | ai:claude
+pub fn tool_names_for_profile(profile: McpProfile) -> Vec<String> {
+    tool_descriptors()
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
+                .filter(|n| tool_in_profile(n, profile))
+                .map(|n| n.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `tool_descriptors()` filtered to `profile`, with a `"profile"` metadata field
+/// added to each descriptor naming its minimum tier so schema-driven clients can
+/// see why a tool is (or isn't) present. trace:STORY-474 | ai:claude
+pub fn tool_descriptors_for_profile(profile: McpProfile) -> Value {
+    let arr = tool_descriptors()
+        .as_array()
+        .map(|a| a.to_vec())
+        .unwrap_or_default();
+    let filtered: Vec<Value> = arr
+        .into_iter()
+        .filter_map(|mut t| {
+            let name = t.get("name").and_then(|v| v.as_str())?.to_string();
+            if !tool_in_profile(&name, profile) {
+                return None;
+            }
+            if let Some(obj) = t.as_object_mut() {
+                obj.insert(
+                    "profile".to_string(),
+                    json!(tool_min_profile(&name).as_str()),
+                );
+            }
+            Some(t)
+        })
+        .collect();
+    json!(filtered)
+}
+
+/// Resolve the active MCP profile from (in order) an explicit override, the
+/// `AIDA_MCP_PROFILE` env var, `[mcp] profile` in `.aida/config.toml`, then the
+/// built-in default. An unknown token at any layer is ignored (falls through to
+/// the next source) so a typo never silently opens a wider surface than
+/// intended — it just keeps the previous resolution. trace:STORY-474 | ai:claude
+pub fn resolve_mcp_profile(project_root: &Path, override_token: Option<&str>) -> McpProfile {
+    if let Some(p) = override_token.and_then(McpProfile::from_token) {
+        return p;
+    }
+    if let Ok(env) = std::env::var("AIDA_MCP_PROFILE") {
+        if let Some(p) = McpProfile::from_token(&env) {
+            return p;
+        }
+    }
+    if let Ok(body) = std::fs::read_to_string(project_root.join(".aida").join("config.toml")) {
+        if let Ok(value) = toml::from_str::<toml::Value>(&body) {
+            if let Some(p) = value
+                .get("mcp")
+                .and_then(|t| t.get("profile"))
+                .and_then(|v| v.as_str())
+                .and_then(McpProfile::from_token)
+            {
+                return p;
+            }
+        }
+    }
+    McpProfile::default()
+}
+
+// ============================================================================
 // Tool descriptors (kept at module scope for register-agent + tests)
 // ============================================================================
 
 // trace:TASK-440 | ai:claude
+// trace:STORY-399 | ai:claude
 /// Build the `outputSchema` for a tool that returns the MCP text envelope.
 ///
-/// Path A — the schema describes the wire shape every tool returns today
-/// (`{ content: [{ type: "text", text: "..." }], isError?: bool }`) and
-/// uses `payload_description` to tell schema-driven clients what the `text`
-/// string conveys for *this* tool. Per-tool structured payloads (Path B,
-/// STORY-399) will replace this with concrete `structuredContent` schemas.
+/// Path A (TASK-440) shipped the descriptor-level schema describing the wire
+/// shape every tool returns (`{ content: [{ type: "text", text: "..." }],
+/// isError?: bool }`). Path B (STORY-399) makes successful responses *also*
+/// carry a `structuredContent` object that mirrors this same envelope shape,
+/// so schema-driven MCP clients (Codex, Cursor, …) get a machine-readable
+/// result without parsing the human text.
+///
+/// The decision is **additive** (acceptance option (a)): the text `content`
+/// array is preserved byte-for-byte, and `structuredContent` is layered
+/// alongside it — legacy text consumers (Claude Code) keep working unchanged.
+/// `structuredContent` is declared optional in the schema because it is absent
+/// on error responses (those carry the `structuredError` payload from
+/// STORY-401 instead). `payload_description` still tells clients what the
+/// `text` string — mirrored verbatim into `structuredContent.content` —
+/// conveys for *this* tool.
 fn text_envelope_output_schema(payload_description: &str) -> Value {
+    // The single text-content array shape, reused by both the top-level
+    // `content` property and the Path-B `structuredContent.content` mirror.
+    let text_content_array = || {
+        json!({
+            "type": "array",
+            "description": "A single text item carrying this tool's response.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "const": "text" },
+                    "text": { "type": "string" }
+                },
+                "required": ["type", "text"]
+            }
+        })
+    };
     json!({
         "type": "object",
         "description": format!(
-            "MCP text envelope. The `text` field contains: {}",
+            "MCP text envelope (additive structuredContent per STORY-399). \
+             The `text` field contains: {}",
             payload_description
         ),
         "properties": {
-            "content": {
-                "type": "array",
-                "description": "Always a single text item under Path A.",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": { "type": "string", "const": "text" },
-                        "text": { "type": "string" }
-                    },
-                    "required": ["type", "text"]
-                }
-            },
+            "content": text_content_array(),
             "isError": {
                 "type": "boolean",
                 "description": "Present and true when the tool returned an error; absent on success."
+            },
+            "structuredContent": {
+                "type": "object",
+                "description": "Path B (STORY-399): machine-readable mirror of the text envelope, present on success. Absent on error (see `structuredError`).",
+                "properties": {
+                    "content": text_content_array()
+                },
+                "required": ["content"]
             }
         },
         "required": ["content"]
@@ -2255,7 +3175,8 @@ pub fn tool_descriptors() -> Value {
         // ---- Spec graph ----
         {
             "name": "list_requirements",
-            "description": "List requirements from the AIDA database, optionally filtered by status, type, or feature category. Returns a summarized list of matching requirements.",
+            // trace:STORY-82 | ai:claude
+            "description": "List requirements from the AIDA database, optionally filtered by status, type, feature category, priority, tags, batch, parent, owner role, or in-flight state. Mirrors the current `aida list` filter surface. Returns a summarized list of matching requirements.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2268,7 +3189,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "Filter by the semantic type of the requirement.",
-                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint"],
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
                         "example": "story"
                     },
                     "priority": {
@@ -2281,6 +3202,37 @@ pub fn tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Filter by feature category name (e.g., auth, backend).",
                         "example": "auth"
+                    },
+                    "tags": {
+                        "type": "string",
+                        "description": "Filter by tags. Comma-separated list; a row matches when it carries ALL of the listed tags (e.g. `batch:scaffolding,papercut`). Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` for surface tags, flat for behavior/severity).",
+                        "example": "mcp,modernization"
+                    },
+                    "batch": {
+                        "type": "string",
+                        "description": "Filter to members of a batch — shorthand for the `batch:<NAME>` tag (e.g. `scaffolding-2026-05-28`). Mirrors `aida list --batch`.",
+                        "example": "scaffolding-2026-05-28"
+                    },
+                    "parent": {
+                        "type": "string",
+                        "description": "Restrict to direct children of this parent SPEC-ID (mirrors `aida list --parent`).",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "EPIC-27"
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Filter to requirements routed to a role — matches a `role:<value>` tag on the spec (e.g. implementer, advisor). Alias: `for`.",
+                        "example": "implementer"
+                    },
+                    "for": {
+                        "type": "string",
+                        "description": "Alias for `role` — filter to requirements carrying a `role:<value>` tag.",
+                        "example": "advisor"
+                    },
+                    "in_flight": {
+                        "type": "boolean",
+                        "description": "When true, restrict to requirements with a live session/claim lease (work currently in flight). When false or omitted (default), no in-flight filter is applied.",
+                        "example": true
                     },
                     "limit": {
                         "type": "integer",
@@ -2296,7 +3248,8 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "show_requirement",
-            "description": "Retrieve and display the full markdown details of a specific requirement (description, relationships, comments) by its unique SPEC-ID.",
+            // trace:STORY-82 | ai:claude
+            "description": "Retrieve and display the full markdown details of a specific requirement (description, relationships, comments, and git linkage) by its unique SPEC-ID. Mirrors `aida show`: git linkage (referencing commits, feature branch, PR) is included by default.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2305,17 +3258,28 @@ pub fn tool_descriptors() -> Value {
                         "description": "The unique SPEC-ID of the requirement (e.g., FR-0042). Must follow the canonical spec format.",
                         "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
                         "example": "FR-0042"
+                    },
+                    "include_git": {
+                        "type": "boolean",
+                        "description": "Append the git-linkage section (referencing commits, feature branch / worktree, shipped state, PR number). Defaults to true, matching `aida show`; pass false for the `aida show --no-git` view.",
+                        "example": true
+                    },
+                    "verbose": {
+                        "type": "boolean",
+                        "description": "Expand the git-linkage section with the full per-commit list and trace-tagged files, matching `aida show --verbose`. Defaults to false.",
+                        "example": false
                     }
                 },
                 "required": ["id"]
             },
             "outputSchema": text_envelope_output_schema(
-                "a Markdown rendering of the requirement: H1 `# <SPEC-ID> — <title>`, bold-key/value lines for Status / Priority / Type / Feature / Owner / Tags, a `## Description` body, and optional `## Comments` and `## Relationships` sections."
+                "a Markdown rendering of the requirement: H1 `# <SPEC-ID> — <title>`, bold-key/value lines for Status / Priority / Type / Feature / Owner / Tags, a `## Description` body, optional `## Comments` and `## Relationships` sections, and (unless `include_git` is false) a `## Git linkage` section listing referencing commits, the feature branch, and any PR."
             )
         },
         {
             "name": "add_requirement",
-            "description": "Create and add a new requirement to the AIDA database. Generates a new canonical SPEC-ID automatically based on the type.",
+            // trace:STORY-82 | ai:claude
+            "description": "Create and add a new requirement to the AIDA database. Generates a new canonical SPEC-ID automatically based on the type. Optionally links it under a parent, sets a feature category, and assigns an owner. Note: MCP intake always files as `draft` (approving/planning is the advisor's triage decision), regardless of the requested status.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2337,7 +3301,7 @@ pub fn tool_descriptors() -> Value {
                     },
                     "status": {
                         "type": "string",
-                        "description": "Initial status of the requirement.",
+                        "description": "Requested initial status. MCP intake files everything as `draft` and queues approved+ requests for advisor triage; lower-than-draft values still apply.",
                         "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected"],
                         "example": "draft"
                     },
@@ -2347,10 +3311,26 @@ pub fn tool_descriptors() -> Value {
                         "enum": ["high", "medium", "low"],
                         "example": "medium"
                     },
+                    "feature": {
+                        "type": "string",
+                        "description": "Feature category name (NOT a type), e.g. auth, backend. Matches `aida add --feature`.",
+                        "example": "auth"
+                    },
+                    "owner": {
+                        "type": "string",
+                        "description": "Owner to assign to the new requirement (matches `aida add --owner`).",
+                        "example": "alice"
+                    },
+                    "parent": {
+                        "type": "string",
+                        "description": "SPEC-ID of a parent to link this requirement under (adds a Parent/Child edge, mirroring `aida add --parent`). The parent must exist and not be terminal-status.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "EPIC-27"
+                    },
                     "tags": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "Optional list of tags to categorize this requirement.",
+                        "description": "Optional list of tags to categorize this requirement. Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` surface tags; flat behavior/severity/batch tags like `papercut`, `batch:NAME`).",
                         "example": ["auth", "security"]
                     }
                 },
@@ -2362,7 +3342,8 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "update_requirement",
-            "description": "Update specific fields (status, description) of an existing requirement. Fields omitted from parameters remain unchanged.",
+            // trace:STORY-82 | ai:claude
+            "description": "Update fields of an existing requirement (title, type, status, priority, description, tags, parent). Fields omitted from parameters remain unchanged. Note: advisor-authority transitions (approved/planned) and the merge-driven `completed` status are gated and cannot be set via MCP.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2372,16 +3353,45 @@ pub fn tool_descriptors() -> Value {
                         "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
                         "example": "FR-0042"
                     },
+                    "title": {
+                        "type": "string",
+                        "description": "New title for the requirement.",
+                        "example": "Implement OAuth2 + SAML login flow"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "New semantic type. Changing the type does NOT renumber the existing SPEC-ID.",
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "example": "story"
+                    },
                     "status": {
                         "type": "string",
-                        "description": "New status to transition the requirement into.",
+                        "description": "New status to transition the requirement into. approved/planned (advisor triage) and completed (merge-driven) are refused via MCP.",
                         "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected", "needs-attention"],
                         "example": "in-progress"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "description": "New priority level.",
+                        "enum": ["high", "medium", "low"],
+                        "example": "high"
                     },
                     "description": {
                         "type": "string",
                         "description": "Updated detailed description of the requirement.",
                         "example": "Updated detailed implementation checklist for the login interface."
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Replace the requirement's tag set with this list. Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` surface tags; flat behavior/severity/batch tags).",
+                        "example": ["auth", "batch:login-rework"]
+                    },
+                    "parent": {
+                        "type": "string",
+                        "description": "Re-parent the requirement under this SPEC-ID (adds a Parent/Child edge to the new parent; existing parent edges are left in place). The parent must exist and not be terminal-status.",
+                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "example": "EPIC-27"
                     }
                 },
                 "required": ["id"]
@@ -2392,7 +3402,8 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "search_requirements",
-            "description": "Perform a case-insensitive keyword search across requirement titles and descriptions in the database.",
+            // trace:STORY-82 | ai:claude
+            "description": "Case-insensitive keyword search across requirement titles, descriptions, and SPEC-IDs, optionally narrowed by type and/or status. Mirrors `aida search`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2400,6 +3411,18 @@ pub fn tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Case-insensitive query string to search for.",
                         "example": "oauth2"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Restrict results to this semantic type.",
+                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "example": "bug"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Restrict results to this status.",
+                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"],
+                        "example": "in-progress"
                     }
                 },
                 "required": ["query"]
@@ -2809,7 +3832,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "triage_finding",
-            "description": "Triage a finding, either promoting it to an approved active task or dismissing it.",
+            "description": "Triage a finding by dismissing it (sets Rejected). Promotion to an approved active task is the advisor's triage decision and is refused via MCP (run the CLI as the advisor, or let the advisor promote it).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3031,7 +4054,12 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
-    eprintln!("AIDA MCP server started");
+    // trace:STORY-474 | ai:claude — surface the active profile on the stderr
+    // banner so an operator can confirm an untrusted client got the safe surface.
+    eprintln!(
+        "AIDA MCP server started (profile: {})",
+        server.profile.as_str()
+    );
 
     for line in stdin.lock().lines() {
         let line = line?;
@@ -3314,11 +4342,174 @@ mod tests {
         McpServer::new(storage, dir.to_path_buf())
     }
 
+    /// BUG-449: set a gated status directly in the store, bypassing the MCP
+    /// gate — mirrors how the advisor (CLI) or a merge auto-bump sets
+    /// Approved/Planned/Completed out-of-band. Tests use this to reach a
+    /// precondition the MCP caller itself is (correctly) forbidden to set.
+    fn force_status(server: &McpServer<'static>, spec_id: &str, status: RequirementStatus) {
+        let mut store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id_mut(spec_id)
+            .expect("spec should exist for force_status");
+        req.status = status;
+        server.storage.save(&store).unwrap();
+    }
+
     fn added_spec_id(response: &str) -> &str {
         response
             .strip_prefix("Requirement added: ")
             .and_then(|rest| rest.split_whitespace().next())
             .unwrap_or_else(|| panic!("unexpected add_requirement response: {response}"))
+    }
+
+    // ===================================================================
+    // STORY-401: stable structured error shapes
+    // ===================================================================
+
+    #[test]
+    fn mcp_error_classify_invalid_arg() {
+        let e = McpError::classify("post_punt", "Missing required parameter: spec_id");
+        assert_eq!(e.code, McpErrorCode::InvalidArg);
+        assert!(e.code.recoverable());
+        assert_eq!(e.tool, "post_punt");
+        // short machine-friendly text shape `<tool>: <code>: <message>`
+        assert_eq!(
+            e.envelope_text(),
+            "post_punt: invalid_arg: Missing required parameter: spec_id"
+        );
+    }
+
+    #[test]
+    fn mcp_error_classify_not_found() {
+        let e = McpError::classify("show_requirement", "Requirement 'TASK-999' not found");
+        assert_eq!(e.code, McpErrorCode::NotFound);
+        assert!(e.code.recoverable());
+
+        let unknown = McpError::classify(
+            "definitely_not_a_tool",
+            "Unknown tool: definitely_not_a_tool",
+        );
+        assert_eq!(unknown.code, McpErrorCode::NotFound);
+    }
+
+    #[test]
+    fn mcp_error_classify_conflict_and_permission() {
+        let conflict = McpError::classify("claim_task", "lease already claimed by another agent");
+        assert_eq!(conflict.code, McpErrorCode::Conflict);
+        assert!(!conflict.code.recoverable());
+
+        let denied = McpError::classify(
+            "update_requirement",
+            "MCP is not advisor authority; cannot self-advance to Planned",
+        );
+        assert_eq!(denied.code, McpErrorCode::PermissionDenied);
+        assert!(!denied.code.recoverable());
+    }
+
+    #[test]
+    fn mcp_error_classify_falls_back_to_internal() {
+        let e = McpError::classify("history", "something totally unexpected happened");
+        assert_eq!(e.code, McpErrorCode::Internal);
+        assert!(!e.code.recoverable());
+    }
+
+    #[test]
+    fn mcp_error_result_value_is_back_compatible_envelope() {
+        let e = McpError::classify("post_punt", "Missing required parameter: spec_id");
+        let v = e.to_result_value();
+        // Back-compatible: isError:true + a text content array.
+        assert_eq!(v["isError"], json!(true));
+        let text = v["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Missing required parameter: spec_id"));
+        assert_eq!(v["content"][0]["type"], json!("text"));
+        // Additive structured payload.
+        let se = &v["structuredError"];
+        assert_eq!(se["code"], json!("invalid_arg"));
+        assert_eq!(se["message"], json!("Missing required parameter: spec_id"));
+        assert_eq!(se["tool"], json!("post_punt"));
+        assert_eq!(se["recoverable"], json!(true));
+    }
+
+    #[test]
+    fn mcp_dispatch_unknown_tool_yields_structured_error() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({"name": "definitely_not_a_tool", "arguments": {}}),
+        );
+        let result = resp
+            .result
+            .expect("tools/call should return a result object");
+        assert_eq!(result["isError"], json!(true));
+        // Stable code + the legacy "Unknown tool" phrase the stdio suite asserts.
+        assert_eq!(result["structuredError"]["code"], json!("not_found"));
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("Unknown tool"), "text was: {text}");
+    }
+
+    // STORY-399 (Path B): a successful tools/call must carry `structuredContent`
+    // whose `content` array mirrors the legacy text envelope verbatim, so both
+    // legacy text consumers and schema-driven clients see the same logical
+    // result. Error responses must NOT carry structuredContent (they carry the
+    // STORY-401 `structuredError` payload instead). trace:STORY-399 | ai:claude
+    #[test]
+    fn mcp_dispatch_success_emits_structured_content_mirroring_text() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        // `list_active_leases` takes no args and never errors on an empty store —
+        // a clean success-path probe of the dispatch envelope.
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({"name": "list_active_leases", "arguments": {}}),
+        );
+        let result = resp
+            .result
+            .expect("tools/call should return a result object");
+
+        // Legacy text envelope preserved.
+        assert!(
+            result.get("isError").is_none(),
+            "success must not set isError"
+        );
+        let text = result["content"][0]["text"]
+            .as_str()
+            .expect("success must carry a text content item");
+        assert_eq!(result["content"][0]["type"], json!("text"));
+
+        // Path B: structuredContent mirrors the same payload.
+        let structured = result
+            .get("structuredContent")
+            .expect("success must carry structuredContent (STORY-399)");
+        assert_eq!(
+            structured["content"][0]["type"],
+            json!("text"),
+            "structuredContent.content must hold a text item"
+        );
+        assert_eq!(
+            structured["content"][0]["text"].as_str(),
+            Some(text),
+            "structuredContent must mirror the text envelope verbatim"
+        );
+    }
+
+    #[test]
+    fn mcp_dispatch_error_has_no_structured_content() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({"name": "definitely_not_a_tool", "arguments": {}}),
+        );
+        let result = resp
+            .result
+            .expect("tools/call should return a result object");
+        assert_eq!(result["isError"], json!(true));
+        assert!(
+            result.get("structuredContent").is_none(),
+            "error responses carry structuredError, not structuredContent: {result}"
+        );
+        assert!(result.get("structuredError").is_some());
     }
 
     #[test]
@@ -3564,6 +4755,35 @@ mod tests {
                 "tool '{}' outputSchema must declare a `content` property (Path A — text envelope wraps every response)",
                 name
             );
+
+            // STORY-399 (Path B): the outputSchema must also declare the
+            // additive `structuredContent` object, and that object must itself
+            // require a `content` array — the machine-readable mirror.
+            // trace:STORY-399 | ai:claude
+            let structured = properties
+                .get("structuredContent")
+                .and_then(|v| v.as_object())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "tool '{}' outputSchema must declare a `structuredContent` object (Path B — STORY-399)",
+                        name
+                    )
+                });
+            assert_eq!(
+                structured.get("type").and_then(|v| v.as_str()),
+                Some("object"),
+                "tool '{}' structuredContent schema must be an object",
+                name
+            );
+            assert!(
+                structured
+                    .get("properties")
+                    .and_then(|v| v.as_object())
+                    .map(|p| p.contains_key("content"))
+                    .unwrap_or(false),
+                "tool '{}' structuredContent must declare a `content` property",
+                name
+            );
         }
     }
 
@@ -3726,7 +4946,7 @@ mod tests {
         }
     }
 
-    // trace:BUG-377 TASK-550 | ai:codex
+    // trace:BUG-377 TASK-550 TASK-647 | ai:codex
     #[test]
     fn mcp_add_requirement_persists_all_advertised_fields() {
         let dir = tempdir().unwrap();
@@ -3742,6 +4962,12 @@ mod tests {
             }))
             .unwrap();
         let spec_id = added_spec_id(&response);
+        // TASK-647 (ADR-3): MCP intake always lands `draft` (advisor-gated),
+        // and the response says so — even though `approved` was requested.
+        assert!(
+            response.contains("advisor triage"),
+            "expected triage notice in: {response}"
+        );
 
         let store = server.storage.load().unwrap();
         let req = store
@@ -3750,7 +4976,8 @@ mod tests {
         assert_eq!(req.title, "MCP write map");
         assert_eq!(req.description, "All advertised fields should persist");
         assert_eq!(req.req_type, RequirementType::Bug);
-        assert_eq!(req.status, RequirementStatus::Approved);
+        // TASK-647: requested `approved` was downgraded to `draft` at intake.
+        assert_eq!(req.status, RequirementStatus::Draft);
         assert_eq!(req.priority, RequirementPriority::High);
         assert!(req.tags.contains("mcp"));
         assert!(req.tags.contains("roundtrip"));
@@ -3761,26 +4988,31 @@ mod tests {
     fn mcp_list_requirements_normalizes_status_type_and_priority_filters() {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
+        // TASK-647 (ADR-3): MCP add lands draft, so set the non-draft statuses
+        // this filter test needs via the (ungated) update tool.
         let working = server
             .tool_add_requirement(&json!({
                 "title": "Working MCP item",
                 "description": "status filter target",
                 "type": "task",
-                "status": "in-progress",
                 "priority": "high",
             }))
             .unwrap();
         let working_id = added_spec_id(&working).to_string();
+        server
+            .tool_update_requirement(&json!({ "id": working_id, "status": "in-progress" }))
+            .unwrap();
         let planned = server
             .tool_add_requirement(&json!({
                 "title": "Planned MCP item",
                 "description": "negative control",
                 "type": "story",
-                "status": "planned",
                 "priority": "low",
             }))
             .unwrap();
         let planned_id = added_spec_id(&planned).to_string();
+        // BUG-449: Planned is advisor-gated via MCP — set it out-of-band.
+        force_status(&server, &planned_id, RequirementStatus::Planned);
         let nfr = server
             .tool_add_requirement(&json!({
                 "title": "Nonfunctional MCP item",
@@ -3814,6 +5046,336 @@ mod tests {
             .unwrap();
         assert!(priority_output.contains(&working_id), "{priority_output}");
         assert!(!priority_output.contains(&planned_id), "{priority_output}");
+    }
+
+    // ===================================================================
+    // STORY-82: modernized filter/field surface on the 7 core tools
+    // ===================================================================
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_list_requirements_filters_by_tags_batch_and_role() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let tagged = server
+            .tool_add_requirement(&json!({
+                "title": "Tagged + batched + roled",
+                "description": "matches all three filters",
+                "type": "task",
+                "tags": ["mcp", "papercut", "batch:fall-cleanup", "role:implementer"],
+            }))
+            .unwrap();
+        let tagged_id = added_spec_id(&tagged).to_string();
+        let other = server
+            .tool_add_requirement(&json!({
+                "title": "Unrelated",
+                "description": "negative control",
+                "type": "task",
+                "tags": ["docs"],
+            }))
+            .unwrap();
+        let other_id = added_spec_id(&other).to_string();
+
+        // tags CSV: AND-match across the listed tags.
+        let out = server
+            .tool_list_requirements(&json!({ "tags": "mcp,papercut" }))
+            .unwrap();
+        assert!(out.contains(&tagged_id), "{out}");
+        assert!(!out.contains(&other_id), "{out}");
+
+        // a tag the row lacks excludes it.
+        let none = server
+            .tool_list_requirements(&json!({ "tags": "mcp,does-not-exist" }))
+            .unwrap();
+        assert!(none.contains("No requirements found"), "{none}");
+
+        // batch shorthand → batch:<name> tag.
+        let batch_out = server
+            .tool_list_requirements(&json!({ "batch": "fall-cleanup" }))
+            .unwrap();
+        assert!(batch_out.contains(&tagged_id), "{batch_out}");
+        assert!(!batch_out.contains(&other_id), "{batch_out}");
+
+        // role / for → role:<name> tag (case-insensitive); `for` is an alias.
+        for key in ["role", "for"] {
+            let role_out = server
+                .tool_list_requirements(&json!({ key: "IMPLEMENTER" }))
+                .unwrap();
+            assert!(role_out.contains(&tagged_id), "{key}: {role_out}");
+            assert!(!role_out.contains(&other_id), "{key}: {role_out}");
+        }
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_list_requirements_filters_by_parent() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let epic = server
+            .tool_add_requirement(&json!({
+                "title": "Parent epic",
+                "description": "has children",
+                "type": "epic",
+            }))
+            .unwrap();
+        let epic_id = added_spec_id(&epic).to_string();
+        let child = server
+            .tool_add_requirement(&json!({
+                "title": "Child story",
+                "description": "linked under the epic",
+                "type": "story",
+                "parent": epic_id,
+            }))
+            .unwrap();
+        let child_id = added_spec_id(&child).to_string();
+        let stray = server
+            .tool_add_requirement(&json!({
+                "title": "Unparented",
+                "description": "not a child",
+                "type": "story",
+            }))
+            .unwrap();
+        let stray_id = added_spec_id(&stray).to_string();
+
+        let out = server
+            .tool_list_requirements(&json!({ "parent": epic_id }))
+            .unwrap();
+        assert!(out.contains(&child_id), "child must show: {out}");
+        assert!(!out.contains(&stray_id), "stray must not show: {out}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_add_requirement_persists_parent_feature_owner() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let epic = server
+            .tool_add_requirement(&json!({
+                "title": "Owner of children",
+                "description": "epic",
+                "type": "epic",
+            }))
+            .unwrap();
+        let epic_id = added_spec_id(&epic).to_string();
+
+        let response = server
+            .tool_add_requirement(&json!({
+                "title": "Full-field child",
+                "description": "feature + owner + parent",
+                "type": "task",
+                "feature": "auth",
+                "owner": "alice",
+                "parent": epic_id,
+            }))
+            .unwrap();
+        assert!(
+            response.contains(&epic_id),
+            "result notes parent: {response}"
+        );
+        let child_id = added_spec_id(&response).to_string();
+
+        let store = server.storage.load().unwrap();
+        let child = store.get_requirement_by_spec_id(&child_id).unwrap();
+        // The legacy YAML test store normalizes feature names on load
+        // (migrate_features prefixes a stable number), so assert containment
+        // rather than exact equality.
+        assert!(child.feature.contains("auth"), "feature: {}", child.feature);
+        assert_eq!(child.owner, "alice");
+        // Child carries a Child→parent edge; parent carries Parent→child.
+        let parent = store.get_requirement_by_spec_id(&epic_id).unwrap();
+        assert!(
+            parent
+                .relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Parent && r.target_id == child.id),
+            "parent should have a Parent edge to the child"
+        );
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_add_requirement_rejects_missing_parent() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let err = server
+            .tool_add_requirement(&json!({
+                "title": "Orphan",
+                "description": "bad parent",
+                "type": "task",
+                "parent": "EPIC-999",
+            }))
+            .expect_err("missing parent should fail");
+        assert!(err.contains("EPIC-999"), "{err}");
+        assert!(err.contains("not found"), "{err}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_update_requirement_sets_title_type_priority_tags_parent() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let epic = server
+            .tool_add_requirement(&json!({
+                "title": "Reparent target",
+                "description": "epic",
+                "type": "epic",
+            }))
+            .unwrap();
+        let epic_id = added_spec_id(&epic).to_string();
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Original title",
+                "description": "to be edited",
+                "type": "task",
+                "priority": "low",
+                "tags": ["old"],
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        let result = server
+            .tool_update_requirement(&json!({
+                "id": id,
+                "title": "New title",
+                "type": "story",
+                "priority": "high",
+                "tags": ["fresh", "batch:x"],
+                "parent": epic_id,
+            }))
+            .unwrap();
+        assert!(result.starts_with(&format!("Updated {}", id)), "{result}");
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.title, "New title");
+        assert_eq!(req.req_type, RequirementType::Story);
+        assert_eq!(req.priority, RequirementPriority::High);
+        assert!(req.tags.contains("fresh") && req.tags.contains("batch:x"));
+        assert!(!req.tags.contains("old"), "tags should be replaced");
+        assert!(
+            req.relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Child),
+            "target should carry a Child edge to the new parent"
+        );
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_update_requirement_rejects_invalid_type() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "T", "description": "d", "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "type": "nonsense" }))
+            .expect_err("invalid type should fail");
+        assert!(err.contains("Invalid requirement type 'nonsense'"), "{err}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_search_requirements_narrows_by_type_and_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let bug = server
+            .tool_add_requirement(&json!({
+                "title": "Login oauth bug",
+                "description": "oauth token refresh fails",
+                "type": "bug",
+            }))
+            .unwrap();
+        let bug_id = added_spec_id(&bug).to_string();
+        let story = server
+            .tool_add_requirement(&json!({
+                "title": "Login oauth story",
+                "description": "oauth happy path",
+                "type": "story",
+            }))
+            .unwrap();
+        let story_id = added_spec_id(&story).to_string();
+
+        // type narrows.
+        let out = server
+            .tool_search_requirements(&json!({ "query": "oauth", "type": "bug" }))
+            .unwrap();
+        assert!(out.contains(&bug_id), "{out}");
+        assert!(!out.contains(&story_id), "{out}");
+
+        // status narrows (both are draft on MCP intake).
+        let drafts = server
+            .tool_search_requirements(&json!({ "query": "oauth", "status": "draft" }))
+            .unwrap();
+        assert!(
+            drafts.contains(&bug_id) && drafts.contains(&story_id),
+            "{drafts}"
+        );
+        let none = server
+            .tool_search_requirements(&json!({ "query": "oauth", "status": "completed" }))
+            .unwrap();
+        assert!(none.contains("No requirements found"), "{none}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn mcp_show_requirement_appends_git_linkage_by_default() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Show with git", "description": "d", "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        // Default: git linkage present (no repo/commits → the empty-state line).
+        let with_git = server.tool_show_requirement(&json!({ "id": id })).unwrap();
+        assert!(with_git.contains("## Git linkage"), "{with_git}");
+
+        // include_git=false suppresses it (the `aida show --no-git` view).
+        let no_git = server
+            .tool_show_requirement(&json!({ "id": id, "include_git": false }))
+            .unwrap();
+        assert!(!no_git.contains("## Git linkage"), "{no_git}");
+    }
+
+    // trace:STORY-82 | ai:claude
+    #[test]
+    fn list_requirements_descriptor_advertises_modern_filters() {
+        let desc = tool_descriptors();
+        let arr = desc.as_array().unwrap();
+        let tool = arr
+            .iter()
+            .find(|t| t.get("name").and_then(|v| v.as_str()) == Some("list_requirements"))
+            .unwrap();
+        let props = tool
+            .pointer("/inputSchema/properties")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        for p in ["tags", "batch", "parent", "role", "for", "in_flight"] {
+            assert!(
+                props.contains_key(p),
+                "list_requirements must advertise `{p}`"
+            );
+        }
+        // type enum now covers the full taxonomy.
+        let type_enum = tool
+            .pointer("/inputSchema/properties/type/enum")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        let names: Vec<&str> = type_enum.iter().filter_map(|v| v.as_str()).collect();
+        for t in ["folder", "meta", "doc", "sprint"] {
+            assert!(names.contains(&t), "type enum must include {t}: {names:?}");
+        }
     }
 
     // trace:STORY-489 | ai:claude
@@ -3962,6 +5524,8 @@ mod tests {
     }
 
     // trace:BUG-377 TASK-550 | ai:codex
+    // STORY-82: title / priority / tags are now advertised + persisted (they
+    // were ignored before). trace:STORY-82 | ai:claude
     #[test]
     fn mcp_update_requirement_persists_advertised_fields_only() {
         let dir = tempdir().unwrap();
@@ -3978,25 +5542,266 @@ mod tests {
         let result = server
             .tool_update_requirement(&json!({
                 "id": spec_id,
-                "status": "planned",
+                // BUG-449: use an implementer-legitimate transition (Planned is
+                // advisor-gated via MCP); this test is about field persistence.
+                "status": "in-progress",
                 "description": "after",
-                "title": "ignored title",
+                "title": "new title",
                 "priority": "high",
-                "tags": ["ignored"],
+                "tags": ["kept"],
             }))
             .unwrap();
         assert!(result.contains("status:"), "{result}");
         assert!(result.contains("description updated"), "{result}");
+        assert!(result.contains("title:"), "{result}");
+        assert!(result.contains("priority:"), "{result}");
 
         let store = server.storage.load().unwrap();
         let req = store
             .get_requirement_by_spec_id(&spec_id)
             .expect("requirement should exist");
-        assert_eq!(req.title, "Update target");
+        assert_eq!(req.title, "new title");
         assert_eq!(req.description, "after");
-        assert_eq!(req.status, RequirementStatus::Planned);
-        assert_eq!(req.priority, RequirementPriority::Medium);
-        assert!(!req.tags.contains("ignored"));
+        assert_eq!(req.status, RequirementStatus::InProgress);
+        assert_eq!(req.priority, RequirementPriority::High);
+        assert!(req.tags.contains("kept"));
+    }
+
+    // trace:BUG-449 | ai:claude
+    #[test]
+    fn mcp_update_requirement_gates_advisor_and_merge_driven_statuses() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Gate target",
+                "description": "BUG-449 status gate",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        // The add-then-update bypass must be refused: advisor-triage statuses…
+        for status in ["approved", "planned"] {
+            let err = server
+                .tool_update_requirement(&json!({ "id": id, "status": status }))
+                .expect_err("approved/planned via MCP must be refused");
+            assert!(err.contains("advisor"), "{status}: {err}");
+        }
+        // …and the merge-driven Completed (the headline self-mark-on-uncommitted bypass).
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "status": "completed" }))
+            .expect_err("completed via MCP must be refused");
+        assert!(err.contains("merge") || err.contains("(SPEC-ID)"), "{err}");
+
+        // Implementer-legitimate transitions are still allowed. Ordered to also
+        // satisfy forbidden_attention_transition (NeedsAttention only from
+        // InProgress; leaving it only to Approved/InProgress/Rejected).
+        for status in ["in-progress", "needs-attention", "in-progress", "done"] {
+            server
+                .tool_update_requirement(&json!({ "id": id, "status": status }))
+                .unwrap_or_else(|e| panic!("{status} should be allowed via MCP: {e}"));
+        }
+
+        // Nothing slipped the gate: the spec never reached an advisor/merge status.
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Done);
+    }
+
+    // ===================================================================
+    // TASK-681 (EPIC-38): authority/lifecycle gate parity audit across
+    // every mutating MCP tool. The audit found one bypass —
+    // `triage_finding promote` self-granted Approved — now gated below.
+    // The remaining mutating tools carry no spec-status/lifecycle
+    // invariant for an MCP caller to bypass (they either always land a
+    // safe status, or write coordination state the orchestrator/CLI
+    // re-derives); these guard tests assert that property so a future
+    // edit that adds a status mutation trips a red test.
+    // trace:TASK-681 | ai:claude
+    // ===================================================================
+
+    /// THE FIX: `triage_finding promote` sets a finding `Approved`, which is
+    /// the advisor's triage decision (same invariant `update_requirement`
+    /// gates under BUG-449). It must be refused for an MCP caller.
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_triage_finding_promote_is_advisor_gated() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let filed = server
+            .tool_file_finding(&json!({
+                "title": "Promote bypass attempt",
+                "description": "finding body",
+                "source": "review",
+                "pr": 681,
+            }))
+            .unwrap();
+        let finding_id = filed
+            .strip_prefix("Finding filed: ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap()
+            .to_string();
+
+        let err = server
+            .tool_triage_finding(&json!({
+                "id": finding_id,
+                "action": "promote",
+                "reason": "I want this approved",
+            }))
+            .expect_err("triage_finding promote must be advisor-gated via MCP");
+        assert!(err.contains("advisor"), "{err}");
+
+        // The finding never reached Approved — it stays Draft as filed.
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&finding_id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Draft);
+
+        // `dismiss` (Rejected) is implementer-legitimate and still works.
+        server
+            .tool_triage_finding(&json!({ "id": finding_id, "action": "dismiss" }))
+            .expect("dismiss is implementer-legitimate and stays allowed");
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&finding_id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Rejected);
+    }
+
+    /// `file_finding` is the findings analogue of `add_requirement`: it must
+    /// always land `Draft` regardless of any status the caller might try to
+    /// smuggle in (it accepts no `status` arg today; this pins that).
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_file_finding_always_lands_draft() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let filed = server
+            .tool_file_finding(&json!({
+                "title": "Intake finding",
+                "description": "body",
+                "source": "implementer",
+                "spec_id": "TASK-681",
+                // a status arg, if it ever leaks in, must be ignored:
+                "status": "approved",
+            }))
+            .unwrap();
+        let id = filed
+            .strip_prefix("Finding filed: ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap()
+            .to_string();
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Draft);
+    }
+
+    /// `add_comment` carries no status/lifecycle mutation — confirm it leaves
+    /// the spec's status untouched no matter what.
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_add_comment_does_not_touch_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Comment-only target",
+                "description": "body",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        server
+            .tool_add_comment(&json!({ "id": id, "text": "a note" }))
+            .unwrap();
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Draft);
+    }
+
+    /// `add_relationship` links specs and (correctly) guards adding children
+    /// to a terminal parent, but it must not mutate either spec's status.
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_add_relationship_does_not_touch_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let parent = server
+            .tool_add_requirement(&json!({
+                "title": "Parent",
+                "description": "p",
+                "type": "epic",
+            }))
+            .unwrap();
+        let parent_id = added_spec_id(&parent).to_string();
+        let child = server
+            .tool_add_requirement(&json!({
+                "title": "Child",
+                "description": "c",
+                "type": "task",
+            }))
+            .unwrap();
+        let child_id = added_spec_id(&child).to_string();
+        server
+            .tool_add_relationship(&json!({
+                "spec_id": child_id,
+                "target_spec_id": parent_id,
+                "relationship_type": "parent",
+            }))
+            .unwrap();
+        let store = server.storage.load().unwrap();
+        for id in [&parent_id, &child_id] {
+            assert_eq!(
+                store.get_requirement_by_spec_id(id).unwrap().status,
+                RequirementStatus::Draft,
+                "{id} status must be untouched by add_relationship"
+            );
+        }
+    }
+
+    /// The coordination-channel writers (`post_punt`/`resolve_punt`/
+    /// `escalate_punt`/`post_directive`/`ack_brief`/`send_message`) write
+    /// runtime files the orchestrator/CLI consume; none of them touch spec
+    /// status in the store. Exercise the punt + directive writers and assert
+    /// the requirement store is never mutated by them. (Status transitions
+    /// for punted work are applied by the orchestrator, not the MCP writer.)
+    // trace:TASK-681 | ai:claude
+    #[test]
+    fn mcp_coordination_writers_do_not_touch_spec_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Coordination target",
+                "description": "body",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        server
+            .tool_post_punt(&json!({
+                "spec_id": id,
+                "detail": "which approach?",
+                "category": "design-fork",
+            }))
+            .unwrap();
+        server
+            .tool_resolve_punt(&json!({
+                "spec_id": id,
+                "answer": "approach A",
+                "reasoning": "simpler",
+            }))
+            .unwrap();
+        server
+            .tool_post_directive(&json!({ "verb": "pause" }))
+            .unwrap();
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(
+            req.status,
+            RequirementStatus::Draft,
+            "coordination writers must not mutate spec status"
+        );
     }
 
     // trace:BUG-377 TASK-550 | ai:codex
@@ -4048,11 +5853,14 @@ mod tests {
             .unwrap()
             .to_string();
 
+        // TASK-681: `promote` is now advisor-gated (it sets Approved), so the
+        // reason-persistence path is exercised via `dismiss` (Rejected stays
+        // an implementer-legitimate transition).
         server
             .tool_triage_finding(&json!({
                 "id": finding_id,
-                "action": "promote",
-                "reason": "verified high priority",
+                "action": "dismiss",
+                "reason": "not actually a problem",
             }))
             .unwrap();
 
@@ -4060,12 +5868,12 @@ mod tests {
         let req = store
             .get_requirement_by_spec_id(&finding_id)
             .expect("finding should exist");
-        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(req.status, RequirementStatus::Rejected);
         assert_eq!(req.comments.len(), 1);
         assert_eq!(req.comments[0].author, "mcp");
         assert_eq!(
             req.comments[0].content,
-            "promoted via MCP: verified high priority"
+            "dismissed via MCP: not actually a problem"
         );
     }
 
@@ -4191,10 +5999,13 @@ mod tests {
                 "title": "Closed parent",
                 "description": "terminal parent",
                 "type": "epic",
-                "status": "completed",
             }))
             .unwrap();
         let parent_id = added_spec_id(&parent).to_string();
+        // TASK-647 (ADR-3): MCP add lands draft; drive the parent to the
+        // terminal `completed` state (the guard's precondition) out-of-band —
+        // BUG-449 forbids setting Completed via the MCP update tool itself.
+        force_status(&server, &parent_id, RequirementStatus::Completed);
         let child = server
             .tool_add_requirement(&json!({
                 "title": "Child task",
@@ -4246,11 +6057,13 @@ mod tests {
         let dir = tempdir().unwrap();
         let srv = mk_server(dir.path());
         let add = srv
-            .tool_add_requirement(
-                &json!({"title":"flip me","description":"d","type":"task","status":"in-progress"}),
-            )
+            .tool_add_requirement(&json!({"title":"flip me","description":"d","type":"task"}))
             .unwrap();
         let id = added_spec_id(&add).to_string();
+        // TASK-647 (ADR-3): MCP add lands draft; reach In Progress (the punt
+        // pre-state) via the ungated update tool.
+        srv.tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .unwrap();
 
         let r = srv
             .tool_post_punt(
@@ -5005,5 +6818,273 @@ mod tests {
                 .any(|r| r.title == "Roundtrip via MCP"),
             "CLI-equivalent GitBackend did not see the MCP-written requirement"
         );
+    }
+
+    // ========================================================================
+    // STORY-474: tool profiles + safe-default surface
+    // ========================================================================
+
+    /// Every name in `tool_descriptors()` must be classified explicitly — no
+    /// tool may fall through to the `Admin` catch-all in `tool_min_profile`. A
+    /// new tool added without a classification line is a bug (it would silently
+    /// be admin-only). trace:STORY-474 | ai:claude
+    #[test]
+    fn every_tool_is_explicitly_classified() {
+        let names: Vec<String> = tool_descriptors()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.get("name").unwrap().as_str().unwrap().to_string())
+            .collect();
+        // The catch-all returns Admin; an explicit `add_requirement`-style
+        // operator/coordination/read classification returns something <= Operator.
+        // No *real* tool should be Admin today.
+        let unclassified: Vec<&String> = names
+            .iter()
+            .filter(|n| tool_min_profile(n) == McpProfile::Admin)
+            .collect();
+        assert!(
+            unclassified.is_empty(),
+            "tools missing a profile classification (would be admin-only): {:?}",
+            unclassified
+        );
+    }
+
+    #[test]
+    fn read_only_profile_excludes_all_write_tools() {
+        let names = tool_names_for_profile(McpProfile::ReadOnly);
+        // Spot-check the writes are gone.
+        for write in [
+            "add_requirement",
+            "update_requirement",
+            "add_comment",
+            "add_relationship",
+            "post_punt",
+            "resolve_punt",
+            "escalate_punt",
+            "file_finding",
+            "triage_finding",
+            "claim_task",
+            "release_task",
+            "post_directive",
+            "ack_directive",
+            "ack_brief",
+            "send_message",
+        ] {
+            assert!(
+                !names.contains(&write.to_string()),
+                "read-only profile leaked write tool {write}"
+            );
+        }
+        // Reads are present.
+        for read in [
+            "list_requirements",
+            "show_requirement",
+            "search_requirements",
+            "query_graph",
+            "history",
+            "list_punts",
+            "read_brief",
+        ] {
+            assert!(
+                names.contains(&read.to_string()),
+                "read-only profile dropped read tool {read}"
+            );
+        }
+    }
+
+    /// Each higher tier is a strict superset of the one below it.
+    #[test]
+    fn profiles_are_monotonic_supersets() {
+        let ro = tool_names_for_profile(McpProfile::ReadOnly);
+        let coord = tool_names_for_profile(McpProfile::Coordination);
+        let op = tool_names_for_profile(McpProfile::Operator);
+        let full = tool_names_for_profile(McpProfile::Full);
+        let admin = tool_names_for_profile(McpProfile::Admin);
+
+        for n in &ro {
+            assert!(coord.contains(n), "coordination dropped {n}");
+        }
+        for n in &coord {
+            assert!(op.contains(n), "operator dropped {n}");
+        }
+        for n in &op {
+            assert!(full.contains(n), "full dropped {n}");
+        }
+        // admin == full today.
+        assert_eq!(admin.len(), full.len());
+        // full exposes every descriptor.
+        assert_eq!(full.len(), tool_descriptors().as_array().unwrap().len());
+        // strict growth across tiers.
+        assert!(ro.len() < coord.len());
+        assert!(coord.len() < op.len());
+        assert!(op.len() <= full.len());
+    }
+
+    #[test]
+    fn profile_token_parsing_round_trips_and_aliases() {
+        assert_eq!(
+            McpProfile::from_token("read-only"),
+            Some(McpProfile::ReadOnly)
+        );
+        assert_eq!(
+            McpProfile::from_token("readonly"),
+            Some(McpProfile::ReadOnly)
+        );
+        assert_eq!(McpProfile::from_token("  RO "), Some(McpProfile::ReadOnly));
+        assert_eq!(
+            McpProfile::from_token("read_only"),
+            Some(McpProfile::ReadOnly)
+        );
+        assert_eq!(
+            McpProfile::from_token("Coordination"),
+            Some(McpProfile::Coordination)
+        );
+        assert_eq!(
+            McpProfile::from_token("operator"),
+            Some(McpProfile::Operator)
+        );
+        assert_eq!(McpProfile::from_token("admin"), Some(McpProfile::Admin));
+        assert_eq!(McpProfile::from_token("full"), Some(McpProfile::Full));
+        assert_eq!(McpProfile::from_token("all"), Some(McpProfile::Full));
+        assert_eq!(McpProfile::from_token("bogus"), None);
+        // canonical token round-trips
+        for p in [
+            McpProfile::ReadOnly,
+            McpProfile::Coordination,
+            McpProfile::Operator,
+            McpProfile::Admin,
+            McpProfile::Full,
+        ] {
+            assert_eq!(McpProfile::from_token(p.as_str()), Some(p));
+        }
+    }
+
+    #[test]
+    fn default_profile_is_full_for_backwards_compat() {
+        assert_eq!(McpProfile::default(), McpProfile::Full);
+    }
+
+    /// `tools/list` advertises only the in-profile tools and tags each with its
+    /// minimum tier.
+    #[test]
+    fn tools_list_respects_profile() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server =
+            McpServer::with_profile(storage, dir.path().to_path_buf(), McpProfile::ReadOnly);
+
+        let resp = server.handle_tools_list(&json!(1));
+        let result = resp.result.expect("tools/list returns a result");
+        let tools = result["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert!(names.contains(&"list_requirements"));
+        assert!(!names.contains(&"add_requirement"));
+        // descriptors carry the profile tier metadata.
+        let lr = tools
+            .iter()
+            .find(|t| t["name"] == json!("list_requirements"))
+            .unwrap();
+        assert_eq!(lr["profile"], json!("read-only"));
+    }
+
+    /// `tools/call` rejects an out-of-profile (but known) tool with a permission
+    /// error, even when the client calls it directly. trace:STORY-474 | ai:claude
+    #[test]
+    fn tools_call_rejects_out_of_profile_tool() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server =
+            McpServer::with_profile(storage, dir.path().to_path_buf(), McpProfile::ReadOnly);
+
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({ "name": "add_requirement", "arguments": { "title": "X" } }),
+        );
+        let result = resp.result.expect("tools/call returns a result");
+        assert_eq!(result["isError"], json!(true));
+        let code = result["structuredError"]["code"].as_str().unwrap();
+        assert_eq!(code, "permission_denied");
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(
+            text.contains("operator"),
+            "should name the required tier: {text}"
+        );
+        assert!(
+            text.contains("read-only"),
+            "should name the active tier: {text}"
+        );
+    }
+
+    /// A read tool still works under read-only (smoke test the gate doesn't
+    /// over-block).
+    #[test]
+    fn tools_call_allows_in_profile_read() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server =
+            McpServer::with_profile(storage, dir.path().to_path_buf(), McpProfile::ReadOnly);
+
+        let resp = server.handle_tools_call(&json!(1), &json!({ "name": "list_features" }));
+        let result = resp.result.expect("tools/call returns a result");
+        // list_features returns Ok (not a profile rejection).
+        assert!(
+            result["isError"] != json!(true),
+            "in-profile read was rejected: {result}"
+        );
+    }
+
+    /// Resolution order for the non-env layers (override > config > default).
+    /// The `AIDA_MCP_PROFILE` env layer is intentionally NOT exercised here:
+    /// mutating a process-global env var races with the many parallel tests that
+    /// build a server via `McpServer::new` (which reads it). The env layer is a
+    /// thin `std::env::var` read above the config layer in `resolve_mcp_profile`.
+    #[test]
+    fn resolve_profile_prefers_override_then_config_then_default() {
+        // Guard: a leaked AIDA_MCP_PROFILE from the ambient shell would change
+        // the default-layer expectation; skip that one assertion if so.
+        let env_clean = std::env::var("AIDA_MCP_PROFILE").is_err();
+
+        let dir = tempdir().unwrap();
+        let aida = dir.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+
+        // No override, no env, no config -> default (full).
+        if env_clean {
+            assert_eq!(resolve_mcp_profile(dir.path(), None), McpProfile::Full);
+        }
+
+        // Config sets coordination (override and env both absent/clean).
+        std::fs::write(
+            aida.join("config.toml"),
+            "[mcp]\nprofile = \"coordination\"\n",
+        )
+        .unwrap();
+        if env_clean {
+            assert_eq!(
+                resolve_mcp_profile(dir.path(), None),
+                McpProfile::Coordination
+            );
+        }
+
+        // Explicit override beats config (and env) regardless of ambient env.
+        assert_eq!(
+            resolve_mcp_profile(dir.path(), Some("read-only")),
+            McpProfile::ReadOnly
+        );
+
+        // An unknown override token is ignored (falls through to config).
+        if env_clean {
+            assert_eq!(
+                resolve_mcp_profile(dir.path(), Some("nonsense")),
+                McpProfile::Coordination
+            );
+        }
     }
 }

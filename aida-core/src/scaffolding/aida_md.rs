@@ -8,6 +8,91 @@ use super::*;
 pub(super) const AIDA_BLOCK_BEGIN: &str = "<!-- AIDA-AUTOGEN-BEGIN -->";
 pub(super) const AIDA_BLOCK_END: &str = "<!-- AIDA-AUTOGEN-END -->";
 
+/// Heading that opens the Claude-Code-skills documentation section of
+/// `.claude/AIDA.md`. The whole section is gated by `generate_skills`, so a
+/// project initialized with `aida init --no-skills` writes an AIDA.md that
+/// stops *before* this heading. The drift check must tolerate that — see
+/// `aida_md_matches`. trace:TASK-125 | ai:claude
+const AIDA_MD_SKILLS_HEADING: &str = "## Claude Code skills";
+
+/// Compare an on-disk `.claude/AIDA.md` against the freshly-regenerated
+/// expected content, tolerant of the one legitimately-optional section.
+///
+/// `generate_aida_md` appends a "Claude Code skills (slash commands)"
+/// section only when `config.generate_skills` is true. The `aida status`
+/// scaffold drift check always regenerates with the default config
+/// (`generate_skills = true`) — it has no record of an `aida init
+/// --no-skills` having dropped the section — so a clean `--no-skills` init
+/// would otherwise report `.claude/AIDA.md` as STALE the instant it was
+/// written. We split both sides at the skills heading and:
+///
+/// - always require the pre-skills *body* to match (after stripping the
+///   AIDA-Generated header lines, which carry a content checksum), and
+/// - require the skills section to match only when *both* sides have it.
+///   When the on-disk file omits it (the `--no-skills` case), the absence
+///   is treated as a deliberate opt-out, not drift.
+///
+/// trace:TASK-125 | ai:claude
+pub fn aida_md_matches(actual: &str, expected: &str) -> bool {
+    let a = strip_aida_header(actual);
+    let e = strip_aida_header(expected);
+
+    let (a_body, a_skills) = split_at_skills(a);
+    let (e_body, e_skills) = split_at_skills(e);
+
+    if a_body.trim() != e_body.trim() {
+        return false;
+    }
+
+    match (a_skills, e_skills) {
+        // Both carry the skills section — it must match.
+        (Some(a_s), Some(e_s)) => a_s.trim() == e_s.trim(),
+        // On-disk file omits the section (opted out via --no-skills). The
+        // expected content may or may not include it; either way the absence
+        // on disk is deliberate, not drift.
+        (None, _) => true,
+        // On-disk has the section but expected doesn't — unusual, but lean
+        // toward "matching" rather than flagging drift on a section the
+        // current template no longer emits.
+        (Some(_), None) => true,
+    }
+}
+
+/// Split AIDA.md content into (body-before-skills, optional-skills-section).
+fn split_at_skills(content: &str) -> (&str, Option<&str>) {
+    match content.find(AIDA_MD_SKILLS_HEADING) {
+        Some(idx) => (&content[..idx], Some(&content[idx..])),
+        None => (content, None),
+    }
+}
+
+/// Drop the leading `<!-- AIDA Generated: ... -->` / `<!-- To customize:
+/// ... -->` header lines so two AIDA.md bodies can be compared on their
+/// substance, not the embedded per-content checksum. Non-header content is
+/// returned unchanged.
+fn strip_aida_header(content: &str) -> &str {
+    let mut rest = content;
+    loop {
+        let trimmed = rest.trim_start_matches(['\n', '\r']);
+        if let Some(after) = trimmed.strip_prefix("<!-- AIDA Generated:") {
+            // Skip to the end of this comment's line.
+            rest = match after.find('\n') {
+                Some(nl) => &after[nl + 1..],
+                None => "",
+            };
+            continue;
+        }
+        if let Some(after) = trimmed.strip_prefix("<!-- To customize:") {
+            rest = match after.find('\n') {
+                Some(nl) => &after[nl + 1..],
+                None => "",
+            };
+            continue;
+        }
+        return trimmed;
+    }
+}
+
 impl Scaffolder {
     /// Generate the canonical AIDA conventions content. Single source of
     /// truth for trace format, commit format, daily commands, and capture
@@ -274,6 +359,87 @@ fn find_marker_at_line_start(haystack: &str, marker: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const HEADER: &str =
+        "<!-- AIDA Generated: v2.0.0 | checksum:deadbeef | DO NOT EDIT DIRECTLY -->\n\
+                          <!-- To customize: copy this file and modify the copy -->\n\n";
+
+    /// TASK-125: a `--no-skills` AIDA.md (no skills section) must NOT be
+    /// reported as drift against the default-config (skills-on) regeneration.
+    #[test]
+    fn aida_md_matches_tolerates_missing_skills_section() {
+        let body = "# AIDA Conventions\n\nshared body.\n";
+        let with_skills =
+            format!("{HEADER}{body}\n## Claude Code skills (slash commands)\n\nstuff\n");
+        let without_skills = format!("{HEADER}{body}");
+        // On-disk lacks the section, expected has it → still a match.
+        assert!(aida_md_matches(&without_skills, &with_skills));
+        // Both have the section → match.
+        assert!(aida_md_matches(&with_skills, &with_skills));
+        // Header checksum differing must not matter.
+        let with_skills_other_header = with_skills.replace("deadbeef", "cafef00d");
+        assert!(aida_md_matches(&with_skills_other_header, &with_skills));
+    }
+
+    /// Real drift in the shared body must still be reported.
+    #[test]
+    fn aida_md_matches_flags_body_drift() {
+        let expected = format!("{HEADER}# AIDA Conventions\n\nshared body.\n");
+        let actual = format!("{HEADER}# AIDA Conventions\n\nUSER EDITED body.\n");
+        assert!(!aida_md_matches(&actual, &expected));
+    }
+
+    /// Drift inside the skills section (when both have it) must be reported.
+    #[test]
+    fn aida_md_matches_flags_skills_section_drift() {
+        let body = "# AIDA Conventions\n\nshared body.\n";
+        let expected =
+            format!("{HEADER}{body}\n## Claude Code skills (slash commands)\n\noriginal\n");
+        let actual =
+            format!("{HEADER}{body}\n## Claude Code skills (slash commands)\n\nTAMPERED\n");
+        assert!(!aida_md_matches(&actual, &expected));
+    }
+
+    /// End-to-end regression for TASK-125: the AIDA.md that
+    /// `aida init --no-skills` writes (skills section dropped, AIDA-Generated
+    /// header attached) must compare clean against the content the status
+    /// drift check regenerates with the default (skills-on) config. Before
+    /// the fix this reported `.claude/AIDA.md` STALE-on-arrival.
+    #[test]
+    fn no_skills_init_aida_md_is_not_stale_vs_default_regeneration() {
+        use crate::models::RequirementsStore;
+        use crate::scaffolding::{ScaffoldConfig, Scaffolder};
+        use std::path::PathBuf;
+
+        let store = RequirementsStore::default();
+
+        // What `aida init --no-skills` writes to disk.
+        let mut no_skills_cfg = ScaffoldConfig::default();
+        no_skills_cfg.generate_skills = false;
+        let no_skills = Scaffolder::new(PathBuf::from("/tmp/aida-task125"), no_skills_cfg);
+        let on_disk_raw = no_skills.generate_aida_md(&store);
+        let on_disk =
+            super::super::wrap_with_aida_header(&PathBuf::from(".claude/AIDA.md"), &on_disk_raw);
+
+        // What `aida status` regenerates to compare against (default config).
+        let default = Scaffolder::new(
+            PathBuf::from("/tmp/aida-task125"),
+            ScaffoldConfig::default(),
+        );
+        let expected_raw = default.generate_aida_md(&store);
+        let expected =
+            super::super::wrap_with_aida_header(&PathBuf::from(".claude/AIDA.md"), &expected_raw);
+
+        // Sanity: the two genuinely differ (skills section present in one).
+        assert_ne!(
+            on_disk, expected,
+            "test precondition: outputs should differ"
+        );
+        assert!(
+            aida_md_matches(&on_disk, &expected),
+            "a fresh --no-skills AIDA.md must not be reported as drift"
+        );
+    }
 
     #[test]
     fn extract_aida_block_returns_inner_content() {

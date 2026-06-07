@@ -44,6 +44,7 @@ aida init --no-skills          # Skip .claude/skills/ and .claude/commands/
 aida init --no-hooks           # Skip .claude/hooks/ and git hooks
 aida init --with-memories      # Also write the starter memory pack (opt-in)
 aida init --with-memories --refresh   # Overlay updated pack files, keep your edits
+aida init --with-memories --focus <subsystem>  # Scope the pack to a subsystem (untagged memories = universal, always loaded)
 aida init --force              # Overwrite existing files
 ```
 
@@ -72,6 +73,8 @@ Prerequisites: `aida` on PATH (run `aida-on` first if using the dev build), `gh`
 
 When adding a new generic discipline memory, tag it `propagation: scaffolding-pack` and it joins the pack on the next build — no code change.
 
+**Subsystem-scoped memories (STORY-362).** A memory file may also carry an optional `subsystem: <name>` frontmatter tag. `aida init --with-memories --focus <subsystem>` then loads only universal memories plus those whose `subsystem:` matches (case-insensitive). Backward-compatible: a memory with no `subsystem:` tag is **universal** and always loads, with or without `--focus`. Omitting `--focus` loads the full pack regardless of tags. (Forward-looking for SPIKE-10 subsystem-scoped advisors; the embedded pack is all-universal today.)
+
 ### Daily-use commands
 
 ```bash
@@ -95,6 +98,7 @@ aida fetch                             # Read-only two-leg refresh of remote ref
 aida fetch --code-only --quiet         # Background-safe code-leg-only refresh
 aida db reconcile-status [--spec ID] [--since REF] [--dry-run]  # Replay Done→Completed bumps the pull missed (TASK-226)
 aida cache status                      # Compare cache HEAD vs git HEAD
+aida memories check [--verbose] [--json]   # Drift between local memory pack and binary's embedded master; fix via init --with-memories --refresh (STORY-410)
 aida plan verify <file> [--fix]        # Lint a plan: drifted refs, missing files/sections (--fix rewrites refs) (TASK-93)
 aida plan helpers <spec> [--append <file>]  # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
 aida ultraplan <spec> [--stdout|--json]     # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
@@ -173,6 +177,8 @@ For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the work
 
 ### Divergent-branch recovery
 
+The convention behind the two-leg git-mirror verbs (`fetch` / `pull` / `push` / `rebase`) — what bundles, what's a deliberate non-mirror, and the `--code-only` / `--store-only` / `--dry-run` / `--json` rules a new verb must follow — is `docs/git-verb-surface.md` (TASK-109).
+
 `aida pull` for the **code** leg uses `git pull --ff-only` by design (see `aida-cli/src/main.rs:20120` — refuses to surprise the working tree with auto-rebase). On divergence it prints `git pull --rebase origin main` as a hint. The **store** leg uses `--rebase` (line 19678) because store conflicts are rare and the worktree is AIDA-managed.
 
 When the code leg refuses (or raw `git pull` hits "Need to specify how to reconcile"):
@@ -240,7 +246,11 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 `aida mcp-serve` exposes requirements as MCP tools and resources for native Claude Code integration via `.mcp.json`. Tools: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `add_relationship`, `query_graph`, `list_features`, `history`. Resources: `aida://project/summary`, `aida://requirements/tree`. The MCP server is the highest-leverage surface for the agent-context vision.
 
+The **7 core tool schemas mirror the current CLI surface** (STORY-82): the status/type enums are the full taxonomy; `list_requirements` filters on `tags`/`batch`/`parent`/`role`(`for`)/`in_flight` like `aida list`; `show_requirement` appends git linkage by default (`include_git`/`verbose`, matching `aida show`); `add_requirement` accepts `parent`/`feature`/`owner`; `update_requirement` edits `title`/`type`/`priority`/`tags`/`parent` (status transitions stay gated — approved/planned are advisor-only, completed is merge-driven); `search_requirements` narrows by `type`/`status`. When you add a new CLI filter or field, mirror it onto the matching MCP tool schema + handler so the two surfaces don't drift. trace:STORY-82
+
 Long-running MCP servers self-respawn after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA for the same version. The current MCP response is flushed first; the next request runs on the new binary. If a client still appears stale, kill that agent's `aida mcp-serve` process and let the MCP client respawn it.
+
+**This dev repo dogfoods its own MCP server.** A checked-in `.mcp.json` registers `aida mcp-serve` (resolved off PATH — run `aida-on` so it's the in-repo build) so Claude Code sessions working *in* this repo exercise the MCP tools, not just the CLI. MCP-vs-CLI parity gaps (schema drift, tool-response edge cases) therefore surface here first, in our own workflow, rather than only when downstream projects hit them. trace:TASK-253
 
 ## Template architecture (CRITICAL for AIDA development)
 

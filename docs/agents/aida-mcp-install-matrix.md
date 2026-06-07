@@ -4,14 +4,30 @@
 **Owner**: AIDA ecosystem watch / Codex  
 **Purpose**: track how AIDA should be exposed to each major coding-agent client without relying on memory or stale setup snippets.
 
-This matrix is operational, not marketing. It records how to connect each client to `aida mcp-serve`, what instruction file or marketplace surface the client expects, and which AIDA MCP profile should be safe by default once tool profiles ship.
+This matrix is operational, not marketing. It records how to connect each client to `aida mcp-serve`, what instruction file or marketplace surface the client expects, and which AIDA MCP profile should be safe by default.
 
-Until `aida mcp-serve --profile` exists, treat the profile column as the target posture. Today the local stdio server exposes the full tool set to a trusted local client.
+## Tool profiles (STORY-474)
+
+`aida mcp-serve` now gates its tool surface behind a named **profile** — a capability tier where each higher tier is a strict superset of the one below:
+
+| Profile | Exposes | Use for |
+|---|---|---|
+| `read-only` | pure reads only (`list_*`/`show_*`/`search_*`/`query_graph`/`history`/`read_*`) — **no write tools at all** | untrusted / marketplace / exploratory / remote clients (the recommended safe default) |
+| `coordination` | read-only + drain-coordination writes (punts, findings, task claims, directives, brief acks, comments, relationships, messages) — no spec create/edit | trusted agents participating in a drain |
+| `operator` | coordination + spec-graph writes (`add_requirement`, `update_requirement`) | trusted local day-to-day work |
+| `admin` / `full` | every tool | fully-trusted local operator (the built-in backwards-compatible default) |
+
+Select the profile (first match wins):
+
+1. `AIDA_MCP_PROFILE=read-only` in the MCP server's environment (set it in the client's `.mcp.json`/`mcpServers` env block), or
+2. `[mcp]\nprofile = "read-only"` in `.aida/config.toml`.
+
+The default is `full` so existing trusted local installs are unchanged. **Marketplace and any non-local/untrusted install should set `read-only` (or `coordination`) explicitly.** The profile is a real boundary: an out-of-profile tool is both hidden from `tools/list` and rejected at `tools/call` with a `permission_denied` envelope, even if the client calls it by name. The active profile is printed on the server's stderr startup banner.
 
 ## Recommended Defaults
 
 - Default to local stdio for solo/local agents.
-- Default to read-mostly or coordination-scoped MCP once profiles exist.
+- Default to `read-only` or `coordination`-scoped MCP for any untrusted/remote/marketplace context (set `AIDA_MCP_PROFILE` / `[mcp] profile`).
 - Keep write-capable tools off for cloud/remote agents until auth, project scoping, and audit logs exist.
 - Prefer client-native package/marketplace channels for discovery, but keep `aida init` as the source of repo-local scaffolding.
 - Keep a "last verified" date on every row; do not silently assume client setup stays stable.
@@ -21,7 +37,7 @@ Until `aida mcp-serve --profile` exists, treat the profile column as the target 
 | Client | Instruction / agent context file | MCP config surface | Marketplace / package surface | AIDA setup recommendation | Write-tool stance | Last verified | Source |
 |---|---|---|---|---|---|---|---|
 | Claude Code | `CLAUDE.md`; `.claude/skills/`; slash commands and hooks | Project `.mcp.json` scaffolded by `aida init`; plugin packages may also bundle MCP servers | Claude Code plugin marketplaces package commands, agents, hooks, MCP servers, and skills via `.claude-plugin/marketplace.json`; AIDA package skeleton lives at `plugins/aida/` | Keep `aida init` for repo scaffolding; use the AIDA Claude plugin for discovery and repeatable install | Trusted local write tools are acceptable after project trust; marketplace package must document permissions | 2026-05-26 | https://code.claude.com/docs/en/plugin-marketplaces |
-| Codex CLI | `AGENTS.md`; Codex skills when scaffolded | `codex mcp add <name> -- <command>...`; local setup verified by `docs/agents/codex-mcp-setup.md` | Codex has CLI MCP management; broader marketplace/plugin behavior is still changing, so keep install docs conservative | Prefer `aida agent new codex --spec <SPEC>` for supervised launches; register MCP as `codex mcp add aida -- aida mcp-serve` | Trusted local coordination profile; parse text envelopes defensively until structuredContent ships | 2026-05-26 | https://platform.openai.com/docs/docs-mcp |
+| Codex CLI | `AGENTS.md`; Codex skills when scaffolded | `codex mcp add <name> -- <command>...`; local setup verified by `docs/agents/codex-mcp-setup.md` | Codex has CLI MCP management; broader marketplace/plugin behavior is still changing, so keep install docs conservative | Prefer `aida agent new codex --spec <SPEC>` for supervised launches; register MCP as `codex mcp add aida -- aida mcp-serve` | Trusted local coordination profile; structuredContent ships on success (STORY-399), text envelope preserved for back-compat | 2026-05-26 | https://platform.openai.com/docs/docs-mcp |
 | Cursor | Cursor rules files; project-specific guidance should be mirrored from AGENTS/CLAUDE where useful | Project `.cursor/mcp.json` for project tools; user/global MCP config also exists | Cursor extension ecosystem, not a stable AIDA-specific package target yet | Document `.cursor/mcp.json` snippet once profiles exist; use read-only by default for exploratory Cursor sessions | Read-only first; coordination only after explicit trust because Cursor may run tools inside editor workflows | 2026-05-26 | https://docs.cursor.com/context/model-context-protocol |
 | Windsurf / Cascade | Windsurf rules/customizations; repo guidance should point back to AGENTS.md | `~/.codeium/windsurf/mcp_config.json`; supports command/args/env/server URL fields and marketplace/deeplink flows | Windsurf MCP marketplace, custom registries, team admin controls, whitelists | Provide a global config snippet and a marketplace-ready metadata block; warn that global config can leak tools into unrelated workspaces | Read-only or coordination-scoped only; respect team whitelists/admin registry controls | 2026-05-26 | https://docs.windsurf.com/windsurf/cascade/mcp |
 | Continue | Rules/tools blocks and Continue config; can import JSON MCP snippets | `.continue/mcpServers/` can ingest JSON-style MCP server configs from Claude Desktop/Cursor/Cline-style files | Continue Hub / Mission Control for shared models, rules, tools, and secrets | Provide a copied JSON config under `.continue/mcpServers/aida.json` once profile support exists | Read-only first; coordination only in trusted project workspaces | 2026-05-26 | https://docs.continue.dev/customize/deep-dives/mcp |

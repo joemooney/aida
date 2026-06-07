@@ -665,6 +665,7 @@ fn handle_groom(
                 .filter(|s| !s.is_empty()),
             for_scope: None,
             for_session: None,
+            added_by_machine: None,
         };
         storage
             .queue_add(entry)
@@ -781,11 +782,15 @@ mod tests {
             attachments: Vec::new(),
             trace_links: Vec::new(),
             gitlab_issues: Vec::new(),
+            // trace:STORY-476 | ai:claude
+            external_refs: Vec::new(),
             implementation_info: None,
             ai_evaluation: None,
             attention_reason: None,
             failure_reason: None,
             human_only: false,
+            // trace:STORY-522 | ai:claude
+            decision_request: None,
             version: 1,
         }
     }

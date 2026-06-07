@@ -3627,6 +3627,7 @@ async fn queue_add(
         for_role: None,
         for_scope: None,
         for_session: None,
+        added_by_machine: None,
     };
 
     state

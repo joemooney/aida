@@ -215,6 +215,14 @@ fn clip(s: &str, max: usize) -> String {
     t
 }
 
+/// TASK-252: char-safe first-12 truncation of a session id for the lease
+/// overlay. The previous `&id[..12]` byte-slice panics the whole TUI render if
+/// a multi-byte UTF-8 char straddles byte 12. Session ids are normally ASCII
+/// hex, but we never assume that of an arbitrary &str. trace:TASK-252 | ai:claude
+fn short_session_id(id: &str) -> String {
+    id.chars().take(12).collect()
+}
+
 fn render_header(frame: &mut Frame, area: Rect, model: &OverlayModel, refreshing: bool) {
     let branch = model
         .branch
@@ -251,7 +259,7 @@ fn render_session(frame: &mut Frame, area: Rect, model: &OverlayModel) {
     let inner_w = area.width.saturating_sub(2) as usize;
     let lines: Vec<Line> = match &model.session {
         Some(s) => {
-            let id = if s.id.len() > 12 { &s.id[..12] } else { &s.id };
+            let id = short_session_id(&s.id);
             let role = s
                 .role
                 .clone()
@@ -512,6 +520,22 @@ mod tests {
     /// both public, so this avoids depending on a `Display` impl.
     fn line_text(line: &Line) -> String {
         line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    /// TASK-252: `short_session_id` truncates by char (not byte) and never
+    /// panics on multi-byte UTF-8 — the old `&id[..12]` byte-slice would.
+    #[test]
+    fn short_session_id_is_char_safe() {
+        // Normal ASCII hex id → first 12 chars.
+        assert_eq!(short_session_id("019e2d4fd55baaaa"), "019e2d4fd55b");
+        // Shorter than 12 → unchanged.
+        assert_eq!(short_session_id("short"), "short");
+        // All multi-byte: 14 emoji → exactly 12 chars, no panic.
+        let emoji = "🎯".repeat(14);
+        assert_eq!(short_session_id(&emoji).chars().count(), 12);
+        // A char straddling byte boundary 12 (©=2 bytes) must not panic.
+        let mixed = "ab©de©fg©hi©jklmnop";
+        let _ = short_session_id(mixed);
     }
 
     const FIXTURE: &str = r#"{

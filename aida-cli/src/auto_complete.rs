@@ -114,6 +114,45 @@ impl LifecycleSkip {
         !self.no_ci_wait && !self.no_review && !self.no_build
     }
 
+    /// TASK-525: the active short-circuit tokens (`no-ci-wait`, `no-review`,
+    /// `no-build`) for telemetry — recorded on the auto-complete JSONL event so
+    /// retro analysis can see how often fast-track tags fire and on what.
+    /// Empty when no skip is active. trace:TASK-525 | ai:claude
+    pub(crate) fn active_tokens(self) -> Vec<String> {
+        let mut v = Vec::new();
+        if self.no_ci_wait {
+            v.push("no-ci-wait".to_string());
+        }
+        if self.no_review {
+            v.push("no-review".to_string());
+        }
+        if self.no_build {
+            v.push("no-build".to_string());
+        }
+        v
+    }
+}
+
+/// The lifecycle short-circuit tags AIDA recognizes (STORY-442). Used both by
+/// `LifecycleSkip::from_tags` and by the `aida edit`/`aida add` typo guard
+/// (TASK-524) so a misspelled `lifecycle:*` tag is flagged instead of silently
+/// no-op'ing. trace:TASK-524 | ai:claude
+pub(crate) const RECOGNIZED_LIFECYCLE_TAGS: &[&str] = &[
+    "lifecycle:no-ci-wait",
+    "lifecycle:no-review",
+    "lifecycle:no-build",
+    "lifecycle:trivial",
+];
+
+/// TASK-524: true when `tag` is in the `lifecycle:` namespace but is NOT one of
+/// the recognized short-circuit tags — i.e. a likely typo that would silently
+/// have no effect. Case-insensitive, matching `from_tags`.
+pub(crate) fn is_unrecognized_lifecycle_tag(tag: &str) -> bool {
+    let t = tag.trim().to_ascii_lowercase();
+    t.starts_with("lifecycle:") && !RECOGNIZED_LIFECYCLE_TAGS.contains(&t.as_str())
+}
+
+impl LifecycleSkip {
     pub(crate) fn banner_summary(self) -> Option<String> {
         if self.is_empty() {
             return None;
@@ -333,6 +372,17 @@ pub(crate) enum FailureKind {
     /// orchestrator killed the child and shelved the spec for a human to look
     /// at. trace:BUG-420 | ai:claude
     Watchdog,
+    /// BUG-455: a phase failed because the SQLite cache (`.aida/cache.db`) was
+    /// locked by another concurrent `aida` process (a sibling drain, an
+    /// interactive shell, or a bulk op like a mass `archive`/`edit` sweep).
+    /// The app-level cache retry loop (TASK-558) waits out most contention, but
+    /// a lock held longer than the retry budget surfaces the failure here. This
+    /// is transient *environment contention* — not a broken spec and not a
+    /// broken install — so it is classified *shelvable*: a batch drain parks
+    /// the spec and continues rather than hard-stopping the whole batch, the
+    /// same way a transient GH-API blip ([`Self::PrVerificationInconclusive`])
+    /// is shelved. trace:BUG-455 | ai:claude
+    CacheLocked,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -352,6 +402,7 @@ impl FailureKind {
             Self::NoVerdict => "no-verdict",
             Self::PrVerificationInconclusive => "pr-verification-inconclusive",
             Self::Watchdog => "no-progress-watchdog",
+            Self::CacheLocked => "cache-locked",
             Self::Failed => "failed",
         }
     }
@@ -360,9 +411,12 @@ impl FailureKind {
     /// on this failure kind, or stop the batch entirely?
     ///
     /// - **Shelvable** — the spec's work itself failed in a way a human
-    ///   should look at: `NoPr`, `CiRed`, `CiTimeout`, `NoVerdict`,
-    ///   `Failed`. The drain parks the spec in `NeedsAttention` and
-    ///   continues to the next batch member.
+    ///   should look at (`NoPr`, `CiRed`, `CiTimeout`, `NoVerdict`,
+    ///   `Failed`), or a *transient* condition that re-running clears
+    ///   (`PrVerificationInconclusive`, `Watchdog`, and `CacheLocked` —
+    ///   BUG-455's concurrent-`aida` SQLite-cache contention). The drain
+    ///   parks the spec in `NeedsAttention` and continues to the next
+    ///   batch member.
     /// - **Not shelvable** — the local environment is broken in a way
     ///   that has nothing to do with the spec: `Spawn` (no PATH for the
     ///   subprocess), `MissingTool` (no `gh` / `cargo`), `Internal`
@@ -380,6 +434,7 @@ impl FailureKind {
                 | Self::NoVerdict
                 | Self::PrVerificationInconclusive
                 | Self::Watchdog
+                | Self::CacheLocked
                 | Self::Failed
         )
     }
@@ -454,6 +509,39 @@ impl PhaseFailure {
             kind,
         }
     }
+
+    /// BUG-455: upgrade a failure that is really transient SQLite cache-lock
+    /// contention to [`FailureKind::CacheLocked`] (a *shelvable* kind) so a
+    /// batch drain parks the spec and continues instead of hard-stopping.
+    ///
+    /// A concurrent `aida` process (sibling drain, interactive shell, bulk
+    /// archive/edit sweep) can hold `.aida/cache.db`'s write lock past the
+    /// app-level retry budget; whichever phase touched the cache then fails
+    /// with a "database is locked" message. Without this, that failure
+    /// inherits the phase's default kind ([`FailureKind::Failed`]) or — worse
+    /// — an un-shelvable [`FailureKind::Internal`], and the whole batch stops
+    /// over transient environment contention that re-running clears.
+    ///
+    /// Only the message text is consulted (via [`is_database_locked_message`]),
+    /// not the original kind, so it catches the condition wherever a cache
+    /// write surfaced it. Idempotent — a failure already classified
+    /// `CacheLocked` is left as-is. trace:BUG-455 | ai:claude
+    pub(crate) fn reclassify_transient(mut self) -> Self {
+        if self.kind != FailureKind::CacheLocked && is_database_locked_message(&self.reason) {
+            self.kind = FailureKind::CacheLocked;
+        }
+        self
+    }
+}
+
+/// BUG-455: does a failure `reason` describe a SQLite cache-lock contention
+/// (a transient "database is locked" / "database table is locked" / SQLITE_BUSY
+/// surfaced through the cache layer)? Pure, case-insensitive, and fully
+/// isolated so the classification rule is unit-testable without a driver.
+/// trace:BUG-455 | ai:claude
+pub(crate) fn is_database_locked_message(reason: &str) -> bool {
+    let lower = reason.to_ascii_lowercase();
+    lower.contains("database is locked") || lower.contains("database table is locked")
 }
 
 /// The verdict of the BUG-241 reconcile step: when a phase ends without the
@@ -487,6 +575,10 @@ pub(crate) struct HintContext {
     pub(crate) pr_number: Option<u32>,
     pub(crate) implementer_session: Option<String>,
     pub(crate) ci_run_id: Option<String>,
+    /// STORY-508/TASK-651: the project's active forge, so recovery hints name
+    /// the right CLI (gh/glab) — or a forge-neutral phrasing for pure-git —
+    /// when a drain phase fails. Set by the driver's `hint_context()`.
+    pub(crate) forge: crate::forge::ForgeKind,
 }
 
 /// The outcome of phase 1 — the implementer session. The implementer either
@@ -885,6 +977,29 @@ pub(crate) fn phase_event(
     serde_json::Value::Object(obj).to_string()
 }
 
+/// STORY-508/TASK-651: forge-aware "CLI not on PATH" recovery message. `action`
+/// is what the missing CLI was needed for ("merge the PR"); `retry` is the
+/// resume verb ("re-run"). Names the right CLI + install URL per forge; pure-git
+/// (no forge CLI) gets a forge-neutral phrasing — it shouldn't normally reach a
+/// MissingTool failure since it shells out to neither gh nor glab.
+fn forge_cli_missing_hint(forge: crate::forge::ForgeKind, action: &str, retry: &str) -> String {
+    match forge.cli_install_hint() {
+        Some((name, url)) => format!(
+            "`{}` is not on PATH — auto-complete needs the {} to {}. \
+             Install it ({}), then {}.",
+            forge.cli_name(),
+            name,
+            action,
+            url,
+            retry
+        ),
+        None => format!(
+            "A forge CLI is needed to {action}, but this project is configured pure-git. \
+             Complete the step manually, then {retry}."
+        ),
+    }
+}
+
 /// Pick the recovery hint for a failed phase. Pure — each branch names a
 /// concrete next command, parameterised by the failure `kind` (so a spawn
 /// ENOENT is never reported as red CI) and whatever the driver discovered.
@@ -912,7 +1027,10 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 Phase::Implementer => format!("aida queue work {spec}"),
                 Phase::Ci => format!("aida session end {session} --wait-ci"),
                 Phase::Reviewer => format!("aida queue work PR-{pr}"),
-                Phase::Merge => format!("gh pr merge {pr} --squash --delete-branch"),
+                Phase::Merge => ctx
+                    .forge
+                    .merge_cmd(&pr)
+                    .unwrap_or_else(|| format!("merge PR {pr} to your default branch")),
                 Phase::Pull => "aida pull".to_string(),
                 Phase::Build => "cargo build --release".to_string(),
             };
@@ -961,6 +1079,19 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                  `aida queue rework {spec} --work`."
             );
         }
+        // BUG-455: the SQLite cache was locked by another concurrent `aida`
+        // process longer than the retry budget. Transient — re-running the
+        // drain once the contending process finishes clears it.
+        // trace:BUG-455 | ai:claude
+        FailureKind::CacheLocked => {
+            return format!(
+                "The local cache was locked by another `aida` process (a sibling drain, \
+                 an interactive shell, or a bulk archive/edit sweep) longer than the retry \
+                 window — the spec is shelved, not failed. Avoid running bulk cache writes \
+                 while a drain is live, then re-run: `aida queue work {spec} --auto-complete`. \
+                 If a lock looks stuck, run `aida doctor heal stale-locks`."
+            );
+        }
         _ => {}
     }
 
@@ -980,9 +1111,7 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
             )
         }
         (Phase::Implementer, FailureKind::MissingTool) => {
-            "`gh` is not on PATH — auto-complete needs the GitHub CLI to track the PR. \
-             Install it (https://cli.github.com), then re-run."
-                .to_string()
+            forge_cli_missing_hint(ctx.forge, "track the PR", "re-run")
         }
         (Phase::Implementer, _) => {
             let resume = ctx
@@ -994,22 +1123,39 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         }
 
         (Phase::Ci, FailureKind::CiRed) => {
+            // STORY-508/TASK-651: forge-aware CI viewer. With a run id → view
+            // it (gh run view / glab ci view); else point at the branch's
+            // runs/pipeline (gh run list / glab ci status); pure-git has none.
+            let branch_runs = match ctx.forge {
+                crate::forge::ForgeKind::GitHub => Some(format!("gh run list --branch {branch}")),
+                crate::forge::ForgeKind::GitLab => Some("glab ci status".to_string()),
+                crate::forge::ForgeKind::None => None,
+            };
             let view = ctx
                 .ci_run_id
                 .as_deref()
-                .map(|r| format!("gh run view {r}"))
-                .unwrap_or_else(|| format!("gh run list --branch {branch}"));
+                .and_then(|r| ctx.forge.ci_view_cmd(r))
+                .or(branch_runs)
+                .unwrap_or_else(|| "check your CI dashboard".to_string());
             let run = ctx.ci_run_id.as_deref().unwrap_or("<ID>");
             format!(
                 "CI failed on run {run} — view it: `{view}`. Push fixups to the same \
                  branch: `aida queue work {spec} --branch {branch} --steal`"
             )
         }
-        (Phase::Ci, FailureKind::CiTimeout) => format!(
-            "CI never reached a terminal state in the wait window — it may be queued or \
-             a runner is slow, CI is not red. Check progress with \
-             `gh run list --branch {branch}`, then re-run auto-complete once CI settles."
-        ),
+        (Phase::Ci, FailureKind::CiTimeout) => {
+            // STORY-508/TASK-651: forge-aware "check CI progress" command.
+            let progress = match ctx.forge {
+                crate::forge::ForgeKind::GitHub => format!("`gh run list --branch {branch}`"),
+                crate::forge::ForgeKind::GitLab => "`glab ci status`".to_string(),
+                crate::forge::ForgeKind::None => "your CI dashboard".to_string(),
+            };
+            format!(
+                "CI never reached a terminal state in the wait window — it may be queued or \
+                 a runner is slow, CI is not red. Check progress with {progress}, then re-run \
+                 auto-complete once CI settles."
+            )
+        }
         (Phase::Ci, _) => format!(
             "The implementer session would not end cleanly — it may have uncommitted \
              changes. Commit or discard them in the worktree, then end it: \
@@ -1030,11 +1176,16 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         ),
 
         (Phase::Merge, FailureKind::MissingTool) => {
-            "`gh` is not on PATH — auto-complete needs the GitHub CLI to merge the PR. \
-             Install it (https://cli.github.com), then merge the PR manually."
-                .to_string()
+            forge_cli_missing_hint(ctx.forge, "merge the PR", "merge the PR manually")
         }
-        (Phase::Merge, _) => format!("Investigate the merge failure: `gh pr view {pr}`"),
+        (Phase::Merge, _) => {
+            let view = ctx
+                .forge
+                .view_cmd(&pr)
+                .map(|c| format!("`{c}`"))
+                .unwrap_or_else(|| "your forge's web UI".to_string());
+            format!("Investigate the merge failure: {view}")
+        }
 
         (Phase::Pull, _) => "Classify the divergence: `aida rebase --dry-run --json`".to_string(),
 
@@ -1778,6 +1929,12 @@ fn resolve_phase_failure(
     failure: &PhaseFailure,
     durations: Vec<(Phase, u128)>,
 ) -> OrchestrationResult {
+    // BUG-455: a "database is locked" failure from any phase is transient
+    // cache-lock contention, not a spec or environment fault — reclassify it
+    // shelvable here, at the single seam every failure routes through, so the
+    // drain parks the spec and continues. trace:BUG-455 | ai:claude
+    let failure = failure.clone().reclassify_transient();
+    let failure = &failure;
     match driver.reconcile_failure(phase, failure) {
         PhaseReconcile::ShippedOutOfBand { reason } => {
             finish_reconciled(spec, json, start, durations, phase, &reason)
@@ -2910,6 +3067,59 @@ where
 mod tests {
     use super::*;
 
+    /// BUG-455: a "database is locked" message is recognised (case-insensitive,
+    /// both SQLite lock spellings) and nothing else trips the classifier.
+    /// Pure-function test — no driver, no filesystem. trace:BUG-455
+    #[test]
+    fn database_locked_message_is_recognised() {
+        assert!(is_database_locked_message(
+            "database is locked while trying to shelve"
+        ));
+        assert!(is_database_locked_message("DATABASE IS LOCKED")); // case-insensitive
+        assert!(is_database_locked_message(
+            "Error: the database table is locked: requirements"
+        ));
+        // Unrelated failures must NOT be misread as a cache lock.
+        assert!(!is_database_locked_message("CI run failed (red)"));
+        assert!(!is_database_locked_message("no PR was opened"));
+        assert!(!is_database_locked_message(""));
+    }
+
+    /// BUG-455: a transient cache-lock failure is reclassified to the shelvable
+    /// `CacheLocked` kind, so a batch drain parks the spec and continues instead
+    /// of hard-stopping; an unrelated failure keeps its kind. Idempotent.
+    /// Pure-function test — fully isolated. trace:BUG-455
+    #[test]
+    fn cache_lock_failure_reclassifies_to_shelvable() {
+        // A reviewer phase that surfaced a cache lock comes in with the default
+        // `Failed` kind (or could even be `Internal`); either way it upgrades.
+        let f = PhaseFailure::of(
+            FailureKind::Internal,
+            "database is locked while trying to shelve SPEC into Needs Attention",
+        )
+        .reclassify_transient();
+        assert_eq!(f.kind, FailureKind::CacheLocked);
+        assert!(
+            f.kind.is_shelvable(),
+            "a cache-lock failure must be shelvable so the drain continues"
+        );
+
+        // Idempotent: re-running leaves an already-CacheLocked failure alone.
+        let again = f.reclassify_transient();
+        assert_eq!(again.kind, FailureKind::CacheLocked);
+
+        // An unrelated failure is untouched.
+        let unrelated =
+            PhaseFailure::of(FailureKind::CiRed, "CI run failed (red)").reclassify_transient();
+        assert_eq!(unrelated.kind, FailureKind::CiRed);
+
+        // A non-shelvable env failure with no lock text stays non-shelvable.
+        let spawn = PhaseFailure::of(FailureKind::Spawn, "spawn ENOENT: claude not on PATH")
+            .reclassify_transient();
+        assert_eq!(spawn.kind, FailureKind::Spawn);
+        assert!(!spawn.kind.is_shelvable());
+    }
+
     /// BUG-420: the watchdog trips on no-progress first, ceiling as backstop;
     /// 0 disables a check. trace:BUG-420
     #[test]
@@ -3229,6 +3439,7 @@ mod tests {
                 pr_number: Some(46),
                 implementer_session: Some("019e2f423e7c".to_string()),
                 ci_run_id: Some("9988776655".to_string()),
+                forge: crate::forge::ForgeKind::GitHub,
             }
         }
         fn reconcile_failure(&mut self, _phase: Phase, _failure: &PhaseFailure) -> PhaseReconcile {
@@ -3291,6 +3502,25 @@ mod tests {
         assert!(skip.no_build);
     }
 
+    /// TASK-525: active_tokens lists exactly the set skips (telemetry payload),
+    /// empty when none, all three for `trivial`.
+    #[test]
+    fn lifecycle_skip_active_tokens() {
+        assert!(LifecycleSkip::none().active_tokens().is_empty());
+        assert_eq!(
+            LifecycleSkip::from_tags(["lifecycle:no-review"]).active_tokens(),
+            vec!["no-review".to_string()]
+        );
+        assert_eq!(
+            LifecycleSkip::from_tags(["lifecycle:trivial"]).active_tokens(),
+            vec![
+                "no-ci-wait".to_string(),
+                "no-review".to_string(),
+                "no-build".to_string()
+            ]
+        );
+    }
+
     #[test]
     fn lifecycle_skip_trivial_implies_all_three() {
         let skip = LifecycleSkip::from_tags(["lifecycle:trivial"]);
@@ -3302,6 +3532,45 @@ mod tests {
                 no_build: true,
             }
         );
+    }
+
+    /// TASK-524: the typo guard flags `lifecycle:*` tags that aren't recognized
+    /// short-circuits (they silently no-op), while passing the real ones and
+    /// non-lifecycle tags. Stays in sync with `from_tags` via the shared
+    /// RECOGNIZED_LIFECYCLE_TAGS list.
+    #[test]
+    fn unrecognized_lifecycle_tag_typo_guard() {
+        use super::is_unrecognized_lifecycle_tag;
+        // Recognized → not flagged (case-insensitive, like from_tags).
+        for t in [
+            "lifecycle:no-ci-wait",
+            "lifecycle:no-review",
+            "lifecycle:no-build",
+            "lifecycle:trivial",
+            "Lifecycle:Trivial",
+        ] {
+            assert!(!is_unrecognized_lifecycle_tag(t), "recognized: {t}");
+        }
+        // Typos in the lifecycle namespace → flagged.
+        for t in [
+            "lifecycle:no-ci",     // missing -wait
+            "lifecycle:trivai",    // misspelled
+            "lifecycle:no-builds", // plural
+            "lifecycle:skip-ci",   // wrong name
+        ] {
+            assert!(is_unrecognized_lifecycle_tag(t), "typo: {t}");
+        }
+        // Non-lifecycle tags are never flagged.
+        for t in ["papercut", "batch:x", "from-review:PR-1", "aida:queue:work"] {
+            assert!(!is_unrecognized_lifecycle_tag(t), "non-lifecycle: {t}");
+        }
+        // Every recognized tag must agree with from_tags (no drift).
+        for t in super::RECOGNIZED_LIFECYCLE_TAGS {
+            assert!(
+                !LifecycleSkip::from_tags([*t]).is_empty(),
+                "{t} should parse"
+            );
+        }
     }
 
     #[test]
@@ -4502,6 +4771,7 @@ mod tests {
             pr_number: Some(46),
             implementer_session: Some("019e2f423e7c".to_string()),
             ci_run_id: Some("9988776655".to_string()),
+            forge: crate::forge::ForgeKind::GitHub,
         }
     }
 
@@ -4536,6 +4806,32 @@ mod tests {
     fn recovery_hint_merge_failed_names_pr_view() {
         let hint = recovery_hint(Phase::Merge, FailureKind::Failed, &ctx());
         assert!(hint.contains("gh pr view 46"));
+    }
+
+    /// STORY-508/TASK-651: recovery hints are forge-aware — a GitLab project's
+    /// drain failure names glab/MR commands, never gh.
+    #[test]
+    fn recovery_hints_are_forge_aware_for_gitlab() {
+        let mut c = ctx();
+        c.forge = crate::forge::ForgeKind::GitLab;
+
+        let merge = recovery_hint(Phase::Merge, FailureKind::Failed, &c);
+        assert!(merge.contains("glab mr view 46"), "{merge}");
+        assert!(!merge.contains("gh pr"), "{merge}");
+
+        let merge_missing = recovery_hint(Phase::Merge, FailureKind::MissingTool, &c);
+        assert!(merge_missing.contains("glab"), "{merge_missing}");
+        assert!(merge_missing.contains("GitLab CLI"), "{merge_missing}");
+        assert!(!merge_missing.contains("gh"), "{merge_missing}");
+
+        let ci_red = recovery_hint(Phase::Ci, FailureKind::CiRed, &c);
+        assert!(ci_red.contains("glab ci view"), "{ci_red}");
+        assert!(!ci_red.contains("gh run"), "{ci_red}");
+
+        // Spawn-on-merge workaround also routes through glab.
+        let spawn = recovery_hint(Phase::Merge, FailureKind::Spawn, &c);
+        assert!(spawn.contains("glab mr merge 46"), "{spawn}");
+        assert!(spawn.contains("--remove-source-branch"), "{spawn}");
     }
 
     /// BUG-236 regression guard: by phase 3 the spec is Done (the

@@ -68,11 +68,14 @@ jobs:
         run: cargo test --workspace
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
-      # Default invocation runs descriptor + CLI->MCP read direction only
-      # (post-TASK-440 outputSchema closure). The MCP-write -> CLI-read stages
-      # are gated behind `--require-mcp-write-roundtrip` while BUG-310 is in
-      # flight; once BUG-310 ships, add that flag to flip the gate.
+      # Runs the FULL roundtrip: descriptors + CLI->MCP read direction
+      # (post-TASK-440 outputSchema closure) AND the MCP-write -> CLI-read +
+      # coordination-tool round trips. The write-roundtrip stages were staged
+      # behind a gate while BUG-310 (MCP writes reporting success without
+      # persisting) was in flight; BUG-310 has since shipped (Completed), so the
+      # gate is flipped and the full suite runs by default.
       # trace:TASK-451 | ai:claude
+      # trace:TASK-453 | ai:claude
       - name: Run MCP stdio compatibility tests
         run: bash tests/test_mcp_stdio.sh
 
@@ -81,6 +84,42 @@ jobs:
       # trace:TASK-452 | ai:claude
       - name: Run MCP doc-consistency test
         run: bash tests/test_mcp_doc_consistency.sh
+
+      # STORY-498: CI spec-id validity gate (MVP slice of EPIC-34). Walk the
+      # commits this PR adds, resolve every `(SPEC-ID)` subject trailer against
+      # the live requirement graph, and FAIL the PR when a trailer references a
+      # nonexistent or rejected spec — a dead/dangling provenance link. This is
+      # the server-side, non-bypassable half: a `git commit --no-verify`'d local
+      # commit that dodges the message-grammar hook is still caught here. The
+      # store lives on the orphan `aida-store` branch; fetch it so the binary's
+      # fresh-clone auto-attach can build the read cache. Mechanical/release
+      # commits with no trailer are exempt by the existing audited rule.
+      # trace:STORY-498 | ai:claude
+      - name: Validate commit SPEC-ID references (trace gate)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags origin aida-store:aida-store || \
+            echo "::warning::could not fetch aida-store branch — trace gate may not resolve ids"
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags origin "${{ github.base_ref }}" || true
+          ./target/release/aida trace gate --range "${BASE}..HEAD"
+
+      # STORY-499: diff-level trace-COVERAGE check (EPIC-34 gap #1). Distinct
+      # from the validity gate above: `gate` checks the `(SPEC-ID)` trailers
+      # resolve live; `coverage` checks the changed CODE in the diff actually
+      # carries the required `// trace:` provenance (inline anchor OR a live
+      # commit trailer), per the SPIKE-47 deterministic definition + exemption
+      # list (tests / generated / docs / config / vendored / pure-deletion /
+      # fmt-only / trivial). Shipped REPORT-ONLY first (SPIKE-47 §5/§6: a
+      # coverage gate's failure mode is adoption death — run report-only for a
+      # calibration period to mine missed exemptions, then flip to `--block`).
+      # No `--block` here, so this step annotates the coverage ratio + any
+      # uncovered hunks but never fails the PR. trace:STORY-499 | ai:claude
+      - name: Report diff trace coverage (report-only)
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          ./target/release/aida trace coverage --range "${BASE}..HEAD" || true
 
       - name: Check formatting
         run: cargo fmt --all -- --check

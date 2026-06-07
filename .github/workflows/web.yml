@@ -1,0 +1,56 @@
+# Web dashboard CI (TASK-224)
+#
+# Builds the React dashboard (aida-web-react/) so it can't silently break.
+# Discovered during STORY-86: a status-enum regen left 7 TypeScript errors
+# in the web app, but CI stayed green because no workflow ran `npm run check`
+# / `npm run build`. This workflow closes that gap.
+#
+# Linux-only, matching the alpha PR-CI policy (TASK-257) in ci.yml. Path
+# filters keep it from running on changes that can't affect the web build
+# (Rust-only PRs, docs, etc.); pushes to main always build.
+name: Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'aida-web-react/**'
+      - 'shared/types.ts'
+      - '.github/workflows/web.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'aida-web-react/**'
+      - 'shared/types.ts'
+      - '.github/workflows/web.yml'
+
+jobs:
+  web:
+    name: Build web dashboard
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: aida-web-react
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: aida-web-react/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `check` = `tsc -b` (type-check only), `build` = `tsc -b && vite build`.
+      # Running check first surfaces type errors with a clear step name before
+      # the bundler runs; either failing fails the job.
+      - name: Type-check
+        run: npm run check
+
+      - name: Build
+        run: npm run build

@@ -1119,6 +1119,15 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
 
     let now = SystemTime::now();
     let want = scope.trim();
+    // BUG-447: scope the machine-global scan to the CURRENT project. Onboarding
+    // seeds the same id (TASK-007) in every project, and the scan keyed on
+    // spec-id alone would surface a same-id session from a DIFFERENT (or
+    // since-deleted) project on this machine — resuming it would replay another
+    // project's context. Filter to sessions whose recorded cwd is within the
+    // current project root or a sibling `<root>-<slug>` worktree. When we can't
+    // resolve a project root (not in a project), keep the old global behaviour.
+    // trace:BUG-447 | ai:claude
+    let project_root = crate::find_main_worktree_root().ok();
     let mut out: Vec<SessionMeta> = entries
         .into_iter()
         .filter_map(|(path, mtime)| parse_session_meta(&path, mtime, now).ok())
@@ -1128,9 +1137,58 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
                 .map(|s| s.eq_ignore_ascii_case(want))
                 .unwrap_or(false)
         })
+        .filter(|m| match &project_root {
+            // No cwd recorded ⇒ can't confirm it's ours ⇒ exclude when scoped.
+            Some(root) => m
+                .last_cwd
+                .as_deref()
+                .map(|cwd| session_cwd_in_project(cwd, root))
+                .unwrap_or(false),
+            None => true,
+        })
         .collect();
     out.sort_by_key(|m| m.age_seconds);
     Ok(out)
+}
+
+/// BUG-447: is a recorded session's `cwd` within the current project's scope —
+/// the project-root subtree, or a sibling `<root>-<slug>` worktree that
+/// `aida queue work` creates (`<parent>/<repo_name>-<slug>`)? `Path::starts_with`
+/// is component-wise, so a sibling worktree (`…/ai-task-007`) does NOT match the
+/// root (`…/ai`); the explicit sibling check handles it. trace:BUG-447 | ai:claude
+fn session_cwd_in_project(cwd: &str, project_root: &Path) -> bool {
+    let cwd = Path::new(cwd.trim());
+    if cwd == project_root || cwd.starts_with(project_root) {
+        return true;
+    }
+    let (Some(parent), Some(repo_name)) = (
+        project_root.parent(),
+        project_root.file_name().and_then(|s| s.to_str()),
+    ) else {
+        return false;
+    };
+    match (cwd.parent(), cwd.file_name().and_then(|s| s.to_str())) {
+        (Some(cwd_parent), Some(cwd_name)) => {
+            cwd_parent == parent && cwd_name.starts_with(&format!("{repo_name}-"))
+        }
+        _ => false,
+    }
+}
+
+/// TASK-402: canonicalize a role name parsed out of a session's JSONL so
+/// `--list-sessions` reports the project-wide identity, not a deprecated
+/// alias. `dialog` is the legacy token (TASK-279) for `advisor` (TASK-586);
+/// normalizing here keeps the recorded role aligned with what the orchestrator
+/// actually launched (`--role implementer`/`advisor`) and removes the
+/// "did the orchestrator launch the wrong role?" confusion during a
+/// resume-after-failure recovery. Pure + case-insensitive on the alias.
+/// trace:TASK-402 | ai:claude
+fn canonical_session_role(raw: &str) -> String {
+    if raw.eq_ignore_ascii_case("dialog") {
+        "advisor".to_string()
+    } else {
+        raw.to_string()
+    }
 }
 
 /// TASK-112: one-line summary of a recorded Claude session, for the
@@ -1221,8 +1279,18 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
                     // Reject empty matches and the literal `(none active)`
                     // / `${role}` cases that show up in shell-template
                     // output or unset-env echos.
+                    //
+                    // TASK-402 (friction #2): a session the orchestrator
+                    // launched with `--role implementer` could be tagged
+                    // `dialog` in `--list-sessions` because the early JSONL
+                    // scan caught the deprecated alias (a not-yet-migrated
+                    // role file / shell echo). Canonicalize the parsed name
+                    // so the recorded role reflects the project-wide identity
+                    // (`dialog` is the deprecated alias for `advisor`) instead
+                    // of confusing the operator mid-recovery.
+                    // trace:TASK-402 | ai:claude
                     if !name.is_empty() {
-                        role = Some(name);
+                        role = Some(canonical_session_role(&name));
                         break;
                     }
                 }
@@ -1809,6 +1877,50 @@ pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TASK-402 (friction #2): a session JSONL that echoed the deprecated
+    // `dialog` alias must report the canonical `advisor` role in
+    // `--list-sessions`, so a recovery operator doesn't think the orchestrator
+    // launched the wrong role. Other roles pass through unchanged.
+    // trace:TASK-402 | ai:claude
+    #[test]
+    fn canonical_session_role_normalizes_dialog_alias() {
+        assert_eq!(canonical_session_role("dialog"), "advisor");
+        assert_eq!(canonical_session_role("Dialog"), "advisor");
+        assert_eq!(canonical_session_role("DIALOG"), "advisor");
+        // Real roles are untouched.
+        assert_eq!(canonical_session_role("implementer"), "implementer");
+        assert_eq!(canonical_session_role("advisor"), "advisor");
+        assert_eq!(canonical_session_role("reviewer"), "reviewer");
+    }
+
+    #[test]
+    fn session_cwd_scoping_separates_sibling_project_trees() {
+        // BUG-447: the reported bleed — a TASK-007 session in the deleted
+        // `~/ai` project must NOT match a `~/ai/dummy1` lookup.
+        let root = Path::new("/home/joe/ai/dummy1");
+        // main worktree (cwd == root) and a subdir of it are in scope
+        assert!(session_cwd_in_project("/home/joe/ai/dummy1", root));
+        assert!(session_cwd_in_project("/home/joe/ai/dummy1/src", root));
+        // the stale sibling-tree session is OUT of scope
+        assert!(!session_cwd_in_project("/home/joe/ai-task-007", root));
+        assert!(!session_cwd_in_project("/home/joe/ai", root));
+    }
+
+    #[test]
+    fn session_cwd_scoping_includes_sibling_worktree() {
+        // `aida queue work` creates `<parent>/<repo_name>-<slug>` worktrees;
+        // their sessions belong to this project and must stay in scope.
+        let root = Path::new("/home/joe/ai/dummy1");
+        assert!(session_cwd_in_project("/home/joe/ai/dummy1-task-007", root));
+        assert!(session_cwd_in_project(
+            "/home/joe/ai/dummy1-task-007-some-title",
+            root
+        ));
+        // a genuinely different sibling project (no shared `<root>-` prefix)
+        // is out of scope.
+        assert!(!session_cwd_in_project("/home/joe/ai/other", root));
+    }
 
     /// BUG-112: build a manifest with `(spec, position, started_at)` items
     /// for the RECENT FOCUS precedence tests.

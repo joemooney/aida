@@ -119,6 +119,7 @@ The **queue** is keyed off the **shell's user id**, not the node id. Resolution 
 | `[orchestrator]` | `auto_release_dormant_leases`, `stale_lease_threshold_minutes` |
 | `[advisor]` | `calibration_mode` (off/on), fork settings for the headless advisor tier |
 | `[archive]` | `auto_after_days` — opt-in auto-archive sweep on pull |
+| `[ultraplan]` | `mode` (never / on-demand / suggested), `suggest_threshold` (`acceptance-bullets>N`) — whether pickup nudges `aida ultraplan` for chunky specs |
 | `[telemetry]` | `enabled` — local usage log on/off |
 | `[drain]` | `gh_verify_retries`, `no_progress_minutes`, `phase_ceiling_minutes` |
 | `[store.sync]` | `auto_push`: manual / session-end / per-write |

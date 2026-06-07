@@ -95,6 +95,58 @@ pub(crate) fn status_badge(status: &str) -> String {
     format!("{} {}", status_glyph(status), paint_status(status, status))
 }
 
+/// A fixed-width status cell for list tables: `"<glyph> <coloured label>"` with
+/// the PLAIN label left-padded to `label_width` BEFORE colouring (ANSI escapes
+/// would otherwise inflate `{:<}` byte counts and break column alignment). The
+/// cell occupies `label_width + 2` visible columns — glyph (1) + space (1) +
+/// label. Use this where `aida show`/badges aren't appropriate but a glyph in
+/// the column is still wanted (TASK-315). trace:TASK-315 | ai:claude
+pub(crate) fn status_cell(status: &str, label_width: usize) -> String {
+    let padded = format!("{:<width$}", status, width = label_width);
+    format!("{} {}", status_glyph(status), paint_status(&padded, status))
+}
+
+/// TASK-670: a fixed-width status cell with NO leading glyph — the padded,
+/// coloured label only, occupying `width` visible columns. Used by `aida list
+/// --no-glyph`, which strips every glyph (status + work-routing) for plain-text
+/// / grep / non-Unicode output. (Colour still auto-degrades under NO_COLOR / a
+/// non-TTY, so the plain-text path is honoured for free.) trace:TASK-670 | ai:claude
+pub(crate) fn status_cell_no_glyph(status: &str, width: usize) -> String {
+    let padded = format!("{:<width$}", status, width = width);
+    paint_status(&padded, status).to_string()
+}
+
+/// TASK-670: the leading **work-routing** glyph for an `aida list` row. This
+/// axis is ORTHOGONAL to status (Draft/NeedsAttention already carry glyphs via
+/// [`status_glyph`], so they're deliberately NOT duplicated here) — it answers
+/// "where is this spec in the work pipeline RIGHT NOW", not "what state is it
+/// in".
+///
+/// Priority when several apply: in-flight `▶` > blocked `⊘` > queued `↑` >
+/// idle (a single space, so the column stays aligned). Returns a `&'static str`
+/// (not a `char`) for a uniform single-display-column cell.
+///
+/// - `▶` in-flight — a *live* session lease holds the spec (someone's on it
+///   now; additive over the persistent `in-progress` status, which lingers
+///   after a dead session). The caller supplies liveness — only live leases
+///   should set `in_flight` (cf. the dead-agent reaper, STORY-496).
+/// - `⊘` blocked — BlockedBy an incomplete spec (needs a graph walk, so the
+///   caller only sets this behind `--blocked`).
+/// - `↑` queued — present in a role queue, not yet started.
+///
+/// trace:TASK-670 | ai:claude
+pub(crate) fn flow_glyph(in_flight: bool, blocked: bool, queued: bool) -> &'static str {
+    if in_flight {
+        "▶"
+    } else if blocked {
+        "⊘"
+    } else if queued {
+        "↑"
+    } else {
+        " "
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,6 +200,50 @@ mod tests {
         let badge = status_badge("Done");
         assert!(badge.contains('◉'), "badge missing glyph: {badge:?}");
         assert!(badge.contains("Done"), "badge missing label: {badge:?}");
+    }
+
+    /// TASK-315: a list status cell is `"<glyph> <label>"` padded so its visible
+    /// width is `label_width + 2`. Asserted under NO_COLOR for an exact compare.
+    #[test]
+    fn status_cell_is_glyph_space_padded_label() {
+        colored::control::set_override(false);
+        let cell = status_cell("Approved", 11);
+        colored::control::unset_override();
+        // glyph + space + "Approved" padded to 11 = "Approved   ".
+        assert_eq!(cell, "▸ Approved   ", "cell: {cell:?}");
+        assert_eq!(cell.chars().count(), 13, "visible width = 11 + 2");
+        // Over-long labels are not truncated (alignment degrades gracefully).
+        colored::control::set_override(false);
+        let wide = status_cell("In Progress", 11);
+        colored::control::unset_override();
+        assert_eq!(wide, "◐ In Progress", "cell: {wide:?}");
+    }
+
+    /// TASK-670: the work-routing glyph obeys the in-flight > blocked > queued
+    /// priority, and falls back to a single space (column stays aligned) when
+    /// nothing applies. trace:TASK-670 | ai:claude
+    #[test]
+    fn flow_glyph_priority_and_idle() {
+        // Idle: no routing state.
+        assert_eq!(flow_glyph(false, false, false), " ");
+        // Each state alone.
+        assert_eq!(flow_glyph(false, false, true), "↑", "queued");
+        assert_eq!(flow_glyph(false, true, false), "⊘", "blocked");
+        assert_eq!(flow_glyph(true, false, false), "▶", "in-flight");
+        // Priority: in-flight wins over everything.
+        assert_eq!(flow_glyph(true, true, true), "▶");
+        assert_eq!(flow_glyph(true, false, true), "▶");
+        // Blocked beats queued.
+        assert_eq!(flow_glyph(false, true, true), "⊘");
+        // Glyph is always a single display column.
+        for g in [
+            flow_glyph(false, false, false),
+            flow_glyph(false, false, true),
+            flow_glyph(false, true, false),
+            flow_glyph(true, false, false),
+        ] {
+            assert_eq!(g.chars().count(), 1, "flow glyph must be one column: {g:?}");
+        }
     }
 
     #[test]
