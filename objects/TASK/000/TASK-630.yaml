@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T15:03:54.277918097Z
-modified_at: 2026-06-06T08:31:02.250494336Z
+modified_at: 2026-06-07T03:54:22.126305573Z
 req_type: Task
 tags:
 - from-bug-250
@@ -28,3 +28,8 @@ comments:
   content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Well-scoped follow-up (BUG-250 acceptance #5, deliberately deferred) — make `aida queue work <spec> --resume` recognise the persisted `.aida/pr-holds/<spec>.json` hold marker as a re-enterable state (distinct from queued/Completed/needs-rework) and clear it once the PR opens; mechanism (Held outcome + hold marker) already shipped, this is the bounded resume re-entry.'
   created_at: 2026-06-06T08:31:00.965225869Z
   modified_at: 2026-06-06T08:31:00.965225869Z
+- id: 019ea037-a62e-7d02-94c3-1fb73b5d7cfe
+  author: joe
+  content: Commit e0f03e69e references this requirement
+  created_at: 2026-06-07T03:54:22.126305573Z
+  modified_at: 2026-06-07T03:54:22.126305573Z
