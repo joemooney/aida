@@ -38428,9 +38428,11 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
     // Try to associate this run with the active session lease so the
     // review-story description records who opened the PR. Falls back to
     // a synthetic "(no-session)" id if no lease covers the cwd.
-    let session_id = std::env::current_dir()
+    let lease = std::env::current_dir()
         .ok()
-        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+    let lease_scope = lease.as_ref().map(|l| l.scope.clone());
+    let session_id = lease
         .map(|l| l.id)
         .unwrap_or_else(|| "(no-sess)".to_string());
 
@@ -38441,6 +38443,27 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
         AutoQueueOrigin::PrSkill,
     );
     render_auto_queue_outcome(&outcome);
+
+    // TASK-630: opening the PR is the event that ends a deliberate PR-hold
+    // (BUG-250). `aida pr auto-queue-review` runs right after `gh pr create`
+    // (the /aida-pr step), so a Filed/AlreadyExists outcome means the held PR is
+    // now open — clear the persisted `.aida/pr-holds/<spec>.json` marker so a
+    // later `aida queue work <spec> --resume` no longer treats the spec as held.
+    // Best-effort: a missing marker (the common case — most PRs were never
+    // held) or an unlink error never perturbs the queue-review flow.
+    // trace:TASK-630 | ai:claude
+    if matches!(
+        outcome.status,
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
+    ) {
+        if let Some(spec) = &lease_scope {
+            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+            let marker = punt::hold_signal_path(&main_root, spec);
+            if punt::read_hold_signal(&marker).is_some() {
+                let _ = std::fs::remove_file(&marker);
+            }
+        }
+    }
 
     // BUG-86: on every non-success outcome (needs-attention OR by-design
     // skip), print the exact command to re-run manually. The skill side
@@ -63747,6 +63770,82 @@ mod queue_work_tests {
         );
     }
 
+    /// TASK-630 (BUG-250 criterion 5): the held-state re-entry decision is a pure
+    /// function, so it can be exercised exhaustively with no Storage, worktree,
+    /// or launcher. A deliberate PR-hold parks the spec Done + dequeued with a
+    /// marker; `--resume` against that combination is the ONLY case that may
+    /// re-enter. Every other state, a missing marker, or a non-resume invocation
+    /// must NOT — those keep the existing recovery hints. trace:TASK-630 | ai:claude
+    #[test]
+    fn held_resume_reentry_only_for_resume_done_and_marked() {
+        use RequirementStatus::*;
+
+        // The one re-enterable combination: explicit --resume, Done status,
+        // hold marker present.
+        assert!(
+            held_resume_reentry_allowed(true, &Done, true),
+            "resume + Done + hold marker is the deliberate-hold re-entry case"
+        );
+
+        // No --resume → never re-enter (a plain `queue work <spec>` keeps its
+        // status-aware not-queued hint).
+        assert!(
+            !held_resume_reentry_allowed(false, &Done, true),
+            "without --resume a held Done spec is not auto-re-entered"
+        );
+
+        // Marker absent → not a deliberate hold; leave it to the Done hint
+        // (rework / wait-for-merge).
+        assert!(
+            !held_resume_reentry_allowed(true, &Done, false),
+            "no hold marker → not a deliberate hold, no re-entry"
+        );
+
+        // Held re-entry is Done-specific: a hold marker against any other status
+        // must not unlock resume (defensive — a held spec is always Done).
+        for status in [
+            Draft,
+            Approved,
+            Planned,
+            InProgress,
+            Completed,
+            Rejected,
+            NeedsAttention,
+        ] {
+            assert!(
+                !held_resume_reentry_allowed(true, &status, true),
+                "held re-entry must be Done-only; {status:?} must not re-enter"
+            );
+        }
+    }
+
+    /// TASK-630: a held-spec resume plan is an Item-mode pickup anchored on the
+    /// spec itself (its own id is the lease scope — the implementer worktree the
+    /// dormant session lives in), with exactly one entry. This is what lets the
+    /// rest of `handle_queue_work` resume the session unchanged.
+    /// trace:TASK-630 | ai:claude
+    #[test]
+    fn held_resume_plan_is_item_scoped_to_the_spec() {
+        let mut req = aida_core::Requirement::new("held work".to_string(), String::new());
+        req.spec_id = Some("STORY-306".to_string());
+        req.status = RequirementStatus::Done;
+
+        let plan = held_resume_plan(&req, "test-user");
+
+        assert_eq!(plan.mode, QueueWorkMode::Item);
+        assert_eq!(plan.entries.len(), 1, "exactly the held spec, no cluster");
+        assert_eq!(plan.anchor_display, "STORY-306");
+        assert_eq!(
+            plan.scope, "STORY-306",
+            "scope is the spec's own id (its implementer worktree)"
+        );
+        assert!(
+            plan.review_target.is_none(),
+            "a held implementer spec is not a PR-review pickup"
+        );
+        assert_eq!(plan.entries[0].spec_id, "STORY-306");
+    }
+
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
     /// inner subprocess's error must name the lease + actual reason — not
     /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
@@ -80568,6 +80667,68 @@ fn format_queue_work_not_queued_error(
     }
 }
 
+/// TASK-630: the held-state re-entry decision, isolated so it is unit-testable
+/// without a Storage handle, a worktree, or a launcher.
+///
+/// A deliberate *push-branch, hold-PR* finish (BUG-250) leaves the spec **Done**
+/// + dequeued with a persisted hold marker at `.aida/pr-holds/<spec>.json`. The
+/// plain `aida queue work <spec>` recovery hints (rework / wait-for-merge) don't
+/// fit that state — the operator is neither reworking nor waiting for a merge;
+/// they're re-entering the dormant implementer worktree to run the manual gate
+/// and *then* open the deferred PR. `--resume` against such a spec should flow
+/// through the verb's normal lease/pull/worktree bookkeeping instead of bailing.
+///
+/// The decision is deliberately narrow: re-entry is allowed **only** when the
+/// operator explicitly asked to resume (`resume == true`), the spec is in the
+/// Done state (the state a deliberate hold parks it in), AND a hold marker is
+/// present. A queued / Completed / NeedsAttention spec, or a Done spec with no
+/// hold marker, is left to the existing recovery hints — a held re-entry is a
+/// distinct state, not a blanket "resume any Done spec". trace:TASK-630 | ai:claude
+fn held_resume_reentry_allowed(
+    resume: bool,
+    status: &RequirementStatus,
+    hold_marker_present: bool,
+) -> bool {
+    resume && hold_marker_present && *status == RequirementStatus::Done
+}
+
+/// TASK-630: build the Item-mode plan for a held-spec `--resume` re-entry.
+///
+/// A held spec is Done + dequeued, so there is no real `QueueEntry` to anchor
+/// the plan on. We synthesise one (scoped to the spec's own id, matching the
+/// implementer worktree the held session lives in) so the rest of
+/// `handle_queue_work` — lease bookkeeping, worktree resolution, the
+/// `QueueWorkLaunch::Resume` re-entry — runs unchanged. trace:TASK-630 | ai:claude
+fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> QueueWorkPlan {
+    let synthetic = aida_core::QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id: req.id.clone(),
+        position: 0,
+        added_by: user_id.to_string(),
+        note: None,
+        added_at: chrono::Utc::now(),
+        for_role: Some("implementer".to_string()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    let (scope, review_target) = derive_scope_from_entry(&synthetic, req);
+    let anchor_display = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| scope.clone());
+    let resolved = build_resolved_entry(synthetic, req);
+    QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![resolved],
+        scope,
+        review_target,
+        anchor_display,
+        anchor_title: req.title.clone(),
+    }
+}
+
 /// STORY-42: case-insensitive match against a requirement's uuid,
 /// spec_id, or agreed_id. trace:STORY-42 | ai:claude
 fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
@@ -80831,7 +80992,44 @@ fn handle_queue_work(
         uuid::Uuid::parse_str(sid)
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
-    let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter, strict)?;
+    // TASK-630: a deliberate PR-hold (BUG-250) parks the spec Done + dequeued
+    // with a persisted marker at `.aida/pr-holds/<spec>.json`. Normal queue
+    // resolution then bails ("isn't queued. Status is Done") — wrong for a
+    // re-entry. When the operator explicitly `--resume`s such a spec, recognise
+    // the hold as a re-enterable state and synthesise an Item-mode plan so the
+    // rest of the verb (lease/pull/worktree + QueueWorkLaunch::Resume) runs
+    // unchanged. We try the normal resolution first; only on its failure do we
+    // consult the marker, so a still-queued or non-held spec keeps its existing
+    // behaviour exactly. trace:TASK-630 | ai:claude
+    let plan = match resolve_queue_work_plan(storage, user_id, arg, type_filter, strict) {
+        Ok(plan) => plan,
+        Err(e) => match arg.filter(|_| resume.is_some()) {
+            Some(arg_str) => {
+                let store = storage.load()?;
+                let held = store
+                    .requirements
+                    .iter()
+                    .find(|r| spec_matches(r, arg_str))
+                    .and_then(|req| {
+                        let main_root = find_main_worktree_root().ok()?;
+                        let display = req
+                            .agreed_id
+                            .as_deref()
+                            .or(req.spec_id.as_deref())
+                            .unwrap_or(arg_str);
+                        let marker = punt::hold_signal_path(&main_root, display);
+                        let present = punt::read_hold_signal(&marker).is_some();
+                        held_resume_reentry_allowed(true, &req.status, present)
+                            .then(|| held_resume_plan(req, user_id))
+                    });
+                match held {
+                    Some(plan) => plan,
+                    None => return Err(e),
+                }
+            }
+            None => return Err(e),
+        },
+    };
 
     // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
     // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
