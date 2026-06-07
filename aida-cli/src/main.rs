@@ -33,7 +33,9 @@ mod pr_rebase;
 mod pr_ship;
 mod process_probe;
 mod prompts;
+// trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
+mod queue_recover;
 mod reviewer_summary;
 mod rules_sync;
 mod session;
@@ -79249,6 +79251,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 user.as_deref(),
             )?;
         }
+        // STORY-384: failed-phase-1 recovery wizard — inspect state, recommend a
+        // recovery path, step through it. A front-end over existing primitives.
+        // trace:STORY-384 | ai:claude
+        QueueCommand::Recover {
+            id,
+            dry_run,
+            auto,
+            user,
+        } => {
+            let user_id = current_user_id(user.as_deref());
+            handle_queue_recover(storage, &user_id, id, *dry_run, *auto)?;
+        }
     }
     Ok(())
 }
@@ -83761,6 +83775,403 @@ fn handle_from_pr(
             );
             std::process::exit(result.exit_code);
         }
+    }
+}
+
+/// STORY-384: `aida queue recover <id>` — the failed-phase-1 recovery wizard.
+///
+/// Inspects the spec's recovery-relevant state (lease, branch, worktree, PR),
+/// derives the recommended recovery path via the pure
+/// [`queue_recover::recommend`], prints the inspection + recommendation, and —
+/// unless `--dry-run` — steps through the recovery, confirming destructive ops
+/// (push, PR-create, session end) unless `--auto`.
+///
+/// A FRONT-END over existing primitives: the probes reuse the same lease/PR/git
+/// helpers the orchestrator and `aida session leases` use; the execution shells
+/// out to `aida` subcommands (`queue work --from-pr`, `pull`, `session end`,
+/// `queue add`) and `git` / `gh` rather than reimplementing them.
+/// trace:STORY-384 | ai:claude
+fn handle_queue_recover(
+    storage: &Storage,
+    user_id: &str,
+    spec_query: &str,
+    dry_run: bool,
+    auto: bool,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    // Resolve the spec id + status from the store (canonical SPEC-ID, status
+    // for display). A spec we can't find still gets a best-effort recovery
+    // using the query string verbatim, but we warn.
+    let store = storage.load().ok();
+    let (spec, status_label, spec_completed) = match store.as_ref().and_then(|s| {
+        s.requirements.iter().find(|r| {
+            r.spec_id.as_deref() == Some(spec_query)
+                || r.agreed_id.as_deref() == Some(spec_query)
+                || r.id.to_string() == spec_query
+        })
+    }) {
+        Some(req) => {
+            let id = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| spec_query.to_string());
+            (
+                id,
+                req.status.to_string(),
+                req.status == RequirementStatus::Completed,
+            )
+        }
+        None => {
+            eprintln!(
+                "{} no spec matched `{}` in the store — probing git/PR state by the id verbatim.",
+                "⚠".yellow(),
+                spec_query
+            );
+            (spec_query.to_string(), "<unknown>".to_string(), false)
+        }
+    };
+
+    // --- Inspection: probe the world for this spec. ---
+    // Reuse the orchestrator's PR/branch/CI/reviewed/merged probe (the same
+    // helper `--from-pr` and `--resume-drain` use). `member: None` is the
+    // standalone-PR case it already handles. trace:STORY-384 | ai:claude
+    let (facts, pr_branch, pr) = probe_resume_facts(&project_root, storage, &spec, None);
+
+    // Lease state — does a session still hold this spec's scope?
+    let leases = list_leases(&project_root);
+    let lease = find_lease_by_spec(&spec, &leases).ok();
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let lease_state = lease.as_ref().map(|l| {
+        let worktree_exists = l.worktree_path.exists();
+        let has_live = live
+            .iter()
+            .any(|s| !s.stale_cwd && s.cwd.starts_with(&l.worktree_path));
+        let age_hours = now.signed_duration_since(l.started_at).num_hours();
+        classify_lease_state(worktree_exists, has_live, age_hours)
+    });
+
+    // The branch we inspect for commits-ahead / dirty: prefer the lease's
+    // branch (where a phase-1 implementer committed), else the PR head branch.
+    let branch = lease
+        .as_ref()
+        .map(|l| l.branch.clone())
+        .or_else(|| pr_branch.clone());
+
+    // Commits ahead of origin/main on the branch (work that exists but may not
+    // have shipped). Probe against the lease worktree if present, else root.
+    let probe_repo = lease
+        .as_ref()
+        .map(|l| l.worktree_path.clone())
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| project_root.clone());
+    let commits_ahead = branch
+        .as_deref()
+        .and_then(|b| branch_commits_ahead_main(&probe_repo, b))
+        .unwrap_or(0);
+
+    // Branch pushed? A PR implies a pushed branch; otherwise probe origin.
+    let branch_pushed = pr.is_some()
+        || branch
+            .as_deref()
+            .map(|b| {
+                matches!(
+                    probe_branch_on_origin(&project_root, b),
+                    BranchOriginProbe::Present
+                )
+            })
+            .unwrap_or(false);
+
+    // Worktree dirty? Only meaningful when a lease worktree exists.
+    let dirty_entries = lease
+        .as_ref()
+        .filter(|l| l.worktree_path.exists())
+        .map(|l| worktree_dirty_entries(&l.worktree_path))
+        .unwrap_or_default();
+    let uncommitted_changes = !dirty_entries.is_empty();
+
+    let state = queue_recover::RecoverState {
+        spec_completed: spec_completed || facts.spec_completed,
+        pr_exists: pr.is_some(),
+        pr_merged: facts.pr_merged,
+        commits_ahead,
+        branch_pushed,
+        uncommitted_changes,
+        lease_held: lease.is_some(),
+    };
+
+    // --- Print the inspection result. ---
+    println!(
+        "{} recovery inspection for {}",
+        "🔎".to_string(),
+        spec.bold()
+    );
+    println!("  {:<14} {}", "status".dimmed(), status_label);
+    match (&lease, lease_state) {
+        (Some(l), Some(st)) => println!(
+            "  {:<14} {} {} (id {}, branch {})",
+            "lease".dimmed(),
+            st.glyph(),
+            st.label(),
+            &l.id[..l.id.len().min(8)],
+            l.branch
+        ),
+        _ => println!("  {:<14} none", "lease".dimmed()),
+    }
+    match &branch {
+        Some(b) => println!(
+            "  {:<14} {} — {} commit(s) ahead of origin/main, {}",
+            "branch".dimmed(),
+            b,
+            commits_ahead,
+            if branch_pushed {
+                "pushed"
+            } else {
+                "NOT pushed"
+            }
+        ),
+        None => println!("  {:<14} none", "branch".dimmed()),
+    }
+    if uncommitted_changes {
+        println!(
+            "  {:<14} {} uncommitted change(s)",
+            "worktree".dimmed(),
+            dirty_entries.len()
+        );
+        for e in dirty_entries.iter().take(3) {
+            println!("                   {}", e.dimmed());
+        }
+        if dirty_entries.len() > 3 {
+            println!(
+                "                   {} … and {} more",
+                "".dimmed(),
+                dirty_entries.len() - 3
+            );
+        }
+    } else {
+        println!("  {:<14} clean", "worktree".dimmed());
+    }
+    match pr {
+        Some(n) if facts.pr_merged => println!("  {:<14} PR-{} (merged)", "pr".dimmed(), n),
+        Some(n) => println!("  {:<14} PR-{} (open)", "pr".dimmed(), n),
+        None => println!("  {:<14} none", "pr".dimmed()),
+    }
+    println!();
+
+    // --- Recommendation. ---
+    let action = queue_recover::recommend(&state);
+    println!(
+        "{} recommended: {}",
+        "→".cyan().bold(),
+        recover_action_label(action).bold()
+    );
+    println!("  {} {}", "rationale:".dimmed(), action.rationale());
+    println!();
+
+    if dry_run {
+        println!(
+            "{} --dry-run — not executing. Drop it to run the recovery.",
+            "ⓘ".cyan()
+        );
+        return Ok(());
+    }
+
+    // --- Execution. ---
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    // Helper: run an `aida` subcommand from the project root, surfacing its
+    // exit code. Non-zero leaves the state visible for manual resume.
+    let run_aida = |args: &[&str]| -> std::io::Result<std::process::ExitStatus> {
+        println!("  {} aida {}", "▸".cyan(), args.join(" "));
+        std::process::Command::new(&aida)
+            .current_dir(&project_root)
+            .args(args)
+            .status()
+    };
+    let run_git =
+        |args: &[&str], cwd: &std::path::Path| -> std::io::Result<std::process::ExitStatus> {
+            println!("  {} git {}", "▸".cyan(), args.join(" "));
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .status()
+        };
+    // Confirm a destructive op unless --auto. Non-interactive (no TTY) defaults
+    // to NO so a scripted run without --auto never silently ships.
+    let confirm = |what: &str| -> bool {
+        if auto {
+            return true;
+        }
+        prompt_yes_no(&format!("  {} {} [y/N] ", "?".yellow(), what), false).unwrap_or(false)
+    };
+
+    match action {
+        queue_recover::RecoverAction::AlreadyCompleted => {
+            println!(
+                "{} `{}` is already Completed — nothing to recover.",
+                "✓".green().bold(),
+                spec
+            );
+            if state.lease_held && confirm("end the leaked lease for this spec?") {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+        }
+        queue_recover::RecoverAction::AlreadyMergedPull => {
+            println!(
+                "{} the PR merged — pulling to auto-bump `{}` Done → Completed.",
+                "↩".cyan().bold(),
+                spec
+            );
+            let _ = run_aida(&["pull"]);
+            if state.lease_held && confirm("end the leaked lease for this spec?") {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+        }
+        queue_recover::RecoverAction::DrivePhasesFromPr => {
+            if !confirm("drive phases 3-6 on the open PR (reviewer → merge → pull → build)?")
+            {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            // Reuse the TASK-405 PR-only orchestrator path.
+            let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+        }
+        queue_recover::RecoverAction::PushOpenPrDrive => {
+            let Some(b) = branch.as_deref() else {
+                eprintln!(
+                    "{} no branch to push for `{}` — cannot recover automatically.",
+                    "✗".red().bold(),
+                    spec
+                );
+                return Ok(());
+            };
+            if !confirm(&format!("push `{b}`, open a PR, then drive phases 3-6?")) {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            if !push_st.success() {
+                eprintln!(
+                    "{} push failed — resolve manually, then re-run `aida queue recover {}`.",
+                    "✗".red().bold(),
+                    spec
+                );
+                return Ok(());
+            }
+            // Open the PR (gh fills title/body from the branch commits).
+            let pr_st = std::process::Command::new("gh")
+                .current_dir(&probe_repo)
+                .args(["pr", "create", "--fill"])
+                .status();
+            println!("  {} gh pr create --fill", "▸".cyan());
+            match pr_st {
+                Ok(s) if s.success() => {
+                    // Now drive phases 3-6 on the freshly-opened PR.
+                    let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+                }
+                _ => {
+                    eprintln!(
+                        "{} `gh pr create` failed — open the PR manually, then run \
+                         `aida queue recover {}` again (it will take the drive-from-PR path).",
+                        "✗".red().bold(),
+                        spec
+                    );
+                }
+            }
+        }
+        queue_recover::RecoverAction::WipCommitPushDrive => {
+            if !confirm("commit the WIP, then push + open PR + drive phases 3-6?") {
+                println!(
+                    "{} skipped — commit/stash the WIP yourself, then re-run.",
+                    "ⓘ".cyan()
+                );
+                return Ok(());
+            }
+            let _ = run_git(&["add", "-A"], &probe_repo)?;
+            let _ = run_git(
+                &["commit", "-m", &format!("wip: recover {spec}")],
+                &probe_repo,
+            )?;
+            let Some(b) = branch.as_deref() else {
+                eprintln!("{} no branch to push.", "✗".red().bold());
+                return Ok(());
+            };
+            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            if !push_st.success() {
+                eprintln!("{} push failed — resolve manually.", "✗".red().bold());
+                return Ok(());
+            }
+            println!("  {} gh pr create --fill", "▸".cyan());
+            let pr_st = std::process::Command::new("gh")
+                .current_dir(&probe_repo)
+                .args(["pr", "create", "--fill"])
+                .status();
+            if matches!(pr_st, Ok(s) if s.success()) {
+                let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+            } else {
+                eprintln!(
+                    "{} `gh pr create` failed — open the PR manually, then re-run recover.",
+                    "✗".red().bold()
+                );
+            }
+        }
+        queue_recover::RecoverAction::WipCommitPark => {
+            println!(
+                "{} preserving uncommitted work as a WIP commit (parked for resumption).",
+                "ⓘ".cyan()
+            );
+            if !confirm("commit the WIP on the branch and park (no PR)?") {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            let _ = run_git(&["add", "-A"], &probe_repo)?;
+            let _ = run_git(
+                &["commit", "-m", &format!("wip: recover {spec} (parked)")],
+                &probe_repo,
+            )?;
+            println!(
+                "{} WIP committed. Resume later with `aida queue work {} --resume`.",
+                "✓".green().bold(),
+                spec
+            );
+        }
+        queue_recover::RecoverAction::EndAndRequeue => {
+            println!(
+                "{} nothing was shipped — ending the lease and re-queueing `{}` for a fresh attempt.",
+                "↩".cyan().bold(),
+                spec
+            );
+            if !confirm("end the session and re-queue the spec?") {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            if state.lease_held {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+            // Re-queue for the spec's owner. queue add is advisor-gated in
+            // non-TTY contexts, so route the role explicitly.
+            let _ = run_aida(&["queue", "add", &spec, "--user", user_id]);
+        }
+    }
+
+    Ok(())
+}
+
+/// STORY-384: short human label for a recovery action (the recommendation
+/// headline). The longer "why" is [`queue_recover::RecoverAction::rationale`].
+/// trace:STORY-384 | ai:claude
+fn recover_action_label(action: queue_recover::RecoverAction) -> &'static str {
+    use queue_recover::RecoverAction as A;
+    match action {
+        A::AlreadyCompleted => "already completed — nothing to recover",
+        A::AlreadyMergedPull => "pull to auto-bump the merged PR",
+        A::DrivePhasesFromPr => "drive phases 3-6 on the open PR",
+        A::PushOpenPrDrive => "push + open PR + drive phases 3-6",
+        A::WipCommitPushDrive => "commit WIP + push + open PR + drive phases 3-6",
+        A::WipCommitPark => "commit WIP and park for resumption",
+        A::EndAndRequeue => "end the lease and re-queue",
     }
 }
 
