@@ -598,6 +598,39 @@ pub fn init_forge_config_section(project_root: &Path) -> String {
     )
 }
 
+/// STORY-511: a one-line, human-facing summary of which forge `aida init`
+/// auto-detected from `origin`, for printing in the init success output so
+/// the operator *sees* the inference rather than having to read
+/// `.aida/config.toml`. EPIC-35 slice-5 init-UX polish. Returns the forge
+/// kind alongside the message so the caller can tailor follow-up hints
+/// (e.g. naming the right CLI to install). trace:STORY-511 | ai:claude
+pub fn init_forge_detection_message(project_root: &Path) -> (ForgeKind, String) {
+    let url = origin_url(project_root);
+    let kind = url
+        .as_deref()
+        .map(detect_forge_kind)
+        .unwrap_or(ForgeKind::None);
+    let msg = match kind {
+        ForgeKind::GitHub => {
+            "Detected forge: GitHub (origin host) — PR + CI lifecycle via `gh`.".to_string()
+        }
+        ForgeKind::GitLab => {
+            "Detected forge: GitLab (origin host) — MR + CI lifecycle via `glab` (install: \
+             https://gitlab.com/gitlab-org/cli)."
+                .to_string()
+        }
+        ForgeKind::None if url.is_some() => {
+            "Detected forge: none (origin host is neither GitHub nor GitLab) — running pure-git: \
+             merge = git ancestry + (SPEC-ID)-trailer auto-complete, no forge CLI needed."
+                .to_string()
+        }
+        ForgeKind::None => "Detected forge: none (no `origin` remote yet) — running pure-git. Set \
+             `[forge] provider` in .aida/config.toml or add an origin to enable PR/MR drains."
+            .to_string(),
+    };
+    (kind, msg)
+}
+
 /// The forge provider for a project (config → detect → pure-git).
 pub fn forge_for(project_root: &Path) -> Box<dyn Forge> {
     match resolve_forge_kind(project_root) {
