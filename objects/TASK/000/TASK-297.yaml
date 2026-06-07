@@ -32,12 +32,12 @@ description: |-
   - **STORY-263** (reviewer-only first cut) — must ship first; this TASK polishes the broader workflow surface
   - **EPIC-28 STORY 3** (/aida-punt) — required for skills that can't auto-default
   - **SPIKE-7** — empirical evidence backing the audit's necessity
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:25.766156033Z
-modified_at: 2026-06-06T08:35:33.844724599Z
+modified_at: 2026-06-07T04:03:59.150030685Z
 req_type: Task
 tags:
 - aida-no-human-env
@@ -52,3 +52,7 @@ comments:
   content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded audit-and-harden of skill templates for headless mode: add AIDA_NO_HUMAN=1 paths (auto-confirm/skip/punt) to interactive skills. On-phase orchestrator-reliability work, enumerated skill list, no open decision.'
   created_at: 2026-06-06T08:35:32.553147643Z
   modified_at: 2026-06-06T08:35:32.553147643Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T04:03:59.150030685Z
+  completion_sha: 98fccb19bf6494f44e41bfafb52fd67234a7e3b8
