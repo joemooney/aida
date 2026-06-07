@@ -4236,6 +4236,85 @@ pub enum AdvisorCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Recurring maintenance/research tasks that land in the queue on a
+    /// cadence. No daemon: due schedules are evaluated and fired on every
+    /// `aida pull`. Manage them with the subcommands below.
+    // trace:STORY-262 | ai:claude
+    #[clap(subcommand)]
+    Schedule(ScheduleCommand),
+}
+
+/// No-daemon scheduled-task management. A schedule is a recurring task
+/// template with a cadence; when due (cadence elapsed since the last fire)
+/// `aida pull` files a fresh TASK into the target role's queue, tagged
+/// `scheduled:<name>`. Storage is local at `.aida/schedules.toml`.
+// trace:STORY-262 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum ScheduleCommand {
+    /// Register a recurring task. The schedule fires immediately on the next
+    /// `aida pull` (never-fired schedules are due now), then on every cadence
+    /// boundary thereafter.
+    Add {
+        /// Unique short name (the registration key). Becomes the
+        /// `scheduled:<name>` tag on every filed TASK.
+        name: String,
+
+        /// Cadence: a Go-duration-like token (`90d`, `14d`, `30d`, `12h`,
+        /// `1w`). Units: m=minutes, h=hours, d=days, w=weeks.
+        #[clap(long)]
+        every: String,
+
+        /// TASK title filed when the schedule fires.
+        #[clap(long)]
+        template: String,
+
+        /// TASK description (optional).
+        #[clap(long)]
+        description: Option<String>,
+
+        /// Extra comma-separated tags applied to the filed TASK (in addition
+        /// to `scheduled:<name>` and `batch:scheduled`).
+        #[clap(long)]
+        tags: Option<String>,
+
+        /// Role the filed TASK is routed to. Defaults to `advisor`.
+        #[clap(long = "for", default_value = "advisor")]
+        for_role: String,
+    },
+
+    /// List registered schedules with cadence, last-fired, next-due, status.
+    List {
+        /// Emit the schedule list as JSON instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Enable a disabled schedule so it resumes firing on cadence.
+    Enable {
+        /// Schedule name.
+        name: String,
+    },
+
+    /// Disable a schedule. It's preserved but never fired until re-enabled.
+    Disable {
+        /// Schedule name.
+        name: String,
+    },
+
+    /// Remove a schedule entirely.
+    Remove {
+        /// Schedule name.
+        name: String,
+    },
+
+    /// Manually fire due schedules now (the same logic `aida pull` runs). With
+    /// a name, force-fire that one schedule regardless of cadence.
+    Run {
+        /// Optional schedule name. Without it, fire all currently-due
+        /// schedules. With it, force-fire that schedule even if not yet due.
+        name: Option<String>,
+    },
 }
 
 /// Worker-directive introspection. The `aida-worker` shell function reads
