@@ -101,6 +101,23 @@ jobs:
           git fetch --no-tags origin "${{ github.base_ref }}" || true
           ./target/release/aida trace gate --range "${BASE}..HEAD"
 
+      # STORY-499: diff-level trace-COVERAGE check (EPIC-34 gap #1). Distinct
+      # from the validity gate above: `gate` checks the `(SPEC-ID)` trailers
+      # resolve live; `coverage` checks the changed CODE in the diff actually
+      # carries the required `// trace:` provenance (inline anchor OR a live
+      # commit trailer), per the SPIKE-47 deterministic definition + exemption
+      # list (tests / generated / docs / config / vendored / pure-deletion /
+      # fmt-only / trivial). Shipped REPORT-ONLY first (SPIKE-47 §5/§6: a
+      # coverage gate's failure mode is adoption death — run report-only for a
+      # calibration period to mine missed exemptions, then flip to `--block`).
+      # No `--block` here, so this step annotates the coverage ratio + any
+      # uncovered hunks but never fails the PR. trace:STORY-499 | ai:claude
+      - name: Report diff trace coverage (report-only)
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          ./target/release/aida trace coverage --range "${BASE}..HEAD" || true
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
