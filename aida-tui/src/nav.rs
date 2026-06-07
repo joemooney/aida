@@ -6,8 +6,9 @@
 //! rule. Pure state + render; the parent dashboard owns the data each
 //! section drives. trace:STORY-244 | ai:claude
 
+use crate::theme::Theme;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
@@ -126,9 +127,12 @@ impl NavState {
 }
 
 /// Draw the left-nav panel into `area`. A divider row separates list
-/// sections from action verbs.
-pub fn render(frame: &mut Frame, area: Rect, state: &NavState) {
-    let block = Block::bordered().title(" Nav ");
+/// sections from action verbs. Colors resolve through `theme`.
+/// trace:TASK-256 | ai:claude
+pub fn render(frame: &mut Frame, area: Rect, state: &NavState, theme: &Theme) {
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.border))
+        .title(" Nav ");
     let inner_w = area.width.saturating_sub(2) as usize;
 
     let mut lines: Vec<Line> = Vec::new();
@@ -139,21 +143,21 @@ pub fn render(frame: &mut Frame, area: Rect, state: &NavState) {
         if !section.is_list_section() && !saw_action {
             lines.push(Line::from(Span::styled(
                 "─".repeat(inner_w),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(theme.dim),
             )));
             saw_action = true;
         }
         let marker = if i == state.selected { "▸ " } else { "  " };
         let style = if i == state.selected {
             Style::default()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
+                .fg(theme.on_accent)
+                .bg(theme.accent)
                 .add_modifier(Modifier::BOLD)
         } else if section.is_list_section() {
-            Style::default()
+            Style::default().fg(theme.fg)
         } else {
             // Action verbs are dimmer until selected.
-            Style::default().fg(Color::Gray)
+            Style::default().fg(theme.dim)
         };
         let text = format!("{marker}{}", section.label());
         let clipped: String = text.chars().take(inner_w.max(4)).collect();
