@@ -8,12 +8,12 @@ description: |-
   Today a held spec ends Done; 'aida queue work <spec> --resume' bails via format_queue_work_not_queued_error ('isn't queued. Status is Done'). The working path post-BUG-250 is: run the gate, 'gh pr create', then 'aida queue work PR-N --role reviewer' (the Held hint points at this). The ergonomic gap: re-entering the SAME implementer worktree/session to run the gate + open the PR from inside, with the verb's lease/pull bookkeeping (today the bypass is 'cd <worktree> && claude --resume <session>').
 
   Mechanism available: BUG-250 already persists the hold marker at .aida/pr-holds/<spec>.json (punt::read_hold_signal). The resume path (resolve_queue_work_plan -> format_queue_work_not_queued_error, and the QueueWorkLaunch::Resume re-entry in handle_queue_work) should recognise a held marker as a re-enterable state distinct from queued/Completed/needs-rework, and clear the marker once the PR is opened. Validate via a supervised push-hold-PR finish + resume, per the EPIC-33 invariant-1 plan.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T15:03:54.277918097Z
-modified_at: 2026-06-07T03:54:22.126305573Z
+modified_at: 2026-06-07T04:04:07.784329551Z
 req_type: Task
 tags:
 - from-bug-250
@@ -33,3 +33,7 @@ comments:
   content: Commit e0f03e69e references this requirement
   created_at: 2026-06-07T03:54:22.126305573Z
   modified_at: 2026-06-07T03:54:22.126305573Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T04:04:07.784329551Z
+  completion_sha: 238c1c9570a3f4b6e8bea398e9678363a7cb25fa
