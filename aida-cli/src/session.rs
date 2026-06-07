@@ -1175,6 +1175,22 @@ fn session_cwd_in_project(cwd: &str, project_root: &Path) -> bool {
     }
 }
 
+/// TASK-402: canonicalize a role name parsed out of a session's JSONL so
+/// `--list-sessions` reports the project-wide identity, not a deprecated
+/// alias. `dialog` is the legacy token (TASK-279) for `advisor` (TASK-586);
+/// normalizing here keeps the recorded role aligned with what the orchestrator
+/// actually launched (`--role implementer`/`advisor`) and removes the
+/// "did the orchestrator launch the wrong role?" confusion during a
+/// resume-after-failure recovery. Pure + case-insensitive on the alias.
+/// trace:TASK-402 | ai:claude
+fn canonical_session_role(raw: &str) -> String {
+    if raw.eq_ignore_ascii_case("dialog") {
+        "advisor".to_string()
+    } else {
+        raw.to_string()
+    }
+}
+
 /// TASK-112: one-line summary of a recorded Claude session, for the
 /// `aida queue work --list-sessions` output. `<liveness> <id8>  <age>
 /// <role>  <title>`. trace:TASK-112 | ai:claude
@@ -1263,8 +1279,18 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
                     // Reject empty matches and the literal `(none active)`
                     // / `${role}` cases that show up in shell-template
                     // output or unset-env echos.
+                    //
+                    // TASK-402 (friction #2): a session the orchestrator
+                    // launched with `--role implementer` could be tagged
+                    // `dialog` in `--list-sessions` because the early JSONL
+                    // scan caught the deprecated alias (a not-yet-migrated
+                    // role file / shell echo). Canonicalize the parsed name
+                    // so the recorded role reflects the project-wide identity
+                    // (`dialog` is the deprecated alias for `advisor`) instead
+                    // of confusing the operator mid-recovery.
+                    // trace:TASK-402 | ai:claude
                     if !name.is_empty() {
-                        role = Some(name);
+                        role = Some(canonical_session_role(&name));
                         break;
                     }
                 }
@@ -1851,6 +1877,22 @@ pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TASK-402 (friction #2): a session JSONL that echoed the deprecated
+    // `dialog` alias must report the canonical `advisor` role in
+    // `--list-sessions`, so a recovery operator doesn't think the orchestrator
+    // launched the wrong role. Other roles pass through unchanged.
+    // trace:TASK-402 | ai:claude
+    #[test]
+    fn canonical_session_role_normalizes_dialog_alias() {
+        assert_eq!(canonical_session_role("dialog"), "advisor");
+        assert_eq!(canonical_session_role("Dialog"), "advisor");
+        assert_eq!(canonical_session_role("DIALOG"), "advisor");
+        // Real roles are untouched.
+        assert_eq!(canonical_session_role("implementer"), "implementer");
+        assert_eq!(canonical_session_role("advisor"), "advisor");
+        assert_eq!(canonical_session_role("reviewer"), "reviewer");
+    }
 
     #[test]
     fn session_cwd_scoping_separates_sibling_project_trees() {

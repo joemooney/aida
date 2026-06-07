@@ -83495,15 +83495,41 @@ fn handle_queue_work(
                     continue;
                 }
                 orchestrator::AutoReleaseDecision::DormantDirty { dirty_entries } => {
+                    // TASK-402 (friction #3 + #4): a dormant lease with a dirty
+                    // worktree is the canonical resume-after-failure state — the
+                    // process died mid-implementation (orphaned) and the
+                    // unfinished work lives uncommitted in that exact worktree.
+                    // The bare message ("commit/stash, or --force to discard")
+                    // omits the one option that keeps the WIP: resume into the
+                    // existing worktree. `--steal` would remove the worktree the
+                    // WIP lives in, so name it as the destructive path, not the
+                    // default. trace:TASK-402 | ai:claude
+                    let resume_hint = if resume.is_some() {
+                        format!(
+                            " You passed --resume: keep this worktree and re-attach \
+                             to the recorded session — re-run with \
+                             `aida queue work {} --resume <session-uuid>` \
+                             (--list-sessions shows the uuid).",
+                            plan.scope
+                        )
+                    } else {
+                        format!(
+                            " To keep the work, resume into this worktree: \
+                             `aida queue work {} --resume` (bare = most-recent session). \
+                             Only commit/stash or `aida session end {} --force` (discards) \
+                             if you intend to abandon it.",
+                            plan.scope,
+                            &conflict.id[..conflict.id.len().min(8)]
+                        )
+                    };
                     anyhow::bail!(
-                        "lease {} for scope `{}` is dormant but its worktree has {} \
-                         uncommitted change(s) at {} — commit/stash them first, or \
-                         `aida session end {} --force` to discard, then retry.",
+                        "lease {} for scope `{}` looks orphaned (dormant process, \
+                         worktree has {} uncommitted change(s) at {}).{}",
                         &conflict.id[..conflict.id.len().min(8)],
                         plan.scope,
                         dirty_entries,
                         conflict.worktree_path.display(),
-                        &conflict.id[..conflict.id.len().min(8)]
+                        resume_hint
                     );
                 }
                 orchestrator::AutoReleaseDecision::Live => {
@@ -83512,9 +83538,18 @@ fn handle_queue_work(
             }
 
             if !steal {
+                // TASK-402 (friction #4): the lease is live (the auto-release
+                // sweep above handles dormant/orphaned leases). Warn that
+                // `--steal` ends the session AND removes its worktree — so if
+                // there is unfinished work in that worktree, `--resume` (which
+                // re-attaches in place) is the work-preserving path, not
+                // `--steal`. trace:TASK-402 | ai:claude
                 anyhow::bail!(
-                    "scope `{}` is owned by lease {} ({}, worktree: {}) — pass --steal to end \
-                     that session first and take over, or `aida session end {}` manually.",
+                    "scope `{}` is owned by lease {} ({}, worktree: {}) — \
+                     to take over: `--steal` ends that session and removes its \
+                     worktree (work there is lost unless committed), \
+                     or `--resume` re-attaches to it in place (keeps the worktree), \
+                     or `aida session end {}` manually.",
                     plan.scope,
                     &conflict.id[..conflict.id.len().min(8)],
                     conflict.role.as_deref().unwrap_or("(unset)"),
@@ -90550,11 +90585,27 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             .as_deref()
                             .and_then(claude_log_indicates_api_outage)
                     {
-                        let hint = format!(
-                            "Anthropic API was unavailable; resume with: \
-                             `aida queue work {spec} --resume {session_uuid}`",
-                            spec = self.spec,
+                        // TASK-402 (friction #1 + #5): make this retry hint
+                        // paste-ready. The headless implementer ran in a
+                        // sibling worktree, so `claude --resume` (project-slug
+                        // scoped by cwd) is invisible from the main repo — emit
+                        // the `cd <worktree>` step alongside the *full* session
+                        // UUID. trace:TASK-402 | ai:claude
+                        let resume_base =
+                            format!("aida queue work {} --resume {}", self.spec, session_uuid);
+                        let resume_cmd = resume_command_with_cwd(
+                            &resume_base,
+                            self.implementer_worktree
+                                .as_deref()
+                                .map(|p| p.to_string_lossy())
+                                .as_deref(),
+                            std::env::current_dir()
+                                .ok()
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .as_deref(),
                         );
+                        let hint =
+                            format!("Anthropic API was unavailable; resume with: `{resume_cmd}`");
                         return Ok(auto_complete::ImplementerOutcome::Inconclusive {
                             reason: format!(
                                 "Anthropic API outage during the headless implementer: {reason_line}"
@@ -92427,6 +92478,22 @@ impl QueueWorkLaunch {
     }
 }
 
+/// TASK-402: does `s` look like an AIDA *lease* id rather than a Claude
+/// *session* UUID? A lease id is a hyphenless hex run (e.g. `019e45cfc559`,
+/// the short form printed by `✓ session … started`); a Claude session UUID
+/// always carries hyphens (`019e45cf-acea-73c1-9476-…`). The orchestrator's
+/// phase-1 banner prominently shows the lease id, so pasting *that* into
+/// `--resume <id>` is the #1 recovery papercut — it never prefix-matches a
+/// recorded session. Detect the shape so we can point at the right id form
+/// instead of the generic "no recorded session" miss. Pure + heuristic.
+/// trace:TASK-402 | ai:claude
+fn looks_like_lease_id(s: &str) -> bool {
+    !s.is_empty()
+        && !s.contains('-')
+        && (8..=16).contains(&s.len())
+        && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// TASK-112: resolve a (possibly truncated) session id against the
 /// recorded sessions for a scope. Returns the full id on a unique match;
 /// a non-matching value of UUID-ish length is passed through verbatim
@@ -92439,6 +92506,18 @@ fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
     match matches.len() {
         1 => Ok(matches[0].clone()),
         0 if requested.len() >= 16 => Ok(requested.to_string()),
+        // TASK-402 (friction #1): the pasted value has the shape of an AIDA
+        // lease id, not a Claude session UUID. The banner that advertised
+        // `✓ session <lease> started` is the trap — `--resume` wants the
+        // Claude session UUID. Name the mismatch and point at the right id.
+        // trace:TASK-402 | ai:claude
+        0 if looks_like_lease_id(requested) => anyhow::bail!(
+            "`{}` looks like an AIDA lease id, but --resume needs the Claude \
+             session UUID (e.g. 019e45cf-acea-73c1-…) — run \
+             `aida queue work <scope> --list-sessions` to see the resumable \
+             session ids (or pass bare `--resume` to take the most recent)",
+            requested
+        ),
         0 => anyhow::bail!(
             "no recorded claude session matches `{}` — run \
              `aida queue work <scope> --list-sessions` to see recorded ids",
@@ -92567,15 +92646,56 @@ fn print_scope_sessions(scope: &str) -> Result<()> {
         println!("  {}", session::format_session_line(m));
     }
     println!();
+    // TASK-402 (friction #1 + #5): make the resume hint paste-ready. Show the
+    // *full* Claude session UUID (the id `--resume` actually needs — not the
+    // AIDA lease id the kickoff banner shows, and not the 8-char prefix in the
+    // table above) and, when the session's recorded worktree differs from the
+    // current cwd, prepend the `cd <worktree>` step so a headless session
+    // launched in a sibling worktree is resumable in one paste.
+    // trace:TASK-402 | ai:claude
+    let most_recent = &sessions[0];
+    let resume_cmd = paste_ready_resume_command(scope, most_recent);
+    println!("  {}", "resume the most recent:".dimmed());
+    println!("    {}", resume_cmd.cyan());
+    println!();
     println!(
         "  {}",
         format!(
-            "resume one:  aida queue work {} --resume <session-id>",
+            "(or `aida queue work {} --resume <full-session-uuid>` for a specific one above)",
             scope
         )
         .dimmed()
     );
     Ok(())
+}
+
+/// TASK-402: assemble a single paste-ready resume command for a recorded
+/// session. Uses the FULL session UUID (`--resume` rejects the AIDA lease id
+/// and a truncated prefix can be ambiguous) and, when the session's recorded
+/// worktree is known and is not the current cwd, prepends `cd <worktree> && `
+/// so a headless session launched in a sibling worktree (Claude's `--resume`
+/// is project-slug scoped — invisible from the main repo's cwd) resumes in one
+/// paste. Pure given the cwd argument resolved by the caller.
+/// trace:TASK-402 | ai:claude
+fn paste_ready_resume_command(scope: &str, m: &session::SessionMeta) -> String {
+    let base = format!("aida queue work {} --resume {}", scope, m.id);
+    let current = std::env::current_dir()
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned());
+    resume_command_with_cwd(&base, m.last_cwd.as_deref(), current.as_deref())
+}
+
+/// TASK-402: pure helper — prepend a `cd <worktree> && ` step when the
+/// session's recorded worktree is known and differs from the current cwd.
+/// Keeps the cwd-resolution side effect out so it's unit-testable.
+/// trace:TASK-402 | ai:claude
+fn resume_command_with_cwd(base: &str, worktree: Option<&str>, current: Option<&str>) -> String {
+    match worktree {
+        Some(wt) if !wt.is_empty() && Some(wt) != current => {
+            format!("cd {} && {}", wt, base)
+        }
+        _ => base.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -92606,6 +92726,66 @@ mod queue_work_resume_tests {
     fn resolve_resume_id_short_no_match_errs() {
         let recorded: Vec<String> = vec![];
         assert!(resolve_resume_id(&recorded, "abc").is_err());
+    }
+
+    // TASK-402 (friction #1): a pasted AIDA lease id is recognised by shape
+    // and the error names the right id form instead of the generic miss.
+    // trace:TASK-402 | ai:claude
+    #[test]
+    fn looks_like_lease_id_distinguishes_lease_from_uuid() {
+        // AIDA lease ids: hyphenless hex, 8-16 chars.
+        assert!(looks_like_lease_id("019e45cfc559"));
+        assert!(looks_like_lease_id("019e45cf"));
+        // Claude session UUIDs carry hyphens — not a lease id.
+        assert!(!looks_like_lease_id("019e45cf-acea-73c1-9476-d044fe19d8e4"));
+        // A bare short prefix the user typed is too short / not full hex run.
+        assert!(!looks_like_lease_id("abc"));
+        assert!(!looks_like_lease_id(""));
+        // Non-hex characters disqualify it.
+        assert!(!looks_like_lease_id("zzzzzzzz"));
+    }
+
+    #[test]
+    fn resolve_resume_id_lease_shaped_miss_points_at_uuid() {
+        // The user pasted the lease id from the kickoff banner. No recorded
+        // session matches, but the message must call out the lease-vs-UUID
+        // confusion, not the generic "no recorded session" miss.
+        let recorded: Vec<String> = vec!["019e45cf-acea-73c1-9476-d044fe19d8e4".to_string()];
+        let err = resolve_resume_id(&recorded, "019e45cfc559").unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(msg.contains("lease id"), "msg: {msg}");
+        assert!(msg.contains("uuid"), "msg: {msg}");
+    }
+
+    // TASK-402 (friction #5): the resume command is paste-ready — it prepends
+    // the `cd <worktree>` step only when the recorded worktree differs from
+    // the current cwd. trace:TASK-402 | ai:claude
+    #[test]
+    fn resume_command_prepends_cd_when_worktree_differs() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd = resume_command_with_cwd(
+            base,
+            Some("/home/joe/ai/aida-task-358"),
+            Some("/home/joe/ai/aida"),
+        );
+        assert_eq!(cmd, format!("cd /home/joe/ai/aida-task-358 && {base}"));
+    }
+
+    #[test]
+    fn resume_command_omits_cd_when_worktree_matches_cwd() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd =
+            resume_command_with_cwd(base, Some("/home/joe/ai/aida"), Some("/home/joe/ai/aida"));
+        assert_eq!(cmd, base);
+    }
+
+    #[test]
+    fn resume_command_omits_cd_when_worktree_unknown() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd = resume_command_with_cwd(base, None, Some("/home/joe/ai/aida"));
+        assert_eq!(cmd, base);
+        let cmd_empty = resume_command_with_cwd(base, Some(""), Some("/home/joe/ai/aida"));
+        assert_eq!(cmd_empty, base);
     }
 
     #[test]
