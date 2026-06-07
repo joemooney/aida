@@ -55,7 +55,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T05:56:36.343278174Z
-modified_at: 2026-06-07T01:50:26.320439718Z
+modified_at: 2026-06-07T01:50:28.795605265Z
 req_type: Task
 tags:
 - from-user-question
@@ -63,5 +63,11 @@ tags:
 - init
 - onboarding
 - scaffold
+comments:
+- id: 019e9fc6-39bb-78e1-9087-a7435b57e3ad
+  author: joe
+  content: 'Rejected (2026-06-06): superseded by TASK-631 (Completed) — aida init now COMMITS its own scaffolding (auto non-TTY / prompt-default-Y on TTY, scoped paths), which strictly subsumes this ''offer to git-add'' request.'
+  created_at: 2026-06-07T01:50:28.795605265Z
+  modified_at: 2026-06-07T01:50:28.795605265Z
 archived: true
 archived_at: 2026-06-06T04:18:37.730287775Z
