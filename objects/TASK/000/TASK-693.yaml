@@ -1,0 +1,12 @@
+id: 019ea2be-ee56-7a21-8f53-e3dd63f1ad64
+spec_id: TASK-693
+agreed_id: TASK-693
+title: 'STORY-472 follow-up: aida release --after-pr <N> (watch PR CI + merge before releasing)'
+description: 'Deferred from STORY-472 slice 1. Add --after-pr <N> to ''aida release'': wait for PR-N''s checks to complete, merge it (--squash --delete-branch), then proceed with the release flow. Refuse if PR-N''s CI is failing (suggest --check). In the current workflow the integrator lands PRs before release, so this is an enhancement, not core. trace:STORY-472'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T15:41:22.390843082Z
+modified_at: 2026-06-07T15:41:22.390843082Z
+req_type: Task
