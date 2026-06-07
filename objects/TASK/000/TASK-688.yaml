@@ -3,14 +3,18 @@ spec_id: TASK-688
 agreed_id: TASK-688
 title: 'STORY-335 slice 1: read-only rebase-conflict forecast in aida queue integrate --dry-run'
 description: 'First slice of STORY-335 (operator-chosen safest slice; surface = extend STORY-520''s aida queue integrate, not a new --auto-complete=from-review path). Adds a read-only cross-batch rebase-conflict forecast to the existing ''aida queue integrate --dry-run'': for each ready (Done + open-PR) member, forecast via ''git merge-tree --write-tree'' (no worktree mutation) whether its PR branch rebases cleanly onto current main; print clean/conflict(files)/unknown per member + a ''N of M will conflict — resolve X first'' summary. Zero change to the live merge/act path. Pure parse + summarize helpers in integrate.rs (unit-tested); git probe + render in main.rs. Scope note (documented in output): forecasts each branch against current main independently — does NOT yet model sequential accumulation (a member conflicting only with an earlier un-landed batch member). Remaining STORY-335 slices stay open: the actual rebase step in the act path, --strategy {per-item|one-branch|stacked}, and the from-review resume semantics. trace:STORY-335'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T14:38:47.592630827Z
-modified_at: 2026-06-07T14:38:47.592630827Z
+modified_at: 2026-06-07T14:59:21.364045195Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e4115-7ee3-7cd1-a137-9871d589b6a9
   created_at: 2026-06-07T14:38:54.911440639Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T14:59:21.364045195Z
+  completion_sha: 839d41fd90f65aff62a355f9d3cbc2a706db416b
