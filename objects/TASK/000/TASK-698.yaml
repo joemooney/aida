@@ -1,0 +1,54 @@
+id: 019ea3c1-c1cd-7930-a208-210c687cfda4
+spec_id: TASK-698
+agreed_id: TASK-698
+title: 'aida init: prompt for agent permission posture + populate ~/.aida/agents.toml (surface the STORY-495 bypass knob)'
+description: |-
+  ## Friction (operator-found, 2026-06-07)
+
+  STORY-495 shipped the faithful-launcher flip: `aida agent new` no longer auto-injects bypass; you opt in via `[agents] bypass = true` in ~/.aida/agents.toml. But NOTHING surfaces that knob — the operator only discovered it after spawning an agent that unexpectedly prompted for permissions, then had to hand-create agents.toml. Classic ADR-2 gap: the knob exists, but it's undiscovered.
+
+  ## Proposal
+
+  At `aida init`, on FIRST MACHINE SETUP (~/.aida/agents.toml absent) at a TTY, prompt for the agent permission posture and write ~/.aida/agents.toml:
+
+    How should agents launched by `aida agent new` handle permissions?
+      1) Bypass — skip all prompts (trusted / autonomous workflows)   → [agents] bypass = true
+      2) Native — each tool's own default (claude prompts) [default]    → write nothing / bypass=false
+      3) Decide later                                                    → write nothing
+
+  ## Properties (match the onboarding cluster)
+
+  - Default = **native** (safe-by-default; bypass is the explicit opt-in — consistent with STORY-495's faithful-launcher philosophy). Never silently bypass.
+  - **Idempotent**: if ~/.aida/agents.toml exists, do NOT prompt or overwrite (respect the user's config) — same as TASK-638's role scaffold.
+  - **TTY-gated**: non-interactive init → no prompt, native default. `--no-agent-config` (or similar) opt-out.
+  - Machine-global (~/.aida/), so this is FIRST-MACHINE-SETUP surfaced at the first project init.
+
+  ## Grouping (important)
+
+  This is the SAME class as TASK-638 (init scaffolds the role set globally). Both are "set up this machine's agent defaults," fire-once, idempotent. Recommend a SINGLE "machine setup" step at first init covering both (role scaffold + agent permission posture) rather than two separate prompts — keep onboarding to one clean interaction.
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] First `aida init` on a machine with no ~/.aida/agents.toml prompts the permission-posture question (TTY only) and writes the chosen config; bypass → `[agents] bypass = true`.
+  - [ ] Idempotent: existing ~/.aida/agents.toml is never prompted-over or overwritten.
+  - [ ] Non-interactive init writes nothing (native default); `--no-agent-config` opt-out at a TTY.
+  - [ ] Default selection is native (safe); bypass requires an explicit pick.
+  - [ ] Ideally folded into one first-machine-setup step with TASK-638 (role scaffold).
+
+  ## Relationships
+  - Surfaces the STORY-495 knob. ADR-2 principle (surface concept + sensible default). Sibling of TASK-638 (role scaffold) — recommend merging into one machine-setup step. Cluster: TASK-645 (role default).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T20:24:04.813514736Z
+modified_at: 2026-06-07T20:24:04.813514736Z
+req_type: Task
+tags:
+- agents-config
+- aida:init
+- from-product
+- from-user-friction
+- onboarding-flow
+- parent:STORY-495
+- permission-posture
