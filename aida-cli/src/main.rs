@@ -33,7 +33,9 @@ mod pr_rebase;
 mod pr_ship;
 mod process_probe;
 mod prompts;
+// trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
+mod queue_recover;
 mod reviewer_summary;
 mod rules_sync;
 mod session;
@@ -1098,6 +1100,14 @@ fn run() -> Result<()> {
     // trace:STORY-498 | ai:claude
     if let Command::Trace(TraceCommand::Gate { range, json }) = &cli.command {
         return handle_trace_gate(range.as_deref(), *json);
+    }
+
+    // STORY-499: `aida trace coverage` is self-contained the same way `gate` is
+    // — it reads git for the diff + range and self-loads the store to resolve
+    // `// trace:` anchors / `(SPEC-ID)` trailers. Dispatch it early so it never
+    // needs the shared storage handle. trace:STORY-499 | ai:claude
+    if let Command::Trace(TraceCommand::Coverage { range, json, block }) = &cli.command {
+        return handle_trace_coverage(range.as_deref(), *json, *block);
     }
 
     // `aida changelog` is self-contained: git + read-only store, no shared
@@ -11390,6 +11400,97 @@ mod task_492_brief_tests {
         assert_eq!(headless_log_len(root, session), Some(1));
         std::fs::write(&logp, "abcdef").unwrap();
         assert_eq!(headless_log_len(root, session), Some(6));
+    }
+
+    // TASK-298: FULLY-ISOLATED tests of the pure stream-json stall parser.
+    // Each takes one JSONL line (or a small log body) and asserts on the
+    // detection verdict — no threads, no files, no orchestrator. trace:TASK-298
+
+    #[test]
+    fn stall_parser_silent_on_blank_and_non_json() {
+        assert_eq!(headless_line_permission_stall(""), None);
+        assert_eq!(headless_line_permission_stall("   "), None);
+        assert_eq!(headless_line_permission_stall("{not-json"), None);
+    }
+
+    #[test]
+    fn stall_parser_silent_on_clean_events() {
+        let init = r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#;
+        assert_eq!(headless_line_permission_stall(init), None);
+        let ok_result = r#"{"type":"result","subtype":"success","is_error":false}"#;
+        assert_eq!(headless_line_permission_stall(ok_result), None);
+        // An empty permission_denials array is NOT a stall.
+        let empty = r#"{"type":"assistant","permission_denials":[]}"#;
+        assert_eq!(headless_line_permission_stall(empty), None);
+    }
+
+    #[test]
+    fn stall_parser_detects_permission_denial_with_tool_name() {
+        let line = r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("denial detected");
+        assert!(reason.contains("permission gate"), "got: {reason}");
+        assert!(reason.contains("Bash"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_counts_multiple_denials_and_falls_back_to_tool_alias() {
+        // First denial uses the `tool` alias (not `tool_name`); the count tail
+        // reports the extras.
+        let line =
+            r#"{"type":"assistant","permission_denials":[{"tool":"Write"},{"tool_name":"Bash"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("denial detected");
+        assert!(reason.contains("Write"), "got: {reason}");
+        assert!(reason.contains("+1 more"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_detects_is_error_with_result_detail() {
+        // The SPIKE-7 false-positive: exit code 0 but is_error true.
+        let line = r#"{"type":"result","subtype":"error_during_execution","is_error":true,"result":"permission gate refused\nsecond line"}"#;
+        let reason = headless_line_permission_stall(line).expect("is_error detected");
+        assert!(reason.contains("is_error"), "got: {reason}");
+        // Multi-line detail collapses to the first non-empty line.
+        assert!(reason.contains("permission gate refused"), "got: {reason}");
+        assert!(!reason.contains("second line"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_is_error_falls_back_to_subtype_when_no_result_text() {
+        let line = r#"{"type":"result","subtype":"error_max_turns","is_error":true}"#;
+        let reason = headless_line_permission_stall(line).expect("is_error detected");
+        assert!(reason.contains("error_max_turns"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_parser_denial_wins_over_is_error_on_same_line() {
+        let line =
+            r#"{"type":"assistant","is_error":true,"permission_denials":[{"tool_name":"Edit"}]}"#;
+        let reason = headless_line_permission_stall(line).expect("detected");
+        assert!(reason.contains("permission gate"), "got: {reason}");
+        assert!(reason.contains("Edit"), "got: {reason}");
+    }
+
+    #[test]
+    fn stall_scan_folds_log_and_returns_first_signal() {
+        // A realistic log: clean lines, then a denial, then more lines. The
+        // scan returns the first stall signal and ignores the clean prefix.
+        let log = [
+            r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}"#,
+            r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#,
+            r#"{"type":"result","subtype":"success","is_error":false}"#,
+        ]
+        .join("\n");
+        let reason = headless_log_permission_stall(&log).expect("stall found in log");
+        assert!(reason.contains("Bash"), "got: {reason}");
+
+        // A clean log yields no stall.
+        let clean = [
+            r#"{"type":"system","subtype":"init","model":"x","cwd":"/w"}"#,
+            r#"{"type":"result","subtype":"success","is_error":false,"duration_ms":10}"#,
+        ]
+        .join("\n");
+        assert_eq!(headless_log_permission_stall(&clean), None);
     }
 
     fn req(spec_id: &str, title: &str, description: &str) -> Requirement {
@@ -34971,6 +35072,101 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
     newest_len
 }
 
+/// TASK-298: scan one headless `claude -p --output-format stream-json` JSONL
+/// *line* for a hard "the session bailed at a gate" signal and, when present,
+/// return a specific human-readable reason. SPIKE-7 found `claude -p`'s exit
+/// code is unreliable (it exits 0 even when it abandoned the work at a
+/// permission prompt), so the real completion signal lives in the stream:
+///
+///   - a non-empty `permission_denials` array → the model wanted a tool the
+///     non-interactive run could not grant; in `--no-human` mode there is no
+///     human to approve it, so the run is silently stuck. We surface the first
+///     denied tool name.
+///   - a top-level `is_error: true` (on any event, including the terminal
+///     `result`) → the run reported an error envelope; we surface its
+///     `result`/`subtype` detail.
+///
+/// Pure and FULLY ISOLATED: takes a single JSONL line, returns
+/// `Some(reason)` when the line carries a stall signal, `None` otherwise.
+/// Blank or non-JSON lines are `None` (the orchestrator's log is well-formed
+/// JSONL, but a partially-flushed final line must never trip a false stall).
+/// The watchdog folds this over the log so a `--no-human` drain wedged at a
+/// permission gate is detected and failed instead of hanging until the
+/// no-progress / ceiling timeout. trace:TASK-298 | ai:claude
+fn headless_line_permission_stall(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed: serde_json::Value = serde_json::from_str(trimmed).ok()?;
+
+    // Permission denials are the precise SPIKE-7 signal — surface them first
+    // with the offending tool name(s).
+    if let Some(denials) = parsed
+        .get("permission_denials")
+        .and_then(|v| v.as_array())
+        .filter(|a| !a.is_empty())
+    {
+        let tool = denials
+            .iter()
+            .find_map(|d| {
+                d.get("tool_name")
+                    .or_else(|| d.get("tool"))
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("an unknown tool");
+        let extra = if denials.len() > 1 {
+            format!(" (+{} more)", denials.len() - 1)
+        } else {
+            String::new()
+        };
+        return Some(format!(
+            "headless Claude bailed at the permission gate for tool {tool}{extra}"
+        ));
+    }
+
+    // An error envelope — `is_error: true` on any event (the terminal
+    // `result` event is the common carrier, but be liberal). Exit code 0
+    // cannot be trusted, so this is the authoritative failure flag.
+    if parsed.get("is_error").and_then(|v| v.as_bool()) == Some(true) {
+        let detail = parsed
+            .get("result")
+            .and_then(|v| v.as_str())
+            .map(first_nonempty_line)
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                parsed
+                    .get("subtype")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_else(|| "error".to_string());
+        return Some(format!("headless Claude reported is_error: {detail}"));
+    }
+
+    None
+}
+
+/// TASK-298: fold [`headless_line_permission_stall`] over a whole headless log
+/// body, returning the first line's stall reason or `None`. Best-effort, like
+/// the sibling [`claude_log_indicates_api_outage`]: the classification is a
+/// refinement that lets the watchdog fail fast, not a gate.
+/// trace:TASK-298 | ai:claude
+fn headless_log_permission_stall(content: &str) -> Option<String> {
+    content.lines().find_map(headless_line_permission_stall)
+}
+
+/// First non-empty trimmed line of a string, or the empty string. Small pure
+/// helper so a multi-line `result` detail collapses to one log-friendly row.
+/// trace:TASK-298 | ai:claude
+fn first_nonempty_line(s: &str) -> String {
+    s.lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
+}
+
 struct TextQuestionPunt {
     detail: String,
     lean: String,
@@ -39086,9 +39282,11 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
     // Try to associate this run with the active session lease so the
     // review-story description records who opened the PR. Falls back to
     // a synthetic "(no-session)" id if no lease covers the cwd.
-    let session_id = std::env::current_dir()
+    let lease = std::env::current_dir()
         .ok()
-        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+    let lease_scope = lease.as_ref().map(|l| l.scope.clone());
+    let session_id = lease
         .map(|l| l.id)
         .unwrap_or_else(|| "(no-sess)".to_string());
 
@@ -39099,6 +39297,27 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
         AutoQueueOrigin::PrSkill,
     );
     render_auto_queue_outcome(&outcome);
+
+    // TASK-630: opening the PR is the event that ends a deliberate PR-hold
+    // (BUG-250). `aida pr auto-queue-review` runs right after `gh pr create`
+    // (the /aida-pr step), so a Filed/AlreadyExists outcome means the held PR is
+    // now open — clear the persisted `.aida/pr-holds/<spec>.json` marker so a
+    // later `aida queue work <spec> --resume` no longer treats the spec as held.
+    // Best-effort: a missing marker (the common case — most PRs were never
+    // held) or an unlink error never perturbs the queue-review flow.
+    // trace:TASK-630 | ai:claude
+    if matches!(
+        outcome.status,
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
+    ) {
+        if let Some(spec) = &lease_scope {
+            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+            let marker = punt::hold_signal_path(&main_root, spec);
+            if punt::read_hold_signal(&marker).is_some() {
+                let _ = std::fs::remove_file(&marker);
+            }
+        }
+    }
 
     // BUG-86: on every non-success outcome (needs-attention OR by-design
     // skip), print the exact command to re-run manually. The skill side
@@ -44063,6 +44282,382 @@ mod statusline_tests {
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].spec_id, "BUG-2");
         assert_eq!(violations[0].verdict, TrailerVerdict::Nonexistent);
+    }
+
+    // ── STORY-499: diff-level trace-COVERAGE core (fully-isolated) ──
+    //
+    // The whole point of STORY-499 is that the coverage decision (file →
+    // requires-trace? + hunk → has-trace?) is a PURE fn with every dependency
+    // injected — no git, no store. These tests exercise it with hand-built
+    // hunks + an in-test resolver. trace:STORY-499 | ai:claude
+
+    fn live_resolver(id: &str) -> SpecResolution {
+        // Treat anything starting `DEAD` as missing; everything else live.
+        if id.to_ascii_uppercase().starts_with("DEAD") {
+            SpecResolution::Missing
+        } else {
+            SpecResolution::Live
+        }
+    }
+
+    fn empty_maps() -> (
+        std::collections::HashMap<String, Vec<String>>,
+        std::collections::HashMap<String, String>,
+        std::collections::HashMap<String, bool>,
+    ) {
+        (
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
+        )
+    }
+
+    #[test]
+    fn coverage_file_classifier_exemptions() {
+        // F1 tests
+        assert_eq!(
+            classify_coverage_file("aida-cli/tests/foo.rs", None),
+            Some(CoverageExemption::TestFile)
+        );
+        assert_eq!(
+            classify_coverage_file("src/bar_test.rs", None),
+            Some(CoverageExemption::TestFile)
+        );
+        assert_eq!(
+            classify_coverage_file("web/comp.test.ts", None),
+            Some(CoverageExemption::TestFile)
+        );
+        // F2 generated — path + marker
+        assert_eq!(
+            classify_coverage_file("src/generated/types.rs", None),
+            Some(CoverageExemption::Generated)
+        );
+        assert_eq!(
+            classify_coverage_file("src/types.gen.rs", None),
+            Some(CoverageExemption::Generated)
+        );
+        assert_eq!(
+            classify_coverage_file("src/types.rs", Some("// @generated by tool\nfn x() {}")),
+            Some(CoverageExemption::Generated)
+        );
+        // F3 docs / non-source
+        assert_eq!(
+            classify_coverage_file("README.md", None),
+            Some(CoverageExemption::DocOrProse)
+        );
+        assert_eq!(
+            classify_coverage_file("docs/plans/x.rs", None),
+            Some(CoverageExemption::DocOrProse)
+        );
+        // F4 config
+        assert_eq!(
+            classify_coverage_file("Cargo.toml", None),
+            Some(CoverageExemption::ConfigData)
+        );
+        assert_eq!(
+            classify_coverage_file("Cargo.lock", None),
+            Some(CoverageExemption::ConfigData)
+        );
+        // F5 vendored
+        assert_eq!(
+            classify_coverage_file("vendor/lib/x.rs", None),
+            Some(CoverageExemption::Vendored)
+        );
+        // Coverable source file → None
+        assert_eq!(classify_coverage_file("aida-cli/src/main.rs", None), None);
+        // Unknown extension → not coverable (prose)
+        assert_eq!(
+            classify_coverage_file("Makefile", None),
+            Some(CoverageExemption::DocOrProse)
+        );
+    }
+
+    #[test]
+    fn coverage_hunk_classifier_exemptions() {
+        let mk = |added: &[&str], removed: &[&str]| ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: added.iter().map(|s| s.to_string()).collect(),
+            removed: removed.iter().map(|s| s.to_string()).collect(),
+        };
+        // H1 pure deletion
+        assert_eq!(
+            classify_coverage_hunk(&mk(&[], &["old();", "more();"]), 1),
+            Some(CoverageExemption::PureDeletion)
+        );
+        // H2 whitespace-only reflow (same content, different spacing)
+        assert_eq!(
+            classify_coverage_hunk(&mk(&["let  x =  1;"], &["let x = 1;"]), 1),
+            Some(CoverageExemption::CommentOrBlankOnly)
+        );
+        // H4 comment-only addition
+        assert_eq!(
+            classify_coverage_hunk(&mk(&["// a comment", "/// doc"], &[]), 1),
+            Some(CoverageExemption::CommentOrBlankOnly)
+        );
+        // H4 trivial one-liner (<=1 effective added line)
+        assert_eq!(
+            classify_coverage_hunk(&mk(&["let x = 1;"], &[]), 1),
+            Some(CoverageExemption::Trivial)
+        );
+        // Real multi-line code addition → coverable (None)
+        assert_eq!(
+            classify_coverage_hunk(
+                &mk(&["fn f() {", "    do_a();", "    do_b();", "}"], &[]),
+                1
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn coverage_attribution_in_hunk_anchor() {
+        // A real coverable code hunk with an inline `// trace:` is covered.
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn feature() {".to_string(),
+                "    // trace:STORY-499 | ai:claude".to_string(),
+                "    do_work();".to_string(),
+                "    do_more();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.coverable(), 1);
+        assert_eq!(cov.covered(), 1);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::InHunkAnchor));
+        assert!(cov.uncovered().is_empty());
+        assert_eq!(cov.ratio(), 1.0);
+    }
+
+    #[test]
+    fn coverage_attribution_proximity_anchor_above_only() {
+        // The trace anchor sits ABOVE the hunk in the post-change file (an
+        // unchanged `/// trace:` over a changed body). new_start=4 (1-based),
+        // so file lines [0..3) are searched above it; the anchor at index 2
+        // (line 3) is within N=5.
+        let post = vec![
+            "use std::x;".to_string(),         // line 1
+            "".to_string(),                    // line 2
+            "/// trace:STORY-499".to_string(), // line 3  (above, within 5)
+            "fn body() {".to_string(),         // line 4  <- hunk start
+            "    changed();".to_string(),      // line 5
+            "    changed2();".to_string(),     // line 6
+            "}".to_string(),
+        ];
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 4,
+            added: vec!["    changed();".to_string(), "    changed2();".to_string()],
+            removed: vec!["    old();".to_string()],
+        }];
+        let mut files = std::collections::HashMap::new();
+        files.insert("src/x.rs".to_string(), post);
+        let (_e, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::ProximityAnchor));
+
+        // A trace anchor BELOW the hunk must NOT count (it annotates the next
+        // item, per SPIKE-47 risk #2).
+        let post_below = vec![
+            "fn body() {".to_string(),         // line 1  <- hunk start
+            "    changed();".to_string(),      // line 2
+            "    changed2();".to_string(),     // line 3
+            "}".to_string(),                   // line 4
+            "/// trace:STORY-499".to_string(), // line 5 (below — must not count)
+        ];
+        let mut files2 = std::collections::HashMap::new();
+        files2.insert("src/x.rs".to_string(), post_below);
+        let hunks2 = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 1,
+            added: vec!["    changed();".to_string(), "    changed2();".to_string()],
+            removed: vec![],
+        }];
+        let cov2 = compute_diff_coverage(&hunks2, &files2, &gen, &floor, 5, 1, live_resolver);
+        // No anchor above, no trailer → uncovered.
+        assert!(cov2.hunks[0].is_uncovered_coverable());
+    }
+
+    #[test]
+    fn coverage_attribution_file_level_module_anchor() {
+        let post = vec![
+            "//! trace:STORY-499".to_string(),
+            "fn a() {".to_string(),
+            "    x();".to_string(),
+            "    y();".to_string(),
+            "}".to_string(),
+        ];
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 50, // far from the module anchor → only file-level can cover
+            added: vec!["    x();".to_string(), "    y();".to_string()],
+            removed: vec![],
+        }];
+        let mut files = std::collections::HashMap::new();
+        files.insert("src/x.rs".to_string(), post);
+        let (_e, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::FileAnchor));
+    }
+
+    #[test]
+    fn coverage_attribution_commit_trailer_floor() {
+        // No inline anchor anywhere, but the file's commit carries a live
+        // trailer → covered by the §4.2.4 floor. This is why the default world
+        // (every feat/fix commit has a trailer) keeps the gate silent.
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn f() {".to_string(),
+                "    a();".to_string(),
+                "    b();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, _f) = empty_maps();
+        let mut floor = std::collections::HashMap::new();
+        floor.insert("src/x.rs".to_string(), true);
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.hunks[0].covered, Some(CoverageSource::CommitTrailer));
+    }
+
+    #[test]
+    fn coverage_uncovered_coverable_hunk_is_reported() {
+        // Real code, no anchor, no trailer → the one thing the gate flags.
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn slipped_in() {".to_string(),
+                "    untraced();".to_string(),
+                "    more_untraced();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.coverable(), 1);
+        assert_eq!(cov.covered(), 0);
+        assert_eq!(cov.uncovered().len(), 1);
+        assert_eq!(cov.ratio(), 0.0);
+    }
+
+    #[test]
+    fn coverage_dead_anchor_does_not_count() {
+        // A `// trace:DEAD-1` that resolves Missing is NOT coverage (parity with
+        // STORY-498's live-resolution requirement).
+        let hunks = vec![ParsedHunk {
+            file: "src/x.rs".to_string(),
+            new_start: 10,
+            added: vec![
+                "fn f() {".to_string(),
+                "    // trace:DEAD-1".to_string(),
+                "    a();".to_string(),
+                "    b();".to_string(),
+                "}".to_string(),
+            ],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert!(cov.hunks[0].is_uncovered_coverable());
+    }
+
+    #[test]
+    fn coverage_exempt_files_drop_from_denominator() {
+        let hunks = vec![
+            // exempt: test file
+            ParsedHunk {
+                file: "tests/it.rs".to_string(),
+                new_start: 1,
+                added: vec!["assert!(true);".to_string(), "assert!(false);".to_string()],
+                removed: vec![],
+            },
+            // exempt: docs
+            ParsedHunk {
+                file: "README.md".to_string(),
+                new_start: 1,
+                added: vec!["a".to_string(), "b".to_string()],
+                removed: vec![],
+            },
+            // coverable + uncovered
+            ParsedHunk {
+                file: "src/x.rs".to_string(),
+                new_start: 10,
+                added: vec![
+                    "fn f() {".to_string(),
+                    "    a();".to_string(),
+                    "    b();".to_string(),
+                    "}".to_string(),
+                ],
+                removed: vec![],
+            },
+        ];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.exempt(), 2);
+        assert_eq!(cov.coverable(), 1);
+        assert_eq!(cov.uncovered().len(), 1);
+    }
+
+    #[test]
+    fn coverage_all_exempt_diff_passes_vacuously() {
+        let hunks = vec![ParsedHunk {
+            file: "docs/plan.md".to_string(),
+            new_start: 1,
+            added: vec!["prose".to_string()],
+            removed: vec![],
+        }];
+        let (files, gen, floor) = empty_maps();
+        let cov = compute_diff_coverage(&hunks, &files, &gen, &floor, 5, 1, live_resolver);
+        assert_eq!(cov.coverable(), 0);
+        assert!(cov.uncovered().is_empty());
+        assert_eq!(cov.ratio(), 1.0);
+    }
+
+    #[test]
+    fn coverage_diff_parser_splits_hunks_and_files() {
+        let diff = "\
+diff --git a/src/a.rs b/src/a.rs
+--- a/src/a.rs
++++ b/src/a.rs
+@@ -1,2 +1,3 @@
+ unchanged
++added line one
++added line two
+@@ -10,0 +12,1 @@
++another add
+diff --git a/old.rs b/new.rs
+--- a/old.rs
++++ b/new.rs
+@@ -5,1 +5,1 @@
+-removed
++replaced
+diff --git a/gone.rs b/gone.rs
+--- a/gone.rs
++++ /dev/null
+@@ -1,1 +0,0 @@
+-deleted file body
+";
+        let hunks = parse_unified_diff_hunks(diff);
+        // 3 hunks attributed to real files; the /dev/null target is skipped.
+        assert_eq!(hunks.len(), 3, "got: {hunks:?}");
+        assert_eq!(hunks[0].file, "src/a.rs");
+        assert_eq!(hunks[0].new_start, 1);
+        assert_eq!(hunks[0].added, vec!["added line one", "added line two"]);
+        assert_eq!(hunks[1].file, "src/a.rs");
+        assert_eq!(hunks[1].new_start, 12);
+        assert_eq!(hunks[2].file, "new.rs");
+        assert_eq!(hunks[2].added, vec!["replaced"]);
+        assert_eq!(hunks[2].removed, vec!["removed"]);
     }
 
     // ── STORY-469 Guard 1: client-side trailer-guard refusal formatting ──
@@ -64405,6 +65000,82 @@ mod queue_work_tests {
         );
     }
 
+    /// TASK-630 (BUG-250 criterion 5): the held-state re-entry decision is a pure
+    /// function, so it can be exercised exhaustively with no Storage, worktree,
+    /// or launcher. A deliberate PR-hold parks the spec Done + dequeued with a
+    /// marker; `--resume` against that combination is the ONLY case that may
+    /// re-enter. Every other state, a missing marker, or a non-resume invocation
+    /// must NOT — those keep the existing recovery hints. trace:TASK-630 | ai:claude
+    #[test]
+    fn held_resume_reentry_only_for_resume_done_and_marked() {
+        use RequirementStatus::*;
+
+        // The one re-enterable combination: explicit --resume, Done status,
+        // hold marker present.
+        assert!(
+            held_resume_reentry_allowed(true, &Done, true),
+            "resume + Done + hold marker is the deliberate-hold re-entry case"
+        );
+
+        // No --resume → never re-enter (a plain `queue work <spec>` keeps its
+        // status-aware not-queued hint).
+        assert!(
+            !held_resume_reentry_allowed(false, &Done, true),
+            "without --resume a held Done spec is not auto-re-entered"
+        );
+
+        // Marker absent → not a deliberate hold; leave it to the Done hint
+        // (rework / wait-for-merge).
+        assert!(
+            !held_resume_reentry_allowed(true, &Done, false),
+            "no hold marker → not a deliberate hold, no re-entry"
+        );
+
+        // Held re-entry is Done-specific: a hold marker against any other status
+        // must not unlock resume (defensive — a held spec is always Done).
+        for status in [
+            Draft,
+            Approved,
+            Planned,
+            InProgress,
+            Completed,
+            Rejected,
+            NeedsAttention,
+        ] {
+            assert!(
+                !held_resume_reentry_allowed(true, &status, true),
+                "held re-entry must be Done-only; {status:?} must not re-enter"
+            );
+        }
+    }
+
+    /// TASK-630: a held-spec resume plan is an Item-mode pickup anchored on the
+    /// spec itself (its own id is the lease scope — the implementer worktree the
+    /// dormant session lives in), with exactly one entry. This is what lets the
+    /// rest of `handle_queue_work` resume the session unchanged.
+    /// trace:TASK-630 | ai:claude
+    #[test]
+    fn held_resume_plan_is_item_scoped_to_the_spec() {
+        let mut req = aida_core::Requirement::new("held work".to_string(), String::new());
+        req.spec_id = Some("STORY-306".to_string());
+        req.status = RequirementStatus::Done;
+
+        let plan = held_resume_plan(&req, "test-user");
+
+        assert_eq!(plan.mode, QueueWorkMode::Item);
+        assert_eq!(plan.entries.len(), 1, "exactly the held spec, no cluster");
+        assert_eq!(plan.anchor_display, "STORY-306");
+        assert_eq!(
+            plan.scope, "STORY-306",
+            "scope is the spec's own id (its implementer worktree)"
+        );
+        assert!(
+            plan.review_target.is_none(),
+            "a held implementer spec is not a PR-review pickup"
+        );
+        assert_eq!(plan.entries[0].spec_id, "STORY-306");
+    }
+
     /// BUG-311 acceptance: when `--steal`'s internal `session_end` fails, the
     /// inner subprocess's error must name the lease + actual reason — not
     /// the canned "pass --steal" message. anyhow's `{:#}` collapses the
@@ -71638,6 +72309,9 @@ fn handle_trace_command(cmd: &TraceCommand, storage: &Storage) -> Result<()> {
         TraceCommand::Gate { range, json } => {
             handle_trace_gate(range.as_deref(), *json)?;
         }
+        TraceCommand::Coverage { range, json, block } => {
+            handle_trace_coverage(range.as_deref(), *json, *block)?;
+        }
     }
     Ok(())
 }
@@ -73023,6 +73697,755 @@ fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
     }
 
     if !violations.is_empty() {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+// ============================================================================
+// STORY-499: diff-level trace-COVERAGE check (gap #1 of EPIC-34).
+//
+// STORY-498 shut gaps #2 + #3: `aida trace gate` validates that every commit
+// `(SPEC-ID)` *trailer* resolves to a live spec. STORY-499 closes gap #1 —
+// COVERAGE: does the changed CODE in a diff actually carry the required
+// provenance (`// trace:` anchor OR a live commit trailer), per the SPIKE-47
+// definition? It is report-only by default (SPIKE-47 §5/§6: a coverage gate's
+// failure mode is adoption death; ship it report-first, flip to block after a
+// calibration period).
+//
+// The hard part is precision without false positives. SPIKE-47 settled the
+// definition deterministically:
+//   - UNIT: the changed source hunk (NOT line, NOT function — §2).
+//   - EXEMPTIONS: a two-layer, explicit, audited list (§3) — commit-level
+//     (reusing STORY-498's plan/no-trailer machinery) + file/path-level
+//     (tests, generated, docs, config, vendored) + hunk-level (pure deletion,
+//     whitespace/fmt-only, comment-only, trivial one-liner).
+//   - ATTRIBUTION (§4.2): a coverable hunk is COVERED if ANY of — an in-hunk
+//     `// trace:<live-id>`; a `// trace:` within N lines ABOVE the hunk in the
+//     post-change file; a module-level `//! trace:`; OR the commit carries a
+//     live `(SPEC-ID)` trailer (the floor — STORY-498 already enforces this for
+//     validity, so the default world is fully covered and the gate stays
+//     silent).
+//
+// The CORE (`compute_diff_coverage`) is a PURE, fully-isolated-tested fn: it
+// takes parsed hunks + per-file post-change content + a commit-trailer-covered
+// flag + an anchor resolver, and returns the per-hunk classification + ratio.
+// No git, no store, no I/O. The CLI handler gathers those inputs from git and
+// the live graph and calls it. trace:STORY-499 | ai:claude
+// ============================================================================
+
+/// Why a coverable hunk is exempt from the coverage denominator. Every
+/// exemption is reported (never silently dropped) per SPIKE-47 §3.
+/// trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CoverageExemption {
+    /// File path matched a test glob (SPIKE-47 F1).
+    TestFile,
+    /// File path / generated-marker matched (SPIKE-47 F2).
+    Generated,
+    /// Non-source / docs / prose extension (SPIKE-47 F3).
+    DocOrProse,
+    /// Config / data / lockfile (SPIKE-47 F4).
+    ConfigData,
+    /// Vendored / third-party path (SPIKE-47 F5).
+    Vendored,
+    /// Hunk with only deletions (SPIKE-47 H1).
+    PureDeletion,
+    /// Hunk whose added lines are only comments / blank (SPIKE-47 H2/H4).
+    CommentOrBlankOnly,
+    /// Hunk net change ≤ trivial threshold (SPIKE-47 H4).
+    Trivial,
+}
+
+impl CoverageExemption {
+    fn reason(&self) -> &'static str {
+        match self {
+            CoverageExemption::TestFile => "test file",
+            CoverageExemption::Generated => "generated code",
+            CoverageExemption::DocOrProse => "docs / non-source",
+            CoverageExemption::ConfigData => "config / data / lockfile",
+            CoverageExemption::Vendored => "vendored / third-party",
+            CoverageExemption::PureDeletion => "pure deletion",
+            CoverageExemption::CommentOrBlankOnly => "comment / blank only",
+            CoverageExemption::Trivial => "trivial change",
+        }
+    }
+}
+
+/// How a coverable hunk earned its coverage (SPIKE-47 §4.2). Cheapest-first.
+/// trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CoverageSource {
+    /// A `// trace:<live-id>` appears in the hunk's added lines (§4.2.1).
+    InHunkAnchor,
+    /// A `// trace:<live-id>` sits within N lines above the hunk (§4.2.2).
+    ProximityAnchor,
+    /// A module-level `//! trace:<live-id>` covers the whole file (§4.2.3).
+    FileAnchor,
+    /// The hunk's commit carries a live `(SPEC-ID)` trailer (§4.2.4 — the floor).
+    CommitTrailer,
+}
+
+/// The classification of one changed hunk. trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct HunkVerdict {
+    /// File the hunk lives in (post-change path).
+    file: String,
+    /// 1-based start line of the hunk in the post-change file.
+    new_start: usize,
+    /// Number of added/modified lines in the hunk.
+    added_lines: usize,
+    /// `Some(reason)` when the hunk is exempt from the denominator.
+    exempt: Option<CoverageExemption>,
+    /// `Some(source)` when the hunk is covered. `None` + not-exempt = a
+    /// reported uncovered coverable hunk.
+    covered: Option<CoverageSource>,
+}
+
+impl HunkVerdict {
+    /// A coverable hunk that is NOT covered — the thing the gate reports.
+    fn is_uncovered_coverable(&self) -> bool {
+        self.exempt.is_none() && self.covered.is_none()
+    }
+    fn is_coverable(&self) -> bool {
+        self.exempt.is_none()
+    }
+}
+
+/// One parsed changed hunk fed into the pure core. trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedHunk {
+    /// Post-change file path.
+    file: String,
+    /// 1-based start line of the hunk in the post-change file.
+    new_start: usize,
+    /// The `+` (added) line bodies, in order, with the leading `+` stripped.
+    added: Vec<String>,
+    /// The `-` (removed) line bodies, with the leading `-` stripped.
+    removed: Vec<String>,
+}
+
+/// Aggregate coverage result returned by the pure core. trace:STORY-499 | ai:claude
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+struct DiffCoverage {
+    hunks: Vec<HunkVerdict>,
+}
+
+impl DiffCoverage {
+    fn coverable(&self) -> usize {
+        self.hunks.iter().filter(|h| h.is_coverable()).count()
+    }
+    fn covered(&self) -> usize {
+        self.hunks
+            .iter()
+            .filter(|h| h.is_coverable() && h.covered.is_some())
+            .count()
+    }
+    fn exempt(&self) -> usize {
+        self.hunks.iter().filter(|h| h.exempt.is_some()).count()
+    }
+    fn uncovered(&self) -> Vec<&HunkVerdict> {
+        self.hunks
+            .iter()
+            .filter(|h| h.is_uncovered_coverable())
+            .collect()
+    }
+    /// `covered / coverable`. 1.0 when there is nothing coverable (vacuously
+    /// fully covered — an all-exempt diff passes). trace:STORY-499 | ai:claude
+    fn ratio(&self) -> f64 {
+        let coverable = self.coverable();
+        if coverable == 0 {
+            return 1.0;
+        }
+        self.covered() as f64 / coverable as f64
+    }
+}
+
+/// Default source extensions that REQUIRE coverage. Mirrors `aida trace scan
+/// --extensions` default (`rs`); extensible per-repo (SPIKE-47 §2.1.2).
+/// trace:STORY-499 | ai:claude
+const COVERAGE_SOURCE_EXTENSIONS: &[&str] = &["rs", "py", "ts", "tsx", "js", "jsx", "go", "java"];
+
+/// SPIKE-47 §3.2 file/path-level exemption classifier. Returns `Some(reason)`
+/// when the whole file is exempt, `None` when its changed source hunks are
+/// coverable. Deterministic — globs/extensions only, no parsing. PURE.
+/// trace:STORY-499 | ai:claude
+fn classify_coverage_file(path: &str, generated_header: Option<&str>) -> Option<CoverageExemption> {
+    let lower = path.to_ascii_lowercase();
+    let segments: Vec<&str> = lower.split('/').collect();
+
+    // F5: vendored / third-party.
+    if segments
+        .iter()
+        .any(|s| matches!(*s, "vendor" | "node_modules" | "third_party" | "target"))
+    {
+        return Some(CoverageExemption::Vendored);
+    }
+
+    // F2: generated — path globs OR an in-file generated marker.
+    if segments.iter().any(|s| *s == "generated")
+        || lower.contains(".gen.")
+        || lower.ends_with(".gen.rs")
+    {
+        return Some(CoverageExemption::Generated);
+    }
+    if let Some(header) = generated_header {
+        let h = header.to_ascii_lowercase();
+        if h.contains("@generated") || h.contains("do not edit") || h.contains("auto-generated") {
+            return Some(CoverageExemption::Generated);
+        }
+    }
+
+    // F1: tests — `tests/` segment, or a test-named file.
+    let file_name = segments.last().copied().unwrap_or("");
+    if segments.iter().any(|s| *s == "tests")
+        || file_name.starts_with("test_")
+        || file_name.contains("_test.")
+        || file_name.contains(".test.")
+        || file_name.ends_with("_test")
+    {
+        return Some(CoverageExemption::TestFile);
+    }
+
+    // Extension-based classification.
+    let ext = lower.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+
+    // F3: docs / prose — non-source extensions, or anything under `docs/`.
+    if segments.iter().any(|s| *s == "docs")
+        || matches!(ext, "md" | "txt" | "rst" | "adoc" | "html" | "css" | "svg")
+    {
+        return Some(CoverageExemption::DocOrProse);
+    }
+
+    // F4: config / data / lockfiles.
+    if lower.ends_with(".lock")
+        || file_name == ".gitignore"
+        || matches!(
+            ext,
+            "toml" | "yaml" | "yml" | "json" | "ini" | "cfg" | "lock"
+        )
+    {
+        return Some(CoverageExemption::ConfigData);
+    }
+
+    // Coverable only when the extension is in the source set.
+    if COVERAGE_SOURCE_EXTENSIONS.contains(&ext) {
+        return None;
+    }
+    // Unknown / non-source extension → not coverable (treated as prose).
+    Some(CoverageExemption::DocOrProse)
+}
+
+/// True when a single source line is comment-only or blank, for the common
+/// comment leaders (`//`, `///`, `//!`, `#`, `*`, `/*`, `*/`, `<!--`). PURE.
+/// Used by the comment-only hunk exemption (SPIKE-47 H4). trace:STORY-499 | ai:claude
+fn coverage_line_is_comment_or_blank(line: &str) -> bool {
+    let t = line.trim();
+    if t.is_empty() {
+        return true;
+    }
+    t.starts_with("//")
+        || t.starts_with('#')
+        || t.starts_with('*')
+        || t.starts_with("/*")
+        || t.starts_with("*/")
+        || t.starts_with("<!--")
+        || t.starts_with("-->")
+}
+
+/// SPIKE-47 §3.3 hunk-level exemption classifier. Returns `Some(reason)` when
+/// a hunk (in an already-coverable file) is exempt. `trivial_max_lines` is the
+/// configurable trivial-change floor (default 1). PURE. trace:STORY-499 | ai:claude
+fn classify_coverage_hunk(
+    hunk: &ParsedHunk,
+    trivial_max_lines: usize,
+) -> Option<CoverageExemption> {
+    // H1: pure deletion — removed lines, no additions.
+    if hunk.added.is_empty() {
+        return Some(CoverageExemption::PureDeletion);
+    }
+
+    // H2 (fmt/whitespace) collapses into H1 once whitespace is normalized: a
+    // whitespace-only reflow has `+`/`-` lines equal after trimming, so it
+    // carries no net coverable addition. Detect by comparing the whitespace-
+    // normalized added vs removed multisets.
+    let norm = |lines: &[String]| -> Vec<String> {
+        lines
+            .iter()
+            .map(|l| l.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|l| !l.is_empty())
+            .collect()
+    };
+    let mut added_norm = norm(&hunk.added);
+    let mut removed_norm = norm(&hunk.removed);
+    added_norm.sort();
+    removed_norm.sort();
+    if !added_norm.is_empty() && added_norm == removed_norm {
+        // Whitespace-only reflow (no net content change) → fmt-only.
+        return Some(CoverageExemption::CommentOrBlankOnly);
+    }
+
+    // H4 (comment-only): every added line is a comment or blank.
+    if hunk
+        .added
+        .iter()
+        .all(|l| coverage_line_is_comment_or_blank(l))
+    {
+        return Some(CoverageExemption::CommentOrBlankOnly);
+    }
+
+    // H4 (trivial): net effective added lines (non-blank, non-comment) at or
+    // below the threshold.
+    let effective_added = hunk
+        .added
+        .iter()
+        .filter(|l| !coverage_line_is_comment_or_blank(l))
+        .count();
+    if effective_added <= trivial_max_lines {
+        return Some(CoverageExemption::Trivial);
+    }
+
+    None
+}
+
+/// SPIKE-47 trace-anchor grammar (reused verbatim from `aida trace gate`):
+/// matches `trace:<SPEC-ID>` regardless of comment leader. PURE compile.
+/// trace:STORY-499 | ai:claude
+fn coverage_anchor_re() -> regex::Regex {
+    regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap()
+}
+
+/// True when `line` carries a `// trace:<id>` whose id resolves Live via
+/// `resolve`. Module-level `//!` anchors and `///` doc anchors all match (the
+/// regex keys off the `trace:` token, not the leader). PURE (resolver injected).
+/// trace:STORY-499 | ai:claude
+fn coverage_line_has_live_anchor<F>(line: &str, re: &regex::Regex, resolve: &mut F) -> bool
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    re.captures_iter(line).any(|cap| {
+        let id = &cap[1];
+        matches!(resolve(id), SpecResolution::Live)
+    })
+}
+
+/// Attribute one hunk to a coverage source, per SPIKE-47 §4.2 (cheapest-first):
+///   1. in-hunk anchor (added lines)
+///   2. proximity anchor (≤ `proximity_lines` ABOVE the hunk in the post-change file)
+///   3. file-level `//!` anchor anywhere in the file
+///   4. commit-trailer fallback (the floor)
+/// `post_change_lines` is the full post-change file (1-based logical, passed as a
+/// slice). PURE — resolver + content injected, no I/O. trace:STORY-499 | ai:claude
+fn attribute_hunk_coverage<F>(
+    hunk: &ParsedHunk,
+    post_change_lines: &[String],
+    commit_trailer_covered: bool,
+    proximity_lines: usize,
+    re: &regex::Regex,
+    resolve: &mut F,
+) -> Option<CoverageSource>
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    // 1. In-hunk anchor.
+    if hunk
+        .added
+        .iter()
+        .any(|l| coverage_line_has_live_anchor(l, re, resolve))
+    {
+        return Some(CoverageSource::InHunkAnchor);
+    }
+
+    // 2. Proximity anchor — scan ABOVE-only (§4.2 rule 2 + risk #2). The hunk
+    // starts at 1-based `new_start`; lines above are indices [start-1-N, start-1)
+    // in the 0-based file vector.
+    if hunk.new_start >= 1 {
+        let start_idx = hunk.new_start.saturating_sub(1); // 0-based first hunk line
+        let from = start_idx.saturating_sub(proximity_lines);
+        for line in post_change_lines.iter().take(start_idx).skip(from) {
+            if coverage_line_has_live_anchor(line, re, resolve) {
+                return Some(CoverageSource::ProximityAnchor);
+            }
+        }
+    }
+
+    // 3. File-level `//!` module anchor anywhere in the file.
+    if post_change_lines
+        .iter()
+        .any(|l| l.trim_start().starts_with("//!") && coverage_line_has_live_anchor(l, re, resolve))
+    {
+        return Some(CoverageSource::FileAnchor);
+    }
+
+    // 4. Commit-trailer fallback — the floor.
+    if commit_trailer_covered {
+        return Some(CoverageSource::CommitTrailer);
+    }
+
+    None
+}
+
+/// The PURE, fully-isolated core of the coverage gate. Given parsed hunks, the
+/// post-change content of each touched file, a per-file generated-header probe,
+/// a per-hunk commit-trailer-covered flag, and an anchor resolver, classify
+/// every hunk (exempt / covered / uncovered-coverable) per the SPIKE-47
+/// definition. NO git, NO store, NO I/O — every dependency is an argument.
+///
+/// `files`: post-change line content keyed by path (the file the hunk lives in).
+/// `generated_headers`: first-lines blob per path (for the §3.2 generated-marker
+///   probe); absent ⇒ probe skipped.
+/// `commit_trailer_covered`: per-file flag — does the file's commit carry a live
+///   `(SPEC-ID)` trailer? (the §4.2.4 floor).
+/// trace:STORY-499 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn compute_diff_coverage<F>(
+    hunks: &[ParsedHunk],
+    files: &std::collections::HashMap<String, Vec<String>>,
+    generated_headers: &std::collections::HashMap<String, String>,
+    commit_trailer_covered: &std::collections::HashMap<String, bool>,
+    proximity_lines: usize,
+    trivial_max_lines: usize,
+    mut resolve: F,
+) -> DiffCoverage
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    let re = coverage_anchor_re();
+    let mut out = Vec::with_capacity(hunks.len());
+    for hunk in hunks {
+        let added_lines = hunk.added.len();
+
+        // File-level exemption first (cheapest; whole file dropped).
+        if let Some(reason) = classify_coverage_file(
+            &hunk.file,
+            generated_headers.get(&hunk.file).map(|s| s.as_str()),
+        ) {
+            out.push(HunkVerdict {
+                file: hunk.file.clone(),
+                new_start: hunk.new_start,
+                added_lines,
+                exempt: Some(reason),
+                covered: None,
+            });
+            continue;
+        }
+
+        // Hunk-level exemption.
+        if let Some(reason) = classify_coverage_hunk(hunk, trivial_max_lines) {
+            out.push(HunkVerdict {
+                file: hunk.file.clone(),
+                new_start: hunk.new_start,
+                added_lines,
+                exempt: Some(reason),
+                covered: None,
+            });
+            continue;
+        }
+
+        // Coverable — attribute coverage.
+        let empty = Vec::new();
+        let post = files.get(&hunk.file).unwrap_or(&empty);
+        let trailer_covered = commit_trailer_covered
+            .get(&hunk.file)
+            .copied()
+            .unwrap_or(false);
+        let covered = attribute_hunk_coverage(
+            hunk,
+            post,
+            trailer_covered,
+            proximity_lines,
+            &re,
+            &mut resolve,
+        );
+        out.push(HunkVerdict {
+            file: hunk.file.clone(),
+            new_start: hunk.new_start,
+            added_lines,
+            exempt: None,
+            covered,
+        });
+    }
+    DiffCoverage { hunks: out }
+}
+
+/// Parse `git diff --unified=0` output into `ParsedHunk`s. PURE (takes the raw
+/// diff text). Tracks the current `+++ b/<path>` file and each `@@ -a,b +c,d @@`
+/// header to assign `new_start` and split `+`/`-` line bodies. Skips
+/// `/dev/null` (deleted-file) targets. trace:STORY-499 | ai:claude
+fn parse_unified_diff_hunks(diff: &str) -> Vec<ParsedHunk> {
+    let hunk_re = regex::Regex::new(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@").unwrap();
+    let mut hunks: Vec<ParsedHunk> = Vec::new();
+    let mut current_file: Option<String> = None;
+    let mut cur: Option<ParsedHunk> = None;
+
+    let flush = |cur: &mut Option<ParsedHunk>, hunks: &mut Vec<ParsedHunk>| {
+        if let Some(h) = cur.take() {
+            if !h.added.is_empty() || !h.removed.is_empty() {
+                hunks.push(h);
+            }
+        }
+    };
+
+    for line in diff.lines() {
+        if let Some(rest) = line.strip_prefix("+++ ") {
+            flush(&mut cur, &mut hunks);
+            let path = rest.trim();
+            current_file = if path == "/dev/null" {
+                None
+            } else {
+                // Strip the `b/` prefix git prepends.
+                Some(path.strip_prefix("b/").unwrap_or(path).to_string())
+            };
+            continue;
+        }
+        if line.starts_with("--- ") || line.starts_with("diff --git") {
+            continue;
+        }
+        if let Some(cap) = hunk_re.captures(line) {
+            flush(&mut cur, &mut hunks);
+            if let Some(file) = &current_file {
+                let new_start: usize = cap[1].parse().unwrap_or(1);
+                cur = Some(ParsedHunk {
+                    file: file.clone(),
+                    new_start,
+                    added: Vec::new(),
+                    removed: Vec::new(),
+                });
+            }
+            continue;
+        }
+        if let Some(h) = cur.as_mut() {
+            if let Some(body) = line.strip_prefix('+') {
+                h.added.push(body.to_string());
+            } else if let Some(body) = line.strip_prefix('-') {
+                h.removed.push(body.to_string());
+            }
+        }
+    }
+    flush(&mut cur, &mut hunks);
+    hunks
+}
+
+/// Read the unified diff for a range, `git diff -M -w --unified=0 <base>..HEAD`.
+/// `-M` enables rename detection (renamed files emit no content hunks → §3.3 H3),
+/// `-w` ignores whitespace so fmt-only reflows produce no hunks (§3.3 H2).
+/// trace:STORY-499 | ai:claude
+fn read_diff_for_range(project_root: &std::path::Path, range: &str) -> Result<String> {
+    use std::process::Command as PCmd;
+    let output = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["diff", "-M", "-w", "--unified=0", range])
+        .output();
+    match output {
+        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).to_string()),
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr);
+            anyhow::bail!("git diff failed for range `{range}`: {}", err.trim());
+        }
+        Err(e) => anyhow::bail!("could not run git: {e}"),
+    }
+}
+
+/// Read the post-change content of a file at HEAD (or the working tree) as a
+/// line vector, for the proximity / file-level anchor scan (§4.2). Tries the
+/// on-disk file first (the merged tree in CI checkout), falling back to
+/// `git show HEAD:<path>`. Returns an empty vec when neither resolves (the hunk
+/// can still be covered by an in-hunk anchor or the commit trailer).
+/// trace:STORY-499 | ai:claude
+fn read_post_change_file(project_root: &std::path::Path, path: &str) -> Vec<String> {
+    let on_disk = project_root.join(path);
+    if let Ok(content) = std::fs::read_to_string(&on_disk) {
+        return content.lines().map(|l| l.to_string()).collect();
+    }
+    use std::process::Command as PCmd;
+    if let Ok(o) = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["show", &format!("HEAD:{path}")])
+        .output()
+    {
+        if o.status.success() {
+            return String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.to_string())
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// For each touched file, determine whether ANY commit in `range` that touches
+/// it carries a live `(SPEC-ID)` trailer (the §4.2.4 floor). Conservative and
+/// cheap: if any non-plan commit referencing a live spec touched the file, its
+/// hunks get the trailer-floor. Returns a per-file flag map. trace:STORY-499 | ai:claude
+fn compute_trailer_floor<F>(
+    project_root: &std::path::Path,
+    range: &str,
+    files: &[String],
+    resolve: &mut F,
+) -> std::collections::HashMap<String, bool>
+where
+    F: FnMut(&str) -> SpecResolution,
+{
+    use std::process::Command as PCmd;
+    let mut out = std::collections::HashMap::new();
+    for file in files {
+        // Commits in range that touched this file, with subjects.
+        let covered = PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args([
+                "log",
+                "--no-merges",
+                "--pretty=format:%s",
+                range,
+                "--",
+                file,
+            ])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout).lines().any(|subject| {
+                    if is_plan_commit_subject(subject) {
+                        return false;
+                    }
+                    extract_spec_ids_from_commit(subject)
+                        .iter()
+                        .any(|id| matches!(resolve(id), SpecResolution::Live))
+                })
+            })
+            .unwrap_or(false);
+        out.insert(file.clone(), covered);
+    }
+    out
+}
+
+/// CLI handler for `aida trace coverage`. Gathers the diff + post-change files +
+/// commit-trailer floor + live-graph resolver from git/the store, runs the pure
+/// `compute_diff_coverage` core, prints a report, and exits non-zero ONLY when
+/// `block` posture is active and a coverable hunk is uncovered. Default posture
+/// is report-only (CI-success regardless) per SPIKE-47 §5/§6. trace:STORY-499 | ai:claude
+fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let range = resolve_gate_range(&project_root, range);
+
+    let diff = read_diff_for_range(&project_root, &range)?;
+    let hunks = parse_unified_diff_hunks(&diff);
+
+    // The live requirement graph (for anchor/trailer resolution).
+    let store = load_store_for_lookup(&project_root);
+    if store.is_none() {
+        eprintln!(
+            "⚠ trace coverage: no requirement store reachable from {} — anchor/trailer ids cannot \
+             be confirmed live (every id is treated as live; coverage may be over-counted). Run \
+             where the store is attached (`aida cache rebuild`).",
+            project_root.display()
+        );
+    }
+
+    // Distinct touched files (post-change paths).
+    let mut touched: Vec<String> = hunks.iter().map(|h| h.file.clone()).collect();
+    touched.sort();
+    touched.dedup();
+
+    // Post-change content + generated-marker headers per file.
+    let mut files = std::collections::HashMap::new();
+    let mut generated_headers = std::collections::HashMap::new();
+    for path in &touched {
+        let lines = read_post_change_file(&project_root, path);
+        let header: String = lines.iter().take(5).cloned().collect::<Vec<_>>().join("\n");
+        generated_headers.insert(path.clone(), header);
+        files.insert(path.clone(), lines);
+    }
+
+    // Commit-trailer floor per file.
+    let mut floor_resolve =
+        |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
+    let trailer_floor = compute_trailer_floor(&project_root, &range, &touched, &mut floor_resolve);
+
+    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
+    let coverage = compute_diff_coverage(
+        &hunks,
+        &files,
+        &generated_headers,
+        &trailer_floor,
+        5, // proximity_lines (SPIKE-47 §4.2 default N=5)
+        1, // trivial_max_lines (SPIKE-47 §3.3 H4 default)
+        resolve,
+    );
+
+    let uncovered = coverage.uncovered();
+    let posture = if block { "block" } else { "report" };
+
+    // Audited exemption breakdown — SPIKE-47 §3 requires every exemption to be
+    // reported (never silently dropped). trace:STORY-499 | ai:claude
+    let mut exempt_breakdown: std::collections::BTreeMap<&'static str, usize> =
+        std::collections::BTreeMap::new();
+    for h in &coverage.hunks {
+        if let Some(reason) = h.exempt {
+            *exempt_breakdown.entry(reason.reason()).or_insert(0) += 1;
+        }
+    }
+
+    if json {
+        let payload = serde_json::json!({
+            "range": range,
+            "posture": posture,
+            "hunks_total": coverage.hunks.len(),
+            "coverable": coverage.coverable(),
+            "covered": coverage.covered(),
+            "exempt": coverage.exempt(),
+            "exempt_breakdown": exempt_breakdown,
+            "uncovered": uncovered.len(),
+            "ratio": coverage.ratio(),
+            "uncovered_hunks": uncovered,
+            "ok": uncovered.is_empty(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!(
+            "trace coverage [{posture}]: {} hunk(s) in `{}` — {} coverable, {} covered, {} exempt \
+             (ratio {:.0}%)",
+            coverage.hunks.len(),
+            range,
+            coverage.coverable(),
+            coverage.covered(),
+            coverage.exempt(),
+            coverage.ratio() * 100.0,
+        );
+        if !exempt_breakdown.is_empty() {
+            let summary = exempt_breakdown
+                .iter()
+                .map(|(reason, n)| format!("{n} {reason}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!("  exempt: {summary}");
+        }
+        if uncovered.is_empty() {
+            println!("✓ every coverable changed hunk carries trace coverage");
+        } else {
+            eprintln!("⚠ {} uncovered coverable hunk(s):", uncovered.len());
+            for h in &uncovered {
+                eprintln!(
+                    "  {}:{} (+{} line(s)) — no // trace: anchor and no live commit trailer",
+                    h.file, h.new_start, h.added_lines
+                );
+            }
+            eprintln!(
+                "\nAdd a `// trace:<SPEC-ID>` near the change (or ensure the commit carries a live \
+                 `(SPEC-ID)` trailer). Tests / generated / docs / config / trivial changes are \
+                 exempt automatically."
+            );
+        }
+    }
+
+    // Report-only by default (CI succeeds); only `block` posture exits non-zero.
+    if block && !uncovered.is_empty() {
         std::process::exit(1);
     }
     Ok(())
@@ -78970,6 +80393,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             resume_drain,
             drain_id,
             resume_dry_run,
+            from_pr,
             no_human,
             escalate_blocks,
             escalate_defaults,
@@ -79403,6 +80827,28 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     Some(s) => s.to_string(),
                     None => resolve_auto_complete_head(storage, &user_id)?,
                 };
+                // TASK-405: `--from-pr` — implementation shipped OUTSIDE the
+                // orchestrator (a PR is already open). Drive phases 3-6 only,
+                // skipping the implementer. Routed here on the single-spec path
+                // (batch / nextN drains exit above). The shared `--resume-dry-run`
+                // flag previews the plan. trace:TASK-405 | ai:claude
+                if *from_pr {
+                    handle_from_pr(
+                        storage,
+                        &user_id,
+                        &spec,
+                        variant,
+                        *resume_dry_run,
+                        *json,
+                        permission_mode.as_deref(),
+                        no_human_mode,
+                        escalate_mode,
+                        *steal,
+                        *force_claim,
+                        *allow_stale_base,
+                        *no_auto_rebase,
+                    );
+                }
                 handle_auto_complete(
                     storage,
                     &user_id,
@@ -79598,6 +81044,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 *no_pull,
                 user.as_deref(),
             )?;
+        }
+        // STORY-384: failed-phase-1 recovery wizard — inspect state, recommend a
+        // recovery path, step through it. A front-end over existing primitives.
+        // trace:STORY-384 | ai:claude
+        QueueCommand::Recover {
+            id,
+            dry_run,
+            auto,
+            user,
+        } => {
+            let user_id = current_user_id(user.as_deref());
+            handle_queue_recover(storage, &user_id, id, *dry_run, *auto)?;
         }
     }
     Ok(())
@@ -81226,6 +82684,68 @@ fn format_queue_work_not_queued_error(
     }
 }
 
+/// TASK-630: the held-state re-entry decision, isolated so it is unit-testable
+/// without a Storage handle, a worktree, or a launcher.
+///
+/// A deliberate *push-branch, hold-PR* finish (BUG-250) leaves the spec **Done**
+/// + dequeued with a persisted hold marker at `.aida/pr-holds/<spec>.json`. The
+/// plain `aida queue work <spec>` recovery hints (rework / wait-for-merge) don't
+/// fit that state — the operator is neither reworking nor waiting for a merge;
+/// they're re-entering the dormant implementer worktree to run the manual gate
+/// and *then* open the deferred PR. `--resume` against such a spec should flow
+/// through the verb's normal lease/pull/worktree bookkeeping instead of bailing.
+///
+/// The decision is deliberately narrow: re-entry is allowed **only** when the
+/// operator explicitly asked to resume (`resume == true`), the spec is in the
+/// Done state (the state a deliberate hold parks it in), AND a hold marker is
+/// present. A queued / Completed / NeedsAttention spec, or a Done spec with no
+/// hold marker, is left to the existing recovery hints — a held re-entry is a
+/// distinct state, not a blanket "resume any Done spec". trace:TASK-630 | ai:claude
+fn held_resume_reentry_allowed(
+    resume: bool,
+    status: &RequirementStatus,
+    hold_marker_present: bool,
+) -> bool {
+    resume && hold_marker_present && *status == RequirementStatus::Done
+}
+
+/// TASK-630: build the Item-mode plan for a held-spec `--resume` re-entry.
+///
+/// A held spec is Done + dequeued, so there is no real `QueueEntry` to anchor
+/// the plan on. We synthesise one (scoped to the spec's own id, matching the
+/// implementer worktree the held session lives in) so the rest of
+/// `handle_queue_work` — lease bookkeeping, worktree resolution, the
+/// `QueueWorkLaunch::Resume` re-entry — runs unchanged. trace:TASK-630 | ai:claude
+fn held_resume_plan(req: &aida_core::Requirement, user_id: &str) -> QueueWorkPlan {
+    let synthetic = aida_core::QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id: req.id.clone(),
+        position: 0,
+        added_by: user_id.to_string(),
+        note: None,
+        added_at: chrono::Utc::now(),
+        for_role: Some("implementer".to_string()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    let (scope, review_target) = derive_scope_from_entry(&synthetic, req);
+    let anchor_display = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| scope.clone());
+    let resolved = build_resolved_entry(synthetic, req);
+    QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![resolved],
+        scope,
+        review_target,
+        anchor_display,
+        anchor_title: req.title.clone(),
+    }
+}
+
 /// STORY-42: case-insensitive match against a requirement's uuid,
 /// spec_id, or agreed_id. trace:STORY-42 | ai:claude
 fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
@@ -81489,7 +83009,44 @@ fn handle_queue_work(
         uuid::Uuid::parse_str(sid)
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
     }
-    let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter, strict)?;
+    // TASK-630: a deliberate PR-hold (BUG-250) parks the spec Done + dequeued
+    // with a persisted marker at `.aida/pr-holds/<spec>.json`. Normal queue
+    // resolution then bails ("isn't queued. Status is Done") — wrong for a
+    // re-entry. When the operator explicitly `--resume`s such a spec, recognise
+    // the hold as a re-enterable state and synthesise an Item-mode plan so the
+    // rest of the verb (lease/pull/worktree + QueueWorkLaunch::Resume) runs
+    // unchanged. We try the normal resolution first; only on its failure do we
+    // consult the marker, so a still-queued or non-held spec keeps its existing
+    // behaviour exactly. trace:TASK-630 | ai:claude
+    let plan = match resolve_queue_work_plan(storage, user_id, arg, type_filter, strict) {
+        Ok(plan) => plan,
+        Err(e) => match arg.filter(|_| resume.is_some()) {
+            Some(arg_str) => {
+                let store = storage.load()?;
+                let held = store
+                    .requirements
+                    .iter()
+                    .find(|r| spec_matches(r, arg_str))
+                    .and_then(|req| {
+                        let main_root = find_main_worktree_root().ok()?;
+                        let display = req
+                            .agreed_id
+                            .as_deref()
+                            .or(req.spec_id.as_deref())
+                            .unwrap_or(arg_str);
+                        let marker = punt::hold_signal_path(&main_root, display);
+                        let present = punt::read_hold_signal(&marker).is_some();
+                        held_resume_reentry_allowed(true, &req.status, present)
+                            .then(|| held_resume_plan(req, user_id))
+                    });
+                match held {
+                    Some(plan) => plan,
+                    None => return Err(e),
+                }
+            }
+            None => return Err(e),
+        },
+    };
 
     // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
     // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
@@ -83876,6 +85433,539 @@ fn handle_drain_resume(
             );
             std::process::exit(result.exit_code);
         }
+    }
+}
+
+/// TASK-405: the `--from-pr` entry point — PR-only invocation. Implementation
+/// shipped OUTSIDE the orchestrator (a PR is already open for `spec`), so drive
+/// the remaining phases (reviewer → CI → merge → pull → build) WITHOUT
+/// re-running the implementer. Probes the PR's real state, decides the entry
+/// phase (or a clean refusal) via the pure [`drain_resume::from_pr_plan`], and
+/// — unless `--dry-run` (the shared `--resume-dry-run` flag) — re-enters at that
+/// phase via `run_auto_complete`'s resume-entry seam. Never returns.
+///
+/// Distinct from `handle_drain_resume`: there is no crashed drain-state file,
+/// no PID-liveness gate (the implementer ran elsewhere, possibly by hand), and
+/// the entry phase is computed straight from probed PR/spec reality.
+/// trace:TASK-405 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_from_pr(
+    storage: &Storage,
+    user_id: &str,
+    spec: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    dry_run: bool,
+    json: bool,
+    permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
+    steal: bool,
+    force_claim: bool,
+    allow_stale_base: bool,
+    no_auto_rebase: bool,
+) -> ! {
+    let project_root = match storage.path().parent() {
+        Some(p) => p.to_path_buf(),
+        None => {
+            eprintln!(
+                "{} cannot derive project root from the store path",
+                "✗".red().bold()
+            );
+            std::process::exit(1);
+        }
+    };
+
+    // Probe the world for this spec's PR + per-phase postconditions. Passing
+    // `member: None` is exactly the standalone-PR case `probe_resume_facts`
+    // already handles (it falls back to a forge lookup by spec when drain-state
+    // recorded no PR). trace:TASK-405 | ai:claude
+    let (facts, branch, pr) = probe_resume_facts(&project_root, storage, spec, None);
+    let pr_exists = pr.is_some();
+
+    match drain_resume::from_pr_plan(pr_exists, &facts) {
+        drain_resume::FromPrOutcome::RefuseAlreadyCompleted => {
+            eprintln!(
+                "{} `{}` is already Completed — the merge already promoted it; nothing to drive.",
+                "✗".red().bold(),
+                spec
+            );
+            eprintln!(
+                "  {} `--from-pr` engages the orchestrator on an OPEN PR — there is no open work here.",
+                "→".dimmed()
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::RefuseNoPr => {
+            eprintln!(
+                "{} no open PR found for `{}` — nothing to drive with `--from-pr`.",
+                "✗".red().bold(),
+                spec
+            );
+            eprintln!(
+                "  {} `--from-pr` drives phases 3-6 on a PR shipped outside the orchestrator. \
+                 To run the FULL pipeline (implementer first) drop `--from-pr`.",
+                "→".dimmed()
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::RefuseAlreadyMerged => {
+            eprintln!(
+                "{} {} is already merged — the merge already happened, so there is nothing to drive.",
+                "✗".red().bold(),
+                pr.map(|n| format!("PR-{n}")).unwrap_or_else(|| "the PR".into())
+            );
+            eprintln!(
+                "  {} run `aida pull` to auto-bump `{}` Done → Completed.",
+                "→".dimmed(),
+                spec
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::DriveFrom(start_phase) => {
+            println!(
+                "{} driving `{}` from phase {} ({}) — implementation shipped outside the \
+                 orchestrator (skipping the implementer phase).",
+                "↩".cyan().bold(),
+                spec,
+                start_phase.index(),
+                start_phase.slug()
+            );
+            if let Some(n) = pr {
+                println!("  {} seeded PR-{}", "→".dimmed(), n);
+            }
+            if dry_run {
+                println!(
+                    "  {} --resume-dry-run — not re-entering. Drop it to drive the PR.",
+                    "→".dimmed()
+                );
+                std::process::exit(0);
+            }
+            // The implementer ran outside the orchestrator and may hold a stale
+            // lease on this scope; release a dead/clean one so the reviewer
+            // phase (which resolves PR→spec) doesn't collide. Same guard the
+            // resume path applies (BUG-438). trace:TASK-405 | ai:claude
+            release_dead_leases_for_resume(&project_root, spec);
+            let resume_entry = Some(ResumeEntry {
+                start_phase,
+                branch,
+                pr,
+            });
+            let result = run_auto_complete(
+                storage,
+                user_id,
+                spec,
+                variant,
+                json,
+                permission_mode,
+                no_human,
+                escalate_mode,
+                // A standalone `--from-pr` drive owns its drain-state file.
+                true,
+                steal,
+                force_claim,
+                allow_stale_base,
+                no_auto_rebase,
+                resume_entry,
+            );
+            std::process::exit(result.exit_code);
+        }
+    }
+}
+
+/// STORY-384: `aida queue recover <id>` — the failed-phase-1 recovery wizard.
+///
+/// Inspects the spec's recovery-relevant state (lease, branch, worktree, PR),
+/// derives the recommended recovery path via the pure
+/// [`queue_recover::recommend`], prints the inspection + recommendation, and —
+/// unless `--dry-run` — steps through the recovery, confirming destructive ops
+/// (push, PR-create, session end) unless `--auto`.
+///
+/// A FRONT-END over existing primitives: the probes reuse the same lease/PR/git
+/// helpers the orchestrator and `aida session leases` use; the execution shells
+/// out to `aida` subcommands (`queue work --from-pr`, `pull`, `session end`,
+/// `queue add`) and `git` / `gh` rather than reimplementing them.
+/// trace:STORY-384 | ai:claude
+fn handle_queue_recover(
+    storage: &Storage,
+    user_id: &str,
+    spec_query: &str,
+    dry_run: bool,
+    auto: bool,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    // Resolve the spec id + status from the store (canonical SPEC-ID, status
+    // for display). A spec we can't find still gets a best-effort recovery
+    // using the query string verbatim, but we warn.
+    let store = storage.load().ok();
+    let (spec, status_label, spec_completed) = match store.as_ref().and_then(|s| {
+        s.requirements.iter().find(|r| {
+            r.spec_id.as_deref() == Some(spec_query)
+                || r.agreed_id.as_deref() == Some(spec_query)
+                || r.id.to_string() == spec_query
+        })
+    }) {
+        Some(req) => {
+            let id = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| spec_query.to_string());
+            (
+                id,
+                req.status.to_string(),
+                req.status == RequirementStatus::Completed,
+            )
+        }
+        None => {
+            eprintln!(
+                "{} no spec matched `{}` in the store — probing git/PR state by the id verbatim.",
+                "⚠".yellow(),
+                spec_query
+            );
+            (spec_query.to_string(), "<unknown>".to_string(), false)
+        }
+    };
+
+    // --- Inspection: probe the world for this spec. ---
+    // Reuse the orchestrator's PR/branch/CI/reviewed/merged probe (the same
+    // helper `--from-pr` and `--resume-drain` use). `member: None` is the
+    // standalone-PR case it already handles. trace:STORY-384 | ai:claude
+    let (facts, pr_branch, pr) = probe_resume_facts(&project_root, storage, &spec, None);
+
+    // Lease state — does a session still hold this spec's scope?
+    let leases = list_leases(&project_root);
+    let lease = find_lease_by_spec(&spec, &leases).ok();
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let lease_state = lease.as_ref().map(|l| {
+        let worktree_exists = l.worktree_path.exists();
+        let has_live = live
+            .iter()
+            .any(|s| !s.stale_cwd && s.cwd.starts_with(&l.worktree_path));
+        let age_hours = now.signed_duration_since(l.started_at).num_hours();
+        classify_lease_state(worktree_exists, has_live, age_hours)
+    });
+
+    // The branch we inspect for commits-ahead / dirty: prefer the lease's
+    // branch (where a phase-1 implementer committed), else the PR head branch.
+    let branch = lease
+        .as_ref()
+        .map(|l| l.branch.clone())
+        .or_else(|| pr_branch.clone());
+
+    // Commits ahead of origin/main on the branch (work that exists but may not
+    // have shipped). Probe against the lease worktree if present, else root.
+    let probe_repo = lease
+        .as_ref()
+        .map(|l| l.worktree_path.clone())
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| project_root.clone());
+    let commits_ahead = branch
+        .as_deref()
+        .and_then(|b| branch_commits_ahead_main(&probe_repo, b))
+        .unwrap_or(0);
+
+    // Branch pushed? A PR implies a pushed branch; otherwise probe origin.
+    let branch_pushed = pr.is_some()
+        || branch
+            .as_deref()
+            .map(|b| {
+                matches!(
+                    probe_branch_on_origin(&project_root, b),
+                    BranchOriginProbe::Present
+                )
+            })
+            .unwrap_or(false);
+
+    // Worktree dirty? Only meaningful when a lease worktree exists.
+    let dirty_entries = lease
+        .as_ref()
+        .filter(|l| l.worktree_path.exists())
+        .map(|l| worktree_dirty_entries(&l.worktree_path))
+        .unwrap_or_default();
+    let uncommitted_changes = !dirty_entries.is_empty();
+
+    let state = queue_recover::RecoverState {
+        spec_completed: spec_completed || facts.spec_completed,
+        pr_exists: pr.is_some(),
+        pr_merged: facts.pr_merged,
+        commits_ahead,
+        branch_pushed,
+        uncommitted_changes,
+        lease_held: lease.is_some(),
+    };
+
+    // --- Print the inspection result. ---
+    println!(
+        "{} recovery inspection for {}",
+        "🔎".to_string(),
+        spec.bold()
+    );
+    println!("  {:<14} {}", "status".dimmed(), status_label);
+    match (&lease, lease_state) {
+        (Some(l), Some(st)) => println!(
+            "  {:<14} {} {} (id {}, branch {})",
+            "lease".dimmed(),
+            st.glyph(),
+            st.label(),
+            &l.id[..l.id.len().min(8)],
+            l.branch
+        ),
+        _ => println!("  {:<14} none", "lease".dimmed()),
+    }
+    match &branch {
+        Some(b) => println!(
+            "  {:<14} {} — {} commit(s) ahead of origin/main, {}",
+            "branch".dimmed(),
+            b,
+            commits_ahead,
+            if branch_pushed {
+                "pushed"
+            } else {
+                "NOT pushed"
+            }
+        ),
+        None => println!("  {:<14} none", "branch".dimmed()),
+    }
+    if uncommitted_changes {
+        println!(
+            "  {:<14} {} uncommitted change(s)",
+            "worktree".dimmed(),
+            dirty_entries.len()
+        );
+        for e in dirty_entries.iter().take(3) {
+            println!("                   {}", e.dimmed());
+        }
+        if dirty_entries.len() > 3 {
+            println!(
+                "                   {} … and {} more",
+                "".dimmed(),
+                dirty_entries.len() - 3
+            );
+        }
+    } else {
+        println!("  {:<14} clean", "worktree".dimmed());
+    }
+    match pr {
+        Some(n) if facts.pr_merged => println!("  {:<14} PR-{} (merged)", "pr".dimmed(), n),
+        Some(n) => println!("  {:<14} PR-{} (open)", "pr".dimmed(), n),
+        None => println!("  {:<14} none", "pr".dimmed()),
+    }
+    println!();
+
+    // --- Recommendation. ---
+    let action = queue_recover::recommend(&state);
+    println!(
+        "{} recommended: {}",
+        "→".cyan().bold(),
+        recover_action_label(action).bold()
+    );
+    println!("  {} {}", "rationale:".dimmed(), action.rationale());
+    println!();
+
+    if dry_run {
+        println!(
+            "{} --dry-run — not executing. Drop it to run the recovery.",
+            "ⓘ".cyan()
+        );
+        return Ok(());
+    }
+
+    // --- Execution. ---
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    // Helper: run an `aida` subcommand from the project root, surfacing its
+    // exit code. Non-zero leaves the state visible for manual resume.
+    let run_aida = |args: &[&str]| -> std::io::Result<std::process::ExitStatus> {
+        println!("  {} aida {}", "▸".cyan(), args.join(" "));
+        std::process::Command::new(&aida)
+            .current_dir(&project_root)
+            .args(args)
+            .status()
+    };
+    let run_git =
+        |args: &[&str], cwd: &std::path::Path| -> std::io::Result<std::process::ExitStatus> {
+            println!("  {} git {}", "▸".cyan(), args.join(" "));
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .status()
+        };
+    // Confirm a destructive op unless --auto. Non-interactive (no TTY) defaults
+    // to NO so a scripted run without --auto never silently ships.
+    let confirm = |what: &str| -> bool {
+        if auto {
+            return true;
+        }
+        prompt_yes_no(&format!("  {} {} [y/N] ", "?".yellow(), what), false).unwrap_or(false)
+    };
+
+    match action {
+        queue_recover::RecoverAction::AlreadyCompleted => {
+            println!(
+                "{} `{}` is already Completed — nothing to recover.",
+                "✓".green().bold(),
+                spec
+            );
+            if state.lease_held && confirm("end the leaked lease for this spec?") {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+        }
+        queue_recover::RecoverAction::AlreadyMergedPull => {
+            println!(
+                "{} the PR merged — pulling to auto-bump `{}` Done → Completed.",
+                "↩".cyan().bold(),
+                spec
+            );
+            let _ = run_aida(&["pull"]);
+            if state.lease_held && confirm("end the leaked lease for this spec?") {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+        }
+        queue_recover::RecoverAction::DrivePhasesFromPr => {
+            if !confirm("drive phases 3-6 on the open PR (reviewer → merge → pull → build)?")
+            {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            // Reuse the TASK-405 PR-only orchestrator path.
+            let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+        }
+        queue_recover::RecoverAction::PushOpenPrDrive => {
+            let Some(b) = branch.as_deref() else {
+                eprintln!(
+                    "{} no branch to push for `{}` — cannot recover automatically.",
+                    "✗".red().bold(),
+                    spec
+                );
+                return Ok(());
+            };
+            if !confirm(&format!("push `{b}`, open a PR, then drive phases 3-6?")) {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            if !push_st.success() {
+                eprintln!(
+                    "{} push failed — resolve manually, then re-run `aida queue recover {}`.",
+                    "✗".red().bold(),
+                    spec
+                );
+                return Ok(());
+            }
+            // Open the PR (gh fills title/body from the branch commits).
+            let pr_st = std::process::Command::new("gh")
+                .current_dir(&probe_repo)
+                .args(["pr", "create", "--fill"])
+                .status();
+            println!("  {} gh pr create --fill", "▸".cyan());
+            match pr_st {
+                Ok(s) if s.success() => {
+                    // Now drive phases 3-6 on the freshly-opened PR.
+                    let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+                }
+                _ => {
+                    eprintln!(
+                        "{} `gh pr create` failed — open the PR manually, then run \
+                         `aida queue recover {}` again (it will take the drive-from-PR path).",
+                        "✗".red().bold(),
+                        spec
+                    );
+                }
+            }
+        }
+        queue_recover::RecoverAction::WipCommitPushDrive => {
+            if !confirm("commit the WIP, then push + open PR + drive phases 3-6?") {
+                println!(
+                    "{} skipped — commit/stash the WIP yourself, then re-run.",
+                    "ⓘ".cyan()
+                );
+                return Ok(());
+            }
+            let _ = run_git(&["add", "-A"], &probe_repo)?;
+            let _ = run_git(
+                &["commit", "-m", &format!("wip: recover {spec}")],
+                &probe_repo,
+            )?;
+            let Some(b) = branch.as_deref() else {
+                eprintln!("{} no branch to push.", "✗".red().bold());
+                return Ok(());
+            };
+            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
+            if !push_st.success() {
+                eprintln!("{} push failed — resolve manually.", "✗".red().bold());
+                return Ok(());
+            }
+            println!("  {} gh pr create --fill", "▸".cyan());
+            let pr_st = std::process::Command::new("gh")
+                .current_dir(&probe_repo)
+                .args(["pr", "create", "--fill"])
+                .status();
+            if matches!(pr_st, Ok(s) if s.success()) {
+                let _ = run_aida(&["queue", "work", &spec, "--auto-complete", "--from-pr"]);
+            } else {
+                eprintln!(
+                    "{} `gh pr create` failed — open the PR manually, then re-run recover.",
+                    "✗".red().bold()
+                );
+            }
+        }
+        queue_recover::RecoverAction::WipCommitPark => {
+            println!(
+                "{} preserving uncommitted work as a WIP commit (parked for resumption).",
+                "ⓘ".cyan()
+            );
+            if !confirm("commit the WIP on the branch and park (no PR)?") {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            let _ = run_git(&["add", "-A"], &probe_repo)?;
+            let _ = run_git(
+                &["commit", "-m", &format!("wip: recover {spec} (parked)")],
+                &probe_repo,
+            )?;
+            println!(
+                "{} WIP committed. Resume later with `aida queue work {} --resume`.",
+                "✓".green().bold(),
+                spec
+            );
+        }
+        queue_recover::RecoverAction::EndAndRequeue => {
+            println!(
+                "{} nothing was shipped — ending the lease and re-queueing `{}` for a fresh attempt.",
+                "↩".cyan().bold(),
+                spec
+            );
+            if !confirm("end the session and re-queue the spec?") {
+                println!("{} skipped — state left intact.", "ⓘ".cyan());
+                return Ok(());
+            }
+            if state.lease_held {
+                let _ = run_aida(&["session", "end", &spec]);
+            }
+            // Re-queue for the spec's owner. queue add is advisor-gated in
+            // non-TTY contexts, so route the role explicitly.
+            let _ = run_aida(&["queue", "add", &spec, "--user", user_id]);
+        }
+    }
+
+    Ok(())
+}
+
+/// STORY-384: short human label for a recovery action (the recommendation
+/// headline). The longer "why" is [`queue_recover::RecoverAction::rationale`].
+/// trace:STORY-384 | ai:claude
+fn recover_action_label(action: queue_recover::RecoverAction) -> &'static str {
+    use queue_recover::RecoverAction as A;
+    match action {
+        A::AlreadyCompleted => "already completed — nothing to recover",
+        A::AlreadyMergedPull => "pull to auto-bump the merged PR",
+        A::DrivePhasesFromPr => "drive phases 3-6 on the open PR",
+        A::PushOpenPrDrive => "push + open PR + drive phases 3-6",
+        A::WipCommitPushDrive => "commit WIP + push + open PR + drive phases 3-6",
+        A::WipCommitPark => "commit WIP and park for resumption",
+        A::EndAndRequeue => "end the lease and re-queue",
     }
 }
 
@@ -87546,6 +89636,21 @@ impl PhaseWatchdog {
                 self.last_progress = now;
             }
         }
+
+        // TASK-298: a `--no-human` headless run that hit a permission gate (or
+        // reported an `is_error` envelope) is silently stuck — `claude -p`
+        // exits 0 even when it bailed (SPIKE-7), so neither the natural-exit
+        // path nor the no-progress timer would catch it promptly. The log
+        // keeps the offending event, so scan it and trip the watchdog
+        // *immediately* with the specific reason rather than waiting out the
+        // no-progress / ceiling window. trace:TASK-298 | ai:claude
+        if let Some(reason) = read_headless_log_for_session(&self.project_root, &self.session_id)
+            .as_deref()
+            .and_then(headless_log_permission_stall)
+        {
+            return Some(reason);
+        }
+
         auto_complete::watchdog_verdict(
             now.duration_since(self.last_progress),
             now.duration_since(self.phase_start),

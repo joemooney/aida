@@ -182,6 +182,31 @@ pub enum TraceCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// CI trace-COVERAGE check: walk a diff and report which changed source
+    /// hunks carry the required code-to-spec provenance (an inline trace
+    /// comment OR a live commit `(SPEC-ID)` trailer), per the deterministic
+    /// coverage definition + exemptions (tests / generated / docs / config /
+    /// vendored / pure-deletion / fmt-only / trivial). Distinct from `gate`,
+    /// which validates the trailer spec-ids; this checks that the changed CODE
+    /// is traced. Report-only by default (CI succeeds); `--block` fails CI on
+    /// any uncovered coverable hunk.
+    Coverage {
+        /// Git revision range to scan (e.g. `origin/main..HEAD`). Defaults to
+        /// `<default-branch>..HEAD` (the commits this branch adds), falling
+        /// back to `HEAD~20..HEAD` when no default branch resolves.
+        #[clap(long)]
+        range: Option<String>,
+
+        /// Emit machine-readable JSON instead of human text.
+        #[clap(long)]
+        json: bool,
+
+        /// Fail (exit non-zero) when any coverable changed hunk is uncovered.
+        /// Default is report-only: the report prints but CI succeeds.
+        #[clap(long)]
+        block: bool,
+    },
 }
 
 /// Commands for generating reports
@@ -3470,13 +3495,31 @@ pub enum QueueCommand {
         // trace:STORY-492 | ai:claude
         #[clap(long, value_name = "ID", requires = "resume_drain")]
         drain_id: Option<String>,
-        /// With `--resume-drain`: print the reconciled re-entry plan (liveness
-        /// verdict + which phase resume would re-enter at) WITHOUT re-entering.
-        /// The safe way to preview a resume. (The plain `--dry-run` cannot be
-        /// combined with `--auto-complete`, hence a dedicated flag.)
+        /// With `--resume-drain` or `--from-pr`: print the reconciled re-entry
+        /// plan (which phase the drive would re-enter at) WITHOUT re-entering.
+        /// The safe way to preview a resume / PR-only drive. (The plain
+        /// `--dry-run` cannot be combined with `--auto-complete`, hence a
+        /// dedicated flag.)
         // trace:STORY-492 | ai:claude
-        #[clap(long, requires = "resume_drain")]
+        // trace:TASK-405 | ai:claude — now also previews a `--from-pr` drive.
+        #[clap(long, requires = "auto_complete")]
         resume_dry_run: bool,
+        /// PR-only invocation: implementation already shipped OUTSIDE the
+        /// orchestrator (a PR is already open for the spec), so SKIP the
+        /// implementer phase and drive the remaining phases
+        /// (reviewer → CI → merge → pull → build). Probes the PR's real state
+        /// to pick the entry phase: CI not green → reviewer (CI-wait is
+        /// implementer-coupled and cannot be re-run by a fresh process);
+        /// reviewer done → merge; etc. Refuses cleanly if no open PR exists,
+        /// the PR is already merged, or the spec is already Completed.
+        /// Composes with `--auto-complete` and its `through-ci` / `through-merge`
+        /// / `skip-build` variants. Distinct from `--resume-drain` (which
+        /// recovers a CRASHED orchestrator's own drain from its state file);
+        /// `--from-pr` engages a FRESH orchestrator on a PR that progressed
+        /// outside it.
+        // trace:TASK-405 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, requires = "auto_complete", conflicts_with = "resume_drain")]
+        from_pr: bool,
         /// Run `--auto-complete` phases headless (`claude -p`) so the drain
         /// needs no Ctrl+D.
         ///
@@ -3736,6 +3779,43 @@ pub enum QueueCommand {
         /// `--work`; passed to `aida queue work --no-pull`).
         #[clap(long)]
         no_pull: bool,
+        /// User ID (defaults to AIDA_USER or system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
+    /// Recover a spec from a failed phase-1 implementer session — an
+    /// interactive wizard over the existing recovery primitives.
+    ///
+    /// After a phase-1 failure (an Anthropic 529, a commit-and-exit without a
+    /// PR, partial work, an external crash), recovery is a mechanical sequence
+    /// of git/gh/aida commands whose exact shape depends on the spec's state:
+    /// does a lease still hold it? is there an open/merged PR? are there commits
+    /// ahead of `origin/main` that were never pushed? is the worktree dirty?
+    /// This command inspects that state, recommends a recovery path, and steps
+    /// through it interactively — instead of you remembering the dance each time.
+    ///
+    /// It is a FRONT-END over existing primitives, not new mechanism: it reuses
+    /// the same lease probes as `aida session leases`, the same PR/branch probes
+    /// the orchestrator uses, drives phases 3-6 via the PR-only orchestrator
+    /// path when a PR is already open, and falls back to `aida pull` / session
+    /// cleanup / re-queue for the other cases. Recommended actions:
+    ///   • open PR (pushed)        → drive phases reviewer → merge → pull → build
+    ///   • commits, not pushed     → push + open PR + drive phases
+    ///   • commits + dirty worktree→ commit WIP, then push + PR + drive
+    ///   • no commits + dirty      → commit WIP and park for resumption
+    ///   • no commits + clean      → end the lease and re-queue
+    ///   • PR merged / spec done   → pull / nothing to do (already shipped)
+    Recover {
+        /// Spec to recover (UUID or SPEC-ID).
+        id: String,
+        /// Print the inspection result + recommended recovery plan WITHOUT
+        /// executing anything. The safe way to see the state read before acting.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip all confirmation prompts and run the recommended path
+        /// non-interactively (for scripted / headless use). NOT the default.
+        #[clap(long, visible_alias = "yes")]
+        auto: bool,
         /// User ID (defaults to AIDA_USER or system user).
         #[clap(long)]
         user: Option<String>,

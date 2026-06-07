@@ -1,10 +1,12 @@
 # AIDA Multi-User Setup Guide
 
-**Last updated**: 2026-05-02
+**Last updated**: 2026-06-06
 
-This guide covers setting up AIDA for multi-user access via **PostgreSQL** — a server-backed shared projection where all users connect to a single PostgreSQL database. The git-canonical store (default `aida init`) is the recommended path for most multi-user scenarios because it gives you offline capability and git-native conflict resolution. Reach for PostgreSQL when you specifically want a server-of-record that's always-online and want SQL-level access patterns.
+> **Most multi-user teams want the default git-canonical store, not this guide.** A plain `aida init` gives you a shared multi-user requirement store (the orphan `aida-store` branch on your remote, with a local read cache per clone) that already gives you offline capability and git-native conflict resolution — no server to run, no database to administer. Reach for the **PostgreSQL** path documented here only when you specifically want an always-online server-of-record with SQL-level access patterns plus a REST API and React dashboard. PostgreSQL is an advanced, opt-in deployment — not the getting-started flow.
 
-> **PostgreSQL support is opt-in via the `postgres` Cargo feature.** A default `cargo install aida-cli` will NOT include PostgreSQL drivers. Build with `--features postgres` to enable. This is also why `aida db migrate --to postgres` may fail on a default build.
+This guide covers setting up AIDA for multi-user access via **PostgreSQL** — a server-backed shared projection where all users connect to a single PostgreSQL database.
+
+> **PostgreSQL support is opt-in via the `postgres` Cargo feature.** A default `cargo install aida-cli` will NOT include PostgreSQL drivers. Build with `--features postgres` to enable. A binary built without it cannot open a `postgres://` store.
 
 ---
 
@@ -31,18 +33,20 @@ This starts PostgreSQL on port 5432 with:
 - Password: `aida`
 - Database: `aida_default`
 
-### 2. Migrate Data from SQLite
+### 2. Seed the PostgreSQL store
 
-If you have existing requirements in `requirements.db`:
+A fresh PostgreSQL database starts empty. You have two ways to populate it:
 
-```bash
-# Automated script
-./docker/init-pg.sh
+- **Start fresh** — just point the server (next step) at the new database and add requirements directly via the CLI / REST API / dashboard. This is the common case.
+- **Import from a legacy store** — only if you have an existing *pre-git-canonical* store (a standalone `requirements.db` SQLite file or a `requirements.yaml`, i.e. a project created with `aida init --centralized`). The one-shot `aida db migrate` helper is kept around for exactly this:
 
-# Or manually
-aida db migrate --from sqlite --to postgres \
-  --output "postgres://aida:aida@localhost:5432/aida_default"
-```
+  ```bash
+  aida db migrate --from sqlite --to postgres \
+    --output "postgres://aida:aida@localhost:5432/aida_default"
+  # --from yaml works the same way for a legacy YAML store
+  ```
+
+  > `aida db migrate` is an **archived legacy command** — it exists only to lift data off the deprecated centralized backends. The default git-canonical store (orphan `aida-store` branch) does not use it. To move a git-canonical store into PostgreSQL, see [Switching Between Modes](#switching-between-modes) below.
 
 ### 3. Verify the Data
 
@@ -78,18 +82,16 @@ hostname -I | awk '{print $1}'
 
 ### Option A: Direct CLI Access
 
-Install the `aida` binary on the other machine, then:
+Install the `aida` binary (built `--features postgres`) on the other machine, then pass the connection string with `--file` on each call:
 
 ```bash
-# Set the connection string once
-export AIDA_FILE="postgres://aida:aida@192.168.179.180:5432/aida_default"
-
-# Or pass it each time
 aida --file "postgres://aida:aida@192.168.179.180:5432/aida_default" list
 aida --file "postgres://aida:aida@192.168.179.180:5432/aida_default" add \
   --title "From Alice's machine" --type story --status draft
 aida --file "postgres://aida:aida@192.168.179.180:5432/aida_default" show FR-0042
 ```
+
+> The `postgres://` connection string is passed only via the `--file` flag — there is no `AIDA_FILE` environment variable. To avoid retyping it, define a shell alias, e.g. `alias aida-pg='aida --file "postgres://aida:aida@192.168.179.180:5432/aida_default"'`.
 
 ### Option B: REST API
 
@@ -214,27 +216,27 @@ See `aida-server --help` for all auth options.
 
 ## Switching Between Modes
 
-### Centralized → Distributed
+Both modes use the same requirement format, so migration is lossless. The two helpers below — `db export-git` and `db migrate` — are **archived legacy commands** kept for one-shot moves on and off the centralized backend; they are not part of day-to-day operation.
 
-If you later need offline/disconnected operation:
+### PostgreSQL → git-canonical (the default)
+
+If you later want offline/disconnected operation and the git-native store:
 
 ```bash
-# Export PostgreSQL to a git-backed store
+# Export the PostgreSQL store to a git-backed store directory
 aida --file "postgres://aida:aida@localhost:5432/aida_default" db export-git -o aida-store
 
-# Initialize distributed mode (the default)
+# Then initialize the default distributed mode (or attach the exported store)
 aida init
 ```
 
-### Distributed → Centralized
+### git-canonical → PostgreSQL
 
 ```bash
-# Import git store back to PostgreSQL
+# Import a git-backed (YAML) store into PostgreSQL
 aida db migrate --from yaml --to postgres \
   --output "postgres://aida:pass@host:5432/aida_default"
 ```
-
-Both modes use the same requirement format — migration is lossless.
 
 ---
 
