@@ -18,12 +18,12 @@ description: |-
   - **STORY-263** (reviewer-only) — extends its basic watchdog (timeout-based)
   - **TASK-266** (orchestrator failure telemetry, shipped) — logs the failure
   - **SPIKE-7** — empirical evidence backing the requirement
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:28.387939696Z
-modified_at: 2026-06-07T04:16:25.884225044Z
+modified_at: 2026-06-07T04:39:48.478012901Z
 req_type: Task
 tags:
 - auto-complete-followup
@@ -43,3 +43,7 @@ comments:
   content: Commit dad795239 references this requirement
   created_at: 2026-06-07T04:16:25.884225044Z
   modified_at: 2026-06-07T04:16:25.884225044Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T04:39:48.478012901Z
+  completion_sha: 8e0b0d96af8bbd6c62ab4b4a1ddd8725a9573b5e
