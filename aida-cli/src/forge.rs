@@ -2449,9 +2449,22 @@ mod tests {
     /// The list→lookup mapping preserves the BUG-257 transient-vs-definitive
     /// distinction. Synthesize `std::process::Output` values for each arm.
     fn fake_output(code: i32, stdout: &str, stderr: &str) -> std::process::Output {
-        use std::os::unix::process::ExitStatusExt;
+        // ExitStatusExt::from_raw is platform-specific: on Unix the raw value is
+        // a wait-status (exit code in bits 8-15), on Windows it's the bare exit
+        // code as u32. Gate per platform so the test build compiles on both —
+        // both yield a status whose .code() == `code`. trace:BUG-469 | ai:claude
+        #[cfg(unix)]
+        let status = {
+            use std::os::unix::process::ExitStatusExt;
+            std::process::ExitStatus::from_raw((code & 0xff) << 8)
+        };
+        #[cfg(windows)]
+        let status = {
+            use std::os::windows::process::ExitStatusExt;
+            std::process::ExitStatus::from_raw(code as u32)
+        };
         std::process::Output {
-            status: std::process::ExitStatus::from_raw((code & 0xff) << 8),
+            status,
             stdout: stdout.as_bytes().to_vec(),
             stderr: stderr.as_bytes().to_vec(),
         }
