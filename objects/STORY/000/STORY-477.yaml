@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:58:25.820595517Z
-modified_at: 2026-06-06T14:03:50.890585993Z
+modified_at: 2026-06-07T06:28:18.535616075Z
 req_type: Story
 tags:
 - agent-lift
@@ -43,3 +43,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): DEFER to the marketing phase — its explicit purpose is dogfood-proof / case-study / release-note material, which is exactly the deferred marketing phase. Nothing downstream is blocked today. The telemetry substrate exists, so it''s a quick reporting layer when the time comes.'
   created_at: 2026-06-06T14:03:43.830662633Z
   modified_at: 2026-06-06T14:03:43.830662633Z
+- id: 019ea0c4-95e7-7091-8e70-434408410908
+  author: joe
+  content: Commit 1b4d419f5 references this requirement
+  created_at: 2026-06-07T06:28:18.535616075Z
+  modified_at: 2026-06-07T06:28:18.535616075Z
