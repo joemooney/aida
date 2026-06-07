@@ -5,15 +5,17 @@
 # `aida mcp-serve`, and drives JSON-RPC requests like Codex or another local
 # MCP client would.
 #
-# Default run validates the descriptor + CLI-to-MCP read direction (post-TASK-440
-# outputSchema landing), resources, and MCP error envelopes. The agent-facing
-# descriptor contract is behind `--require-agent-contract` while docs and
-# implementation converge. The MCP-write -> CLI-read and coordination stages
-# live behind `--require-mcp-write-roundtrip`; pass it through to the Python
-# suite for the full check.
+# Validates the descriptor + CLI-to-MCP read direction (post-TASK-440
+# outputSchema landing), resources, MCP error envelopes, AND the full
+# MCP-write -> CLI-read + coordination round trips. The write-roundtrip stages
+# were staged behind a gate while BUG-310 (MCP writes reporting success without
+# persisting) was in flight; BUG-310 has shipped, so they run by default now.
+# The agent-facing descriptor contract remains behind `--require-agent-contract`
+# while docs and implementation converge.
 #
 # trace:TASK-451 | ai:codex
 # trace:BUG-310 | ai:codex
+# trace:TASK-453 | ai:claude
 # trace:TASK-549 | ai:antigravity
 set -euo pipefail
 
