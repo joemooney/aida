@@ -1,6 +1,6 @@
 # AIDA Competitive Analysis & Market Positioning
 
-**Last updated**: 2026-05-22  
+**Last updated**: 2026-06-05  
 **Refresh Cadence**: Quarterly (scheduled) / Signal-Triggered (see [signals-to-watch.md](signals-to-watch.md))
 
 The AI dev-tooling and agent coordination landscape moves with extreme velocity. This directory serves as the **living, time-stamped record** of where AIDA sits in this ecosystem—documenting our defensible niche, assessing competitors, and tracking landscape developments.
@@ -21,6 +21,7 @@ We organize our market intelligence into three functional layers:
 
 | File / Directory | Type | Scope & Context |
 |---|---|---|
+| **[2026-06-05-ecc-deep-dive.md](2026-06-05-ecc-deep-dive.md)** | Competitive Analysis | **ECC vs. AIDA Deep-Dive**: Independent codebase-backed analysis of the `affaan-m/ecc` repository (v2.0.0-rc.1) compared to AIDA's git-canonical substrate and orchestrator. Details the 4 layers of ECC (marketplace prompts, distribution engine, hooks, Rust TUI control plane), maps competitive vectors, synthesizes gaps, and outlines a concrete "Manifest-Driven Multi-Harness Distribution" Epic roadmap for AIDA. |
 | **[2026-05-31-round2-moat-gaps-moves.md](2026-05-31-round2-moat-gaps-moves.md)** | **Current Synthesis** | **The competitive picture as of 2026-05-31**: integrates four parallel deep-dives (Spec Kit, multi-agent frontier, AGENTS.md/MCP convergence, beyond-software use cases) into the commoditized-vs-differentiated split, the prioritized capability roadmap (P1 checkpointing … P5 drain legibility + AGENTS.md-generator + ReqIF option), use-case verdicts (pursue ADRs / watch compliance+memory / avoid ELN-wiki-PKM), the positioning line, and the tripwires. **Verdict: the durable core is the structured graph on git drained by an orchestrator with a spec-grounded escalation cascade, portable across vendors; the real risk is distribution, not differentiation.** |
 | **[2026-05-31-git-canonical-substrate-thesis.md](2026-05-31-git-canonical-substrate-thesis.md)** | Strategic Thesis (round-1) | **The git-canonical wedge, pressure-tested**: grades the "competitors avoid git, we ride it" thesis as category-dependent and dangerous in its naive form; reframes the wedge to the stable-ID + typed-relationship + trace-enforced graph on git that no competitor combines, with multi-vendor portability as the strongest claim. Superseded on specifics by the round-2 synthesis above. |
 | **[positioning.md](positioning.md)** | Strategic Statement | **AIDA's Defensible Niche**: Synthesizes AIDA's 8 core architectural pillars and details our horizontal-vertical symbiosis with Anthropic's platform. |
