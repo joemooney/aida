@@ -222,8 +222,8 @@ If you later need offline/disconnected operation:
 # Export PostgreSQL to a git-backed store
 aida --file "postgres://aida:aida@localhost:5432/aida_default" db export-git -o aida-store
 
-# Initialize distributed mode
-aida init --distributed
+# Initialize distributed mode (the default)
+aida init
 ```
 
 ### Distributed → Centralized

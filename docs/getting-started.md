@@ -92,13 +92,39 @@ This creates (the **distributed git-canonical** default):
 - META requirements seeded into the orphan store
 - `CLAUDE.md` — project context for AI assistants
 - `AGENTS.md` — project context for Codex-compatible agents
-- `.claude/skills/`, `.claude/commands/`, `.claude/hooks/` — Claude Code workflow scaffolding
+- `.claude/skills/`, `.claude/commands/`, `.claude/hooks/` — Claude Code workflow scaffolding (by default also scaffolds the Codex profile; `--agent claude` for Claude only)
 - `.mcp.json` — MCP integration
 - `docs/plans/` — implementation plan archive
+- `docs/aida/discipline/` — the starter discipline pack (habits + vocabulary for running an AIDA project)
+- the default role set (implementer, advisor, reviewer) bootstrapped into `~/.aida/roles/` so a fresh machine is ready out of the box (skip with `--no-roles`)
 
 That's it. You're ready to use AIDA.
 
-> **Need the legacy SQLite-canonical mode?** Pass `--centralized` (deprecated, prints a warning). For multi-repo workspaces use `--sibling` instead.
+> **Need the legacy SQLite-canonical mode?** Pass `--centralized` (deprecated, prints a warning). For multi-repo workspaces use `--sibling` instead. To skip the agent scaffolding entirely, use `--no-skills` / `--no-hooks`.
+
+> **Cloning a project that already uses AIDA?** Don't run `aida init` — see [Joining an existing AIDA project](#joining-an-existing-aida-project) below.
+
+---
+
+## Joining an existing AIDA project
+
+If you cloned a repo that **already** uses AIDA (the `aida-store` orphan branch exists on the remote), you do **not** run `aida init`. The first store-reading command auto-attaches the store for you:
+
+```bash
+git clone git@github.com:org/their-project.git
+cd their-project
+aida list           # auto-attaches the .aida-store/ worktree and rebuilds the cache
+```
+
+That first `aida list` (or `aida search`, `aida queue`, …) attaches the `.aida-store/` worktree from the `aida-store` branch and rebuilds the local `.aida/cache.db` — no manual setup. Reading works immediately.
+
+To **write** new requirements from your clone, you need a node id (the namespace for new spec IDs until the merge gate collapses them to short IDs):
+
+```bash
+aida node acquire   # claims a node id for this clone
+```
+
+> **Offline or store unreachable?** If distributed mode is declared but the store branch can't be attached (you're offline, the remote lacks `aida-store`, etc.), reads error with setup guidance rather than silently falling back to a legacy file — so you always know the store isn't really there.
 
 ---
 
