@@ -528,9 +528,39 @@ pub fn recovery_hint(step: &ShipStep, pr_number: Option<u64>) -> String {
     }
 }
 
+/// STORY-529: a spec carrying this tag must NOT be auto-merged by `aida pr
+/// ship` — the PR is left a draft for a human to review + merge. Enforces the
+/// draft-for-review handoff that briefs alone couldn't (handed-off agents kept
+/// self-merging draft-for-review work). trace:STORY-529 | ai:claude
+pub const DRAFT_ONLY_TAG: &str = "review:draft-only";
+
+/// True iff any of `tags` marks the spec draft-only (case-insensitive match on
+/// [`DRAFT_ONLY_TAG`]). The pure heart of the ship-time draft gate.
+/// trace:STORY-529 | ai:claude
+pub fn is_draft_only_tagged(tags: &[String]) -> bool {
+    tags.iter()
+        .any(|t| t.trim().eq_ignore_ascii_case(DRAFT_ONLY_TAG))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draft_only_tag_detection_is_case_insensitive() {
+        // STORY-529: the ship-time draft gate fires on this tag, case-insensitive.
+        assert!(is_draft_only_tagged(&["review:draft-only".to_string()]));
+        assert!(is_draft_only_tagged(&[
+            "batch:x".to_string(),
+            "Review:Draft-Only".to_string()
+        ]));
+        assert!(!is_draft_only_tagged(&[
+            "review".to_string(),
+            "draft-only".to_string(),
+            "papercut".to_string()
+        ]));
+        assert!(!is_draft_only_tagged(&[]));
+    }
 
     #[test]
     fn parse_pr_number_from_create_output_canonical() {

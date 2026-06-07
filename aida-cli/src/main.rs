@@ -39297,6 +39297,48 @@ fn fetch_pr_info_via_gh_bin(
 /// double-implementing them.
 ///
 /// trace:TASK-458 | ai:claude
+/// STORY-529: the spec-IDs referenced by the commits about to ship whose spec
+/// carries the `review:draft-only` tag. Reuses the trailer-gate machinery
+/// (range → commits → store) so the ship-time draft gate sees the same specs
+/// the trailer guard validates. Empty when no store/commits or nothing is
+/// tagged. trace:STORY-529 | ai:claude
+fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<String> {
+    let range = resolve_gate_range(project_root, None);
+    let Ok(commits) = read_commits_in_range(project_root, &range) else {
+        return Vec::new();
+    };
+    let Some(store) = load_store_for_lookup(project_root) else {
+        return Vec::new();
+    };
+    let mut ids: Vec<String> = Vec::new();
+    for (_sha, subject) in &commits {
+        ids.extend(pr_ship::extract_trailing_spec_ids_from_subject(subject));
+    }
+    ids.sort();
+    ids.dedup();
+    let mut out = Vec::new();
+    for id in ids {
+        let want = id.to_ascii_uppercase();
+        let found = store.requirements.iter().find(|r| {
+            r.spec_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+                || r.agreed_id
+                    .as_deref()
+                    .map(|s| s.eq_ignore_ascii_case(&want))
+                    .unwrap_or(false)
+        });
+        if let Some(req) = found {
+            let tags: Vec<String> = req.tags.iter().cloned().collect();
+            if pr_ship::is_draft_only_tagged(&tags) {
+                out.push(id);
+            }
+        }
+    }
+    out
+}
+
 fn pr_ship_handler(
     n: Option<u64>,
     no_pull: bool,
@@ -39517,6 +39559,40 @@ fn pr_ship_handler(
             } else {
                 format!("PR-{}", pr_number)
             }
+        );
+        return Ok(());
+    }
+
+    // ---- STORY-529: draft-for-review gate. A spec tagged `review:draft-only`
+    // must NOT be auto-merged by `aida pr ship` — leave the PR a draft and STOP
+    // (before CI-watch + merge) so a human reviews + merges. Opt-in via the tag,
+    // so untagged specs are unaffected. Enforces the draft-for-review handoff
+    // that briefs alone couldn't (handed-off agents self-merged). trace:STORY-529
+    let draft_only = draft_only_specs_for_ship(&project_root);
+    if !draft_only.is_empty() {
+        // Convert the PR back to a draft (no-op/harmless if already one or if
+        // the forge doesn't support drafts — the load-bearing effect is the
+        // bail before merge below).
+        let _ = std::process::Command::new("gh")
+            .current_dir(&project_root)
+            .args(["pr", "ready", &pr_number.to_string(), "--undo"])
+            .status();
+        eprintln!(
+            "{} PR-{} left as a DRAFT — {} tagged `{}`. A human must review + merge; \
+             `aida pr ship` will not auto-merge it.",
+            "⏸".yellow().bold(),
+            pr_number,
+            draft_only.join(", "),
+            pr_ship::DRAFT_ONLY_TAG
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Skipped(format!(
+                "{} tagged review:draft-only — held for human review",
+                draft_only.join(", ")
+            )),
         );
         return Ok(());
     }
