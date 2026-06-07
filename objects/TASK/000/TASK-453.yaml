@@ -15,12 +15,12 @@ description: |-
   - TASK-451 (landed the staged suite)
   - BUG-310 (the gating bug)
   - STORY-398 (Codex empirical roundtrip)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T07:36:28.836854407Z
-modified_at: 2026-06-06T08:34:57.395842019Z
+modified_at: 2026-06-07T06:34:41.610240191Z
 req_type: Task
 tags:
 - ci
@@ -40,3 +40,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Verified BUG-310 is Completed but the CI step still runs `tests/test_mcp_stdio.sh` without `--require-mcp-write-roundtrip` (gate still staged); fully bounded mechanical follow-up — add the flag to ci.yml, confirm green, optionally flip the script default — now unblocked.
   created_at: 2026-06-06T08:34:56.027429688Z
   modified_at: 2026-06-06T08:34:56.027429688Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T06:34:41.610240191Z
+  completion_sha: 202c9515810f7f1e8a3d18f5b4c0b8f4308cd42b
