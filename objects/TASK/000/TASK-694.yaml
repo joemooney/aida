@@ -8,5 +8,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T16:49:05.807499637Z
-modified_at: 2026-06-07T16:49:05.807499637Z
+modified_at: 2026-06-07T20:48:56.381858323Z
 req_type: Task
+comments:
+- id: 019ea3d8-843d-77c0-b988-244f7d80972e
+  author: joe
+  content: |-
+    BLOCKED on a design contradiction the instrument-don't-infer gate caught (2026-06-07). Claude Code docs (code.claude.com/docs/en/hooks): WorktreeCreate fires BEFORE creation, REPLACES default git behavior (the hook must itself create the worktree + return the path), and its stdin payload carries only the common fields (session_id, transcript_path, cwd, permission_mode, hook_event_name) — NO worktree path/branch input. WorktreeRemove is a non-blocking side-effect hook (cwd may be the worktree dir).
+
+    Consequence: the TASK-634/694 premise — WorktreeCreate as a PASSIVE notification carrying {path,branch} that AIDA reads to register a lease — is WRONG. WorktreeCreate is an OWNERSHIP hook; passively capturing a lease for a harness-created worktree is impossible via it without AIDA taking over worktree provisioning (substrate-DRIVEN, explicitly out of SPIKE-41's capture-only scope). The TASK-634 pure core (worktree_lease.rs, payload {path,branch}→lease) is built on this wrong shape (only spec_id_from_branch is salvageable).
+
+    Options for substrate-CAPTURE of harness worktrees (need operator/master design call):
+    A. AIDA OWNS worktree creation via WorktreeCreate (it git-worktree-adds + registers the lease + returns the path). Substrate-DRIVEN; bigger; changes who provisions.
+    B. Pivot to a passive observe hook — SubagentStart/SubagentStop or PostToolUse on the git-worktree command — to register/release leases without owning creation. Likely the right capture-only fit; needs empirical payload verification.
+    C. WorktreeRemove (non-blocking, safe to instrument) for the release half; pair with B for create.
+
+    Recommend NOT wiring until the design is chosen + the chosen hook's payload is empirically instrumented (the original gate, still unmet — SPIKE-41 was a docs catalogue, not an empirical payload probe). trace:TASK-694
+  created_at: 2026-06-07T20:48:56.381858323Z
+  modified_at: 2026-06-07T20:48:56.381858323Z
