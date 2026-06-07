@@ -1,0 +1,12 @@
+id: 019ea416-a472-7763-853a-0f486913b20a
+spec_id: STORY-529
+agreed_id: STORY-529
+title: Enforce draft-for-review for handed-off agents — briefed 'draft PR' isn't honored (3x self-merge)
+description: 'Recurrence-promoted (3x in one session, 2026-06-07): agents briefed ''open a DRAFT PR, master reviews before merge'' self-merged via aida pr ship anyway — SPIKE-8 (docs), STORY-523 (codex, architecture-adjacent decision-producer), TASK-698 (claude, init UX). The brief is advisory TEXT; aida pr ship opens+merges regardless, so draft-for-review is unenforceable today. Substrate-as-bouncer: encode it, don''t document-and-hope. Options: (a) a per-spec marker (tag ''review:draft-only'' or a field) that makes aida pr ship STOP after opening a draft PR, never merge; (b) a per-agent ~/.aida/agents.toml [agents] draft_only=true the ship path respects; (c) a master-ack gate (the spec needs an advisor/master ack before ship-merge). Connects to feedback_agy_dispatch_policy (AGY/Codex = draft-for-review-only, never auto-merge) — which is exactly the policy that isn''t enforced. Without this, ''hand off bounded work but keep architecture-adjacent changes gated'' (feedback_one_master_advisor) relies on agent goodwill. Smallest slice: a spec tag the ship path checks. trace:feedback_agy_dispatch_policy'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T21:56:47.858338800Z
+modified_at: 2026-06-07T21:56:47.858338800Z
+req_type: Story
