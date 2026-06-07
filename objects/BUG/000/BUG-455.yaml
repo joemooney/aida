@@ -3,12 +3,12 @@ spec_id: BUG-455
 agreed_id: BUG-455
 title: Headless drain phase fails un-shelvably on 'database is locked' (SQLite cache lock contention with concurrent aida processes)
 description: 'Empirical 2026-06-05: a headless drain''s phase-3 (reviewer) failed with ''database is locked — the batch drain will treat the failure as un-shelvable'' because a concurrent bulk operation (a 116-spec aida archive loop) was writing .aida/cache.db at the same time. Phases 1-2 (implementer+CI) completed fine; the contention hit phase 3. Two issues: (1) concurrent aida processes (drains + interactive shells + bulk ops) contend on the SQLite cache lock and a transient lock surfaces as a hard, UN-SHELVABLE phase failure; (2) the drain stops the whole batch on it. FIX: wrap cache access in a busy-timeout / retry-on-locked (SQLite PRAGMA busy_timeout or a bounded retry), and classify ''database is locked'' as a transient/shelvable failure (like a gh network blip) so the drain shelves+continues instead of hard-stopping. OPERATIONAL workaround until fixed: do not run bulk cache writes (archive sweeps, mass edits) while a drain is live. Discovered validating BUG-453.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T04:21:18.986385829Z
-modified_at: 2026-06-06T08:30:01.255637828Z
+modified_at: 2026-06-07T01:07:01.072052881Z
 req_type: Bug
 tags:
 - autonomy
@@ -25,3 +25,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Wrap cache access in SQLite busy_timeout/bounded-retry AND classify "database is locked" as a transient/shelvable drain failure — a real, on-phase reliability bug with a clear bounded fix.
   created_at: 2026-06-06T08:29:59.943238263Z
   modified_at: 2026-06-06T08:29:59.943238263Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T01:07:01.072052881Z
+  completion_sha: 403948eaaf533188512c7d86394316f5077c472d
