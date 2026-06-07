@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:46:29.087785646Z
-modified_at: 2026-06-07T20:30:41.013641766Z
+modified_at: 2026-06-07T20:32:41.791324558Z
 req_type: Story
 tags:
 - backlog-sweep
@@ -83,6 +83,11 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): DEFER behind STORY-522 — 522 defines the DecisionRequest artifact + inbox this producer feeds; producing questions before that format/inbox exists is wasted. Also: the proactive whole-backlog sweep is THROUGHPUT (defer) vs 522''s human-recovery-latency RELIABILITY value (allow). Sequence strictly after 522. Recorded blocked-by STORY-522.'
   created_at: 2026-06-06T14:13:33.256567333Z
   modified_at: 2026-06-06T14:13:33.256567333Z
+- id: 019ea3c9-a53f-7b01-aee6-daa723131b62
+  author: joe
+  content: 'Post-hoc review (was briefed draft-for-review but merged directly via aida pr ship): heuristic + contract use are sound — consumes the existing DecisionRequest contract, skips specs with open requests + low-priority + archived, conservative keyword markers, 5 unit tests. One substantive gap: ''aida questions sweep'' writes DecisionRequests with no preview — filed a follow-up to make --dry-run the default + require --apply to write. Until that lands, run sweep cautiously (it mutates specs on invocation).'
+  created_at: 2026-06-07T20:32:41.791324558Z
+  modified_at: 2026-06-07T20:32:41.791324558Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-07T20:30:41.013641766Z
