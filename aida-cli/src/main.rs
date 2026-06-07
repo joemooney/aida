@@ -13657,23 +13657,43 @@ impl UltraplanMode {
     }
 }
 
-/// TASK-304: parsed `[ultraplan]` config. Both fields default safely so a
-/// project with no `[ultraplan]` block (or an unparseable one) keeps the
-/// current opt-in behavior: `mode = on-demand`, threshold `acceptance-bullets>8`.
-/// trace:TASK-304 | ai:claude
+/// TASK-697: which heuristic the `suggested` mode uses to decide a spec is
+/// worth a planning prompt.
+///
+/// SPIKE-8 (`docs/spikes/2026-06-07-spike-8-ultraplan-comparison.md`) found
+/// that `/ultraplan`'s value is a *context-assembly* aid: it helps most on
+/// thin / under-specified specs and least on well-formed ones (which already
+/// carry their own `## Proposed shape` + Acceptance — the spec *is* the plan).
+/// So acceptance-bullet count *anti-correlates* with where planning helps — a
+/// 9-bullet spec with a design block needs planning less than a 2-bullet spec
+/// with none. `Thinness` keys on that signal and is the default; the legacy
+/// `acceptance-bullets>N` heuristic is still honored for backward compat.
+/// trace:TASK-697 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SuggestThreshold {
+    /// Legacy (TASK-304): suggest when the `## Acceptance` checkbox count is
+    /// strictly greater than `N`.
+    BulletCount(usize),
+    /// TASK-697: suggest when the spec is *under-specified* — no design
+    /// section yet a substantive body (see `is_spec_thin`).
+    Thinness,
+}
+
+/// TASK-304/TASK-697: parsed `[ultraplan]` config. Both fields default safely
+/// so a project with no `[ultraplan]` block (or an unparseable one) keeps the
+/// opt-in behavior: `mode = on-demand`, threshold `spec-thinness`.
+/// trace:TASK-697 | ai:claude
 struct UltraplanConfig {
     mode: UltraplanMode,
-    /// The `acceptance-bullets>N` threshold — the only heuristic supported
-    /// today. A spec triggers a suggestion when its `## Acceptance` checkbox
-    /// count is strictly greater than this.
-    bullet_threshold: usize,
+    /// Which heuristic `suggested` mode applies. Defaults to `Thinness`.
+    threshold: SuggestThreshold,
 }
 
 impl Default for UltraplanConfig {
     fn default() -> Self {
         Self {
             mode: UltraplanMode::OnDemand,
-            bullet_threshold: 8,
+            threshold: SuggestThreshold::Thinness,
         }
     }
 }
@@ -13701,12 +13721,12 @@ fn read_ultraplan_config(project_root: &std::path::Path) -> UltraplanConfig {
     {
         cfg.mode = mode;
     }
-    if let Some(n) = table
+    if let Some(threshold) = table
         .get("suggest_threshold")
         .and_then(|v| v.as_str())
-        .and_then(parse_acceptance_bullet_threshold)
+        .and_then(parse_suggest_threshold)
     {
-        cfg.bullet_threshold = n;
+        cfg.threshold = threshold;
     }
     cfg
 }
@@ -13723,6 +13743,68 @@ fn parse_acceptance_bullet_threshold(token: &str) -> Option<usize> {
         .trim()
         .parse::<usize>()
         .ok()
+}
+
+/// TASK-697: parse a `suggest_threshold` token into a `SuggestThreshold`.
+/// `acceptance-bullets>N` → `BulletCount(N)` (legacy, still honored);
+/// `spec-thinness` / `thinness` / `under-specified` → `Thinness` (the SPIKE-8
+/// recommendation, the new default). Unknown tokens return `None` so the
+/// caller keeps the default threshold. trace:TASK-697 | ai:claude
+fn parse_suggest_threshold(token: &str) -> Option<SuggestThreshold> {
+    if let Some(n) = parse_acceptance_bullet_threshold(token) {
+        return Some(SuggestThreshold::BulletCount(n));
+    }
+    match token.trim().to_ascii_lowercase().as_str() {
+        "spec-thinness" | "thinness" | "under-specified" => Some(SuggestThreshold::Thinness),
+        _ => None,
+    }
+}
+
+/// TASK-697: heading prefixes that mark a spec as carrying its own design —
+/// the signal that planning would add little (the spec already *is* a plan).
+/// Matched case-insensitively against the heading text after the `#` markers.
+/// trace:TASK-697 | ai:claude
+const DESIGN_SECTION_MARKERS: &[&str] = &[
+    "proposed shape",
+    "proposed solution",
+    "proposed design",
+    "design",
+    "approach",
+    "implementation",
+];
+
+/// TASK-697: a spec with `< THIN_MIN_BODY_CHARS` of body is too trivial to
+/// plan — planning overhead would exceed the work. Above it, a design-less
+/// spec is "thin" in the sense that matters (under-specified, not too-small).
+const THIN_MIN_BODY_CHARS: usize = 240;
+
+/// TASK-697: does the spec carry a design / proposed-shape section? Scans
+/// markdown headings (any level) for a `DESIGN_SECTION_MARKERS` prefix.
+/// trace:TASK-697 | ai:claude
+fn has_design_section(description: &str) -> bool {
+    for line in description.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix('#') {
+            let heading = rest.trim_start_matches('#').trim().to_ascii_lowercase();
+            if DESIGN_SECTION_MARKERS
+                .iter()
+                .any(|marker| heading.starts_with(marker))
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// TASK-697: is this spec "thin" — under-specified enough that a planning
+/// prompt would plausibly add value? True when it has NO design section yet a
+/// substantive body. Well-specified specs (which embed `## Proposed shape` and
+/// the like) stay quiet — exactly the SPIKE-8 finding that bullet count is the
+/// wrong signal. Trivial one-liners also stay quiet (too small to plan).
+/// trace:TASK-697 | ai:claude
+fn is_spec_thin(description: &str) -> bool {
+    !has_design_section(description) && description.trim().chars().count() >= THIN_MIN_BODY_CHARS
 }
 
 /// TASK-304: count the markdown task-list bullets (`- [ ]` / `- [x]`) inside
@@ -13779,15 +13861,31 @@ fn ultraplan_suggestion_hint(
     if cfg.mode != UltraplanMode::Suggested {
         return None;
     }
-    let bullets = count_acceptance_bullets(&req.description);
-    if bullets <= cfg.bullet_threshold {
-        return None;
-    }
     let id = req.display_id();
-    Some(format!(
-        "{id} has {bullets} acceptance bullets — `aida ultraplan {id}` to \
-         assemble a planning prompt before implementing."
-    ))
+    match cfg.threshold {
+        // Legacy (TASK-304): fire on a long acceptance checklist.
+        SuggestThreshold::BulletCount(n) => {
+            let bullets = count_acceptance_bullets(&req.description);
+            if bullets <= n {
+                return None;
+            }
+            Some(format!(
+                "{id} has {bullets} acceptance bullets — `aida ultraplan {id}` to \
+                 assemble a planning prompt before implementing."
+            ))
+        }
+        // TASK-697: fire on an under-specified (design-less) spec — where
+        // planning actually adds value.
+        SuggestThreshold::Thinness => {
+            if !is_spec_thin(&req.description) {
+                return None;
+            }
+            Some(format!(
+                "{id} has no design section yet — `aida ultraplan {id}` to \
+                 assemble a planning prompt before implementing."
+            ))
+        }
+    }
 }
 
 /// TASK-304: render the ultraplan suggestion hint to stdout under the
@@ -13807,20 +13905,26 @@ fn print_ultraplan_suggestion_hint(project_root: &std::path::Path, req: &aida_co
 /// the `[forge]` section so all three init paths share one source of truth.
 /// trace:TASK-304 | ai:claude
 fn init_ultraplan_config_section() -> &'static str {
-    "\n# trace:TASK-304 | ai:claude\n\
-     # Whether AIDA proactively suggests `aida ultraplan <SPEC>` for chunky\n\
-     # specs. /ultraplan is interactive (claude.ai web approval), so there is\n\
-     # no \"auto-pull\" mode — only:\n\
+    "\n# trace:TASK-304 | ai:claude  (suggest_threshold: trace:TASK-697)\n\
+     # Whether AIDA proactively suggests `aida ultraplan <SPEC>` for specs\n\
+     # where planning would help. /ultraplan is interactive (claude.ai web\n\
+     # approval), so there is no \"auto-pull\" mode — only:\n\
      #   never      — `aida ultraplan` is disabled (refuses with a message)\n\
      #   on-demand  — current behavior: run `aida ultraplan SPEC` yourself\n\
      #   suggested  — pickup surfaces (/aida-pickup, queue work/list head)\n\
      #                hint when the head spec passes suggest_threshold\n\
-     # suggest_threshold only applies in `suggested` mode. The lone heuristic\n\
-     # is `acceptance-bullets>N`: the count of `- [ ]` items in the spec's\n\
-     # `## Acceptance` section (mechanical, no NLP).\n\
+     # suggest_threshold only applies in `suggested` mode. Heuristics:\n\
+     #   spec-thinness       — (default) suggest when the spec is\n\
+     #                         under-specified: no design section (## Proposed\n\
+     #                         shape / Design / Approach / ...) yet a\n\
+     #                         substantive body. Well-specified specs already\n\
+     #                         carry their plan, so they stay quiet (SPIKE-8).\n\
+     #   acceptance-bullets>N — (legacy) suggest when the `## Acceptance`\n\
+     #                         checkbox count exceeds N. Note: bullet count\n\
+     #                         anti-correlates with where planning helps.\n\
      [ultraplan]\n\
      mode = \"on-demand\"\n\
-     suggest_threshold = \"acceptance-bullets>8\"\n"
+     suggest_threshold = \"spec-thinness\"\n"
 }
 
 #[cfg(test)]
@@ -13913,13 +14017,14 @@ mod task_304_ultraplan_cadence_tests {
     }
 
     // ── read_ultraplan_config: each mode + threshold ────────────────────
-    /// Absent config → on-demand default, threshold 8. trace:TASK-304
+    /// Absent config → on-demand default, threshold = thinness (TASK-697).
+    /// trace:TASK-697 | ai:claude
     #[test]
     fn config_absent_defaults_on_demand() {
         let tmp = tempfile::tempdir().unwrap();
         let cfg = read_ultraplan_config(tmp.path());
         assert_eq!(cfg.mode, UltraplanMode::OnDemand);
-        assert_eq!(cfg.bullet_threshold, 8);
+        assert_eq!(cfg.threshold, SuggestThreshold::Thinness);
     }
 
     /// trace:TASK-304 | ai:claude
@@ -13940,7 +14045,7 @@ mod task_304_ultraplan_cadence_tests {
         );
         let cfg = read_ultraplan_config(tmp.path());
         assert_eq!(cfg.mode, UltraplanMode::Suggested);
-        assert_eq!(cfg.bullet_threshold, 3);
+        assert_eq!(cfg.threshold, SuggestThreshold::BulletCount(3));
     }
 
     /// Unknown mode token falls back to the on-demand default rather than
@@ -13974,12 +14079,15 @@ mod task_304_ultraplan_cadence_tests {
         assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
     }
 
-    /// suggested + over threshold → hint with the documented format.
-    /// trace:TASK-304 | ai:claude
+    /// suggested + legacy bullet threshold, over it → hint with the documented
+    /// format. trace:TASK-304 | ai:claude
     #[test]
     fn hint_fires_suggested_over_threshold() {
         let tmp = tempfile::tempdir().unwrap();
-        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        write_config(
+            tmp.path(),
+            "[ultraplan]\nmode = \"suggested\"\nsuggest_threshold = \"acceptance-bullets>8\"\n",
+        );
         let r = req_with("STORY-9", NINE_BULLETS);
         let hint = ultraplan_suggestion_hint(tmp.path(), &r).expect("expected a hint");
         assert_eq!(
@@ -13989,12 +14097,15 @@ mod task_304_ultraplan_cadence_tests {
         );
     }
 
-    /// suggested but at/under threshold (8 is not > 8) → silent.
-    /// trace:TASK-304 | ai:claude
+    /// suggested + legacy bullet threshold, at/under it (8 is not > 8) →
+    /// silent. trace:TASK-304 | ai:claude
     #[test]
     fn hint_silent_at_threshold_boundary() {
         let tmp = tempfile::tempdir().unwrap();
-        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        write_config(
+            tmp.path(),
+            "[ultraplan]\nmode = \"suggested\"\nsuggest_threshold = \"acceptance-bullets>8\"\n",
+        );
         let eight = "## Acceptance\n- [ ] 1\n- [ ] 2\n- [ ] 3\n- [ ] 4\n\
             - [ ] 5\n- [ ] 6\n- [ ] 7\n- [ ] 8\n";
         let r = req_with("STORY-8", eight);
@@ -14015,18 +14126,110 @@ mod task_304_ultraplan_cadence_tests {
         assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_some());
     }
 
-    /// The scaffolded `[ultraplan]` block ships mode = on-demand and parses
-    /// back to the on-demand default. trace:TASK-304 | ai:claude
+    /// The scaffolded `[ultraplan]` block ships mode = on-demand and the
+    /// spec-thinness threshold, and parses back to those defaults.
+    /// trace:TASK-697 | ai:claude
     #[test]
     fn scaffolded_block_is_on_demand() {
         let section = init_ultraplan_config_section();
         assert!(section.contains("[ultraplan]"));
         assert!(section.contains("mode = \"on-demand\""));
+        assert!(section.contains("suggest_threshold = \"spec-thinness\""));
         let tmp = tempfile::tempdir().unwrap();
         write_config(tmp.path(), section);
         let cfg = read_ultraplan_config(tmp.path());
         assert_eq!(cfg.mode, UltraplanMode::OnDemand);
-        assert_eq!(cfg.bullet_threshold, 8);
+        assert_eq!(cfg.threshold, SuggestThreshold::Thinness);
+    }
+
+    // ── TASK-697: spec-thinness threshold ───────────────────────────────
+    /// A well-specified spec carrying a `## Proposed shape` block (the
+    /// SPIKE-8 example of where planning does NOT help). trace:TASK-697
+    const WELL_SPECIFIED: &str = "## Problem\n\nThe gate logic lives inline in \
+        the handler, mixing pure decision logic with I/O. This makes the \
+        decision tree hard to test in isolation, so regressions slip through.\n\n\
+        ## Proposed shape\n\nExtract `foo_diagnose` returning an enum with the \
+        Refuse / Proceed / Skip variants, then have the caller match on it.\n\n\
+        ## Acceptance\n\n- [ ] pure function\n- [ ] caller matches\n";
+
+    /// A thin spec: substantive problem statement, an acceptance list, but no
+    /// design section — where planning plausibly helps. trace:TASK-697
+    const THIN_SPEC: &str = "## Problem\n\nThe error message printed when a \
+        pull hits a divergence is terse and does not tell the user which of \
+        the two legs (code vs store) actually diverged, so they cannot tell \
+        what to reconcile. We should make it actionable.\n\n## Acceptance\n\n\
+        - [ ] message names the diverged leg\n- [ ] suggests the recovery cmd\n";
+
+    /// trace:TASK-697 | ai:claude
+    #[test]
+    fn suggest_threshold_token_parsing() {
+        assert_eq!(
+            parse_suggest_threshold("acceptance-bullets>8"),
+            Some(SuggestThreshold::BulletCount(8))
+        );
+        assert_eq!(
+            parse_suggest_threshold("spec-thinness"),
+            Some(SuggestThreshold::Thinness)
+        );
+        assert_eq!(
+            parse_suggest_threshold(" THINNESS "),
+            Some(SuggestThreshold::Thinness)
+        );
+        assert_eq!(
+            parse_suggest_threshold("under-specified"),
+            Some(SuggestThreshold::Thinness)
+        );
+        assert_eq!(parse_suggest_threshold("story-with-design-forks"), None);
+    }
+
+    /// `has_design_section` matches any design-marker heading at any level,
+    /// case-insensitively. trace:TASK-697 | ai:claude
+    #[test]
+    fn detects_design_sections() {
+        assert!(has_design_section("## Proposed shape\n\nfoo"));
+        assert!(has_design_section("# Approach\n\nbar"));
+        assert!(has_design_section("### design\n\nbaz"));
+        assert!(has_design_section("## Implementation\n\nqux"));
+        // Acceptance is not a design section.
+        assert!(!has_design_section("## Acceptance\n- [ ] a\n"));
+        assert!(!has_design_section("## Problem\n\njust prose, no design\n"));
+    }
+
+    /// Thin = no design section AND a substantive body. Well-specified specs
+    /// and trivial one-liners are both not-thin. trace:TASK-697 | ai:claude
+    #[test]
+    fn is_spec_thin_classification() {
+        assert!(is_spec_thin(THIN_SPEC));
+        // Has a `## Proposed shape` → not thin even though it's substantive.
+        assert!(!is_spec_thin(WELL_SPECIFIED));
+        // Too short to be worth planning even without a design section.
+        assert!(!is_spec_thin("fix the typo in the README header"));
+    }
+
+    /// suggested + thinness default fires on a design-less spec with the
+    /// thinness-flavored message. trace:TASK-697 | ai:claude
+    #[test]
+    fn hint_fires_on_thin_spec() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        let r = req_with("TASK-12", THIN_SPEC);
+        let hint = ultraplan_suggestion_hint(tmp.path(), &r).expect("expected a hint");
+        assert_eq!(
+            hint,
+            "TASK-12 has no design section yet — `aida ultraplan TASK-12` to \
+             assemble a planning prompt before implementing."
+        );
+    }
+
+    /// suggested + thinness default stays SILENT on a well-specified spec —
+    /// the core SPIKE-8 correction: bullet count would have fired here, but the
+    /// spec already carries its plan. trace:TASK-697 | ai:claude
+    #[test]
+    fn hint_silent_on_well_specified_spec() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_config(tmp.path(), "[ultraplan]\nmode = \"suggested\"\n");
+        let r = req_with("TASK-500", WELL_SPECIFIED);
+        assert!(ultraplan_suggestion_hint(tmp.path(), &r).is_none());
     }
 }
 
