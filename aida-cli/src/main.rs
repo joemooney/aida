@@ -24057,6 +24057,13 @@ fn heal_doctor_finding(
         "completed-without-commit" if opts.force && opts.yes => {
             heal_doctor_completed_without_commit(project_root, finding)
         }
+        // TASK-699: remove a stray ancestor instruction file whose @-imports
+        // escape the project. DESTRUCTIVE — it deletes a file OUTSIDE the repo —
+        // so it's force+yes gated (see heal_doctor_findings's safe-heal gate).
+        // trace:TASK-699
+        "external-import-bleed" if opts.force && opts.yes => {
+            heal_doctor_external_import_bleed(project_root, finding)
+        }
         _ => Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
@@ -24104,6 +24111,62 @@ fn heal_doctor_dead_agent(
         } else {
             Some("registry entry already gone".to_string())
         },
+    })
+}
+
+/// TASK-699: opt-in heal for the `external-import-bleed` category — remove a
+/// stray ancestor CLAUDE.md / CLAUDE.local.md / AGENTS.md whose @-imports escape
+/// the project (the classic accidental-`aida init`-in-a-parent-of-projects
+/// scaffold). DESTRUCTIVE: it deletes a file OUTSIDE the repo, so the caller
+/// gates it behind --heal --force --yes. Guardrails honored here:
+///   - removes ONLY the stray instruction file (the finding id), never the
+///     ancestor's docs/ or anything else;
+///   - re-reads the file and re-verifies at least one @-import STILL escapes the
+///     project right before deleting (mirrors heal_doctor_dead_agent's re-check
+///     so a file edited/fixed between scan and heal is left alone);
+///   - prints exactly what will be deleted before removing it.
+// trace:TASK-699 | ai:claude
+fn heal_doctor_external_import_bleed(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let file = std::path::PathBuf::from(&finding.id);
+    // Re-check: the file may have been removed or edited since the scan.
+    let Ok(content) = std::fs::read_to_string(&file) else {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some(format!("{} already gone", file.display())),
+        });
+    };
+    let file_dir = file.parent().unwrap_or_else(|| std::path::Path::new("/"));
+    if !external_import_bleed::file_still_escapes(file_dir, &content, project_root) {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some(format!(
+                "{} no longer has @-imports escaping the project — not removing",
+                file.display()
+            )),
+        });
+    }
+    // Print EXACTLY what will be deleted before acting (guardrail #4).
+    println!(
+        "  {} removing stray ancestor instruction file: {}",
+        "→".red().bold(),
+        file.display()
+    );
+    std::fs::remove_file(&file).with_context(|| format!("failed to remove {}", file.display()))?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: format!("removed stray ancestor instruction file {}", file.display()),
+        status: "healed".to_string(),
+        detail: None,
     })
 }
 

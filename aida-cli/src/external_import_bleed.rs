@@ -81,6 +81,20 @@ pub(crate) fn import_escapes_project(file_dir: &Path, import: &str, project_root
     !resolved.starts_with(&root)
 }
 
+/// TASK-699 (heal half): given a stray ancestor instruction file's directory,
+/// its current on-disk content, and the project root, decide whether the file
+/// STILL has at least one `@`-import escaping the project — i.e. whether it
+/// should be removed by the opt-in `external-import-bleed` heal. Pure (no fs):
+/// the caller reads the file fresh right before deletion and passes the content
+/// here, mirroring `heal_doctor_dead_agent`'s re-check-before-acting discipline
+/// so a file edited between scan and heal (no longer escaping) is left alone.
+// trace:TASK-699 | ai:claude
+pub(crate) fn file_still_escapes(file_dir: &Path, content: &str, project_root: &Path) -> bool {
+    parse_at_imports(content)
+        .iter()
+        .any(|imp| import_escapes_project(file_dir, imp, project_root))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,6 +146,24 @@ plain line
             "../docs/x.md",
             project_root
         ));
+    }
+
+    #[test]
+    fn file_still_escapes_decides_removal() {
+        let ancestor_dir = Path::new("/home/joe/ai");
+        let project_root = Path::new("/home/joe/ai/aida");
+        // A stray scaffold whose @-import escapes → would be removed.
+        let stray = "# CLAUDE.md\n@docs/aida/discipline/README.md\n";
+        assert!(file_still_escapes(ancestor_dir, stray, project_root));
+        // A file whose only @-import now resolves inside the project (e.g. edited
+        // between scan and heal) → NOT removed.
+        let fixed = "# CLAUDE.md\n@aida/CLAUDE.md\n";
+        assert!(!file_still_escapes(ancestor_dir, fixed, project_root));
+        // A file with no @-imports at all → NOT removed.
+        let no_imports = "# CLAUDE.md\njust prose, no imports\n";
+        assert!(!file_still_escapes(ancestor_dir, no_imports, project_root));
+        // Empty file → NOT removed.
+        assert!(!file_still_escapes(ancestor_dir, "", project_root));
     }
 
     #[test]
