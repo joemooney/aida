@@ -1,0 +1,39 @@
+id: 019e9fce-4d13-7d42-89d5-9ad252c70154
+spec_id: TASK-686
+agreed_id: TASK-686
+title: 'aida init: guard against scaffolding into a parent-of-projects directory (CLAUDE.md bleeds into all children)'
+description: |-
+  ## Papercut (operator-found, 2026-06-06)
+
+  `aida init` was run (or partially run) in ~/ai/ — the directory that CONTAINS dummy1, aida, and ~80 other projects — leaving a stray CLAUDE.md + AGENTS.md + CLAUDE.local.md + docs/aida/discipline/ at the parent level (~/ai/ is not even a git repo). Because Claude Code loads ANCESTOR CLAUDE.md files, every agent launch in every ~/ai/ child project now (a) inherits the parent CLAUDE.md and (b) trips the "Allow external CLAUDE.md import?" security prompt — its `@docs/aida/discipline/README.md` resolves to ~/ai/docs/... which is outside the child's working dir.
+
+  ## Why it's a real footgun
+
+  The blast radius of init'ing one directory too high is huge: it silently affects EVERY subproject (external-import nag on launch + a parent CLAUDE.md polluting their context). And it's an easy mistake (one `cd` off).
+
+  ## Fix (a guard, not a hard block)
+
+  At `aida init`, detect when the target directory looks like a parent-of-projects — e.g. it contains multiple child directories that are themselves git repos and/or AIDA projects (child `.git` or `.aida/`), and is not itself a git repo — and WARN: "<dir> contains N child projects; an AIDA scaffold here will be inherited by all of them via ancestor CLAUDE.md. Init here anyway? [y/N]". Default no.
+
+  ## Acceptance (sketch)
+
+  - [ ] `aida init` in a directory containing >=2 child git-repos/AIDA-projects (and not itself a repo) prompts a parent-of-projects warning, default-no; `--force`/`--yes` overrides.
+  - [ ] Normal init (empty dir or a real project root) is unaffected — no extra prompt.
+  - [ ] Non-interactive init in such a dir refuses (or requires --force) rather than silently scaffolding.
+
+  ## Notes
+  - Doesn't help the existing stray ~/ai/ scaffold (manual cleanup), but prevents recurrence. Possible companion: `aida doctor` flags an ancestor CLAUDE.md whose imports resolve outside a project.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T01:59:18.035945233Z
+modified_at: 2026-06-07T01:59:18.035945233Z
+req_type: Task
+tags:
+- aida:init
+- from-product
+- from-user-friction
+- guard
+- onboarding-flow
+- papercut
