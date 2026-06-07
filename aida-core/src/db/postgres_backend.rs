@@ -415,6 +415,10 @@ impl PostgresBackend {
             attachments,
             trace_links,
             gitlab_issues,
+            // STORY-476: external refs are not persisted by the Postgres
+            // backend (opt-in, behind the `postgres` feature).
+            // trace:STORY-476 | ai:claude
+            external_refs: Vec::new(),
             implementation_info,
             ai_evaluation,
             // STORY-332: punt metadata is not persisted by the Postgres
