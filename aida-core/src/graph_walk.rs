@@ -321,20 +321,23 @@ mod tests {
 
     #[test]
     fn tree_unions_child_and_parent_outgoing_edges() {
-        // BUG-448: the epic rollup walks BOTH `Child` and `Parent` outgoing
-        // edges. `aida add --parent` stores a `Child` edge on the epic; `aida
-        // rel add --type parent` stores a `Parent` edge on the epic (and a
-        // duplicate, with nothing on the child). Both mean "this is a child";
-        // the union must surface both, deduped.
-        let child_via_add = make_req("STORY-1", RequirementStatus::Approved);
-        let child_via_rel = make_req("STORY-2", RequirementStatus::Approved);
+        // BUG-448 / TASK-679: the epic rollup walks BOTH `Child` and `Parent`
+        // outgoing edges so it resolves children regardless of how the
+        // hierarchy was stored. Canonically (post-TASK-679) both `aida add
+        // --parent` and `aida rel add --type parent` store `epic --Parent-->
+        // child`; the `Child` leg is kept for back-compat with any legacy store
+        // whose epic carries `Child --> child` edges. The union must surface
+        // both orientations, deduped.
+        let child_via_legacy = make_req("STORY-1", RequirementStatus::Approved);
+        let child_via_canonical = make_req("STORY-2", RequirementStatus::Approved);
         let mut epic = make_req("EPIC-X", RequirementStatus::InProgress);
-        link(&mut epic, RelationshipType::Child, child_via_add.id);
-        link(&mut epic, RelationshipType::Parent, child_via_rel.id);
-        // rel add wrote a duplicate Parent edge — the walk must dedup it.
-        link(&mut epic, RelationshipType::Parent, child_via_rel.id);
-        let (eid, add_id, rel_id) = (epic.id, child_via_add.id, child_via_rel.id);
-        let store = store_with(vec![child_via_add, child_via_rel, epic]);
+        link(&mut epic, RelationshipType::Child, child_via_legacy.id);
+        link(&mut epic, RelationshipType::Parent, child_via_canonical.id);
+        // A duplicate edge (the old non-deduping `rel add` could create one) —
+        // the walk must collapse it.
+        link(&mut epic, RelationshipType::Parent, child_via_canonical.id);
+        let (eid, legacy_id, canonical_id) = (epic.id, child_via_legacy.id, child_via_canonical.id);
+        let store = store_with(vec![child_via_legacy, child_via_canonical, epic]);
 
         let res = walk_union(
             &store,
@@ -346,7 +349,7 @@ mod tests {
             None,
         );
         let nodes: HashSet<Uuid> = res.nodes.iter().copied().collect();
-        assert_eq!(nodes, HashSet::from([add_id, rel_id]));
+        assert_eq!(nodes, HashSet::from([legacy_id, canonical_id]));
         // deduped: two children, not three (the duplicate Parent edge collapses).
         assert_eq!(res.nodes.len(), 2);
     }
