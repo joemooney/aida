@@ -33,12 +33,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   Build the MINIMAL slice: a 'base is N behind origin/main' WARNING at worktree creation (no auto-pull), pointing at 'aida rebase'. Closes the visibility half of the original 2026-05-13 pain cheaply. Do NOT auto-pull (risks surprising the worktree) — the orchestrator drain (fresh main per-phase) + the rebase verb already own divergence handling.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:42:25.110265092Z
-modified_at: 2026-06-06T15:18:16.379453612Z
+modified_at: 2026-06-07T01:06:52.603678095Z
 req_type: Task
 tags:
 - base-freshness
@@ -68,3 +68,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): Build the MINIMAL slice: a ''base is N behind origin/main'' WARNING at worktree creation (no auto-pull), pointing at ''aida rebase''. Closes the visibility half of the original 2026-05-13 pain cheaply. Do NOT auto-pull (risks surprising the worktree) — the orchestrator drain (fresh main per-phase) + the rebase verb already own divergence handling.'
   created_at: 2026-06-06T15:18:10.155133739Z
   modified_at: 2026-06-06T15:18:10.155133739Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T01:06:52.603678095Z
+  completion_sha: ae126a717cae7dcf8c2579f58955e28504d3c221
