@@ -23,12 +23,12 @@ description: |-
 
   ## Notes
   - Doesn't help the existing stray ~/ai/ scaffold (manual cleanup), but prevents recurrence. Possible companion: `aida doctor` flags an ancestor CLAUDE.md whose imports resolve outside a project.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T01:59:18.035945233Z
-modified_at: 2026-06-07T19:41:12.753007546Z
+modified_at: 2026-06-07T19:56:45.783005817Z
 req_type: Task
 tags:
 - aida:init
@@ -43,3 +43,7 @@ comments:
   content: 'Scoped after review: BUG-446 already hard-refuses init in a git-repo parent-of-projects (nested child .git) with a --force override — which satisfies the ''refuse + override'' intent for that case. The remaining gap is that detection counts only child .git, not child .aida/ — so a parent of AIDA-projects (the ~/ai/ case: ~80 children, many not plain git repos) can slip the guard. Fix = extend detection to also count child .aida/ dirs. The non-git-repo target still bails earlier on ''Run git init first'', so no extra prompt path is needed there.'
   created_at: 2026-06-07T19:41:12.753007546Z
   modified_at: 2026-06-07T19:41:12.753007546Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T19:56:45.783005817Z
+  completion_sha: 68f859a8e600705625d76164c5c63e0117521d96
