@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T16:49:05.807499637Z
-modified_at: 2026-06-07T20:48:56.381858323Z
+modified_at: 2026-06-07T21:17:51.986625625Z
 req_type: Task
 comments:
 - id: 019ea3d8-843d-77c0-b988-244f7d80972e
@@ -26,3 +26,15 @@ comments:
     Recommend NOT wiring until the design is chosen + the chosen hook's payload is empirically instrumented (the original gate, still unmet — SPIKE-41 was a docs catalogue, not an empirical payload probe). trace:TASK-694
   created_at: 2026-06-07T20:48:56.381858323Z
   modified_at: 2026-06-07T20:48:56.381858323Z
+- id: 019ea3f2-fff2-7d71-8273-176451777690
+  author: joe
+  content: |-
+    DESIGN (operator chose passive-observe, 2026-06-07). Firmed from the docs:
+    - Harness worktrees (isolation:'worktree') are created INTERNALLY by Claude Code (WorktreeCreate replaces git) — there is NO Bash 'git worktree add' tool call, so PostToolUse can't catch them. The capture path is SubagentStart/SubagentStop.
+    - SubagentStart/Stop payload: common fields + agent_id + agent_type + cwd. agent_id correlates Start<->Stop. NO documented worktree-path/branch field, but cwd LIKELY = the worktree dir for an isolated subagent (the one thing to confirm empirically). branch derivable via 'git -C <cwd> rev-parse --abbrev-ref HEAD'.
+    - Wire: SubagentStart -> register a lease (worktree_path=cwd, branch from git-in-cwd, scope from spec_id_from_branch [reuse the salvageable TASK-634 helper] else 'harness-worktree', id keyed on agent_id); SubagentStop (correlate by agent_id) -> release it.
+    - worktree_lease.rs (TASK-634) needs reshaping: WorktreePayload{path,branch} -> {agent_id, agent_type, cwd}; lease_spec_for_create derives branch from cwd's git, not a payload field. Only spec_id_from_branch survives as-is.
+
+    PLAN: (1) empirical probe — confirm SubagentStart cwd = worktree for an isolated subagent + capture the real payload (filed as a task; can't run in THIS session — hooks load at session start). (2) wiring — gated on the probe. trace:TASK-694
+  created_at: 2026-06-07T21:17:51.986625625Z
+  modified_at: 2026-06-07T21:17:51.986625625Z
