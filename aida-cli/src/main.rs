@@ -70021,14 +70021,28 @@ fn collect_awaiting_report(
         })
         .collect();
 
-    // Findings + escalations — both need the summary list. Pull it once.
+    // Escalations need the full summary list; findings need a draft-only view.
     let summaries = backend
         .list_summaries(&aida_core::ListFilter::default())
         .unwrap_or_default();
-    let findings_total = findings::count_findings(&findings::build_findings_view(
-        &summaries,
-        &findings::FindingsFilter::default(),
-    ));
+    // BUG-472: the findings breadcrumb must mirror `aida findings list` — DRAFT
+    // specs carrying a from-* tag only. Building it from the unfiltered
+    // `summaries` also counts completed/rejected specs that still carry their
+    // origin from-review/from-implementer tag, overcounting the count (status
+    // said "35" while `aida findings list` showed 0). Filter to draft like
+    // print_status_findings_section does. trace:BUG-472 | ai:claude
+    let findings_total = {
+        let draft = backend
+            .list_summaries(&aida_core::ListFilter {
+                status: Some("draft".to_string()),
+                ..Default::default()
+            })
+            .unwrap_or_default();
+        findings::count_findings(&findings::build_findings_view(
+            &draft,
+            &findings::FindingsFilter::default(),
+        ))
+    };
     let escalations: Vec<_> = summaries
         .iter()
         .filter(|s| s.status.eq_ignore_ascii_case("NeedsAttention"))
