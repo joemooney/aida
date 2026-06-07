@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-17T05:17:28.387939696Z
-modified_at: 2026-06-06T08:35:30.355091378Z
+modified_at: 2026-06-07T04:16:25.884225044Z
 req_type: Task
 tags:
 - auto-complete-followup
@@ -38,3 +38,8 @@ comments:
   content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Bounded orchestrator-reliability fix on-phase: parse `claude -p` stream-json for is_error/permission_denials so headless failures are caught despite exit-0; integrates with existing telemetry. (PR-64 linkage is STORY-263''s basic watchdog, not this; the stream-json parse remains to do.)'
   created_at: 2026-06-06T08:35:29.113118259Z
   modified_at: 2026-06-06T08:35:29.113118259Z
+- id: 019ea04b-d91c-7fc3-af62-5aa8d748e4a3
+  author: joe
+  content: Commit dad795239 references this requirement
+  created_at: 2026-06-07T04:16:25.884225044Z
+  modified_at: 2026-06-07T04:16:25.884225044Z
