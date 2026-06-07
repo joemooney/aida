@@ -3,10 +3,14 @@ spec_id: BUG-470
 agreed_id: BUG-470
 title: 'Windows test flake: aida-tui state.rs temp_root() collides under coarse clock → load_is_none_when_absent_or_malformed fails'
 description: 'aida-tui/src/state.rs test helper temp_root() derives its ''unique'' dir from std::process::id() + SystemTime::now().as_nanos(). Windows SystemTime has ~15ms resolution, so parallel cargo-test threads calling temp_root() within one tick get IDENTICAL dirs and clobber each other''s state files. load_is_none_when_absent_or_malformed then reads a sibling test''s valid state and fails its is_none() assertion (state.rs:128). Passes on Linux/macOS (nanosecond clocks → no collision). Fourth Windows cross-platform blocker on v0.12.0. Fix: add a process-wide AtomicU64 counter to the dir name for guaranteed uniqueness regardless of clock resolution.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T09:20:26.676979978Z
-modified_at: 2026-06-07T09:20:26.676979978Z
+modified_at: 2026-06-07T09:32:18.230604926Z
 req_type: Bug
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T09:32:18.230604926Z
+  completion_sha: 03cc73bf303025f9961b6c1425894287660a65c5
