@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T17:36:44.160363907Z
-modified_at: 2026-06-06T14:13:22.629803506Z
+modified_at: 2026-06-07T03:56:41.123187746Z
 req_type: Story
 tags:
 - drain
@@ -80,3 +80,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): PROTOTYPE the watch-loop as a SCRIPT first (confirm BUG-444 phase-1 NoPr status before relying on the merge phase) — validate the load-bearing PR-detection/merge loop cheaply; promote to a first-class ''integrator'' role + producer/consumer split ONLY if the loop proves out. Avoids committing reversible-expensive role taxonomy/scaffolding up front.'
   created_at: 2026-06-06T14:13:14.911908399Z
   modified_at: 2026-06-06T14:13:14.911908399Z
+- id: 019ea039-c523-7782-a7d6-8eaf2bbca625
+  author: joe
+  content: '✅ ADVISOR DECISION (2026-06-06, compete-vs-compose): DEFER the heavy in-aida-orchestrator build. This session demonstrated the capability END-TO-END via the HARNESS (Claude Code worktree-isolated agents fanning out + an integrator merge loop on top of aida''s thin primitives: queue, leases, plan-promote, status, questions) — ~50 specs shipped that way. Re-implementing parallel fan-out / integrator inside aida''s ''claude -p'' orchestrator (auto_complete.rs) would duplicate what the harness already does well. Reframe: aida ships the PRIMITIVES; the harness orchestrates. Revisit only if a non-harness consumer needs it. Parked (not ready-to-fanout).'
+  created_at: 2026-06-07T03:56:41.123187746Z
+  modified_at: 2026-06-07T03:56:41.123187746Z
