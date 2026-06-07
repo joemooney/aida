@@ -3,10 +3,14 @@ spec_id: TASK-696
 agreed_id: TASK-696
 title: 'aida doctor: flag an ancestor CLAUDE.md whose @-imports resolve outside the project (external-import bleed)'
 description: 'Companion to TASK-686 (which prevents init-into-a-parent-of-projects). TASK-686 stops NEW strays but not existing ones. Add an aida doctor check: walk parent dirs of the project root; if an ANCESTOR CLAUDE.md / CLAUDE.local.md / AGENTS.md exists (especially outside any git repo) whose @-imports resolve to paths outside the current project, flag it — this is the bleed that makes every child project (a) inherit the parent''s AI instructions and (b) trip Claude Code''s ''Allow external CLAUDE.md import?'' prompt on launch. Heal (opt-in): offer to remove the stray ancestor instruction files (CLAUDE.md/CLAUDE.local.md/AGENTS.md) — NOT the ancestor''s docs/ (may be real). Empirical trigger 2026-06-07: ~/ai/ (parent of ~80 projects, not a git repo) has a stray scaffold from an accidental init; launching any child worktree prompts for the external ~/ai/docs/aida/discipline/README.md import. Pure-testable core: given (project_root, ancestor CLAUDE.md path + its @-import targets) → does any import resolve outside project_root → finding. trace:TASK-686'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T20:10:15.447571075Z
-modified_at: 2026-06-07T20:10:15.447571075Z
+modified_at: 2026-06-07T20:35:34.667333565Z
 req_type: Task
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T20:35:34.667333565Z
+  completion_sha: 216c8e5f9ed50530be82f76f8be33ccb979700b6
