@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T03:54:49.466065320Z
-modified_at: 2026-06-06T15:18:44.794885175Z
+modified_at: 2026-06-07T06:11:04.000579911Z
 req_type: Spike
 tags:
 - advisor-discipline
@@ -37,3 +37,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): KEEP PARKED, recurrence-triggered — the spec self-defers on thin evidence (2 observations); revisit when budget-pause events recur (≥3-5 data points). The manual discipline is already captured (feedback_multi_agent_budget_dispatching). Per-provider budget APIs are non-portable, so don''t over-invest pre-evidence.'
   created_at: 2026-06-06T15:18:36.699630133Z
   modified_at: 2026-06-06T15:18:36.699630133Z
+- id: 019ea0b4-ccc0-7fa3-913a-a78122865912
+  author: joe
+  content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): RESEARCH spike (multi-agent budget-dispatch investigation) — self-defers on thin evidence; not a code task to fan out. Keyboard.'
+  created_at: 2026-06-07T06:11:04.000579911Z
+  modified_at: 2026-06-07T06:11:04.000579911Z
