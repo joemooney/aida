@@ -15,7 +15,7 @@ name = "aida"
 path = "src/main.rs"
 
 [dependencies]
-aida-core = { version = "0.11", path = "../aida-core", features = ["postgres", "gitlab", "github", "jira"] }
+aida-core = { version = "0.12", path = "../aida-core", features = ["postgres", "gitlab", "github", "jira"] }
 
 # CLI-specific dependencies
 serde = { workspace = true }
@@ -51,7 +51,7 @@ prost = { workspace = true, optional = true }
 # TUI shell (EPIC-26) — optional, behind the `tui` feature. Default-off
 # through development so partial work never ships in a release binary;
 # STORY-6 flips this to `default = ["tui"]`.
-aida-tui = { version = "0.11", path = "../aida-tui", optional = true }
+aida-tui = { version = "0.12", path = "../aida-tui", optional = true }
 
 # Unix-only — restore default SIGPIPE handling so `aida ... | head -N` exits
 # cleanly instead of triggering Rust's "failed printing to stdout" panic.
