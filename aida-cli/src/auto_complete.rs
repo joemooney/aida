@@ -821,6 +821,29 @@ pub(crate) struct OrchestrationResult {
     pub(crate) held_reason: Option<String>,
 }
 
+impl OrchestrationResult {
+    /// STORY-265 slice 3: a `--with-plan` prelude failure terminal result.
+    /// The plan phase failed before the drain's phase 1 ran, so the run exits
+    /// non-zero keyed to the given `phase` (the implementer phase the drain
+    /// would have entered) with every non-failure field cleared — no PR was
+    /// opened, no spec shipped or punted. trace:STORY-265 | ai:claude
+    pub(crate) fn failed(phase: Phase) -> Self {
+        Self {
+            exit_code: phase.index(),
+            failed_phase: Some(phase),
+            failure: None,
+            phase_durations: Vec::new(),
+            total_ms: 0,
+            punt_reason: None,
+            shipped_spec_id: None,
+            escalation: None,
+            inconclusive_reason: None,
+            shelved_reason: None,
+            held_reason: None,
+        }
+    }
+}
+
 /// The six phases, abstracted so the orchestrator's sequencing can be tested
 /// against a mock. The real implementation spawns Claude sessions, polls CI,
 /// and shells out to `gh` / `cargo`.
@@ -2167,6 +2190,66 @@ pub(crate) fn should_compensate_phase1_bump(
     bumped && !lease_acquired && failed_phase == Some(Phase::Implementer)
 }
 
+/// STORY-265 slice 3: the `--with-plan` PLAN PRELUDE. A `--with-plan`
+/// auto-complete run does the design work in its own planning session
+/// *before* the existing 6-phase drain — produces a `docs/plans/` file and
+/// promotes the spec Approved → Planned — then enters the drain unchanged.
+///
+/// CRITICAL DESIGN: the plan phase is modelled as a PRELUDE, not a renumbered
+/// [`Phase`] variant. The `Phase` enum's 1-based indices double as failure
+/// exit codes everywhere (telemetry, resume reconciliation, recovery hints),
+/// so renumbering it would silently re-key every existing run. Instead the
+/// prelude runs ahead of phase 1 and the drain's phases keep their numbers.
+///
+/// Each step is the exact CLI invocation the prelude shells out to — reusing
+/// slice 2's `aida queue work <SPEC> --plan-only` (the interactive/headless
+/// planning session) and slice 1's `aida plan promote <SPEC>` (the
+/// Approved → Planned transition). Modelling the steps as data (rather than
+/// inlining the shell-outs) keeps the decision — *with-plan ⇒ plan then drain;
+/// without ⇒ drain only* — a pure function the unit tests pin down in
+/// isolation.
+// trace:STORY-265 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PlanPreludeStep {
+    /// `aida queue work <spec> --plan-only` — the slice-2 planning session.
+    /// `headless` appends `--no-human` when the drain runs a headless
+    /// implementer (`--no-human=both`), matching how the phase-1 implementer
+    /// is launched.
+    // trace:STORY-265 | ai:claude
+    PlanSession { spec: String, headless: bool },
+    /// `aida plan promote <spec>` — the slice-1 Approved → Planned transition,
+    /// fired once the plan file lands.
+    // trace:STORY-265 | ai:claude
+    Promote { spec: String },
+}
+
+/// Pure decision for the `--with-plan` prelude: returns the ordered prelude
+/// steps to run before the drain. `with_plan == false` ⇒ no steps (drain
+/// only — the historical behaviour, default unchanged per the slice-1
+/// operator decision). `with_plan == true` ⇒ a plan session then a promote,
+/// after which the caller enters the existing 6-phase drain unchanged.
+/// `headless_implementer` mirrors the drain's phase-1 launch mode onto the
+/// plan session.
+// trace:STORY-265 | ai:claude
+pub(crate) fn plan_prelude_steps(
+    spec: &str,
+    with_plan: bool,
+    headless_implementer: bool,
+) -> Vec<PlanPreludeStep> {
+    if !with_plan {
+        return Vec::new();
+    }
+    vec![
+        PlanPreludeStep::PlanSession {
+            spec: spec.to_string(),
+            headless: headless_implementer,
+        },
+        PlanPreludeStep::Promote {
+            spec: spec.to_string(),
+        },
+    ]
+}
+
 /// Drive the phases in order, stopping at the variant's last phase or at the
 /// first failure. Returns an [`OrchestrationResult`] — the process exit code
 /// (`0` on success, else the 1-based index of the phase that failed) plus
@@ -3066,6 +3149,63 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// STORY-265 slice 3: with `--with-plan`, the prelude is a plan session
+    /// THEN a promote — ordered, before the drain. Fully isolated: pure
+    /// function, no driver, no filesystem. trace:STORY-265
+    #[test]
+    fn with_plan_prelude_is_plan_session_then_promote() {
+        let steps = plan_prelude_steps("STORY-265", true, false);
+        assert_eq!(
+            steps,
+            vec![
+                PlanPreludeStep::PlanSession {
+                    spec: "STORY-265".to_string(),
+                    headless: false,
+                },
+                PlanPreludeStep::Promote {
+                    spec: "STORY-265".to_string(),
+                },
+            ],
+            "with-plan ⇒ plan session then promote, in that order"
+        );
+    }
+
+    /// STORY-265 slice 3: without `--with-plan`, there is NO prelude — the
+    /// drain runs alone, exactly the historical default (unchanged per the
+    /// operator's slice-1 opt-in decision). trace:STORY-265
+    #[test]
+    fn without_with_plan_prelude_is_empty_drain_only() {
+        assert!(
+            plan_prelude_steps("STORY-265", false, false).is_empty(),
+            "no --with-plan ⇒ drain only, no prelude steps"
+        );
+        // The headless flag is irrelevant when with_plan is off.
+        assert!(plan_prelude_steps("STORY-265", false, true).is_empty());
+    }
+
+    /// STORY-265 slice 3: a headless drain (`--no-human=both`) runs the plan
+    /// session headless too, mirroring how the phase-1 implementer launches.
+    /// trace:STORY-265
+    #[test]
+    fn with_plan_prelude_propagates_headless_to_plan_session() {
+        let steps = plan_prelude_steps("STORY-265", true, true);
+        assert_eq!(
+            steps[0],
+            PlanPreludeStep::PlanSession {
+                spec: "STORY-265".to_string(),
+                headless: true,
+            },
+            "headless implementer ⇒ headless plan session"
+        );
+        // The promote step is plain — it is a status edit, never headless.
+        assert_eq!(
+            steps[1],
+            PlanPreludeStep::Promote {
+                spec: "STORY-265".to_string(),
+            }
+        );
+    }
 
     /// BUG-455: a "database is locked" message is recognised (case-insensitive,
     /// both SQLite lock spellings) and nothing else trips the classifier.
