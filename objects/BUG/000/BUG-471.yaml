@@ -1,0 +1,12 @@
+id: 019ea2b4-658d-7411-b106-90704af12b06
+spec_id: BUG-471
+agreed_id: BUG-471
+title: 'aida doctor --heal aborts on first error instead of continuing (idempotency: ''lease X no longer exists'')'
+description: 'Repro 2026-06-07: ''aida doctor --heal -y'' over 568 [safe] findings acked stale briefs, then hit ''Error: lease TASK-587 no longer exists'' and ABORTED the entire heal — leaving 69 orphan worktrees + other categories unhealed. Two issues: (1) idempotency — a stale-lease that was already removed (or removed earlier in the same run) should be a no-op, not an error; (2) resilience — heal should shelve a single finding''s failure and continue the rest (the EPIC-28 resilient-drain discipline), exiting non-zero with a summary of what failed, rather than first-failure-aborts. Workaround used: heal per --category. The per-category path worked. Fix: make heal continue-on-error with a tail summary, and treat already-absent leases as healed.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T15:29:52.013571055Z
+modified_at: 2026-06-07T15:29:52.013571055Z
+req_type: Bug
