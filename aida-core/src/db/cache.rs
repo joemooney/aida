@@ -123,7 +123,9 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // STORY-441: bumped to "2" when `archived_at` column was added. The cache
 // is rebuildable from git so a version mismatch on first read forces a
 // transparent rebuild via `CachedGitBackend::ensure_fresh`.
-const SCHEMA_VERSION: &str = "2";
+// STORY-476: bumped to "3" when the `external_refs` FTS column was added so
+// external issue refs become searchable.
+const SCHEMA_VERSION: &str = "3";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -720,15 +722,19 @@ fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
         ],
     )?;
 
+    // STORY-476: index external issue refs (space-joined) so
+    // `aida search "linear:LIN-123"` finds the spec.
+    let external_refs = req.external_refs.join(" ");
     conn.execute(
-        "INSERT INTO requirements_fts (id, spec_id, agreed_id, title, description)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO requirements_fts (id, spec_id, agreed_id, title, description, external_refs)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             req.id.to_string(),
             req.spec_id.clone().unwrap_or_default(),
             req.agreed_id.clone().unwrap_or_default(),
             req.title,
             req.description,
+            external_refs,
         ],
     )?;
     Ok(())
@@ -1142,6 +1148,40 @@ mod tests {
         assert!(cache
             .search("   ", 10, ArchiveFilter::NonArchivedOnly)
             .is_ok());
+    }
+
+    #[test]
+    fn search_finds_spec_by_external_ref() {
+        // STORY-476: external issue refs are indexed in FTS so a spec is
+        // findable by its linear:/jira:/github: pointer.
+        // trace:STORY-476 | ai:claude
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut a = sample_req("STORY-476", "external refs");
+        a.external_refs = vec!["linear:LIN-123".into(), "github:owner/repo#7".into()];
+        store.requirements.push(a);
+        store.requirements.push(sample_req("FR-1-002", "unrelated"));
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let hits = cache
+            .search("LIN-123", 10, ArchiveFilter::NonArchivedOnly)
+            .unwrap();
+        assert_eq!(
+            hits.len(),
+            1,
+            "should find the spec carrying linear:LIN-123"
+        );
+        assert_eq!(hits[0].spec_id.as_deref(), Some("STORY-476"));
+
+        // The other ref's token is searchable too.
+        let hits2 = cache
+            .search("owner", 10, ArchiveFilter::NonArchivedOnly)
+            .unwrap();
+        assert_eq!(hits2.len(), 1);
+        assert_eq!(hits2[0].spec_id.as_deref(), Some("STORY-476"));
     }
 
     #[test]

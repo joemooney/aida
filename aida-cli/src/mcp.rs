@@ -1455,7 +1455,15 @@ impl<'a> McpServer<'a> {
             .requirements
             .iter()
             .filter(|r| {
-                let text_match = r.title.to_lowercase().contains(&query_lower)
+                // STORY-476: external issue refs are searchable here too, so
+                // an MCP client can find a spec by its linear:/jira:/github:
+                // pointer — matching the CLI FTS surface.
+                let ref_match = r
+                    .external_refs
+                    .iter()
+                    .any(|er| er.to_lowercase().contains(&query_lower));
+                let text_match = ref_match
+                    || r.title.to_lowercase().contains(&query_lower)
                     || r.description.to_lowercase().contains(&query_lower)
                     || r.spec_id
                         .as_deref()

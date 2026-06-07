@@ -78,6 +78,8 @@ pub mod deps_sweep;
 pub mod dispenser;
 pub mod docs_review;
 pub mod export;
+// trace:STORY-476 | ai:claude
+pub mod external_refs;
 pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;

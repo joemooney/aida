@@ -918,6 +918,16 @@ trace_links?: Array<TraceLink>,
  */
 gitlab_issues?: Array<GitLabIssueLink>, 
 /**
+ * One-way external issue references composing this spec with PM systems
+ * (Linear / Jira / GitHub). Each entry is a validated `provider:id`
+ * string (e.g. `linear:LIN-123`, `jira:PROJ-456`,
+ * `github:owner/repo#123`). Rendered as clickable links via the
+ * `[external_refs]` base URLs in `.aida/config.toml`, and searchable.
+ * Deliberately one-way — AIDA records the ref, it does NOT sync state
+ * back to the external system. trace:STORY-476 | ai:claude
+ */
+external_refs?: Array<string>, 
+/**
  * Implementation metadata for this requirement
  */
 implementation_info?: ImplementationInfo | null, 

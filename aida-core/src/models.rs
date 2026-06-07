@@ -3453,6 +3453,16 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gitlab_issues: Vec<GitLabIssueLink>,
 
+    /// One-way external issue references composing this spec with PM systems
+    /// (Linear / Jira / GitHub). Each entry is a validated `provider:id`
+    /// string (e.g. `linear:LIN-123`, `jira:PROJ-456`,
+    /// `github:owner/repo#123`). Rendered as clickable links via the
+    /// `[external_refs]` base URLs in `.aida/config.toml`, and searchable.
+    /// Deliberately one-way — AIDA records the ref, it does NOT sync state
+    /// back to the external system. trace:STORY-476 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external_refs: Vec<String>,
+
     // trace:EPIC-0246 | ai:claude:high
     /// Implementation metadata for this requirement
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3548,6 +3558,8 @@ impl Requirement {
             attachments: Vec::new(),
             trace_links: Vec::new(),
             gitlab_issues: Vec::new(),
+            // trace:STORY-476 | ai:claude
+            external_refs: Vec::new(),
             implementation_info: None,
             version: 1,
             ai_evaluation: None,

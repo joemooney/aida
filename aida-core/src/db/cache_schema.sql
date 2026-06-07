@@ -38,6 +38,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS requirements_fts USING fts5(
     agreed_id,
     title,
     description,
+    external_refs,                         -- STORY-476: space-joined provider:id refs
     tokenize = 'porter unicode61'
 );
 
