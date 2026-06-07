@@ -5894,6 +5894,11 @@ pub enum Command {
         /// sequence + repo/branch/tree state) without acting.
         #[clap(long)]
         check: bool,
+        /// Land an in-flight PR first: wait for PR-<N>'s checks, merge it
+        /// (--squash --delete-branch), and sync local main before releasing.
+        /// Refuses if the PR's checks fail.
+        #[clap(long, value_name = "N")]
+        after_pr: Option<u64>,
         /// Skip the cross-platform CI pre-release gate (not recommended for a
         /// published release).
         #[clap(long)]
