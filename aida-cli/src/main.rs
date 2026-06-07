@@ -2785,6 +2785,208 @@ fn handle_findings_command(
 // trace:STORY-522 | ai:claude
 // ===================================================================
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuestionSweepScope {
+    Backlog,
+    Approved,
+    Planned,
+    InProgress,
+    All,
+}
+
+impl QuestionSweepScope {
+    fn parse(raw: Option<&str>) -> Result<Self> {
+        match raw.unwrap_or("backlog").trim().to_ascii_lowercase().as_str() {
+            "" | "backlog" | "near-term" | "near_term" | "workable" => Ok(Self::Backlog),
+            "approved" => Ok(Self::Approved),
+            "planned" => Ok(Self::Planned),
+            "in-progress" | "in_progress" | "inprogress" => Ok(Self::InProgress),
+            "all" => Ok(Self::All),
+            other => anyhow::bail!(
+                "unknown questions sweep scope `{other}` — expected backlog, approved, planned, in-progress, or all"
+            ),
+        }
+    }
+
+    fn includes_status(self, status: &RequirementStatus) -> bool {
+        match self {
+            Self::Backlog => matches!(
+                status,
+                RequirementStatus::Approved
+                    | RequirementStatus::Planned
+                    | RequirementStatus::InProgress
+            ),
+            Self::Approved => matches!(status, RequirementStatus::Approved),
+            Self::Planned => matches!(status, RequirementStatus::Planned),
+            Self::InProgress => matches!(status, RequirementStatus::InProgress),
+            Self::All => matches!(
+                status,
+                RequirementStatus::Approved
+                    | RequirementStatus::Planned
+                    | RequirementStatus::InProgress
+                    | RequirementStatus::NeedsAttention
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QuestionSweepCandidate {
+    reason: String,
+}
+
+fn requirement_text(req: &Requirement) -> String {
+    let mut text = format!("{}\n{}", req.title, req.description);
+    for comment in &req.comments {
+        text.push_str("\n");
+        text.push_str(&comment.content);
+    }
+    text
+}
+
+fn contains_any(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
+fn is_advisor_resolvable(req: &Requirement) -> bool {
+    if req.tags.iter().any(|tag| {
+        matches!(
+            tag.as_str(),
+            "advisor-resolvable" | "recorded-principle" | "recorded-preference"
+        )
+    }) {
+        return true;
+    }
+    let text = requirement_text(req).to_ascii_lowercase();
+    contains_any(
+        &text,
+        &[
+            "advisor-resolvable",
+            "recorded principle",
+            "recorded preference",
+            "advisor tier handles",
+            "advisor tier can",
+        ],
+    )
+}
+
+fn has_open_decision_request(req: &Requirement) -> bool {
+    req.decision_request
+        .as_ref()
+        .is_some_and(aida_core::DecisionRequest::is_pending)
+}
+
+fn is_in_questions_sweep_scope(req: &Requirement, scope: QuestionSweepScope) -> bool {
+    !req.archived
+        && !matches!(req.priority, RequirementPriority::Low)
+        && !matches!(
+            req.req_type,
+            RequirementType::Sprint | RequirementType::Folder | RequirementType::Meta
+        )
+        && scope.includes_status(&req.status)
+}
+
+fn question_sweep_candidate(
+    req: &Requirement,
+    all: &[Requirement],
+    scope: QuestionSweepScope,
+) -> Option<QuestionSweepCandidate> {
+    if !is_in_questions_sweep_scope(req, scope) || has_open_decision_request(req) {
+        return None;
+    }
+    if is_advisor_resolvable(req) {
+        return None;
+    }
+
+    let text = requirement_text(req).to_ascii_lowercase();
+    let has_acceptance = contains_any(&text, &["acceptance", "acceptance criteria", "acceptance:"]);
+    if !has_acceptance {
+        return Some(QuestionSweepCandidate {
+            reason: "missing acceptance criteria".to_string(),
+        });
+    }
+
+    if contains_any(
+        &text,
+        &[
+            "design fork",
+            "design-fork",
+            "open question",
+            "needs human",
+            "human decision",
+            "operator decision needed",
+            "should this even be built",
+            "should we build",
+            "choose between",
+            "ambiguous",
+            "unclear",
+            "contradictory",
+            "contradiction",
+            "disagree",
+            "tbd",
+        ],
+    ) {
+        return Some(QuestionSweepCandidate {
+            reason: "decision-marker text".to_string(),
+        });
+    }
+
+    for rel in req
+        .relationships
+        .iter()
+        .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
+    {
+        if let Some(blocker) = all.iter().find(|candidate| candidate.id == rel.target_id) {
+            let blocker_text = requirement_text(blocker).to_ascii_lowercase();
+            if matches!(blocker.status, RequirementStatus::Rejected)
+                || contains_any(
+                    &blocker_text,
+                    &["ambiguous", "unclear", "design fork", "design-fork"],
+                )
+            {
+                return Some(QuestionSweepCandidate {
+                    reason: format!("blocked by ambiguous {}", blocker.display_id()),
+                });
+            }
+        }
+    }
+
+    None
+}
+
+fn formulate_sweep_decision_request(
+    req: &Requirement,
+    candidate: &QuestionSweepCandidate,
+) -> aida_core::DecisionRequest {
+    aida_core::DecisionRequest {
+        question: format!(
+            "{} appears to need a human decision before implementation ({}) - should it proceed as written or be parked for clarification?",
+            req.display_id(),
+            candidate.reason
+        ),
+        choices: vec![
+            aida_core::DecisionChoice {
+                label: "Proceed as written".to_string(),
+                consequence: "The spec stays in the near-term queue and implementers use the current text.".to_string(),
+                resolution: "noop".to_string(),
+            },
+            aida_core::DecisionChoice {
+                label: "Park for clarification".to_string(),
+                consequence: "The spec is deferred until the ambiguity is clarified outside the drain.".to_string(),
+                resolution: "tag:+needs-human-decision".to_string(),
+            },
+        ],
+        recommended: Some(1),
+        rationale: Some(format!(
+            "The deterministic sweep flagged this as `{}`; parking avoids a mid-drain implementation guess.",
+            candidate.reason
+        )),
+        answered: None,
+        asked_at: Some(chrono::Utc::now()),
+        answered_at: None,
+    }
+}
+
 /// Parse a `--choice` string of the form `label|consequence|resolution`
 /// into a [`DecisionChoice`]. Each of the three fields is trimmed; all
 /// three are required and non-empty. The `resolution` is a deterministic
@@ -2951,6 +3153,10 @@ fn handle_questions_command(
             questions_list(backend)?;
             Ok(())
         }
+        Some(QuestionsCommand::Sweep { scope }) => {
+            questions_sweep(backend, scope.as_deref())?;
+            Ok(())
+        }
         Some(QuestionsCommand::Ask {
             spec,
             question,
@@ -2994,6 +3200,61 @@ fn handle_questions_command(
             }
         }
     }
+}
+
+/// `aida questions sweep` - proactive producer for the async decision inbox.
+/// The cheap pre-filter is deterministic; only flagged candidates receive a
+/// formulated DecisionRequest, and specs with open requests are skipped for
+/// idempotency. trace:STORY-523 | ai:codex
+fn questions_sweep(
+    backend: &aida_core::CachedGitBackend,
+    raw_scope: Option<&str>,
+) -> Result<usize> {
+    let scope = QuestionSweepScope::parse(raw_scope)?;
+    let all = backend.list_requirements(false)?;
+    let mut candidates = Vec::new();
+
+    for req in &all {
+        if let Some(candidate) = question_sweep_candidate(req, &all, scope) {
+            candidates.push((req.display_id(), candidate));
+        }
+    }
+
+    if candidates.is_empty() {
+        println!(
+            "{}",
+            "Question sweep found no new human-decision candidates.".dimmed()
+        );
+        return Ok(0);
+    }
+
+    let mut recorded = 0usize;
+    for (spec, candidate) in candidates {
+        let Some(mut req) = backend.get_requirement_by_spec_id(&spec)? else {
+            continue;
+        };
+        if has_open_decision_request(&req) {
+            continue;
+        }
+        let request = formulate_sweep_decision_request(&req, &candidate);
+        req.decision_request = Some(request);
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+        recorded += 1;
+        println!(
+            "  {} {} - {}",
+            "Recorded".green(),
+            spec.cyan(),
+            candidate.reason.dimmed()
+        );
+    }
+
+    println!(
+        "{} {recorded} decision request{} recorded.",
+        "Done.".green().bold(),
+        if recorded == 1 { "" } else { "s" }
+    );
+    Ok(recorded)
 }
 
 /// List the decision inbox. Returns the count of pending requests so the
@@ -3263,6 +3524,15 @@ fn questions_answer_all_defaults(
 mod questions_tests {
     use super::*;
 
+    fn sample_requirement(spec: &str, description: &str) -> Requirement {
+        let mut req = Requirement::new("Needs decision".to_string(), description.to_string());
+        req.spec_id = Some(spec.to_string());
+        req.status = RequirementStatus::Approved;
+        req.priority = RequirementPriority::Medium;
+        req.req_type = RequirementType::Story;
+        req
+    }
+
     fn sample_request() -> aida_core::DecisionRequest {
         aida_core::DecisionRequest {
             question: "Promote or ship?".to_string(),
@@ -3284,6 +3554,74 @@ mod questions_tests {
             asked_at: None,
             answered_at: None,
         }
+    }
+
+    #[test]
+    fn sweep_scope_excludes_low_priority_archive_and_drafts() {
+        let all = Vec::new();
+
+        let mut low = sample_requirement(
+            "STORY-LOW",
+            "Acceptance: decide whether this should be built.",
+        );
+        low.priority = RequirementPriority::Low;
+        assert!(question_sweep_candidate(&low, &all, QuestionSweepScope::Backlog).is_none());
+
+        let mut archived = sample_requirement(
+            "STORY-ARCHIVE",
+            "Acceptance: decide whether this should be built.",
+        );
+        archived.archived = true;
+        assert!(question_sweep_candidate(&archived, &all, QuestionSweepScope::Backlog).is_none());
+
+        let mut draft = sample_requirement(
+            "STORY-DRAFT",
+            "Acceptance: decide whether this should be built.",
+        );
+        draft.status = RequirementStatus::Draft;
+        assert!(question_sweep_candidate(&draft, &all, QuestionSweepScope::Backlog).is_none());
+    }
+
+    #[test]
+    fn sweep_flags_human_decision_markers() {
+        let req = sample_requirement(
+            "STORY-DECIDE",
+            "Acceptance: implement after operator decision needed on the design fork.",
+        );
+        let candidate = question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog).unwrap();
+        assert_eq!(candidate.reason, "decision-marker text");
+    }
+
+    #[test]
+    fn sweep_skips_open_decision_request_for_idempotency() {
+        let mut req = sample_requirement(
+            "STORY-ASKED",
+            "Acceptance: operator decision needed before implementation.",
+        );
+        req.decision_request = Some(sample_request());
+        assert!(question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog).is_none());
+    }
+
+    #[test]
+    fn sweep_skips_advisor_resolvable_forks() {
+        let req = sample_requirement(
+            "STORY-ADVISOR",
+            "Acceptance: operator decision needed, but this is advisor-resolvable from a recorded principle.",
+        );
+        assert!(question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog).is_none());
+    }
+
+    #[test]
+    fn sweep_formulates_story_522_decision_request() {
+        let req = sample_requirement("STORY-FORM", "Acceptance: open question remains.");
+        let candidate = QuestionSweepCandidate {
+            reason: "decision-marker text".to_string(),
+        };
+        let request = formulate_sweep_decision_request(&req, &candidate);
+        assert!(request.is_pending());
+        assert_eq!(request.choices.len(), 2);
+        assert_eq!(request.recommended, Some(1));
+        assert!(request.question.contains("STORY-FORM"));
     }
 
     #[test]
