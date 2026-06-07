@@ -35677,6 +35677,7 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             force_delete_branch,
             complexity,
             effort,
+            no_trailer_check,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -35685,6 +35686,7 @@ fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *force_delete_branch,
             *complexity,
             *effort,
+            *no_trailer_check,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
     }
@@ -36183,6 +36185,7 @@ fn pr_ship_handler(
     force_delete_branch: bool,
     complexity: Option<complexity_calibration::ComplexityLevel>,
     effort: Option<effort_calibration::EffortBucket>,
+    no_trailer_check: bool,
 ) -> Result<()> {
     use pr_ship::{
         format_activity_event, format_dry_run_plan, parse_pr_number_from_create_output,
@@ -36208,6 +36211,16 @@ fn pr_ship_handler(
     let branch = current_git_branch(&project_root)?;
     if branch.is_empty() {
         anyhow::bail!("could not detect current branch (detached HEAD?)");
+    }
+
+    // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
+    // Catch a hallucinated / typo'd / since-rejected `(SPEC-ID)` trailer BEFORE
+    // the commit reaches the PR + shared history. Reuses the STORY-498 gate's
+    // pure validator + store resolver, client-side. Refuses (exit 1) on a dead
+    // reference; `--no-trailer-check` and a store-less checkout both bypass.
+    // trace:STORY-469 | ai:claude
+    if !dry_run {
+        run_client_trailer_guard(&project_root, "pr ship", no_trailer_check);
     }
 
     // ---- Step 1: resolve or create the PR. ----
@@ -43178,6 +43191,49 @@ mod statusline_tests {
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].spec_id, "BUG-2");
         assert_eq!(violations[0].verdict, TrailerVerdict::Nonexistent);
+    }
+
+    // ── STORY-469 Guard 1: client-side trailer-guard refusal formatting ──
+
+    #[test]
+    fn client_trailer_guard_refusal_names_each_dead_reference() {
+        // Reuse the shared validator to produce violations, then check the
+        // client-side refusal message surfaces every offending id + the
+        // recovery guidance + the --force escape.
+        let commits = vec![
+            (
+                "aaa1111".to_string(),
+                "[AI:claude] feat(x): hallucinated id (STORY-99999)".to_string(),
+            ),
+            (
+                "bbb2222".to_string(),
+                "fix(y): rejected ref (BUG-7)".to_string(),
+            ),
+        ];
+        let resolve = |id: &str| match id.to_ascii_uppercase().as_str() {
+            "BUG-7" => SpecResolution::Rejected,
+            _ => SpecResolution::Missing,
+        };
+        let violations = validate_trailer_references(&commits, resolve);
+        assert_eq!(violations.len(), 2, "got: {violations:?}");
+
+        let lines = format_trailer_guard_refusal("pr ship", &violations);
+        let joined = lines.join("\n");
+        assert!(joined.contains("pr ship"), "names the surface: {joined}");
+        assert!(joined.contains("STORY-99999"), "names missing id: {joined}");
+        assert!(joined.contains("BUG-7"), "names rejected id: {joined}");
+        assert!(
+            joined.contains("does not exist in the requirement graph"),
+            "explains missing verdict: {joined}"
+        );
+        assert!(
+            joined.contains("resolves to a rejected spec"),
+            "explains rejected verdict: {joined}"
+        );
+        assert!(
+            joined.contains("--force"),
+            "offers the intentional bypass: {joined}"
+        );
     }
 
     /// TASK-579: the origin-ID-in-git-log detector used by `aida findings
@@ -66012,6 +66068,68 @@ fn collect_cleanup_report(
     // ── Detector 8: Orphan Claude Code project dirs ──
     let orphan_project_dirs = collect_orphan_project_dirs();
 
+    // ── Detector 9 (STORY-469 Guard 3): claimed-Done-vs-substrate divergence ──
+    // A spec whose status is Done/Completed but whose local reality contradicts
+    // the claim — an agent's "I shipped" the substrate doesn't corroborate. Two
+    // signals fire (see `detect_claimed_done_divergence`): (1) an active lease +
+    // a dirty worktree (uncommitted work despite Done), (2) no commit references
+    // the spec AND no PR exists. We build a filesystem-derived input row per
+    // Done/Completed spec, then the pure detector decides. trace:STORY-469
+    let landed_spec_ids: std::collections::HashSet<String> =
+        scan_default_branch_for_spec_landings(project_root, 200)
+            .into_iter()
+            .map(|(id, _)| id.to_ascii_uppercase())
+            .collect();
+    // Map a spec's active-lease worktree (Live/Dormant) to its dirty count.
+    let mut claimed_done_inputs = Vec::new();
+    for req in &store.requirements {
+        if !matches!(
+            req.status,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ) {
+            continue;
+        }
+        let Some(spec_id) = req.spec_id.as_deref() else {
+            continue;
+        };
+        let active_lease = lease_states.iter().find(|(l, s)| {
+            l.scope == spec_id && matches!(s, LeaseState::Live | LeaseState::Dormant)
+        });
+        let (has_active_lease, branch, modified_files, age_hours) = match active_lease {
+            Some((l, _)) => {
+                let dirty = if l.worktree_path.exists() {
+                    worktree_dirty_entries(&l.worktree_path).len()
+                } else {
+                    0
+                };
+                (
+                    true,
+                    Some(l.branch.clone()),
+                    dirty,
+                    now.signed_duration_since(l.started_at).num_hours(),
+                )
+            }
+            None => (false, None, 0, 0),
+        };
+        let branch_name = spec_id.to_ascii_lowercase();
+        let has_commit = landed_spec_ids.contains(&spec_id.to_ascii_uppercase());
+        let has_pr =
+            open_pr_branches.contains(&branch_name) || ever_pr_branches.contains(&branch_name);
+        claimed_done_inputs.push(status_cleanup::ClaimedDoneInput {
+            spec_id: spec_id.to_string(),
+            title: req.title.clone(),
+            status: format!("{:?}", req.status),
+            has_active_lease,
+            branch,
+            modified_files,
+            age_hours,
+            has_commit,
+            has_pr,
+        });
+    }
+    let claimed_done_diverged =
+        status_cleanup::detect_claimed_done_divergence(&claimed_done_inputs);
+
     status_cleanup::CleanupReport {
         uncommitted_wip,
         sticky_in_progress,
@@ -66021,6 +66139,7 @@ fn collect_cleanup_report(
         dormant_leases,
         stale_reviewer_leases,
         orphan_project_dirs,
+        claimed_done_diverged,
         // STORY-508/TASK-651: resolve the active forge so the open-change hint
         // names the right CLI (gh/glab) or none (pure-git).
         forge_kind: Some(crate::forge::resolve_forge_kind(project_root)),
@@ -71534,26 +71653,55 @@ fn resolve_gate_range(project_root: &std::path::Path, range: Option<&str>) -> St
     "HEAD~20..HEAD".to_string()
 }
 
+/// Resolve a single SPEC-ID against a loaded store, mirroring the trace-gate
+/// resolver. When `store` is `None` (no requirement store reachable) every id
+/// resolves `Live` — failing every id would block legitimate ships on a
+/// checkout without store access, so the safe default is to surface the
+/// missing-store condition separately (callers warn) rather than refuse.
+/// Shared by `aida trace gate` (STORY-498) and the client-side ship/done guard.
+/// trace:STORY-498 trace:STORY-469 | ai:claude
+fn resolve_spec_in_store(store: Option<&aida_core::RequirementsStore>, id: &str) -> SpecResolution {
+    let Some(store) = store else {
+        return SpecResolution::Live;
+    };
+    let want = id.to_ascii_uppercase();
+    let found = store.requirements.iter().find(|r| {
+        r.spec_id
+            .as_deref()
+            .map(|s| s.eq_ignore_ascii_case(&want))
+            .unwrap_or(false)
+            || r.agreed_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+    });
+    match found {
+        None => SpecResolution::Missing,
+        Some(r) if matches!(r.status, RequirementStatus::Rejected) => SpecResolution::Rejected,
+        Some(_) => SpecResolution::Live,
+    }
+}
+
 /// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
 /// pure validator against the live store, prints the result, and exits non-zero
 /// (code 1) when any commit references a dead/dangling SPEC-ID.
 /// trace:STORY-498 | ai:claude
-fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
+/// Read `(short_sha, subject)` rows for a git range. A unit separator keeps
+/// subjects with arbitrary punctuation intact. Returns an error only when git
+/// itself fails (bad range, no git). Shared by the trace gate and the
+/// client-side ship/done guard. trace:STORY-498 trace:STORY-469 | ai:claude
+fn read_commits_in_range(
+    project_root: &std::path::Path,
+    range: &str,
+) -> Result<Vec<(String, String)>> {
     use std::process::Command as PCmd;
-
-    let project_root =
-        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
-    let range = resolve_gate_range(&project_root, range);
-
-    // Pull commits in the range as `<short-sha>\x1f<subject>` rows. A unit
-    // separator keeps subjects with arbitrary punctuation intact.
     let output = PCmd::new("git")
         .arg("-C")
-        .arg(&project_root)
-        .args(["log", "--no-merges", "--pretty=format:%h\x1f%s", &range])
+        .arg(project_root)
+        .args(["log", "--no-merges", "--pretty=format:%h\x1f%s", range])
         .output();
-    let commits: Vec<(String, String)> = match output {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+    match output {
+        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout)
             .lines()
             .filter_map(|line| {
                 let (sha, subject) = line.split_once('\x1f')?;
@@ -71563,42 +71711,118 @@ fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
                 }
                 Some((sha.to_string(), subject.to_string()))
             })
-            .collect(),
+            .collect()),
         Ok(o) => {
             let err = String::from_utf8_lossy(&o.stderr);
             anyhow::bail!("git log failed for range `{range}`: {}", err.trim());
         }
         Err(e) => anyhow::bail!("could not run git: {e}"),
+    }
+}
+
+// ============================================================================
+// STORY-469 Guard 1: client-side trailer spec-ID validation at ship/done.
+//
+// STORY-498 shipped a SERVER-side (CI) version of this check. Guard 1 is its
+// client-side twin: it runs in `aida pr ship` and `aida queue done` so a
+// hallucinated/typo'd/dead spec-ID is caught BEFORE the commit reaches the PR
+// or the spec is flipped to Done — never lands in shared git history. It reuses
+// the same pure validator (`validate_trailer_references`) + resolver
+// (`resolve_spec_in_store`) as the gate; only the call site differs.
+// ============================================================================
+
+/// Format the human-readable refusal lines for client-side trailer violations.
+/// Pure (takes pre-computed violations) so it's unit-testable in isolation.
+/// `surface` names the command for the message ("pr ship" / "queue done").
+/// trace:STORY-469 | ai:claude
+fn format_trailer_guard_refusal(surface: &str, violations: &[TrailerViolation]) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.push(format!(
+        "✗ {surface}: {} commit trailer reference(s) name a spec that does not resolve:",
+        violations.len()
+    ));
+    for v in violations {
+        lines.push(format!(
+            "  {} ({}) {} — {}",
+            v.sha,
+            v.spec_id,
+            v.verdict.reason(),
+            v.subject
+        ));
+    }
+    lines.push(String::new());
+    lines.push(
+        "A commit's `(SPEC-ID)` trailer must name a live requirement — typo? hallucination? \
+         since-rejected? Check `aida show <SPEC-ID>` and fix the trailer (`git commit --amend` / \
+         interactive rebase) before retrying, or re-run with --force to bypass."
+            .to_string(),
+    );
+    lines
+}
+
+/// Guard 1: validate that every `(SPEC-ID)` trailer on the commits this branch
+/// adds over the default branch resolves to a live (non-rejected) spec. Refuses
+/// (exits 1) on any dead/dangling reference unless `force` is set. A no-op when
+/// the branch is the default branch (nothing to ship) or no store is reachable
+/// (cannot corroborate — surfaced as a soft warning, never a hard refusal, so a
+/// store-less checkout can still ship). `surface` names the calling command.
+/// trace:STORY-469 | ai:claude
+fn run_client_trailer_guard(project_root: &std::path::Path, surface: &str, force: bool) {
+    if force {
+        return;
+    }
+    let range = resolve_gate_range(project_root, None);
+    let commits = match read_commits_in_range(project_root, &range) {
+        Ok(c) => c,
+        Err(e) => {
+            // Git read failed (e.g. shallow checkout, unresolved range). The
+            // guard cannot corroborate; surface softly and proceed — failing
+            // the ship/done on a git hiccup would be worse than the miss.
+            eprintln!(
+                "{} {surface}: trailer spec-ID check skipped — {}",
+                "warning:".yellow().bold(),
+                e
+            );
+            return;
+        }
     };
+    if commits.is_empty() {
+        return;
+    }
+    let store = load_store_for_lookup(project_root);
+    if store.is_none() {
+        eprintln!(
+            "{} {surface}: trailer spec-ID check skipped — no requirement store reachable. \
+             Run where the store is attached (`aida cache rebuild`) to enforce.",
+            "warning:".yellow().bold()
+        );
+        return;
+    }
+    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
+    let violations = validate_trailer_references(&commits, resolve);
+    if violations.is_empty() {
+        return;
+    }
+    for line in format_trailer_guard_refusal(surface, &violations) {
+        eprintln!("{line}");
+    }
+    std::process::exit(1);
+}
+
+/// CLI handler for `aida trace gate`. Reads the commit range from git, runs the
+/// pure validator against the live store, prints the result, and exits non-zero
+/// (code 1) when any commit references a dead/dangling SPEC-ID.
+/// trace:STORY-498 | ai:claude
+fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let range = resolve_gate_range(&project_root, range);
+
+    let commits = read_commits_in_range(&project_root, &range)?;
 
     // Load the live requirement graph once, then resolve each id against it.
     let store = load_store_for_lookup(&project_root);
-    let resolve = |id: &str| -> SpecResolution {
-        let Some(store) = store.as_ref() else {
-            // No store reachable — we cannot corroborate. Treating every id as
-            // Live would defeat the gate, but failing every id would block any
-            // PR in a checkout without store access. The check is meant to run
-            // where the store IS reachable (PR CI attaches it), so the safe
-            // default is to surface the configuration problem loudly.
-            return SpecResolution::Live;
-        };
-        let want = id.to_ascii_uppercase();
-        let found = store.requirements.iter().find(|r| {
-            r.spec_id
-                .as_deref()
-                .map(|s| s.eq_ignore_ascii_case(&want))
-                .unwrap_or(false)
-                || r.agreed_id
-                    .as_deref()
-                    .map(|s| s.eq_ignore_ascii_case(&want))
-                    .unwrap_or(false)
-        });
-        match found {
-            None => SpecResolution::Missing,
-            Some(r) if matches!(r.status, RequirementStatus::Rejected) => SpecResolution::Rejected,
-            Some(_) => SpecResolution::Live,
-        }
-    };
+    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
 
     if store.is_none() {
         eprintln!(
@@ -77420,6 +77644,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     display_id,
                     flag
                 );
+            }
+
+            // STORY-469 Guard 1: validate trailer spec-IDs before flipping the
+            // spec to Done. Catch a hallucinated / typo'd / since-rejected
+            // `(SPEC-ID)` trailer on this branch's commits BEFORE the spec is
+            // marked Done (and before the branch's commits — already authored —
+            // ride a later merge into shared history). Reuses the STORY-498
+            // gate's pure validator + store resolver, client-side. `--force`
+            // bypasses (matching its existing "I know what I'm doing" role for
+            // the PR check above). trace:STORY-469 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                run_client_trailer_guard(&project_root, "queue done", *force);
             }
 
             if !yes {
