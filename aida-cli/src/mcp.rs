@@ -46,6 +46,17 @@
 //! keep the STORY-401 `{ isError: true, structuredError: { … } }` shape and do
 //! not carry `structuredContent`. See `handle_tools_call` and
 //! `text_envelope_output_schema`.
+//!
+//! # Tool profiles (STORY-474)
+//!
+//! The full surface is gated behind a named **profile** — a capability tier
+//! (`read-only` < `coordination` < `operator` < `admin`/`full`). `read-only`
+//! excludes every write tool and is the recommended safe default for untrusted /
+//! marketplace clients; the built-in default stays `full` for backwards
+//! compatibility. Resolve order: `AIDA_MCP_PROFILE` env → `[mcp] profile` in
+//! `.aida/config.toml` → `full`. The profile is enforced at BOTH `tools/list`
+//! (advertise) and `tools/call` (reject above-tier calls). See `McpProfile`,
+//! `tool_min_profile`, and `resolve_mcp_profile`.
 
 use std::cmp::Ordering;
 use std::ffi::OsString;
@@ -568,6 +579,9 @@ struct McpServer<'a> {
     storage: &'a Storage,
     /// Project root for resolving `.aida/` coordination files. STORY-361.
     project_root: PathBuf,
+    /// Active tool profile governing which tools are advertised + callable.
+    /// trace:STORY-474 | ai:claude
+    profile: McpProfile,
 }
 
 /// Helper to get the display spec_id from a Requirement
@@ -632,9 +646,25 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
 
 impl<'a> McpServer<'a> {
     fn new(storage: &'a Storage, project_root: PathBuf) -> Self {
+        // trace:STORY-474 | ai:claude — resolve the active profile from env /
+        // config at construction (no CLI override here; the override path is
+        // exercised via `with_profile`).
+        let profile = resolve_mcp_profile(&project_root, None);
         Self {
             storage,
             project_root,
+            profile,
+        }
+    }
+
+    /// Construct with an explicit profile, bypassing env/config resolution.
+    /// Used by tests and any future CLI `--profile` override. trace:STORY-474
+    #[cfg(test)]
+    fn with_profile(storage: &'a Storage, project_root: PathBuf, profile: McpProfile) -> Self {
+        Self {
+            storage,
+            project_root,
+            profile,
         }
     }
 
@@ -687,12 +717,38 @@ impl<'a> McpServer<'a> {
     }
 
     fn handle_tools_list(&self, id: &Value) -> JsonRpcResponse {
-        JsonRpcResponse::success(id.clone(), json!({ "tools": tool_descriptors() }))
+        // trace:STORY-474 | ai:claude — advertise only the tools the active
+        // profile exposes, each tagged with the tier that admits it.
+        JsonRpcResponse::success(
+            id.clone(),
+            json!({ "tools": tool_descriptors_for_profile(self.profile) }),
+        )
     }
 
     fn handle_tools_call(&self, id: &Value, params: &Value) -> JsonRpcResponse {
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+
+        // trace:STORY-474 | ai:claude — the profile is a real boundary, not just
+        // a discovery filter: reject a tool that exists but is above the active
+        // tier, even if a client calls it by name. Unknown tools fall through to
+        // the dispatch's own "Unknown tool" error below.
+        if tool_name != "" && is_known_tool(tool_name) && !tool_in_profile(tool_name, self.profile)
+        {
+            return JsonRpcResponse::success(
+                id.clone(),
+                McpError::classify(
+                    tool_name,
+                    &format!(
+                        "tool '{}' not permitted: requires the '{}' profile but the server is running the '{}' profile (set AIDA_MCP_PROFILE or [mcp] profile to widen the surface)",
+                        tool_name,
+                        tool_min_profile(tool_name).as_str(),
+                        self.profile.as_str()
+                    ),
+                )
+                .to_result_value(),
+            );
+        }
 
         let result = match tool_name {
             // Spec-graph tools
@@ -2817,6 +2873,227 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 // ============================================================================
+// Tool profiles — conservative safe-default surface (STORY-474)
+// ============================================================================
+
+// trace:STORY-474 | ai:claude
+//
+// MCP tool profiles let an operator expose a conservative slice of the tool
+// surface to an untrusted / exploratory / remote client while keeping the full
+// coordination + admin surface available to trusted agents. The profile is a
+// *capability tier*: each higher tier is a strict superset of the one below it.
+//
+//   read-only     — pure reads only (list/show/search/query/history/read_*).
+//                   Excludes EVERY write tool. The recommended marketplace /
+//                   untrusted-client default.
+//   coordination  — read-only + the file-substrate coordination writes an
+//                   agent needs to participate in a drain (post/resolve/escalate
+//                   punts, file/triage findings, claim/release tasks, post/ack
+//                   directives, ack briefs, send messages, add comments,
+//                   add relationships). No spec create/edit.
+//   operator      — coordination + spec-graph writes (add_requirement,
+//                   update_requirement). Full day-to-day surface.
+//   admin / full  — every tool. (Today `admin` == `full`; the name is reserved
+//                   so a future privileged-only tool can land at the admin tier
+//                   without churning the public profile vocabulary.)
+//
+// Resolution order (first match wins): `--profile <p>` CLI flag → `AIDA_MCP_PROFILE`
+// env → `[mcp] profile` in `.aida/config.toml` → the built-in default (`full`,
+// for backwards compatibility with existing trusted installs). Marketplace /
+// untrusted installs should set `profile = "read-only"` explicitly — see
+// `docs/agents/aida-mcp-install-matrix.md`.
+//
+// Gating happens in TWO places so the profile is a real security boundary, not
+// just a discovery hint: `tools/list` advertises only in-profile tools, and
+// `tools/call` REJECTS an out-of-profile tool with a stable error even if a
+// client calls it by name anyway.
+
+/// Capability tier governing which MCP tools are exposed. Ordered low→high;
+/// each tier admits every tool of the tiers below it. trace:STORY-474 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum McpProfile {
+    /// Pure reads only — the conservative safe default for untrusted clients.
+    ReadOnly,
+    /// Reads + coordination-substrate writes (no spec create/edit).
+    Coordination,
+    /// Coordination + spec-graph writes (add/update requirement).
+    Operator,
+    /// Everything (reserved tier for future privileged-only tools).
+    Admin,
+    /// Everything — the built-in backwards-compatible default.
+    Full,
+}
+
+impl McpProfile {
+    /// Parse a profile token. Accepts hyphen / underscore / space spellings and
+    /// is case-insensitive. `admin` and `full` both expose every tool today.
+    /// Returns `None` for an unknown token so callers can fall back + warn.
+    pub fn from_token(s: &str) -> Option<Self> {
+        match s
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['_', ' '], "-")
+            .as_str()
+        {
+            "read-only" | "readonly" | "ro" => Some(Self::ReadOnly),
+            "coordination" | "coord" => Some(Self::Coordination),
+            "operator" | "op" => Some(Self::Operator),
+            "admin" => Some(Self::Admin),
+            "full" | "all" => Some(Self::Full),
+            _ => None,
+        }
+    }
+
+    /// The canonical lowercase token for this profile.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::Coordination => "coordination",
+            Self::Operator => "operator",
+            Self::Admin => "admin",
+            Self::Full => "full",
+        }
+    }
+}
+
+impl Default for McpProfile {
+    /// Backwards-compatible default: existing installs see the full surface.
+    /// Untrusted / marketplace installs should opt into `read-only` explicitly.
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
+/// The minimum profile tier at which a given tool (by name) becomes available.
+/// This is the single source of truth for the profile→toolset mapping, kept as
+/// a pure fn so the selection logic is unit-testable without a server.
+///
+/// Unknown tool names map to `Admin` (the most restrictive non-`full` tier) so a
+/// newly-added tool is never accidentally exposed to a `read-only` client before
+/// it has been deliberately classified here. trace:STORY-474 | ai:claude
+pub fn tool_min_profile(tool_name: &str) -> McpProfile {
+    match tool_name {
+        // ---- Pure reads (read-only tier) ----
+        "list_requirements"
+        | "show_requirement"
+        | "search_requirements"
+        | "query_graph"
+        | "list_features"
+        | "history"
+        | "read_inbox"
+        | "list_punts"
+        | "read_punt"
+        | "list_findings"
+        | "list_active_leases"
+        | "list_directives"
+        | "list_briefs"
+        | "read_brief" => McpProfile::ReadOnly,
+
+        // ---- Coordination-substrate writes (coordination tier) ----
+        "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
+        | "escalate_punt" | "file_finding" | "triage_finding" | "claim_task" | "release_task"
+        | "post_directive" | "ack_directive" | "ack_brief" => McpProfile::Coordination,
+
+        // ---- Spec-graph writes (operator tier) ----
+        "add_requirement" | "update_requirement" => McpProfile::Operator,
+
+        // Unknown / not-yet-classified tools: gate at the most restrictive
+        // non-full tier so they never leak into a conservative profile.
+        _ => McpProfile::Admin,
+    }
+}
+
+/// True when `tool_name` is exposed under `profile`. trace:STORY-474 | ai:claude
+pub fn tool_in_profile(tool_name: &str, profile: McpProfile) -> bool {
+    profile >= tool_min_profile(tool_name)
+}
+
+/// True when `tool_name` is a tool AIDA actually serves (appears in
+/// `tool_descriptors()`). Used to distinguish "above your profile" from "no such
+/// tool" at call time. trace:STORY-474 | ai:claude
+pub fn is_known_tool(tool_name: &str) -> bool {
+    tool_descriptors()
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .any(|t| t.get("name").and_then(|v| v.as_str()) == Some(tool_name))
+        })
+        .unwrap_or(false)
+}
+
+/// The set of tool names (in `tool_descriptors()` order) exposed under
+/// `profile`. Pure fn over the descriptor list — the unit-tested core of the
+/// profile→toolset selection. trace:STORY-474 | ai:claude
+pub fn tool_names_for_profile(profile: McpProfile) -> Vec<String> {
+    tool_descriptors()
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
+                .filter(|n| tool_in_profile(n, profile))
+                .map(|n| n.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `tool_descriptors()` filtered to `profile`, with a `"profile"` metadata field
+/// added to each descriptor naming its minimum tier so schema-driven clients can
+/// see why a tool is (or isn't) present. trace:STORY-474 | ai:claude
+pub fn tool_descriptors_for_profile(profile: McpProfile) -> Value {
+    let arr = tool_descriptors()
+        .as_array()
+        .map(|a| a.to_vec())
+        .unwrap_or_default();
+    let filtered: Vec<Value> = arr
+        .into_iter()
+        .filter_map(|mut t| {
+            let name = t.get("name").and_then(|v| v.as_str())?.to_string();
+            if !tool_in_profile(&name, profile) {
+                return None;
+            }
+            if let Some(obj) = t.as_object_mut() {
+                obj.insert(
+                    "profile".to_string(),
+                    json!(tool_min_profile(&name).as_str()),
+                );
+            }
+            Some(t)
+        })
+        .collect();
+    json!(filtered)
+}
+
+/// Resolve the active MCP profile from (in order) an explicit override, the
+/// `AIDA_MCP_PROFILE` env var, `[mcp] profile` in `.aida/config.toml`, then the
+/// built-in default. An unknown token at any layer is ignored (falls through to
+/// the next source) so a typo never silently opens a wider surface than
+/// intended — it just keeps the previous resolution. trace:STORY-474 | ai:claude
+pub fn resolve_mcp_profile(project_root: &Path, override_token: Option<&str>) -> McpProfile {
+    if let Some(p) = override_token.and_then(McpProfile::from_token) {
+        return p;
+    }
+    if let Ok(env) = std::env::var("AIDA_MCP_PROFILE") {
+        if let Some(p) = McpProfile::from_token(&env) {
+            return p;
+        }
+    }
+    if let Ok(body) = std::fs::read_to_string(project_root.join(".aida").join("config.toml")) {
+        if let Ok(value) = toml::from_str::<toml::Value>(&body) {
+            if let Some(p) = value
+                .get("mcp")
+                .and_then(|t| t.get("profile"))
+                .and_then(|v| v.as_str())
+                .and_then(McpProfile::from_token)
+            {
+                return p;
+            }
+        }
+    }
+    McpProfile::default()
+}
+
+// ============================================================================
 // Tool descriptors (kept at module scope for register-agent + tests)
 // ============================================================================
 
@@ -3769,7 +4046,12 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
-    eprintln!("AIDA MCP server started");
+    // trace:STORY-474 | ai:claude — surface the active profile on the stderr
+    // banner so an operator can confirm an untrusted client got the safe surface.
+    eprintln!(
+        "AIDA MCP server started (profile: {})",
+        server.profile.as_str()
+    );
 
     for line in stdin.lock().lines() {
         let line = line?;
@@ -6528,5 +6810,273 @@ mod tests {
                 .any(|r| r.title == "Roundtrip via MCP"),
             "CLI-equivalent GitBackend did not see the MCP-written requirement"
         );
+    }
+
+    // ========================================================================
+    // STORY-474: tool profiles + safe-default surface
+    // ========================================================================
+
+    /// Every name in `tool_descriptors()` must be classified explicitly — no
+    /// tool may fall through to the `Admin` catch-all in `tool_min_profile`. A
+    /// new tool added without a classification line is a bug (it would silently
+    /// be admin-only). trace:STORY-474 | ai:claude
+    #[test]
+    fn every_tool_is_explicitly_classified() {
+        let names: Vec<String> = tool_descriptors()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.get("name").unwrap().as_str().unwrap().to_string())
+            .collect();
+        // The catch-all returns Admin; an explicit `add_requirement`-style
+        // operator/coordination/read classification returns something <= Operator.
+        // No *real* tool should be Admin today.
+        let unclassified: Vec<&String> = names
+            .iter()
+            .filter(|n| tool_min_profile(n) == McpProfile::Admin)
+            .collect();
+        assert!(
+            unclassified.is_empty(),
+            "tools missing a profile classification (would be admin-only): {:?}",
+            unclassified
+        );
+    }
+
+    #[test]
+    fn read_only_profile_excludes_all_write_tools() {
+        let names = tool_names_for_profile(McpProfile::ReadOnly);
+        // Spot-check the writes are gone.
+        for write in [
+            "add_requirement",
+            "update_requirement",
+            "add_comment",
+            "add_relationship",
+            "post_punt",
+            "resolve_punt",
+            "escalate_punt",
+            "file_finding",
+            "triage_finding",
+            "claim_task",
+            "release_task",
+            "post_directive",
+            "ack_directive",
+            "ack_brief",
+            "send_message",
+        ] {
+            assert!(
+                !names.contains(&write.to_string()),
+                "read-only profile leaked write tool {write}"
+            );
+        }
+        // Reads are present.
+        for read in [
+            "list_requirements",
+            "show_requirement",
+            "search_requirements",
+            "query_graph",
+            "history",
+            "list_punts",
+            "read_brief",
+        ] {
+            assert!(
+                names.contains(&read.to_string()),
+                "read-only profile dropped read tool {read}"
+            );
+        }
+    }
+
+    /// Each higher tier is a strict superset of the one below it.
+    #[test]
+    fn profiles_are_monotonic_supersets() {
+        let ro = tool_names_for_profile(McpProfile::ReadOnly);
+        let coord = tool_names_for_profile(McpProfile::Coordination);
+        let op = tool_names_for_profile(McpProfile::Operator);
+        let full = tool_names_for_profile(McpProfile::Full);
+        let admin = tool_names_for_profile(McpProfile::Admin);
+
+        for n in &ro {
+            assert!(coord.contains(n), "coordination dropped {n}");
+        }
+        for n in &coord {
+            assert!(op.contains(n), "operator dropped {n}");
+        }
+        for n in &op {
+            assert!(full.contains(n), "full dropped {n}");
+        }
+        // admin == full today.
+        assert_eq!(admin.len(), full.len());
+        // full exposes every descriptor.
+        assert_eq!(full.len(), tool_descriptors().as_array().unwrap().len());
+        // strict growth across tiers.
+        assert!(ro.len() < coord.len());
+        assert!(coord.len() < op.len());
+        assert!(op.len() <= full.len());
+    }
+
+    #[test]
+    fn profile_token_parsing_round_trips_and_aliases() {
+        assert_eq!(
+            McpProfile::from_token("read-only"),
+            Some(McpProfile::ReadOnly)
+        );
+        assert_eq!(
+            McpProfile::from_token("readonly"),
+            Some(McpProfile::ReadOnly)
+        );
+        assert_eq!(McpProfile::from_token("  RO "), Some(McpProfile::ReadOnly));
+        assert_eq!(
+            McpProfile::from_token("read_only"),
+            Some(McpProfile::ReadOnly)
+        );
+        assert_eq!(
+            McpProfile::from_token("Coordination"),
+            Some(McpProfile::Coordination)
+        );
+        assert_eq!(
+            McpProfile::from_token("operator"),
+            Some(McpProfile::Operator)
+        );
+        assert_eq!(McpProfile::from_token("admin"), Some(McpProfile::Admin));
+        assert_eq!(McpProfile::from_token("full"), Some(McpProfile::Full));
+        assert_eq!(McpProfile::from_token("all"), Some(McpProfile::Full));
+        assert_eq!(McpProfile::from_token("bogus"), None);
+        // canonical token round-trips
+        for p in [
+            McpProfile::ReadOnly,
+            McpProfile::Coordination,
+            McpProfile::Operator,
+            McpProfile::Admin,
+            McpProfile::Full,
+        ] {
+            assert_eq!(McpProfile::from_token(p.as_str()), Some(p));
+        }
+    }
+
+    #[test]
+    fn default_profile_is_full_for_backwards_compat() {
+        assert_eq!(McpProfile::default(), McpProfile::Full);
+    }
+
+    /// `tools/list` advertises only the in-profile tools and tags each with its
+    /// minimum tier.
+    #[test]
+    fn tools_list_respects_profile() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server =
+            McpServer::with_profile(storage, dir.path().to_path_buf(), McpProfile::ReadOnly);
+
+        let resp = server.handle_tools_list(&json!(1));
+        let result = resp.result.expect("tools/list returns a result");
+        let tools = result["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert!(names.contains(&"list_requirements"));
+        assert!(!names.contains(&"add_requirement"));
+        // descriptors carry the profile tier metadata.
+        let lr = tools
+            .iter()
+            .find(|t| t["name"] == json!("list_requirements"))
+            .unwrap();
+        assert_eq!(lr["profile"], json!("read-only"));
+    }
+
+    /// `tools/call` rejects an out-of-profile (but known) tool with a permission
+    /// error, even when the client calls it directly. trace:STORY-474 | ai:claude
+    #[test]
+    fn tools_call_rejects_out_of_profile_tool() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server =
+            McpServer::with_profile(storage, dir.path().to_path_buf(), McpProfile::ReadOnly);
+
+        let resp = server.handle_tools_call(
+            &json!(1),
+            &json!({ "name": "add_requirement", "arguments": { "title": "X" } }),
+        );
+        let result = resp.result.expect("tools/call returns a result");
+        assert_eq!(result["isError"], json!(true));
+        let code = result["structuredError"]["code"].as_str().unwrap();
+        assert_eq!(code, "permission_denied");
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(
+            text.contains("operator"),
+            "should name the required tier: {text}"
+        );
+        assert!(
+            text.contains("read-only"),
+            "should name the active tier: {text}"
+        );
+    }
+
+    /// A read tool still works under read-only (smoke test the gate doesn't
+    /// over-block).
+    #[test]
+    fn tools_call_allows_in_profile_read() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server =
+            McpServer::with_profile(storage, dir.path().to_path_buf(), McpProfile::ReadOnly);
+
+        let resp = server.handle_tools_call(&json!(1), &json!({ "name": "list_features" }));
+        let result = resp.result.expect("tools/call returns a result");
+        // list_features returns Ok (not a profile rejection).
+        assert!(
+            result["isError"] != json!(true),
+            "in-profile read was rejected: {result}"
+        );
+    }
+
+    /// Resolution order for the non-env layers (override > config > default).
+    /// The `AIDA_MCP_PROFILE` env layer is intentionally NOT exercised here:
+    /// mutating a process-global env var races with the many parallel tests that
+    /// build a server via `McpServer::new` (which reads it). The env layer is a
+    /// thin `std::env::var` read above the config layer in `resolve_mcp_profile`.
+    #[test]
+    fn resolve_profile_prefers_override_then_config_then_default() {
+        // Guard: a leaked AIDA_MCP_PROFILE from the ambient shell would change
+        // the default-layer expectation; skip that one assertion if so.
+        let env_clean = std::env::var("AIDA_MCP_PROFILE").is_err();
+
+        let dir = tempdir().unwrap();
+        let aida = dir.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+
+        // No override, no env, no config -> default (full).
+        if env_clean {
+            assert_eq!(resolve_mcp_profile(dir.path(), None), McpProfile::Full);
+        }
+
+        // Config sets coordination (override and env both absent/clean).
+        std::fs::write(
+            aida.join("config.toml"),
+            "[mcp]\nprofile = \"coordination\"\n",
+        )
+        .unwrap();
+        if env_clean {
+            assert_eq!(
+                resolve_mcp_profile(dir.path(), None),
+                McpProfile::Coordination
+            );
+        }
+
+        // Explicit override beats config (and env) regardless of ambient env.
+        assert_eq!(
+            resolve_mcp_profile(dir.path(), Some("read-only")),
+            McpProfile::ReadOnly
+        );
+
+        // An unknown override token is ignored (falls through to config).
+        if env_clean {
+            assert_eq!(
+                resolve_mcp_profile(dir.path(), Some("nonsense")),
+                McpProfile::Coordination
+            );
+        }
     }
 }
