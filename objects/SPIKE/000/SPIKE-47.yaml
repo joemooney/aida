@@ -17,12 +17,12 @@ description: |-
   - A measurement approach + a recommendation on default posture (block vs report).
   - A go/no-go on building the diff-level gate, with the smallest valuable first slice named.
   trace:self
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:40:34.828606283Z
-modified_at: 2026-06-06T08:30:45.948635578Z
+modified_at: 2026-06-07T01:06:44.237821076Z
 req_type: Spike
 tags:
 - foundations
@@ -41,3 +41,7 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Spike with crisp acceptance — produce a written, deterministically-implementable definition of "trace coverage" for a diff + exemption list + measurement approach + go/no-go; it is the gating research for STORY-499 and is bounded research output, not an open product decision.
   created_at: 2026-06-06T08:30:44.538825490Z
   modified_at: 2026-06-06T08:30:44.538825490Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T01:06:44.237821076Z
+  completion_sha: 0868cd9375e8bde687f5aafaef03174744e145d7
