@@ -428,6 +428,8 @@ impl PostgresBackend {
             // Postgres backend (opt-in, behind the `postgres` feature).
             // trace:STORY-333 | ai:claude
             human_only: false,
+            // trace:STORY-522 | ai:claude
+            decision_request: None,
             version,
         })
     }

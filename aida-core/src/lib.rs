@@ -196,6 +196,9 @@ pub use models::{
     // Custom type definition types
     CustomFieldType,
     CustomTypeDefinition,
+    // Async decision-inbox types (STORY-522)
+    DecisionChoice,
+    DecisionRequest,
     FailureReason,
     FeatureDefinition,
     FieldChange,

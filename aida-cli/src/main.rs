@@ -106,10 +106,11 @@ use crate::cli::{
     DbCommand, DepsCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
     FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand,
     MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand, PlanCommand,
-    PrCommand, PuntsCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
-    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
-    ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand, SkillCommand,
-    StackCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
+    PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelDefCommand, RelationshipCommand,
+    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
+    ScaffoldCommand, ServerCommand, SessionCommand, SessionManifestCommand, SessionWakeupCommand,
+    SkillCommand, StackCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand,
+    ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2009,6 +2010,16 @@ fn run() -> Result<()> {
             // trace:STORY-360 | ai:claude
             unreachable!("Command::Advisor dispatched before storage init");
         }
+        Command::Questions { .. } => {
+            // `aida questions` reads/writes the `decision_request` field on a
+            // spec; the deprecated SQLite backend does not persist it.
+            // trace:STORY-522 | ai:claude
+            anyhow::bail!(
+                "aida questions requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
         Command::Punt { .. } => {
             // `aida punt` writes the NeedsAttention status + structured punt
             // metadata; the deprecated SQLite backend does not persist it.
@@ -2713,6 +2724,617 @@ fn handle_findings_command(
         }
     }
     Ok(())
+}
+
+// ===================================================================
+// `aida questions` — the async decision inbox (STORY-522, slice 1).
+//
+// The advisor distills a fork it can't resolve into a structured
+// DecisionRequest on the spec; the human batch-answers it OUTSIDE any
+// agent (plain CLI, no LLM session). Slice 1 RECORDS the answer (a pure
+// data op); the loop-resume auto-applier that applies the chosen
+// resolution token is DEFERRED per the operator decision.
+// trace:STORY-522 | ai:claude
+// ===================================================================
+
+/// Parse a `--choice` string of the form `label|consequence|resolution`
+/// into a [`DecisionChoice`]. Each of the three fields is trimmed; all
+/// three are required and non-empty. The `resolution` is a deterministic
+/// action token (e.g. `status:rejected`, `tag:+deferred`, `noop`) — its
+/// shape isn't validated here (slice 1 only records it), but it must be
+/// present so the eventual auto-applier has something to act on.
+// trace:STORY-522 | ai:claude
+fn parse_decision_choice(spec: &str) -> Result<aida_core::DecisionChoice> {
+    let parts: Vec<&str> = spec.splitn(3, '|').collect();
+    if parts.len() != 3 {
+        anyhow::bail!(
+            "invalid --choice {spec:?}: expected `label|consequence|resolution` \
+             (three fields separated by `|`)"
+        );
+    }
+    let label = parts[0].trim();
+    let consequence = parts[1].trim();
+    let resolution = parts[2].trim();
+    if label.is_empty() || consequence.is_empty() || resolution.is_empty() {
+        anyhow::bail!(
+            "invalid --choice {spec:?}: label, consequence, and resolution \
+             must all be non-empty"
+        );
+    }
+    Ok(aida_core::DecisionChoice {
+        label: label.to_string(),
+        consequence: consequence.to_string(),
+        resolution: resolution.to_string(),
+    })
+}
+
+/// Resolve a user-typed choice token (`"2"`, `"default"`, `"recommended"`)
+/// to a 0-based choice index, validated against `request`.
+// trace:STORY-522 | ai:claude
+fn resolve_choice_index(request: &aida_core::DecisionRequest, choice: &str) -> Result<usize> {
+    let trimmed = choice.trim();
+    if trimmed.eq_ignore_ascii_case("default") || trimmed.eq_ignore_ascii_case("recommended") {
+        return request.recommended.ok_or_else(|| {
+            anyhow::anyhow!(
+                "no recommended default on this question — pick a choice number (1-{})",
+                request.choices.len()
+            )
+        });
+    }
+    let one_based: usize = trimmed.parse().map_err(|_| {
+        anyhow::anyhow!(
+            "invalid choice {choice:?}: expected a number 1-{}, `default`, or `recommended`",
+            request.choices.len()
+        )
+    })?;
+    if one_based == 0 || one_based > request.choices.len() {
+        anyhow::bail!(
+            "choice {one_based} out of range — this question has {} choices (1-{})",
+            request.choices.len(),
+            request.choices.len()
+        );
+    }
+    Ok(one_based - 1)
+}
+
+/// Record an answer on a (pending) DecisionRequest: resolve the user-typed
+/// `choice` to an index, set `answered` + `answered_at`, return the index.
+/// Pure (no I/O) so the record-and-flip logic is unit-testable without a
+/// backend. Errors if already answered or the choice is invalid.
+// trace:STORY-522 | ai:claude
+fn record_answer(request: &mut aida_core::DecisionRequest, choice: &str) -> Result<usize> {
+    if !request.is_pending() {
+        anyhow::bail!("already answered");
+    }
+    let idx = resolve_choice_index(request, choice)?;
+    request.answered = Some(idx);
+    request.answered_at = Some(chrono::Utc::now());
+    Ok(idx)
+}
+
+/// Confirm the recommended default on a (pending) DecisionRequest. Returns
+/// the chosen index, or `None` when there is no default to confirm or the
+/// request is already answered. Pure (no I/O). trace:STORY-522 | ai:claude
+fn confirm_default(request: &mut aida_core::DecisionRequest) -> Option<usize> {
+    if !request.is_pending() {
+        return None;
+    }
+    let idx = request.recommended?;
+    request.answered = Some(idx);
+    request.answered_at = Some(chrono::Utc::now());
+    Some(idx)
+}
+
+/// Render a single pending DecisionRequest to stdout — question, numbered
+/// choices (recommended marked), and rationale. Shared by the list view
+/// and the interactive answer loop.
+// trace:STORY-522 | ai:claude
+fn print_decision_request(display_id: &str, title: &str, request: &aida_core::DecisionRequest) {
+    println!(
+        "{} {}  {}",
+        "Decision needed:".yellow().bold(),
+        display_id.cyan().bold(),
+        title.dimmed()
+    );
+    println!("  {}", request.question);
+    for (i, choice) in request.choices.iter().enumerate() {
+        let marker = if request.recommended == Some(i) {
+            " (recommended)".green().to_string()
+        } else {
+            String::new()
+        };
+        println!(
+            "    {}{} {} — {}",
+            format!("{}.", i + 1).bold(),
+            marker,
+            choice.label.bold(),
+            choice.consequence.dimmed()
+        );
+    }
+    if let Some(rationale) = &request.rationale {
+        println!("  {} {}", "Why:".dimmed(), rationale);
+    }
+}
+
+/// Load every requirement carrying a DecisionRequest, partitioned into
+/// (pending, answered). Reads full objects (the cache does not project the
+/// `decision_request` field, mirroring history). trace:STORY-522 | ai:claude
+fn collect_decision_requests(
+    backend: &aida_core::CachedGitBackend,
+) -> Result<(Vec<aida_core::Requirement>, Vec<aida_core::Requirement>)> {
+    let mut pending = Vec::new();
+    let mut answered = Vec::new();
+    for req in backend.list_requirements(false)? {
+        match &req.decision_request {
+            Some(dr) if dr.is_pending() => pending.push(req),
+            Some(_) => answered.push(req),
+            None => {}
+        }
+    }
+    Ok((pending, answered))
+}
+
+/// `aida questions` / `aida questions list` / `ask` / `answer` dispatch.
+// trace:STORY-522 | ai:claude
+fn handle_questions_command(
+    cmd: Option<&QuestionsCommand>,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    match cmd {
+        // Bare `aida questions` — list, then (TTY + pending) offer the loop.
+        None => {
+            let pending_count = questions_list(backend)?;
+            let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+            if interactive && pending_count > 0 {
+                print!("\nAnswer {pending_count} now? [Y/n] ");
+                use std::io::Write;
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                let answer = input.trim();
+                if answer.is_empty() || answer.eq_ignore_ascii_case("y") {
+                    questions_answer_loop(backend, store_path)?;
+                }
+            }
+            Ok(())
+        }
+        Some(QuestionsCommand::List) => {
+            questions_list(backend)?;
+            Ok(())
+        }
+        Some(QuestionsCommand::Ask {
+            spec,
+            question,
+            choice,
+            recommend,
+            rationale,
+            force,
+        }) => questions_ask(
+            backend,
+            store_path,
+            spec,
+            question,
+            choice,
+            *recommend,
+            rationale.as_deref(),
+            *force,
+        ),
+        Some(QuestionsCommand::Answer {
+            spec,
+            choice,
+            all_defaults,
+        }) => {
+            if *all_defaults {
+                if spec.is_some() || choice.is_some() {
+                    anyhow::bail!(
+                        "--all-defaults answers every recommended default in bulk; \
+                         do not also pass <spec>/<choice>"
+                    );
+                }
+                return questions_answer_all_defaults(backend, store_path);
+            }
+            match (spec, choice) {
+                (Some(spec), Some(choice)) => {
+                    questions_answer_one(backend, store_path, spec, choice)
+                }
+                (None, None) => questions_answer_loop(backend, store_path),
+                _ => anyhow::bail!(
+                    "answer takes either both <spec> and <choice> \
+                     (non-interactive) or neither (interactive loop)"
+                ),
+            }
+        }
+    }
+}
+
+/// List the decision inbox. Returns the count of pending requests so the
+/// bare-invocation caller can decide whether to offer the answer loop.
+// trace:STORY-522 | ai:claude
+fn questions_list(backend: &aida_core::CachedGitBackend) -> Result<usize> {
+    let (pending, answered) = collect_decision_requests(backend)?;
+    if pending.is_empty() && answered.is_empty() {
+        println!(
+            "{}",
+            "Decision inbox empty — no questions recorded.".dimmed()
+        );
+        return Ok(0);
+    }
+    if !pending.is_empty() {
+        println!(
+            "{} ({})",
+            "Pending decisions".yellow().bold(),
+            pending.len()
+        );
+        for req in &pending {
+            if let Some(dr) = &req.decision_request {
+                println!();
+                print_decision_request(&req.display_id(), &req.title, dr);
+            }
+        }
+    }
+    if !answered.is_empty() {
+        println!();
+        println!("{} ({})", "Answered".green().bold(), answered.len());
+        for req in &answered {
+            if let Some(dr) = &req.decision_request {
+                if let Some(idx) = dr.answered {
+                    let label = dr.choices.get(idx).map(|c| c.label.as_str()).unwrap_or("?");
+                    println!(
+                        "  {:<14} {} → {}",
+                        req.display_id().cyan(),
+                        req.title.dimmed(),
+                        label.bold()
+                    );
+                }
+            }
+        }
+    }
+    Ok(pending.len())
+}
+
+/// `aida questions ask` — pose a DecisionRequest on a spec.
+// trace:STORY-522 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn questions_ask(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    spec: &str,
+    question: &str,
+    choice_specs: &[String],
+    recommend: Option<usize>,
+    rationale: Option<&str>,
+    force: bool,
+) -> Result<()> {
+    if choice_specs.len() < 2 {
+        anyhow::bail!(
+            "a decision needs at least two choices (got {}) — pass --choice \
+             `label|consequence|resolution` twice or more",
+            choice_specs.len()
+        );
+    }
+    let choices: Vec<aida_core::DecisionChoice> = choice_specs
+        .iter()
+        .map(|c| parse_decision_choice(c))
+        .collect::<Result<_>>()?;
+
+    // recommend is 1-based on the CLI; store 0-based.
+    let recommended = match recommend {
+        Some(n) => {
+            if n == 0 || n > choices.len() {
+                anyhow::bail!(
+                    "--recommend {n} out of range — there are {} choices (1-{})",
+                    choices.len(),
+                    choices.len()
+                );
+            }
+            Some(n - 1)
+        }
+        None => None,
+    };
+
+    let mut req = backend
+        .get_requirement_by_spec_id(spec)?
+        .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
+    let display_id = req.display_id();
+
+    if let Some(existing) = &req.decision_request {
+        if existing.is_pending() && !force {
+            anyhow::bail!(
+                "{display_id} already has a pending decision — answer it first, \
+                 or pass --force to overwrite it"
+            );
+        }
+    }
+
+    let now = chrono::Utc::now();
+    let request = aida_core::DecisionRequest {
+        question: question.to_string(),
+        choices,
+        recommended,
+        rationale: rationale.map(|s| s.to_string()),
+        answered: None,
+        asked_at: Some(now),
+        answered_at: None,
+    };
+    req.decision_request = Some(request.clone());
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+
+    println!("{} {display_id}", "Decision recorded:".green().bold());
+    print_decision_request(&display_id, &req.title, &request);
+    println!(
+        "{}",
+        "Answer it with `aida questions answer` (or `aida questions` at a TTY).".dimmed()
+    );
+    Ok(())
+}
+
+/// Record one answer on a spec's DecisionRequest (the non-interactive,
+/// agent-free data op). trace:STORY-522 | ai:claude
+fn questions_answer_one(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    spec: &str,
+    choice: &str,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(spec)?
+        .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
+    let display_id = req.display_id();
+    let title = req.title.clone();
+
+    let request = req
+        .decision_request
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("{display_id} has no decision to answer"))?;
+    if !request.is_pending() {
+        anyhow::bail!("{display_id} is already answered");
+    }
+    let idx = record_answer(request, choice)?;
+    let label = request.choices[idx].label.clone();
+
+    req.modified_at = chrono::Utc::now();
+    backend.update_requirement(&req)?;
+    println!(
+        "{} {display_id} ({}) → {}",
+        "Answered".green().bold(),
+        title.dimmed(),
+        label.bold()
+    );
+    Ok(())
+}
+
+/// Interactive answer loop over every pending DecisionRequest. Reads a
+/// choice number (or `s`/`skip`) from stdin per question.
+// trace:STORY-522 | ai:claude
+fn questions_answer_loop(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let (pending, _) = collect_decision_requests(backend)?;
+    if pending.is_empty() {
+        println!("{}", "No pending decisions to answer.".dimmed());
+        return Ok(());
+    }
+    let mut answered = 0usize;
+    for req in pending {
+        let spec = req.display_id();
+        let dr = match &req.decision_request {
+            Some(dr) if dr.is_pending() => dr,
+            _ => continue,
+        };
+        println!();
+        print_decision_request(&spec, &req.title, dr);
+        let prompt = match dr.recommended {
+            Some(r) => format!(
+                "  Choice [1-{}, Enter={}, s=skip]: ",
+                dr.choices.len(),
+                r + 1
+            ),
+            None => format!("  Choice [1-{}, s=skip]: ", dr.choices.len()),
+        };
+        print!("{prompt}");
+        use std::io::Write;
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let entered = input.trim();
+        if entered.eq_ignore_ascii_case("s") || entered.eq_ignore_ascii_case("skip") {
+            println!("  {}", "skipped".dimmed());
+            continue;
+        }
+        let choice = if entered.is_empty() {
+            // Enter accepts the recommended default when one exists.
+            if dr.recommended.is_none() {
+                println!(
+                    "  {}",
+                    "no default — type a choice number or s to skip".dimmed()
+                );
+                continue;
+            }
+            "default".to_string()
+        } else {
+            entered.to_string()
+        };
+        match questions_answer_one(backend, store_path, &spec, &choice) {
+            Ok(()) => answered += 1,
+            Err(e) => println!("  {} {e}", "error:".red()),
+        }
+    }
+    println!();
+    println!("{} {answered} answered.", "Done.".green().bold());
+    Ok(())
+}
+
+/// `aida questions answer --all-defaults` — confirm every recommended
+/// default in one shot. trace:STORY-522 | ai:claude
+fn questions_answer_all_defaults(
+    backend: &aida_core::CachedGitBackend,
+    _store_path: &std::path::Path,
+) -> Result<()> {
+    let (pending, _) = collect_decision_requests(backend)?;
+    let mut answered = 0usize;
+    let mut skipped = 0usize;
+    for mut req in pending {
+        let display_id = req.display_id();
+        let request = match req.decision_request.as_mut() {
+            Some(r) if r.is_pending() => r,
+            _ => continue,
+        };
+        let Some(idx) = confirm_default(request) else {
+            skipped += 1;
+            continue;
+        };
+        let label = request.choices[idx].label.clone();
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+        answered += 1;
+        println!("  {} {display_id} → {}", "Answered".green(), label.bold());
+    }
+    if answered == 0 && skipped == 0 {
+        println!("{}", "No pending decisions to answer.".dimmed());
+    } else {
+        println!(
+            "{} {answered} answered{}.",
+            "Done.".green().bold(),
+            if skipped > 0 {
+                format!(", {skipped} skipped (no recommended default)")
+            } else {
+                String::new()
+            }
+        );
+    }
+    Ok(())
+}
+
+// STORY-522: `aida questions` parser + record/confirm logic. These tests are
+// fully isolated — pure functions over in-memory DecisionRequest values, no
+// backend / CWD / HOME / git. trace:STORY-522 | ai:claude
+#[cfg(test)]
+mod questions_tests {
+    use super::*;
+
+    fn sample_request() -> aida_core::DecisionRequest {
+        aida_core::DecisionRequest {
+            question: "Promote or ship?".to_string(),
+            choices: vec![
+                aida_core::DecisionChoice {
+                    label: "Promote to EPIC".to_string(),
+                    consequence: "decompose first".to_string(),
+                    resolution: "tag:+epic-candidate".to_string(),
+                },
+                aida_core::DecisionChoice {
+                    label: "Ship as story".to_string(),
+                    consequence: "implement directly".to_string(),
+                    resolution: "status:approved".to_string(),
+                },
+            ],
+            recommended: Some(1),
+            rationale: None,
+            answered: None,
+            asked_at: None,
+            answered_at: None,
+        }
+    }
+
+    #[test]
+    fn parse_choice_splits_three_fields() {
+        let c = parse_decision_choice("Reject|drop the spec|status:rejected").unwrap();
+        assert_eq!(c.label, "Reject");
+        assert_eq!(c.consequence, "drop the spec");
+        assert_eq!(c.resolution, "status:rejected");
+    }
+
+    #[test]
+    fn parse_choice_trims_whitespace() {
+        let c = parse_decision_choice("  A  |  does B  |  noop  ").unwrap();
+        assert_eq!(c.label, "A");
+        assert_eq!(c.consequence, "does B");
+        assert_eq!(c.resolution, "noop");
+    }
+
+    #[test]
+    fn parse_choice_resolution_may_contain_no_extra_pipes() {
+        // splitn(3) keeps everything after the 2nd pipe in `resolution`, so a
+        // compound token survives intact.
+        let c = parse_decision_choice("Approve|ready|status:approved;tag:+ready").unwrap();
+        assert_eq!(c.resolution, "status:approved;tag:+ready");
+    }
+
+    #[test]
+    fn parse_choice_rejects_too_few_fields() {
+        assert!(parse_decision_choice("just a label").is_err());
+        assert!(parse_decision_choice("label|consequence").is_err());
+    }
+
+    #[test]
+    fn parse_choice_rejects_empty_fields() {
+        assert!(parse_decision_choice("|consequence|res").is_err());
+        assert!(parse_decision_choice("label||res").is_err());
+        assert!(parse_decision_choice("label|consequence|").is_err());
+    }
+
+    #[test]
+    fn resolve_index_handles_numbers_and_keywords() {
+        let req = sample_request();
+        assert_eq!(resolve_choice_index(&req, "1").unwrap(), 0);
+        assert_eq!(resolve_choice_index(&req, "2").unwrap(), 1);
+        // default / recommended → the 0-based recommended index.
+        assert_eq!(resolve_choice_index(&req, "default").unwrap(), 1);
+        assert_eq!(resolve_choice_index(&req, "recommended").unwrap(), 1);
+        // out of range / non-numeric → error.
+        assert!(resolve_choice_index(&req, "0").is_err());
+        assert!(resolve_choice_index(&req, "3").is_err());
+        assert!(resolve_choice_index(&req, "nope").is_err());
+    }
+
+    #[test]
+    fn record_answer_flips_pending_to_answered() {
+        let mut req = sample_request();
+        assert!(req.is_pending());
+        let idx = record_answer(&mut req, "1").unwrap();
+        assert_eq!(idx, 0);
+        assert_eq!(req.answered, Some(0));
+        assert!(req.answered_at.is_some());
+        assert!(!req.is_pending());
+        // A second answer is refused.
+        assert!(record_answer(&mut req, "2").is_err());
+    }
+
+    #[test]
+    fn record_answer_default_keyword_uses_recommended() {
+        let mut req = sample_request();
+        let idx = record_answer(&mut req, "default").unwrap();
+        assert_eq!(idx, 1);
+        assert_eq!(req.answered, Some(1));
+    }
+
+    #[test]
+    fn confirm_default_sets_answered_to_recommended() {
+        let mut req = sample_request();
+        let idx = confirm_default(&mut req).unwrap();
+        assert_eq!(idx, 1);
+        assert_eq!(req.answered, Some(1));
+        assert!(req.answered_at.is_some());
+        assert!(!req.is_pending());
+    }
+
+    #[test]
+    fn confirm_default_skips_when_no_recommendation() {
+        let mut req = sample_request();
+        req.recommended = None;
+        assert!(confirm_default(&mut req).is_none());
+        assert!(req.is_pending(), "no default → left pending");
+    }
+
+    #[test]
+    fn confirm_default_skips_already_answered() {
+        let mut req = sample_request();
+        req.answered = Some(0);
+        assert!(confirm_default(&mut req).is_none());
+        assert_eq!(req.answered, Some(0), "existing answer untouched");
+    }
 }
 
 /// `aida findings add` — file an advisor observation as a `from-advisor:`
@@ -8476,6 +9098,32 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 .format("%Y-%m-%d %H:%M %Z")
                         );
                     }
+                    // STORY-522: surface a PENDING DecisionRequest so the
+                    // human sees the question + choices in `aida show`,
+                    // self-contained, and can answer it with
+                    // `aida questions answer`. trace:STORY-522 | ai:claude
+                    if let Some(dr) = req.decision_request.as_ref().filter(|d| d.is_pending()) {
+                        println!("\n{}:", "Decision needed".yellow().bold());
+                        println!("  {}", dr.question);
+                        for (i, choice) in dr.choices.iter().enumerate() {
+                            let marker = if dr.recommended == Some(i) {
+                                " (recommended)".green().to_string()
+                            } else {
+                                String::new()
+                            };
+                            println!(
+                                "    {}{} {} — {}",
+                                format!("{}.", i + 1).bold(),
+                                marker,
+                                choice.label.bold(),
+                                choice.consequence.dimmed()
+                            );
+                        }
+                        if let Some(rationale) = &dr.rationale {
+                            println!("  {} {}", "Why:".dimmed(), rationale);
+                        }
+                        println!("  {}", "Answer with `aida questions answer`.".dimmed());
+                    }
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
                     }
@@ -8930,6 +9578,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 spec.as_deref(),
                 *request_review,
             )?;
+        }
+        Command::Questions { cmd } => {
+            handle_questions_command(cmd.as_ref(), &backend, store_path)?;
         }
         Command::Punt {
             id,
@@ -9948,6 +10599,13 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
                 | TraceCommand::Scan { update: true, .. }
         ),
         Command::Findings(cmd) => !matches!(cmd, FindingsCommand::List { .. }),
+        // STORY-522: `aida questions ask` / `answer` write the
+        // decision_request field; bare list / `list` are read-only.
+        // trace:STORY-522 | ai:claude
+        Command::Questions { cmd } => matches!(
+            cmd,
+            Some(QuestionsCommand::Ask { .. }) | Some(QuestionsCommand::Answer { .. })
+        ),
         Command::Config(cmd) => matches!(
             cmd,
             ConfigCommand::Format { .. }
@@ -83162,15 +83820,41 @@ fn handle_queue_work(
                     continue;
                 }
                 orchestrator::AutoReleaseDecision::DormantDirty { dirty_entries } => {
+                    // TASK-402 (friction #3 + #4): a dormant lease with a dirty
+                    // worktree is the canonical resume-after-failure state — the
+                    // process died mid-implementation (orphaned) and the
+                    // unfinished work lives uncommitted in that exact worktree.
+                    // The bare message ("commit/stash, or --force to discard")
+                    // omits the one option that keeps the WIP: resume into the
+                    // existing worktree. `--steal` would remove the worktree the
+                    // WIP lives in, so name it as the destructive path, not the
+                    // default. trace:TASK-402 | ai:claude
+                    let resume_hint = if resume.is_some() {
+                        format!(
+                            " You passed --resume: keep this worktree and re-attach \
+                             to the recorded session — re-run with \
+                             `aida queue work {} --resume <session-uuid>` \
+                             (--list-sessions shows the uuid).",
+                            plan.scope
+                        )
+                    } else {
+                        format!(
+                            " To keep the work, resume into this worktree: \
+                             `aida queue work {} --resume` (bare = most-recent session). \
+                             Only commit/stash or `aida session end {} --force` (discards) \
+                             if you intend to abandon it.",
+                            plan.scope,
+                            &conflict.id[..conflict.id.len().min(8)]
+                        )
+                    };
                     anyhow::bail!(
-                        "lease {} for scope `{}` is dormant but its worktree has {} \
-                         uncommitted change(s) at {} — commit/stash them first, or \
-                         `aida session end {} --force` to discard, then retry.",
+                        "lease {} for scope `{}` looks orphaned (dormant process, \
+                         worktree has {} uncommitted change(s) at {}).{}",
                         &conflict.id[..conflict.id.len().min(8)],
                         plan.scope,
                         dirty_entries,
                         conflict.worktree_path.display(),
-                        &conflict.id[..conflict.id.len().min(8)]
+                        resume_hint
                     );
                 }
                 orchestrator::AutoReleaseDecision::Live => {
@@ -83179,9 +83863,18 @@ fn handle_queue_work(
             }
 
             if !steal {
+                // TASK-402 (friction #4): the lease is live (the auto-release
+                // sweep above handles dormant/orphaned leases). Warn that
+                // `--steal` ends the session AND removes its worktree — so if
+                // there is unfinished work in that worktree, `--resume` (which
+                // re-attaches in place) is the work-preserving path, not
+                // `--steal`. trace:TASK-402 | ai:claude
                 anyhow::bail!(
-                    "scope `{}` is owned by lease {} ({}, worktree: {}) — pass --steal to end \
-                     that session first and take over, or `aida session end {}` manually.",
+                    "scope `{}` is owned by lease {} ({}, worktree: {}) — \
+                     to take over: `--steal` ends that session and removes its \
+                     worktree (work there is lost unless committed), \
+                     or `--resume` re-attaches to it in place (keeps the worktree), \
+                     or `aida session end {}` manually.",
                     plan.scope,
                     &conflict.id[..conflict.id.len().min(8)],
                     conflict.role.as_deref().unwrap_or("(unset)"),
@@ -90217,11 +90910,27 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             .as_deref()
                             .and_then(claude_log_indicates_api_outage)
                     {
-                        let hint = format!(
-                            "Anthropic API was unavailable; resume with: \
-                             `aida queue work {spec} --resume {session_uuid}`",
-                            spec = self.spec,
+                        // TASK-402 (friction #1 + #5): make this retry hint
+                        // paste-ready. The headless implementer ran in a
+                        // sibling worktree, so `claude --resume` (project-slug
+                        // scoped by cwd) is invisible from the main repo — emit
+                        // the `cd <worktree>` step alongside the *full* session
+                        // UUID. trace:TASK-402 | ai:claude
+                        let resume_base =
+                            format!("aida queue work {} --resume {}", self.spec, session_uuid);
+                        let resume_cmd = resume_command_with_cwd(
+                            &resume_base,
+                            self.implementer_worktree
+                                .as_deref()
+                                .map(|p| p.to_string_lossy())
+                                .as_deref(),
+                            std::env::current_dir()
+                                .ok()
+                                .map(|p| p.to_string_lossy().into_owned())
+                                .as_deref(),
                         );
+                        let hint =
+                            format!("Anthropic API was unavailable; resume with: `{resume_cmd}`");
                         return Ok(auto_complete::ImplementerOutcome::Inconclusive {
                             reason: format!(
                                 "Anthropic API outage during the headless implementer: {reason_line}"
@@ -92094,6 +92803,22 @@ impl QueueWorkLaunch {
     }
 }
 
+/// TASK-402: does `s` look like an AIDA *lease* id rather than a Claude
+/// *session* UUID? A lease id is a hyphenless hex run (e.g. `019e45cfc559`,
+/// the short form printed by `✓ session … started`); a Claude session UUID
+/// always carries hyphens (`019e45cf-acea-73c1-9476-…`). The orchestrator's
+/// phase-1 banner prominently shows the lease id, so pasting *that* into
+/// `--resume <id>` is the #1 recovery papercut — it never prefix-matches a
+/// recorded session. Detect the shape so we can point at the right id form
+/// instead of the generic "no recorded session" miss. Pure + heuristic.
+/// trace:TASK-402 | ai:claude
+fn looks_like_lease_id(s: &str) -> bool {
+    !s.is_empty()
+        && !s.contains('-')
+        && (8..=16).contains(&s.len())
+        && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// TASK-112: resolve a (possibly truncated) session id against the
 /// recorded sessions for a scope. Returns the full id on a unique match;
 /// a non-matching value of UUID-ish length is passed through verbatim
@@ -92106,6 +92831,18 @@ fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
     match matches.len() {
         1 => Ok(matches[0].clone()),
         0 if requested.len() >= 16 => Ok(requested.to_string()),
+        // TASK-402 (friction #1): the pasted value has the shape of an AIDA
+        // lease id, not a Claude session UUID. The banner that advertised
+        // `✓ session <lease> started` is the trap — `--resume` wants the
+        // Claude session UUID. Name the mismatch and point at the right id.
+        // trace:TASK-402 | ai:claude
+        0 if looks_like_lease_id(requested) => anyhow::bail!(
+            "`{}` looks like an AIDA lease id, but --resume needs the Claude \
+             session UUID (e.g. 019e45cf-acea-73c1-…) — run \
+             `aida queue work <scope> --list-sessions` to see the resumable \
+             session ids (or pass bare `--resume` to take the most recent)",
+            requested
+        ),
         0 => anyhow::bail!(
             "no recorded claude session matches `{}` — run \
              `aida queue work <scope> --list-sessions` to see recorded ids",
@@ -92234,15 +92971,56 @@ fn print_scope_sessions(scope: &str) -> Result<()> {
         println!("  {}", session::format_session_line(m));
     }
     println!();
+    // TASK-402 (friction #1 + #5): make the resume hint paste-ready. Show the
+    // *full* Claude session UUID (the id `--resume` actually needs — not the
+    // AIDA lease id the kickoff banner shows, and not the 8-char prefix in the
+    // table above) and, when the session's recorded worktree differs from the
+    // current cwd, prepend the `cd <worktree>` step so a headless session
+    // launched in a sibling worktree is resumable in one paste.
+    // trace:TASK-402 | ai:claude
+    let most_recent = &sessions[0];
+    let resume_cmd = paste_ready_resume_command(scope, most_recent);
+    println!("  {}", "resume the most recent:".dimmed());
+    println!("    {}", resume_cmd.cyan());
+    println!();
     println!(
         "  {}",
         format!(
-            "resume one:  aida queue work {} --resume <session-id>",
+            "(or `aida queue work {} --resume <full-session-uuid>` for a specific one above)",
             scope
         )
         .dimmed()
     );
     Ok(())
+}
+
+/// TASK-402: assemble a single paste-ready resume command for a recorded
+/// session. Uses the FULL session UUID (`--resume` rejects the AIDA lease id
+/// and a truncated prefix can be ambiguous) and, when the session's recorded
+/// worktree is known and is not the current cwd, prepends `cd <worktree> && `
+/// so a headless session launched in a sibling worktree (Claude's `--resume`
+/// is project-slug scoped — invisible from the main repo's cwd) resumes in one
+/// paste. Pure given the cwd argument resolved by the caller.
+/// trace:TASK-402 | ai:claude
+fn paste_ready_resume_command(scope: &str, m: &session::SessionMeta) -> String {
+    let base = format!("aida queue work {} --resume {}", scope, m.id);
+    let current = std::env::current_dir()
+        .ok()
+        .map(|p| p.to_string_lossy().into_owned());
+    resume_command_with_cwd(&base, m.last_cwd.as_deref(), current.as_deref())
+}
+
+/// TASK-402: pure helper — prepend a `cd <worktree> && ` step when the
+/// session's recorded worktree is known and differs from the current cwd.
+/// Keeps the cwd-resolution side effect out so it's unit-testable.
+/// trace:TASK-402 | ai:claude
+fn resume_command_with_cwd(base: &str, worktree: Option<&str>, current: Option<&str>) -> String {
+    match worktree {
+        Some(wt) if !wt.is_empty() && Some(wt) != current => {
+            format!("cd {} && {}", wt, base)
+        }
+        _ => base.to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -92273,6 +93051,66 @@ mod queue_work_resume_tests {
     fn resolve_resume_id_short_no_match_errs() {
         let recorded: Vec<String> = vec![];
         assert!(resolve_resume_id(&recorded, "abc").is_err());
+    }
+
+    // TASK-402 (friction #1): a pasted AIDA lease id is recognised by shape
+    // and the error names the right id form instead of the generic miss.
+    // trace:TASK-402 | ai:claude
+    #[test]
+    fn looks_like_lease_id_distinguishes_lease_from_uuid() {
+        // AIDA lease ids: hyphenless hex, 8-16 chars.
+        assert!(looks_like_lease_id("019e45cfc559"));
+        assert!(looks_like_lease_id("019e45cf"));
+        // Claude session UUIDs carry hyphens — not a lease id.
+        assert!(!looks_like_lease_id("019e45cf-acea-73c1-9476-d044fe19d8e4"));
+        // A bare short prefix the user typed is too short / not full hex run.
+        assert!(!looks_like_lease_id("abc"));
+        assert!(!looks_like_lease_id(""));
+        // Non-hex characters disqualify it.
+        assert!(!looks_like_lease_id("zzzzzzzz"));
+    }
+
+    #[test]
+    fn resolve_resume_id_lease_shaped_miss_points_at_uuid() {
+        // The user pasted the lease id from the kickoff banner. No recorded
+        // session matches, but the message must call out the lease-vs-UUID
+        // confusion, not the generic "no recorded session" miss.
+        let recorded: Vec<String> = vec!["019e45cf-acea-73c1-9476-d044fe19d8e4".to_string()];
+        let err = resolve_resume_id(&recorded, "019e45cfc559").unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(msg.contains("lease id"), "msg: {msg}");
+        assert!(msg.contains("uuid"), "msg: {msg}");
+    }
+
+    // TASK-402 (friction #5): the resume command is paste-ready — it prepends
+    // the `cd <worktree>` step only when the recorded worktree differs from
+    // the current cwd. trace:TASK-402 | ai:claude
+    #[test]
+    fn resume_command_prepends_cd_when_worktree_differs() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd = resume_command_with_cwd(
+            base,
+            Some("/home/joe/ai/aida-task-358"),
+            Some("/home/joe/ai/aida"),
+        );
+        assert_eq!(cmd, format!("cd /home/joe/ai/aida-task-358 && {base}"));
+    }
+
+    #[test]
+    fn resume_command_omits_cd_when_worktree_matches_cwd() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd =
+            resume_command_with_cwd(base, Some("/home/joe/ai/aida"), Some("/home/joe/ai/aida"));
+        assert_eq!(cmd, base);
+    }
+
+    #[test]
+    fn resume_command_omits_cd_when_worktree_unknown() {
+        let base = "aida queue work TASK-358 --resume 019e45cf-acea-73c1";
+        let cmd = resume_command_with_cwd(base, None, Some("/home/joe/ai/aida"));
+        assert_eq!(cmd, base);
+        let cmd_empty = resume_command_with_cwd(base, Some(""), Some("/home/joe/ai/aida"));
+        assert_eq!(cmd_empty, base);
     }
 
     #[test]
