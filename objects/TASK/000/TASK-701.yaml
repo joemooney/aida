@@ -1,0 +1,12 @@
+id: 019ea3f3-0442-7362-9981-baf5219c986e
+spec_id: TASK-701
+agreed_id: TASK-701
+title: 'Probe: empirically confirm SubagentStart/Stop payload + cwd=worktree for isolated subagents (gate for TASK-694)'
+description: 'The empirical gate for TASK-694''s passive-observe design (instrument-don''t-infer). Hooks load at session START, so this can''t run mid-session — recipe: (1) add a logging hook to .claude/settings.local.json (local, gitignored, NOT the symlinked settings.json) for SubagentStart + SubagentStop running a 2-line script that appends stdin to .aida/hook-debug/subagent-events.jsonl; (2) launch a fresh session and spawn a worktree-isolated subagent (Agent isolation:''worktree'') that does something trivial; (3) read the log. CONFIRM: does SubagentStart''s cwd point to the worktree dir? Is agent_id stable Start<->Stop? Any undocumented worktree/branch field? Document the verified payload on TASK-694, then remove the probe hook. SubagentStop is non-blocking (safe); SubagentStart is observability-only (safe, can''t break creation). trace:TASK-694'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T21:17:53.090165408Z
+modified_at: 2026-06-07T21:17:53.090165408Z
+req_type: Task
