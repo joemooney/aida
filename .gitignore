@@ -20,6 +20,12 @@ release/
 *.iml
 .worktrees/
 
+# Claude Code harness runtime state (per-clone, ephemeral): Agent-tool worktree
+# isolation dirs and Workflow-tool persisted scripts. Untracked otherwise, they
+# pollute the clean-tree check that scripts/release.sh requires. trace:BUG-467
+.claude/worktrees/
+.claude/workflows/
+
 # OS
 .DS_Store
 Thumbs.db
