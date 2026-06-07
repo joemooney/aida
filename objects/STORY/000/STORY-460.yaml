@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-06-07T06:10:54.903936252Z
+modified_at: 2026-06-07T22:30:56.042747527Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -100,3 +100,8 @@ comments:
   content: 'PARKED for keyboard (autonomous burn-down 2026-06-06): Integrator role scaffolding — same compete-vs-harness call as STORY-519/520: the harness delivers integration (proven this session); defer the in-aida role build.'
   created_at: 2026-06-07T06:10:51.536841644Z
   modified_at: 2026-06-07T06:10:51.536841644Z
+- id: 019ea435-e52a-7b60-9610-b867644abfda
+  author: joe
+  content: 'Design sketch (no impl) filed: docs/plans/2026-06-07-story-460-integrator-role-sketch.md. Honors the DEFER-with-EPIC-31 decision — shows how the integrator rides EPIC-31''s launcher/registry pass rather than shipping standalone. Covers: (1) role def — scope IN (rebase/mechanical-conflict/CI-watch/squash-merge clean+verdicted/branch-delete/pull) vs scope OUT (semantic conflicts, missing verdict, real test fails -> escalate); (2) scaffolding rides render_agent_launch_context -> role_guidance_for (which has NO integrator arm today, falls to generic ''other =>'' — gap to close); (3) escalation = existing file-based finding/brief handshake, punt-and-continue; (4) load-balancing role NOT subsystem advisor, one master keeps final say; (5) smallest slice + sign-off items. KEY TENSION flagged: STORY-460 acceptance says templates/roles/*.md but the real role substrate is TOML (.aida/roles/*.toml, RoleState) + the discipline pack — recommend re-spec to TOML-role + discipline-page + role_guidance_for arm rather than a new markdown role-file tree. Also: adding integrator to STARTER_ROLES flips the guarded starter_set_is_agent_wired_only invariant — needs sign-off (rec: opt-in until the active aida-integrate loop ships). Status unchanged.'
+  created_at: 2026-06-07T22:30:56.042747527Z
+  modified_at: 2026-06-07T22:30:56.042747527Z
