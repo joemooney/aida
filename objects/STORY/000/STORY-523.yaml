@@ -40,12 +40,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   DEFER behind STORY-522 — 522 defines the DecisionRequest artifact + inbox this producer feeds; producing questions before that format/inbox exists is wasted. Also: the proactive whole-backlog sweep is THROUGHPUT (defer) vs 522's human-recovery-latency RELIABILITY value (allow). Sequence strictly after 522. Recorded blocked-by STORY-522.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-06T03:46:29.087785646Z
-modified_at: 2026-06-07T19:58:02.595257652Z
+modified_at: 2026-06-07T20:30:41.013641766Z
 req_type: Story
 tags:
 - backlog-sweep
@@ -83,3 +83,7 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): DEFER behind STORY-522 — 522 defines the DecisionRequest artifact + inbox this producer feeds; producing questions before that format/inbox exists is wasted. Also: the proactive whole-backlog sweep is THROUGHPUT (defer) vs 522''s human-recovery-latency RELIABILITY value (allow). Sequence strictly after 522. Recorded blocked-by STORY-522.'
   created_at: 2026-06-06T14:13:33.256567333Z
   modified_at: 2026-06-06T14:13:33.256567333Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-07T20:30:41.013641766Z
+  completion_sha: cea15ddf4aea7cd2c06c7192e091e055a11566ca
