@@ -372,6 +372,17 @@ pub(crate) enum FailureKind {
     /// orchestrator killed the child and shelved the spec for a human to look
     /// at. trace:BUG-420 | ai:claude
     Watchdog,
+    /// BUG-455: a phase failed because the SQLite cache (`.aida/cache.db`) was
+    /// locked by another concurrent `aida` process (a sibling drain, an
+    /// interactive shell, or a bulk op like a mass `archive`/`edit` sweep).
+    /// The app-level cache retry loop (TASK-558) waits out most contention, but
+    /// a lock held longer than the retry budget surfaces the failure here. This
+    /// is transient *environment contention* — not a broken spec and not a
+    /// broken install — so it is classified *shelvable*: a batch drain parks
+    /// the spec and continues rather than hard-stopping the whole batch, the
+    /// same way a transient GH-API blip ([`Self::PrVerificationInconclusive`])
+    /// is shelved. trace:BUG-455 | ai:claude
+    CacheLocked,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -391,6 +402,7 @@ impl FailureKind {
             Self::NoVerdict => "no-verdict",
             Self::PrVerificationInconclusive => "pr-verification-inconclusive",
             Self::Watchdog => "no-progress-watchdog",
+            Self::CacheLocked => "cache-locked",
             Self::Failed => "failed",
         }
     }
@@ -399,9 +411,12 @@ impl FailureKind {
     /// on this failure kind, or stop the batch entirely?
     ///
     /// - **Shelvable** — the spec's work itself failed in a way a human
-    ///   should look at: `NoPr`, `CiRed`, `CiTimeout`, `NoVerdict`,
-    ///   `Failed`. The drain parks the spec in `NeedsAttention` and
-    ///   continues to the next batch member.
+    ///   should look at (`NoPr`, `CiRed`, `CiTimeout`, `NoVerdict`,
+    ///   `Failed`), or a *transient* condition that re-running clears
+    ///   (`PrVerificationInconclusive`, `Watchdog`, and `CacheLocked` —
+    ///   BUG-455's concurrent-`aida` SQLite-cache contention). The drain
+    ///   parks the spec in `NeedsAttention` and continues to the next
+    ///   batch member.
     /// - **Not shelvable** — the local environment is broken in a way
     ///   that has nothing to do with the spec: `Spawn` (no PATH for the
     ///   subprocess), `MissingTool` (no `gh` / `cargo`), `Internal`
@@ -419,6 +434,7 @@ impl FailureKind {
                 | Self::NoVerdict
                 | Self::PrVerificationInconclusive
                 | Self::Watchdog
+                | Self::CacheLocked
                 | Self::Failed
         )
     }
@@ -493,6 +509,39 @@ impl PhaseFailure {
             kind,
         }
     }
+
+    /// BUG-455: upgrade a failure that is really transient SQLite cache-lock
+    /// contention to [`FailureKind::CacheLocked`] (a *shelvable* kind) so a
+    /// batch drain parks the spec and continues instead of hard-stopping.
+    ///
+    /// A concurrent `aida` process (sibling drain, interactive shell, bulk
+    /// archive/edit sweep) can hold `.aida/cache.db`'s write lock past the
+    /// app-level retry budget; whichever phase touched the cache then fails
+    /// with a "database is locked" message. Without this, that failure
+    /// inherits the phase's default kind ([`FailureKind::Failed`]) or — worse
+    /// — an un-shelvable [`FailureKind::Internal`], and the whole batch stops
+    /// over transient environment contention that re-running clears.
+    ///
+    /// Only the message text is consulted (via [`is_database_locked_message`]),
+    /// not the original kind, so it catches the condition wherever a cache
+    /// write surfaced it. Idempotent — a failure already classified
+    /// `CacheLocked` is left as-is. trace:BUG-455 | ai:claude
+    pub(crate) fn reclassify_transient(mut self) -> Self {
+        if self.kind != FailureKind::CacheLocked && is_database_locked_message(&self.reason) {
+            self.kind = FailureKind::CacheLocked;
+        }
+        self
+    }
+}
+
+/// BUG-455: does a failure `reason` describe a SQLite cache-lock contention
+/// (a transient "database is locked" / "database table is locked" / SQLITE_BUSY
+/// surfaced through the cache layer)? Pure, case-insensitive, and fully
+/// isolated so the classification rule is unit-testable without a driver.
+/// trace:BUG-455 | ai:claude
+pub(crate) fn is_database_locked_message(reason: &str) -> bool {
+    let lower = reason.to_ascii_lowercase();
+    lower.contains("database is locked") || lower.contains("database table is locked")
 }
 
 /// The verdict of the BUG-241 reconcile step: when a phase ends without the
@@ -1028,6 +1077,19 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                  (no commit or file-change) within its window — likely a degenerate spin. \
                  Inspect the worktree and pick the spec back up by hand: \
                  `aida queue rework {spec} --work`."
+            );
+        }
+        // BUG-455: the SQLite cache was locked by another concurrent `aida`
+        // process longer than the retry budget. Transient — re-running the
+        // drain once the contending process finishes clears it.
+        // trace:BUG-455 | ai:claude
+        FailureKind::CacheLocked => {
+            return format!(
+                "The local cache was locked by another `aida` process (a sibling drain, \
+                 an interactive shell, or a bulk archive/edit sweep) longer than the retry \
+                 window — the spec is shelved, not failed. Avoid running bulk cache writes \
+                 while a drain is live, then re-run: `aida queue work {spec} --auto-complete`. \
+                 If a lock looks stuck, run `aida doctor heal stale-locks`."
             );
         }
         _ => {}
@@ -1867,6 +1929,12 @@ fn resolve_phase_failure(
     failure: &PhaseFailure,
     durations: Vec<(Phase, u128)>,
 ) -> OrchestrationResult {
+    // BUG-455: a "database is locked" failure from any phase is transient
+    // cache-lock contention, not a spec or environment fault — reclassify it
+    // shelvable here, at the single seam every failure routes through, so the
+    // drain parks the spec and continues. trace:BUG-455 | ai:claude
+    let failure = failure.clone().reclassify_transient();
+    let failure = &failure;
     match driver.reconcile_failure(phase, failure) {
         PhaseReconcile::ShippedOutOfBand { reason } => {
             finish_reconciled(spec, json, start, durations, phase, &reason)
@@ -2998,6 +3066,59 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// BUG-455: a "database is locked" message is recognised (case-insensitive,
+    /// both SQLite lock spellings) and nothing else trips the classifier.
+    /// Pure-function test — no driver, no filesystem. trace:BUG-455
+    #[test]
+    fn database_locked_message_is_recognised() {
+        assert!(is_database_locked_message(
+            "database is locked while trying to shelve"
+        ));
+        assert!(is_database_locked_message("DATABASE IS LOCKED")); // case-insensitive
+        assert!(is_database_locked_message(
+            "Error: the database table is locked: requirements"
+        ));
+        // Unrelated failures must NOT be misread as a cache lock.
+        assert!(!is_database_locked_message("CI run failed (red)"));
+        assert!(!is_database_locked_message("no PR was opened"));
+        assert!(!is_database_locked_message(""));
+    }
+
+    /// BUG-455: a transient cache-lock failure is reclassified to the shelvable
+    /// `CacheLocked` kind, so a batch drain parks the spec and continues instead
+    /// of hard-stopping; an unrelated failure keeps its kind. Idempotent.
+    /// Pure-function test — fully isolated. trace:BUG-455
+    #[test]
+    fn cache_lock_failure_reclassifies_to_shelvable() {
+        // A reviewer phase that surfaced a cache lock comes in with the default
+        // `Failed` kind (or could even be `Internal`); either way it upgrades.
+        let f = PhaseFailure::of(
+            FailureKind::Internal,
+            "database is locked while trying to shelve SPEC into Needs Attention",
+        )
+        .reclassify_transient();
+        assert_eq!(f.kind, FailureKind::CacheLocked);
+        assert!(
+            f.kind.is_shelvable(),
+            "a cache-lock failure must be shelvable so the drain continues"
+        );
+
+        // Idempotent: re-running leaves an already-CacheLocked failure alone.
+        let again = f.reclassify_transient();
+        assert_eq!(again.kind, FailureKind::CacheLocked);
+
+        // An unrelated failure is untouched.
+        let unrelated =
+            PhaseFailure::of(FailureKind::CiRed, "CI run failed (red)").reclassify_transient();
+        assert_eq!(unrelated.kind, FailureKind::CiRed);
+
+        // A non-shelvable env failure with no lock text stays non-shelvable.
+        let spawn = PhaseFailure::of(FailureKind::Spawn, "spawn ENOENT: claude not on PATH")
+            .reclassify_transient();
+        assert_eq!(spawn.kind, FailureKind::Spawn);
+        assert!(!spawn.kind.is_shelvable());
+    }
 
     /// BUG-420: the watchdog trips on no-progress first, ceiling as backstop;
     /// 0 disables a check. trace:BUG-420
