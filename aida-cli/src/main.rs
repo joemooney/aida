@@ -890,6 +890,7 @@ fn run() -> Result<()> {
         agent,
         no_hooks,
         no_roles,
+        no_agent_config,
         force,
         distributed: _,
         centralized,
@@ -963,6 +964,22 @@ fn run() -> Result<()> {
                 Err(e) => {
                     eprintln!("  {} starter roles skipped: {}", "Note:".dimmed(), e);
                 }
+            }
+        }
+        // TASK-698: first-machine-setup — surface the STORY-495 permission
+        // posture knob. Part of the same "set up this machine's agent defaults"
+        // step as the role scaffold above (both write GLOBAL ~/.aida/, fire
+        // once, idempotent). Only prompts at a TTY when ~/.aida/agents.toml is
+        // absent; the native (faithful) posture is the safe default. Non-fatal:
+        // a hiccup writing global state must not abort an otherwise-successful
+        // init. trace:TASK-698 | ai:claude
+        if !*no_agent_config {
+            if let Err(e) = maybe_prompt_agent_posture() {
+                eprintln!(
+                    "  {} agent permission posture skipped: {}",
+                    "Note:".dimmed(),
+                    e
+                );
             }
         }
         // Starter memory pack — opt-in, orthogonal to storage mode. Failure
@@ -27381,6 +27398,133 @@ fn load_agents_bypass(project_root: &std::path::Path) -> Result<bool> {
     Ok(bypass)
 }
 
+/// TASK-698: first-machine-setup prompt for the agent permission posture.
+/// Surfaces the STORY-495 `[agents] bypass` knob at `aida init` so the
+/// operator discovers it during onboarding rather than after an agent
+/// unexpectedly prompts. Writes the chosen posture to the GLOBAL
+/// `~/.aida/agents.toml`.
+///
+/// Guards (all must hold to prompt):
+///   - `~/.aida/agents.toml` is absent — idempotent; an existing file is
+///     never prompted-over or overwritten (respect the user's config).
+///   - stdin AND stdout are TTYs — non-interactive init never prompts and
+///     leaves the native (faithful) default in place.
+///
+/// Default selection is **native** (bypass = false) — safe-by-default,
+/// consistent with STORY-495's faithful-launcher philosophy. Bypass requires
+/// an explicit pick. "Decide later" writes nothing, so a future `aida init`
+/// re-surfaces the prompt.
+fn maybe_prompt_agent_posture() -> Result<()> {
+    let Some(home) = aida_home_dir() else {
+        return Ok(());
+    };
+    let path = home.join(".aida/agents.toml");
+    // Idempotent: never prompt or overwrite an existing config.
+    if path.exists() {
+        return Ok(());
+    }
+    // TTY-gated: non-interactive init writes nothing (native default).
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Ok(());
+    }
+
+    eprintln!();
+    eprintln!("{}", "Machine setup — agent permission posture".bold());
+    eprintln!(
+        "  How should agents launched by `{}` handle permissions?",
+        "aida agent new".cyan()
+    );
+    eprintln!(
+        "    {}  Native  — each tool's own default (Claude prompts)  [default]",
+        "1)".bold()
+    );
+    eprintln!(
+        "    {}  Bypass  — skip all prompts (trusted / autonomous workflows)",
+        "2)".bold()
+    );
+    eprintln!(
+        "    {}  Decide later — ask again on the next init",
+        "3)".bold()
+    );
+    eprint!("  Choose [1]: ");
+    use std::io::Write as _;
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+
+    let mut answer = String::new();
+    if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+        // Treat read failure as "decide later" — write nothing.
+        eprintln!(
+            "  {} no choice read; leaving native default in place.",
+            "Note:".dimmed()
+        );
+        return Ok(());
+    }
+
+    let bypass = match answer.trim() {
+        // Empty (bare Enter) and "1" both select the safe native default.
+        "" | "1" => false,
+        "2" => true,
+        "3" => {
+            eprintln!(
+                "  {} no agent posture written; rerun `aida init` to set it.",
+                "Note:".dimmed()
+            );
+            return Ok(());
+        }
+        other => {
+            eprintln!(
+                "  {} unrecognized choice {:?}; leaving native default in place.",
+                "Note:".dimmed(),
+                other
+            );
+            return Ok(());
+        }
+    };
+
+    write_global_agents_posture(&path, bypass)?;
+    if bypass {
+        eprintln!(
+            "  {} agents will run with permissions bypassed ({} in ~/.aida/agents.toml).",
+            "+".green(),
+            "[agents] bypass = true".cyan()
+        );
+    } else {
+        eprintln!(
+            "  {} agents will keep their native posture ({} in ~/.aida/agents.toml).",
+            "+".green(),
+            "[agents] bypass = false".cyan()
+        );
+    }
+    Ok(())
+}
+
+/// Write the global `~/.aida/agents.toml` recording the chosen permission
+/// posture. Creates `~/.aida/` if needed. trace:TASK-698 | ai:claude
+fn write_global_agents_posture(path: &std::path::Path, bypass: bool) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    let body = format!(
+        "# Per-agent launch defaults for `aida agent new` (machine-global).\n\
+         #\n\
+         # Uniform permission-bypass knob (STORY-495). When `bypass = true`,\n\
+         # every supervised launch (`aida agent new`, `aida session new`,\n\
+         # `aida session start --launch`, `aida queue work`) runs with\n\
+         # permissions bypassed (Claude: `--permission-mode=bypassPermissions`).\n\
+         # When `false`, launchers are faithful: they inject no permission flag,\n\
+         # so each agent keeps its native posture (Claude prompts).\n\
+         #\n\
+         # Set during `aida init` first-machine setup (TASK-698). Edit freely.\n\
+         [agents]\n\
+         bypass = {bypass}\n"
+    );
+    std::fs::write(path, body)
+        .with_context(|| format!("writing agent permission posture {}", path.display()))?;
+    Ok(())
+}
+
 fn read_agents_bypass_from_file(path: &std::path::Path) -> Result<Option<bool>> {
     let Some(value) = parse_agents_toml(path)? else {
         return Ok(None);
@@ -28664,6 +28808,61 @@ mod agent_launcher_tests {
         merge_agent_flags_from_file(&mut flags, &project.join(".aida/agents.toml"), "codex")
             .unwrap();
         assert_eq!(flags, vec!["--foo"]);
+    }
+
+    /// TASK-698: the first-machine-setup writer emits a valid agents.toml whose
+    /// `[agents] bypass` value round-trips back through the resolver, for both
+    /// the native (false) and bypass (true) postures, and creates ~/.aida/ if
+    /// it is missing. trace:TASK-698 | ai:claude
+    #[test]
+    fn agent_posture_writer_round_trips_both_postures() {
+        let tmp = TempDir::new().unwrap();
+
+        // Bypass posture — parent dir does not exist yet; writer creates it.
+        let bypass_path = tmp.path().join("home-bypass/.aida/agents.toml");
+        assert!(!bypass_path.parent().unwrap().exists());
+        write_global_agents_posture(&bypass_path, true).unwrap();
+        assert!(bypass_path.exists());
+        toml::from_str::<toml::Value>(&std::fs::read_to_string(&bypass_path).unwrap())
+            .expect("written agents.toml must be valid TOML");
+        assert_eq!(
+            read_agents_bypass_from_file(&bypass_path).unwrap(),
+            Some(true)
+        );
+
+        // Native posture — explicit `bypass = false` recorded (idempotent: a
+        // future init sees the file and never re-prompts).
+        let native_path = tmp.path().join("home-native/.aida/agents.toml");
+        write_global_agents_posture(&native_path, false).unwrap();
+        assert_eq!(
+            read_agents_bypass_from_file(&native_path).unwrap(),
+            Some(false)
+        );
+    }
+
+    /// TASK-698: the posture prompt is idempotent and TTY-gated — when
+    /// ~/.aida/agents.toml already exists it is left byte-for-byte untouched,
+    /// and a non-interactive (no-TTY) init writes nothing. The test harness has
+    /// no TTY, so `maybe_prompt_agent_posture` must never create or mutate the
+    /// file here. trace:TASK-698 | ai:claude
+    #[test]
+    fn agent_posture_prompt_is_idempotent_and_tty_gated() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        // Pre-existing config must be preserved verbatim (idempotent guard).
+        let path = home.join(".aida/agents.toml");
+        let original = "[agents]\nbypass = true\n# user-authored\n";
+        std::fs::write(&path, original).unwrap();
+        maybe_prompt_agent_posture().unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+
+        // Absent config under no TTY → writes nothing (native default stays).
+        std::fs::remove_file(&path).unwrap();
+        maybe_prompt_agent_posture().unwrap();
+        assert!(!path.exists());
     }
 
     /// STORY-495: with the knob on and no explicit posture / per-tool flags,

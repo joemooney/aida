@@ -42,6 +42,7 @@ aida init --sibling            # Distributed using a sibling repo (multi-repo wo
 aida init --centralized        # Legacy SQLite mode (deprecated, prints warning)
 aida init --no-skills          # Skip .claude/skills/ and .claude/commands/
 aida init --no-hooks           # Skip .claude/hooks/ and git hooks
+aida init --no-agent-config    # Skip the first-machine agent permission-posture prompt (~/.aida/agents.toml)
 aida init --with-memories      # Also write the starter memory pack (opt-in)
 aida init --with-memories --refresh   # Overlay updated pack files, keep your edits
 aida init --with-memories --focus <subsystem>  # Scope the pack to a subsystem (untagged memories = universal, always loaded)
@@ -49,6 +50,8 @@ aida init --force              # Overwrite existing files
 ```
 
 `aida init` creates: orphan branch `aida-store` + worktree at `.aida-store/`, `.aida/config.toml`, `.aida/cache.db`, META requirements seeded into the orphan store, `.mcp.json`, `CLAUDE.md`, `AGENTS.md` (Codex), `.claude/skills/` + `commands/` + `hooks/`, `docs/plans/`, `docs/aida/discipline/`.
+
+**First-machine setup (global ~/.aida/).** On the first `aida init` on a machine, init also bootstraps machine-global agent defaults: the starter role set into `~/.aida/roles/` (TASK-638) and, at a TTY, a one-time prompt for the **agent permission posture** that writes `~/.aida/agents.toml` (TASK-698 — surfaces the STORY-495 `[agents] bypass` knob). The posture default is **native** (faithful launcher; Claude prompts); `bypass = true` is the explicit opt-in. Both steps are idempotent — an existing `~/.aida/agents.toml` / role file is never prompted-over or overwritten — and non-interactive init writes nothing (native default). Skip with `--no-roles` / `--no-agent-config`.
 
 ### First-user demo — `scripts/aida-demo.sh` (TASK-563)
 
