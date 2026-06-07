@@ -3154,8 +3154,8 @@ fn handle_questions_command(
             questions_list(backend)?;
             Ok(())
         }
-        Some(QuestionsCommand::Sweep { scope }) => {
-            questions_sweep(backend, scope.as_deref())?;
+        Some(QuestionsCommand::Sweep { scope, apply }) => {
+            questions_sweep(backend, scope.as_deref(), *apply)?;
             Ok(())
         }
         Some(QuestionsCommand::Ask {
@@ -3210,6 +3210,7 @@ fn handle_questions_command(
 fn questions_sweep(
     backend: &aida_core::CachedGitBackend,
     raw_scope: Option<&str>,
+    apply: bool,
 ) -> Result<usize> {
     let scope = QuestionSweepScope::parse(raw_scope)?;
     let all = backend.list_requirements(false)?;
@@ -3229,7 +3230,11 @@ fn questions_sweep(
         return Ok(0);
     }
 
-    let mut recorded = 0usize;
+    // TASK-700: default to a read-only preview — the sweep is a coarse keyword
+    // heuristic that MUTATES specs (attaches DecisionRequests), so it must not
+    // write without an explicit --apply. Mirrors `integrate --dry-run`.
+    // trace:TASK-700 | ai:claude
+    let mut affected = 0usize;
     for (spec, candidate) in candidates {
         let Some(mut req) = backend.get_requirement_by_spec_id(&spec)? else {
             continue;
@@ -3237,25 +3242,43 @@ fn questions_sweep(
         if has_open_decision_request(&req) {
             continue;
         }
-        let request = formulate_sweep_decision_request(&req, &candidate);
-        req.decision_request = Some(request);
-        req.modified_at = chrono::Utc::now();
-        backend.update_requirement(&req)?;
-        recorded += 1;
-        println!(
-            "  {} {} - {}",
-            "Recorded".green(),
-            spec.cyan(),
-            candidate.reason.dimmed()
-        );
+        if apply {
+            let request = formulate_sweep_decision_request(&req, &candidate);
+            req.decision_request = Some(request);
+            req.modified_at = chrono::Utc::now();
+            backend.update_requirement(&req)?;
+            println!(
+                "  {} {} - {}",
+                "Recorded".green(),
+                spec.cyan(),
+                candidate.reason.dimmed()
+            );
+        } else {
+            println!(
+                "  {} {} - {}",
+                "[dry-run] would attach".dimmed(),
+                spec.cyan(),
+                candidate.reason.dimmed()
+            );
+        }
+        affected += 1;
     }
 
-    println!(
-        "{} {recorded} decision request{} recorded.",
-        "Done.".green().bold(),
-        if recorded == 1 { "" } else { "s" }
-    );
-    Ok(recorded)
+    if apply {
+        println!(
+            "{} {affected} decision request{} recorded.",
+            "Done.".green().bold(),
+            if affected == 1 { "" } else { "s" }
+        );
+    } else {
+        println!(
+            "{} {affected} spec{} would get a DecisionRequest — re-run with {} to write.",
+            "Dry-run:".yellow().bold(),
+            if affected == 1 { "" } else { "s" },
+            "--apply".cyan()
+        );
+    }
+    Ok(affected)
 }
 
 /// List the decision inbox. Returns the count of pending requests so the
