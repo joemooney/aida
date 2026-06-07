@@ -1326,14 +1326,27 @@ fn run() -> Result<()> {
             // trace:BUG-442 trace:TASK-621 trace:BUG-428 | ai:claude
             let distributed_root = distributed_mode_declared().or_else(|| {
                 let root = find_project_root().ok()?;
-                branch_exists_anywhere(&root, "aida-store").then_some(root)
+                if branch_exists_anywhere(&root, "aida-store") {
+                    return Some(root);
+                }
+                // BUG-433: the store is physically PRESENT here (`.aida-store/`
+                // with an `objects/` dir — even via a symlink to the main store)
+                // but there's no `.aida/config.toml` marker AND no detectable
+                // `aida-store` branch — e.g. a session worktree forked from a
+                // commit that predates the committed scaffolding, or a symlink
+                // into another repo's store. Detect distributed mode from the
+                // store's SHAPE so we use the real store instead of silently
+                // falling through to the legacy backend (which serves
+                // stale/unrelated data with no signal — the inverse of BUG-428).
+                // trace:BUG-433 | ai:claude
+                attached_store_present(&root).then_some(root)
             });
             if let Some(project_root) = distributed_root {
                 // An already-attached fresh clone (no config, but the worktree
                 // exists from a prior auto-attach) must be used directly — no
                 // re-fetch, no repeated "attached…" noise on every command.
                 let existing_worktree = project_root.join(".aida-store");
-                let store_path_opt = if existing_worktree.join("objects").is_dir() {
+                let store_path_opt = if attached_store_present(&project_root) {
                     Some(existing_worktree)
                 } else if branch_exists_anywhere(&project_root, "aida-store") {
                     // Auto-attach the store worktree from the `aida-store` branch
@@ -5833,6 +5846,16 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
     }
     let cwd = std::env::current_dir().ok()?;
     detect_distributed_store_from(&cwd)
+}
+
+/// BUG-433: is a git-canonical store physically attached at `<root>/.aida-store`?
+/// True when `.aida-store/objects/` is a directory — the hallmark of an attached
+/// orphan-store worktree, resolved through a symlink too. Used to detect
+/// distributed mode from the store's SHAPE when neither `.aida/config.toml` nor
+/// an `aida-store` branch is present, so plain `aida` uses the real store
+/// instead of silently serving legacy data. trace:BUG-433 | ai:claude
+fn attached_store_present(project_root: &std::path::Path) -> bool {
+    project_root.join(".aida-store").join("objects").is_dir()
 }
 
 /// Resolve the `AIDA_STORE` env override into a usable store path, or `None`
@@ -45447,6 +45470,19 @@ mod bug_354_text_question_classifier_tests {
         assert!(find_plan_file_for_spec(dir, "STORY-999").is_none());
         // a spec only present in the template is NOT matched
         assert!(find_plan_file_for_spec(dir, "BUG-99").is_some()); // (real plan)
+    }
+
+    #[test]
+    fn attached_store_present_detects_objects_dir() {
+        // BUG-433: distributed mode is detectable from the store's shape
+        // (.aida-store/objects/) even with no config marker / no branch.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert!(!attached_store_present(root)); // bare project — no store
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        assert!(!attached_store_present(root)); // .aida-store but not git-canonical
+        std::fs::create_dir_all(root.join(".aida-store").join("objects")).unwrap();
+        assert!(attached_store_present(root)); // objects/ present → attached store
     }
 
     #[test]
