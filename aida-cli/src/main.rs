@@ -13099,6 +13099,13 @@ fn handle_init_distributed_worktree(
     let config_content = config_content + init_ultraplan_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
+    // STORY-511: surface the auto-detected forge so the operator sees the
+    // inference instead of having to read .aida/config.toml. EPIC-35 init UX.
+    {
+        let (_, msg) = forge::init_forge_detection_message(&cwd);
+        println!("  {} {}", "Done".green(), msg);
+    }
+
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
     ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
@@ -13261,6 +13268,11 @@ fn handle_init_post_clone(
         "Done".green(),
         ".aida/config.toml".white().bold()
     );
+    // STORY-511: surface the auto-detected forge (EPIC-35 init UX).
+    {
+        let (_, msg) = forge::init_forge_detection_message(cwd);
+        println!("  {} {}", "Done".green(), msg);
+    }
 
     // docs/plans/ for plan archive (post-clone attach: never overwrite).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;
@@ -49937,6 +49949,143 @@ mod git_linkage_tests {
     }
 }
 
+/// STORY-511: coverage for the forge-aware change-request (PR/MR) linkage
+/// formatter that `aida show`'s git-linkage section renders. Fully
+/// isolated — no git repo, no `gh`/`glab` on PATH, no I/O — the rendering
+/// is a pure function of (ForgeKind, ChangeLinkageState). EPIC-35 slice 5.
+/// trace:STORY-511 | ai:claude
+#[cfg(test)]
+mod change_linkage_format_tests {
+    use super::*;
+    use crate::forge::ForgeKind;
+
+    /// Convenience: collect the (label, value) lines into a single string
+    /// so assertions can match against the full rendered block.
+    fn render(forge: ForgeKind, state: &ChangeLinkageState) -> String {
+        format_change_linkage(forge, state)
+            .into_iter()
+            .map(|(l, v)| format!("{l}: {v}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn github_shipped_uses_pr_noun() {
+        let out = render(
+            ForgeKind::GitHub,
+            &ChangeLinkageState::Shipped { number: Some(42) },
+        );
+        assert!(out.contains("Branch: merged to main"), "{out}");
+        assert!(out.contains("PR: PR-42"), "{out}");
+    }
+
+    #[test]
+    fn gitlab_shipped_uses_mr_noun() {
+        let out = render(
+            ForgeKind::GitLab,
+            &ChangeLinkageState::Shipped { number: Some(7) },
+        );
+        assert!(out.contains("Branch: merged to main"), "{out}");
+        assert!(out.contains("MR: MR-7"), "{out}");
+        // The GitHub-only noun must NOT leak onto a GitLab repo.
+        assert!(!out.contains("PR-7"), "{out}");
+    }
+
+    #[test]
+    fn shipped_without_number_omits_change_line() {
+        let out = render(
+            ForgeKind::GitLab,
+            &ChangeLinkageState::Shipped { number: None },
+        );
+        assert_eq!(out, "Branch: merged to main");
+    }
+
+    #[test]
+    fn gitlab_in_flight_found_renders_mr_and_url() {
+        let out = render(
+            ForgeKind::GitLab,
+            &ChangeLinkageState::InFlightFound {
+                number: 13,
+                url: "https://gitlab.com/joe/aida-gl-test/-/merge_requests/13".to_string(),
+            },
+        );
+        assert!(
+            out.contains("MR: MR-13 https://gitlab.com/joe/aida-gl-test/-/merge_requests/13"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn github_in_flight_found_renders_pr_and_url() {
+        let out = render(
+            ForgeKind::GitHub,
+            &ChangeLinkageState::InFlightFound {
+                number: 99,
+                url: "https://github.com/joe/aida/pull/99".to_string(),
+            },
+        );
+        assert!(
+            out.contains("PR: PR-99 https://github.com/joe/aida/pull/99"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn no_change_uses_forge_noun() {
+        assert_eq!(
+            render(ForgeKind::GitHub, &ChangeLinkageState::InFlightNoChange),
+            "PR: no PR opened yet"
+        );
+        assert_eq!(
+            render(ForgeKind::GitLab, &ChangeLinkageState::InFlightNoChange),
+            "MR: no MR opened yet"
+        );
+    }
+
+    #[test]
+    fn cli_missing_names_the_right_cli_per_forge() {
+        let gh = render(ForgeKind::GitHub, &ChangeLinkageState::CliMissing);
+        assert!(gh.contains("gh not installed"), "{gh}");
+        assert!(gh.contains("PR state unknown"), "{gh}");
+
+        let gl = render(ForgeKind::GitLab, &ChangeLinkageState::CliMissing);
+        assert!(gl.contains("glab not installed"), "{gl}");
+        assert!(gl.contains("MR state unknown"), "{gl}");
+        // The GitLab diagnostic must not name `gh`.
+        assert!(!gl.contains("gh "), "{gl}");
+    }
+
+    #[test]
+    fn pure_git_cli_missing_uses_generic_label() {
+        // Pure-git has no forge CLI binary; the diagnostic must not print an
+        // empty token ("  not installed").
+        let out = render(ForgeKind::None, &ChangeLinkageState::CliMissing);
+        assert!(out.contains("the forge CLI not installed"), "{out}");
+        assert!(out.contains("change state unknown"), "{out}");
+    }
+
+    #[test]
+    fn cli_failed_and_unreachable_use_forge_noun() {
+        let gl_fail = render(ForgeKind::GitLab, &ChangeLinkageState::CliFailed);
+        assert!(gl_fail.contains("glab lookup failed"), "{gl_fail}");
+        assert!(gl_fail.contains("MR state unknown"), "{gl_fail}");
+
+        let gl_unreach = render(ForgeKind::GitLab, &ChangeLinkageState::Unreachable);
+        assert!(gl_unreach.contains("MR API unreachable"), "{gl_unreach}");
+        assert!(gl_unreach.contains("(transient)"), "{gl_unreach}");
+    }
+
+    #[test]
+    fn branch_not_found_is_forge_independent() {
+        for f in [ForgeKind::GitHub, ForgeKind::GitLab, ForgeKind::None] {
+            assert_eq!(
+                render(f, &ChangeLinkageState::BranchNotFound),
+                "Branch: work committed but branch not found locally"
+            );
+        }
+    }
+}
+
 /// TASK-238: coverage for the queue-list tag surfacing — the inline
 /// chip formatter and the `--by-batch` group key. trace:TASK-238
 #[cfg(test)]
@@ -53638,6 +53787,92 @@ pub(crate) fn scan_trace_graph(
     out
 }
 
+/// STORY-511: the resolved state of the change-request (PR/MR) line in
+/// `aida show`'s git-linkage section, decoupled from the git/forge probes
+/// so the *rendering* is a pure function of (forge, state) — and thus
+/// unit-testable with no git repo and no `gh`/`glab` on PATH. EPIC-35
+/// slice 5 makes this section forge-aware: a GitLab repo reads "MR-47"
+/// and "glab not installed", not the GitHub-only "PR-47"/"gh" wording.
+/// trace:STORY-511 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ChangeLinkageState {
+    /// Shipped (merged to the default branch); carries the squash-merge
+    /// change number when one was parsed from the subject.
+    Shipped { number: Option<u64> },
+    /// In flight, an open change was found. `number` + `url`.
+    InFlightFound { number: u64, url: String },
+    /// In flight, the forge CLI ran cleanly and reported no open change.
+    InFlightNoChange,
+    /// In flight, the forge CLI is not on PATH.
+    CliMissing,
+    /// In flight, the forge CLI ran but errored (auth / parse).
+    CliFailed,
+    /// In flight, the forge API was unreachable (transient).
+    Unreachable,
+    /// Work is committed but no local branch holds it.
+    BranchNotFound,
+}
+
+/// STORY-511: render the change-request linkage lines for `aida show`'s
+/// git-linkage section, forge-aware. Returns `(label, value)` pairs of
+/// **plain, uncolored** text in render order (caller applies styling).
+/// The change noun comes from [`crate::forge::ForgeKind::change_noun`]
+/// ("PR" / "MR" / "change") and the CLI name from
+/// [`crate::forge::ForgeKind::cli_name`] ("gh" / "glab" / "the forge CLI")
+/// so a GitLab project reads "MR-47" and "glab not installed" rather than
+/// the GitHub-only wording. Pure: no git, no forge CLI, no I/O — fully
+/// unit-testable in isolation. trace:STORY-511 | ai:claude
+pub(crate) fn format_change_linkage(
+    forge: crate::forge::ForgeKind,
+    state: &ChangeLinkageState,
+) -> Vec<(String, String)> {
+    let noun = forge.change_noun(); // "PR" | "MR" | "change"
+    let cli = forge.cli_name(); // "gh" | "glab" | ""
+                                // Pure-git has no forge CLI binary; name it generically rather than
+                                // printing an empty token in "<cli> not installed".
+    let cli_label = if cli.is_empty() { "the forge CLI" } else { cli };
+    let mut out: Vec<(String, String)> = Vec::new();
+    match state {
+        ChangeLinkageState::Shipped { number } => {
+            out.push(("Branch".to_string(), "merged to main".to_string()));
+            if let Some(num) = number {
+                out.push((noun.to_string(), format!("{noun}-{num}")));
+            }
+        }
+        ChangeLinkageState::InFlightFound { number, url } => {
+            out.push((noun.to_string(), format!("{noun}-{number} {url}")));
+        }
+        ChangeLinkageState::InFlightNoChange => {
+            out.push((noun.to_string(), format!("no {noun} opened yet")));
+        }
+        ChangeLinkageState::CliMissing => {
+            out.push((
+                noun.to_string(),
+                format!("{cli_label} not installed — {noun} state unknown"),
+            ));
+        }
+        ChangeLinkageState::CliFailed => {
+            out.push((
+                noun.to_string(),
+                format!("{cli_label} lookup failed — {noun} state unknown"),
+            ));
+        }
+        ChangeLinkageState::Unreachable => {
+            out.push((
+                noun.to_string(),
+                format!("{noun} API unreachable — {noun} state unknown (transient)"),
+            ));
+        }
+        ChangeLinkageState::BranchNotFound => {
+            out.push((
+                "Branch".to_string(),
+                "work committed but branch not found locally".to_string(),
+            ));
+        }
+    }
+    out
+}
+
 /// TASK-241: extract the PR number from a GitHub squash-merge commit
 /// subject, which ends with `(#NN)`. Returns None when the subject has
 /// no such suffix. trace:TASK-241 | ai:claude
@@ -54959,13 +55194,51 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
 
     println!("\n{}:", "Git linkage".green().bold());
 
-    // ---- Branch / worktree / PR (anchored on the newest commit) ----
+    // ---- Branch / worktree / PR-or-MR (anchored on the newest commit) ----
+    // STORY-511: resolve the forge once so the change-request line uses the
+    // right noun ("PR"/"MR") and CLI ("gh"/"glab") — a GitLab repo now reads
+    // "MR-47" + "glab not installed", not the GitHub-only wording. The
+    // (label, value) text is produced by the pure `format_change_linkage`;
+    // this block only adds color + the worktree/branch decoration that
+    // depends on live data. trace:STORY-511 | ai:claude
     if !commits.is_empty() {
-        if shipped {
-            println!("  {}     {}", "Branch".bold(), "merged to main".green());
-            if let Some(num) = shipped_pr {
-                println!("  {}         {}", "PR".bold(), format!("PR-{}", num).cyan());
+        let forge = crate::forge::resolve_forge_kind(project_root);
+        // Helper: print a formatted change-linkage line list with styling.
+        let render = |lines: Vec<(String, String)>, found_url: Option<&str>| {
+            for (label, value) in lines {
+                if label == "Branch" {
+                    // "merged to main" is the only Branch line this path
+                    // produces (in-flight Branch is rendered below with
+                    // worktree decoration).
+                    println!("  {}     {}", "Branch".bold(), value.green());
+                } else if let Some(url) = found_url {
+                    // An open change: split the trailing url so it can be dimmed.
+                    let id_part = value.strip_suffix(url).map(|s| s.trim_end());
+                    match id_part {
+                        Some(id) => {
+                            println!("  {}         {} {}", label.bold(), id.cyan(), url.dimmed())
+                        }
+                        None => println!("  {}         {}", label.bold(), value.cyan()),
+                    }
+                } else {
+                    // Shipped change number, or a dimmed "unknown" diagnostic.
+                    let is_diag = value.contains("unknown")
+                        || value.starts_with("no ")
+                        || value.contains("not installed");
+                    if is_diag {
+                        println!("  {}         {}", label.bold(), value.dimmed());
+                    } else {
+                        println!("  {}         {}", label.bold(), value.cyan());
+                    }
+                }
             }
+        };
+
+        if shipped {
+            render(
+                format_change_linkage(forge, &ChangeLinkageState::Shipped { number: shipped_pr }),
+                None,
+            );
         } else {
             match branch.as_deref() {
                 Some(b) => {
@@ -54979,38 +55252,35 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
                         wt,
                         "in flight".yellow()
                     );
-                    // STORY-516: forge-routed. trace:STORY-516 | ai:claude
-                    match change_lookup_for_branch(project_root, b) {
-                        crate::forge::ChangeLookup::Found(c) => println!(
-                            "  {}         {} {}",
-                            "PR".bold(),
-                            format!("PR-{}", c.id).cyan(),
-                            c.url.dimmed()
-                        ),
-                        crate::forge::ChangeLookup::NoChange => {
-                            println!("  {}         {}", "PR".bold(), "no PR opened yet".dimmed())
-                        }
-                        crate::forge::ChangeLookup::CliMissing => println!(
-                            "  {}         {}",
-                            "PR".bold(),
-                            "gh not installed — PR state unknown".dimmed()
-                        ),
-                        crate::forge::ChangeLookup::CliFailed(_) => println!(
-                            "  {}         {}",
-                            "PR".bold(),
-                            "gh lookup failed — PR state unknown".dimmed()
-                        ),
-                        crate::forge::ChangeLookup::Unreachable(_) => println!(
-                            "  {}         {}",
-                            "PR".bold(),
-                            "GH API unreachable — PR state unknown (transient)".dimmed()
-                        ),
-                    }
+                    // STORY-516: forge-routed lookup → STORY-511 forge-aware
+                    // rendering. trace:STORY-516 trace:STORY-511 | ai:claude
+                    let (state, url): (ChangeLinkageState, Option<String>) =
+                        match change_lookup_for_branch(project_root, b) {
+                            crate::forge::ChangeLookup::Found(c) => (
+                                ChangeLinkageState::InFlightFound {
+                                    number: c.id,
+                                    url: c.url.clone(),
+                                },
+                                Some(c.url),
+                            ),
+                            crate::forge::ChangeLookup::NoChange => {
+                                (ChangeLinkageState::InFlightNoChange, None)
+                            }
+                            crate::forge::ChangeLookup::CliMissing => {
+                                (ChangeLinkageState::CliMissing, None)
+                            }
+                            crate::forge::ChangeLookup::CliFailed(_) => {
+                                (ChangeLinkageState::CliFailed, None)
+                            }
+                            crate::forge::ChangeLookup::Unreachable(_) => {
+                                (ChangeLinkageState::Unreachable, None)
+                            }
+                        };
+                    render(format_change_linkage(forge, &state), url.as_deref());
                 }
-                None => println!(
-                    "  {}     {}",
-                    "Branch".bold(),
-                    "work committed but branch not found locally".yellow()
+                None => render(
+                    format_change_linkage(forge, &ChangeLinkageState::BranchNotFound),
+                    None,
                 ),
             }
         }
