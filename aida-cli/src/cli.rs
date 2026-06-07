@@ -1158,6 +1158,14 @@ pub enum PrCommand {
         // trace:STORY-451 | ai:codex
         #[clap(long, value_enum, value_name = "BUCKET")]
         effort: Option<crate::effort_calibration::EffortBucket>,
+
+        /// Bypass the client-side trailer spec-ID check (Guard 1). Ship even
+        /// when a commit's `(SPEC-ID)` trailer does not resolve to a live
+        /// spec. Use only when you know the trailer is intentional (e.g. a
+        /// cross-repo id the local store can't see).
+        // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        no_trailer_check: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but
