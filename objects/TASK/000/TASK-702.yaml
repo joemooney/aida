@@ -8,7 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T21:18:01.019067825Z
-modified_at: 2026-06-07T22:19:24.031115141Z
+modified_at: 2026-06-07T22:41:14.210435728Z
 req_type: Task
 tags:
 - review:draft-only
+comments:
+- id: 019ea43f-53e2-73a2-9849-3a3f46e566d5
+  author: joe
+  content: 'COLLISION note (2026-06-07): codex (briefed) and a fan-out subagent both implemented this concurrently. PR #663 (branch task-702) now holds the subagent''s version (f54841231, [AI:claude]) — complete, gates green (2023 cli tests + scaffolding test), hooks empirically validated end-to-end (register with branch-derived scope, harness-worktree fallback, release by agent_id). codex''s parallel commit 06935ec9d was superseded on the remote (recoverable from codex''s local if preferred). review:draft-only → PR held as a DRAFT for operator review on return. Lesson: check for in-flight agent work on a spec before fanning it out.'
+  created_at: 2026-06-07T22:41:14.210435728Z
+  modified_at: 2026-06-07T22:41:14.210435728Z
