@@ -79,14 +79,22 @@ mod tests {
     use super::*;
 
     /// A unique temp dir with a `.aida/` subdir, mimicking a project root.
+    ///
+    /// Uses a process-wide atomic counter for uniqueness. A timestamp alone is
+    /// insufficient: Windows `SystemTime` resolution is ~15ms, so parallel test
+    /// threads calling this within one tick would collide and clobber each
+    /// other's state files. trace:BUG-470 | ai:claude
     fn temp_root() -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
         let root = std::env::temp_dir().join(format!(
-            "aida-tui-state-test-{}-{}",
+            "aida-tui-state-test-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(root.join(".aida")).unwrap();
         root
