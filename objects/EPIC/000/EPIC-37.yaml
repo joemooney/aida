@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:31:00.203994130Z
-modified_at: 2026-06-06T08:30:12.174241031Z
+modified_at: 2026-06-07T02:09:17.713359733Z
 req_type: Epic
 tags:
 - batch:onboarding-hardening
@@ -47,3 +47,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Active onboarding-hardening umbrella; 3 of 5 children (BUG-446/447/671) already Completed, remaining real work is BUG-445+TASK-631 — drain the rest via --batch onboarding-hardening, no open umbrella-level decision.
   created_at: 2026-06-06T08:30:10.274699306Z
   modified_at: 2026-06-06T08:30:10.274699306Z
+- id: 019e9fd7-7391-7110-a7f0-eb793d9b6d48
+  author: joe
+  content: '✅ COMPLETE (2026-06-06). Onboarding-hardening delivered + verified end-to-end via a fresh ''git init && aida init'' dogfood. Children all shipped: BUG-446 (workspace-of-projects init guard), BUG-447 (project-scoped session-resume), TASK-631 (init commits its own scaffolding — clean tree), BUG-445 (scaffolding-commit task stays primary-worktree-only), TASK-671 (id-real remote-aware awaiting-commit hint), + last-mile BUG-464 (status no longer miscounts seeded META as untriaged drafts) and BUG-465 (empty-queue first-run now GUIDES: file→queue→work, instead of dead-ending). Acceptance met: a fresh init → first ''aida queue work'' is boring and correct. Fold-in disposition: TASK-450 rejected (superseded by TASK-631); BUG-433 (silent-wrong-data store detection) left OPEN as a standalone store-detection bug — TASK-631 narrowed its trigger but the detection hole is orthogonal to onboarding.'
+  created_at: 2026-06-07T02:09:17.713359733Z
+  modified_at: 2026-06-07T02:09:17.713359733Z
