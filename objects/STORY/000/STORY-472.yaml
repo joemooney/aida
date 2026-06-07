@@ -76,7 +76,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T19:42:18.683129292Z
-modified_at: 2026-06-07T16:35:10.529458594Z
+modified_at: 2026-06-07T16:35:13.314887819Z
 req_type: Story
 tags:
 - admin-verb
@@ -98,3 +98,8 @@ comments:
   content: Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified). Verified `aida release` top-level verb does not exist (only `aida dev release` version-bump + `aida node release`); well-specified, bounded, phased (--check then full), no open decision — delivers the one-verb CI-watch + PR-merge + pull + release.sh wrapper.
   created_at: 2026-06-06T08:33:57.077871035Z
   modified_at: 2026-06-06T08:33:57.077871035Z
+- id: 019ea2f0-3b22-7d32-b39f-3c42bd943299
+  author: joe
+  content: 'Delivered 2026-06-07: top-level ''aida release'' verb complete — --patch/--minor/--major + --check preview + --skip-xplat-check (TASK-692) and --after-pr <N> watch-merge-sync (TASK-693), reusing handle_dev_release. Closes the operator friction (''won''t remember the sequence''). No open children remain.'
+  created_at: 2026-06-07T16:35:13.314887819Z
+  modified_at: 2026-06-07T16:35:13.314887819Z
