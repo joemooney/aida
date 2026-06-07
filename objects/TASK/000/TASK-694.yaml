@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T16:49:05.807499637Z
-modified_at: 2026-06-07T21:17:51.986625625Z
+modified_at: 2026-06-07T21:22:21.722791287Z
 req_type: Task
 comments:
 - id: 019ea3d8-843d-77c0-b988-244f7d80972e
@@ -38,3 +38,15 @@ comments:
     PLAN: (1) empirical probe — confirm SubagentStart cwd = worktree for an isolated subagent + capture the real payload (filed as a task; can't run in THIS session — hooks load at session start). (2) wiring — gated on the probe. trace:TASK-694
   created_at: 2026-06-07T21:17:51.986625625Z
   modified_at: 2026-06-07T21:17:51.986625625Z
+- id: 019ea3f7-1d9a-7150-866a-c37c465c4d30
+  author: joe
+  content: |-
+    PROBE RESULT (TASK-701, empirically verified in-session 2026-06-07 — hooks load dynamically, fired on a throwaway Agent isolation:worktree):
+
+    SubagentStart payload: {session_id, transcript_path, cwd, agent_id, agent_type, hook_event_name}. cwd = the worktree dir (/.../.claude/worktrees/agent-<agent_id>) — CONFIRMED, this is the gate question answered YES. No branch field.
+    SubagentStop payload: {cwd, permission_mode, agent_id, agent_type, hook_event_name, stop_hook_active, agent_transcript_path, last_assistant_message, background_tasks, session_crons}. Same cwd + same agent_id as Start → correlation confirmed.
+    WorktreeRemove: did NOT fire (the worktree persisted after the subagent finished — the orphan-accumulation we keep cleaning). => use SubagentStop for the lease RELEASE, not WorktreeRemove.
+
+    Confirmed wiring (TASK-702, now UNBLOCKED): SubagentStart -> register lease(worktree_path=cwd, branch=git -C cwd rev-parse --abbrev-ref HEAD, scope=spec_id_from_branch(branch) else 'harness-worktree', key=agent_id). SubagentStop -> release lease by agent_id. Harness branches are 'worktree-agent-<id>' (no SPEC-ID → harness-worktree scope, as designed). trace:TASK-701 trace:TASK-694
+  created_at: 2026-06-07T21:22:21.722791287Z
+  modified_at: 2026-06-07T21:22:21.722791287Z
