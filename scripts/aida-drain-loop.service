@@ -1,0 +1,33 @@
+# aida-drain-loop.service — systemd --user unit for the v1 resilient drain loop.
+#
+# Install:
+#   cp scripts/aida-drain-loop.service ~/.config/systemd/user/
+#   # edit WorkingDirectory + the PATH line below for your machine
+#   loginctl enable-linger "$USER"          # survive logout/reboot (already done on imac)
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now aida-drain-loop.service
+#   journalctl --user -u aida-drain-loop -f  # watch it
+#   systemctl --user stop aida-drain-loop    # pause the loop
+#
+# NOTE on PATH: a --user service runs with a minimal environment, so `aida` must
+# be reachable. Set the PATH line to wherever your active `aida` lives — the
+# in-repo release build (target/release) if you use `aida-on`, plus ~/.local/bin
+# / /usr/local/bin for a released binary. Confirm with: `command -v aida`.
+
+[Unit]
+Description=AIDA resilient drain loop (EPIC-30 v1)
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/ai/aida
+# EDIT THIS to match `command -v aida` on your box:
+Environment=PATH=%h/ai/aida/target/release:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=AIDA_SESSION_ROLE=implementer
+# Knobs (optional): Environment=AIDA_DRAIN_CHUNK=10  AIDA_DRAIN_IDLE=300
+ExecStart=%h/ai/aida/scripts/drain-loop.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
