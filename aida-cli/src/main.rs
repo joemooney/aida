@@ -1045,6 +1045,21 @@ fn run() -> Result<()> {
         return handle_dev_command(dev_cmd);
     }
 
+    // STORY-472: `aida release` — a memorable top-level verb wrapping the dev
+    // release flow (store pull → scripts/release.sh → tarball wait → sibling
+    // upgrade). Operates on the repo, not the requirements store, so dispatch
+    // early like `dev`. trace:STORY-472 | ai:claude
+    if let Command::Release {
+        patch,
+        minor,
+        major,
+        check,
+        skip_xplat_check,
+    } = &cli.command
+    {
+        return handle_release(*patch, *minor, *major, *check, *skip_xplat_check);
+    }
+
     // Doctor commands run before storage init — they may need to operate
     // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
     if let Command::Doctor {
@@ -1788,6 +1803,7 @@ fn run() -> Result<()> {
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
@@ -8191,6 +8207,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
@@ -60999,6 +61016,169 @@ fn handle_dev_serve(
 
     eprintln!("[dev serve] stopped.");
     Ok(())
+}
+
+/// STORY-472: resolve the bump kind from the mutually-exclusive
+/// `--patch`/`--minor`/`--major` flags. None set → "patch" (smallest, safe
+/// default); more than one set → a clean error. trace:STORY-472 | ai:claude
+fn resolve_release_bump(patch: bool, minor: bool, major: bool) -> Result<&'static str, String> {
+    match (patch, minor, major) {
+        (_, false, false) => Ok("patch"), // explicit --patch or nothing
+        (false, true, false) => Ok("minor"),
+        (false, false, true) => Ok("major"),
+        _ => Err("specify only one of --patch / --minor / --major".to_string()),
+    }
+}
+
+/// STORY-472: compute the next semver from `current` for a patch/minor/major
+/// bump (lower components reset to 0), for the `--check` preview. Returns None
+/// if `current` isn't a plain MAJOR.MINOR.PATCH. trace:STORY-472 | ai:claude
+fn preview_next_version(current: &str, bump: &str) -> Option<String> {
+    let core = current.split(['-', '+']).next().unwrap_or(current);
+    let mut it = core.split('.');
+    let maj: u64 = it.next()?.parse().ok()?;
+    let min: u64 = it.next()?.parse().ok()?;
+    let pat: u64 = it.next()?.parse().ok()?;
+    if it.next().is_some() {
+        return None;
+    }
+    Some(match bump {
+        "minor" => format!("{maj}.{}.0", min + 1),
+        "major" => format!("{}.0.0", maj + 1),
+        _ => format!("{maj}.{min}.{}", pat + 1),
+    })
+}
+
+/// STORY-472: `aida release` — a memorable top-level verb over the dev release
+/// flow. `--check` previews the planned release (read-only); otherwise it
+/// delegates to `handle_dev_release`, forwarding `--skip-xplat-check` via the
+/// env the release script honors. trace:STORY-472 | ai:claude
+fn handle_release(
+    patch: bool,
+    minor: bool,
+    major: bool,
+    check: bool,
+    skip_xplat_check: bool,
+) -> Result<()> {
+    let bump = resolve_release_bump(patch, minor, major).map_err(|e| anyhow::anyhow!(e))?;
+
+    if check {
+        let cur = current_version();
+        let target = preview_next_version(cur, bump).unwrap_or_else(|| "?".to_string());
+        let repo = std::env::current_dir().ok().and_then(|cwd| {
+            find_aida_repo_above(&cwd).or_else(|| {
+                std::env::var("AIDA_DEV_REPO")
+                    .ok()
+                    .map(std::path::PathBuf::from)
+                    .filter(|p| is_aida_repo(p))
+            })
+        });
+        println!(
+            "{} would run a {} release: {} → {}",
+            "▸".cyan().bold(),
+            bump.bold(),
+            cur,
+            target.green()
+        );
+        match &repo {
+            Some(r) => {
+                let branch = current_branch_at(r).unwrap_or_else(|| "?".to_string());
+                let dirty = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(r)
+                    .args(["status", "--porcelain"])
+                    .output()
+                    .ok()
+                    .map(|o| !o.stdout.is_empty())
+                    .unwrap_or(false);
+                println!("  repo:    {}", r.display());
+                println!("  branch:  {branch}");
+                println!(
+                    "  tree:    {}",
+                    if dirty {
+                        "DIRTY — release.sh requires a clean tree"
+                            .yellow()
+                            .to_string()
+                    } else {
+                        "clean".to_string()
+                    }
+                );
+            }
+            None => println!(
+                "  {} not in an aida repo (cd into the checkout or set AIDA_DEV_REPO)",
+                "⚠".yellow()
+            ),
+        }
+        println!("  steps:   1) aida-store pull  2) scripts/release.sh {bump} (cross-platform gate + tag + push)  3) wait for tarballs  4) upgrade sibling installs");
+        println!(
+            "  cross-platform gate: {}",
+            if skip_xplat_check {
+                "SKIPPED (--skip-xplat-check)".yellow().to_string()
+            } else {
+                "enforced".to_string()
+            }
+        );
+        println!("\n  Re-run without --check to execute.");
+        return Ok(());
+    }
+
+    if skip_xplat_check {
+        // scripts/release.sh / pre-release-check.sh honor this env. trace:STORY-472
+        std::env::set_var("AIDA_SKIP_XPLAT_CHECK", "1");
+    }
+    handle_dev_release(bump)
+}
+
+#[cfg(test)]
+mod release_verb_tests {
+    use super::{preview_next_version, resolve_release_bump};
+
+    #[test]
+    fn resolve_bump_defaults_to_patch() {
+        assert_eq!(resolve_release_bump(false, false, false), Ok("patch"));
+        assert_eq!(resolve_release_bump(true, false, false), Ok("patch"));
+    }
+
+    #[test]
+    fn resolve_bump_maps_each_flag() {
+        assert_eq!(resolve_release_bump(false, true, false), Ok("minor"));
+        assert_eq!(resolve_release_bump(false, false, true), Ok("major"));
+    }
+
+    #[test]
+    fn resolve_bump_rejects_multiple() {
+        assert!(resolve_release_bump(false, true, true).is_err());
+        assert!(resolve_release_bump(true, true, false).is_err());
+        assert!(resolve_release_bump(true, false, true).is_err());
+    }
+
+    #[test]
+    fn preview_next_version_bumps_and_resets_lower_components() {
+        assert_eq!(
+            preview_next_version("0.12.0", "patch").as_deref(),
+            Some("0.12.1")
+        );
+        assert_eq!(
+            preview_next_version("0.12.3", "minor").as_deref(),
+            Some("0.13.0")
+        );
+        assert_eq!(
+            preview_next_version("0.12.3", "major").as_deref(),
+            Some("1.0.0")
+        );
+    }
+
+    #[test]
+    fn preview_next_version_tolerates_prerelease_suffix_and_rejects_garbage() {
+        // A -pre / +build suffix is dropped before bumping.
+        assert_eq!(
+            preview_next_version("1.2.3-rc1", "patch").as_deref(),
+            Some("1.2.4")
+        );
+        // Not a 3-part numeric version → None (handler renders "?").
+        assert_eq!(preview_next_version("nightly", "patch"), None);
+        assert_eq!(preview_next_version("1.2", "patch"), None);
+    }
 }
 
 /// Stream a child's stdout/stderr to the parent's stderr with a prefix.

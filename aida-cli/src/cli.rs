@@ -5875,6 +5875,31 @@ pub enum Command {
         branch: Option<String>,
     },
 
+    // trace:STORY-472 | ai:claude
+    /// One-verb release: sync the store, run the version bump + tag + push,
+    /// wait for the published tarballs, and upgrade sibling installs. Wraps the
+    /// whole sequence so you don't have to remember it. Use --check first to
+    /// preview without acting.
+    Release {
+        /// Bump the patch version (default if no level is given).
+        #[clap(long)]
+        patch: bool,
+        /// Bump the minor version.
+        #[clap(long)]
+        minor: bool,
+        /// Bump the major version.
+        #[clap(long)]
+        major: bool,
+        /// Preview the planned release (current → target version + the step
+        /// sequence + repo/branch/tree state) without acting.
+        #[clap(long)]
+        check: bool,
+        /// Skip the cross-platform CI pre-release gate (not recommended for a
+        /// published release).
+        #[clap(long)]
+        skip_xplat_check: bool,
+    },
+
     /// AIDA-developer-only commands: activate the in-repo dev binary,
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]
