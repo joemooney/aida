@@ -477,9 +477,18 @@ impl MetaSubtype {
 /// `Serialize` stays derived so the on-disk bytes are unchanged.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash, TS)]
 pub enum RelationshipType {
-    /// Parent-child relationship (this is parent of target)
+    // TASK-679: the stored convention — verified empirically against `aida add
+    // --parent` — is "the rel_type names the SOURCE's role relative to the
+    // target". So a parent stores `Parent --> child` ("I am the parent of this
+    // target") and the child stores the reciprocal `Child --> parent`. Both
+    // `aida add --parent` and (since TASK-679) `aida rel add --type parent`
+    // write the bidirectional pair. trace:TASK-679 | ai:claude
+    /// This requirement is the parent of the target. Stored on the parent as
+    /// `parent --Parent--> child`; its reciprocal is `Child` on the child. Walk
+    /// OUTGOING `Parent` from an epic/folder to reach its children.
     Parent,
-    /// Child-parent relationship (this is child of target)
+    /// This requirement is a child of the target. Stored on the child as
+    /// `child --Child--> parent`; its reciprocal is `Parent` on the parent.
     Child,
     /// Duplicate relationship
     Duplicate,

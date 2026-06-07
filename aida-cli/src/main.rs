@@ -10621,34 +10621,70 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
             }
 
-            let rel = aida_core::models::Relationship {
-                rel_type: rel_type.clone(),
-                target_id: to_req.id,
-                created_at: Some(chrono::Utc::now()),
-                created_by: Some(get_default_author()),
-            };
+            // TASK-679: a parent/child edge is canonically BIDIRECTIONAL so it
+            // matches `aida add --parent` (which writes the parent's `Parent`
+            // edge AND the child's reciprocal `Child` edge). The old `rel add`
+            // wrote only the source-side edge, leaving the other spec's `show`
+            // blind to the link (spec point #5). Force the reciprocal for
+            // parent/child even without an explicit `--bidirectional`; other
+            // edge types keep the opt-in flag. trace:TASK-679 | ai:claude
+            let write_inverse = rel_should_write_inverse(&rel_type, *bidirectional);
 
-            from_req.relationships.push(rel);
-            from_req.modified_at = chrono::Utc::now();
-            backend.update_requirement(&from_req)?;
-            println!("Added relationship: {} --[{:?}]--> {}", from, rel_type, to);
+            // TASK-679: dedup. The old git-canonical path pushed blindly, so a
+            // repeated `rel add` (EPIC-37 had the same target twice) accumulated
+            // duplicate edges. Skip the push when an identical (rel_type,
+            // target) edge already exists on the source. trace:TASK-679 | ai:claude
+            let edge_exists = from_req
+                .relationships
+                .iter()
+                .any(|r| r.rel_type == rel_type && r.target_id == to_req.id);
+            if edge_exists {
+                println!(
+                    "Relationship already exists: {} --[{:?}]--> {} (no change)",
+                    from, rel_type, to
+                );
+            } else {
+                let rel = aida_core::models::Relationship {
+                    rel_type: rel_type.clone(),
+                    target_id: to_req.id,
+                    created_at: Some(chrono::Utc::now()),
+                    created_by: Some(get_default_author()),
+                };
 
-            if *bidirectional {
+                from_req.relationships.push(rel);
+                from_req.modified_at = chrono::Utc::now();
+                backend.update_requirement(&from_req)?;
+                println!("Added relationship: {} --[{:?}]--> {}", from, rel_type, to);
+            }
+
+            if write_inverse {
                 let mut to_req = backend.get_requirement_by_spec_id(to)?.unwrap();
                 // STORY-333: use the canonical inverse helper so new typed
                 // variants (BlockedBy ↔ Blocks) compose automatically.
                 // trace:STORY-333 | ai:claude
                 let inverse_type = rel_type.inverse().unwrap_or_else(|| rel_type.clone());
-                let inv_rel = aida_core::models::Relationship {
-                    rel_type: inverse_type.clone(),
-                    target_id: from_req.id,
-                    created_at: Some(chrono::Utc::now()),
-                    created_by: Some(get_default_author()),
-                };
-                to_req.relationships.push(inv_rel);
-                to_req.modified_at = chrono::Utc::now();
-                backend.update_requirement(&to_req)?;
-                println!("Added inverse: {} --[{:?}]--> {}", to, inverse_type, from);
+                // TASK-679: dedup the inverse end too. trace:TASK-679 | ai:claude
+                let inverse_exists = to_req
+                    .relationships
+                    .iter()
+                    .any(|r| r.rel_type == inverse_type && r.target_id == from_req.id);
+                if inverse_exists {
+                    println!(
+                        "Inverse already exists: {} --[{:?}]--> {} (no change)",
+                        to, inverse_type, from
+                    );
+                } else {
+                    let inv_rel = aida_core::models::Relationship {
+                        rel_type: inverse_type.clone(),
+                        target_id: from_req.id,
+                        created_at: Some(chrono::Utc::now()),
+                        created_by: Some(get_default_author()),
+                    };
+                    to_req.relationships.push(inv_rel);
+                    to_req.modified_at = chrono::Utc::now();
+                    backend.update_requirement(&to_req)?;
+                    println!("Added inverse: {} --[{:?}]--> {}", to, inverse_type, from);
+                }
             }
         }
         Command::Rel(RelationshipCommand::Remove {
@@ -16050,17 +16086,16 @@ fn handle_graph_command(
             "follow",
         )
     } else {
-        // BUG-448: the epic rollup must union BOTH parenthood edge types stored
-        // on the parent. `aida add --parent` records a `Child` edge on the
-        // parent; `aida rel add --type parent` records a `Parent` edge on the
-        // parent (inverted-but-displayed-as "is parent of") and writes nothing
-        // on the child. Both are OUTGOING from the epic and both mean "this is a
-        // child", so `--tree` walked over only `Child` reported "(no related
-        // specs)" for any epic whose children were grouped post-hoc via
-        // `rel add`. Walking both types (deduped by the visited/seen sets) makes
-        // `show`, `--follow parent`, and `--tree` agree. The underlying
-        // edge-semantics divergence is a separate data-model normalization
-        // (follow-up). trace:BUG-448 | ai:claude
+        // BUG-448 / TASK-679: the epic rollup walks OUTGOING `Parent` to reach
+        // children — both `aida add --parent` and `aida rel add --type parent`
+        // store `parent --Parent--> child` on the parent (TASK-679 made `rel
+        // add` also write the reciprocal `child --Child--> parent`, so the two
+        // surfaces now agree). `Child` is KEPT in the union purely for
+        // back-compat: any legacy store whose hierarchy was recorded the other
+        // way round (a parent carrying `Child --> child` edges) still resolves
+        // its children without a migration. Both are OUTGOING from the epic and
+        // both resolve to children; the visited/seen sets dedup overlap.
+        // trace:BUG-448 | ai:claude trace:TASK-679 | ai:claude
         (
             vec![(
                 vec![RelationshipType::Child, RelationshipType::Parent],
@@ -72249,6 +72284,16 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
     Ok(())
 }
 
+/// TASK-679: a parent/child edge is canonically BIDIRECTIONAL so both ends
+/// reflect the link — matching `aida add --parent`, which writes the parent's
+/// `Parent --> child` edge and the child's reciprocal `Child --> parent` edge.
+/// `aida rel add` previously wrote only the source-side edge for these types.
+/// Any other edge type keeps the explicit `--bidirectional` opt-in. Pure so
+/// the canonical-edge decision is unit-testable. trace:TASK-679 | ai:claude
+fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: bool) -> bool {
+    bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
+}
+
 fn add_relationship(
     storage: &Storage,
     from_str: &str,
@@ -72303,8 +72348,31 @@ fn add_relationship(
         }
     }
 
+    // TASK-679: dedup — `add_relationship` errors hard on a pre-existing edge;
+    // make a repeated `rel add` a friendly no-op instead. trace:TASK-679 | ai:claude
+    let already_exists = from_req
+        .relationships
+        .iter()
+        .any(|r| r.rel_type == rel_type && r.target_id == to_id);
+    if already_exists {
+        println!(
+            "{} {} {} {} ({})",
+            "Relationship already exists (no change):".yellow(),
+            from_spec,
+            "->".blue(),
+            to_spec,
+            rel_type.to_string().cyan()
+        );
+        return Ok(());
+    }
+
+    // TASK-679: parent/child edges are canonically bidirectional (match
+    // `aida add --parent`), so write the reciprocal even without the flag.
+    // `add_relationship` itself dedups the inverse end. trace:TASK-679 | ai:claude
+    let write_inverse = rel_should_write_inverse(&rel_type, bidirectional);
+
     // Add the relationship
-    store.add_relationship(&from_id, rel_type.clone(), &to_id, bidirectional)?;
+    store.add_relationship(&from_id, rel_type.clone(), &to_id, write_inverse)?;
 
     // Save
     storage.save(&store)?;
@@ -72320,7 +72388,7 @@ fn add_relationship(
     );
     println!("  Relationship: {}", rel_type.to_string().cyan());
 
-    if bidirectional {
+    if write_inverse {
         if let Some(inverse) = rel_type.inverse() {
             println!("  {} (bidirectional)", inverse.to_string().cyan());
         }
@@ -72362,6 +72430,143 @@ fn remove_relationship(
     }
 
     Ok(())
+}
+
+// TASK-679: fully-isolated unit tests for the canonical parent/child edge
+// behaviour of `aida rel add`. These exercise the model layer directly (no
+// filesystem, no git) plus the pure `rel_should_write_inverse` decision.
+// trace:TASK-679 | ai:claude
+#[cfg(test)]
+mod task_679_canonical_rel_tests {
+    use super::rel_should_write_inverse;
+    use aida_core::models::{RelationshipType, Requirement, RequirementStatus, RequirementsStore};
+
+    fn store_with_two() -> (RequirementsStore, uuid::Uuid, uuid::Uuid) {
+        let mut store = RequirementsStore::new();
+        let parent = Requirement::new("Parent epic".into(), "desc".into());
+        let child = Requirement::new("Child task".into(), "desc".into());
+        let (pid, cid) = (parent.id, child.id);
+        store.add_requirement_with_spec_id(parent);
+        store.add_requirement_with_spec_id(child);
+        (store, pid, cid)
+    }
+
+    #[test]
+    fn parent_child_edges_force_a_reciprocal() {
+        // `rel add --type parent` and `--type child` both write a reciprocal
+        // even without `--bidirectional`; other types stay opt-in.
+        assert!(rel_should_write_inverse(&RelationshipType::Parent, false));
+        assert!(rel_should_write_inverse(&RelationshipType::Child, false));
+        assert!(!rel_should_write_inverse(
+            &RelationshipType::References,
+            false
+        ));
+        assert!(rel_should_write_inverse(
+            &RelationshipType::References,
+            true
+        ));
+    }
+
+    #[test]
+    fn rel_add_type_parent_matches_add_parent_shape() {
+        // `aida rel add --type parent PARENT CHILD` must store the SAME edge
+        // pair as `aida add --parent`: `parent --Parent--> child` on the parent
+        // and the reciprocal `child --Child--> parent` on the child.
+        let (mut store, pid, cid) = store_with_two();
+        let write_inverse = rel_should_write_inverse(&RelationshipType::Parent, false);
+        store
+            .add_relationship(&pid, RelationshipType::Parent, &cid, write_inverse)
+            .unwrap();
+
+        let parent = store.get_requirement_by_id(&pid).unwrap();
+        assert!(
+            parent
+                .relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Parent && r.target_id == cid),
+            "parent should carry `Parent --> child`"
+        );
+        let child = store.get_requirement_by_id(&cid).unwrap();
+        assert!(
+            child
+                .relationships
+                .iter()
+                .any(|r| r.rel_type == RelationshipType::Child && r.target_id == pid),
+            "child should carry the reciprocal `Child --> parent`"
+        );
+    }
+
+    #[test]
+    fn rel_add_dedups_repeated_edges() {
+        // A repeated identical edge must not accumulate. The model layer rejects
+        // the duplicate, and the CLI surfaces it as a friendly no-op (tested via
+        // the model's reject here).
+        let (mut store, pid, cid) = store_with_two();
+        store
+            .add_relationship(&pid, RelationshipType::Parent, &cid, false)
+            .unwrap();
+        let second = store.add_relationship(&pid, RelationshipType::Parent, &cid, false);
+        assert!(
+            second.is_err(),
+            "duplicate edge must be rejected, not stored"
+        );
+        let parent = store.get_requirement_by_id(&pid).unwrap();
+        let count = parent
+            .relationships
+            .iter()
+            .filter(|r| r.rel_type == RelationshipType::Parent && r.target_id == cid)
+            .count();
+        assert_eq!(count, 1, "only one Parent edge after a repeat");
+    }
+
+    #[test]
+    fn tree_walk_resolves_children_from_both_orientations() {
+        // `--tree` walks OUTGOING [Child, Parent] from the epic. The canonical
+        // orientation (`epic --Parent--> child`, post-TASK-679) and the legacy
+        // back-compat orientation (`epic --Child--> child`) both resolve, deduped.
+        use aida_core::graph_walk::{walk_union, Direction};
+
+        let mut store = RequirementsStore::new();
+        let mut epic = Requirement::new("Epic".into(), "desc".into());
+        epic.status = RequirementStatus::InProgress;
+        let canonical_child = Requirement::new("Canonical child".into(), "desc".into());
+        let legacy_child = Requirement::new("Legacy child".into(), "desc".into());
+        let (eid, can_id, leg_id) = (epic.id, canonical_child.id, legacy_child.id);
+
+        // Canonical: epic --Parent--> child.
+        epic.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: can_id,
+            created_at: None,
+            created_by: None,
+        });
+        // Legacy back-compat: epic --Child--> child (other stored orientation).
+        epic.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: leg_id,
+            created_at: None,
+            created_by: None,
+        });
+        store.add_requirement_with_spec_id(canonical_child);
+        store.add_requirement_with_spec_id(legacy_child);
+        store.add_requirement_with_spec_id(epic);
+
+        let res = walk_union(
+            &store,
+            eid,
+            &[(
+                vec![RelationshipType::Child, RelationshipType::Parent],
+                Direction::Outgoing,
+            )],
+            None,
+        );
+        let nodes: std::collections::HashSet<uuid::Uuid> = res.nodes.iter().copied().collect();
+        assert_eq!(
+            nodes,
+            std::collections::HashSet::from([can_id, leg_id]),
+            "tree must find children from both the canonical and legacy edge orientations"
+        );
+    }
 }
 
 /// Modern `aida rel list` over the git-canonical backend. Supports three
