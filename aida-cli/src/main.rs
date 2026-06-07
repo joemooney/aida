@@ -24,6 +24,7 @@ mod global_queue;
 mod headless_tail;
 mod headless_tee;
 mod history;
+mod integrate;
 mod mailbox_store;
 mod mcp;
 mod metrics;
@@ -82671,6 +82672,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let user_id = current_user_id(user.as_deref());
             handle_queue_recover(storage, &user_id, id, *dry_run, *auto)?;
         }
+        QueueCommand::Integrate {
+            dry_run,
+            once: _,
+            watch,
+            interval,
+            max,
+            user,
+        } => {
+            let user_id = current_user_id(user.as_deref());
+            handle_queue_integrate(storage, &user_id, *dry_run, *watch, *interval, *max)?;
+        }
     }
     Ok(())
 }
@@ -87614,6 +87626,183 @@ fn handle_queue_recover(
             // non-TTY contexts, so route the role explicitly.
             let _ = run_aida(&["queue", "add", &spec, "--user", user_id]);
         }
+    }
+
+    Ok(())
+}
+
+/// STORY-520: `aida queue integrate` — the thin integrator watch-loop.
+///
+/// The consumer half of a producer/consumer split: parallel implementers
+/// produce PRs + flip specs to Done; this single serial loop consumes that
+/// signal (Done + open PR) and drives the back-end merge phases on each in turn.
+///
+/// A FRONT-END over existing primitives, not new mechanism: the ready-set query
+/// reuses the store load + the forge PR/merged probes (`probe_resume_facts`),
+/// the membership decision is the pure [`integrate::classify_candidate`], and
+/// each ready spec is driven by shelling out to the SAME TASK-405 PR-only path
+/// (`aida queue work <id> --auto-complete --from-pr`) the resume/recover flows
+/// use. The serial-merge invariant (one merge authority over `main`) is
+/// preserved by driving each spec to completion before the next.
+/// trace:STORY-520 | ai:claude
+fn handle_queue_integrate(
+    storage: &Storage,
+    _user_id: &str,
+    dry_run: bool,
+    watch: bool,
+    interval: u64,
+    max: usize,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+
+    let mut integrated_total: usize = 0;
+    let mut pass: usize = 0;
+
+    loop {
+        pass += 1;
+
+        // --- Probe: build the candidate set from store status + forge facts. ---
+        // Reuse `probe_resume_facts` (the same PR/merged probe `--from-pr` and
+        // `--resume-drain` use) so the integrator sees exactly the reality the
+        // drive path will. trace:STORY-520 | ai:claude
+        let store = storage.load()?;
+        let mut candidates: Vec<integrate::IntegrationCandidate> = Vec::new();
+        for req in &store.requirements {
+            if req.status != RequirementStatus::Done {
+                continue;
+            }
+            let id = req
+                .agreed_id
+                .as_deref()
+                .or(req.spec_id.as_deref())
+                .unwrap_or("?")
+                .to_string();
+            // Classify the PR lookup as conclusive-or-not BEFORE probing the
+            // richer facts, so a flaky gh never gets read as "no PR".
+            let lookup = detect_open_pr_for_spec_via_forge(&project_root, &id);
+            let inconclusive = matches!(
+                lookup,
+                PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_)
+            );
+            let (facts, _branch, pr) = probe_resume_facts(&project_root, storage, &id, None);
+            candidates.push(integrate::IntegrationCandidate {
+                id,
+                is_done: true,
+                has_open_pr: pr.is_some(),
+                pr_merged: facts.pr_merged,
+                pr_lookup_inconclusive: inconclusive,
+            });
+        }
+
+        let ready = integrate::ready_for_integration(&candidates);
+
+        // --- Report the pass. ---
+        if watch {
+            println!(
+                "{} integrator pass {} — {} Done spec(s), {} ready for integration",
+                "▸".cyan().bold(),
+                pass,
+                candidates.len(),
+                ready.len()
+            );
+        } else {
+            println!(
+                "{} {} Done spec(s); {} ready for integration",
+                "▸".cyan().bold(),
+                candidates.len(),
+                ready.len()
+            );
+        }
+        for c in &candidates {
+            match integrate::classify_candidate(c) {
+                integrate::CandidateVerdict::Integrate => {
+                    println!("  {} {} — open PR, ready to merge", "→".green(), c.id);
+                }
+                integrate::CandidateVerdict::SkipNoPr => {
+                    println!("  {} {} — Done but no open PR (skip)", "·".dimmed(), c.id);
+                }
+                integrate::CandidateVerdict::SkipAlreadyMerged => {
+                    println!(
+                        "  {} {} — PR already merged; `aida pull` will promote it (skip)",
+                        "·".dimmed(),
+                        c.id
+                    );
+                }
+                integrate::CandidateVerdict::SkipProbeInconclusive => {
+                    println!(
+                        "  {} {} — PR probe inconclusive (gh missing/auth/network); skipping, not guessing",
+                        "⚠".yellow(),
+                        c.id
+                    );
+                }
+                // Non-Done specs were filtered out before classification.
+                integrate::CandidateVerdict::SkipNotDone => {}
+            }
+        }
+
+        // --- Act: drive each ready spec, serially, through the PR-only path. ---
+        let ready_ids: Vec<String> = ready.iter().map(|c| c.id.clone()).collect();
+        for id in &ready_ids {
+            if max != 0 && integrated_total >= max {
+                println!("{} reached --max {} this run; stopping.", "▸".cyan(), max);
+                return Ok(());
+            }
+            if dry_run {
+                println!(
+                    "  {} [dry-run] would drive `{}` via `aida queue work {} --auto-complete --from-pr`",
+                    "→".dimmed(),
+                    id,
+                    id
+                );
+                continue;
+            }
+            println!(
+                "{} integrating `{}` (reviewer → CI → merge → pull → build)…",
+                "↩".cyan().bold(),
+                id
+            );
+            let status = std::process::Command::new(&aida)
+                .current_dir(&project_root)
+                .args(["queue", "work", id, "--auto-complete", "--from-pr"])
+                .status();
+            match status {
+                Ok(s) if s.success() => {
+                    integrated_total += 1;
+                    println!("  {} `{}` integrated", "✓".green().bold(), id);
+                }
+                Ok(s) => {
+                    // A non-zero exit means the drive shelved/refused this spec
+                    // (CI red, RequestChanges, already-merged race, …). Leave it
+                    // visible and move on — the serial loop must not stall on one
+                    // spec. trace:STORY-520 | ai:claude
+                    eprintln!(
+                        "  {} `{}` did not integrate cleanly (exit {}); leaving for triage and continuing",
+                        "⚠".yellow(),
+                        id,
+                        s.code().unwrap_or(-1)
+                    );
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  {} failed to launch the drive for `{}`: {}",
+                        "✗".red().bold(),
+                        id,
+                        e
+                    );
+                }
+            }
+        }
+
+        if !watch {
+            break;
+        }
+        if max != 0 && integrated_total >= max {
+            break;
+        }
+        // Watch mode: sleep, then rescan. The store reload at the top of the
+        // loop picks up specs producers shipped during the sleep.
+        std::thread::sleep(std::time::Duration::from_secs(interval));
     }
 
     Ok(())
