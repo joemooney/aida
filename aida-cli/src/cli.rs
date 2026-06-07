@@ -4308,6 +4308,34 @@ pub enum AdvisorCommand {
     // trace:STORY-262 | ai:claude
     #[clap(subcommand)]
     Schedule(ScheduleCommand),
+
+    /// Generate a checked-in advisor handoff brief for a sibling project.
+    /// Writes a dated, structured Markdown brief at
+    /// `<to>/docs/<date>-advisor-handoff.md` with five sections — parent
+    /// identity (auto), vision, decided things, substrate slice (scoped by
+    /// `--focus`), and latitude. The brief is a template: parent identity
+    /// and the focus topic are filled in automatically; the strategic
+    /// sections are placeholders the operator authors before committing it
+    /// to the child project.
+    // trace:STORY-363 | ai:claude
+    Handoff {
+        /// Path to the sibling/child project the brief is for. The brief is
+        /// written under `<to>/docs/`; the directory is created if absent.
+        #[clap(long, value_name = "PROJECT")]
+        to: std::path::PathBuf,
+
+        /// The focus topic for this handoff — names the slice of advisor
+        /// context the child project inherits (e.g. "git-canonical store",
+        /// "orchestrator drain"). Used in the brief title and the substrate
+        /// section heading.
+        #[clap(long, value_name = "TOPIC")]
+        focus: String,
+
+        /// Overwrite an existing brief for the same date instead of
+        /// refusing. By default a same-day brief is preserved.
+        #[clap(long)]
+        force: bool,
+    },
 }
 
 /// No-daemon scheduled-task management. A schedule is a recurring task
