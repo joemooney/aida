@@ -1,0 +1,12 @@
+id: 019ea12a-201c-7431-bcfa-fd3a80f13b3f
+spec_id: BUG-467
+agreed_id: BUG-467
+title: Harness dirs .claude/worktrees/ + .claude/workflows/ not gitignored → pollute clean-tree (blocks release gate)
+description: 'scripts/release.sh requires a clean working tree. The Claude Code Agent-tool worktree dir is .claude/worktrees/ (no leading dot) and the Workflow tool persists scripts under .claude/workflows/; neither is matched by .gitignore (line 21''s ''.worktrees/'' only matches a dotted ''.worktrees'', not ''.claude/worktrees''). Result: dozens of ephemeral agent worktrees + workflow scripts show as untracked and block any clean-tree-requiring op (release, some session-end paths). Fix: add ''.claude/worktrees/'' and ''.claude/workflows/'' to .gitignore (per-clone runtime state, deny-by-default convention). Discovered 2026-06-07 while attempting the v0.12.0 release cut.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-07T08:19:13.052007824Z
+modified_at: 2026-06-07T08:19:13.052007824Z
+req_type: Bug
