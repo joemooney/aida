@@ -78312,6 +78312,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             resume_drain,
             drain_id,
             resume_dry_run,
+            from_pr,
             no_human,
             escalate_blocks,
             escalate_defaults,
@@ -78745,6 +78746,28 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     Some(s) => s.to_string(),
                     None => resolve_auto_complete_head(storage, &user_id)?,
                 };
+                // TASK-405: `--from-pr` — implementation shipped OUTSIDE the
+                // orchestrator (a PR is already open). Drive phases 3-6 only,
+                // skipping the implementer. Routed here on the single-spec path
+                // (batch / nextN drains exit above). The shared `--resume-dry-run`
+                // flag previews the plan. trace:TASK-405 | ai:claude
+                if *from_pr {
+                    handle_from_pr(
+                        storage,
+                        &user_id,
+                        &spec,
+                        variant,
+                        *resume_dry_run,
+                        *json,
+                        permission_mode.as_deref(),
+                        no_human_mode,
+                        escalate_mode,
+                        *steal,
+                        *force_claim,
+                        *allow_stale_base,
+                        *no_auto_rebase,
+                    );
+                }
                 handle_auto_complete(
                     storage,
                     &user_id,
@@ -83209,6 +83232,142 @@ fn handle_drain_resume(
                 escalate_mode,
                 // The resume owns the drain-state file (updates it, clears on a
                 // clean finish).
+                true,
+                steal,
+                force_claim,
+                allow_stale_base,
+                no_auto_rebase,
+                resume_entry,
+            );
+            std::process::exit(result.exit_code);
+        }
+    }
+}
+
+/// TASK-405: the `--from-pr` entry point — PR-only invocation. Implementation
+/// shipped OUTSIDE the orchestrator (a PR is already open for `spec`), so drive
+/// the remaining phases (reviewer → CI → merge → pull → build) WITHOUT
+/// re-running the implementer. Probes the PR's real state, decides the entry
+/// phase (or a clean refusal) via the pure [`drain_resume::from_pr_plan`], and
+/// — unless `--dry-run` (the shared `--resume-dry-run` flag) — re-enters at that
+/// phase via `run_auto_complete`'s resume-entry seam. Never returns.
+///
+/// Distinct from `handle_drain_resume`: there is no crashed drain-state file,
+/// no PID-liveness gate (the implementer ran elsewhere, possibly by hand), and
+/// the entry phase is computed straight from probed PR/spec reality.
+/// trace:TASK-405 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_from_pr(
+    storage: &Storage,
+    user_id: &str,
+    spec: &str,
+    variant: auto_complete::AutoCompleteVariant,
+    dry_run: bool,
+    json: bool,
+    permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
+    steal: bool,
+    force_claim: bool,
+    allow_stale_base: bool,
+    no_auto_rebase: bool,
+) -> ! {
+    let project_root = match storage.path().parent() {
+        Some(p) => p.to_path_buf(),
+        None => {
+            eprintln!(
+                "{} cannot derive project root from the store path",
+                "✗".red().bold()
+            );
+            std::process::exit(1);
+        }
+    };
+
+    // Probe the world for this spec's PR + per-phase postconditions. Passing
+    // `member: None` is exactly the standalone-PR case `probe_resume_facts`
+    // already handles (it falls back to a forge lookup by spec when drain-state
+    // recorded no PR). trace:TASK-405 | ai:claude
+    let (facts, branch, pr) = probe_resume_facts(&project_root, storage, spec, None);
+    let pr_exists = pr.is_some();
+
+    match drain_resume::from_pr_plan(pr_exists, &facts) {
+        drain_resume::FromPrOutcome::RefuseAlreadyCompleted => {
+            eprintln!(
+                "{} `{}` is already Completed — the merge already promoted it; nothing to drive.",
+                "✗".red().bold(),
+                spec
+            );
+            eprintln!(
+                "  {} `--from-pr` engages the orchestrator on an OPEN PR — there is no open work here.",
+                "→".dimmed()
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::RefuseNoPr => {
+            eprintln!(
+                "{} no open PR found for `{}` — nothing to drive with `--from-pr`.",
+                "✗".red().bold(),
+                spec
+            );
+            eprintln!(
+                "  {} `--from-pr` drives phases 3-6 on a PR shipped outside the orchestrator. \
+                 To run the FULL pipeline (implementer first) drop `--from-pr`.",
+                "→".dimmed()
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::RefuseAlreadyMerged => {
+            eprintln!(
+                "{} {} is already merged — the merge already happened, so there is nothing to drive.",
+                "✗".red().bold(),
+                pr.map(|n| format!("PR-{n}")).unwrap_or_else(|| "the PR".into())
+            );
+            eprintln!(
+                "  {} run `aida pull` to auto-bump `{}` Done → Completed.",
+                "→".dimmed(),
+                spec
+            );
+            std::process::exit(1);
+        }
+        drain_resume::FromPrOutcome::DriveFrom(start_phase) => {
+            println!(
+                "{} driving `{}` from phase {} ({}) — implementation shipped outside the \
+                 orchestrator (skipping the implementer phase).",
+                "↩".cyan().bold(),
+                spec,
+                start_phase.index(),
+                start_phase.slug()
+            );
+            if let Some(n) = pr {
+                println!("  {} seeded PR-{}", "→".dimmed(), n);
+            }
+            if dry_run {
+                println!(
+                    "  {} --resume-dry-run — not re-entering. Drop it to drive the PR.",
+                    "→".dimmed()
+                );
+                std::process::exit(0);
+            }
+            // The implementer ran outside the orchestrator and may hold a stale
+            // lease on this scope; release a dead/clean one so the reviewer
+            // phase (which resolves PR→spec) doesn't collide. Same guard the
+            // resume path applies (BUG-438). trace:TASK-405 | ai:claude
+            release_dead_leases_for_resume(&project_root, spec);
+            let resume_entry = Some(ResumeEntry {
+                start_phase,
+                branch,
+                pr,
+            });
+            let result = run_auto_complete(
+                storage,
+                user_id,
+                spec,
+                variant,
+                json,
+                permission_mode,
+                no_human,
+                escalate_mode,
+                // A standalone `--from-pr` drive owns its drain-state file.
                 true,
                 steal,
                 force_claim,

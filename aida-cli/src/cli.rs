@@ -3470,13 +3470,31 @@ pub enum QueueCommand {
         // trace:STORY-492 | ai:claude
         #[clap(long, value_name = "ID", requires = "resume_drain")]
         drain_id: Option<String>,
-        /// With `--resume-drain`: print the reconciled re-entry plan (liveness
-        /// verdict + which phase resume would re-enter at) WITHOUT re-entering.
-        /// The safe way to preview a resume. (The plain `--dry-run` cannot be
-        /// combined with `--auto-complete`, hence a dedicated flag.)
+        /// With `--resume-drain` or `--from-pr`: print the reconciled re-entry
+        /// plan (which phase the drive would re-enter at) WITHOUT re-entering.
+        /// The safe way to preview a resume / PR-only drive. (The plain
+        /// `--dry-run` cannot be combined with `--auto-complete`, hence a
+        /// dedicated flag.)
         // trace:STORY-492 | ai:claude
-        #[clap(long, requires = "resume_drain")]
+        // trace:TASK-405 | ai:claude — now also previews a `--from-pr` drive.
+        #[clap(long, requires = "auto_complete")]
         resume_dry_run: bool,
+        /// PR-only invocation: implementation already shipped OUTSIDE the
+        /// orchestrator (a PR is already open for the spec), so SKIP the
+        /// implementer phase and drive the remaining phases
+        /// (reviewer → CI → merge → pull → build). Probes the PR's real state
+        /// to pick the entry phase: CI not green → reviewer (CI-wait is
+        /// implementer-coupled and cannot be re-run by a fresh process);
+        /// reviewer done → merge; etc. Refuses cleanly if no open PR exists,
+        /// the PR is already merged, or the spec is already Completed.
+        /// Composes with `--auto-complete` and its `through-ci` / `through-merge`
+        /// / `skip-build` variants. Distinct from `--resume-drain` (which
+        /// recovers a CRASHED orchestrator's own drain from its state file);
+        /// `--from-pr` engages a FRESH orchestrator on a PR that progressed
+        /// outside it.
+        // trace:TASK-405 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, requires = "auto_complete", conflicts_with = "resume_drain")]
+        from_pr: bool,
         /// Run `--auto-complete` phases headless (`claude -p`) so the drain
         /// needs no Ctrl+D.
         ///
