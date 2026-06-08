@@ -47,6 +47,14 @@ fn parking_tag(tags: &[String]) -> Option<String> {
         let parks = lo == "blocked"
             || lo == "needs-human-input"
             || lo == "needs-human"
+            // A spec awaiting a human design/architecture decision or an
+            // explicit operator action is NOT autonomously pickable, even
+            // though it's bounded + unblocked. (Found dogfooding /aida-burndown:
+            // STORY-493 needs-design-signoff + STORY-497 operator-action slipped
+            // the gate.) trace:STORY-527 | ai:claude
+            || lo == "needs-design-signoff"
+            || lo == "needs-design"
+            || lo == "operator-action"
             || lo == "review:draft-only"
             || lo.starts_with("deferred:");
         if parks {
@@ -150,6 +158,8 @@ mod tests {
             "blocked",
             "needs-human-input",
             "Needs-Human",
+            "needs-design-signoff",
+            "operator-action",
             "review:draft-only",
             "deferred:post-stability",
         ] {
