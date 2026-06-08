@@ -3,12 +3,12 @@ spec_id: STORY-533
 agreed_id: STORY-533
 title: 'EPIC-27: session MCP tools (session_start/end/leases/status/manifest)'
 description: 'Mirror the session CLI surface onto MCP tools: session_start, session_end, session_leases, session_status, session_manifest in mcp.rs — schemas mirror the CLI, handlers + tests + the stdio suite. Note: session lifecycle has side effects (worktrees/leases) — mirror the CLI''s guards. trace:EPIC-27'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:32:51.295299528Z
-modified_at: 2026-06-08T05:03:24.998044269Z
+modified_at: 2026-06-08T05:16:39.518871561Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -36,3 +36,7 @@ comments:
   content: Commit 86806f38c references this requirement
   created_at: 2026-06-08T05:03:24.998044269Z
   modified_at: 2026-06-08T05:03:24.998044269Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-08T05:16:39.518871561Z
+  completion_sha: 350e94c7cd22133561f9d75a1bab5736a7ec6089
