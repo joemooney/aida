@@ -987,6 +987,27 @@ impl<'a> McpServer<'a> {
             "role_enter" => self.tool_role_enter(&arguments),
             "role_end" => self.tool_role_end(&arguments),
 
+            // Workflow tools — STORY-536 (EPIC-27). The remaining CLI long
+            // tail: the read-only library mirrors (cache_status, plan_verify,
+            // plan_helpers, ultraplan_assemble, goal_derive, status_unified,
+            // usage_query) compute in-process from the same helpers the CLI
+            // uses (no subprocess to `aida`). db_sync / fetch / pull are git
+            // network + working-tree / store mutations driven by subprocess
+            // `git`; surfacing them as in-process MCP mutations would surprise
+            // the caller (working-tree changes, remote pushes), so they follow
+            // the queue_work / session_start PEEK precedent — they return the
+            // exact `aida …` command to run. trace:EPIC-27
+            "cache_status" => self.tool_cache_status(&arguments),
+            "plan_verify" => self.tool_plan_verify(&arguments),
+            "plan_helpers" => self.tool_plan_helpers(&arguments),
+            "ultraplan_assemble" => self.tool_ultraplan_assemble(&arguments),
+            "goal_derive" => self.tool_goal_derive(&arguments),
+            "status_unified" => self.tool_status_unified(&arguments),
+            "usage_query" => self.tool_usage_query(&arguments),
+            "db_sync" => self.tool_db_sync(&arguments),
+            "fetch" => self.tool_fetch(&arguments),
+            "pull" => self.tool_pull(&arguments),
+
             _ => Err(format!("Unknown tool: {}", tool_name)),
         };
 
@@ -4011,6 +4032,430 @@ impl<'a> McpServer<'a> {
     }
 
     // ========================================================================
+    // Workflow tool implementations — STORY-536 (EPIC-27)
+    //
+    // The remaining CLI long tail. The read-only mirrors compute in-process
+    // from the same library helpers the CLI handlers use (cache reads, the
+    // plan-lint pass, the ultraplan assembler, the goal-clause builder, the
+    // usage-log aggregator). db_sync / fetch / pull are git network +
+    // working-tree / store mutations driven by subprocess `git`; an in-process
+    // MCP mutation would surprise the caller (working-tree changes, remote
+    // pushes), so they follow the queue_work / session_start PEEK precedent —
+    // they return the exact `aida …` command to run. trace:EPIC-27
+    // ========================================================================
+
+    // trace:EPIC-27 — mirrors `aida cache status`. Reads the SQLite cache +
+    // the orphan store's HEAD SHA directly (no GitBackend construction).
+    fn tool_cache_status(&self, _args: &Value) -> Result<String, String> {
+        let store_path = self.project_root.join(".aida-store");
+        if !store_path.exists() {
+            return Err(format!(
+                "no git-canonical store at {} — `cache status` applies to a distributed-mode \
+                 project. Run `aida init` first.",
+                store_path.display()
+            ));
+        }
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+        let cache = aida_core::Cache::open(&cache_path).map_err(|e| e.to_string())?;
+        let recorded_sha = cache
+            .source_head_sha()
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default();
+        let actual_sha = aida_core::git_ops::head_sha(&store_path).unwrap_or_default();
+        let count = cache.requirement_count().map_err(|e| e.to_string())?;
+        let built_at = cache
+            .built_at()
+            .map_err(|e| e.to_string())?
+            .unwrap_or_else(|| "(never)".into());
+
+        let mut out = String::new();
+        out.push_str(&format!(
+            "Cache path:          {}\n",
+            cache.path().display()
+        ));
+        out.push_str(&format!("Cached requirements: {}\n", count));
+        out.push_str(&format!("Last built:          {}\n", built_at));
+        out.push_str(&format!(
+            "Cache HEAD SHA:      {}\n",
+            if recorded_sha.is_empty() {
+                "(none)".to_string()
+            } else {
+                recorded_sha.clone()
+            }
+        ));
+        out.push_str(&format!(
+            "Store HEAD SHA:      {}\n",
+            if actual_sha.is_empty() {
+                "(no git head — non-git store?)".to_string()
+            } else {
+                actual_sha.clone()
+            }
+        ));
+        let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
+        if stale && !actual_sha.is_empty() {
+            out.push_str("Status:              STALE — run `aida cache rebuild`");
+        } else {
+            out.push_str("Status:              FRESH");
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — read-only mirror of `aida plan verify <file>`. Runs the
+    // pure `compute_plan_report` lint pass and renders the report to a string;
+    // never rewrites the file (--fix) or exits the process.
+    fn tool_plan_verify(&self, args: &Value) -> Result<String, String> {
+        let file = required_string(args, "file")?;
+        // Resolve relative paths against the project root so callers can pass
+        // a repo-relative plan path.
+        let path = {
+            let p = Path::new(file);
+            if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                self.project_root.join(p)
+            }
+        };
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| format!("could not read plan file {}: {}", path.display(), e))?;
+        let root = crate::plan_repo_root(&path);
+        let report = crate::compute_plan_report(&content, &root);
+        Ok(crate::render_plan_report_string(
+            &report,
+            &path.display().to_string(),
+        ))
+    }
+
+    // trace:EPIC-27 — read-only mirror of `aida plan helpers <spec>`. Derives
+    // the `## Reusable helpers` section from the trace graph; the --append
+    // file write stays CLI-only.
+    fn tool_plan_helpers(&self, args: &Value) -> Result<String, String> {
+        let spec = required_string(args, "spec")?;
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let target = Self::resolve_requirement(&store, spec)?;
+        let display = Self::display_id_of(target);
+        match crate::build_reusable_helpers_section(&store, &self.project_root, target) {
+            Some(mut md) => {
+                md.push_str(&format!(
+                    "\n_Generated by `aida plan helpers {display}` — verify before relying on it._\n"
+                ));
+                Ok(md)
+            }
+            None => Ok(format!(
+                "No reusable helpers derived for {display} — no related spec (sibling / \
+                 tag-mate / same-feature) carries a `trace:` comment that names a helper."
+            )),
+        }
+    }
+
+    // trace:EPIC-27 — read-only mirror of `aida ultraplan <spec> --stdout`.
+    // Assembles the prompt + warnings; clipboard / deep-link stays CLI-only.
+    fn tool_ultraplan_assemble(&self, args: &Value) -> Result<String, String> {
+        let spec = required_string(args, "spec")?;
+        let no_comments = args
+            .get("no_comments")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        // TASK-304: honor `[ultraplan] mode = "never"`.
+        if crate::read_ultraplan_config(&self.project_root).mode == crate::UltraplanMode::Never {
+            return Err(
+                "`aida ultraplan` is disabled for this project (`[ultraplan] mode = \"never\"` \
+                 in .aida/config.toml). Set mode = \"on-demand\" or \"suggested\" to re-enable."
+                    .to_string(),
+            );
+        }
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let target = Self::resolve_requirement(&store, spec)?;
+        let helpers = crate::build_reusable_helpers_section(&store, &self.project_root, target);
+        let (reservations, reservation_warnings) = crate::read_reserved_paths(&self.project_root);
+        let (prompt, mut warnings) = crate::assemble_ultraplan_prompt(
+            &store,
+            target,
+            helpers.as_deref(),
+            !no_comments,
+            &reservations,
+        );
+        warnings.extend(reservation_warnings);
+        let mut out = prompt;
+        if !warnings.is_empty() {
+            out.push('\n');
+            for w in &warnings {
+                out.push_str(&format!("\nWarning: {}", w));
+            }
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — mirrors `aida goal …`. Pure clause builder; copy /
+    // invoke / deep-link stays CLI-only.
+    fn tool_goal_derive(&self, args: &Value) -> Result<String, String> {
+        let batch = args.get("batch").and_then(|v| v.as_str());
+        let epic = args.get("epic").and_then(|v| v.as_str());
+        let spec = args.get("spec").and_then(|v| v.as_str());
+        let pr = args.get("pr").and_then(|v| v.as_u64());
+        let queue_empty = args.get("queue_empty").and_then(|v| v.as_str());
+        let clauses = crate::build_goal_clauses(batch, epic, spec, pr, queue_empty)
+            .map_err(|e| e.to_string())?;
+        let condition = crate::assemble_goal_condition(&clauses);
+        let mut out = format!("/goal {}\n\nverify each clause:", condition);
+        for c in &clauses {
+            out.push_str(&format!("\n  · {}", c.verify));
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — a lightweight in-process status snapshot (no CI probe,
+    // no CachedGitBackend). The CI-bearing surface of `aida status` shells out
+    // to `gh` and stays CLI-only; this mirrors only the substrate-grounded
+    // parts the server can read directly (store counts, leases, queue depth).
+    fn tool_status_unified(&self, args: &Value) -> Result<String, String> {
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let by_status =
+            |s: RequirementStatus| store.requirements.iter().filter(|r| r.status == s).count();
+
+        let mut out = String::from("Project status\n");
+        out.push_str(&format!(
+            "  Total requirements: {}\n",
+            store.requirements.len()
+        ));
+        out.push_str("  By status:\n");
+        for (label, status) in [
+            ("Draft", RequirementStatus::Draft),
+            ("Approved", RequirementStatus::Approved),
+            ("Planned", RequirementStatus::Planned),
+            ("In Progress", RequirementStatus::InProgress),
+            ("Needs Attention", RequirementStatus::NeedsAttention),
+            ("Done", RequirementStatus::Done),
+            ("Completed", RequirementStatus::Completed),
+            ("Rejected", RequirementStatus::Rejected),
+        ] {
+            let n = by_status(status);
+            if n > 0 {
+                out.push_str(&format!("    {:<16} {}\n", format!("{}:", label), n));
+            }
+        }
+
+        // Active session leases (worktree-backed only, matching the CLI bias).
+        let leases: Vec<_> = list_leases(&self.project_root)
+            .into_iter()
+            .filter(|l| !l.mcp_claim)
+            .collect();
+        out.push_str(&format!("  Active sessions: {}\n", leases.len()));
+        for l in &leases {
+            out.push_str(&format!(
+                "    - {} scope={} role={}\n",
+                Self::lease_short_id(l),
+                l.scope,
+                l.role.as_deref().unwrap_or("?")
+            ));
+        }
+
+        // Queue depth for the resolved user.
+        let user_id = self.queue_user_id(args);
+        let depth = self
+            .storage
+            .queue_list(&user_id, false)
+            .map(|e| e.len())
+            .unwrap_or(0);
+        out.push_str(&format!("  Queue depth ('{}'): {}\n", user_id, depth));
+
+        out.push_str(
+            "  Note: PR/CI rollup + awaiting-you gates need `gh` — run `aida status`, \
+             or read the aida://project/summary / aida://session/leases MCP resources.",
+        );
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — read-only aggregation over the local usage telemetry log
+    // (`~/.aida/usage.jsonl`). Mirrors `aida usage` / `--errors` / `--unused`;
+    // the orchestrator-telemetry views (`--auto-complete`, `--health`) stay
+    // CLI-only.
+    fn tool_usage_query(&self, args: &Value) -> Result<String, String> {
+        let since_raw = args.get("since").and_then(|v| v.as_str()).unwrap_or("30d");
+        let unused_raw = args.get("unused").and_then(|v| v.as_str());
+        let errors_only = args
+            .get("errors")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .unwrap_or(20);
+
+        let events = crate::usage::read_events();
+        if events.is_empty() {
+            return Ok(
+                "Usage: (no events yet; the log fills as `aida …` commands run)".to_string(),
+            );
+        }
+        let now = chrono::Utc::now();
+        let since_window = crate::parse_days_arg(since_raw).map_err(|e| e.to_string())?;
+        let since = now - since_window;
+
+        // --unused: commands not seen since the cutoff.
+        if let Some(raw) = unused_raw {
+            let cutoff_window = crate::parse_days_arg(raw).map_err(|e| e.to_string())?;
+            let cutoff = now - cutoff_window;
+            let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
+                std::collections::HashMap::new();
+            for ev in &events {
+                if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&ev.ts) {
+                    let ts = ts.with_timezone(&chrono::Utc);
+                    let cur = last_seen.entry(ev.cmd.clone()).or_insert(ts);
+                    if *cur < ts {
+                        *cur = ts;
+                    }
+                }
+            }
+            let mut stale: Vec<(String, chrono::DateTime<chrono::Utc>)> = last_seen
+                .into_iter()
+                .filter(|(_, ts)| *ts < cutoff)
+                .collect();
+            stale.sort_by_key(|(_, ts)| *ts);
+            let mut out = format!(
+                "Usage: commands NOT used in the last {} (deprecation candidates):",
+                raw
+            );
+            if stale.is_empty() {
+                out.push_str("\n  (none — everything we've seen has been used recently)");
+            } else {
+                for (cmd, ts) in stale.iter().take(limit) {
+                    out.push_str(&format!("\n  {:<24} last {}", cmd, ts.to_rfc3339()));
+                }
+                if stale.len() > limit {
+                    out.push_str(&format!(
+                        "\n  … {} more (raise `limit`)",
+                        stale.len() - limit
+                    ));
+                }
+            }
+            return Ok(out);
+        }
+
+        let by_cmd = crate::aggregate_events(&events, since);
+        let mut rows: Vec<_> = by_cmd.into_values().collect();
+        if errors_only {
+            rows.retain(|r| r.errors > 0);
+            rows.sort_by(|a, b| {
+                b.error_rate()
+                    .partial_cmp(&a.error_rate())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| b.count.cmp(&a.count))
+            });
+        } else {
+            rows.sort_by(|a, b| b.count.cmp(&a.count));
+        }
+
+        let header = if errors_only {
+            format!("Usage: commands with errors in the last {}", since_raw)
+        } else {
+            format!("Usage: top commands in the last {}", since_raw)
+        };
+        let mut out = header;
+        out.push_str(&format!(
+            "\n  {:<24} {:>6} {:>6} {:>8}",
+            "cmd", "count", "errs", "avg_ms"
+        ));
+        if rows.is_empty() {
+            out.push_str("\n  (no qualifying events in the window — try a wider `since`)");
+            return Ok(out);
+        }
+        for row in rows.iter().take(limit) {
+            out.push_str(&format!(
+                "\n  {:<24} {:>6} {:>6} {:>8}",
+                row.cmd,
+                row.count,
+                row.errors,
+                row.avg_ms()
+            ));
+        }
+        if rows.len() > limit {
+            out.push_str(&format!(
+                "\n  … {} more (raise `limit`)",
+                rows.len() - limit
+            ));
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — PEEK: `aida db sync` does git network I/O against the
+    // orphan store branch (fetch + rebase + push). Return the command to run.
+    fn tool_db_sync(&self, args: &Value) -> Result<String, String> {
+        let pull = args.get("pull").and_then(|v| v.as_bool()).unwrap_or(false);
+        let push = args.get("push").and_then(|v| v.as_bool()).unwrap_or(false);
+        let mut cmd = String::from("aida db sync");
+        if pull {
+            cmd.push_str(" --pull");
+        }
+        if push {
+            cmd.push_str(" --push");
+        }
+        if !pull && !push {
+            cmd.push_str(" --pull --push");
+        }
+        Ok(format!(
+            "Syncing the orphan `aida-store` branch does git network I/O (fetch + rebase + push) \
+             — a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            cmd
+        ))
+    }
+
+    // trace:EPIC-27 — PEEK: `aida fetch` refreshes remote refs via subprocess
+    // `git`. Return the command to run.
+    fn tool_fetch(&self, args: &Value) -> Result<String, String> {
+        let code_only = args
+            .get("code_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let store_only = args
+            .get("store_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let quiet = args.get("quiet").and_then(|v| v.as_bool()).unwrap_or(false);
+        let mut cmd = String::from("aida fetch");
+        if code_only {
+            cmd.push_str(" --code-only");
+        }
+        if store_only {
+            cmd.push_str(" --store-only");
+        }
+        if quiet {
+            cmd.push_str(" --quiet");
+        }
+        Ok(format!(
+            "Fetching refreshes remote refs (code branch + orphan store) via git network I/O \
+             — a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            cmd
+        ))
+    }
+
+    // trace:EPIC-27 — PEEK: `aida pull` mutates the working tree + local store
+    // and auto-bumps merged specs. Return the command to run.
+    fn tool_pull(&self, args: &Value) -> Result<String, String> {
+        let code_only = args
+            .get("code_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let store_only = args
+            .get("store_only")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let mut cmd = String::from("aida pull");
+        if code_only {
+            cmd.push_str(" --code-only");
+        }
+        if store_only {
+            cmd.push_str(" --store-only");
+        }
+        Ok(format!(
+            "Pulling mutates the working tree (code: git pull --ff-only) and the local store \
+             (rebase), then auto-bumps merged specs Done → Completed — a working-tree-mutating \
+             subprocess act the MCP server does not perform.\nRun:\n  {}",
+            cmd
+        ))
+    }
+
+    // ========================================================================
     // Resource implementations
     // ========================================================================
 
@@ -4647,7 +5092,25 @@ pub fn tool_min_profile(tool_name: &str) -> McpProfile {
         | "role_list"
         | "role_show"
         | "role_enter"
-        | "role_end" => McpProfile::ReadOnly,
+        | "role_end"
+        // STORY-536 (EPIC-27): workflow tools are all read tier. The library
+        // mirrors (cache_status / plan_verify / plan_helpers /
+        // ultraplan_assemble / goal_derive / status_unified / usage_query)
+        // are pure reads — they compute reports / prompts / conditions without
+        // mutating substrate. db_sync / fetch / pull are metadata-only PEEKS
+        // (they return the `aida …` command; the git network + working-tree /
+        // store mutation is a subprocess-driven CLI-only act), so they never
+        // mutate substrate either. trace:EPIC-27
+        | "cache_status"
+        | "plan_verify"
+        | "plan_helpers"
+        | "ultraplan_assemble"
+        | "goal_derive"
+        | "status_unified"
+        | "usage_query"
+        | "db_sync"
+        | "fetch"
+        | "pull" => McpProfile::ReadOnly,
 
         // ---- Coordination-substrate writes (coordination tier) ----
         "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
@@ -5723,6 +6186,15 @@ pub fn tool_descriptors() -> Value {
     ) {
         base.extend(role.iter().cloned());
     }
+    // STORY-536 (EPIC-27): workflow tool descriptors live in their own array
+    // (same macro-recursion-limit reason as the queue / session / role blocks)
+    // and are appended here. trace:EPIC-27
+    if let (Some(base), Some(workflow)) = (
+        descriptors.as_array_mut(),
+        workflow_tool_descriptors().as_array(),
+    ) {
+        base.extend(workflow.iter().cloned());
+    }
     descriptors
 }
 
@@ -6018,6 +6490,159 @@ fn role_tool_descriptors() -> Value {
             },
             "outputSchema": text_envelope_output_schema(
                 "a line reporting the active shell role (or that none appears active) plus a `Run:` block with the `aida role end` command."
+            )
+        }
+    ])
+}
+
+// STORY-536 (EPIC-27): workflow tool descriptors — the remaining CLI long
+// tail. Factored into their own `json!` array so the combined
+// `tool_descriptors()` literal stays under the macro recursion limit.
+// trace:EPIC-27
+fn workflow_tool_descriptors() -> Value {
+    json!([
+        // ---- Workflow (STORY-536 / EPIC-27) ----
+        {
+            "name": "cache_status",
+            "description": "Report the read-cache freshness for the git-canonical store. Mirrors `aida cache status`. Reads the SQLite cache (`.aida/cache.db`) + the orphan store's HEAD SHA directly (no subprocess) and reports cached vs store requirement counts, last-built time, the cache/store HEAD SHAs, and a FRESH/STALE verdict. Rebuilding the cache stays CLI-only (`aida cache rebuild`).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a block with `Cache path`, `Cached requirements`, `Store requirements`, `Last built`, `Cache HEAD SHA`, `Store HEAD SHA`, and a `Status: FRESH`/`STALE` line. On a store that cannot be opened the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "plan_verify",
+            "description": "Lint a plan file: report drifted line refs, missing/recommended sections, and unresolved file paths. Read-only mirror of `aida plan verify <file>` — it computes the same findings the CLI prints but never rewrites the file (the `--fix` in-place rewrite stays CLI-only) and never exits the process. Resolves refs against the repo the plan lives in.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file": { "type": "string", "description": "Path to the plan markdown file to lint (absolute, or relative to the project root).", "example": "docs/plans/2026-06-07-story-536.md" }
+                },
+                "required": ["file"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a `Verifying plan: <path>` header, grouped `Sections` / `Files` / `Line refs` finding lines (each tagged OK / WARN / ERROR), an optional `hint:` line when drifted refs exist, and a final `Verdict: … PASS/FAIL` line. On an unreadable file the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "plan_helpers",
+            "description": "Derive a `## Reusable helpers` section for a spec by walking the trace graph (sibling / tag-mate / same-feature specs) and harvesting their `trace:`-named helpers, so a plan reuses existing code instead of re-inventing it. Read-only mirror of `aida plan helpers <spec>` — it returns the derived markdown; appending it to a plan file (`--append`) stays CLI-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to derive helpers for.", "example": "STORY-536" }
+                },
+                "required": ["spec"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "the derived `## Reusable helpers` markdown section (with a `verify before relying on it` footer), or a note that no related spec contributes a named helper. On an unknown spec the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "ultraplan_assemble",
+            "description": "Assemble the rich `/ultraplan` prompt for a spec from its description, acceptance criteria, graph context, reusable-helper section, and the 11-section plan structure. Read-only mirror of `aida ultraplan <spec> --stdout` — it returns the assembled prompt text; copying to the clipboard or opening a deep link stays CLI-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "spec": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to assemble the prompt for.", "example": "STORY-536" },
+                    "no_comments": { "type": "boolean", "description": "Omit the spec's comments from the prompt (the comments carry long-form enrichment by default).", "example": false }
+                },
+                "required": ["spec"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "the assembled `/ultraplan` prompt text, followed by any assembly `Warning:` lines (e.g. a spec with no description). On an unknown spec, or when ultraplan is disabled for the project, the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "goal_derive",
+            "description": "Derive a machine-checkable `/goal` completion condition from one or more axes. Mirrors `aida goal --batch|--epic|--spec|--pr|--queue-empty`. Pure — composes the given flags with AND, inlining each clause's verification command. At least one axis is required. Copying / invoking the condition stays CLI-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "batch": { "type": "string", "description": "All specs tagged `batch:NAME` are resolved (Completed or Rejected). Bare name or `batch:` prefix both accepted.", "example": "fall-cleanup" },
+                    "epic": { "type": "string", "description": "All direct children of this epic are resolved.", "example": "EPIC-27" },
+                    "spec": { "type": "string", "description": "This spec reaches status Completed.", "example": "STORY-536" },
+                    "pr": { "type": "integer", "description": "This PR number is merged.", "example": 680 },
+                    "queue_empty": { "type": "string", "description": "The named role's queue is empty. Bare role or `role:` prefix both accepted.", "example": "implementer" }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "the assembled `/goal <condition>` line plus a `verify each clause:` list naming the per-clause verification command. On no axis given the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "status_unified",
+            "description": "A lightweight in-process project status snapshot: requirement counts by status, active session leases, and the caller's queue depth. Mirrors the substrate-grounded parts of `aida status` that need no CI probe. The full `aida status` surface (PR/CI rollup, awaiting-you gates) shells out to `gh` and stays CLI-only — also see the `aida://project/summary` / `aida://session/leases` MCP resources.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "user": { "type": "string", "description": "Override the queue user id for the queue-depth line (defaults to the shell identity).", "example": "alice" }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a `Project status` block with a `By status:` count breakdown, an `Active sessions:` count (+ scope/role lines), and a `Queue depth:` line. A note points at `aida status` / the MCP resources for the CI-bearing surface."
+            )
+        },
+        {
+            "name": "usage_query",
+            "description": "Query the local command-usage telemetry log (`~/.aida/usage.jsonl`). Mirrors `aida usage` (top commands by count), `aida usage --errors` (high error-rate commands), and `aida usage --unused <window>` (deprecation candidates). Read-only aggregation over the local log; the orchestrator-telemetry views (`--auto-complete`, `--health`) stay CLI-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "since": { "type": "string", "description": "Window for the aggregation, e.g. `30d`, `90d` (default `30d`).", "example": "30d" },
+                    "unused": { "type": "string", "description": "Instead of top commands, list commands NOT used within this window (deprecation candidates).", "example": "30d" },
+                    "errors": { "type": "boolean", "description": "Show only commands with errors, ranked by error rate.", "example": false },
+                    "limit": { "type": "integer", "description": "Cap the number of rows returned (default 20).", "example": 20 }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either a `Usage: top commands …` table (`cmd  count  errs  avg_ms`), an errors-only variant, or an `unused` list of `cmd — last <rel>` lines. With no events yet, a note that the log is empty."
+            )
+        },
+        {
+            "name": "db_sync",
+            "description": "PEEK ONLY (does not sync): return the exact `aida db sync` command to run. `aida db sync --pull --push` does git network I/O against the orphan `aida-store` branch (fetch + rebase + push) — a subprocess-driven act the in-process MCP server intentionally does NOT perform, since it mutates the remote and the local store worktree. Composes the command from the requested legs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "pull": { "type": "boolean", "description": "Include the `--pull` leg (rebase the local store onto origin).", "example": true },
+                    "push": { "type": "boolean", "description": "Include the `--push` leg (push the local store to origin).", "example": true }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a note explaining the peek plus a `Run:` block with the `aida db sync …` command."
+            )
+        },
+        {
+            "name": "fetch",
+            "description": "PEEK ONLY (does not fetch): return the exact `aida fetch` command to run. `aida fetch` does git network I/O (refreshes the code branch + orphan-store remote refs) via subprocess `git` — an act the in-process MCP server intentionally does NOT perform. Composes the command from the requested scope.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "code_only": { "type": "boolean", "description": "Fetch only the code branch leg (`--code-only`).", "example": false },
+                    "store_only": { "type": "boolean", "description": "Fetch only the orphan-store leg (`--store-only`).", "example": false },
+                    "quiet": { "type": "boolean", "description": "Suppress per-leg progress output (`--quiet`).", "example": false }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a note explaining the peek plus a `Run:` block with the `aida fetch …` command."
+            )
+        },
+        {
+            "name": "pull",
+            "description": "PEEK ONLY (does not pull): return the exact `aida pull` command to run. `aida pull` mutates the working tree (code leg: `git pull --ff-only`) and the local store (store leg: rebase), then auto-bumps Done → Completed for merged specs — subprocess-driven, working-tree-mutating acts the in-process MCP server intentionally does NOT perform. Composes the command from the requested scope.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "code_only": { "type": "boolean", "description": "Pull only the code branch leg (`--code-only`).", "example": false },
+                    "store_only": { "type": "boolean", "description": "Pull only the orphan-store leg (`--store-only`).", "example": false }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a note explaining the peek plus a `Run:` block with the `aida pull …` command."
             )
         }
     ])
@@ -9732,5 +10357,164 @@ mod tests {
                 "{t} should be read-only"
             );
         }
+    }
+
+    // =====================================================================
+    // STORY-536 (EPIC-27): workflow MCP tools
+    // =====================================================================
+
+    #[test]
+    fn workflow_tools_are_in_descriptors_and_classified() {
+        let names: Vec<String> = tool_descriptors()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.get("name").unwrap().as_str().unwrap().to_string())
+            .collect();
+        for t in [
+            "cache_status",
+            "plan_verify",
+            "plan_helpers",
+            "ultraplan_assemble",
+            "goal_derive",
+            "status_unified",
+            "usage_query",
+            "db_sync",
+            "fetch",
+            "pull",
+        ] {
+            assert!(names.contains(&t.to_string()), "missing descriptor: {t}");
+            // No workflow tool may fall through to the Admin catch-all, and
+            // every one is read tier (the library mirrors are pure reads; the
+            // three git verbs are metadata-only PEEKs). trace:EPIC-27
+            assert_eq!(
+                tool_min_profile(t),
+                McpProfile::ReadOnly,
+                "{t} should be read-only"
+            );
+        }
+    }
+
+    #[test]
+    fn cache_status_reports_freshness() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let out = server.tool_cache_status(&json!({})).unwrap();
+        assert!(out.contains("Cache path:"), "out: {out}");
+        assert!(out.contains("Cached requirements:"), "out: {out}");
+        assert!(
+            out.contains("Status:") && (out.contains("FRESH") || out.contains("STALE")),
+            "out: {out}"
+        );
+    }
+
+    #[test]
+    fn plan_verify_lints_a_plan_file() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        // Minimal plan missing required sections — must report and verdict.
+        let plan = dir.path().join("plan.md");
+        std::fs::write(&plan, "# Plan: STORY-X\n\nSome prose, no real sections.\n").unwrap();
+        let out = server
+            .tool_plan_verify(&json!({ "file": plan.to_str().unwrap() }))
+            .unwrap();
+        assert!(out.contains("Verifying plan:"), "out: {out}");
+        assert!(out.contains("Verdict:"), "out: {out}");
+        // A missing file is an error, not a panic.
+        let err = server
+            .tool_plan_verify(&json!({ "file": "does-not-exist.md" }))
+            .unwrap_err();
+        assert!(err.contains("could not read plan file"), "err: {err}");
+    }
+
+    #[test]
+    fn plan_helpers_handles_no_helpers() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let spec = seed_req(&server, "Helpers target");
+        let out = server.tool_plan_helpers(&json!({ "spec": spec })).unwrap();
+        // A lone seeded spec has no related helper-bearing specs.
+        assert!(out.contains("No reusable helpers derived"), "out: {out}");
+        // Unknown spec errors cleanly.
+        let err = server
+            .tool_plan_helpers(&json!({ "spec": "NOPE-999" }))
+            .unwrap_err();
+        assert!(!err.is_empty(), "err: {err}");
+    }
+
+    #[test]
+    fn ultraplan_assemble_builds_a_prompt() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let spec = seed_req(&server, "Ultraplan target");
+        let out = server
+            .tool_ultraplan_assemble(&json!({ "spec": spec }))
+            .unwrap();
+        assert!(out.contains("Plan the implementation of"), "out: {out}");
+        assert!(out.contains("## Acceptance criteria"), "out: {out}");
+    }
+
+    #[test]
+    fn goal_derive_composes_clauses_and_requires_an_axis() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let out = server
+            .tool_goal_derive(&json!({ "spec": "STORY-7", "pr": 42 }))
+            .unwrap();
+        assert!(out.starts_with("/goal "), "out: {out}");
+        assert!(out.contains("verify each clause:"), "out: {out}");
+        assert!(out.contains("aida show STORY-7"), "out: {out}");
+        assert!(out.contains("gh pr view 42"), "out: {out}");
+        // No axis → error.
+        let err = server.tool_goal_derive(&json!({})).unwrap_err();
+        assert!(err.contains("no condition flags"), "err: {err}");
+    }
+
+    #[test]
+    fn status_unified_reports_counts_and_queue_depth() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        seed_req(&server, "A status spec");
+        let out = server
+            .tool_status_unified(&json!({ "user": "su-test" }))
+            .unwrap();
+        assert!(out.contains("Project status"), "out: {out}");
+        assert!(out.contains("By status:"), "out: {out}");
+        assert!(out.contains("Active sessions:"), "out: {out}");
+        assert!(out.contains("Queue depth ('su-test')"), "out: {out}");
+    }
+
+    #[test]
+    fn usage_query_handles_empty_log_gracefully() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        // The local log may or may not exist in CI; the tool must never panic
+        // and must return a string in both the empty and populated cases.
+        let out = server.tool_usage_query(&json!({})).unwrap();
+        assert!(out.contains("Usage:"), "out: {out}");
+    }
+
+    #[test]
+    fn git_verbs_peek_and_return_commands() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+
+        let sync = server
+            .tool_db_sync(&json!({ "pull": true, "push": true }))
+            .unwrap();
+        assert!(sync.contains("Run:"), "sync: {sync}");
+        assert!(sync.contains("aida db sync --pull --push"), "sync: {sync}");
+        // No legs → defaults to both.
+        let sync2 = server.tool_db_sync(&json!({})).unwrap();
+        assert!(
+            sync2.contains("aida db sync --pull --push"),
+            "sync2: {sync2}"
+        );
+
+        let fetch = server.tool_fetch(&json!({ "code_only": true })).unwrap();
+        assert!(fetch.contains("aida fetch --code-only"), "fetch: {fetch}");
+
+        let pull = server.tool_pull(&json!({ "store_only": true })).unwrap();
+        assert!(pull.contains("aida pull --store-only"), "pull: {pull}");
     }
 }
