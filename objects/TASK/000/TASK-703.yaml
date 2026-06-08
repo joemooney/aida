@@ -8,9 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T02:34:19.414717224Z
-modified_at: 2026-06-08T03:04:15.739502156Z
+modified_at: 2026-06-08T03:04:17.505398499Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019ea3ad-33ef-7650-8cca-32f8813889c6
   created_at: 2026-06-08T02:34:25.415805806Z
+comments:
+- id: 019ea530-2961-7581-bec5-caee18368844
+  author: joe
+  content: 'Slice 1 shipped in PR #668 (aida burndown plan — selector + pickability gate). The trailer didn''t auto-bump (Approved→Completed off-range); closed manually. STORY-527 (the full /aida-burndown) is Completed.'
+  created_at: 2026-06-08T03:04:17.505398499Z
+  modified_at: 2026-06-08T03:04:17.505398499Z
