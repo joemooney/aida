@@ -47519,6 +47519,42 @@ cargo test -p aida-cli
         assert_eq!(captured_plan_slug(&pr), "pr-7");
     }
 
+    /// BUG-473: `extract_verification_commands` keeps a looser set of commands
+    /// inside a fenced block (any non-empty, non-comment line) than outside (only
+    /// tool-prefixed lines). The old `(in_fence && looks_like_cmd) || looks_like_cmd`
+    /// collapsed to `looks_like_cmd`, so fenced non-tool commands were dropped.
+    #[test]
+    fn extract_verification_commands_keeps_fenced_non_tool_lines() {
+        let body = "\
+prose before the block should never be captured\n\
+RUSTFLAGS=-Awarnings should not leak outside a fence\n\
+```bash\n\
+# this is a comment, skip it\n\
+RUSTFLAGS=-Awarnings cargo build\n\
+cd subdir && make check\n\
+cargo test -p aida-cli\n\
+```\n\
+trailing prose after the block, also skipped\n";
+        let cmds = extract_verification_commands(body);
+        // Fenced non-tool-prefixed commands are now captured (the BUG-473 fix).
+        assert!(
+            cmds.contains(&"RUSTFLAGS=-Awarnings cargo build".to_string()),
+            "fenced env-prefixed command should be captured: {cmds:?}"
+        );
+        assert!(
+            cmds.contains(&"cd subdir && make check".to_string()),
+            "fenced `cd && make` command should be captured: {cmds:?}"
+        );
+        // Tool-prefixed fenced command still captured.
+        assert!(cmds.contains(&"cargo test -p aida-cli".to_string()));
+        // Comment lines inside the fence are skipped.
+        assert!(!cmds.iter().any(|c| c.starts_with('#')));
+        // Prose / env line OUTSIDE the fence is still rejected (tool-prefix gate).
+        assert!(!cmds.iter().any(|c| c.contains("should not leak outside")));
+        assert!(!cmds.iter().any(|c| c.contains("prose before")));
+        assert!(!cmds.iter().any(|c| c.contains("trailing prose")));
+    }
+
     /// TASK-305: PR arg parsing accepts bare / PR- / # forms.
     #[test]
     fn plan_capture_parses_pr_arg() {
@@ -56839,9 +56875,18 @@ fn extract_verification_commands(body: &str) -> Vec<String> {
             || candidate.starts_with("go test")
             || candidate.starts_with("./")
             || candidate.starts_with("bash ");
+        // trace:BUG-473 | ai:claude
         // Inside a fenced block we keep any command-shaped line; outside, only
-        // ones starting with a recognised tool so prose doesn't leak in.
-        if (in_fence && looks_like_cmd) || looks_like_cmd {
+        // ones starting with a recognised tool so prose doesn't leak in. The
+        // in-fence path is intentionally looser than the tool-prefix list: a
+        // ```bash block is already an explicit command region, so we keep any
+        // non-empty, non-comment line (e.g. `RUSTFLAGS=… cargo build`, `cd x &&
+        // make`) that the tool-prefix heuristic would otherwise drop. (The old
+        // condition `(in_fence && looks_like_cmd) || looks_like_cmd` collapsed to
+        // `looks_like_cmd`, so `in_fence` had no effect and this looser capture
+        // never happened — BUG-473.)
+        let in_fence_cmd = !candidate.is_empty() && !candidate.starts_with('#');
+        if (in_fence && in_fence_cmd) || looks_like_cmd {
             if !candidate.is_empty() && !out.iter().any(|c| c == candidate) {
                 out.push(candidate.to_string());
             }
@@ -57021,12 +57066,13 @@ fn captured_plan_slug(pr: &CapturedPr) -> String {
         specs.push(id);
     }
     if specs.is_empty() {
+        // trace:BUG-473 | ai:claude
+        // Take the first spec id from the first commit subject that yields one.
+        // (Was a loop-once `for id in … { push; break; }`; `.into_iter().next()`
+        // expresses the same intent without the never-loop construct.)
         for subj in &pr.commit_subjects {
-            for id in extract_spec_ids_from_commit(subj) {
+            if let Some(id) = extract_spec_ids_from_commit(subj).into_iter().next() {
                 specs.push(id);
-                break;
-            }
-            if !specs.is_empty() {
                 break;
             }
         }
@@ -95730,39 +95776,41 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // logs a warning and proceeds — we never block a drain on
         // transient infrastructure issues, only on confirmed-stale
         // confirmed-overlap. trace:STORY-281 | ai:claude
+        // trace:BUG-473 | ai:claude
+        // Single-pass check (not a loop): BUG-364 deliberately changed the old
+        // `continue` (re-check the base after rebasing) into trust-the-rebase-and-
+        // proceed, so every arm settles the decision on the first evaluation. The
+        // `auto_rebase_attempted` flag is retained because `resolve_phase3_stale_overlap`
+        // / `should_auto_rebase_stale_base` take it by `&mut` to guard a second
+        // rebase attempt; with no re-entry it is always `false` here.
         let mut auto_rebase_attempted = false;
-        loop {
-            match preflight_stale_base_check(&self.project_root, pr as u64) {
-                Ok(pr_rebase::StaleBaseOutcome::Current) => break,
-                Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                    eprintln!(
-                        "  {} {}",
-                        "⚠".yellow().bold(),
-                        pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
-                    );
-                    break;
-                }
-                Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                    behind,
-                    overlap_files,
-                    ..
-                }) => {
-                    let msg =
-                        pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
-                    match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
-                        Phase3StaleOverlapAction::Proceed => break,
-                        Phase3StaleOverlapAction::Refuse(msg) => {
-                            return Err(auto_complete::PhaseFailure::new(msg));
-                        }
+        match preflight_stale_base_check(&self.project_root, pr as u64) {
+            Ok(pr_rebase::StaleBaseOutcome::Current) => {}
+            Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
+                eprintln!(
+                    "  {} {}",
+                    "⚠".yellow().bold(),
+                    pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
+                );
+            }
+            Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
+                behind,
+                overlap_files,
+                ..
+            }) => {
+                let msg = pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
+                match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
+                    Phase3StaleOverlapAction::Proceed => {}
+                    Phase3StaleOverlapAction::Refuse(msg) => {
+                        return Err(auto_complete::PhaseFailure::new(msg));
                     }
                 }
-                Err(e) => {
-                    eprintln!(
-                        "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",
-                        "⚠".yellow().bold()
-                    );
-                    break;
-                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",
+                    "⚠".yellow().bold()
+                );
             }
         }
 
