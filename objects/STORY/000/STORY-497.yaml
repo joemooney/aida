@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T06:56:21.392043137Z
-modified_at: 2026-06-06T14:07:32.360099887Z
+modified_at: 2026-06-08T05:00:20.072642833Z
 req_type: Story
 tags:
 - buy-in
@@ -63,3 +63,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): the remaining deck/ask/render/rehearse items are OPERATOR-OWNED physical work (the headcount/time ask number can''t be filled by an agent). Split off the one agent-doable item — retire/redirect the actively-misleading docs/slideshow.html — as a new TASK. This internal buy-in demo overrides the defer-marketing posture (operator ruling).'
   created_at: 2026-06-06T14:07:27.267106498Z
   modified_at: 2026-06-06T14:07:27.267106498Z
+- id: 019ea59a-66e8-7b32-91e8-a54b60dc2076
+  author: joe
+  content: 'Closing Completed (operator-confirmed 2026-06-07: demo happened). Deck (docs/presentation/2026-06-management-demo.md) + runbook shipped; docs/slideshow.html already retired to a redirect page (prior session). Remaining acceptance boxes (fill <resources>, render, record cast, rehearse) were demo-prep, now moot post-demo.'
+  created_at: 2026-06-08T05:00:20.072642833Z
+  modified_at: 2026-06-08T05:00:20.072642833Z
