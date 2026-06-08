@@ -22165,7 +22165,7 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
 ///
 /// The default set is the **agent-wired** role taxonomy — the roles the
 /// orchestrator actually drives and routes work to (`implementer`,
-/// `advisor`, `reviewer`; `integrator` joins once STORY-460's role lands).
+/// `advisor`, `reviewer`, `integrator`).
 /// `architect` and `triage` are deliberately NOT scaffolded by default:
 /// they have no orchestrator phase and sit empirically dormant, so shipping
 /// them as starters invites the "what's this role for?" first-impression
@@ -22173,6 +22173,7 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
 /// `aida role add <name>`. The canonical taxonomy lives in
 /// `validate_registered_agent_role`.
 // trace:TASK-608 | ai:claude
+// trace:STORY-460 | ai:claude — integrator joins the agent-wired starter set
 const STARTER_ROLES: &[(&str, &str)] = &[
     (
         "implementer",
@@ -22185,6 +22186,10 @@ const STARTER_ROLES: &[(&str, &str)] = &[
     (
         "reviewer",
         "Code/PR review. Walk diffs, check trace comments, verify against requirements.",
+    ),
+    (
+        "integrator",
+        "Owns the merge cascade — rebases PRs, resolves mechanical conflicts, watches CI, squash-merges CI-green-and-verdict-present PRs, deletes merged branches, runs `aida pull`. Escalates design-judgment conflicts to the advisor; routes missing-verdict PRs to the reviewer.",
     ),
 ];
 
@@ -22469,6 +22474,11 @@ mod role_identity_tests {
         );
         assert!(names.contains(&"advisor"), "advisor must be scaffolded");
         assert!(names.contains(&"reviewer"), "reviewer must be scaffolded");
+        // trace:STORY-460 | ai:claude
+        assert!(
+            names.contains(&"integrator"),
+            "integrator must be scaffolded"
+        );
         assert!(
             !names.contains(&"architect"),
             "architect must be opt-in, not a default starter role"
