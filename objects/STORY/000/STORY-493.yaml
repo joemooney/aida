@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:54:54.211726236Z
-modified_at: 2026-06-08T04:47:22.275352815Z
+modified_at: 2026-06-08T04:47:23.446081554Z
 req_type: Story
 tags:
 - hybrid
@@ -43,3 +43,8 @@ comments:
   content: '✅ OPERATOR DECISION (2026-06-06): CONFIRM the landed-vs-remaining split first (the mailbox core + .aida local layer + CLI send/inbox/thread/sync + MCP tools already shipped), THEN sign off + build the remaining git-canonical durable DIGEST (trigger + consistency model). The digest is the round-2 moat differentiator vs competitors'' ephemeral mailboxes — worth finishing, not dropping. Re-spec to only the genuinely-remaining digest work before implementing.'
   created_at: 2026-06-06T14:07:18.410570787Z
   modified_at: 2026-06-06T14:07:18.410570787Z
+- id: 019ea58e-8d36-78b0-8073-29cbd6474369
+  author: joe
+  content: 'Landed-vs-remaining confirmed (advisor, 2026-06-07): send/inbox/thread/sync all ship; digest_local_to_canonical dedups by message-id into per-message files on the orphan store (idempotent, no cross-agent write contention) — consistency model is DONE and correct. ONLY remaining slice: auto-trigger the digest at session-end + drain-end (today sync is manual-only, so durable digest is forgettable). Building that now as the final slice; trailering STORY-493 to complete it. Dropped needs-design-signoff.'
+  created_at: 2026-06-08T04:47:23.446081554Z
+  modified_at: 2026-06-08T04:47:23.446081554Z
