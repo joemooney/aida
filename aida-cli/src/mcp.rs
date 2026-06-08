@@ -846,6 +846,7 @@ impl<'a> McpServer<'a> {
             "tools/list" => self.handle_tools_list(&id),
             "tools/call" => self.handle_tools_call(&id, &req.params),
             "resources/list" => self.handle_resources_list(&id),
+            "resources/templates/list" => self.handle_resources_templates_list(&id),
             "resources/read" => self.handle_resources_read(&id, &req.params),
             "ping" => JsonRpcResponse::success(id, json!({})),
             _ => JsonRpcResponse::error(id, -32601, format!("Method not found: {}", req.method)),
@@ -1038,6 +1039,53 @@ impl<'a> McpServer<'a> {
                         "name": "Requirements Tree",
                         "description": "Requirement hierarchy overview",
                         "mimeType": "text/plain"
+                    },
+                    // EPIC-27 (STORY-535): live-state resources. These mirror the
+                    // read-only CLI surfaces (`aida queue list --in-flight-only`,
+                    // `aida session leases`) but as MCP *resources* — addressable
+                    // live state an agent can subscribe-poll rather than tool calls
+                    // it invokes. They back onto the SAME library helpers the CLI /
+                    // equivalent MCP tools use (no subprocess to `aida`).
+                    // trace:STORY-535 trace:EPIC-27
+                    {
+                        "uri": "aida://queue/in-flight",
+                        "name": "Queue — in-flight",
+                        "description": "Specs with a live session/MCP-claim lease, plus Done-awaiting-merge work",
+                        "mimeType": "text/plain"
+                    },
+                    {
+                        "uri": "aida://session/leases",
+                        "name": "Session leases",
+                        "description": "Active scoped session leases (who holds what right now)",
+                        "mimeType": "text/plain"
+                    }
+                ]
+            }),
+        )
+    }
+
+    /// EPIC-27 (STORY-535): advertise the parameterized live-state resources as
+    /// RFC-6570 URI templates. The MCP protocol carries these on a distinct
+    /// `resources/templates/list` method (separate from the concrete-URI
+    /// `resources/list`), so clients that understand templates can expand
+    /// `aida://pr/{n}` / `aida://batch/{name}` themselves; the matching read
+    /// logic lives in `handle_resources_read`. trace:STORY-535 trace:EPIC-27
+    fn handle_resources_templates_list(&self, id: &Value) -> JsonRpcResponse {
+        JsonRpcResponse::success(
+            id.clone(),
+            json!({
+                "resourceTemplates": [
+                    {
+                        "uriTemplate": "aida://pr/{n}",
+                        "name": "PR linkage",
+                        "description": "Spec/finding linkage for pull-request number N (git-canonical, gh-free)",
+                        "mimeType": "text/plain"
+                    },
+                    {
+                        "uriTemplate": "aida://batch/{name}",
+                        "name": "Batch progress",
+                        "description": "Progress buckets for the batch:<name> tag set",
+                        "mimeType": "text/plain"
                     }
                 ]
             }),
@@ -1047,10 +1095,25 @@ impl<'a> McpServer<'a> {
     fn handle_resources_read(&self, id: &Value, params: &Value) -> JsonRpcResponse {
         let uri = params.get("uri").and_then(|v| v.as_str()).unwrap_or("");
 
+        // EPIC-27 (STORY-535): static resources match by exact URI; the two
+        // parameterized templates are matched by prefix + a parsed tail, since
+        // the protocol layer has no built-in URI-template expander. The order
+        // matters only in that the exact matches are cheap string compares.
+        // trace:STORY-535 trace:EPIC-27
         let result = match uri {
             "aida://project/summary" => self.resource_project_summary(),
             "aida://requirements/tree" => self.resource_requirements_tree(),
-            _ => Err(format!("Unknown resource: {}", uri)),
+            "aida://queue/in-flight" => self.resource_queue_in_flight(),
+            "aida://session/leases" => self.resource_session_leases(),
+            _ => {
+                if let Some(n) = uri.strip_prefix("aida://pr/") {
+                    self.resource_pr(n)
+                } else if let Some(name) = uri.strip_prefix("aida://batch/") {
+                    self.resource_batch(name)
+                } else {
+                    Err(format!("Unknown resource: {}", uri))
+                }
+            }
         };
 
         match result {
@@ -4015,6 +4078,216 @@ impl<'a> McpServer<'a> {
         }
 
         Ok(output)
+    }
+
+    // ========================================================================
+    // EPIC-27 (STORY-535): live-state resources
+    //
+    // Each backs onto the SAME library helper its CLI / MCP-tool equivalent
+    // uses, with no subprocess to `aida`:
+    //  - `aida://queue/in-flight`  ← `list_leases` (the in-flight lease scopes,
+    //                                 same probe `queue_list`'s in_flight filter
+    //                                 + `aida queue list --in-flight-only` use)
+    //                                 + the Done-awaiting-merge status bucket.
+    //  - `aida://session/leases`   ← `list_leases` (mirrors `tool_list_active_leases`
+    //                                 / `aida session leases`).
+    //  - `aida://pr/{n}`           ← `crate::collect_git_linkage` + `from-review:PR-N`
+    //                                 finding tags (git-canonical, gh-free, mirroring
+    //                                 `aida show <spec>`'s git linkage).
+    //  - `aida://batch/{name}`     ← the `batch:<name>` tag set bucketed by status,
+    //                                 mirroring `tool_queue_progress` / `aida queue
+    //                                 progress --batch`.
+    // trace:STORY-535 trace:EPIC-27
+    // ========================================================================
+
+    /// `aida://queue/in-flight` — specs the queue considers actively in flight:
+    /// those held by a live session/MCP-claim lease (the `--in-flight-only`
+    /// axis), plus the Done-awaiting-merge bucket `aida queue list` appends so
+    /// freshly-shipped work stays visible until auto-bump. trace:STORY-535
+    fn resource_queue_in_flight(&self) -> Result<String, String> {
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // Live lease scopes — the same set `tool_list_requirements`'s in_flight
+        // filter and `aida queue list --in-flight-only` derive. trace:STORY-535
+        let in_flight_scopes: std::collections::HashSet<String> = list_leases(&self.project_root)
+            .into_iter()
+            .map(|l| l.scope.to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let mut in_flight: Vec<String> = Vec::new();
+        let mut awaiting_merge: Vec<String> = Vec::new();
+        for r in &store.requirements {
+            let sid = spec_id(r);
+            if sid != "?" && in_flight_scopes.contains(&sid.to_ascii_lowercase()) {
+                in_flight.push(format!("- [{}] {} ({})", sid, r.title, r.status));
+            }
+            // STORY-86: Done = finished on a branch, awaiting merge.
+            if r.status == RequirementStatus::Done {
+                awaiting_merge.push(format!("- [{}] {}", sid, r.title));
+            }
+        }
+
+        let mut output = "# Queue — in-flight\n\n".to_string();
+        output.push_str("## Live leases (in-flight)\n\n");
+        if in_flight.is_empty() {
+            output.push_str("_No specs held by a live session/MCP-claim lease._\n");
+        } else {
+            output.push_str(&in_flight.join("\n"));
+            output.push('\n');
+        }
+        output.push_str("\n## Done — awaiting merge\n\n");
+        if awaiting_merge.is_empty() {
+            output.push_str("_No Done specs awaiting merge._\n");
+        } else {
+            output.push_str(&awaiting_merge.join("\n"));
+            output.push('\n');
+        }
+        Ok(output)
+    }
+
+    /// `aida://session/leases` — active scoped session leases. Mirrors
+    /// `tool_list_active_leases` / `aida session leases`. trace:STORY-535
+    fn resource_session_leases(&self) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        let mut output = "# Session leases\n\n".to_string();
+        if leases.is_empty() {
+            output.push_str("_No active leases._\n");
+            return Ok(output);
+        }
+        output.push_str(&format!("{} active lease(s):\n\n", leases.len()));
+        for l in &leases {
+            let claim_kind = if l.mcp_claim { "mcp" } else { "session" };
+            let role = l.role.as_deref().unwrap_or("?");
+            output.push_str(&format!(
+                "- {} scope={} role={} owner={} kind={} started_at={}\n",
+                l.id, l.scope, role, l.owner, claim_kind, l.started_at
+            ));
+        }
+        Ok(output)
+    }
+
+    /// `aida://pr/{n}` — git-canonical, gh-free PR linkage for PR number N.
+    /// Resolves the spec(s) tied to the PR two ways, both substrate-local:
+    ///   1. squash-merge subject `(#N)` → the `(SPEC-ID)` in the same commit
+    ///      (via `crate::collect_git_linkage`'s `shipped_pr`), and
+    ///   2. review findings tagged `from-review:PR-N`.
+    /// This mirrors the PR pointer `aida show <spec>` surfaces, without ever
+    /// shelling out to `gh`. trace:STORY-535
+    fn resource_pr(&self, raw: &str) -> Result<String, String> {
+        let n: u64 = raw
+            .trim()
+            .parse()
+            .map_err(|_| format!("Invalid PR number in resource URI: aida://pr/{}", raw))?;
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // Findings raised against PR-N (cheap, tag-only). trace:STORY-535
+        let mut findings: Vec<String> = store
+            .requirements
+            .iter()
+            .filter(|r| {
+                r.tags
+                    .iter()
+                    .any(|t| crate::findings::pr_number_from_tag(t) == Some(n as u32))
+            })
+            .map(|r| format!("- [{}] {} ({})", spec_id(r), r.title, r.status))
+            .collect();
+        findings.sort();
+
+        // Shipped specs whose squash-merge commit carries `(#N)`. We restrict
+        // the per-spec git probe to Done/Completed specs (the only ones that
+        // can carry a shipped PR), keeping the scan bounded. trace:STORY-535
+        let mut shipped: Vec<String> = Vec::new();
+        for r in &store.requirements {
+            if !matches!(
+                r.status,
+                RequirementStatus::Done | RequirementStatus::Completed
+            ) {
+                continue;
+            }
+            let sid = spec_id(r).to_string();
+            if sid == "?" {
+                continue;
+            }
+            let linkage = crate::collect_git_linkage(&self.project_root, &[sid.clone()]);
+            if linkage.shipped_pr == Some(n) {
+                let pr = linkage
+                    .commits
+                    .first()
+                    .map(|(_, short, subj)| format!(" — {} {}", short, subj))
+                    .unwrap_or_default();
+                shipped.push(format!("- [{}] {} ({}){}", sid, r.title, r.status, pr));
+            }
+        }
+        shipped.sort();
+
+        let mut output = format!("# PR #{}\n\n", n);
+        output.push_str("## Shipped specs (squash-merge `(#N)`)\n\n");
+        if shipped.is_empty() {
+            output.push_str("_No merged spec references this PR number._\n");
+        } else {
+            output.push_str(&shipped.join("\n"));
+            output.push('\n');
+        }
+        output.push_str("\n## Review findings (`from-review:PR-N`)\n\n");
+        if findings.is_empty() {
+            output.push_str("_No review findings tagged against this PR._\n");
+        } else {
+            output.push_str(&findings.join("\n"));
+            output.push('\n');
+        }
+        Ok(output)
+    }
+
+    /// `aida://batch/{name}` — progress for the `batch:<name>` tag set, bucketed
+    /// by live status exactly like `tool_queue_progress` / `aida queue progress
+    /// --batch`. trace:STORY-535
+    fn resource_batch(&self, raw: &str) -> Result<String, String> {
+        let name = raw.trim();
+        if name.is_empty() {
+            return Err("Empty batch name in resource URI: aida://batch/<name>".to_string());
+        }
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let tag = format!("batch:{}", name);
+
+        let (mut shipped, mut in_flight, mut working, mut remaining) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for r in &store.requirements {
+            if !r.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)) {
+                continue;
+            }
+            let disp = spec_id(r).to_string();
+            match r.status {
+                RequirementStatus::Completed | RequirementStatus::Rejected => shipped.push(disp),
+                RequirementStatus::Done => in_flight.push(disp),
+                RequirementStatus::InProgress => working.push(disp),
+                _ => remaining.push(disp),
+            }
+        }
+        let total = shipped.len() + in_flight.len() + working.len() + remaining.len();
+        if total == 0 {
+            return Ok(format!(
+                "# Batch `{}`\n\n_No requirements tagged `batch:{}`._\n",
+                name, name
+            ));
+        }
+        let fmt = |label: &str, items: &[String]| {
+            if items.is_empty() {
+                format!("- {}: 0", label)
+            } else {
+                format!("- {}: {} ({})", label, items.len(), items.join(", "))
+            }
+        };
+        Ok(format!(
+            "# Batch `{}`\n\n{} item{}:\n\n{}\n{}\n{}\n{}\n",
+            name,
+            total,
+            if total == 1 { "" } else { "s" },
+            fmt("Shipped", &shipped),
+            fmt("In flight", &in_flight),
+            fmt("Working now", &working),
+            fmt("Remaining", &remaining),
+        ))
     }
 }
 
