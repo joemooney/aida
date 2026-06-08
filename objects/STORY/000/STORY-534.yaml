@@ -1,0 +1,12 @@
+id: 019ea54a-706f-78b3-8f34-e67a4eeef881
+spec_id: STORY-534
+agreed_id: STORY-534
+title: 'EPIC-27: role MCP tools (role_enter/end/show/list)'
+description: 'Mirror the role CLI surface onto MCP tools: role_enter, role_end, role_show, role_list in mcp.rs — schemas + handlers + tests + stdio suite. Role identity is shell-keyed (see CLAUDE.md queue-identity note) — confirm the MCP server resolves the same identity the CLI does. trace:EPIC-27'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-08T03:32:59.631330682Z
+modified_at: 2026-06-08T03:32:59.631330682Z
+req_type: Story
