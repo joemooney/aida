@@ -572,6 +572,161 @@ fn list_leases(project_root: &Path) -> Vec<LightLease> {
 }
 
 // ============================================================================
+// Role helpers — STORY-534 (EPIC-27)
+//
+// Like `LightLease`, `LightRole` is a tolerant projection of the role TOML the
+// CLI writes (`RoleState` in main.rs carries more fields than the MCP surface
+// needs). We read `.aida/roles/*.toml` and `~/.aida/roles/*.toml` directly with
+// `#[serde(default)]` so unknown / new fields don't break us and the MCP server
+// needn't rebuild every time a role field lands. Timestamps stay as raw RFC3339
+// strings — we only need to display them, not arithmetic on them (except a
+// best-effort "N ago"). trace:EPIC-27
+// ============================================================================
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct LightRole {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    purpose: Option<String>,
+    #[serde(default)]
+    created_at: Option<String>,
+    #[serde(default)]
+    last_active_at: String,
+    #[serde(default)]
+    working_directory: Option<String>,
+    #[serde(default)]
+    notes: Option<String>,
+    #[serde(default)]
+    global: bool,
+    #[serde(default)]
+    scope_tags: Vec<String>,
+    #[serde(default)]
+    scope_status: Option<String>,
+    #[serde(default)]
+    system_prompt: Option<String>,
+}
+
+/// Canonicalize a role name, mirroring main.rs's `canonical_role_name`:
+/// TASK-586 made `advisor` the canonical identifier; `dialog` is a deprecated,
+/// silently-accepted alias. trace:EPIC-27
+fn canonical_light_role_name(raw: &str) -> String {
+    if raw.eq_ignore_ascii_case("dialog") {
+        "advisor".to_string()
+    } else {
+        raw.to_string()
+    }
+}
+
+/// The active shell role, read from `AIDA_SESSION_ROLE` (canonicalized). This is
+/// the *MCP server process's* environment — it reflects the launching shell's
+/// role only when the agent's `aida mcp-serve` was started under an active role.
+/// trace:EPIC-27
+fn role_active_env() -> Option<String> {
+    std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .map(|v| canonical_light_role_name(&v))
+}
+
+fn project_roles_dir(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("roles")
+}
+
+fn global_roles_dir() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".aida").join("roles"))
+}
+
+/// List all roles for the project (and any global roles), newest-active first,
+/// de-duplicated by canonical name. Mirrors main.rs `list_roles`. trace:EPIC-27
+fn list_light_roles(project_root: &Path) -> Vec<LightRole> {
+    let mut roles: Vec<LightRole> = Vec::new();
+    for dir in [Some(project_roles_dir(project_root)), global_roles_dir()]
+        .into_iter()
+        .flatten()
+    {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            if let Ok(content) = std::fs::read_to_string(&p) {
+                if let Ok(mut role) = toml::from_str::<LightRole>(&content) {
+                    if role.name.is_empty() {
+                        continue;
+                    }
+                    role.name = canonical_light_role_name(&role.name);
+                    roles.push(role);
+                }
+            }
+        }
+    }
+    // Newest-active first, then drop the canonical-name duplicate (a machine
+    // mid-migration can have both `advisor.toml` and the legacy `dialog.toml`).
+    roles.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    let mut seen = std::collections::HashSet::new();
+    roles.retain(|r| seen.insert(r.name.clone()));
+    roles
+}
+
+/// Load a single role by (already-canonicalized) name, checking the project dir
+/// first, then the global dir; the legacy `dialog.toml` is accepted as the
+/// advisor role. trace:EPIC-27
+fn load_light_role(project_root: &Path, canonical: &str) -> Option<LightRole> {
+    let mut candidates = vec![canonical.to_string()];
+    if canonical == "advisor" {
+        candidates.push("dialog".to_string());
+    }
+    for cand in &candidates {
+        let mut paths: Vec<PathBuf> =
+            vec![project_roles_dir(project_root).join(format!("{}.toml", cand))];
+        if let Some(g) = global_roles_dir() {
+            paths.push(g.join(format!("{}.toml", cand)));
+        }
+        for path in paths {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(mut role) = toml::from_str::<LightRole>(&content) {
+                    role.name = canonical_light_role_name(&role.name);
+                    return Some(role);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Best-effort "N ago" for an RFC3339 timestamp string, mirroring main.rs's
+/// `humanize_relative`. Falls back to the raw string when it won't parse.
+/// trace:EPIC-27
+fn light_role_relative(rfc3339: &str) -> String {
+    let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(rfc3339) else {
+        return rfc3339.to_string();
+    };
+    let now = chrono::Utc::now();
+    let secs = now
+        .signed_duration_since(parsed.with_timezone(&chrono::Utc))
+        .num_seconds();
+    if secs < 0 {
+        return "just now".to_string();
+    }
+    if secs < 60 {
+        return format!("{}s ago", secs);
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{}m ago", mins);
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{}h ago", hours);
+    }
+    format!("{}d ago", hours / 24)
+}
+
+// ============================================================================
 // MCP Server
 // ============================================================================
 
@@ -816,6 +971,20 @@ impl<'a> McpServer<'a> {
             "session_manifest" => self.tool_session_manifest(&arguments),
             "session_start" => self.tool_session_start(&arguments),
             "session_end" => self.tool_session_end(&arguments),
+
+            // Role tools — STORY-534 (EPIC-27). Mirror the `aida role` CLI
+            // surface so agents can inspect the persona set over MCP.
+            // role_show / role_list read `.aida/roles/*.toml` (+ ~/.aida/roles)
+            // directly. role_enter / role_end are PEEKS — entering/ending a
+            // role sets the *shell's* `AIDA_SESSION_ROLE` (role identity is
+            // shell-keyed, like the queue user; see BUG-89), an act the
+            // stateless MCP server cannot perform for the caller, so they
+            // return the `aida role enter/end …` command instead (the
+            // queue_work / session_start PEEK precedent). trace:EPIC-27
+            "role_list" => self.tool_role_list(&arguments),
+            "role_show" => self.tool_role_show(&arguments),
+            "role_enter" => self.tool_role_enter(&arguments),
+            "role_end" => self.tool_role_end(&arguments),
 
             _ => Err(format!("Unknown tool: {}", tool_name)),
         };
@@ -3577,6 +3746,208 @@ impl<'a> McpServer<'a> {
     }
 
     // ========================================================================
+    // Role tool implementations — STORY-534 (EPIC-27)
+    //
+    // These mirror the `aida role <subcommand>` CLI surface so MCP-speaking
+    // agents can inspect the project's personas without shelling out. The two
+    // inspectors (list / show) read the role TOML files the CLI reads — under
+    // `.aida/roles/` and `~/.aida/roles/` — with no subprocess to `aida`.
+    //
+    // role_enter / role_end are metadata-only PEEKS: `aida role enter` /
+    // `aida role end` set/clear the *shell's* `AIDA_SESSION_ROLE` env var by
+    // emitting shell code the caller must `eval`. Role identity is therefore
+    // shell-keyed (the same way the queue user is shell-keyed — see the BUG-89
+    // queue-identity note), and the stateless MCP server process cannot mutate
+    // the calling agent's shell environment. So the tools validate the inputs
+    // and return the exact `aida role …` command to run, rather than mutating
+    // server-side state that would never reach the caller. This follows the
+    // queue_work / session_start PEEK precedent. trace:EPIC-27
+    // ========================================================================
+
+    // trace:EPIC-27 — mirrors `aida role list`.
+    fn tool_role_list(&self, _args: &Value) -> Result<String, String> {
+        let active = role_active_env();
+        let roles = list_light_roles(&self.project_root);
+        if roles.is_empty() {
+            return Ok(format!(
+                "(no roles defined for {}) — create one with `aida role add <name>` or install a starter set with `aida role scaffold`.",
+                self.project_root.display()
+            ));
+        }
+        let mut lines: Vec<String> = Vec::new();
+        for r in &roles {
+            let marker = if active.as_deref() == Some(r.name.as_str()) {
+                "*"
+            } else {
+                " "
+            };
+            let scope = if r.global { " [global]" } else { "" };
+            let purpose = r
+                .purpose
+                .as_deref()
+                .map(|p| format!(" — {}", p))
+                .unwrap_or_default();
+            lines.push(format!(
+                "{} {}{} last active {}{}",
+                marker,
+                r.name,
+                scope,
+                light_role_relative(&r.last_active_at),
+                purpose
+            ));
+        }
+        Ok(format!(
+            "Roles for {} ({}):\n{}",
+            self.project_root.display(),
+            lines.len(),
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27 — mirrors `aida role show [NAME]`. With no `name`, resolves
+    // the active role from `AIDA_SESSION_ROLE` like the CLI; errors when none
+    // is given and none is active.
+    fn tool_role_show(&self, args: &Value) -> Result<String, String> {
+        let resolved = match args.get("name").and_then(|v| v.as_str()) {
+            Some(n) => canonical_light_role_name(n),
+            None => role_active_env().ok_or_else(|| {
+                "No role active and no `name` given. Use role_list to see options.".to_string()
+            })?,
+        };
+        let role = load_light_role(&self.project_root, &resolved).ok_or_else(|| {
+            format!(
+                "No such role: {} — create it with `aida role add {}`, or see options with role_list.",
+                resolved, resolved
+            )
+        })?;
+        let mut out = format!("Role:        {}", role.name);
+        if role.global {
+            out.push_str(" [global]");
+        }
+        out.push('\n');
+        out.push_str(&format!(
+            "Purpose:     {}\n",
+            role.purpose.as_deref().unwrap_or("(none)")
+        ));
+        out.push_str(&format!(
+            "Created:     {}\n",
+            role.created_at.as_deref().unwrap_or("?")
+        ));
+        out.push_str(&format!(
+            "Last active: {} ({})\n",
+            role.last_active_at,
+            light_role_relative(&role.last_active_at)
+        ));
+        if let Some(d) = &role.working_directory {
+            out.push_str(&format!("Last cwd:    {}\n", d));
+        }
+        if let Some(n) = &role.notes {
+            out.push_str(&format!("Notes:       {}\n", n));
+        }
+        if !role.scope_tags.is_empty() || role.scope_status.is_some() {
+            let mut parts: Vec<String> = Vec::new();
+            if !role.scope_tags.is_empty() {
+                parts.push(format!("tags={}", role.scope_tags.join(",")));
+            }
+            if let Some(s) = &role.scope_status {
+                parts.push(format!("status={}", s));
+            }
+            out.push_str(&format!("Scope:       {}\n", parts.join(" ")));
+        }
+        if let Some(text) = &role.system_prompt {
+            let preview: String = text.lines().next().unwrap_or("").chars().take(80).collect();
+            let suffix = if text.chars().count() > preview.chars().count() {
+                "…"
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "Addendum:    {} chars — {}{}\n",
+                text.len(),
+                preview,
+                suffix
+            ));
+        }
+        let active_marker = if role_active_env().as_deref() == Some(role.name.as_str()) {
+            "  (active in the CLI's shell)"
+        } else {
+            ""
+        };
+        out.push_str(&format!(
+            "Active:      {}{}",
+            role_active_env().as_deref().unwrap_or("(none)"),
+            active_marker
+        ));
+        Ok(out)
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida role enter` sets the shell's `AIDA_SESSION_ROLE` env var (it emits
+    // shell code the caller `eval`s). The MCP server cannot mutate the calling
+    // agent's shell, so this is a metadata-only PEEK: it validates the role
+    // exists and returns the exact `aida role enter` command + the resolved
+    // role context. trace:EPIC-27
+    fn tool_role_enter(&self, args: &Value) -> Result<String, String> {
+        let name = required_string(args, "name")?;
+        let cd = args.get("cd").and_then(|v| v.as_bool()).unwrap_or(false);
+        let resolved = canonical_light_role_name(name);
+        let role = load_light_role(&self.project_root, &resolved).ok_or_else(|| {
+            format!(
+                "No such role: {} — create it with `aida role add {}`, or see options with role_list.",
+                resolved, resolved
+            )
+        })?;
+
+        let mut cmd = format!("aida role enter {}", resolved);
+        if cd {
+            cmd.push_str(" --cd");
+        }
+
+        let mut out = String::new();
+        if role_active_env().as_deref() == Some(resolved.as_str()) {
+            out.push_str(&format!(
+                "Note: role '{}' is already the active shell role.\n",
+                resolved
+            ));
+        }
+        let purpose = role
+            .purpose
+            .as_deref()
+            .map(|p| format!(" ({})", p))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "Entering a role sets the shell's active role (AIDA_SESSION_ROLE) — \
+             a shell-env act the MCP server does not perform for you.\n\
+             Resolved role: {}{}{}.\nRun:\n  {}",
+            resolved,
+            if role.global { " [global]" } else { "" },
+            purpose,
+            cmd
+        ));
+        Ok(out)
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida role end` clears the shell's `AIDA_SESSION_ROLE` (it emits shell
+    // code the caller `eval`s). Same shell-env constraint as role_enter, so
+    // this is a metadata-only PEEK returning the command to run. trace:EPIC-27
+    fn tool_role_end(&self, _args: &Value) -> Result<String, String> {
+        let active = role_active_env();
+        let mut out = String::new();
+        match active.as_deref() {
+            Some(r) => out.push_str(&format!("Active shell role: {}.\n", r)),
+            None => out.push_str("No role appears active in the CLI's shell.\n"),
+        }
+        out.push_str(
+            "Ending a role clears the shell's active role (AIDA_SESSION_ROLE) — \
+             a shell-env act the MCP server does not perform for you.\nRun:\n  aida role end",
+        );
+        Ok(out)
+    }
+
+    // ========================================================================
     // Resource implementations
     // ========================================================================
 
@@ -3994,7 +4365,16 @@ pub fn tool_min_profile(tool_name: &str) -> McpProfile {
         | "session_status"
         | "session_manifest"
         | "session_start"
-        | "session_end" => McpProfile::ReadOnly,
+        | "session_end"
+        // STORY-534 (EPIC-27): role tools are all read tier. role_list /
+        // role_show are pure reads of `.aida/roles/*` (+ ~/.aida/roles);
+        // role_enter / role_end are metadata-only PEEKS (entering/ending a
+        // role mutates the *shell's* env, a CLI-only act), so they never
+        // mutate substrate. trace:EPIC-27
+        | "role_list"
+        | "role_show"
+        | "role_enter"
+        | "role_end" => McpProfile::ReadOnly,
 
         // ---- Coordination-substrate writes (coordination tier) ----
         "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
@@ -5061,6 +5441,15 @@ pub fn tool_descriptors() -> Value {
     ) {
         base.extend(session.iter().cloned());
     }
+    // STORY-534 (EPIC-27): role tool descriptors live in their own array (same
+    // macro-recursion-limit reason as the queue / session blocks) and are
+    // appended here. trace:EPIC-27
+    if let (Some(base), Some(role)) = (
+        descriptors.as_array_mut(),
+        role_tool_descriptors().as_array(),
+    ) {
+        base.extend(role.iter().cloned());
+    }
     descriptors
 }
 
@@ -5297,6 +5686,65 @@ fn session_tool_descriptors() -> Value {
             },
             "outputSchema": text_envelope_output_schema(
                 "a note explaining the peek plus a `Run:` block with the `aida session end <id>` command. On an ambiguous/absent selector with multiple sessions, the envelope sets `isError: true`."
+            )
+        }
+    ])
+}
+
+// STORY-534 (EPIC-27): role tool descriptors, factored into their own `json!`
+// array so the combined `tool_descriptors()` literal stays under the macro
+// recursion limit. trace:EPIC-27
+fn role_tool_descriptors() -> Value {
+    json!([
+        // ---- Role (STORY-534 / EPIC-27) ----
+        {
+            "name": "role_list",
+            "description": "List the project's roles (personas / hats) and any global roles, newest-active first. Mirrors `aida role list`. Reads `.aida/roles/*.toml` (+ `~/.aida/roles/*.toml`) directly — no subprocess. The active shell role (`AIDA_SESSION_ROLE`) is marked `*` when it matches one of these.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Roles for <root> (N):` followed by `<*| > <name>[ [global]] last active <rel>[ — <purpose>]` lines, or a `(no roles defined …)` note."
+            )
+        },
+        {
+            "name": "role_show",
+            "description": "Show details for one role. Mirrors `aida role show [NAME]`. Reads the role TOML directly. With no `name`, resolves the active role from `AIDA_SESSION_ROLE` (errors when none is given and none is active). The legacy `dialog` name resolves to `advisor`.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Role name to show. Optional when a role is active in the launching shell (AIDA_SESSION_ROLE).", "example": "advisor" }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a `Role: <name>` block with `Purpose`, `Created`, `Last active`, optional `Last cwd` / `Notes` / `Scope` / `Addendum` lines, and an `Active:` line. On an unknown name (or no name with no active role) the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "role_enter",
+            "description": "PEEK ONLY (does not switch role): validate the role exists and return the exact `aida role enter` command to run. Mirrors `aida role enter`. Entering a role sets the *shell's* `AIDA_SESSION_ROLE` (role identity is shell-keyed, like the queue user — see BUG-89); the stateless MCP server cannot mutate the calling agent's shell, so it resolves the role context and instructs the caller to run the CLI. Notes when the role is already active.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Role name to enter.", "example": "advisor" },
+                    "cd": { "type": "boolean", "description": "Whether the suggested command should also restore the role's last working directory (`--cd`).", "example": false }
+                },
+                "required": ["name"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a note explaining the peek + the resolved role context plus a `Run:` block with the `aida role enter <name>` command. On an unknown role the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "role_end",
+            "description": "PEEK ONLY (does not clear role): report the active shell role and return the `aida role end` command to run. Mirrors `aida role end`. Ending a role clears the shell's `AIDA_SESSION_ROLE` — a shell-env act the MCP server cannot perform for the caller (same shell-keyed constraint as role_enter).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a line reporting the active shell role (or that none appears active) plus a `Run:` block with the `aida role end` command."
             )
         }
     ])
@@ -8864,6 +9312,147 @@ mod tests {
                 "{t} is unclassified"
             );
             // All session tools are read tier (the two peeks never mutate).
+            assert_eq!(
+                tool_min_profile(t),
+                McpProfile::ReadOnly,
+                "{t} should be read-only"
+            );
+        }
+    }
+
+    // =====================================================================
+    // STORY-534 (EPIC-27): role MCP tools
+    // =====================================================================
+
+    /// Write a minimal role TOML under `.aida/roles/<name>.toml` matching the
+    /// `LightRole` shape the role tools read. trace:EPIC-27
+    fn seed_role(dir: &Path, name: &str, purpose: &str) {
+        let roles = dir.join(".aida").join("roles");
+        std::fs::create_dir_all(&roles).unwrap();
+        let body = format!(
+            "name = \"{name}\"\n\
+             purpose = \"{purpose}\"\n\
+             created_at = \"2026-06-01T00:00:00Z\"\n\
+             last_active_at = \"2026-06-07T00:00:00Z\"\n\
+             working_directory = \"/tmp/wt-{name}\"\n\
+             global = false\n\
+             scope_tags = [\"inbox\"]\n\
+             scope_status = \"draft\"\n"
+        );
+        std::fs::write(roles.join(format!("{name}.toml")), body).unwrap();
+    }
+
+    #[test]
+    fn role_list_lists_seeded_roles() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+
+        // NOTE: list_light_roles also reads `~/.aida/roles/` (global roles),
+        // which may be populated on the developer/CI machine, so we don't
+        // assert emptiness — we assert the seeded *project* roles surface. The
+        // empty-state branch is covered by the help text path, not here.
+        // trace:EPIC-27
+        seed_role(dir.path(), "proj-impl", "ships code");
+        seed_role(dir.path(), "proj-adv", "strategy partner");
+        let listed = server.tool_role_list(&json!({})).unwrap();
+        assert!(listed.contains("proj-impl"), "listed: {listed}");
+        assert!(listed.contains("proj-adv"), "listed: {listed}");
+        assert!(listed.contains("ships code"), "listed: {listed}");
+    }
+
+    #[test]
+    fn role_show_renders_a_role_and_errors_on_unknown() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        seed_role(dir.path(), "reviewer", "guards the merge");
+
+        let shown = server
+            .tool_role_show(&json!({ "name": "reviewer" }))
+            .unwrap();
+        assert!(shown.contains("Role:        reviewer"), "shown: {shown}");
+        assert!(shown.contains("guards the merge"), "shown: {shown}");
+        assert!(shown.contains("tags=inbox"), "shown: {shown}");
+        assert!(shown.contains("status=draft"), "shown: {shown}");
+
+        // Unknown role errors.
+        let err = server
+            .tool_role_show(&json!({ "name": "nope" }))
+            .expect_err("unknown role");
+        assert!(err.contains("No such role"), "err: {err}");
+    }
+
+    #[test]
+    fn role_show_canonicalizes_dialog_to_advisor() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        // Legacy `dialog.toml` should resolve as the advisor role.
+        let roles = dir.path().join(".aida").join("roles");
+        std::fs::create_dir_all(&roles).unwrap();
+        std::fs::write(
+            roles.join("dialog.toml"),
+            "name = \"dialog\"\nlast_active_at = \"2026-06-07T00:00:00Z\"\n",
+        )
+        .unwrap();
+
+        let shown = server
+            .tool_role_show(&json!({ "name": "advisor" }))
+            .unwrap();
+        assert!(shown.contains("Role:        advisor"), "shown: {shown}");
+    }
+
+    #[test]
+    fn role_enter_is_a_peek_with_command() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        seed_role(dir.path(), "implementer", "ships code");
+
+        let peek = server
+            .tool_role_enter(&json!({ "name": "implementer", "cd": true }))
+            .unwrap();
+        assert!(
+            peek.contains("aida role enter implementer --cd"),
+            "peek: {peek}"
+        );
+        assert!(peek.contains("ships code"), "peek: {peek}");
+
+        // name is required.
+        let err = server
+            .tool_role_enter(&json!({}))
+            .expect_err("name required");
+        assert!(err.contains("name"), "err: {err}");
+
+        // Unknown role errors.
+        let unknown = server
+            .tool_role_enter(&json!({ "name": "ghost" }))
+            .expect_err("unknown role");
+        assert!(unknown.contains("No such role"), "unknown: {unknown}");
+    }
+
+    #[test]
+    fn role_end_is_a_peek_with_command() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let peek = server.tool_role_end(&json!({})).unwrap();
+        assert!(peek.contains("aida role end"), "peek: {peek}");
+    }
+
+    #[test]
+    fn role_tools_are_in_descriptors_and_classified() {
+        let names: Vec<String> = tool_descriptors()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.get("name").unwrap().as_str().unwrap().to_string())
+            .collect();
+        for t in ["role_list", "role_show", "role_enter", "role_end"] {
+            assert!(names.contains(&t.to_string()), "missing descriptor: {t}");
+            // No role tool may fall through to the Admin catch-all.
+            assert_ne!(
+                tool_min_profile(t),
+                McpProfile::Admin,
+                "{t} is unclassified"
+            );
+            // All role tools are read tier (the two peeks never mutate).
             assert_eq!(
                 tool_min_profile(t),
                 McpProfile::ReadOnly,
