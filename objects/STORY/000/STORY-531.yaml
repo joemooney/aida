@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:31:52.631747927Z
-modified_at: 2026-06-08T06:24:09.583893916Z
+modified_at: 2026-06-08T06:24:11.345139577Z
 req_type: Story
 tags:
 - from-spike:tier2
@@ -24,3 +24,8 @@ comments:
   content: 'Deferred (advisor, 2026-06-07): Tier-1 metrics (TASK-706 + STORY-530) just shipped — we have zero distribution data to design thresholds against. Revisit once Tier-1 has ~4 weeks of data OR a metric visibly misbehaves. If something is needed sooner, the non-premature slice is manual-only: /aida-insights gains a deep LLM mode invoked by hand, no auto-thresholds. Tag flipped needs-design-signoff → deferred:tier1-data.'
   created_at: 2026-06-08T04:47:20.439772823Z
   modified_at: 2026-06-08T04:47:20.439772823Z
+- id: 019ea5e7-2c51-7fd3-9646-b699358d8e1c
+  author: joe
+  content: 'Re-scoped to the MANUAL slice (advisor, operator-approved 2026-06-07): drop auto-thresholds + cost-control infra (premature — no Tier-1 distribution data yet). Build only: /aida-insights gains an on-demand LLM health fact-finding mode that reads the now-shipped Tier-1 metrics (aida usage --health + --auto-complete gap) and, when invoked, root-causes anomalies / buckets failure reasons / synthesizes a health narrative. No automatic triggering. Auto-threshold triggering stays a future spec gated on real data.'
+  created_at: 2026-06-08T06:24:11.345139577Z
+  modified_at: 2026-06-08T06:24:11.345139577Z
