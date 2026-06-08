@@ -20853,10 +20853,11 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             // store), then stage + commit it. Append-only/id-keyed, so this is
             // idempotent. The orphan branch is pushed by the normal store-sync
             // path (`aida db sync --push` / `aida pull`); this only advances it
-            // locally. Auto-triggering this on session-end / drain boundaries
-            // is a deliberate follow-up (the trigger-cadence is the operator's
-            // call). trace:TASK-605 | ai:claude
-            let n = mailbox_store::digest_local_to_canonical(store_root, project_root)?;
+            // locally. The same digest is auto-triggered (best-effort) at
+            // session-end and drain-end via `maybe_digest_mailbox_best_effort`,
+            // so a manual `mailbox sync` is rarely needed. trace:TASK-605
+            // trace:STORY-493 | ai:claude
+            let n = digest_mailbox_to_canonical(store_root, project_root)?;
             if n == 0 {
                 println!(
                     "{} mailbox already in sync (nothing new to digest)",
@@ -20864,14 +20865,10 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 );
                 return Ok(());
             }
-            aida_core::git_ops::add(store_root, &["mailbox"])?;
-            let committed =
-                aida_core::git_ops::commit(store_root, &format!("mailbox: digest {n} message(s)"))?;
             println!(
-                "{} digested {} message(s) to the canonical store{}",
+                "{} digested {} message(s) to the canonical store",
                 "✉".green(),
                 n.to_string().cyan(),
-                if committed { "" } else { " (nothing staged)" }
             );
             Ok(())
         }
@@ -36803,6 +36800,13 @@ fn session_end(
     }
 
     if let Some(store_path) = detect_distributed_store_from(&project_root) {
+        // STORY-493: durably digest this session's local mailbox traffic into
+        // the git-canonical orphan store before the store is pushed, so a
+        // session's inter-agent messages are replayable/shareable once it
+        // closes. Best-effort + non-fatal — a digest failure must never abort
+        // session cleanup. Runs before the push so the digest commit rides the
+        // same push. trace:STORY-493 | ai:claude
+        maybe_digest_mailbox_best_effort(&store_path, "session-end");
         maybe_auto_push_store(&store_path, StoreAutoPushMode::SessionEnd, "session-end");
     }
 
@@ -64488,6 +64492,151 @@ fn auto_push_store_best_effort(store_path: &std::path::Path, reason: &str) {
     }
 }
 
+/// Digest the local mailbox layer into the git-canonical orphan store and
+/// commit it locally. Shared by the manual `mailbox sync` command and the
+/// auto-triggers (session-end / drain-end). Returns the number of messages
+/// newly digested (0 = nothing new). Append-only/id-keyed, so this is
+/// idempotent — re-running digests nothing. trace:STORY-493 | ai:claude
+fn digest_mailbox_to_canonical(
+    store_root: &std::path::Path,
+    project_root: &std::path::Path,
+) -> Result<usize> {
+    let n = mailbox_store::digest_local_to_canonical(store_root, project_root)?;
+    if n == 0 {
+        return Ok(0);
+    }
+    aida_core::git_ops::add(store_root, &["mailbox"])?;
+    aida_core::git_ops::commit(store_root, &format!("mailbox: digest {n} message(s)"))?;
+    Ok(n)
+}
+
+/// Best-effort mailbox digest at a lifecycle boundary (session-end, drain-end).
+/// A digest failure must NOT abort session cleanup or break the drain, so any
+/// error is logged as a warning and swallowed. No-ops cleanly when there is no
+/// local mailbox layer / nothing new to digest. trace:STORY-493 | ai:claude
+fn maybe_digest_mailbox_best_effort(store_path: &std::path::Path, reason: &str) {
+    let Some(project_root) = store_path.parent() else {
+        return;
+    };
+    match digest_mailbox_to_canonical(store_path, project_root) {
+        Ok(0) => {}
+        Ok(n) => eprintln!(
+            "  {} digested {n} mailbox message(s) to the canonical store ({reason})",
+            "✉".dimmed()
+        ),
+        Err(e) => eprintln!(
+            "  {} mailbox digest skipped ({reason}): {e}",
+            "Warning:".yellow().bold()
+        ),
+    }
+}
+
+#[cfg(test)]
+mod mailbox_digest_autotrigger_tests {
+    //! STORY-493: the session-end / drain-end auto-trigger calls
+    //! `maybe_digest_mailbox_best_effort`, which wraps `digest_mailbox_to_canonical`.
+    //! The call sites themselves `std::process::exit`, so the behavior under test
+    //! is the shared helper + its best-effort guarantee. trace:STORY-493 | ai:claude
+    use super::*;
+    use aida_core::mailbox::{Message, Recipient};
+    use tempfile::tempdir;
+
+    fn msg(id: &str) -> Message {
+        Message {
+            id: id.to_string(),
+            thread_id: "t1".to_string(),
+            from: "codex".to_string(),
+            to: Recipient::Broadcast,
+            timestamp: 1,
+            in_reply_to: None,
+            body: format!("body-{id}"),
+        }
+    }
+
+    /// A project root with a git-initialized `.aida-store/` worktree, mirroring
+    /// the on-disk layout the auto-triggers run against. Returns (project_root, store_root).
+    fn project_with_store() -> (tempfile::TempDir, std::path::PathBuf) {
+        let proj = tempdir().unwrap();
+        let store_root = proj.path().join(".aida-store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        aida_core::git_ops::init(&store_root).unwrap();
+        aida_core::git_ops::configure_user(&store_root, "Test", "test@localhost").unwrap();
+        (proj, store_root)
+    }
+
+    #[test]
+    fn helper_digests_local_messages_and_commits() {
+        let (proj, store_root) = project_with_store();
+        mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
+        mailbox_store::write_message(proj.path(), &msg("b")).unwrap();
+
+        let n = digest_mailbox_to_canonical(&store_root, proj.path()).unwrap();
+        assert_eq!(n, 2, "both local messages digest into the canonical store");
+        let canon = mailbox_store::read_canonical_messages(&store_root).unwrap();
+        assert_eq!(canon.len(), 2);
+        // The digest committed on the orphan store: a commit now exists whose
+        // message names the digest (confirms staged + committed, not left dirty).
+        let log = std::process::Command::new("git")
+            .args(["-C", store_root.to_str().unwrap(), "log", "--oneline"])
+            .output()
+            .unwrap();
+        let log = String::from_utf8_lossy(&log.stdout);
+        assert!(
+            log.contains("mailbox: digest 2 message(s)"),
+            "digest should have committed the mailbox dir; git log was:\n{log}"
+        );
+    }
+
+    #[test]
+    fn helper_is_idempotent_double_fire_is_safe() {
+        // Double-firing (session-end then drain-end) must not duplicate or error.
+        let (proj, store_root) = project_with_store();
+        mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
+
+        assert_eq!(
+            digest_mailbox_to_canonical(&store_root, proj.path()).unwrap(),
+            1
+        );
+        assert_eq!(
+            digest_mailbox_to_canonical(&store_root, proj.path()).unwrap(),
+            0,
+            "re-digesting writes nothing new (id-keyed, idempotent)"
+        );
+        assert_eq!(
+            mailbox_store::read_canonical_messages(&store_root)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn best_effort_no_local_mailbox_is_a_clean_noop() {
+        // No `.aida/mailbox/` layer at all: must not error.
+        // `_proj` is kept bound so the TempDir guard isn't dropped early.
+        let (_proj, store_root) = project_with_store();
+        // Should not panic / not write anything.
+        maybe_digest_mailbox_best_effort(&store_root, "test");
+        assert!(mailbox_store::read_canonical_messages(&store_root)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn best_effort_swallows_a_digest_error() {
+        // Store path with no parent can't derive a project root; the best-effort
+        // wrapper must return quietly rather than panic. (A non-git store dir
+        // also exercises the Err arm of the wrapper without aborting.)
+        let proj = tempdir().unwrap();
+        let store_root = proj.path().join(".aida-store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        // local message present but the store is NOT a git repo → commit fails;
+        // the wrapper must log + continue, not propagate.
+        mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
+        maybe_digest_mailbox_best_effort(&store_root, "test"); // must not panic
+    }
+}
+
 fn maybe_auto_push_store(store_path: &std::path::Path, mode: StoreAutoPushMode, reason: &str) {
     let project_root = store_path
         .parent()
@@ -90522,6 +90671,11 @@ fn handle_auto_complete(
         // STORY-492: not a resume — start at phase 1.
         None,
     );
+    // STORY-493: drain-end mailbox digest for the single-spec drain, matching
+    // the batch / batch-chain paths. Best-effort + non-fatal. trace:STORY-493
+    if let Ok(root) = find_main_worktree_root() {
+        maybe_digest_mailbox_best_effort(&root.join(".aida-store"), "drain-end");
+    }
     std::process::exit(result.exit_code);
 }
 
@@ -91214,6 +91368,12 @@ fn handle_auto_complete_batch(
         result.exit_code
     };
     emit_batch_drain_summary(batch_name, &result, exit_code, json);
+    // STORY-493: at drain-end, durably digest any mailbox traffic the drain
+    // produced into the git-canonical orphan store. Best-effort + non-fatal —
+    // never let a digest failure change the drain's exit code. trace:STORY-493
+    if let Some(root) = &drain_root {
+        maybe_digest_mailbox_best_effort(&root.join(".aida-store"), "drain-end");
+    }
     // STORY-301: clean batch exit removes the drain-state file. A crash mid-
     // drain skips this, leaving the file for `aida drain status` to flag stale.
     if let Some(root) = &drain_root {
@@ -91325,6 +91485,11 @@ fn handle_auto_complete_batches(
         && matches!(result.outcome, auto_complete::BatchDrainOutcome::Drained);
     let exit_code = if no_activity { 1 } else { result.exit_code };
     emit_batch_chain_summary(batch_names, &result, exit_code, json);
+    // STORY-493: same best-effort drain-end mailbox digest as the single-batch
+    // path. Non-fatal — never affects the drain's exit code. trace:STORY-493
+    if let Some(root) = &drain_root {
+        maybe_digest_mailbox_best_effort(&root.join(".aida-store"), "drain-end");
+    }
     if let Some(root) = &drain_root {
         let _ = drain_state::DrainState::clear(root);
     }
