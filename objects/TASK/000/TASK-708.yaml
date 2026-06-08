@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T05:20:40.247098304Z
-modified_at: 2026-06-08T06:46:24.651356101Z
+modified_at: 2026-06-08T06:54:54.671074349Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,8 @@ comments:
   content: 'Closing Completed (advisor, 2026-06-07): both gates landed — STORY-459 (aida queue add --for-agent) + TASK-542 (aida agent new --name / stable auto-naming). Per-agent routing is generic, so the integrator role inherits it with no new code; its usage is documented in the aida-integrate skill being built under TASK-707. No separate build needed.'
   created_at: 2026-06-08T06:46:23.212599186Z
   modified_at: 2026-06-08T06:46:23.212599186Z
+- id: 019ea603-4ccf-7103-9999-3287195121c8
+  author: joe
+  content: Commit 777c56494 references this requirement
+  created_at: 2026-06-08T06:54:54.671074349Z
+  modified_at: 2026-06-08T06:54:54.671074349Z
