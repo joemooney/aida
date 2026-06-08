@@ -26,12 +26,12 @@ description: |-
   - Phase note: project is in bug-clearing-before-public-marketing phase, but this is an INTERNAL stakeholder demo for buy-in — operator-directed, legitimately overrides the defer-marketing posture. The deck is honest about the stabilization phase (reads as discipline to a technical audience).
   - Format decision (operator, 2026-05-31): live-demo-led, slides as scaffold — for AIDA the depth shows through use; slides alone invite the "20 lines of bash" reaction.
   - HOW for rendering/screenshots/retire-mechanics is physical-seat; the narrative + runbook (the product-seat core) are drafted.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T06:56:21.392043137Z
-modified_at: 2026-06-08T05:00:20.072642833Z
+modified_at: 2026-06-08T05:00:21.749396911Z
 req_type: Story
 tags:
 - buy-in
