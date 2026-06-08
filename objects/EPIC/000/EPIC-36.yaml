@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T14:18:31.709016159Z
-modified_at: 2026-06-06T08:20:35.772804158Z
+modified_at: 2026-06-08T06:36:18.584951622Z
 req_type: Epic
 tags:
 - from-forensics
@@ -72,3 +72,8 @@ comments:
   content: 'Disposition sweep 2026-06-06 — ✅ READY (no human input needed; bounded, well-specified, ready to implement/queue). MVP slice is bounded: session_success_rate vs drain_success_rate misclassification-gap metric as a deterministic parser over headless-logs/usage.jsonl, surfaced in aida usage --auto-complete. On-phase (stability/regression guard).'
   created_at: 2026-06-06T08:14:51.277902218Z
   modified_at: 2026-06-06T08:14:51.277902218Z
+- id: 019ea5f2-4518-7481-bbd0-7425ea39e09f
+  author: joe
+  content: 'Completed (advisor, 2026-06-07): Tier-1 deterministic metrics shipped (TASK-706 gap metric + STORY-530 catalog: phase-failure/reap-vs-kill/halt-rate/recovery-latency/draft-inbox/burn-down-velocity) and Tier-2 shipped as the MANUAL slice (STORY-531: on-demand /aida-insights --health LLM fact-finding). The AUTO-THRESHOLD Tier-2 (automatic LLM triggering on metric thresholds + cost controls) is deliberately NOT filed yet — premature without Tier-1 distribution data. File it as a fresh spec once the metrics show real patterns.'
+  created_at: 2026-06-08T06:36:18.584951622Z
+  modified_at: 2026-06-08T06:36:18.584951622Z
