@@ -91,9 +91,7 @@ pub fn requirement_not_found(id: &str, store_path: Option<&Path>) -> anyhow::Err
                 .unwrap_or_else(|| "(unknown)".to_string());
             msg.push_str(&format!("  Searched in: {}\n", path_str));
             msg.push_str(&format!("  Mode: {}\n", mode.label()));
-            msg.push_str(&format!(
-                "  Hint: check the spec ID (try `aida list` or `aida search <terms>`)."
-            ));
+            msg.push_str("  Hint: check the spec ID (try `aida list` or `aida search <terms>`).");
         }
     }
 

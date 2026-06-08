@@ -106,6 +106,7 @@ where
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum IdFormatPolicy {
     /// Always issue node-aware ids (`<TYPE>-<NODE>-<SEQ>`). Useful for
     /// projects that don't want to manage block allocation, or for solo
@@ -116,18 +117,13 @@ pub enum IdFormatPolicy {
     /// through to a node-aware id if no block is allocated for the type.
     /// **Default** — matches the existing `use_agreed_blocks = true`
     /// behavior and is what the user picked for `aida init` defaults.
+    #[default]
     BlocksThenFallback,
 
     /// Require an allocated block for every id; error out otherwise. Use
     /// when the project policy is "agreed-ids only — never let a node-aware
     /// id leak into trace comments or PR titles."
     BlocksOnly,
-}
-
-impl Default for IdFormatPolicy {
-    fn default() -> Self {
-        Self::BlocksThenFallback
-    }
 }
 
 impl IdFormatPolicy {
@@ -182,21 +178,16 @@ impl IdFormatPolicy {
 /// BUG-100 numerically. trace:FR-271 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum IdCounterScope {
     /// One counter per type prefix. `FR-1`, `BUG-1`, `EPIC-1` are all
     /// distinct and start fresh.
+    #[default]
     PerType,
     /// One counter shared across all types. `FR-1`, `BUG-2`, `EPIC-3` —
     /// the prefix labels what each id is *for*, but the number is
     /// globally unique within a node's block range.
     Global,
-}
-
-impl Default for IdCounterScope {
-    fn default() -> Self {
-        // Per-type for back-compat. New projects override at init time.
-        Self::PerType
-    }
 }
 
 impl IdCounterScope {
@@ -911,11 +902,13 @@ impl WorkspaceConfig {
 /// how storage works, and whether distributed features are enabled.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "mode")]
+#[derive(Default)]
 pub enum DeploymentMode {
     /// Centralized: single PostgreSQL or SQLite database, simple sequential IDs.
     /// This is the default for teams with always-available connectivity.
     /// IDs: `FR-001`, `FEAT-042`
     #[serde(rename = "centralized")]
+    #[default]
     Centralized,
 
     /// Distributed: git-based event log, node-namespaced IDs, offline-capable.
@@ -926,12 +919,6 @@ pub enum DeploymentMode {
         #[serde(default)]
         aida_repo_path: Option<String>,
     },
-}
-
-impl Default for DeploymentMode {
-    fn default() -> Self {
-        Self::Centralized
-    }
 }
 
 impl DeploymentMode {

@@ -196,6 +196,13 @@ pub struct DaemonClient {
 }
 
 #[cfg(unix)]
+impl Default for DaemonClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(unix)]
 impl DaemonClient {
     /// Create a client targeting the default socket path.
     pub fn new() -> Self {

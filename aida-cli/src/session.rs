@@ -339,9 +339,10 @@ mod normalize_specs_tests {
     }
 
     fn store(reqs: Vec<aida_core::Requirement>) -> aida_core::RequirementsStore {
-        let mut s = aida_core::RequirementsStore::default();
-        s.requirements = reqs;
-        s
+        aida_core::RequirementsStore {
+            requirements: reqs,
+            ..Default::default()
+        }
     }
 
     /// Long-form node-aware id rewrites to the agreed short id.
@@ -492,7 +493,7 @@ pub fn new_session(
 ///   - role=reviewer            → `review@<scope>`               (PR/MR work)
 ///   - scope=EPIC-N + batchM    → `EPIC-N:batchM`                (epic-batch)
 ///   - other implementer shapes → `<role-label>@<scope>:<suffix>` or
-///                                `<role-label>@<scope>` if no suffix
+///     `<role-label>@<scope>` if no suffix
 ///
 /// `<suffix>` is the part of the branch name after `<scope-slug>-`. Returns
 /// `None` when scope is empty (defensive — the caller already validates).
@@ -611,7 +612,7 @@ fn append_launch_log(role: &str, permission_mode: &str, title: &str) -> Result<(
 }
 
 fn sanitize_for_tsv(s: &str) -> String {
-    s.replace('\t', " ").replace('\n', " ").replace('\r', " ")
+    s.replace(['\t', '\n', '\r'], " ")
 }
 
 /// Replace this process with `claude --permission-mode <mode>`. When `name`
@@ -1065,7 +1066,7 @@ pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
     // Unix-shaped fixture strings elsewhere. Normalize both spellings so
     // advisor fork destinations use the same slug convention cross-platform.
     // trace:BUG-346 | ai:codex
-    let encoded = s.replace('\\', "-").replace('/', "-");
+    let encoded = s.replace(['\\', '/'], "-");
     #[cfg(test)]
     let home = std::env::var_os("AIDA_TEST_HOME")
         .map(PathBuf::from)
@@ -1851,8 +1852,8 @@ pub fn forget(id_query: &str, force: bool, dry_run: bool, yes: bool) -> Result<(
 
 /// Replace this process with `claude --resume <id>`. Falls back to spawn
 /// + wait on platforms without exec semantics. `permission_mode`, when
-/// given, is passed through so a resumed `aida queue work` session keeps
-/// the same permission posture as a fresh one. trace:TASK-112 | ai:claude
+///   given, is passed through so a resumed `aida queue work` session keeps
+///   the same permission posture as a fresh one. trace:TASK-112 | ai:claude
 pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");

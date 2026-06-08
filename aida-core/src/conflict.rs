@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_conflict_on_title() {
-        let mut local = make_req("Local Title", "Draft");
+        let local = make_req("Local Title", "Draft");
         let mut remote = local.clone();
         remote.title = "Remote Title".to_string();
         remote.modified_at = Utc::now();
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_resolve_accept_local() {
-        let mut local = make_req("Local", "Draft");
+        let local = make_req("Local", "Draft");
         let mut remote = local.clone();
         remote.title = "Remote".to_string();
         remote.modified_at = Utc::now();
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_store_conflicts() {
-        let mut req1_local = make_req("Req 1 Local", "Draft");
+        let req1_local = make_req("Req 1 Local", "Draft");
         let mut req1_remote = req1_local.clone();
         req1_remote.title = "Req 1 Remote".to_string();
         req1_remote.modified_at = Utc::now();

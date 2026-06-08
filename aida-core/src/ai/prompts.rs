@@ -600,10 +600,11 @@ mod tests {
     }
 
     fn create_test_store() -> RequirementsStore {
-        let mut store = RequirementsStore::default();
-        store.name = "test-project".to_string();
-        store.title = "Test Project".to_string();
-        store
+        RequirementsStore {
+            name: "test-project".to_string(),
+            title: "Test Project".to_string(),
+            ..Default::default()
+        }
     }
 
     #[test]

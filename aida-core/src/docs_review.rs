@@ -209,6 +209,12 @@ pub struct DocReviewReport {
     pub issues: Vec<DocIssue>,
 }
 
+impl Default for DocReviewReport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DocReviewReport {
     pub fn new() -> Self {
         Self {
@@ -275,7 +281,7 @@ impl DocReviewReport {
         for (file, (c, i, m)) in &file_counts {
             md.push_str(&format!("| {} | {} | {} | {} |\n", file, c, i, m));
         }
-        md.push_str("\n");
+        md.push('\n');
 
         // Issues by file
         md.push_str("## Issues\n\n");
@@ -300,7 +306,7 @@ impl DocReviewReport {
                 md.push_str(&format!("- **Before**: {}\n", truncate(before, 100)));
                 md.push_str(&format!("- **After**: {}\n", truncate(after, 100)));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         md

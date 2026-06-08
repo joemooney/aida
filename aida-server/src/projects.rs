@@ -115,7 +115,7 @@ impl ProjectManager {
             let db_path = db_path.clone();
             move || {
                 let backend = create_backend(&db_path, None)?;
-                Ok::<_, anyhow::Error>(ServerState::new(backend)?)
+                ServerState::new(backend)
             }
         })
         .await??;

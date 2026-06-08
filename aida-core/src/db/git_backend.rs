@@ -291,9 +291,9 @@ impl GitBackend {
     /// Begin a bulk-add session. Buffers new requirements in memory while
     /// assigning IDs via the live metadata counters, then flushes all YAMLs
     /// + a counter-bumped metadata.yaml in a single commit when `finish` is
-    /// called. Avoids the load-iterate-write pattern of `update_atomically`
+    ///   called. Avoids the load-iterate-write pattern of `update_atomically`
     /// + `save`, which is overkill when the operation is purely additive.
-    /// trace:FR-1-002 | ai:claude
+    ///   trace:FR-1-002 | ai:claude
     pub fn bulk_writer(&self) -> Result<BulkWriter<'_>> {
         let metadata = self.load_metadata()?;
         Ok(BulkWriter {
@@ -1210,11 +1210,6 @@ mod tests {
         );
     }
 
-    /// BUG-96: even when `save()` is also writing a brand-new add, an
-    /// unparseable neighbour must survive. The 2026-05-13 incident was
-    /// exactly this shape: `aida add` of TASK-0396 deleted six other specs
-    /// in the same commit. trace:BUG-96 | ai:claude
-    #[test]
     /// TASK-1-109: queue_clear's completed_only flag was a no-op on this
     /// backend; now it filters queue entries by their backing requirement's
     /// status, removing only the entries whose spec is Completed.
@@ -1333,6 +1328,11 @@ mod tests {
         );
     }
 
+    /// BUG-96: even when `save()` is also writing a brand-new add, an
+    /// unparseable neighbour must survive. The 2026-05-13 incident was
+    /// exactly this shape: `aida add` of TASK-0396 deleted six other specs
+    /// in the same commit. trace:BUG-96 | ai:claude
+    #[test]
     fn test_save_preserves_unparseable_alongside_new_add() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");

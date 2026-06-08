@@ -625,8 +625,8 @@ pub fn collect_process(project_root: &Path, opts: &DigestOptions) -> Vec<MemoryE
             None => continue,
         };
         let hook = after_title
-            .splitn(2, "—")
-            .nth(1)
+            .split_once("—")
+            .map(|x| x.1)
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
         let file_path = dir.join(&file);
@@ -967,8 +967,8 @@ fn strip_spec_ids(s: &str) -> String {
         out = collapsed;
     }
     out.trim()
-        .trim_start_matches(|c: char| matches!(c, ':' | ',' | ';' | '.'))
-        .trim_end_matches(|c: char| matches!(c, ':' | ',' | ';' | '.'))
+        .trim_start_matches([':', ',', ';', '.'])
+        .trim_end_matches([':', ',', ';', '.'])
         .trim()
         .replace("— —", "—")
         .trim()

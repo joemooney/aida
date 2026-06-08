@@ -1,28 +1,5 @@
 use super::*;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn generated_agents_md_has_codex_operating_sections() {
-        let scaffolder = Scaffolder::new(
-            std::path::PathBuf::from("/tmp/aida-story-417-test"),
-            ScaffoldConfig::default(),
-        );
-        let store = RequirementsStore::default();
-        let md = scaffolder.generate_agents_md(&store);
-
-        assert!(md.contains("## Codex Operating Discipline"));
-        assert!(md.contains("docs/agents/codex-mcp-setup.md"));
-        assert!(md.contains("docs/agents/session-communication.md"));
-        assert!(md.contains("[AI:codex]"));
-        assert!(md.contains("SPEC-410"));
-        assert!(md.contains("BUG-345"));
-        assert!(md.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
-    }
-}
-
 impl Scaffolder {
     /// Generate AGENTS.md content for Codex-compatible coding agents.
     ///
@@ -194,5 +171,28 @@ project convention.
   branch contents, verify the PR contents and flag the mismatch.
 "#
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generated_agents_md_has_codex_operating_sections() {
+        let scaffolder = Scaffolder::new(
+            std::path::PathBuf::from("/tmp/aida-story-417-test"),
+            ScaffoldConfig::default(),
+        );
+        let store = RequirementsStore::default();
+        let md = scaffolder.generate_agents_md(&store);
+
+        assert!(md.contains("## Codex Operating Discipline"));
+        assert!(md.contains("docs/agents/codex-mcp-setup.md"));
+        assert!(md.contains("docs/agents/session-communication.md"));
+        assert!(md.contains("[AI:codex]"));
+        assert!(md.contains("SPEC-410"));
+        assert!(md.contains("BUG-345"));
+        assert!(md.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
     }
 }

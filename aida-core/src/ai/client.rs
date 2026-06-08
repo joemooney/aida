@@ -45,20 +45,15 @@ pub enum AiError {
 }
 
 /// AI operation mode
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum AiMode {
     /// Use Claude CLI with --print flag
     ClaudeCli { path: PathBuf },
     /// Direct API integration (future)
     DirectApi { api_key: String },
     /// AI features disabled
+    #[default]
     Disabled,
-}
-
-impl Default for AiMode {
-    fn default() -> Self {
-        AiMode::Disabled
-    }
 }
 
 /// AI Client for interacting with Claude

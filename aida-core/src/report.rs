@@ -506,7 +506,7 @@ impl ReportGenerator {
         if !report.project_description.is_empty() {
             md.push_str(&format!("\n{}\n", report.project_description));
         }
-        md.push_str("\n");
+        md.push('\n');
 
         // Features
         if !report.features.is_empty() {
@@ -515,7 +515,7 @@ impl ReportGenerator {
             for (name, prefix) in &report.features {
                 md.push_str(&format!("| {} | {} |\n", name, prefix));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         // Type Definitions
@@ -528,7 +528,7 @@ impl ReportGenerator {
                     md.push_str(&format!("- **{}**: {}\n", name, desc));
                 }
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         // AI Configuration
@@ -584,7 +584,7 @@ impl ReportGenerator {
                 if let Some(ref gen) = tp.generate_children_extra {
                     md.push_str(&format!("- **Generate Children Extra**: {}\n", gen));
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
         }
 
@@ -628,7 +628,7 @@ impl ReportGenerator {
             for (type_name, count) in &report.traceability.by_type {
                 md.push_str(&format!("- {}: {}\n", type_name, count));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         if !report.traceability.by_confidence.is_empty() {
@@ -636,7 +636,7 @@ impl ReportGenerator {
             for (level, count) in &report.traceability.by_confidence {
                 md.push_str(&format!("- {}: {}\n", level, count));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         // Trace Links Detail
@@ -658,9 +658,9 @@ impl ReportGenerator {
                     if let Some(ref notes) = link.notes {
                         md.push_str(&format!(" - *{}*", notes));
                     }
-                    md.push_str("\n");
+                    md.push('\n');
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
         }
 
@@ -690,7 +690,7 @@ impl ReportGenerator {
                 for path in &status.matching {
                     md.push_str(&format!("- `{}`\n", path.display()));
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
 
             if !status.modified.is_empty() {
@@ -713,7 +713,7 @@ impl ReportGenerator {
                         }
                     }
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
 
             if !status.missing.is_empty() {
@@ -721,7 +721,7 @@ impl ReportGenerator {
                 for path in &status.missing {
                     md.push_str(&format!("- `{}`\n", path.display()));
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
 
             if !status.extra.is_empty() {
@@ -729,7 +729,7 @@ impl ReportGenerator {
                 for path in &status.extra {
                     md.push_str(&format!("- `{}`\n", path.display()));
                 }
-                md.push_str("\n");
+                md.push('\n');
             }
         }
 
@@ -759,7 +759,7 @@ impl ReportGenerator {
                     config.tech_stack.join(", ")
                 ));
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         md.push_str("---\n\n");

@@ -209,9 +209,11 @@ mod tests {
     /// and the JSON parses cleanly. trace:FR-1-013 | ai:claude
     #[test]
     fn no_hooks_still_emits_status_line() {
-        let mut config = ScaffoldConfig::default();
-        config.include_validate_commit_hook = false;
-        config.include_track_commits_hook = false;
+        let config = ScaffoldConfig {
+            include_validate_commit_hook: false,
+            include_track_commits_hook: false,
+            ..Default::default()
+        };
 
         let json = build(config);
         let v = parse_json(&json);
@@ -263,8 +265,10 @@ mod tests {
     /// entirely (no empty array left behind). trace:TASK-20 | ai:claude
     #[test]
     fn session_start_omitted_when_role_context_hook_disabled() {
-        let mut config = ScaffoldConfig::default();
-        config.include_role_context_hook = false;
+        let config = ScaffoldConfig {
+            include_role_context_hook: false,
+            ..Default::default()
+        };
         let json = build(config);
         let v = parse_json(&json);
         assert!(

@@ -23,8 +23,8 @@ include!(concat!(env!("OUT_DIR"), "/embedded_templates.rs"));
 /// Skills come in two on-disk shapes (TASK-574):
 ///   * flat:        `skills/<name>.md`        — the prompt body itself.
 ///   * folder-form: `skills/<name>/SKILL.md`  — the prompt body, plus
-///                  `skills/<name>/<support>` — helper files (`templates/`,
-///                  `examples/`, scripts) shipped alongside the prompt.
+///     `skills/<name>/<support>` — helper files (`templates/`,
+///     `examples/`, scripts) shipped alongside the prompt.
 ///
 /// Centralizing this mapping keeps the scaffolding loop and the skill↔command
 /// parity invariant from re-deriving the convention divergently. trace:TASK-574
@@ -88,7 +88,7 @@ pub fn get_embedded_templates() -> Vec<TemplateInfo> {
         .iter()
         .map(|(key, content)| {
             let category = key.split('/').next().unwrap_or("other").to_string();
-            let name = key.split('/').last().unwrap_or(key).to_string();
+            let name = key.split('/').next_back().unwrap_or(key).to_string();
             TemplateInfo {
                 key: key.to_string(),
                 category,

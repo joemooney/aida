@@ -234,7 +234,7 @@ pub fn read_all_captures(project_root: &Path) -> Vec<EffortCapture> {
             records.push(record);
         }
     }
-    records.sort_by(|a, b| b.latest_ts().cmp(&a.latest_ts()));
+    records.sort_by_key(|r| std::cmp::Reverse(r.latest_ts()));
     records
 }
 
