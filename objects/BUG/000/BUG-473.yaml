@@ -1,0 +1,25 @@
+id: 019ea5af-c836-7913-a822-3458ebec9d5c
+spec_id: BUG-473
+agreed_id: BUG-473
+title: 3 clippy correctness errors on main (dead boolean guard + 2 loops-never-loop), hidden by CI's -W mode
+description: |-
+  Flagged independently by 3 implementer subagents (STORY-493/533/460) and reproduced by the advisor on main with clippy 1.92.0. CI passes because it runs clippy as -W (warnings) not -D (deny), so these deny-by-default correctness lints don't block merges.
+
+  Sites (aida-cli/src/main.rs):
+  1. **main.rs:56844 — overly_complex_bool_expr (REAL logic bug):** `if (in_fence && looks_like_cmd) || looks_like_cmd` collapses to `looks_like_cmd` — the `in_fence` guard is dead. In command-extraction/fence-parsing code. Fixer must determine INTENT: was it meant to be `(in_fence && looks_like_SOMETHING_ELSE) || looks_like_cmd`, or `in_fence || looks_like_cmd`? Read the surrounding function.
+  2. **main.rs:57025 — never_loop:** a loop that always exits on first iteration. Confirm intentional loop-once idiom vs a real early-exit bug; fix or rewrite as non-loop.
+  3. **main.rs:95734 — never_loop:** same — verify intent.
+
+  Acceptance: `cargo clippy -p aida-cli` is error-free (0 errors); each fix is correct per the code's intent (not just clippy-silenced); add/adjust a test if a behavior change results from the logic-bug fix. Out of scope (file separately if wanted): flipping CI clippy to deny correctness lints.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-08T05:23:41.238112273Z
+modified_at: 2026-06-08T05:23:41.238112273Z
+req_type: Bug
+tags:
+- ci-gap
+- clippy
+- correctness
+- from-implementer-recurrence
