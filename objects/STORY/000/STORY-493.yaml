@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:54:54.211726236Z
-modified_at: 2026-06-08T04:47:23.446081554Z
+modified_at: 2026-06-08T04:59:20.336854341Z
 req_type: Story
 tags:
 - hybrid
@@ -48,3 +48,8 @@ comments:
   content: 'Landed-vs-remaining confirmed (advisor, 2026-06-07): send/inbox/thread/sync all ship; digest_local_to_canonical dedups by message-id into per-message files on the orphan store (idempotent, no cross-agent write contention) — consistency model is DONE and correct. ONLY remaining slice: auto-trigger the digest at session-end + drain-end (today sync is manual-only, so durable digest is forgettable). Building that now as the final slice; trailering STORY-493 to complete it. Dropped needs-design-signoff.'
   created_at: 2026-06-08T04:47:23.446081554Z
   modified_at: 2026-06-08T04:47:23.446081554Z
+- id: 019ea599-7d90-7e50-894f-8b9146192921
+  author: joe
+  content: Commit 36cd541f3 references this requirement
+  created_at: 2026-06-08T04:59:20.336854341Z
+  modified_at: 2026-06-08T04:59:20.336854341Z
