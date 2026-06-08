@@ -118,6 +118,19 @@ These mirror the `aida role <subcommand>` CLI surface so MCP-speaking agents can
 - `role_enter({name, cd?, ...})` → **peek**, not switcher (read-only): validates the role exists and returns the `aida role enter` command to run, plus the resolved role context (required: `name`).
 - `role_end({...})` → **peek**, not actor (read-only): reports the active shell role and returns the `aida role end` command to run.
 
+### MCP resources (live state — STORY-535 / EPIC-27)
+
+Resources are a **distinct MCP concept from tools**: addressable read-only state you fetch via `resources/read` (and discover via `resources/list` / `resources/templates/list`), not verbs you invoke via `tools/call`. They back onto the same library helpers the equivalent CLI surfaces use — no subprocess to `aida`. Six resources today:
+
+- `aida://project/summary` — project statistics + feature list.
+- `aida://requirements/tree` — requirement hierarchy overview.
+- `aida://queue/in-flight` — specs held by a live session/MCP-claim lease, plus the Done-awaiting-merge bucket (mirrors `aida queue list --in-flight-only`).
+- `aida://session/leases` — active scoped session leases (mirrors `aida session leases`).
+- `aida://pr/{n}` *(template)* — git-canonical, gh-free PR linkage for PR number N: merged specs whose squash-merge subject carries `(#N)`, plus review findings tagged `from-review:PR-N`.
+- `aida://batch/{name}` *(template)* — progress buckets (Shipped / In flight / Working now / Remaining) for the `batch:<name>` tag set (mirrors `aida queue progress --batch`).
+
+The two `{…}` URIs are **resource templates** (advertised on `resources/templates/list`); the `resources/read` handler matches them by prefix and parses the tail (`aida://pr/<n>`, `aida://batch/<name>`).
+
 > **Schemas:** all 47 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
 
 ## How to connect (minimum viable)
