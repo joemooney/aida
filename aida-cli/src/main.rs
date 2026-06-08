@@ -23,8 +23,10 @@ mod external_import_bleed;
 mod findings;
 mod forge;
 mod global_queue;
+// trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
 mod headless_tail;
 mod headless_tee;
+mod health_metrics;
 mod history;
 mod integrate;
 mod mailbox_store;
@@ -63203,7 +63205,19 @@ fn handle_usage_command(
     // log (`~/.aida/auto-complete.jsonl`) — a different source from the
     // per-command usage log, so it gets its own handler.
     if auto_complete {
-        return handle_auto_complete_usage(since_raw, failures, pattern, json_out, limit, store);
+        // trace:EPIC-36 — the session-vs-drain gap reads the project's
+        // `.aida/headless-logs/`; resolve the root best-effort (None when not
+        // inside a project, in which case the gap is simply omitted).
+        let project_root = find_project_root().ok();
+        return handle_auto_complete_usage(
+            since_raw,
+            failures,
+            pattern,
+            json_out,
+            limit,
+            store,
+            project_root.as_deref(),
+        );
     }
 
     let now = chrono::Utc::now();
@@ -63467,6 +63481,7 @@ fn handle_auto_complete_usage(
     json_out: bool,
     limit: usize,
     store: Option<&RequirementsStore>,
+    project_root: Option<&std::path::Path>,
 ) -> Result<()> {
     let now = chrono::Utc::now();
     let since = now - parse_days_arg(since_raw)?;
@@ -63508,7 +63523,35 @@ fn handle_auto_complete_usage(
     }
     // `--failures` expands the full list; bare `--auto-complete` is the
     // compact overview that caps the list and points at `--failures`.
-    render_auto_complete_failures(&events, json_out, limit, !failures, store, since_raw)
+    render_auto_complete_failures(
+        &events,
+        json_out,
+        limit,
+        !failures,
+        store,
+        since_raw,
+        project_root,
+    )
+}
+
+/// EPIC-36: compose the session-vs-drain misclassification gap from the drain
+/// summary (already computed over the auto-complete log) and the headless
+/// session logs under `<project_root>/.aida/headless-logs/`. Returns `None`
+/// when there's no project root (gap can't be located). Carries the session
+/// tally back so the caller can render the per-class breakdown. trace:EPIC-36
+fn compute_session_drain_gap(
+    drain_summary: &auto_complete_telemetry::Summary,
+    project_root: Option<&std::path::Path>,
+) -> Option<(
+    health_metrics::MisclassificationGap,
+    health_metrics::SessionTally,
+)> {
+    let root = project_root?;
+    let logs_dir = root.join(".aida").join("headless-logs");
+    let sessions = health_metrics::tally_from_dir(&logs_dir);
+    let gap =
+        health_metrics::compute_gap(&sessions, drain_summary.success_rate(), drain_summary.total);
+    Some((gap, sessions))
 }
 
 /// Render the summary header + recent-failures list. `overview` (bare
@@ -63521,8 +63564,12 @@ fn render_auto_complete_failures(
     overview: bool,
     store: Option<&RequirementsStore>,
     since_raw: &str,
+    project_root: Option<&std::path::Path>,
 ) -> Result<()> {
     let summary = auto_complete_telemetry::summarize(events);
+    // trace:EPIC-36 — session-vs-drain misclassification gap over the headless
+    // session logs, alongside the drain success rate computed above.
+    let gap = compute_session_drain_gap(&summary, project_root);
     let mut failures: Vec<&auto_complete_telemetry::AutoCompleteEvent> =
         events.iter().filter(|e| e.is_failure()).collect();
     // Newest first — RFC3339 sorts lexically.
@@ -63544,6 +63591,28 @@ fn render_auto_complete_failures(
                 })
             })
             .collect();
+        let gap_json = gap.as_ref().map(|(g, tally)| {
+            let breakdown: Vec<serde_json::Value> = tally
+                .breakdown()
+                .iter()
+                .map(|(outcome, count)| {
+                    serde_json::json!({
+                        "outcome": outcome.slug(),
+                        "count": count,
+                        "counts_as_success": outcome.is_success(),
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "session_success_rate": g.session_success_rate,
+                "drain_success_rate": g.drain_success_rate,
+                "gap": g.gap(),
+                "session_total": g.session_total,
+                "drain_total": g.drain_total,
+                "insufficient_data": g.has_zero_denominator(),
+                "session_breakdown": breakdown,
+            })
+        });
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
@@ -63551,6 +63620,7 @@ fn render_auto_complete_failures(
                 "success": summary.success,
                 "failed": summary.failed,
                 "success_rate": summary.success_rate(),
+                "misclassification_gap": gap_json,
                 "failures": arr,
             }))?
         );
@@ -63570,6 +63640,48 @@ fn render_auto_complete_failures(
         },
         summary.success_rate() * 100.0,
     );
+
+    // trace:EPIC-36 — surface the session-vs-drain misclassification gap: how
+    // much work the headless sessions actually completed that the drain scored
+    // as a failure.
+    if let Some((g, _)) = gap {
+        if g.has_zero_denominator() {
+            let why = if g.session_total == 0 {
+                "no headless session logs"
+            } else {
+                "no drain runs"
+            };
+            println!(
+                "  {} {}",
+                "Misclassification gap:".bold(),
+                format!("insufficient data ({why})").dimmed()
+            );
+        } else {
+            let gap_pct = g.gap() * 100.0;
+            let gap_cell = format!("{gap_pct:+.0}%");
+            let gap_cell = if g.gap() > 0.001 {
+                gap_cell.yellow()
+            } else if g.gap() < -0.001 {
+                gap_cell.red()
+            } else {
+                gap_cell.dimmed()
+            };
+            println!(
+                "  {} session {:.0}% vs drain {:.0}% → gap {} ({} sessions)",
+                "Misclassification gap:".bold(),
+                g.session_success_rate * 100.0,
+                g.drain_success_rate * 100.0,
+                gap_cell,
+                g.session_total,
+            );
+            if g.gap() > 0.001 {
+                println!(
+                    "  {}",
+                    "↳ work sessions finished but the orchestrator scored as failed".dimmed()
+                );
+            }
+        }
+    }
 
     if failures.is_empty() {
         println!(
