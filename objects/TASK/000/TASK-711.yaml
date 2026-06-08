@@ -1,0 +1,18 @@
+id: 019ea7eb-3277-7521-b111-2961a642c21f
+spec_id: TASK-711
+agreed_id: TASK-711
+title: Full clippy -D warnings — only behind a PINNED CI toolchain
+description: 'TASK-710 shipped the warning cleanup but deferred flipping CI to -D warnings because it''s fragile on a floating @stable toolchain (clippy 1.96 added 23+ lints with no code change). To do -D warnings safely: (1) pin .github/workflows/ci.yml to a specific Rust version (e.g. dtolnay/rust-toolchain@1.96.0) so the lint set is frozen; (2) clear that version''s full warning set; (3) flip to -D warnings; (4) optionally add a separate non-blocking ''latest stable'' clippy canary job so latest-toolchain breakage is visible without blocking merges. Draft: needs the operator''s call on pinning PR-CI''s Rust version (trades away always-builds-on-latest coverage).'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-08T15:47:49.495521737Z
+modified_at: 2026-06-08T15:47:49.495521737Z
+req_type: Task
+tags:
+- ci
+- clippy
+- deferred:needs-pinned-toolchain
+- from-task:TASK-710
+- tech-debt
