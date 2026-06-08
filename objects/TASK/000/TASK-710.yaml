@@ -3,12 +3,12 @@ spec_id: TASK-710
 agreed_id: TASK-710
 title: Finish the clippy -D warnings cleanup (clear ~255 style/pedantic warnings, then flip CI)
 description: 'TASK-709 denied clippy::correctness in CI; the broader ''change back to -D warnings'' TODO in .github/workflows/ci.yml remains. ~255 style/pedantic warnings across the workspace need clearing (many auto-fixable via ''cargo clippy --fix''), then flip ci.yml from ''-W clippy::all -D clippy::correctness'' to ''-D warnings''. Draft (not approved): a 255-site sweep is a deliberate, supervised refactor — clippy --fix can introduce churn/regressions — not an unattended-drain item. Promote when ready to do it at the keyboard.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T07:50:19.270532830Z
-modified_at: 2026-06-08T07:50:19.270532830Z
+modified_at: 2026-06-08T14:00:08.352138181Z
 req_type: Task
 tags:
 - ci
