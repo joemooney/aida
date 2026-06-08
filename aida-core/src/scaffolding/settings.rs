@@ -100,6 +100,37 @@ impl Scaffolder {
             );
         }
 
+        // SubagentStart/Stop: passive-observe harness worktree leases.
+        // trace:TASK-702 | ai:claude
+        hooks.push(
+            r#"    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-subagent-start.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]"#
+            .to_string(),
+        );
+        hooks.push(
+            r#"    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-subagent-stop.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]"#
+            .to_string(),
+        );
+
         // Status bar one-liner. Always emitted — it costs nothing when AIDA
         // is unavailable (the printf fallback prints cwd) and surfaces the
         // active role / project the moment the user opens Claude Code.
@@ -240,6 +271,34 @@ mod tests {
             v["hooks"]["SessionStart"].is_null(),
             "SessionStart should be absent when the flag is off"
         );
+    }
+
+    /// SubagentStart/Stop hooks capture harness worktree leases.
+    /// trace:TASK-702 | ai:claude
+    #[test]
+    fn subagent_hooks_present_by_default() {
+        let json = build(ScaffoldConfig::default());
+        let v = parse_json(&json);
+
+        let start = v["hooks"]["SubagentStart"][0]["hooks"][0]["command"]
+            .as_str()
+            .expect("SubagentStart command should be a string");
+        assert!(
+            start.ends_with("/aida-subagent-start.sh"),
+            "expected subagent start hook, got {}",
+            start
+        );
+        assert_eq!(v["hooks"]["SubagentStart"][0]["hooks"][0]["timeout"], 5);
+
+        let stop = v["hooks"]["SubagentStop"][0]["hooks"][0]["command"]
+            .as_str()
+            .expect("SubagentStop command should be a string");
+        assert!(
+            stop.ends_with("/aida-subagent-stop.sh"),
+            "expected subagent stop hook, got {}",
+            stop
+        );
+        assert_eq!(v["hooks"]["SubagentStop"][0]["hooks"][0]["timeout"], 5);
     }
 
     /// PreToolUse merges validate-commit + git-guardrails into one

@@ -26735,6 +26735,22 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 *force_claim,
             )
         }
+        SessionCommand::HarnessWorktreeRegister {
+            agent_id,
+            cwd,
+            agent_type,
+            branch,
+            scope,
+        } => session_harness_worktree_register(
+            agent_id,
+            cwd,
+            agent_type.as_deref(),
+            branch.as_deref(),
+            scope.as_deref(),
+        ),
+        SessionCommand::HarnessWorktreeRelease { agent_id } => {
+            session_harness_worktree_release(agent_id)
+        }
         SessionCommand::End {
             id,
             spec,
@@ -29938,6 +29954,103 @@ const SESS_LABEL_MAX: usize = 20;
 
 fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
     leases_dir(project_root).join(format!("{}.toml", id))
+}
+
+fn session_harness_branch(cwd: &std::path::Path, override_branch: Option<&str>) -> Result<String> {
+    if let Some(branch) = override_branch.filter(|s| !s.trim().is_empty()) {
+        return Ok(branch.to_string());
+    }
+    current_branch_at(cwd).ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not derive branch for harness worktree `{}`",
+            cwd.display()
+        )
+    })
+}
+
+fn session_harness_worktree_register(
+    agent_id: &str,
+    cwd: &str,
+    agent_type: Option<&str>,
+    branch: Option<&str>,
+    scope: Option<&str>,
+) -> Result<()> {
+    let cwd = std::path::PathBuf::from(cwd);
+    let branch = session_harness_branch(&cwd, branch)?;
+    let payload = worktree_lease::SubagentPayload {
+        agent_id: agent_id.to_string(),
+        agent_type: agent_type.map(|s| s.to_string()),
+        cwd: cwd.clone(),
+    };
+    let mut spec = worktree_lease::lease_spec_for_start(&payload, &branch);
+    if let Some(scope) = scope.filter(|s| !s.trim().is_empty()) {
+        spec.scope = scope.to_string();
+    }
+
+    let project_root = find_main_worktree_root()?;
+    let id = worktree_lease::lease_id_from_agent_id(&spec.agent_id);
+    let owner = aida_core::git_ops::git_config_get("user.email")
+        .ok()
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "unknown".to_string());
+    let lease = SessionLease {
+        id: id.clone(),
+        scope: spec.scope.clone(),
+        slug: slugify(&spec.scope),
+        owner,
+        worktree_path: spec
+            .worktree_path
+            .canonicalize()
+            .unwrap_or_else(|_| spec.worktree_path.clone()),
+        branch: spec.branch.clone(),
+        started_at: chrono::Utc::now(),
+        hostname: hostname(),
+        role: spec.agent_type.clone(),
+        creator_pid: None,
+        cargo_target_dir: None,
+        parent_project_root: Some(
+            project_root
+                .canonicalize()
+                .unwrap_or_else(|_| project_root.clone()),
+        ),
+        pr_head_sha: None,
+        pr_base_sha: None,
+        pr_base_ref: None,
+        zen_intent_token: None,
+        escalated_to_human: None,
+        parent_branch: None,
+        parent_branch_sha: None,
+    };
+
+    std::fs::create_dir_all(leases_dir(&project_root))?;
+    std::fs::write(
+        lease_path(&project_root, &id),
+        toml::to_string_pretty(&lease)?,
+    )?;
+    println!(
+        "registered harness worktree lease {} scope:{} branch:{}",
+        id, lease.scope, lease.branch
+    );
+    Ok(())
+}
+
+fn session_harness_worktree_release(agent_id: &str) -> Result<()> {
+    let project_root = find_main_worktree_root()?;
+    let payload = worktree_lease::SubagentPayload {
+        agent_id: agent_id.to_string(),
+        agent_type: None,
+        cwd: std::path::PathBuf::new(),
+    };
+    let id = worktree_lease::lease_id_for_stop(&payload);
+    let path = lease_path(&project_root, &id);
+    match std::fs::remove_file(&path) {
+        Ok(()) => {
+            println!("released harness worktree lease {}", id);
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("removing {}", path.display())),
+    }
 }
 
 /// Lease-occupancy primitive: find a lease that already occupies `worktree` and

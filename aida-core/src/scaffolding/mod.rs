@@ -1983,6 +1983,43 @@ impl Scaffolder {
                 }
             }
 
+            // Subagent harness worktree lease hooks (SubagentStart/SubagentStop).
+            // trace:TASK-702 | ai:claude
+            for (path, body, description) in [
+                (
+                    PathBuf::from(".claude/hooks/aida-subagent-start.sh"),
+                    self.generate_subagent_start_hook(),
+                    "Claude Code SubagentStart hook registering AIDA harness worktree leases"
+                        .to_string(),
+                ),
+                (
+                    PathBuf::from(".claude/hooks/aida-subagent-stop.sh"),
+                    self.generate_subagent_stop_hook(),
+                    "Claude Code SubagentStop hook releasing AIDA harness worktree leases"
+                        .to_string(),
+                ),
+            ] {
+                if !body.is_empty() {
+                    let artifact = self.create_artifact(
+                        path.clone(),
+                        body,
+                        description,
+                        true, // shell script
+                    );
+                    match &artifact.file_status {
+                        FileStatus::New => new_files.push(path),
+                        FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                            modified_files.push(artifact.path.clone())
+                        }
+                        FileStatus::OlderVersion { .. } => {
+                            upgradeable_files.push(artifact.path.clone())
+                        }
+                        FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                    }
+                    artifacts.push(artifact);
+                }
+            }
+
             // Generate settings.json with hook configuration
             let path = PathBuf::from(".claude/settings.json");
             let artifact = self.create_artifact(
