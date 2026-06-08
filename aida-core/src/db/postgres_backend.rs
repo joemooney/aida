@@ -440,15 +440,11 @@ impl PostgresBackend {
 
     /// Save a requirement to the database
     fn save_requirement<C: GenericClient>(&self, client: &mut C, req: &Requirement) -> Result<()> {
-        let ai_eval_json = req
-            .ai_evaluation
-            .as_ref()
-            .map(|e| Self::to_json(e))
-            .transpose()?;
+        let ai_eval_json = req.ai_evaluation.as_ref().map(Self::to_json).transpose()?;
         let impl_info_json = req
             .implementation_info
             .as_ref()
-            .map(|i| Self::to_json(i))
+            .map(Self::to_json)
             .transpose()?;
 
         client.execute(
@@ -661,6 +657,8 @@ impl PostgresBackend {
     }
 
     /// Load metadata from database
+    // why: private one-shot loader returning the metadata column tuple; a named alias would only be used here and the SELECT column order is the documentation.
+    #[allow(clippy::type_complexity)]
     fn load_metadata<C: GenericClient>(
         &self,
         client: &mut C,
@@ -954,9 +952,7 @@ impl PostgresBackend {
             &[&requirement_id],
         )?;
 
-        rows.iter()
-            .map(|row| Self::row_to_sync_state(row))
-            .collect()
+        rows.iter().map(Self::row_to_sync_state).collect()
     }
 
     /// Load all sync states
@@ -974,9 +970,7 @@ impl PostgresBackend {
             &[],
         )?;
 
-        rows.iter()
-            .map(|row| Self::row_to_sync_state(row))
-            .collect()
+        rows.iter().map(Self::row_to_sync_state).collect()
     }
 
     /// Load sync states by status
@@ -997,9 +991,7 @@ impl PostgresBackend {
             &[&format!("{:?}", status)],
         )?;
 
-        rows.iter()
-            .map(|row| Self::row_to_sync_state(row))
-            .collect()
+        rows.iter().map(Self::row_to_sync_state).collect()
     }
 
     /// Delete a sync state

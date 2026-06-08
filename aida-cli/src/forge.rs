@@ -83,14 +83,14 @@ impl ForgeKind {
         }
     }
 
-    /// STORY-508 / TASK-651: per-forge command vocabulary. Unlike
-    /// [`change_cmd_hint`] (a single-verb templater for `pr`/`mr` subcommands),
-    /// these return the *correct command shape* per forge, since gh and glab
-    /// diverge by more than the noun: PR-CI status is `gh pr checks` but
-    /// `glab ci status`; the workflow-run viewer is `gh run view` but `glab ci
-    /// view`; merge's branch-cleanup flag is gh `--delete-branch` vs glab
-    /// `--remove-source-branch`. Each returns `None` for pure-git (no forge
-    /// CLI) — callers supply a git/aida-native phrasing or drop the hint.
+    // STORY-508 / TASK-651: per-forge command vocabulary. Unlike
+    // `change_cmd_hint` (a single-verb templater for `pr`/`mr` subcommands),
+    // these return the *correct command shape* per forge, since gh and glab
+    // diverge by more than the noun: PR-CI status is `gh pr checks` but
+    // `glab ci status`; the workflow-run viewer is `gh run view` but `glab ci
+    // view`; merge's branch-cleanup flag is gh `--delete-branch` vs glab
+    // `--remove-source-branch`. Each returns `None` for pure-git (no forge
+    // CLI) — callers supply a git/aida-native phrasing or drop the hint.
 
     /// Watch a change's CI to completion. `change_id` is a display string so
     /// callers can pass a number (`"47"`) or a placeholder (`"<N>"`).
@@ -1545,7 +1545,7 @@ fn change_ref_from_glab_mr(mr: &serde_json::Value, branch_hint: &str) -> Option<
 ///   - clean exit, empty array                  → `NoChange`
 ///   - clean exit, ≥1 MR                         → `Found(first)`
 ///   - clean exit, unparseable JSON             → `CliFailed(parse-error)`
-/// trace:STORY-509 trace:BUG-257 | ai:claude
+///     trace:STORY-509 trace:BUG-257 | ai:claude
 fn glab_lookup_from_list_output(
     out: Result<std::process::Output>,
     branch_hint: &str,

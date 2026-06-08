@@ -50,6 +50,8 @@ impl DeepLink {
         self
     }
 
+    // why: builder method for the DeepLink API surface, exercised by tests; kept for callers that scope a link to a repo.
+    #[allow(dead_code)]
     pub fn with_repo<S: Into<String>>(mut self, repo: S) -> Self {
         self.repo = Some(repo.into());
         self

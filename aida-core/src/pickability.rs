@@ -216,9 +216,10 @@ mod tests {
     }
 
     fn store_with(reqs: Vec<Requirement>) -> RequirementsStore {
-        let mut s = RequirementsStore::default();
-        s.requirements = reqs;
-        s
+        RequirementsStore {
+            requirements: reqs,
+            ..Default::default()
+        }
     }
 
     fn add_blocked_by(req: &mut Requirement, target_id: Uuid) {

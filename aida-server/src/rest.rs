@@ -3828,7 +3828,7 @@ async fn get_jira_sync(
                     if key.contains('-')
                         && key
                             .split('-')
-                            .last()
+                            .next_back()
                             .map(|n| n.parse::<u64>().is_ok())
                             .unwrap_or(false)
                     {

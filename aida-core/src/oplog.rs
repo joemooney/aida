@@ -316,7 +316,7 @@ mod tests {
             .clone();
 
         let mut log_b = OpLog::new("2".to_string());
-        let op2 = log_b
+        let _op2 = log_b
             .append(
                 target,
                 "bob".into(),

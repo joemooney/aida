@@ -191,7 +191,7 @@ pub fn scan_release_tags(project_root: &Path) -> Vec<ReleaseTag> {
             }
         })
         .collect();
-    names.sort_by(|a, b| semver_key(a).cmp(&semver_key(b)));
+    names.sort_by_key(|a| semver_key(a));
 
     let mut tags = Vec::with_capacity(names.len());
     for name in names {
@@ -303,9 +303,7 @@ pub fn parse_commit_type(subject: &str) -> Option<String> {
         }
     }
     // Take the token up to ':' or '('.
-    let stop = rest
-        .find(|c: char| c == ':' || c == '(')
-        .unwrap_or(rest.len());
+    let stop = rest.find([':', '(']).unwrap_or(rest.len());
     let token = rest[..stop].trim().to_ascii_lowercase();
     if token.is_empty() {
         return None;
@@ -608,10 +606,8 @@ pub fn render_markdown(sections: &[ReleaseSection]) -> String {
                 .iter()
                 .filter(|e| e.category == cat)
                 .collect();
-            if cat_entries.is_empty() {
-                if !(cat == Category::Other && !section.others.is_empty()) {
-                    continue;
-                }
+            if (section.others.is_empty() || cat != Category::Other) && cat_entries.is_empty() {
+                continue;
             }
             out.push_str(cat.heading());
             out.push_str("\n\n");
@@ -879,7 +875,7 @@ mod tests {
             "v0.2.0-rc1".to_string(),
             "v0.1.0".to_string(),
         ];
-        tags.sort_by(|a, b| semver_key(a).cmp(&semver_key(b)));
+        tags.sort_by_key(|a| semver_key(a));
         assert_eq!(
             tags,
             vec![

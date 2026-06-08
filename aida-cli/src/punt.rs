@@ -432,6 +432,8 @@ pub struct HoldSignal {
 
 impl HoldSignal {
     /// One-line hold summary for the orchestrator's run epilogue.
+    // why: orchestrator-epilogue formatter with full test coverage; the live epilogue path is gated behind the hold flow that isn't yet wired in production.
+    #[allow(dead_code)]
     pub fn summary(&self) -> String {
         match &self.reason {
             Some(r) => format!("PR held on `{}` — {r}", self.branch),

@@ -8,11 +8,11 @@
 //!   - `aida session prune`           — refuse to delete live jsonls
 //!   - `aida session leases --verbose` — warn on stale (deleted) cwd
 //!   - `aida session end` (BUG-61)    — refuse to remove a worktree with a
-//!                                     live claude inside; offer --force
+//!     live claude inside; offer --force
 //!   - `aida session show` (STORY-68) — show whether the lease has a live
-//!                                     claude attached
+//!     claude attached
 //!   - `aida session end` (STORY-73) — resolve the lease whose creator_pid
-//!                                     is an ancestor of the calling shell
+//!     is an ancestor of the calling shell
 //!
 //! Why mtime over fd inspection: tested on Linux 2026-05-09, `/proc/<pid>/fd/`
 //! does NOT contain any per-session jsonl for live claude processes — only
@@ -191,7 +191,7 @@ pub fn encode_cwd_for_projects(cwd: &Path) -> String {
     // hyphens. Tests and cross-platform paths can contain either separator
     // spelling, so normalize both rather than keying off MAIN_SEPARATOR.
     // trace:BUG-346 | ai:codex
-    s.replace('\\', "-").replace('/', "-")
+    s.replace(['\\', '/'], "-")
 }
 
 /// Walk the chain of parent PIDs starting from `start` (typically the PID of

@@ -1153,7 +1153,7 @@ impl Storage {
             .unwrap_or_default();
 
         // Save the updated store
-        let yaml = serde_yaml::to_string(&disk_store).map_err(|e| {
+        let yaml = serde_yaml::to_string(&disk_store).inspect_err(|_e| {
             // Log which field might contain control characters for debugging
             let check_ctrl = |s: &str, name: &str| {
                 for (i, c) in s.chars().enumerate() {
@@ -1177,7 +1177,6 @@ impl Storage {
                     check_ctrl(created_by, "new_req.created_by");
                 }
             }
-            e
         })?;
         fs::write(&self.file_path, yaml)?;
 

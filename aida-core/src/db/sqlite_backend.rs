@@ -653,6 +653,8 @@ impl SqliteBackend {
     }
 
     /// Load metadata from database
+    // why: private one-shot loader returning the metadata column tuple; a named alias would only be used here and the SELECT column order is the documentation.
+    #[allow(clippy::type_complexity)]
     fn load_metadata(
         &self,
         conn: &Connection,
@@ -813,15 +815,11 @@ impl SqliteBackend {
 
     /// Save a requirement to the database (for full store save)
     fn save_requirement(&self, conn: &Connection, req: &Requirement) -> Result<()> {
-        let ai_eval_json = req
-            .ai_evaluation
-            .as_ref()
-            .map(|e| Self::to_json(e))
-            .transpose()?;
+        let ai_eval_json = req.ai_evaluation.as_ref().map(Self::to_json).transpose()?;
         let impl_info_json = req
             .implementation_info
             .as_ref()
-            .map(|i| Self::to_json(i))
+            .map(Self::to_json)
             .transpose()?;
         let attachments_json = Self::to_json(&req.attachments)?;
         let gitlab_issues_json = Self::to_json(&req.gitlab_issues)?;
@@ -1056,7 +1054,7 @@ impl SqliteBackend {
                       link_origin, sync_status, last_error
                FROM gitlab_sync_state WHERE requirement_id = ?1 AND gitlab_issue_iid = ?2"#,
             rusqlite::params![requirement_id.to_string(), issue_iid as i64],
-            |row| Self::row_to_sync_state(row),
+            Self::row_to_sync_state,
         );
 
         match result {
@@ -1102,7 +1100,7 @@ impl SqliteBackend {
         )?;
 
         let states = stmt
-            .query_map([], |row| Self::row_to_sync_state(row))?
+            .query_map([], Self::row_to_sync_state)?
             .filter_map(|r| r.ok())
             .collect();
 

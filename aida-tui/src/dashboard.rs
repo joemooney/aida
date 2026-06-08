@@ -26,17 +26,12 @@ use std::time::Duration;
 
 /// Which role the dashboard is filtering for. Cycled by `r` or the Tab
 /// key; rendered as a row of pill-style chips at the top of the screen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RoleTab {
+    #[default]
     Implementer,
     Reviewer,
     Dialog,
-}
-
-impl Default for RoleTab {
-    fn default() -> Self {
-        RoleTab::Implementer
-    }
 }
 
 impl RoleTab {
@@ -103,7 +98,7 @@ pub struct AmbientState {
 }
 
 /// Per-launcher-run dashboard model.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DashboardModel {
     pub role: RoleTab,
     pub nav: NavState,
@@ -121,21 +116,6 @@ pub struct DashboardModel {
     /// Catppuccin Mocha palette; the launcher overrides it from
     /// `[tui] theme`. trace:TASK-256 | ai:claude
     pub theme: Theme,
-}
-
-impl Default for DashboardModel {
-    fn default() -> Self {
-        DashboardModel {
-            role: RoleTab::default(),
-            nav: NavState::default(),
-            rows: Vec::new(),
-            selected: 0,
-            ambient: AmbientState::default(),
-            preview_cache: HashMap::new(),
-            notice: None,
-            theme: Theme::default(),
-        }
-    }
 }
 
 impl DashboardModel {
@@ -356,7 +336,7 @@ fn rollup_state(rollup: &[serde_json::Value]) -> String {
         .iter()
         .filter_map(|v| v.get("conclusion").and_then(|c| c.as_str()))
         .collect();
-    if conclusions.iter().any(|c| *c == "FAILURE") {
+    if conclusions.contains(&"FAILURE") {
         "failure".into()
     } else if conclusions.iter().all(|c| *c == "SUCCESS") {
         "green".into()

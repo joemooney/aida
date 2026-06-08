@@ -299,6 +299,8 @@ pub(crate) fn touch_mcp_agent(
 /// supported: registry IDs are `<agent-type>-<pid>`, so each process gets a
 /// distinct entry even when cwd/spec match.
 // trace:STORY-432 | ai:codex
+// why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn register_spawned_agent(
     project_root: &Path,
     agent_type: &str,
@@ -966,7 +968,7 @@ mod tests {
         std::fs::create_dir_all(&nested).unwrap();
         std::fs::create_dir_all(&wt_b).unwrap();
 
-        let mut live = |id: &str, wt: &Path| {
+        let live = |id: &str, wt: &Path| {
             let mut e = entry_with(std::process::id(), Utc::now());
             e.id = id.to_string();
             e.worktree_path = wt.to_path_buf();

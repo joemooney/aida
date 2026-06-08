@@ -82,9 +82,9 @@ pub(crate) fn read_canonical_messages(store_root: &Path) -> Result<Vec<Message>>
 /// Digest the local layer into the canonical layer: write every local message
 /// whose id is not already canonical into `<store_root>/mailbox/`. Append-only
 /// + id-keyed, so it is idempotent (re-running digests nothing new) and two
-/// agents digesting concurrently merge without edit conflict. Returns the count
-/// newly written; the CALLER stages + commits the orphan-store change.
-/// trace:TASK-605 | ai:claude
+///   agents digesting concurrently merge without edit conflict. Returns the count
+///   newly written; the CALLER stages + commits the orphan-store change.
+///   trace:TASK-605 | ai:claude
 pub(crate) fn digest_local_to_canonical(store_root: &Path, project_root: &Path) -> Result<usize> {
     use std::collections::HashSet;
     let local = read_local_messages(project_root)?;

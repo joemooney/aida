@@ -2889,6 +2889,9 @@ pub enum BacklogCommand {
 /// Personal work queue commands.
 // trace:STORY-368 | ai:claude
 // trace:TASK-487 | ai:claude
+// why: clap-derived subcommand enum — boxing a variant's fields would break the
+// derive's flat arg parsing; the size skew is inherent to CLI command modeling.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
 pub enum QueueCommand {
     /// List items in your queue. When a role is active and --role is not
@@ -3298,11 +3301,11 @@ pub enum QueueCommand {
         ///      eating autonomous overnight runs and Claude Code keeps
         ///      the rm -rf circuit breakers on)
         ///   5. fallback → `acceptEdits`
-        /// Common values: `auto` (research preview: auto-approves with
-        /// background safety checks; pairs with the pre-allow list),
-        /// `bypassPermissions` (legacy `--dangerously-skip-permissions`),
-        /// `plan` (read-only), `default` (prompt on everything). Passed
-        /// through unvalidated to `claude --permission-mode`.
+        ///      Common values: `auto` (research preview: auto-approves with
+        ///      background safety checks; pairs with the pre-allow list),
+        ///      `bypassPermissions` (legacy `--dangerously-skip-permissions`),
+        ///      `plan` (read-only), `default` (prompt on everything). Passed
+        ///      through unvalidated to `claude --permission-mode`.
         // trace:STORY-42, TASK-82, TASK-83, TASK-84 | ai:claude
         // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "MODE")]
@@ -3956,9 +3959,9 @@ pub enum QueueCommand {
         // trace:STORY-335 trace:TASK-691 | ai:claude
         /// Accumulation strategy for the batch. `per-item` (default) = a branch
         /// + PR per item, rebased and merged in order. `one-branch` and
-        /// `stacked` are accepted but not built yet (they error with a pointer).
-        /// When omitted, falls back to `[integrate] strategy` in
-        /// .aida/config.toml, then `per-item`.
+        ///   `stacked` are accepted but not built yet (they error with a pointer).
+        ///   When omitted, falls back to `[integrate] strategy` in
+        ///   .aida/config.toml, then `per-item`.
         #[clap(long, value_enum)]
         strategy: Option<crate::integrate::IntegrateStrategy>,
         /// User ID (defaults to AIDA_USER or system user).
