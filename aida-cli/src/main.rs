@@ -196,7 +196,7 @@ struct SpecIdClaimant {
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
 /// Format recommendation: "ai:claude:username" for AI-assisted work
-fn get_default_author() -> String {
+pub(crate) fn get_default_author() -> String {
     if let Ok(author) = std::env::var("AIDA_AUTHOR") {
         author
     } else {
@@ -21128,7 +21128,7 @@ fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
 /// no-op if no role active or the role file is unwriteable). Called from
 /// the show/edit/add/comment paths so resuming a role surfaces what the
 /// user was working on last.
-fn record_role_activity(spec_id: &str, action: &str) {
+pub(crate) fn record_role_activity(spec_id: &str, action: &str) {
     let role_name = match std::env::var("AIDA_SESSION_ROLE") {
         Ok(n) if !n.is_empty() => n,
         _ => return,
@@ -43490,7 +43490,7 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
 /// when no lease covers this shell or the manifest doesn't list the
 /// spec — most edits happen outside a planned cluster, so the path stays
 /// quiet by design. trace:STORY-98 | ai:claude
-fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
+pub(crate) fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
     let Ok(project_root) = find_project_root() else {
         return;
     };
@@ -81209,7 +81209,7 @@ where
 /// `--for X` (non-"any") takes precedence over `--all` — that flag only
 /// suppresses the *default* active-role filter, not an explicit override.
 /// trace:BUG-87 | ai:claude
-fn resolve_queue_role_filter(
+pub(crate) fn resolve_queue_role_filter(
     role: Option<&str>,
     all: bool,
     session_role: Option<&str>,
@@ -81227,7 +81227,7 @@ fn resolve_queue_role_filter(
 
 /// Predicate: does a queue entry pass the resolved role filter?
 /// trace:BUG-87 | ai:claude
-fn entry_matches_role_filter(
+pub(crate) fn entry_matches_role_filter(
     for_role: Option<&str>,
     role_filter: Option<&str>,
     only_unrouted: bool,
@@ -84718,7 +84718,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 /// Pure function — separated from `handle_queue_rework` so the table
 /// can be unit-tested without spinning up a storage backend.
 /// trace:TASK-218 | ai:claude
-fn rework_smart_target(current: &RequirementStatus) -> Option<RequirementStatus> {
+pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<RequirementStatus> {
     match current {
         RequirementStatus::Draft => None,
         RequirementStatus::Approved => None,
