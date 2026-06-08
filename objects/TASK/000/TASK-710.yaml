@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T07:50:19.270532830Z
-modified_at: 2026-06-08T14:00:08.352138181Z
+modified_at: 2026-06-08T15:14:14.115895406Z
 req_type: Task
 tags:
 - ci
@@ -16,3 +16,9 @@ tags:
 - deferred:supervised
 - from-task:TASK-709
 - tech-debt
+comments:
+- id: 019ea7cc-71e3-7cb2-b121-ac3e42a45527
+  author: joe
+  content: Commit 74edcb1b4 references this requirement
+  created_at: 2026-06-08T15:14:14.115895406Z
+  modified_at: 2026-06-08T15:14:14.115895406Z
