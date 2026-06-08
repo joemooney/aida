@@ -3,12 +3,12 @@ spec_id: TASK-708
 agreed_id: TASK-708
 title: When STORY-459 (`--for-agent`) + TASK-542 (stable agent names) land, integrator
 description: ''
-status: Draft
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T05:20:40.247098304Z
-modified_at: 2026-06-08T06:46:23.212599186Z
+modified_at: 2026-06-08T06:46:24.651356101Z
 req_type: Task
 relationships:
 - rel_type: Child
