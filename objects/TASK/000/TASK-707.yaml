@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T05:20:27.161200120Z
-modified_at: 2026-06-08T06:46:19.680588050Z
+modified_at: 2026-06-08T06:46:22.034491859Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e5abd-6593-7ac3-8612-eed9695bb0c5
   created_at: 2026-06-08T05:20:34.949531061Z
+comments:
+- id: 019ea5fb-7a52-7f92-833f-17faf8399971
+  author: joe
+  content: 'Re-scoped + approved (advisor, 2026-06-07): the two follow-ups this stub named are now mostly delivered — ''aida queue integrate'' SHIPPED via STORY-335 (--dry-run/--rebase/--strategy), and the integrator ROLE shipped via STORY-460. The only genuinely-remaining piece is the aida-integrate SKILL: a procedural recipe wrapping the integrator role + ''aida queue integrate'' (list open PRs in dependency order, rebase loop, CI watch, squash-merge on green+verdict, escalation criteria to the advisor). Also documents per-agent dispatch via --for-agent (STORY-459) — which subsumes TASK-708.'
+  created_at: 2026-06-08T06:46:22.034491859Z
+  modified_at: 2026-06-08T06:46:22.034491859Z
