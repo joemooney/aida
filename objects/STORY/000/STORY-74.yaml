@@ -43,7 +43,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:12.360171396Z
-modified_at: 2026-06-06T04:16:31.401596680Z
+modified_at: 2026-06-08T03:30:58.296440840Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -58,5 +58,10 @@ comments:
     Re-evaluate after EPIC-26 ships if TUI grows multi-project panels. The work itself is sound; just not the current priority.
   created_at: 2026-05-15T04:02:09.846196394Z
   modified_at: 2026-05-15T04:02:09.846196394Z
+- id: 019ea548-9678-7bb1-bc2f-082873ed0811
+  author: joe
+  content: Burnable per the EPIC-22 operator decision (build the registry-foundation slice; 75/76/77 deferred until a real multi-repo workspace creates recurring sync pain).
+  created_at: 2026-06-08T03:30:58.296440840Z
+  modified_at: 2026-06-08T03:30:58.296440840Z
 archived: true
 archived_at: 2026-06-06T04:16:31.401596680Z
