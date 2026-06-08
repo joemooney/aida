@@ -56476,6 +56476,37 @@ struct PlanRefFix {
     new: String,
 }
 
+/// The full result of linting a plan file: the three finding groups plus the
+/// confirmed drifted-ref fixes. Split out from `verify_plan` so both the CLI
+/// renderer (`verify_plan`) and the read-only MCP `plan_verify` tool compute
+/// from the same source of truth. trace:EPIC-27 | ai:claude
+struct PlanReport {
+    sections: Vec<PlanFinding>,
+    files: Vec<PlanFinding>,
+    refs: Vec<PlanFinding>,
+    fixes: Vec<PlanRefFix>,
+}
+
+impl PlanReport {
+    fn error_count(&self) -> usize {
+        let c = |fs: &[PlanFinding]| {
+            fs.iter()
+                .filter(|f| f.level == PlanFindingLevel::Error)
+                .count()
+        };
+        c(&self.sections) + c(&self.files) + c(&self.refs)
+    }
+
+    fn warn_count(&self) -> usize {
+        let c = |fs: &[PlanFinding]| {
+            fs.iter()
+                .filter(|f| f.level == PlanFindingLevel::Warn)
+                .count()
+        };
+        c(&self.sections) + c(&self.files) + c(&self.refs)
+    }
+}
+
 fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
     match cmd {
         PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
@@ -57704,11 +57735,14 @@ fn plan_symbols_on_line(line: &str) -> Vec<String> {
     out
 }
 
-fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()> {
+/// Pure plan-lint pass: compute the section / file / line-ref findings (and
+/// the drifted-ref fixes) for `content` resolved against repo `root`. Does no
+/// I/O beyond reading the source files the plan references, and never writes
+/// or exits — the rendering, `--fix` rewrite, and process exit live in the
+/// callers (`verify_plan` for the CLI, the `plan_verify` MCP tool for the
+/// server). trace:EPIC-27 | ai:claude
+fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
     use regex::Regex;
-    let content = std::fs::read_to_string(plan_file)
-        .with_context(|| format!("could not read plan file {}", plan_file.display()))?;
-    let root = plan_repo_root(plan_file);
     let lines: Vec<&str> = content.lines().collect();
 
     let mut section_findings: Vec<PlanFinding> = Vec::new();
@@ -57987,6 +58021,31 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
         }
     }
 
+    PlanReport {
+        sections: section_findings,
+        files: file_findings,
+        refs: ref_findings,
+        fixes,
+    }
+}
+
+/// CLI entry point for `aida plan verify <file> [--fix] [--quiet]`. Reads the
+/// plan, runs the pure `compute_plan_report` pass, prints the grouped findings,
+/// optionally rewrites drifted refs in place, and exits non-zero on errors
+/// (pre-commit-hook-able). trace:TASK-93 | ai:claude
+fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()> {
+    let content = std::fs::read_to_string(plan_file)
+        .with_context(|| format!("could not read plan file {}", plan_file.display()))?;
+    let root = plan_repo_root(plan_file);
+    let lines: Vec<&str> = content.lines().collect();
+    let report = compute_plan_report(&content, &root);
+    let PlanReport {
+        sections: section_findings,
+        files: file_findings,
+        refs: ref_findings,
+        fixes,
+    } = &report;
+
     // --- Report. ---
     let plan_label = plan_file.display();
     println!("{} {}", "Verifying plan:".bold(), plan_label);
@@ -58011,24 +58070,17 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
         println!();
     };
 
-    print_group("Sections", &section_findings);
-    print_group("Files", &file_findings);
-    print_group("Line refs", &ref_findings);
+    print_group("Sections", section_findings);
+    print_group("Files", file_findings);
+    print_group("Line refs", ref_findings);
 
-    let count = |findings: &[PlanFinding], level: &PlanFindingLevel| {
-        findings.iter().filter(|f| &f.level == level).count()
-    };
-    let errors = count(&section_findings, &PlanFindingLevel::Error)
-        + count(&file_findings, &PlanFindingLevel::Error)
-        + count(&ref_findings, &PlanFindingLevel::Error);
-    let warns = count(&section_findings, &PlanFindingLevel::Warn)
-        + count(&file_findings, &PlanFindingLevel::Warn)
-        + count(&ref_findings, &PlanFindingLevel::Warn);
+    let errors = report.error_count();
+    let warns = report.warn_count();
 
     if fix && !fixes.is_empty() {
         let mut patched = lines.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let mut applied = 0;
-        for f in &fixes {
+        for f in fixes.iter() {
             if let Some(line) = patched.get_mut(f.line_idx) {
                 if line.contains(&f.old) {
                     *line = line.replacen(&f.old, &f.new, 1);
@@ -58076,6 +58128,56 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
         std::process::exit(1);
     }
     Ok(())
+}
+
+/// Render a `PlanReport` as a plain (un-colored) text report for the read-only
+/// `plan_verify` MCP tool. Mirrors the CLI's grouped layout + verdict line but
+/// returns a string instead of printing, and never rewrites or exits (the MCP
+/// server must not mutate files or kill its own process). trace:EPIC-27
+fn render_plan_report_string(report: &PlanReport, plan_label: &str) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    let _ = writeln!(out, "Verifying plan: {}", plan_label);
+    out.push('\n');
+
+    let mut group = |title: &str, findings: &[PlanFinding]| {
+        if findings.is_empty() {
+            return;
+        }
+        let _ = writeln!(out, "{}", title);
+        for f in findings {
+            let tag = match f.level {
+                PlanFindingLevel::Ok => "  OK   ",
+                PlanFindingLevel::Warn => "  WARN ",
+                PlanFindingLevel::Error => "  ERROR",
+            };
+            let _ = writeln!(out, "{} {}", tag, f.msg);
+        }
+        out.push('\n');
+    };
+    group("Sections", &report.sections);
+    group("Files", &report.files);
+    group("Line refs", &report.refs);
+
+    let errors = report.error_count();
+    let warns = report.warn_count();
+    if !report.fixes.is_empty() {
+        let _ = writeln!(
+            out,
+            "hint: run `aida plan verify <file> --fix` to rewrite {} drifted ref(s) automatically",
+            report.fixes.len()
+        );
+        out.push('\n');
+    }
+    let verdict = if errors > 0 {
+        format!("{} error(s), {} warning(s) — FAIL", errors, warns)
+    } else if warns > 0 {
+        format!("0 errors, {warns} warning(s) — PASS")
+    } else {
+        "all checks passed — PASS".to_string()
+    };
+    let _ = write!(out, "Verdict: {}", verdict);
+    out
 }
 
 // ============================================================================
