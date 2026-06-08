@@ -8,12 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T05:24:51.535469030Z
-modified_at: 2026-06-08T05:24:57.879625825Z
+modified_at: 2026-06-08T05:41:13.615582857Z
 req_type: Task
 tags:
 - ci
 - clippy
 - from-bug:BUG-473
+- operator-action
 - substrate-as-bouncer
 relationships:
 - rel_type: BlockedBy
