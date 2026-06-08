@@ -125,9 +125,11 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        # Using -W instead of -D to allow warnings without failing the build
-        # TODO: Fix clippy warnings and change back to -D warnings
-        run: cargo clippy --workspace -- -W clippy::all
+        # Style/pedantic lints stay warnings (the ~277 pre-existing ones are not
+        # yet cleaned — that's the remaining `-D warnings` TODO). But the
+        # deny-by-default CORRECTNESS lints are re-denied here so a real logic
+        # bug can't merge (BUG-473 slipped past the old blanket -W). trace:TASK-709
+        run: cargo clippy --workspace -- -W clippy::all -D clippy::correctness
 
   # Create release artifacts for tags
   release:
