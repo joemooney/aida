@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:31:52.631747927Z
-modified_at: 2026-06-08T06:24:11.345139577Z
+modified_at: 2026-06-08T06:32:20.966969998Z
 req_type: Story
 tags:
 - from-spike:tier2
@@ -29,3 +29,8 @@ comments:
   content: 'Re-scoped to the MANUAL slice (advisor, operator-approved 2026-06-07): drop auto-thresholds + cost-control infra (premature — no Tier-1 distribution data yet). Build only: /aida-insights gains an on-demand LLM health fact-finding mode that reads the now-shipped Tier-1 metrics (aida usage --health + --auto-complete gap) and, when invoked, root-causes anomalies / buckets failure reasons / synthesizes a health narrative. No automatic triggering. Auto-threshold triggering stays a future spec gated on real data.'
   created_at: 2026-06-08T06:24:11.345139577Z
   modified_at: 2026-06-08T06:24:11.345139577Z
+- id: 019ea5ee-a4e6-7632-b649-8026ba1bb99e
+  author: joe
+  content: Commit 4bac7b80f references this requirement
+  created_at: 2026-06-08T06:32:20.966969998Z
+  modified_at: 2026-06-08T06:32:20.966969998Z
