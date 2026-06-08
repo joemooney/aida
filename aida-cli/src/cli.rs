@@ -5718,6 +5718,14 @@ pub enum Command {
         // trace:TASK-266 | ai:claude
         #[clap(long, requires = "auto_complete", conflicts_with = "failures")]
         pattern: bool,
+        /// Show the deterministic project-health catalog: phase-failure
+        /// distribution, reap-vs-kill breakdown, drain halt-rate, recovery
+        /// latency, draft-inbox depth, and burn-down velocity. Reads the
+        /// orchestrator telemetry log + headless session logs + the spec graph.
+        // trace:STORY-530 | ai:claude — plain `//` so the SPEC-ID stays out of
+        // `--help` output (TASK-268).
+        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern"])]
+        health: bool,
     },
 
     /// Dogfood agent-lift metrics over the recorded telemetry substrate.

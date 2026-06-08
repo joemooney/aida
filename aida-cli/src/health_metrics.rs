@@ -313,6 +313,280 @@ pub fn compute_gap(
     }
 }
 
+// ============================================================================
+// STORY-530 — the remaining Tier-1 deterministic health metrics.
+//
+// Every function below is PURE over plain inputs extracted from the substrate
+// (the `--auto-complete` telemetry log + the spec graph). The thin I/O that
+// reads those sources stays in the caller (`main.rs`) so the arithmetic and
+// the edge cases (zero denominators, empty windows) are unit-testable against
+// synthetic data without touching the filesystem or the store.
+// trace:STORY-530 | ai:claude
+// ============================================================================
+
+/// Drain halt-rate (#3): the EPIC-28 resilient drain *parks-and-continues* on a
+/// shelvable phase failure (CI red, RequestChanges, build fail) but *halts* the
+/// whole batch on a non-shelvable environment failure (`spawn`, `missing-tool`,
+/// `internal`). This breakdown counts, over the drain failures, how many were
+/// shelve-and-continue vs how many would halt the batch — the signal for how
+/// often a drain stops dead vs degrades gracefully. trace:STORY-530
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HaltBreakdown {
+    /// Failures whose `failure_kind` shelves (parks the spec, drain continues).
+    pub shelved: usize,
+    /// Failures whose `failure_kind` halts the batch (broken environment).
+    pub halted: usize,
+    /// Failures with an unknown / absent `failure_kind` slug — conservatively
+    /// neither shelved nor halted, surfaced so the breakdown stays honest.
+    pub unclassified: usize,
+}
+
+impl HaltBreakdown {
+    /// Total classified-or-not failures the breakdown is computed over.
+    pub fn total(&self) -> usize {
+        self.shelved + self.halted + self.unclassified
+    }
+
+    /// Fraction of failures that halted the batch, in `0.0..=1.0`. `0.0` when
+    /// there are no failures (zero-denominator edge). The denominator is
+    /// shelved + halted (classified failures); unclassified rows are excluded
+    /// so an unknown slug neither inflates nor deflates the rate.
+    /// trace:STORY-530
+    pub fn halt_rate(&self) -> f64 {
+        let classified = self.shelved + self.halted;
+        if classified == 0 {
+            0.0
+        } else {
+            self.halted as f64 / classified as f64
+        }
+    }
+}
+
+/// `true` when a `failure_kind` slug is a *shelvable* (park-and-continue) kind.
+/// Mirrors `auto_complete::FailureKind::is_shelvable` over the stable slugs so
+/// this module stays free of the orchestrator's internal types. trace:STORY-530
+pub fn failure_kind_is_shelvable(slug: &str) -> bool {
+    matches!(
+        slug,
+        "no-pr"
+            | "ci-red"
+            | "ci-timeout"
+            | "no-verdict"
+            | "pr-verification-inconclusive"
+            | "no-progress-watchdog"
+            | "cache-locked"
+            | "failed"
+    )
+}
+
+/// `true` when a `failure_kind` slug is a *non-shelvable* (batch-halting)
+/// environment failure. trace:STORY-530
+pub fn failure_kind_is_halting(slug: &str) -> bool {
+    matches!(slug, "spawn" | "missing-tool" | "internal")
+}
+
+/// Classify a slice of drain-failure `failure_kind` slugs into a
+/// `HaltBreakdown`. A `None` slug (a failure with no recorded kind) is
+/// `unclassified`. Pure over the slug list. trace:STORY-530
+pub fn halt_breakdown<I, S>(failure_kinds: I) -> HaltBreakdown
+where
+    I: IntoIterator<Item = Option<S>>,
+    S: AsRef<str>,
+{
+    let mut b = HaltBreakdown::default();
+    for kind in failure_kinds {
+        match kind.as_ref().map(|s| s.as_ref()) {
+            Some(slug) if failure_kind_is_shelvable(slug) => b.shelved += 1,
+            Some(slug) if failure_kind_is_halting(slug) => b.halted += 1,
+            _ => b.unclassified += 1,
+        }
+    }
+    b
+}
+
+/// Recovery latency (#4): the wall-clock gap between a drain *failure* and the
+/// *next* drain run — the human-babysitting cost (how long work sat parked
+/// before someone kicked off the next drain). trace:STORY-530
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RecoveryLatency {
+    /// One gap per failure that was followed by a later drain, in seconds.
+    pub gaps_secs: Vec<i64>,
+}
+
+impl RecoveryLatency {
+    /// Number of recovery gaps measured (failures that had a following drain).
+    pub fn count(&self) -> usize {
+        self.gaps_secs.len()
+    }
+
+    /// Mean gap in seconds, or `None` when no gaps were measured.
+    /// trace:STORY-530
+    pub fn mean_secs(&self) -> Option<f64> {
+        if self.gaps_secs.is_empty() {
+            None
+        } else {
+            let sum: i64 = self.gaps_secs.iter().sum();
+            Some(sum as f64 / self.gaps_secs.len() as f64)
+        }
+    }
+
+    /// Median gap in seconds, or `None` when no gaps were measured.
+    /// trace:STORY-530
+    pub fn median_secs(&self) -> Option<f64> {
+        if self.gaps_secs.is_empty() {
+            return None;
+        }
+        let mut sorted = self.gaps_secs.clone();
+        sorted.sort_unstable();
+        let n = sorted.len();
+        Some(if n % 2 == 1 {
+            sorted[n / 2] as f64
+        } else {
+            (sorted[n / 2 - 1] + sorted[n / 2]) as f64 / 2.0
+        })
+    }
+
+    /// Largest gap in seconds, or `None` when no gaps were measured.
+    pub fn max_secs(&self) -> Option<i64> {
+        self.gaps_secs.iter().copied().max()
+    }
+}
+
+/// One drain run reduced to the two timestamps recovery-latency needs, as epoch
+/// seconds, plus whether it failed. The caller parses the RFC3339 strings from
+/// the telemetry log; this struct keeps the latency computation pure.
+/// trace:STORY-530
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DrainRun {
+    /// When the run started (epoch seconds).
+    pub started_at: i64,
+    /// When the run finished (epoch seconds).
+    pub completed_at: i64,
+    /// Whether the run was a failure.
+    pub failed: bool,
+}
+
+/// Compute recovery latencies from a set of drain runs. Sorts by completion
+/// time, then for each *failed* run measures the gap to the *next run that
+/// started after this one completed* (the next drain a human kicked off). A
+/// failure with no following drain contributes no gap. Pure over the supplied
+/// runs. trace:STORY-530
+pub fn recovery_latency(runs: &[DrainRun]) -> RecoveryLatency {
+    // Order by completion so "the next drain" is well-defined.
+    let mut ordered: Vec<DrainRun> = runs.to_vec();
+    ordered.sort_by_key(|r| r.completed_at);
+    let mut latency = RecoveryLatency::default();
+    for (i, run) in ordered.iter().enumerate() {
+        if !run.failed {
+            continue;
+        }
+        // The next drain that *started* at or after this failure completed.
+        if let Some(next) = ordered
+            .iter()
+            .skip(i + 1)
+            .find(|r| r.started_at >= run.completed_at)
+        {
+            let gap = next.started_at - run.completed_at;
+            if gap >= 0 {
+                latency.gaps_secs.push(gap);
+            }
+        }
+    }
+    latency
+}
+
+/// Draft-inbox depth (#5, ADR-3): the count of untriaged Draft specs awaiting
+/// the advisor's approve/reject decision. A high number is unreviewed backlog
+/// piling up. Pure over `(is_draft, is_archived)` flags; archived drafts are
+/// excluded (they are no longer in the inbox). trace:STORY-530
+pub fn draft_inbox_depth<I>(specs: I) -> usize
+where
+    I: IntoIterator<Item = (bool, bool)>,
+{
+    specs
+        .into_iter()
+        .filter(|(is_draft, is_archived)| *is_draft && !*is_archived)
+        .count()
+}
+
+/// Burn-down velocity (#6): net completions per day — specs that *reached
+/// Completed* minus specs that were *newly added* on the same day. A positive
+/// net means the backlog is shrinking; a negative net means the advisor is
+/// adding work faster than it ships. trace:STORY-530
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BurnDownVelocity {
+    /// Specs that reached Completed in the window.
+    pub completed: usize,
+    /// Specs newly created in the window.
+    pub added: usize,
+    /// Number of distinct days the window spans (>= 1 when any event lands).
+    pub days: usize,
+}
+
+impl BurnDownVelocity {
+    /// Net change in backlog over the window (completed − added). Negative when
+    /// more was added than shipped.
+    pub fn net(&self) -> i64 {
+        self.completed as i64 - self.added as i64
+    }
+
+    /// Net completions per day, or `None` when the window spans no days
+    /// (zero-denominator edge). trace:STORY-530
+    pub fn net_per_day(&self) -> Option<f64> {
+        if self.days == 0 {
+            None
+        } else {
+            Some(self.net() as f64 / self.days as f64)
+        }
+    }
+}
+
+/// One spec reduced to the two day-stamps burn-down needs: the ordinal day it
+/// was created and (optionally) the ordinal day it reached Completed. The
+/// caller derives the Completed day by walking the spec `history:` for a
+/// `status` change whose `new_value` is `Completed` (falling back to
+/// `modified_at` for currently-Completed specs with no history row), and the
+/// created day from `created_at`. Using an ordinal day index (e.g.
+/// `num_days_from_ce` or epoch-day) keeps the bucketing pure and timezone-free.
+/// trace:STORY-530
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpecLifecycleDays {
+    /// Ordinal day the spec was created.
+    pub created_day: i64,
+    /// Ordinal day the spec reached Completed, if it ever did.
+    pub completed_day: Option<i64>,
+}
+
+/// Compute net burn-down velocity over `[window_start_day, window_end_day]`
+/// (inclusive ordinal-day bounds). Counts a completion when `completed_day`
+/// falls in the window, and an add when `created_day` falls in the window. The
+/// `days` denominator is the inclusive span of the window. Pure over the
+/// supplied lifecycle days. trace:STORY-530
+pub fn burn_down_velocity(
+    specs: &[SpecLifecycleDays],
+    window_start_day: i64,
+    window_end_day: i64,
+) -> BurnDownVelocity {
+    let in_window = |d: i64| d >= window_start_day && d <= window_end_day;
+    let mut v = BurnDownVelocity::default();
+    for spec in specs {
+        if in_window(spec.created_day) {
+            v.added += 1;
+        }
+        if let Some(cd) = spec.completed_day {
+            if in_window(cd) {
+                v.completed += 1;
+            }
+        }
+    }
+    v.days = if window_end_day >= window_start_day {
+        (window_end_day - window_start_day + 1) as usize
+    } else {
+        0
+    };
+    v
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -497,5 +771,231 @@ mod tests {
         assert_eq!(SessionOutcome::MidWorkKill.slug(), "mid-work-kill");
         assert_eq!(SessionOutcome::Error.slug(), "error");
         assert_eq!(SessionOutcome::Truncated.slug(), "truncated");
+    }
+
+    // ---- STORY-530: halt-rate ----------------------------------------------
+
+    #[test]
+    fn halt_breakdown_classifies_shelvable_vs_halting() {
+        let kinds = [
+            Some("ci-red"),
+            Some("failed"),
+            Some("spawn"),
+            Some("missing-tool"),
+            Some("internal"),
+        ];
+        let b = halt_breakdown(kinds);
+        assert_eq!(b.shelved, 2); // ci-red + failed
+        assert_eq!(b.halted, 3); // spawn + missing-tool + internal
+        assert_eq!(b.unclassified, 0);
+        assert_eq!(b.total(), 5);
+        // 3 halting of 5 classified = 0.6.
+        assert!((b.halt_rate() - 0.6).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn halt_breakdown_unknown_slug_is_unclassified_and_excluded_from_rate() {
+        let kinds = [Some("ci-red"), Some("spawn"), Some("mystery-kind"), None];
+        let b = halt_breakdown(kinds);
+        assert_eq!(b.shelved, 1);
+        assert_eq!(b.halted, 1);
+        assert_eq!(b.unclassified, 2); // unknown slug + None
+        assert_eq!(b.total(), 4);
+        // Rate over classified only (shelved + halted = 2): 1 halted → 0.5.
+        assert!((b.halt_rate() - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn halt_rate_is_zero_for_no_classified_failures() {
+        let empty: [Option<&str>; 0] = [];
+        assert_eq!(halt_breakdown(empty).halt_rate(), 0.0);
+        // All-unclassified also yields a zero rate (no classified denominator).
+        let b = halt_breakdown([None::<&str>, None::<&str>]);
+        assert_eq!(b.unclassified, 2);
+        assert_eq!(b.halt_rate(), 0.0);
+    }
+
+    #[test]
+    fn shelvable_and_halting_slugs_are_disjoint_and_complete() {
+        for s in [
+            "no-pr",
+            "ci-red",
+            "ci-timeout",
+            "no-verdict",
+            "pr-verification-inconclusive",
+            "no-progress-watchdog",
+            "cache-locked",
+            "failed",
+        ] {
+            assert!(failure_kind_is_shelvable(s), "{s} should be shelvable");
+            assert!(!failure_kind_is_halting(s), "{s} should not be halting");
+        }
+        for s in ["spawn", "missing-tool", "internal"] {
+            assert!(failure_kind_is_halting(s), "{s} should be halting");
+            assert!(!failure_kind_is_shelvable(s), "{s} should not be shelvable");
+        }
+    }
+
+    // ---- STORY-530: recovery latency ---------------------------------------
+
+    fn run(started: i64, completed: i64, failed: bool) -> DrainRun {
+        DrainRun {
+            started_at: started,
+            completed_at: completed,
+            failed,
+        }
+    }
+
+    #[test]
+    fn recovery_latency_measures_gap_to_next_drain() {
+        // Run A fails at t=100; next drain B starts at t=160 → gap 60.
+        // Run B fails at t=200; next drain C starts at t=500 → gap 300.
+        // Run C succeeds → no gap measured from it.
+        let runs = [
+            run(50, 100, true),
+            run(160, 200, true),
+            run(500, 560, false),
+        ];
+        let lat = recovery_latency(&runs);
+        assert_eq!(lat.count(), 2);
+        assert_eq!(lat.gaps_secs, vec![60, 300]);
+        assert_eq!(lat.max_secs(), Some(300));
+        assert!((lat.mean_secs().unwrap() - 180.0).abs() < f64::EPSILON);
+        assert!((lat.median_secs().unwrap() - 180.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn recovery_latency_failure_with_no_following_drain_yields_no_gap() {
+        // A single failing run, nothing after it → nothing to recover toward.
+        let runs = [run(0, 100, true)];
+        let lat = recovery_latency(&runs);
+        assert_eq!(lat.count(), 0);
+        assert_eq!(lat.mean_secs(), None);
+        assert_eq!(lat.median_secs(), None);
+        assert_eq!(lat.max_secs(), None);
+    }
+
+    #[test]
+    fn recovery_latency_orders_unsorted_input_by_completion() {
+        // Supplied out of order; the gap from the t=100 failure is still 50.
+        let runs = [
+            run(200, 260, false),
+            run(150, 200, false),
+            run(0, 100, true),
+        ];
+        let lat = recovery_latency(&runs);
+        // Failure completes at 100; next run that STARTS >= 100 is the 150-run.
+        assert_eq!(lat.gaps_secs, vec![50]);
+    }
+
+    #[test]
+    fn recovery_latency_empty_is_empty() {
+        let lat = recovery_latency(&[]);
+        assert_eq!(lat.count(), 0);
+        assert_eq!(lat.mean_secs(), None);
+    }
+
+    #[test]
+    fn recovery_latency_median_even_count_averages_middle_two() {
+        // Gaps 10, 20, 30, 100 (from four failures each followed by a drain).
+        let runs = [
+            run(0, 10, true),
+            run(20, 30, true),   // gap from first failure: 20-10 = 10
+            run(60, 70, true),   // gap from second failure: 60-30 = 30
+            run(120, 130, true), // gap from third failure: 120-70 = 50
+            run(1000, 1010, false),
+        ];
+        let lat = recovery_latency(&runs);
+        // Failures at completions 10,30,70,130; following starts 20,60,120,1000.
+        // gaps: 10, 30, 50, 870 → median = (30+50)/2 = 40.
+        assert_eq!(lat.gaps_secs, vec![10, 30, 50, 870]);
+        assert!((lat.median_secs().unwrap() - 40.0).abs() < f64::EPSILON);
+    }
+
+    // ---- STORY-530: draft-inbox depth --------------------------------------
+
+    #[test]
+    fn draft_inbox_depth_counts_unarchived_drafts() {
+        // (is_draft, is_archived)
+        let specs = [
+            (true, false),  // counts
+            (true, false),  // counts
+            (true, true),   // archived draft — excluded
+            (false, false), // not a draft — excluded
+            (false, true),  // neither — excluded
+        ];
+        assert_eq!(draft_inbox_depth(specs), 2);
+    }
+
+    #[test]
+    fn draft_inbox_depth_is_zero_when_no_drafts() {
+        assert_eq!(draft_inbox_depth([(false, false), (false, true)]), 0);
+        let empty: [(bool, bool); 0] = [];
+        assert_eq!(draft_inbox_depth(empty), 0);
+    }
+
+    // ---- STORY-530: burn-down velocity -------------------------------------
+
+    fn spec(created: i64, completed: Option<i64>) -> SpecLifecycleDays {
+        SpecLifecycleDays {
+            created_day: created,
+            completed_day: completed,
+        }
+    }
+
+    #[test]
+    fn burn_down_velocity_nets_completions_against_adds() {
+        // Window days 10..=12 (3 days).
+        let specs = [
+            spec(10, Some(11)), // added + completed in window
+            spec(11, Some(12)), // added + completed in window
+            spec(12, None),     // added only
+            spec(5, Some(10)),  // added before window, completed in window
+            spec(11, Some(20)), // added in window, completed after window
+        ];
+        let v = burn_down_velocity(&specs, 10, 12);
+        // adds in window: days 10,11,12,11 = 4 (the day-5 add is out of window).
+        assert_eq!(v.added, 4);
+        // completions in window: days 11,12,10 = 3 (the day-20 completion is out).
+        assert_eq!(v.completed, 3);
+        assert_eq!(v.days, 3);
+        assert_eq!(v.net(), -1); // 3 completed − 4 added
+        assert!((v.net_per_day().unwrap() - (-1.0 / 3.0)).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn burn_down_velocity_positive_net_when_shipping_faster_than_adding() {
+        let specs = [
+            spec(1, Some(5)),
+            spec(2, Some(5)),
+            spec(3, Some(5)),
+            spec(5, None),
+        ];
+        let v = burn_down_velocity(&specs, 5, 5); // single day
+        assert_eq!(v.completed, 3);
+        assert_eq!(v.added, 1);
+        assert_eq!(v.days, 1);
+        assert_eq!(v.net(), 2);
+        assert!((v.net_per_day().unwrap() - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn burn_down_velocity_empty_window_has_no_per_day() {
+        // end < start → zero-day window, net_per_day is None.
+        let v = burn_down_velocity(&[spec(1, Some(1))], 5, 4);
+        assert_eq!(v.days, 0);
+        assert_eq!(v.completed, 0);
+        assert_eq!(v.added, 0);
+        assert_eq!(v.net_per_day(), None);
+    }
+
+    #[test]
+    fn burn_down_velocity_no_specs_is_zero_net() {
+        let v = burn_down_velocity(&[], 0, 9);
+        assert_eq!(v.completed, 0);
+        assert_eq!(v.added, 0);
+        assert_eq!(v.days, 10);
+        assert_eq!(v.net(), 0);
+        assert_eq!(v.net_per_day(), Some(0.0));
     }
 }
