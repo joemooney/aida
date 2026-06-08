@@ -3,12 +3,12 @@ spec_id: TASK-709
 agreed_id: TASK-709
 title: 'CI gate: deny clippy correctness lints so logic bugs can''t merge (the substrate bouncer for BUG-473''s class)'
 description: 'BUG-473 (3 clippy correctness ERRORS sitting on main) only happened because CI runs clippy in warn mode, so deny-by-default correctness lints don''t block a merge. A rule in CLAUDE.md won''t hold against confident agents; the fix is a programmatic gate. Make CI fail on clippy CORRECTNESS lints (e.g. `cargo clippy -- -D clippy::correctness` in .github/workflows/ci.yml, or stop whatever forces -W) WITHOUT requiring the ~252 pre-existing style/pedantic warnings to be cleaned first. Verify the gate is red on BUG-473''s pre-fix state and green after. Depends-on: BUG-473 landing first (else this gate would block all PRs). Blocked-by BUG-473.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T05:24:51.535469030Z
-modified_at: 2026-06-08T06:25:24.748040155Z
+modified_at: 2026-06-08T06:25:55.223552132Z
 req_type: Task
 tags:
 - ci
@@ -31,3 +31,7 @@ comments:
   content: Commit b0cb5272c references this requirement
   created_at: 2026-06-08T06:18:36.140398430Z
   modified_at: 2026-06-08T06:18:36.140398430Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-08T06:25:55.223552132Z
+  completion_sha: 6b7c73c9dd7e990a89fc2426cb02a83fd830378a
