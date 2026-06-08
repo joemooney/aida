@@ -4,6 +4,7 @@ mod auto_complete;
 mod auto_complete_telemetry;
 mod awaiting_you;
 mod backlog;
+mod burndown;
 mod calibration;
 mod changelog;
 mod claude_agents;
@@ -1081,6 +1082,13 @@ fn run() -> Result<()> {
         return handle_release(*patch, *minor, *major, *check, *after_pr, *skip_xplat_check);
     }
 
+    // STORY-527: `aida burndown` reads the requirement graph (like `graph` /
+    // `plan`) — no shared storage handle needed. Dispatch early.
+    // trace:STORY-527 | ai:claude
+    if let Command::Burndown(cmd) = &cli.command {
+        return handle_burndown_command(cmd);
+    }
+
     // Doctor commands run before storage init — they may need to operate
     // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
     if let Command::Doctor {
@@ -1825,6 +1833,7 @@ fn run() -> Result<()> {
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
+        Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
@@ -8590,6 +8599,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
+        Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
@@ -62204,6 +62214,146 @@ fn preview_next_version(current: &str, bump: &str) -> Option<String> {
 /// flow. `--check` previews the planned release (read-only); otherwise it
 /// delegates to `handle_dev_release`, forwarding `--skip-xplat-check` via the
 /// env the release script honors. trace:STORY-472 | ai:claude
+/// STORY-527: `aida burndown` dispatch.
+fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
+    match cmd {
+        crate::cli::BurndownCommand::Plan {
+            status,
+            tag,
+            batch,
+            json,
+        } => handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *json),
+    }
+}
+
+/// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
+/// pure pickability gate. Read-only — the deterministic input the
+/// `/aida-burndown` skill fans out. trace:STORY-527 | ai:claude
+fn handle_burndown_plan(
+    status: &str,
+    tag: Option<&str>,
+    batch: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+
+    // Normalize a status label to an alphanumeric-only lowercase key so
+    // "in-progress" / "In Progress" / "InProgress" all compare equal.
+    let norm = |s: &str| -> String {
+        s.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect::<String>()
+            .to_ascii_lowercase()
+    };
+    let want_status = norm(status);
+    let batch_tag = batch.map(|b| format!("batch:{}", b.to_ascii_lowercase()));
+
+    // uuid → status, so a BlockedBy edge can be checked for satisfaction.
+    let status_by_id: std::collections::HashMap<uuid::Uuid, aida_core::RequirementStatus> = store
+        .requirements
+        .iter()
+        .map(|r| (r.id, r.status.clone()))
+        .collect();
+
+    let mut candidates: Vec<burndown::BurndownCandidate> = Vec::new();
+    for req in &store.requirements {
+        // Archived specs are out of active scope — never fan them out (matches
+        // `aida list`'s default non-archived view). trace:STORY-527
+        if req.archived {
+            continue;
+        }
+        if norm(&req.status.to_string()) != want_status {
+            continue;
+        }
+        let tags: Vec<String> = req.tags.iter().cloned().collect();
+        if let Some(t) = tag {
+            if !tags.iter().any(|x| x.eq_ignore_ascii_case(t)) {
+                continue;
+            }
+        }
+        if let Some(bt) = &batch_tag {
+            if !tags.iter().any(|x| x.eq_ignore_ascii_case(bt)) {
+                continue;
+            }
+        }
+        // A BlockedBy edge is unsatisfied unless its target is Completed; a
+        // dangling target (not in the store) is treated as unsatisfied so we
+        // never fan out a spec whose blocker we can't verify.
+        let has_unsatisfied_blocker = req.relationships.iter().any(|rel| {
+            matches!(rel.rel_type, aida_core::RelationshipType::BlockedBy)
+                && status_by_id
+                    .get(&rel.target_id)
+                    .map(|s| *s != aida_core::RequirementStatus::Completed)
+                    .unwrap_or(true)
+        });
+        candidates.push(burndown::BurndownCandidate {
+            id: req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| req.id.to_string()),
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+            tags,
+            has_unsatisfied_blocker,
+            has_pending_decision: req
+                .decision_request
+                .as_ref()
+                .map(|d| d.is_pending())
+                .unwrap_or(false),
+        });
+    }
+
+    let (ready, parked) = burndown::partition(&candidates);
+
+    if json {
+        let payload = serde_json::json!({
+            "selector": { "status": status, "tag": tag, "batch": batch },
+            "ready": ready,
+            "parked": parked.iter().map(|(id, reason)| serde_json::json!({ "spec": id, "reason": reason })).collect::<Vec<_>>(),
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    println!(
+        "{} burndown plan — selector: status={}{}{}",
+        "▸".cyan().bold(),
+        status,
+        tag.map(|t| format!(" tag={t}")).unwrap_or_default(),
+        batch.map(|b| format!(" batch={b}")).unwrap_or_default(),
+    );
+    println!(
+        "  {} {} ready to fan out, {} parked",
+        "→".green(),
+        ready.len(),
+        parked.len()
+    );
+    if !ready.is_empty() {
+        println!(
+            "\n{}",
+            "Ready (bounded + unblocked + decision-free):".bold()
+        );
+        for id in &ready {
+            println!("  {} {}", "✓".green(), id.cyan());
+        }
+    }
+    if !parked.is_empty() {
+        println!("\n{}", "Parked:".bold());
+        for (id, reason) in &parked {
+            println!("  {} {} — {}", "·".dimmed(), id, reason.dimmed());
+        }
+    }
+    Ok(())
+}
+
 fn handle_release(
     patch: bool,
     minor: bool,

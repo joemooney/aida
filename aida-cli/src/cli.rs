@@ -1445,6 +1445,30 @@ pub enum RoleScopeCommand {
 }
 
 /// Developer commands for working *on* AIDA itself (pyenv-style activation
+// trace:STORY-527 | ai:claude
+/// `aida burndown` — plan an autonomous backlog drain.
+#[derive(Subcommand, Debug)]
+pub enum BurndownCommand {
+    /// Resolve a selector to the ready (fan-out-able) + parked sets, applying
+    /// the pickability gate: bounded (not an epic), unblocked (no unsatisfied
+    /// BlockedBy), decision-free (no pending question), not parking-tagged.
+    /// Read-only — the deterministic input the `/aida-burndown` skill fans out.
+    Plan {
+        /// Status to select (default: `approved` — the ready backlog).
+        #[clap(long, default_value = "approved")]
+        status: String,
+        /// Only specs carrying this tag.
+        #[clap(long)]
+        tag: Option<String>,
+        /// Only specs in this batch (matches the `batch:<name>` tag).
+        #[clap(long)]
+        batch: Option<String>,
+        /// Machine-readable JSON (`{ready:[...], parked:[{spec,reason}]}`).
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// of an in-repo build, running dev servers, installing shell helpers).
 // trace:EPIC-1-001 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -5944,6 +5968,13 @@ pub enum Command {
         #[clap(long)]
         skip_xplat_check: bool,
     },
+
+    // trace:STORY-527 | ai:claude
+    /// Plan an autonomous burn-down: resolve a selector to the ready
+    /// (fan-out-able) + parked sets via the pickability gate. The read-only
+    /// foundation the `/aida-burndown` skill drives its worktree fan-out from.
+    #[clap(subcommand)]
+    Burndown(BurndownCommand),
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
     /// run dev servers, install shell helpers. End users don't need these.
