@@ -3,14 +3,18 @@ spec_id: TASK-706
 agreed_id: TASK-706
 title: 'EPIC-36 MVP: session-vs-drain misclassification-gap metric (deterministic)'
 description: 'The headline metric (operator-sanctioned MVP, bounded). Deterministic Rust: parse each .aida/headless-logs/*.jsonl terminal result event into {clean-success, sentinel-reaped=success, mid-work-kill, error, truncated} → session_success_rate; drain_success_rate already comes from ''aida usage --auto-complete''. GAP = session_success_rate − drain_success_rate = orchestrator misclassification rate (work that succeeded but the orchestrator called failed). Surface it in ''aida usage --auto-complete''. Pure functions over the logs + the existing usage data → unit-testable. This one metric replaces the BUG-444 hand-forensics. trace:EPIC-36'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:31:35.637429530Z
-modified_at: 2026-06-08T03:31:35.637429530Z
+modified_at: 2026-06-08T04:11:38.938393923Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e9826-5d9d-7f10-ab36-bd783796aae1
   created_at: 2026-06-08T03:31:39.586218621Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-08T04:11:38.938393923Z
+  completion_sha: 732f7b7cff85fed5ec3139c033ecb8aa3482bc79
