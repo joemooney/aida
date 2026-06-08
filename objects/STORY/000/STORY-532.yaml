@@ -1,0 +1,12 @@
+id: 019ea54a-2edb-7d82-bb9e-9ca3b3534973
+spec_id: STORY-532
+agreed_id: STORY-532
+title: 'EPIC-27: queue MCP tools (queue_list/add/work/done/next/progress/rework/move/remove)'
+description: Mirror the queue CLI surface onto MCP tools so agents don't shell out. Add queue_list, queue_add, queue_work, queue_done, queue_next, queue_progress, queue_rework, queue_move, queue_remove to aida-cli/src/mcp.rs — each with input schema (mirror the CLI flags per STORY-82), handler, output, error handling, tests. Follows the pattern STORY-1-084 established for the 7 CRUD tools. Run the MCP stdio compat suite (bash tests/test_mcp_stdio.sh) after. trace:EPIC-27
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-08T03:32:42.843469667Z
+modified_at: 2026-06-08T03:32:42.843469667Z
+req_type: Story
