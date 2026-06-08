@@ -8,9 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:33:27.932411948Z
-modified_at: 2026-06-08T03:33:27.932411948Z
+modified_at: 2026-06-08T04:15:12.114398127Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e2e08-fc13-7b12-a718-bc49910c1ea1
   created_at: 2026-06-08T03:33:31.915379100Z
+- rel_type: BlockedBy
+  target_id: 019ea54a-2edb-7d82-bb9e-9ca3b3534973
+  created_at: 2026-06-08T04:15:12.114392049Z
+  created_by: joe
