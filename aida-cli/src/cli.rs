@@ -1445,7 +1445,8 @@ pub enum RoleScopeCommand {
 }
 
 /// Developer commands for working *on* AIDA itself (pyenv-style activation
-/// `aida burndown` — plan an autonomous backlog drain. trace:STORY-527
+// trace:STORY-527 | ai:claude
+/// `aida burndown` — plan an autonomous backlog drain.
 #[derive(Subcommand, Debug)]
 pub enum BurndownCommand {
     /// Resolve a selector to the ready (fan-out-able) + parked sets, applying
