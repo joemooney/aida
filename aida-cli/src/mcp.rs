@@ -806,6 +806,17 @@ impl<'a> McpServer<'a> {
             "queue_move" => self.tool_queue_move(&arguments),
             "queue_remove" => self.tool_queue_remove(&arguments),
 
+            // Session tools — STORY-533 (EPIC-27). Mirror the `aida session`
+            // CLI surface so agents can inspect scoped session leases +
+            // manifests over MCP. session_start / session_end are PEEKS — the
+            // launch / worktree-removal acts are subprocess-driven and stay
+            // CLI-only (the queue_work precedent). trace:EPIC-27
+            "session_leases" => self.tool_session_leases(&arguments),
+            "session_status" => self.tool_session_status(&arguments),
+            "session_manifest" => self.tool_session_manifest(&arguments),
+            "session_start" => self.tool_session_start(&arguments),
+            "session_end" => self.tool_session_end(&arguments),
+
             _ => Err(format!("Unknown tool: {}", tool_name)),
         };
 
@@ -3209,6 +3220,363 @@ impl<'a> McpServer<'a> {
     }
 
     // ========================================================================
+    // Session tool implementations — STORY-533 (EPIC-27)
+    //
+    // These mirror the `aida session <subcommand>` CLI surface so MCP-speaking
+    // agents can inspect scoped session leases + manifests without shelling
+    // out. The three inspectors (leases / status / manifest) read the same
+    // `.aida/sessions/*.toml` files the CLI handlers read — no subprocess to
+    // `aida`. session_start / session_end are metadata-only PEEKS: the actual
+    // launch (worktree + `claude`) and teardown (worktree removal, claude
+    // process termination, PR detection) are subprocess-driven acts that
+    // cannot and should not happen inside the MCP server process, so the tools
+    // resolve/describe the work and instruct the caller to run the CLI to
+    // perform it. This follows the queue_work PEEK precedent (STORY-532).
+    // trace:EPIC-27
+    // ========================================================================
+
+    /// Resolve a `LightLease` by 8-char (or longer) id prefix, mirroring the
+    /// CLI's `find_lease_by_id_prefix`. trace:EPIC-27
+    fn resolve_lease_by_prefix<'l>(
+        leases: &'l [LightLease],
+        query: &str,
+    ) -> Result<&'l LightLease, String> {
+        let matches: Vec<&LightLease> = leases.iter().filter(|l| l.id.starts_with(query)).collect();
+        match matches.len() {
+            0 => Err(format!("no session lease matches id '{}'", query)),
+            1 => Ok(matches[0]),
+            _ => Err(format!(
+                "id prefix '{}' is ambiguous ({} leases match) — pass a longer prefix",
+                query,
+                matches.len()
+            )),
+        }
+    }
+
+    fn lease_short_id(l: &LightLease) -> &str {
+        l.id.get(..8).unwrap_or(&l.id)
+    }
+
+    // trace:EPIC-27 — mirrors `aida session leases`.
+    fn tool_session_leases(&self, args: &Value) -> Result<String, String> {
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok("(no active sessions)".to_string());
+        }
+        // Default view hides MCP-claim markers (they aren't `session start`
+        // leases) unless `all` is set, mirroring the CLI's bias toward
+        // real worktree-backed sessions. trace:EPIC-27
+        let mut lines: Vec<String> = Vec::new();
+        for l in &leases {
+            if !all && l.mcp_claim {
+                continue;
+            }
+            let role = l.role.as_deref().unwrap_or("?");
+            let kind = if l.mcp_claim { "mcp-claim" } else { "session" };
+            lines.push(format!(
+                "- {} scope={} branch={} role={} owner={} kind={} started_at={}",
+                Self::lease_short_id(l),
+                l.scope,
+                if l.branch.is_empty() { "?" } else { &l.branch },
+                role,
+                l.owner,
+                kind,
+                l.started_at
+            ));
+        }
+        if lines.is_empty() {
+            return Ok(
+                "(no worktree-backed sessions; pass `all: true` to include MCP claim markers)"
+                    .to_string(),
+            );
+        }
+        Ok(format!(
+            "Active session lease(s) ({}):\n{}",
+            lines.len(),
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27 — mirrors `aida session show` (the per-lease status view).
+    fn tool_session_status(&self, args: &Value) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok(
+                "(no active sessions) — start one with `aida session start --owns <scope>`."
+                    .to_string(),
+            );
+        }
+        // MCP has no shell cwd/ancestor-PID context that maps to a worktree,
+        // so an `id` is required when more than one lease exists; a single
+        // lease is shown directly. trace:EPIC-27
+        let lease = match args.get("id").and_then(|v| v.as_str()) {
+            Some(q) => Self::resolve_lease_by_prefix(&leases, q)?,
+            None if leases.len() == 1 => &leases[0],
+            None => {
+                let ids: Vec<String> = leases
+                    .iter()
+                    .map(|l| format!("{} ({})", Self::lease_short_id(l), l.scope))
+                    .collect();
+                return Err(format!(
+                    "multiple active sessions — pass `id` to pick one: {}",
+                    ids.join(", ")
+                ));
+            }
+        };
+
+        let mut out = format!("Session {}\n", Self::lease_short_id(lease));
+        out.push_str(&format!("  scope: {}\n", lease.scope));
+        out.push_str(&format!(
+            "  branch: {}\n",
+            if lease.branch.is_empty() {
+                "?"
+            } else {
+                &lease.branch
+            }
+        ));
+        out.push_str(&format!(
+            "  worktree: {}\n",
+            if lease.worktree_path.is_empty() {
+                "?"
+            } else {
+                &lease.worktree_path
+            }
+        ));
+        out.push_str(&format!(
+            "  role: {}\n",
+            lease.role.as_deref().unwrap_or("?")
+        ));
+        out.push_str(&format!("  owner: {}\n", lease.owner));
+        out.push_str(&format!("  hostname: {}\n", lease.hostname));
+        out.push_str(&format!("  started_at: {}\n", lease.started_at));
+        out.push_str(&format!(
+            "  kind: {}",
+            if lease.mcp_claim {
+                "mcp-claim"
+            } else {
+                "session"
+            }
+        ));
+
+        // Surface manifest progress inline when one exists, matching
+        // `aida session show --plan`. trace:EPIC-27
+        let manifest_path = crate::session_manifest::manifest_path(&self.project_root, &lease.id);
+        if let Ok(manifest) = crate::session_manifest::load(&manifest_path) {
+            if !manifest.items.is_empty() {
+                let done = manifest
+                    .items
+                    .iter()
+                    .filter(|it| it.completed_at.is_some())
+                    .count();
+                out.push_str(&format!(
+                    "\n  manifest: {}/{} item(s) completed",
+                    done,
+                    manifest.items.len()
+                ));
+            }
+        }
+        Ok(out)
+    }
+
+    // trace:EPIC-27 — mirrors `aida session manifest` (read of the planned
+    // cluster). The CLI `manifest` subcommand is write-side (write /
+    // mark-started / mark-completed); those marks happen automatically as
+    // `aida edit` / `queue done` run, and writing one needs the active lease's
+    // cwd context. The portable MCP mirror is the READ — render the planned
+    // cluster + per-item status for a resolvable session. trace:EPIC-27
+    fn tool_session_manifest(&self, args: &Value) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok("(no active sessions) — no manifest to show.".to_string());
+        }
+        let lease = match args.get("id").and_then(|v| v.as_str()) {
+            Some(q) => Self::resolve_lease_by_prefix(&leases, q)?,
+            None if leases.len() == 1 => &leases[0],
+            None => {
+                let ids: Vec<String> = leases
+                    .iter()
+                    .map(|l| format!("{} ({})", Self::lease_short_id(l), l.scope))
+                    .collect();
+                return Err(format!(
+                    "multiple active sessions — pass `id` to pick one: {}",
+                    ids.join(", ")
+                ));
+            }
+        };
+        let manifest_path = crate::session_manifest::manifest_path(&self.project_root, &lease.id);
+        let manifest = match crate::session_manifest::load(&manifest_path) {
+            Ok(m) => m,
+            Err(_) => {
+                return Ok(format!(
+                    "Session {} has no planned-cluster manifest yet (none written by /aida-pickup).",
+                    Self::lease_short_id(lease)
+                ));
+            }
+        };
+        if manifest.items.is_empty() {
+            return Ok(format!(
+                "Session {} manifest is empty.",
+                Self::lease_short_id(lease)
+            ));
+        }
+        let mut lines: Vec<String> = Vec::new();
+        for it in &manifest.items {
+            // ✓ completed / ◐ started-not-completed / ○ pending — same status
+            // glyphs as `aida session show --plan`. trace:EPIC-27
+            let marker = if it.completed_at.is_some() {
+                "✓"
+            } else if it.started_at.is_some() {
+                "◐"
+            } else {
+                "○"
+            };
+            lines.push(format!("  {} {}", marker, it.spec_id));
+        }
+        let done = manifest
+            .items
+            .iter()
+            .filter(|it| it.completed_at.is_some())
+            .count();
+        Ok(format!(
+            "Session {} planned cluster ({}/{} done, source: {}):\n{}",
+            Self::lease_short_id(lease),
+            done,
+            manifest.items.len(),
+            manifest.plan_source,
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida session start` creates a sibling git worktree on a fresh branch
+    // and (with `--launch`) execs `claude` inside it — subprocess-driven acts
+    // that cannot happen inside the MCP server process. The MCP tool is
+    // therefore a metadata-only PEEK: it validates the scope/role inputs and
+    // returns the exact CLI invocation the caller should run to actually
+    // start the session. This is the read-tier mirror of the resolver, not
+    // the launcher (the queue_work PEEK precedent). trace:EPIC-27
+    fn tool_session_start(&self, args: &Value) -> Result<String, String> {
+        let owns = required_string(args, "owns")?;
+        let role = args.get("role").and_then(|v| v.as_str());
+        let branch = args.get("branch").and_then(|v| v.as_str());
+        let launch = args
+            .get("launch")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // Warn if the scope is already covered by a live lease (the CLI
+        // detects this too; we surface it so the caller doesn't double-start).
+        // trace:EPIC-27
+        let leases = list_leases(&self.project_root);
+        let existing = leases
+            .iter()
+            .find(|l| l.scope.eq_ignore_ascii_case(owns) && !l.mcp_claim);
+
+        let mut cmd = format!("aida session start --owns {}", owns);
+        if let Some(b) = branch {
+            cmd.push_str(&format!(" --branch {}", b));
+        }
+        if let Some(r) = role {
+            cmd.push_str(&format!(" --role {}", r));
+        }
+        if launch {
+            cmd.push_str(" --launch");
+        }
+
+        let mut out = String::new();
+        if let Some(l) = existing {
+            out.push_str(&format!(
+                "Note: scope '{}' is already held by session {} (branch {}).\n",
+                owns,
+                Self::lease_short_id(l),
+                if l.branch.is_empty() { "?" } else { &l.branch }
+            ));
+        }
+        out.push_str(&format!(
+            "Starting a scoped session creates a worktree + lease{} — \
+             a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            if launch {
+                " and launches a Claude session"
+            } else {
+                ""
+            },
+            cmd
+        ));
+        Ok(out)
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida session end` removes the worktree (git subprocess), can terminate
+    // live `claude` processes, probes the PR + CI state, and files reviewer
+    // follow-ups — none of which can happen safely inside the MCP server
+    // process. The MCP tool is therefore a metadata-only PEEK: it resolves the
+    // lease that `aida session end` would target and returns the CLI command
+    // to run. trace:EPIC-27
+    fn tool_session_end(&self, args: &Value) -> Result<String, String> {
+        let leases = list_leases(&self.project_root);
+        if leases.is_empty() {
+            return Ok("(no active sessions) — nothing to end.".to_string());
+        }
+        // Resolve the target the same axes the CLI accepts: id prefix, or
+        // scope/spec match. MCP has no cwd-to-worktree mapping, so when none
+        // is given and more than one lease exists, ask the caller to pick.
+        // trace:EPIC-27
+        let id = args.get("id").and_then(|v| v.as_str());
+        let spec = args.get("spec").and_then(|v| v.as_str());
+        let lease: &LightLease = if let Some(q) = id {
+            Self::resolve_lease_by_prefix(&leases, q)?
+        } else if let Some(s) = spec {
+            let matches: Vec<&LightLease> = leases
+                .iter()
+                .filter(|l| l.scope.eq_ignore_ascii_case(s))
+                .collect();
+            match matches.len() {
+                0 => return Err(format!("no session lease owns spec '{}'", s)),
+                1 => matches[0],
+                _ => {
+                    let ids: Vec<String> = matches
+                        .iter()
+                        .map(|l| Self::lease_short_id(l).to_string())
+                        .collect();
+                    return Err(format!(
+                        "multiple leases own '{}' — disambiguate with `id`: {}",
+                        s,
+                        ids.join(", ")
+                    ));
+                }
+            }
+        } else if leases.len() == 1 {
+            &leases[0]
+        } else {
+            let ids: Vec<String> = leases
+                .iter()
+                .map(|l| format!("{} ({})", Self::lease_short_id(l), l.scope))
+                .collect();
+            return Err(format!(
+                "multiple active sessions — pass `id` or `spec` to pick one: {}",
+                ids.join(", ")
+            ));
+        };
+
+        let cmd = format!("aida session end {}", Self::lease_short_id(lease));
+        Ok(format!(
+            "Ending session {} (scope {}, branch {}) removes its worktree and lease — \
+             a subprocess act the MCP server does not perform.\nRun:\n  {}",
+            Self::lease_short_id(lease),
+            lease.scope,
+            if lease.branch.is_empty() {
+                "?"
+            } else {
+                &lease.branch
+            },
+            cmd
+        ))
+    }
+
+    // ========================================================================
     // Resource implementations
     // ========================================================================
 
@@ -3616,7 +3984,17 @@ pub fn tool_min_profile(tool_name: &str) -> McpProfile {
         | "queue_list"
         | "queue_next"
         | "queue_progress"
-        | "queue_work" => McpProfile::ReadOnly,
+        | "queue_work"
+        // STORY-533 (EPIC-27): session tools are all read tier. The three
+        // inspectors (leases / status / manifest) are pure reads of
+        // `.aida/sessions/*`; session_start / session_end are metadata-only
+        // PEEKS (the launch / worktree-removal act is a subprocess-driven
+        // CLI-only act), so they never mutate substrate. trace:EPIC-27
+        | "session_leases"
+        | "session_status"
+        | "session_manifest"
+        | "session_start"
+        | "session_end" => McpProfile::ReadOnly,
 
         // ---- Coordination-substrate writes (coordination tier) ----
         "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
@@ -4674,6 +5052,15 @@ pub fn tool_descriptors() -> Value {
     ) {
         base.extend(queue.iter().cloned());
     }
+    // STORY-533 (EPIC-27): session tool descriptors live in their own array
+    // (same macro-recursion-limit reason as the queue block) and are appended
+    // here. trace:EPIC-27
+    if let (Some(base), Some(session)) = (
+        descriptors.as_array_mut(),
+        session_tool_descriptors().as_array(),
+    ) {
+        base.extend(session.iter().cloned());
+    }
     descriptors
 }
 
@@ -4831,6 +5218,85 @@ fn queue_tool_descriptors() -> Value {
             },
             "outputSchema": text_envelope_output_schema(
                 "a confirmation line `Removed <SPEC-ID> from queue.`"
+            )
+        }
+    ])
+}
+
+// STORY-533 (EPIC-27): session tool descriptors, factored into their own
+// `json!` array so the combined `tool_descriptors()` literal stays under the
+// macro recursion limit. trace:EPIC-27
+fn session_tool_descriptors() -> Value {
+    json!([
+        // ---- Session (STORY-533 / EPIC-27) ----
+        {
+            "name": "session_leases",
+            "description": "List active scoped session leases — the 'who holds what scoped work right now' view. Mirrors `aida session leases`. Reads `.aida/sessions/*.toml` directly (no subprocess). By default lists worktree-backed sessions; pass `all` to also include lightweight MCP claim markers.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "all": { "type": "boolean", "description": "Also include MCP `claim_task` markers (not just worktree-backed `session start` leases).", "example": true }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Active session lease(s) (N):` followed by `- <id> scope=<s> branch=<b> role=<r> owner=<o> kind=<session|mcp-claim> started_at=<ts>` lines, or `(no active sessions)`."
+            )
+        },
+        {
+            "name": "session_status",
+            "description": "Show details for one session lease (the per-session status view). Mirrors `aida session show`. Reads `.aida/sessions/*.toml` directly. Pass `id` (8-char prefix accepted) to pick a lease; when exactly one session is active, `id` may be omitted. Surfaces inline manifest progress when a planned cluster exists.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Session lease id (8-char prefix accepted). Optional when exactly one session is active.", "example": "a1b2c3d4" }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a `Session <id>` block with `scope`, `branch`, `worktree`, `role`, `owner`, `hostname`, `started_at`, and `kind` lines, plus a `manifest: <done>/<total> item(s) completed` line when a planned cluster exists. On an ambiguous/absent id with multiple sessions, the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "session_manifest",
+            "description": "Show a session's planned-cluster manifest — the SPEC-IDs /aida-pickup recorded it intends to work, with per-item status (✓ done / ◐ started / ○ pending). Read mirror of `aida session manifest` / `aida session show --plan`. Writing/marking the manifest stays CLI-only (it needs the active session's cwd context and happens automatically as `aida edit` / `queue done` run).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Session lease id (8-char prefix accepted). Optional when exactly one session is active.", "example": "a1b2c3d4" }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Session <id> planned cluster (<done>/<total> done, source: <src>):` followed by `  <✓|◐|○> <SPEC-ID>` lines, or a note that no manifest exists yet. On an ambiguous/absent id with multiple sessions, the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "session_start",
+            "description": "PEEK ONLY (does not launch): describe starting a scoped session and return the exact `aida session start` command to run. Mirrors `aida session start` inputs. The actual act — creating a git worktree on a fresh branch and (with `launch`) exec'ing `claude` — is a subprocess-driven act that the MCP server intentionally does NOT perform; the CLI must run it. Warns when the scope is already held by a live lease.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "owns": { "type": "string", "description": "Scope this session would own (EPIC-N, a SPEC-ID, a path glob, or a free-form tag).", "example": "EPIC-27" },
+                    "branch": { "type": "string", "description": "Branch name for the new worktree (default: derived from owns).", "example": "epic-27-work" },
+                    "role": { "type": "string", "description": "Role to record on the lease (default: derived from scope; PR/MR → reviewer, else implementer).", "example": "implementer" },
+                    "launch": { "type": "boolean", "description": "Whether the suggested command should also launch Claude inside the worktree (`--launch`).", "example": false }
+                },
+                "required": ["owns"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a note explaining the peek plus a `Run:` block with the `aida session start --owns <scope> ...` command. Prepends a `Note:` line when the scope is already held by a live lease."
+            )
+        },
+        {
+            "name": "session_end",
+            "description": "PEEK ONLY (does not end anything): resolve the lease `aida session end` would target and return the CLI command to run. Mirrors `aida session end` selectors. The actual act — removing the git worktree, terminating live `claude` processes, probing PR/CI state, filing reviewer follow-ups — is a subprocess-driven act the MCP server intentionally does NOT perform. Pass `id` (8-char prefix) or `spec` (scope) to target; optional when exactly one session is active.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Session lease id to end (8-char prefix accepted).", "example": "a1b2c3d4" },
+                    "spec": { "type": "string", "description": "Resolve the lease by the scope/spec it owns.", "example": "EPIC-27" }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a note explaining the peek plus a `Run:` block with the `aida session end <id>` command. On an ambiguous/absent selector with multiple sessions, the envelope sets `isError: true`."
             )
         }
     ])
@@ -8201,5 +8667,208 @@ mod tests {
         );
         // With no arg, it never returns empty — resolves to *some* identity.
         assert!(!server.queue_user_id(&json!({})).is_empty());
+    }
+
+    // =====================================================================
+    // STORY-533 (EPIC-27): session MCP tools
+    // =====================================================================
+
+    /// Write a minimal lease TOML under `.aida/sessions/<id>.toml` matching
+    /// the `LightLease` shape the session tools read. trace:EPIC-27
+    fn seed_lease(dir: &Path, id: &str, scope: &str, role: &str) {
+        let sessions = dir.join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let body = format!(
+            "id = \"{id}\"\n\
+             scope = \"{scope}\"\n\
+             slug = \"{scope}\"\n\
+             owner = \"tester\"\n\
+             worktree_path = \"/tmp/wt-{scope}\"\n\
+             branch = \"{scope}-branch\"\n\
+             started_at = \"2026-06-07T00:00:00Z\"\n\
+             hostname = \"testhost\"\n\
+             role = \"{role}\"\n\
+             mcp_claim = false\n"
+        );
+        std::fs::write(sessions.join(format!("{id}.toml")), body).unwrap();
+    }
+
+    #[test]
+    fn session_leases_lists_seeded_leases() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+
+        // Empty to start.
+        let empty = server.tool_session_leases(&json!({})).unwrap();
+        assert!(empty.contains("no active sessions"), "empty: {empty}");
+
+        seed_lease(dir.path(), "aaaaaaaa1111", "EPIC-27", "implementer");
+        let listed = server.tool_session_leases(&json!({})).unwrap();
+        assert!(listed.contains("EPIC-27"), "listed: {listed}");
+        assert!(listed.contains("role=implementer"), "listed: {listed}");
+        assert!(listed.contains("aaaaaaaa"), "listed short id: {listed}");
+    }
+
+    #[test]
+    fn session_status_shows_a_single_lease_and_errors_on_ambiguity() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        seed_lease(dir.path(), "bbbbbbbb2222", "STORY-1", "implementer");
+
+        // Single lease — id optional.
+        let shown = server.tool_session_status(&json!({})).unwrap();
+        assert!(shown.contains("STORY-1"), "shown: {shown}");
+        assert!(shown.contains("branch: STORY-1-branch"), "shown: {shown}");
+        assert!(shown.contains("role: implementer"), "shown: {shown}");
+
+        // Add a second — now id is required.
+        seed_lease(dir.path(), "cccccccc3333", "STORY-2", "reviewer");
+        let err = server
+            .tool_session_status(&json!({}))
+            .expect_err("ambiguous without id");
+        assert!(err.contains("multiple active sessions"), "err: {err}");
+
+        // id prefix disambiguates.
+        let shown2 = server
+            .tool_session_status(&json!({ "id": "cccccccc" }))
+            .unwrap();
+        assert!(shown2.contains("STORY-2"), "shown2: {shown2}");
+    }
+
+    #[test]
+    fn session_manifest_reads_planned_cluster() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let lease_id = "dddddddd4444";
+        seed_lease(dir.path(), lease_id, "EPIC-9", "implementer");
+
+        // No manifest yet.
+        let none = server.tool_session_manifest(&json!({})).unwrap();
+        assert!(none.contains("no planned-cluster manifest"), "none: {none}");
+
+        // Write a manifest with one completed + one pending item.
+        let path = crate::session_manifest::manifest_path(dir.path(), lease_id);
+        let manifest = crate::session_manifest::SessionManifest {
+            session_id: lease_id.to_string(),
+            planned_at: chrono::Utc::now(),
+            plan_source: "test".to_string(),
+            claude_session_id: None,
+            batch_name: None,
+            plan: None,
+            items: vec![
+                crate::session_manifest::ManifestItem {
+                    spec_id: "TASK-100".to_string(),
+                    position: 0,
+                    status_at_plan: "Draft".to_string(),
+                    started_at: Some(chrono::Utc::now()),
+                    completed_at: Some(chrono::Utc::now()),
+                    note: None,
+                },
+                crate::session_manifest::ManifestItem {
+                    spec_id: "TASK-101".to_string(),
+                    position: 1,
+                    status_at_plan: "Draft".to_string(),
+                    started_at: None,
+                    completed_at: None,
+                    note: None,
+                },
+            ],
+        };
+        crate::session_manifest::save(&path, &manifest).unwrap();
+
+        let shown = server.tool_session_manifest(&json!({})).unwrap();
+        assert!(shown.contains("1/2 done"), "shown: {shown}");
+        assert!(shown.contains("✓ TASK-100"), "shown: {shown}");
+        assert!(shown.contains("○ TASK-101"), "shown: {shown}");
+    }
+
+    #[test]
+    fn session_start_is_a_peek_with_command() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+
+        let peek = server
+            .tool_session_start(&json!({ "owns": "EPIC-27", "role": "implementer" }))
+            .unwrap();
+        assert!(
+            peek.contains("aida session start --owns EPIC-27"),
+            "peek: {peek}"
+        );
+        assert!(peek.contains("--role implementer"), "peek: {peek}");
+        // Does NOT actually create a lease.
+        assert!(list_leases(&server.project_root).is_empty());
+
+        // Warns when the scope is already held.
+        seed_lease(dir.path(), "eeeeeeee5555", "EPIC-27", "implementer");
+        let warned = server
+            .tool_session_start(&json!({ "owns": "EPIC-27" }))
+            .unwrap();
+        assert!(warned.contains("already held"), "warned: {warned}");
+
+        // owns is required.
+        let err = server
+            .tool_session_start(&json!({}))
+            .expect_err("owns required");
+        assert!(err.contains("owns"), "err: {err}");
+    }
+
+    #[test]
+    fn session_end_is_a_peek_with_command() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+
+        // No sessions.
+        let none = server.tool_session_end(&json!({})).unwrap();
+        assert!(none.contains("nothing to end"), "none: {none}");
+
+        seed_lease(dir.path(), "ffffffff6666", "EPIC-27", "implementer");
+        let peek = server.tool_session_end(&json!({})).unwrap();
+        assert!(peek.contains("aida session end ffffffff"), "peek: {peek}");
+        // Lease still present (peek did not remove it).
+        assert!(!list_leases(&server.project_root).is_empty());
+
+        // Resolve by spec/scope.
+        let by_spec = server
+            .tool_session_end(&json!({ "spec": "EPIC-27" }))
+            .unwrap();
+        assert!(by_spec.contains("ffffffff"), "by_spec: {by_spec}");
+
+        // Ambiguous without selector once a second lease exists.
+        seed_lease(dir.path(), "99999999aaaa", "EPIC-99", "implementer");
+        let err = server
+            .tool_session_end(&json!({}))
+            .expect_err("ambiguous end");
+        assert!(err.contains("multiple active sessions"), "err: {err}");
+    }
+
+    #[test]
+    fn session_tools_are_in_descriptors_and_classified() {
+        let names: Vec<String> = tool_descriptors()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.get("name").unwrap().as_str().unwrap().to_string())
+            .collect();
+        for t in [
+            "session_leases",
+            "session_status",
+            "session_manifest",
+            "session_start",
+            "session_end",
+        ] {
+            assert!(names.contains(&t.to_string()), "missing descriptor: {t}");
+            // No session tool may fall through to the Admin catch-all.
+            assert_ne!(
+                tool_min_profile(t),
+                McpProfile::Admin,
+                "{t} is unclassified"
+            );
+            // All session tools are read tier (the two peeks never mutate).
+            assert_eq!(
+                tool_min_profile(t),
+                McpProfile::ReadOnly,
+                "{t} should be read-only"
+            );
+        }
     }
 }
