@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:32:59.631330682Z
-modified_at: 2026-06-08T05:17:31.284536799Z
+modified_at: 2026-06-08T05:40:16.982019258Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -30,3 +30,9 @@ relationships:
   target_id: 019ea54a-defc-7703-94d9-6103ecdc96ce
   created_at: 2026-06-08T05:17:31.284532194Z
   created_by: joe
+comments:
+- id: 019ea5be-f9d6-7af3-9b05-63b63b5f07e0
+  author: joe
+  content: Commit 95db0339e references this requirement
+  created_at: 2026-06-08T05:40:16.982019258Z
+  modified_at: 2026-06-08T05:40:16.982019258Z
