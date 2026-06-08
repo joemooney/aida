@@ -60,12 +60,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   DEFER with the EPIC-31 cluster — the integrator role identifier already validates (nothing broken); the remaining role-scaffolding infra (templates/roles/integrator.md + .aida/roles/ scaffold + discipline section) wants the same design pass as the EPIC-31 launcher/registry cluster, not a standalone bugs-phase ship.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-06-08T05:13:16.149967555Z
+modified_at: 2026-06-08T05:20:22.341983067Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -111,3 +111,7 @@ comments:
   content: Commit 21546b7b7 references this requirement
   created_at: 2026-06-08T05:13:16.149967555Z
   modified_at: 2026-06-08T05:13:16.149967555Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-08T05:20:22.341983067Z
+  completion_sha: dcc75c389f4ffc820b6920e01bdc6990d6773827
