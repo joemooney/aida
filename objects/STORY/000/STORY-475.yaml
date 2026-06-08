@@ -8,12 +8,12 @@ description: |
   ## ✅ Operator decision (2026-06-06 disposition sweep)
 
   DEFER until post-stability + a concrete remote/cloud-agent need — opening a network transport with token auth + audit log is exactly the new security surface to hold during the bugs-first phase (the High-priority tag predates that decision). When built, pair with STORY-474 profiles so a read-only profile is the default exposed over HTTP.
-status: Approved
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-27T06:56:30.740409919Z
-modified_at: 2026-06-08T06:23:57.579097706Z
+modified_at: 2026-06-08T06:24:03.898712921Z
 req_type: Story
 tags:
 - audit
