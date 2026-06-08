@@ -65,7 +65,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-06-08T05:20:22.341983067Z
+modified_at: 2026-06-08T05:20:50.910332936Z
 req_type: Story
 tags:
 - advisor-discipline
@@ -118,6 +118,13 @@ comments:
   content: Commit 21546b7b7 references this requirement
   created_at: 2026-06-08T05:13:16.149967555Z
   modified_at: 2026-06-08T05:13:16.149967555Z
+- id: 019ea5ad-2f9e-7a51-800e-0b5313157513
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-07-story-460-integrator-role-sketch.md
+    filed 2 task(s): TASK-707, TASK-708
+  created_at: 2026-06-08T05:20:51.102249973Z
+  modified_at: 2026-06-08T05:20:51.102249973Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-08T05:20:22.341983067Z
