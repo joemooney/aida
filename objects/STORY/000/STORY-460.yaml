@@ -65,14 +65,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-24T16:07:02.291738788Z
-modified_at: 2026-06-07T22:42:14.699456874Z
+modified_at: 2026-06-08T04:59:13.517623367Z
 req_type: Story
 tags:
 - advisor-discipline
-- batch:multi-agent-coordination
-- batch:substrate-architecture
-- blocked
-- deferred:post-stability
 - from-user-direction
 - load-balancing
 - multi-agent
