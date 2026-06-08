@@ -28,7 +28,7 @@ The strategic positioning: the IDE-embedded coding assistants (Cursor, Cline, Ai
 
 ## What you can do via MCP today
 
-AIDA's MCP server exposes **38 tools** in three clusters:
+AIDA's MCP server exposes **43 tools** in four clusters:
 
 **Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
 
@@ -99,7 +99,17 @@ These mirror the `aida queue <subcommand>` CLI surface so MCP-speaking agents ca
 - `queue_move({id, user?, top?, bottom?, before?, after?, ...})` → reorder a queue item (required: `id`).
 - `queue_remove({id, user?, ...})` → remove a queue item (required: `id`).
 
-> **Schemas:** all 38 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
+### Cluster 4 — Session (5 tools, STORY-533 / EPIC-27)
+
+These mirror the `aida session <subcommand>` CLI surface so MCP-speaking agents can inspect scoped session leases + planned-cluster manifests without shelling out. The three inspectors read `.aida/sessions/*.toml` directly (no subprocess to `aida`). The two mutating verbs are **peeks**, not actors: `aida session start` / `aida session end` perform subprocess-driven acts (creating/removing a git worktree, exec'ing or terminating `claude`, probing PR/CI), which an in-process MCP tool must not do — so the MCP tools resolve/describe the work and hand back the exact CLI command to run (the `queue_work` peek precedent).
+
+- `session_leases({all?, ...})` → list active scoped session leases (the "who holds what right now" view). `all` also includes lightweight MCP claim markers.
+- `session_status({id?, ...})` → details for one lease (scope/branch/worktree/role/owner/hostname/started_at, plus inline manifest progress). `id` (8-char prefix) optional when exactly one session is active.
+- `session_manifest({id?, ...})` → a session's planned-cluster manifest with per-item status (✓ done / ◐ started / ○ pending). **Read mirror** — writing/marking the manifest stays CLI-only (it needs the active session's cwd context and happens automatically as `aida edit` / `queue done` run).
+- `session_start({owns, branch?, role?, launch?, ...})` → **peek**, not launcher (read-only): validates the scope/role and returns the `aida session start` command to run; warns when the scope is already held (required: `owns`).
+- `session_end({id?, spec?, ...})` → **peek**, not actor (read-only): resolves the lease `aida session end` would target and returns the CLI command to run.
+
+> **Schemas:** all 43 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
 
 ## How to connect (minimum viable)
 
@@ -178,7 +188,7 @@ Different agent types have different conventions for invoking AIDA workflows (th
 
 **Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. If you don't know the slash/skill name for your agent type, run the CLI verb directly. It works for every agent type.
 
-**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 38 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph and queue operations; use CLI for orchestration verbs that manage live process state (`aida session start`, `aida pr ship`, and the actual launch behind `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
+**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 43 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph and queue operations; use CLI for orchestration verbs that manage live process state (`aida session start`, `aida pr ship`, and the actual launch behind `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
 
 ## What's in flight / known rough edges
 
