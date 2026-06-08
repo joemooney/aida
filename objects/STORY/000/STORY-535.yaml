@@ -3,12 +3,12 @@ spec_id: STORY-535
 agreed_id: STORY-535
 title: 'EPIC-27: MCP resources for live state (queue/in-flight, session/leases, pr/N, batch/N)'
 description: 'Add MCP resources beyond the stale aida://project/summary + requirements/tree: aida://queue/in-flight, aida://session/leases, aida://pr/N, aida://batch/N. Each a read-only resource backed by the existing CLI/cache surface. Tests + stdio suite. trace:EPIC-27'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:33:19.498117518Z
-modified_at: 2026-06-08T05:59:32.799076476Z
+modified_at: 2026-06-08T06:05:50.256680066Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -36,3 +36,7 @@ comments:
   content: Commit 9c364c913 references this requirement
   created_at: 2026-06-08T05:59:32.799076476Z
   modified_at: 2026-06-08T05:59:32.799076476Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-08T06:05:50.256680066Z
+  completion_sha: 817099c69863a1fd7a0d9c34897cd66196c40f95
