@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:31:52.631747927Z
-modified_at: 2026-06-08T04:47:19.279664257Z
+modified_at: 2026-06-08T04:47:20.439772823Z
 req_type: Story
 tags:
 - deferred:tier1-data
@@ -16,3 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 019e9826-5d9d-7f10-ab36-bd783796aae1
   created_at: 2026-06-08T03:31:56.643152362Z
+comments:
+- id: 019ea58e-8177-7103-a8b2-571e2aced738
+  author: joe
+  content: 'Deferred (advisor, 2026-06-07): Tier-1 metrics (TASK-706 + STORY-530) just shipped — we have zero distribution data to design thresholds against. Revisit once Tier-1 has ~4 weeks of data OR a metric visibly misbehaves. If something is needed sooner, the non-premature slice is manual-only: /aida-insights gains a deep LLM mode invoked by hand, no auto-thresholds. Tag flipped needs-design-signoff → deferred:tier1-data.'
+  created_at: 2026-06-08T04:47:20.439772823Z
+  modified_at: 2026-06-08T04:47:20.439772823Z
