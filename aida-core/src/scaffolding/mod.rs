@@ -1534,7 +1534,7 @@ impl Scaffolder {
                         continue;
                     }
                     let content = EMBEDDED_TEMPLATES
-                        .get(key.as_ref() as &str)
+                        .get(key as &str)
                         .map(|s| s.to_string())
                         .unwrap_or_default();
                     let desc = if skill.is_prompt {
@@ -2278,7 +2278,7 @@ impl Scaffolder {
             if already_listed.contains(&name) {
                 continue;
             }
-            if let Some(content) = EMBEDDED_TEMPLATES.get(key.as_ref() as &str) {
+            if let Some(content) = EMBEDDED_TEMPLATES.get(key as &str) {
                 let desc = format!("AIDA slash command: /{}", name);
                 commands.push((name, content.to_string(), desc));
             }
@@ -2762,7 +2762,7 @@ mod tests {
         let claude_md = preview
             .artifacts
             .iter()
-            .find(|a| a.path == PathBuf::from("CLAUDE.md"));
+            .find(|a| a.path == Path::new("CLAUDE.md"));
         assert!(claude_md.is_some());
         assert!(claude_md.unwrap().content.contains("Test Project"));
     }
@@ -2933,12 +2933,14 @@ mod tests {
     #[test]
     fn antigravity_skills_skipped_when_disabled() {
         let temp_dir = TempDir::new().unwrap();
-        let mut config = ScaffoldConfig::default();
         // Mirror what `--no-skills` does to both agent-skill dirs.
-        config.generate_skills = false;
-        config.generate_commands = false;
-        config.generate_codex_skills = false;
-        config.generate_antigravity_skills = false;
+        let config = ScaffoldConfig {
+            generate_skills: false,
+            generate_commands: false,
+            generate_codex_skills: false,
+            generate_antigravity_skills: false,
+            ..Default::default()
+        };
         let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
         let store = create_test_store();
         let preview = scaffolder.preview(&store);
@@ -3113,14 +3115,14 @@ mod tests {
             !preview2
                 .artifacts
                 .iter()
-                .any(|a| a.path == PathBuf::from(".claude/skills/local/my-deploy.md")),
+                .any(|a| a.path == Path::new(".claude/skills/local/my-deploy.md")),
             "scaffolder must never own a project-owned local/ skill"
         );
         assert!(
             !preview2
                 .artifacts
                 .iter()
-                .any(|a| a.path == PathBuf::from(".claude/skills/aida-pr.local.md")),
+                .any(|a| a.path == Path::new(".claude/skills/aida-pr.local.md")),
             "scaffolder must never own a *.local.md extension"
         );
     }
@@ -3140,7 +3142,7 @@ mod tests {
         let aida_md = preview
             .artifacts
             .iter()
-            .find(|a| a.path == PathBuf::from(".claude/AIDA.md"))
+            .find(|a| a.path == Path::new(".claude/AIDA.md"))
             .expect(".claude/AIDA.md should be scaffolded");
 
         let body = &aida_md.content;
@@ -3346,7 +3348,7 @@ mod tests {
         let pre_commit_art = preview
             .artifacts
             .iter()
-            .find(|a| a.path == PathBuf::from(".git/hooks/pre-commit"));
+            .find(|a| a.path == Path::new(".git/hooks/pre-commit"));
         assert!(
             pre_commit_art.is_some(),
             "pre-commit hook should be scaffolded"

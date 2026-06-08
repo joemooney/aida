@@ -220,8 +220,10 @@ mod tests {
 
     #[test]
     fn test_workspace_manifest_serde() {
-        let mut manifest = WorkspaceManifest::default();
-        manifest.name = "test-workspace".into();
+        let mut manifest = WorkspaceManifest {
+            name: "test-workspace".into(),
+            ..Default::default()
+        };
         manifest.add_repo("pacgate", "PacGate");
         manifest.add_repo("pacinet", "PacInet");
 

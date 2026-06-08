@@ -424,7 +424,7 @@ impl FailureKind {
     ///   environment is broken would be worse than stopping — every
     ///   future member would hit the same wall. Historical
     ///   `BatchDrainOutcome::Failed` stop applies.
-    /// trace:EPIC-28 | ai:claude
+    ///   trace:EPIC-28 | ai:claude
     pub(crate) fn is_shelvable(self) -> bool {
         matches!(
             self,
@@ -1979,7 +1979,7 @@ enum PuntFlow {
     /// `orchestrate` continues to phase 2.
     Proceed,
     /// The orchestration ended inside the advisor tier — return this result.
-    Terminal(OrchestrationResult),
+    Terminal(Box<OrchestrationResult>),
 }
 
 /// The instruction handed to a resumed implementer under `--escalate-defaults`
@@ -2000,6 +2000,8 @@ const ADVISOR_DEFAULT_PROMPT: &str =
 /// terminal — one advisor round per spec per drain. Returns
 /// [`PuntFlow::Proceed`] only when the resumed implementer opened a PR; every
 /// other outcome is [`PuntFlow::Terminal`]. trace:STORY-306 | ai:claude
+// why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
+#[allow(clippy::too_many_arguments)]
 fn resolve_punt_via_advisor(
     driver: &mut dyn PhaseDriver,
     spec: &str,
@@ -2019,7 +2021,7 @@ fn resolve_punt_via_advisor(
         );
     }
     match driver.run_advisor() {
-        Err(f) => PuntFlow::Terminal(resolve_phase_failure(
+        Err(f) => PuntFlow::Terminal(Box::new(resolve_phase_failure(
             driver,
             Phase::Implementer,
             spec,
@@ -2027,7 +2029,7 @@ fn resolve_punt_via_advisor(
             start,
             &f,
             durations.to_vec(),
-        )),
+        ))),
         Ok(AdvisorOutcome::Resolved { answer, .. }) => {
             if !json {
                 eprintln!(
@@ -2053,14 +2055,14 @@ fn resolve_punt_via_advisor(
                 // worktree is preserved for the resume.
                 // trace:TASK-358 | ai:claude
                 driver.mark_implementer_lease_escalated();
-                PuntFlow::Terminal(finish_escalated(
+                PuntFlow::Terminal(Box::new(finish_escalated(
                     spec,
                     json,
                     start,
                     durations.to_vec(),
                     EscalationKind::DesignFork,
                     &reason,
-                ))
+                )))
             }
             EscalateMode::Defaults => {
                 if !json {
@@ -2099,7 +2101,7 @@ fn resume_after_advisor(
     batch: bool,
 ) -> PuntFlow {
     match driver.resume_implementer(answer) {
-        Err(f) => PuntFlow::Terminal(resolve_phase_failure(
+        Err(f) => PuntFlow::Terminal(Box::new(resolve_phase_failure(
             driver,
             Phase::Implementer,
             spec,
@@ -2107,17 +2109,17 @@ fn resume_after_advisor(
             start,
             &f,
             durations.to_vec(),
-        )),
+        ))),
         Ok(ImplementerOutcome::PrOpened) => PuntFlow::Proceed,
         // A re-punt after a resume is terminal — one advisor round per spec
         // per drain; a new fork is a fresh punt, not a conversation.
-        Ok(ImplementerOutcome::Punted { reason }) => PuntFlow::Terminal(finish_punted(
+        Ok(ImplementerOutcome::Punted { reason }) => PuntFlow::Terminal(Box::new(finish_punted(
             spec,
             json,
             start,
             durations.to_vec(),
             &reason,
-        )),
+        ))),
         // BUG-257: an Inconclusive on the resumed implementer (a transient
         // GH-API blip during PR lookup) is terminal — the drain pauses for
         // retry, no second advisor round. BUG-266: same path when the
@@ -2125,36 +2127,38 @@ fn resume_after_advisor(
         Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
             // TASK-136: batch → shelve-and-advance; single-spec → pause.
             if batch {
-                PuntFlow::Terminal(finish_inconclusive_shelved(
+                PuntFlow::Terminal(Box::new(finish_inconclusive_shelved(
                     driver,
                     spec,
                     json,
                     start,
                     durations.to_vec(),
                     &reason,
-                ))
+                )))
             } else {
-                PuntFlow::Terminal(finish_inconclusive(
+                PuntFlow::Terminal(Box::new(finish_inconclusive(
                     spec,
                     json,
                     start,
                     durations.to_vec(),
                     &reason,
                     retry_hint.as_deref(),
-                ))
+                )))
             }
         }
         // BUG-250: the resumed implementer deliberately held the PR — a clean
         // terminal stop, same as the first-pass hold (the advisor's fork is
         // resolved, the work is on a branch, the PR awaits a manual gate).
-        Ok(ImplementerOutcome::Held { reason, branch }) => PuntFlow::Terminal(finish_held(
-            spec,
-            json,
-            start,
-            durations.to_vec(),
-            reason.as_deref(),
-            &branch,
-        )),
+        Ok(ImplementerOutcome::Held { reason, branch }) => {
+            PuntFlow::Terminal(Box::new(finish_held(
+                spec,
+                json,
+                start,
+                durations.to_vec(),
+                reason.as_deref(),
+                &branch,
+            )))
+        }
     }
 }
 
@@ -2181,7 +2185,7 @@ fn resume_after_advisor(
 /// - `failed_phase == Some(Phase::Implementer)` — phase 1 is what failed (a
 ///   later-phase failure means the implementer shipped a PR, so the bump was
 ///   legitimate; a success / punt / inconclusive is not a failure at all).
-/// trace:TASK-133 | ai:claude
+///   trace:TASK-133 | ai:claude
 pub(crate) fn should_compensate_phase1_bump(
     bumped: bool,
     lease_acquired: bool,
@@ -2325,6 +2329,8 @@ pub(crate) fn orchestrate_with_lifecycle_skip(
 /// are idempotent. The catastrophic case (double-drive) is prevented *before*
 /// this is called, by the PID-liveness gate in the resume handler.
 /// trace:STORY-492 | ai:claude
+// why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn orchestrate_with_resume(
     driver: &mut dyn PhaseDriver,
     spec: &str,
@@ -2402,7 +2408,7 @@ pub(crate) fn orchestrate_with_resume(
                     escalate_mode,
                     batch,
                 ) {
-                    PuntFlow::Terminal(result) => return result,
+                    PuntFlow::Terminal(result) => return *result,
                     // The advisor resolved the fork and the implementer resumed
                     // with a PR — the pipeline continues to CI.
                     PuntFlow::Proceed => {

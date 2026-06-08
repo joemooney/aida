@@ -47,20 +47,20 @@ impl BuildReport {
 /// not written but the report still tracks what would change.
 pub fn build(store: &RequirementsStore, output_dir: &Path, dry_run: bool) -> Result<BuildReport> {
     let mut report = BuildReport::default();
-    let mut planned: Vec<(PathBuf, String)> = Vec::new();
-
-    planned.push((output_dir.join("README.md"), render_index(store)));
-    planned.push((
-        output_dir.join("00-constitution.md"),
-        render_constitution(store),
-    ));
-    planned.push((output_dir.join("01-vision.md"), render_vision(store)));
-    planned.push((
-        output_dir.join("02-constraints.md"),
-        render_constraints(store),
-    ));
-    planned.push((output_dir.join("07-quality.md"), render_quality(store)));
-    planned.push((output_dir.join("10-glossary.md"), render_glossary(store)));
+    let mut planned: Vec<(PathBuf, String)> = vec![
+        (output_dir.join("README.md"), render_index(store)),
+        (
+            output_dir.join("00-constitution.md"),
+            render_constitution(store),
+        ),
+        (output_dir.join("01-vision.md"), render_vision(store)),
+        (
+            output_dir.join("02-constraints.md"),
+            render_constraints(store),
+        ),
+        (output_dir.join("07-quality.md"), render_quality(store)),
+        (output_dir.join("10-glossary.md"), render_glossary(store)),
+    ];
 
     // Decisions: one file per Decision req, plus an index — sorted by id
     // so ADR-1 lands before ADR-2 in the index. trace:BUG-20 | ai:claude
@@ -251,7 +251,7 @@ fn render_vision(store: &RequirementsStore) -> String {
         return s;
     }
     for v in &visions {
-        let status = format!("{}", v.effective_status());
+        let status = v.effective_status().to_string();
         s.push_str(&format!(
             "## {} — {}  *(status: {})*\n\n",
             display_id(v),
@@ -278,7 +278,7 @@ fn render_constraints(store: &RequirementsStore) -> String {
         return s;
     }
     for c in &constraints {
-        let status = format!("{}", c.effective_status());
+        let status = c.effective_status().to_string();
         s.push_str(&format!(
             "## {} — {}  *(status: {})*\n\n",
             display_id(c),
@@ -308,7 +308,7 @@ fn render_decisions_index(decisions: &[&Requirement]) -> String {
     sorted.sort_by_key(|d| display_id(d));
     for d in sorted {
         let id = display_id(d);
-        let status = format!("{}", d.effective_status());
+        let status = d.effective_status().to_string();
         let file = decision_filename(d);
         s.push_str(&format!(
             "| [{}]({}) | {} | {} |\n",
@@ -320,7 +320,7 @@ fn render_decisions_index(decisions: &[&Requirement]) -> String {
 
 fn render_decision(d: &Requirement) -> String {
     let id = display_id(d);
-    let status = format!("{}", d.effective_status());
+    let status = d.effective_status().to_string();
     let mut s = format!("# {} — {}\n\n", id, d.title);
     s.push_str(&format!("**Status:** {}\n\n", status));
     if !d.description.trim().is_empty() {
@@ -356,7 +356,7 @@ fn render_quality(store: &RequirementsStore) -> String {
         return s;
     }
     for r in &nfrs {
-        let status = format!("{}", r.effective_status());
+        let status = r.effective_status().to_string();
         s.push_str(&format!(
             "## {} — {}  *(status: {})*\n\n",
             display_id(r),

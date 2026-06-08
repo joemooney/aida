@@ -149,8 +149,7 @@ impl AwaitingReport {
             };
             writeln!(
                 w,
-                "  {} brief filed for {}:{} {}",
-                "📬",
+                "  📬 brief filed for {}:{} {}",
                 b.agent.cyan(),
                 id,
                 b.path.display().to_string().dimmed(),
@@ -163,8 +162,7 @@ impl AwaitingReport {
             } else {
                 writeln!(
                     w,
-                    "  {} {} finding{} awaiting triage — `{}`",
-                    "🔍",
+                    "  🔍 {} finding{} awaiting triage — `{}`",
                     self.findings_total,
                     if self.findings_total == 1 { "" } else { "s" },
                     "aida findings list".cyan(),
@@ -177,13 +175,7 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
-            writeln!(
-                w,
-                "  {} verdict needed: {} — {}",
-                "👀",
-                q.spec_id.bold(),
-                q.title,
-            )?;
+            writeln!(w, "  👀 verdict needed: {} — {}", q.spec_id.bold(), q.title,)?;
             budget -= 1;
         }
         for e in &self.escalations {
@@ -191,13 +183,7 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
-            writeln!(
-                w,
-                "  {} escalation: {} — {}",
-                "🗣️",
-                e.spec_id.bold(),
-                e.title,
-            )?;
+            writeln!(w, "  🗣️ escalation: {} — {}", e.spec_id.bold(), e.title,)?;
             budget -= 1;
         }
 

@@ -908,9 +908,9 @@ pub(crate) struct ClaimedDoneInput {
 /// but whose local reality contradicts the claim. Two contradictions fire:
 ///   1. an active lease + a dirty worktree (work still on disk despite Done), and
 ///   2. no commit references the spec AND no PR exists (no shipping evidence).
-/// Specs whose status is not Done/Completed are never flagged here (sticky
-/// In-Progress is a separate category). Returns the diverged items in input
-/// order. trace:STORY-469 | ai:claude
+///      Specs whose status is not Done/Completed are never flagged here (sticky
+///      In-Progress is a separate category). Returns the diverged items in input
+///      order. trace:STORY-469 | ai:claude
 pub(crate) fn detect_claimed_done_divergence(
     inputs: &[ClaimedDoneInput],
 ) -> Vec<ClaimedDoneDivergedItem> {
@@ -1434,14 +1434,16 @@ mod tests {
 
     #[test]
     fn guard3_counts_in_total_and_json_and_render() {
-        let mut report = CleanupReport::default();
-        report.claimed_done_diverged = detect_claimed_done_divergence(&[ClaimedDoneInput {
-            has_active_lease: true,
-            branch: Some("task-542".to_string()),
-            modified_files: 3,
-            age_hours: 6,
-            ..done_input("TASK-542")
-        }]);
+        let report = CleanupReport {
+            claimed_done_diverged: detect_claimed_done_divergence(&[ClaimedDoneInput {
+                has_active_lease: true,
+                branch: Some("task-542".to_string()),
+                modified_files: 3,
+                age_hours: 6,
+                ..done_input("TASK-542")
+            }]),
+            ..Default::default()
+        };
         assert_eq!(report.total(), 1);
 
         let v = report.to_json();

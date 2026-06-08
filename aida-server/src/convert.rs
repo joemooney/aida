@@ -383,7 +383,7 @@ pub fn custom_field_to_proto(field: &CustomFieldDefinition) -> proto::CustomFiel
         required: field.required,
         options: field.options.clone(),
         description: field.description.clone().unwrap_or_default(),
-        order: field.order as i32,
+        order: field.order,
     }
 }
 

@@ -196,12 +196,12 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
     })
 }
 
-fn with_cache_write<T, F>(cache_path: &Path, action: &str, mut f: F) -> Result<T>
+fn with_cache_write<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
     write_cache_lock_info(cache_path)?;
-    let result = with_cache_retry(cache_path, action, || f());
+    let result = with_cache_retry(cache_path, action, f);
     remove_cache_lock_info(cache_path);
     result
 }

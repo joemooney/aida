@@ -35,71 +35,6 @@ pub fn insert_claude_md_import(actual: &str) -> String {
     format!("{}{}{}", actual, sep, block.trim_end())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn insert_into_canonical_layout_lands_before_first_h2() {
-        // trace:BUG-1-065 | ai:claude
-        let original = "# CLAUDE.md\n\nIntro paragraph.\n\n## Project overview\n\nbody\n";
-        let updated = insert_claude_md_import(original);
-        assert!(updated.contains(CLAUDE_AIDA_IMPORT));
-        // The import should come before "## Project overview".
-        let idx_import = updated.find(CLAUDE_AIDA_IMPORT).unwrap();
-        let idx_h2 = updated.find("## Project overview").unwrap();
-        assert!(idx_import < idx_h2);
-    }
-
-    #[test]
-    fn insert_is_idempotent_when_already_present() {
-        let original = "# CLAUDE.md\n\n@.claude/AIDA.md\n\n## Body\n";
-        let updated = insert_claude_md_import(original);
-        assert_eq!(updated, original);
-    }
-
-    #[test]
-    fn insert_appends_when_no_h2_present() {
-        let original = "# CLAUDE.md\n\nNo subsections, just prose.\n";
-        let updated = insert_claude_md_import(original);
-        assert!(updated.contains(CLAUDE_AIDA_IMPORT));
-        // Prose still present at the top, untouched.
-        assert!(updated.starts_with("# CLAUDE.md\n\nNo subsections, just prose.\n"));
-    }
-
-    #[test]
-    fn has_import_detects_presence_anywhere() {
-        assert!(claude_md_has_import("text @.claude/AIDA.md text"));
-        assert!(!claude_md_has_import("@.claude/OTHER.md"));
-        assert!(!claude_md_has_import(""));
-    }
-
-    #[test]
-    fn generated_claude_md_has_discipline_section() {
-        // trace:STORY-255 | ai:claude
-        // trace:TASK-573 | ai:claude — pack discovery is now an @-import
-        let scaffolder = Scaffolder::new(
-            std::path::PathBuf::from("/tmp/aida-story-255-test"),
-            ScaffoldConfig::default(),
-        );
-        let store = RequirementsStore::default();
-        let md = scaffolder.generate_claude_md(&store);
-        // The discipline section is a stub heading + @-import of the pack's
-        // README. The full pointer list (advisor-role, machinery-glossary,
-        // tag-conventions, …) lives in that README; Claude Code expands the
-        // import at session start.
-        assert!(md.contains("## Discipline for AIDA-using sessions"));
-        assert!(md.contains("@docs/aida/discipline/README.md"));
-        // The change is additive — the AIDA conventions import still lands.
-        assert!(md.contains(CLAUDE_AIDA_IMPORT));
-        assert!(md.contains("## Project overview"));
-        // No leftover inlined bullets — the README is the single source of
-        // truth for pointers; CLAUDE.md must not duplicate them.
-        assert!(!md.contains("- **Roles**"));
-        assert!(!md.contains("- **Start here**"));
-    }
-}
-
 impl Scaffolder {
     /// Generate the project-local CLAUDE.md stub. After FR-1-035 this is a
     /// thin seed-class file: project intro + literal `@.claude/AIDA.md`
@@ -288,5 +223,70 @@ cargo test                          # Run tests
 
             ProjectType::Generic => String::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_into_canonical_layout_lands_before_first_h2() {
+        // trace:BUG-1-065 | ai:claude
+        let original = "# CLAUDE.md\n\nIntro paragraph.\n\n## Project overview\n\nbody\n";
+        let updated = insert_claude_md_import(original);
+        assert!(updated.contains(CLAUDE_AIDA_IMPORT));
+        // The import should come before "## Project overview".
+        let idx_import = updated.find(CLAUDE_AIDA_IMPORT).unwrap();
+        let idx_h2 = updated.find("## Project overview").unwrap();
+        assert!(idx_import < idx_h2);
+    }
+
+    #[test]
+    fn insert_is_idempotent_when_already_present() {
+        let original = "# CLAUDE.md\n\n@.claude/AIDA.md\n\n## Body\n";
+        let updated = insert_claude_md_import(original);
+        assert_eq!(updated, original);
+    }
+
+    #[test]
+    fn insert_appends_when_no_h2_present() {
+        let original = "# CLAUDE.md\n\nNo subsections, just prose.\n";
+        let updated = insert_claude_md_import(original);
+        assert!(updated.contains(CLAUDE_AIDA_IMPORT));
+        // Prose still present at the top, untouched.
+        assert!(updated.starts_with("# CLAUDE.md\n\nNo subsections, just prose.\n"));
+    }
+
+    #[test]
+    fn has_import_detects_presence_anywhere() {
+        assert!(claude_md_has_import("text @.claude/AIDA.md text"));
+        assert!(!claude_md_has_import("@.claude/OTHER.md"));
+        assert!(!claude_md_has_import(""));
+    }
+
+    #[test]
+    fn generated_claude_md_has_discipline_section() {
+        // trace:STORY-255 | ai:claude
+        // trace:TASK-573 | ai:claude — pack discovery is now an @-import
+        let scaffolder = Scaffolder::new(
+            std::path::PathBuf::from("/tmp/aida-story-255-test"),
+            ScaffoldConfig::default(),
+        );
+        let store = RequirementsStore::default();
+        let md = scaffolder.generate_claude_md(&store);
+        // The discipline section is a stub heading + @-import of the pack's
+        // README. The full pointer list (advisor-role, machinery-glossary,
+        // tag-conventions, …) lives in that README; Claude Code expands the
+        // import at session start.
+        assert!(md.contains("## Discipline for AIDA-using sessions"));
+        assert!(md.contains("@docs/aida/discipline/README.md"));
+        // The change is additive — the AIDA conventions import still lands.
+        assert!(md.contains(CLAUDE_AIDA_IMPORT));
+        assert!(md.contains("## Project overview"));
+        // No leftover inlined bullets — the README is the single source of
+        // truth for pointers; CLAUDE.md must not duplicate them.
+        assert!(!md.contains("- **Roles**"));
+        assert!(!md.contains("- **Start here**"));
     }
 }

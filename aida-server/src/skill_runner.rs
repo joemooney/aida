@@ -804,11 +804,11 @@ async fn handle_create_requirement(
         .and_then(|w| w.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|w| {
+                .map(|w| {
                     let code = w.get("code").and_then(|c| c.as_str()).unwrap_or("?");
                     let file = w.get("file").and_then(|f| f.as_str()).unwrap_or("?");
                     let line = w.get("line").and_then(|l| l.as_u64()).unwrap_or(0);
-                    Some(format!("- `{}` at {}:{}", code, file, line))
+                    format!("- `{code}` at {file}:{line}")
                 })
                 .collect::<Vec<_>>()
                 .join("\n")

@@ -444,8 +444,10 @@ mod tests {
 
     #[test]
     fn mission_section_singular_pr_count() {
-        let mut m = MissionData::default();
-        m.open_prs = Some(1);
+        let m = MissionData {
+            open_prs: Some(1),
+            ..Default::default()
+        };
         assert!(mission_section(&m).join("\n").contains("Open PRs — 1"));
     }
 

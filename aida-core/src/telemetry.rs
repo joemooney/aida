@@ -362,7 +362,7 @@ mod tests {
         store.record("joe", EventKind::RequirementCreated, Some("FR-001"));
 
         // Manually adjust timestamp for completion
-        let mut completion = TelemetryEvent {
+        let completion = TelemetryEvent {
             id: Uuid::now_v7(),
             timestamp: Utc::now() + chrono::Duration::hours(2),
             actor: "joe".into(),

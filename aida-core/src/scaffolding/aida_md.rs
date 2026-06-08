@@ -414,8 +414,10 @@ mod tests {
         let store = RequirementsStore::default();
 
         // What `aida init --no-skills` writes to disk.
-        let mut no_skills_cfg = ScaffoldConfig::default();
-        no_skills_cfg.generate_skills = false;
+        let no_skills_cfg = ScaffoldConfig {
+            generate_skills: false,
+            ..Default::default()
+        };
         let no_skills = Scaffolder::new(PathBuf::from("/tmp/aida-task125"), no_skills_cfg);
         let on_disk_raw = no_skills.generate_aida_md(&store);
         let on_disk =

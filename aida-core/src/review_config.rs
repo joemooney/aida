@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Review configuration loaded from .aida/review-config.yaml
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ReviewConfig {
     /// Rules to suppress (by rule_id)
     #[serde(default)]
@@ -64,17 +64,6 @@ impl Default for ComplexityConfig {
             max_file_lines: default_max_file_lines(),
             max_function_lines: default_max_function_lines(),
             max_nesting_depth: default_max_nesting(),
-        }
-    }
-}
-
-impl Default for ReviewConfig {
-    fn default() -> Self {
-        Self {
-            suppress: Vec::new(),
-            severity_overrides: HashMap::new(),
-            complexity: ComplexityConfig::default(),
-            exclude_patterns: Vec::new(),
         }
     }
 }

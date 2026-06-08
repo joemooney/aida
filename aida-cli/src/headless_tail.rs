@@ -268,11 +268,11 @@ fn looks_like_spec_id(s: &str) -> bool {
     if !s.contains('-') {
         return false;
     }
-    let after_first_dash = s.splitn(2, '-').nth(1).unwrap_or("");
+    let after_first_dash = s.split_once('-').map(|x| x.1).unwrap_or("");
     after_first_dash
         .chars()
         .next()
-        .map_or(false, |c| c.is_ascii_digit())
+        .is_some_and(|c| c.is_ascii_digit())
         && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 

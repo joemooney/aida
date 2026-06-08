@@ -416,7 +416,6 @@ fn compute_traceability(reqs: &[Requirement]) -> TraceabilityMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::RequirementType;
 
     fn make_req(title: &str, status: RequirementStatus, days_ago_created: i64) -> Requirement {
         let mut req = Requirement::new(title.into(), "desc".into());

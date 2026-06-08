@@ -218,8 +218,8 @@ pub(crate) fn run_is_live(project_root: &Path, token: &str) -> bool {
 
 /// The corroborated verdict for the current process, reading `AIDA_AUTO_COMPLETE`
 /// + `AIDA_AUTO_COMPLETE_TOKEN` from the environment and checking the drain-
-/// state file under `project_root` (resolve it with `find_main_worktree_root`
-/// so a child running in a sibling worktree reads the orchestrator's `.aida/`).
+///   state file under `project_root` (resolve it with `find_main_worktree_root`
+///   so a child running in a sibling worktree reads the orchestrator's `.aida/`).
 pub(crate) fn detect(project_root: &Path) -> OrchestratorContext {
     classify(
         std::env::var(AUTO_COMPLETE_ENV).ok().as_deref(),

@@ -307,7 +307,7 @@ impl RequirementsService for AidaService {
             .requirements
             .iter()
             .enumerate()
-            .last()
+            .next_back()
             .ok_or_else(|| Status::internal("Requirement not found after save"))?;
 
         Ok(Response::new(proto::CreateRequirementResponse {
@@ -1001,13 +1001,11 @@ impl RequirementsService for AidaService {
                 let user = &store.users[idx];
 
                 // If user has an existing PIN, verify current PIN
-                if user.has_pin() {
-                    if !user.verify_pin(&req.current_pin) {
-                        return Ok(Response::new(proto::SetUserPinResponse {
-                            success: false,
-                            message: "Current PIN is incorrect".to_string(),
-                        }));
-                    }
+                if user.has_pin() && !user.verify_pin(&req.current_pin) {
+                    return Ok(Response::new(proto::SetUserPinResponse {
+                        success: false,
+                        message: "Current PIN is incorrect".to_string(),
+                    }));
                 }
 
                 // Set new PIN
@@ -1045,6 +1043,9 @@ impl AidaServiceMultiProject {
     }
 
     /// Extract project name from request metadata
+    // why: the Err type is tonic's own `Status` (the gRPC error contract); every
+    // handler returns `Result<_, Status>` so boxing here would diverge from tonic.
+    #[allow(clippy::result_large_err)]
     fn extract_project<T>(request: &Request<T>) -> Result<String, Status> {
         request
             .metadata()
@@ -1235,7 +1236,7 @@ impl RequirementsService for AidaServiceMultiProject {
             .requirements
             .iter()
             .enumerate()
-            .last()
+            .next_back()
             .ok_or_else(|| Status::internal("Requirement not found after save"))?;
 
         Ok(Response::new(proto::CreateRequirementResponse {
@@ -1917,13 +1918,11 @@ impl RequirementsService for AidaServiceMultiProject {
             Some(idx) => {
                 let user = &store.users[idx];
 
-                if user.has_pin() {
-                    if !user.verify_pin(&req.current_pin) {
-                        return Ok(Response::new(proto::SetUserPinResponse {
-                            success: false,
-                            message: "Current PIN is incorrect".to_string(),
-                        }));
-                    }
+                if user.has_pin() && !user.verify_pin(&req.current_pin) {
+                    return Ok(Response::new(proto::SetUserPinResponse {
+                        success: false,
+                        message: "Current PIN is incorrect".to_string(),
+                    }));
                 }
 
                 store.users[idx].set_pin(&req.new_pin);

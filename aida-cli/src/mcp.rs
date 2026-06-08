@@ -182,7 +182,7 @@ fn parse_aida_binary_identity(output: &str) -> Option<McpBinaryIdentity> {
     let sha = banner
         .split("sha ")
         .nth(1)
-        .and_then(|s| s.split(|c: char| c == ')' || c == '+').next())
+        .and_then(|s| s.split([')', '+']).next())
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("unknown")
@@ -889,7 +889,9 @@ impl<'a> McpServer<'a> {
         // a discovery filter: reject a tool that exists but is above the active
         // tier, even if a client calls it by name. Unknown tools fall through to
         // the dispatch's own "Unknown tool" error below.
-        if tool_name != "" && is_known_tool(tool_name) && !tool_in_profile(tool_name, self.profile)
+        if !tool_name.is_empty()
+            && is_known_tool(tool_name)
+            && !tool_in_profile(tool_name, self.profile)
         {
             return JsonRpcResponse::success(
                 id.clone(),
@@ -4617,8 +4619,8 @@ impl<'a> McpServer<'a> {
     ///   1. squash-merge subject `(#N)` → the `(SPEC-ID)` in the same commit
     ///      (via `crate::collect_git_linkage`'s `shipped_pr`), and
     ///   2. review findings tagged `from-review:PR-N`.
-    /// This mirrors the PR pointer `aida show <spec>` surfaces, without ever
-    /// shelling out to `gh`. trace:STORY-535
+    ///      This mirrors the PR pointer `aida show <spec>` surfaces, without ever
+    ///      shelling out to `gh`. trace:STORY-535
     fn resource_pr(&self, raw: &str) -> Result<String, String> {
         let n: u64 = raw
             .trim()
@@ -4654,7 +4656,8 @@ impl<'a> McpServer<'a> {
             if sid == "?" {
                 continue;
             }
-            let linkage = crate::collect_git_linkage(&self.project_root, &[sid.clone()]);
+            let linkage =
+                crate::collect_git_linkage(&self.project_root, std::slice::from_ref(&sid));
             if linkage.shipped_pr == Some(n) {
                 let pr = linkage
                     .commits
@@ -5154,6 +5157,8 @@ pub fn is_known_tool(tool_name: &str) -> bool {
 /// The set of tool names (in `tool_descriptors()` order) exposed under
 /// `profile`. Pure fn over the descriptor list — the unit-tested core of the
 /// profile→toolset selection. trace:STORY-474 | ai:claude
+// why: unit-tested pure core of profile→toolset selection; the production path filters descriptors inline, so the named helper is test-only today.
+#[allow(dead_code)]
 pub fn tool_names_for_profile(profile: McpProfile) -> Vec<String> {
     tool_descriptors()
         .as_array()

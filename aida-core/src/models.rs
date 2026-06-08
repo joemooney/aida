@@ -92,14 +92,16 @@ impl fmt::Display for PuntCategory {
 impl PuntCategory {
     /// Parse a category from its kebab-case CLI form. Tolerant of casing,
     /// surrounding whitespace, and `_`/` ` separators.
+    // why: inherent parser returns Option<Self> (infallible-ish, no error type) — std::str::FromStr would force a Result + Err type we don't have.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         let normalized: String = s
             .trim()
             .chars()
-            .filter_map(|c| match c {
-                ' ' | '-' | '_' => Some('-'),
-                c if c.is_ascii_alphabetic() => Some(c.to_ascii_lowercase()),
-                _ => Some(c),
+            .map(|c| match c {
+                ' ' | '-' | '_' => '-',
+                c if c.is_ascii_alphabetic() => c.to_ascii_lowercase(),
+                _ => c,
             })
             .collect();
         match normalized.as_str() {
@@ -202,7 +204,7 @@ pub struct FailureReason {
 ///   - **into** `NeedsAttention`: only from `InProgress` (via `aida punt`);
 ///   - **out of** `NeedsAttention`: only to `Approved` / `InProgress` /
 ///     `Rejected` (triage outcomes).
-/// trace:STORY-332 | ai:claude
+///     trace:STORY-332 | ai:claude
 pub fn forbidden_attention_transition(
     from: &RequirementStatus,
     to: &RequirementStatus,
@@ -444,6 +446,8 @@ impl fmt::Display for MetaSubtype {
 
 impl MetaSubtype {
     /// Parse a meta subtype from a string
+    // why: inherent parser returns Option<Self>; std FromStr would force a Result + Err type.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "prompt" => Some(MetaSubtype::Prompt),
@@ -534,8 +538,8 @@ impl fmt::Display for RelationshipType {
 ///   - bare string `Parent` / `BlockedBy` / future names  → `visit_str`
 ///   - YAML externally-tagged `!Custom foo`                → `visit_enum`
 ///   - JSON externally-tagged `{"Custom":"foo"}`           → `visit_map`
-/// `from_str` lowercases, so the stored PascalCase variant names round-trip,
-/// and unknown names fall through to `Custom`. trace:BUG-251 | ai:claude
+///     `from_str` lowercases, so the stored PascalCase variant names round-trip,
+///     and unknown names fall through to `Custom`. trace:BUG-251 | ai:claude
 impl<'de> Deserialize<'de> for RelationshipType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -601,6 +605,8 @@ impl<'de> Deserialize<'de> for RelationshipType {
 
 impl RelationshipType {
     /// Parse a relationship type from a string
+    // why: inherent parser is infallible (returns Self with a default fallthrough); std FromStr requires a fallible Result signature.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "parent" => RelationshipType::Parent,
@@ -653,8 +659,10 @@ impl RelationshipType {
 /// Field type for custom fields
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum CustomFieldType {
     /// Single-line text input
+    #[default]
     Text,
     /// Multi-line text input
     TextArea,
@@ -670,12 +678,6 @@ pub enum CustomFieldType {
     Requirement,
     /// Numeric value
     Number,
-}
-
-impl Default for CustomFieldType {
-    fn default() -> Self {
-        CustomFieldType::Text
-    }
 }
 
 impl fmt::Display for CustomFieldType {
@@ -1245,6 +1247,8 @@ impl fmt::Display for Cardinality {
 
 impl Cardinality {
     /// Parse cardinality from string
+    // why: inherent parser is infallible (returns Self with a default fallthrough); std FromStr requires a fallible Result signature.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().replace(" ", "").as_str() {
             "1:1" | "one_to_one" | "onetoone" => Cardinality::OneToOne,
@@ -2269,6 +2273,8 @@ impl fmt::Display for ArtifactType {
 
 impl ArtifactType {
     /// Parse an artifact type from a string
+    // why: inherent parser returns Option<Self>; std FromStr would force a Result + Err type.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "source" | "sourcecode" | "src" | "code" => Some(ArtifactType::SourceCode),
@@ -2721,6 +2727,8 @@ impl fmt::Display for ConfidenceLevel {
 
 impl ConfidenceLevel {
     /// Parse a confidence level from a string
+    // why: inherent parser returns Option<Self>; std FromStr would force a Result + Err type.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "high" | "h" => Some(ConfidenceLevel::High),
@@ -2734,7 +2742,7 @@ impl ConfidenceLevel {
 // trace:EPIC-0246 | ai:claude:high
 /// Tracks implementation metadata for a requirement
 /// Stores information about how and when a requirement was implemented
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, Default)]
 pub struct ImplementationInfo {
     /// Whether the requirement has been implemented
     pub implemented: bool,
@@ -2783,24 +2791,6 @@ pub struct ImplementationInfo {
     /// trace:STORY-86 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion_sha: Option<String>,
-}
-
-impl Default for ImplementationInfo {
-    fn default() -> Self {
-        Self {
-            implemented: false,
-            summary: None,
-            last_agent_run: None,
-            risk_notes: None,
-            test_coverage_notes: None,
-            source_tool: None,
-            confidence: None,
-            implemented_at: None,
-            implemented_by: None,
-            completed_at: None,
-            completion_sha: None,
-        }
-    }
 }
 
 impl ImplementationInfo {
@@ -2904,19 +2894,19 @@ impl TraceComment {
         // Parse remaining segments
         for segment in segments.iter().skip(1) {
             let segment = segment.trim();
-            if segment.starts_with("ai:") {
+            if let Some(rest) = segment.strip_prefix("ai:") {
                 // Format: ai:claude:high or ai:claude
-                let parts: Vec<&str> = segment[3..].split(':').collect();
+                let parts: Vec<&str> = rest.split(':').collect();
                 if !parts.is_empty() {
                     result.ai_tool = Some(parts[0].to_string());
                 }
                 if parts.len() > 1 {
                     result.confidence = ConfidenceLevel::from_str(parts[1]);
                 }
-            } else if segment.starts_with("impl:") {
-                result.impl_date = Some(segment[5..].trim().to_string());
-            } else if segment.starts_with("by:") {
-                result.implemented_by = Some(segment[3..].trim().to_string());
+            } else if let Some(rest) = segment.strip_prefix("impl:") {
+                result.impl_date = Some(rest.trim().to_string());
+            } else if let Some(rest) = segment.strip_prefix("by:") {
+                result.implemented_by = Some(rest.trim().to_string());
             }
         }
 
@@ -3580,7 +3570,7 @@ impl Requirement {
         self.agreed_id
             .as_deref()
             .or(self.spec_id.as_deref())
-            .unwrap_or_else(|| "?")
+            .unwrap_or("?")
             .to_string()
     }
 
@@ -4088,6 +4078,10 @@ pub const META_PREFIX_USER: &str = "$USER";
 pub const META_PREFIX_VIEW: &str = "$VIEW";
 pub const META_PREFIX_FEATURE: &str = "$FEAT";
 pub const META_PREFIX_TEAM: &str = "$TEAM";
+
+/// Per-requirement ID-generation snapshot: `(index, prefix, feature, spec_id)`.
+/// Collected before mutation to avoid borrow conflicts during ID assignment.
+type ReqIdData = Vec<(usize, Option<String>, Option<String>, Option<String>)>;
 
 impl RequirementsStore {
     /// Creates an empty requirements store
@@ -5163,7 +5157,7 @@ impl RequirementsStore {
     /// Check if a spec_id is available (not used by any requirement, or only by the given UUID)
     pub fn is_spec_id_available(&self, spec_id: &str, exclude_uuid: Option<&Uuid>) -> bool {
         !self.requirements.iter().any(|r| {
-            r.spec_id.as_deref() == Some(spec_id) && exclude_uuid.map_or(true, |uuid| r.id != *uuid)
+            r.spec_id.as_deref() == Some(spec_id) && exclude_uuid.is_none_or(|uuid| r.id != *uuid)
         })
     }
 
@@ -5218,7 +5212,7 @@ impl RequirementsStore {
         }
 
         // Collect data needed for ID generation (to avoid borrow issues)
-        let req_data: Vec<(usize, Option<String>, Option<String>, Option<String>)> = self
+        let req_data: ReqIdData = self
             .requirements
             .iter()
             .enumerate()
@@ -5400,7 +5394,7 @@ impl RequirementsStore {
         self.prefix_counters.clear();
 
         // Collect requirement data for migration (to avoid borrow issues)
-        let req_data: Vec<(usize, Option<String>, Option<String>, Option<String>)> = self
+        let req_data: ReqIdData = self
             .requirements
             .iter()
             .enumerate()
@@ -5973,10 +5967,10 @@ impl RequirementsStore {
         }
 
         // Check for cycles in hierarchical relationships (parent/child)
-        if rel_type.name() == "parent" || rel_type.name() == "child" {
-            if self.would_create_cycle(source_id, target_id, rel_type) {
-                validation.add_error("This relationship would create a cycle in the hierarchy");
-            }
+        if (rel_type.name() == "parent" || rel_type.name() == "child")
+            && self.would_create_cycle(source_id, target_id, rel_type)
+        {
+            validation.add_error("This relationship would create a cycle in the hierarchy");
         }
 
         validation
@@ -6514,8 +6508,8 @@ mod tests {
     fn test_assign_spec_ids() {
         let mut store = RequirementsStore::new();
 
-        let mut req1 = Requirement::new("R1".into(), "D1".into());
-        let mut req2 = Requirement::new("R2".into(), "D2".into());
+        let req1 = Requirement::new("R1".into(), "D1".into());
+        let req2 = Requirement::new("R2".into(), "D2".into());
 
         // Manually add without SPEC-IDs
         store.requirements.push(req1);
@@ -6537,7 +6531,7 @@ mod tests {
 
         let mut req1 = Requirement::new("R1".into(), "D1".into());
         req1.spec_id = Some("SPEC-001".into());
-        let mut req2 = Requirement::new("R2".into(), "D2".into());
+        let req2 = Requirement::new("R2".into(), "D2".into());
 
         store.requirements.push(req1);
         store.requirements.push(req2);
