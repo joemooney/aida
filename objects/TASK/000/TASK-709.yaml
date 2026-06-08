@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T05:24:51.535469030Z
-modified_at: 2026-06-08T05:41:13.615582857Z
+modified_at: 2026-06-08T05:41:14.684739068Z
 req_type: Task
 tags:
 - ci
@@ -21,3 +21,9 @@ relationships:
   target_id: 019ea5af-c836-7913-a822-3458ebec9d5c
   created_at: 2026-06-08T05:24:57.879619481Z
   created_by: joe
+comments:
+- id: 019ea5bf-db3c-7082-91b6-fafcb28f3b96
+  author: joe
+  content: 'Tagged operator-action (advisor): this flips the CI gate that ALL merges depend on. Before enabling -D on clippy correctness, verify EVERY workspace crate (aida-core, aida-cli, aida-server, aida-tui, aida-generate-types) is correctness-clean — I only verified aida-cli for BUG-473. A wrong flip reddens every open PR, so this ships supervised, not in an unattended wave.'
+  created_at: 2026-06-08T05:41:14.684739068Z
+  modified_at: 2026-06-08T05:41:14.684739068Z
