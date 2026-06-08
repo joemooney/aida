@@ -1,0 +1,12 @@
+id: 019ea514-b996-7022-9fa7-ff1a031ae7e5
+spec_id: TASK-703
+agreed_id: TASK-703
+title: 'STORY-527 slice 1: aida burndown plan CLI (selector + pickability gate)'
+description: 'First slice of STORY-527: the read-only deterministic foundation the /aida-burndown skill fans out from. aida burndown plan [--status|--tag|--batch] [--json] resolves a selector to ready (bounded+unblocked+decision-free) vs parked(reason). Pure gate in burndown.rs (classify/partition, 6 tests); handler excludes archived, parks epics + pending-decision + unsatisfied-BlockedBy + parking-tags (blocked/needs-human-input/needs-human/review:draft-only/deferred:*). The skill (fan-out engine) is the remaining STORY-527 slice. trace:STORY-527'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-08T02:34:19.414717224Z
+modified_at: 2026-06-08T02:34:19.414717224Z
+req_type: Task
