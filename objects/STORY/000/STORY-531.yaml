@@ -3,12 +3,12 @@ spec_id: STORY-531
 agreed_id: STORY-531
 title: 'EPIC-36 Tier-2: threshold-triggered LLM health fact-finding (extend /aida-insights)'
 description: 'Design-gated (needs sign-off on thresholds + scope). When a Tier-1 metric crosses a threshold, trigger LLM fact-finding: root-cause an anomaly (''divergence is N% → read the post-session classification + name the bug''), categorize unstructured failure reasons into buckets, synthesize a health narrative + recommended fixes. Extends /aida-insights (TASK-577) from usage-patterns to system-health. Expensive/occasional — gated by Tier-1 thresholds, not run blindly. Needs design sign-off on which thresholds trigger + cost controls before build. trace:EPIC-36'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:31:52.631747927Z
-modified_at: 2026-06-08T06:32:20.966969998Z
+modified_at: 2026-06-08T06:34:56.255651508Z
 req_type: Story
 tags:
 - from-spike:tier2
@@ -34,3 +34,7 @@ comments:
   content: Commit 4bac7b80f references this requirement
   created_at: 2026-06-08T06:32:20.966969998Z
   modified_at: 2026-06-08T06:32:20.966969998Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-08T06:34:56.255651508Z
+  completion_sha: c30df65269494ca4a0162e12d9bd7242ab0700ec
