@@ -1,0 +1,12 @@
+id: 019ea549-48cf-7381-8440-75a52e8b3633
+spec_id: STORY-530
+agreed_id: STORY-530
+title: 'EPIC-36 Tier-1: remaining deterministic health metrics catalog'
+description: 'After the MVP gap-metric: the rest of the Tier-1 deterministic catalog (pure functions over usage.jsonl + headless-logs + the spec graph) — phase-failure distribution (exists: --pattern), reap-vs-genuine-kill breakdown, drain halt-rate (halted vs shelve-and-continued), recovery latency (gap between a drain failure and the next drain — the human-babysitting cost), draft-inbox depth (ADR-3 untriaged count), burn-down velocity (completions/day net of advisor-adds). Each is a bounded deterministic parser; surface via aida usage / a new aida health. trace:EPIC-36'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-08T03:31:43.951121091Z
+modified_at: 2026-06-08T03:31:43.951121091Z
+req_type: Story
