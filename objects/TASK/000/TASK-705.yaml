@@ -1,0 +1,12 @@
+id: 019ea540-8b10-74b1-b099-a696c57de5bc
+spec_id: TASK-705
+agreed_id: TASK-705
+title: 'burndown: skip specs that already have an open PR / in-flight work'
+description: 'Dogfooding /aida-burndown (2026-06-07) surfaced an edge: an Approved spec that already has an open PR (TASK-704 mid-merge) still shows as ''ready'' — the pickability gate is store-only (no forge lookup), so it can''t tell. Risk: the skill''s fan-out could spawn a 2nd implementer for a spec already in flight. Fix options: (a) the /aida-burndown skill''s fan-out step checks open PRs (reuse the integrate classify_candidate machinery) before spawning; (b) a lighter heuristic (skip specs with an active session lease). The gate itself should stay pure/deterministic — do the in-flight check in the skill''s integrator step, not the gate. Minor (transient state) but real for concurrent runs. trace:STORY-527'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-08T03:22:11.088820893Z
+modified_at: 2026-06-08T03:22:11.088820893Z
+req_type: Task
