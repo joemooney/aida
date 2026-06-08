@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:33:08.323277210Z
-modified_at: 2026-06-07T15:17:01.718677214Z
+modified_at: 2026-06-08T06:23:22.526594497Z
 req_type: Story
 tags:
 - autonomous-drain
@@ -134,4 +134,9 @@ comments:
     Remaining (all filed as children, story stays open): one-branch + stacked strategy implementations; sequence-aware forecast (model predecessors landing first); .aida/config.toml [integrate] strategy default (TASK-691).
   created_at: 2026-06-07T15:17:01.718677214Z
   modified_at: 2026-06-07T15:17:01.718677214Z
+- id: 019ea5e6-6d9e-7d21-9d93-ca3f16b1dc0d
+  author: joe
+  content: 'Closing Completed (advisor, 2026-06-07): all four children are Completed — TASK-688 (dry-run forecast), TASK-689 (--rebase step), TASK-690 (--strategy per-item|one-branch|stacked selector), TASK-691 (config default). The per-item integrate-pass MVP this STORY scoped is fully delivered; one-branch/stacked remain separate follow-ups as designed.'
+  created_at: 2026-06-08T06:23:22.526594497Z
+  modified_at: 2026-06-08T06:23:22.526594497Z
 human_only: true
