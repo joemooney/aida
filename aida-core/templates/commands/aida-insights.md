@@ -2,7 +2,20 @@
 
 Monthly usage-pattern review: most-used commands, drain success rate,
 advisor calibration agreement %, and the deprecation / UX-gap /
-substrate-gap follow-ups they suggest.
+substrate-gap follow-ups they suggest. Pass `--health` (or `--deep`) for
+the on-demand health fact-finding mode.
+
+## Mode
+
+Arguments: `$ARGUMENTS`
+
+- If `$ARGUMENTS` contains `--health` or `--deep`, run the **Health
+  fact-finding mode** from `.claude/skills/aida-insights.md` (steps H1–H5):
+  pull `aida usage --health --json` + `aida usage --auto-complete --json`,
+  flag the loudest anomaly, root-cause it, bucket the free-text failure
+  reasons, and synthesise a short health narrative + recommended fixes.
+  Read-only; never auto-file, never set an automatic threshold.
+- Otherwise, run the monthly synthesis below.
 
 ## Snapshot
 
@@ -29,3 +42,7 @@ Follow the workflow in `.claude/skills/aida-insights.md`:
    is off (`[advisor] calibration_mode = "on"` in `.aida/config.toml`)
    rather than reporting "100% agreement" off zero samples.
 5. Read-only. Every suggestion is a recommendation, never auto-run.
+
+For the on-demand health fact-finding mode (when `$ARGUMENTS` carries
+`--health` / `--deep`), follow steps H1–H5 in the "Health fact-finding
+mode" section of `.claude/skills/aida-insights.md`.
