@@ -7,8 +7,14 @@ priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-26T05:59:43.548438869Z
-modified_at: 2026-06-08T03:17:30.662625440Z
+modified_at: 2026-06-08T03:17:33.082762159Z
 req_type: Functional
+comments:
+- id: 019ea53c-4d1a-7972-a94e-92c49e5e528c
+  author: joe
+  content: 'Resolved via /aida-burndown dogfood (2026-06-07): the in-scope behavior (''ESC cancels immediately when no changes'' — the confirmation-on-changes part is struck-through/descoped) is ALREADY satisfied. ESC-to-cancel is present across every requirement Add/Edit surface in this repo: CreateRequirementModal.tsx (74-80), QuickCreateDropdown.tsx (43), EditableField/EditableText (60-63, reverts draft), DetailPanel.tsx (35). The richer form the spec text describes (prefix/custom-fields/confirmation) was the native desktop client, extracted to a separate repo 2026-05-02. No code change needed; closing Completed.'
+  created_at: 2026-06-08T03:17:33.082762159Z
+  modified_at: 2026-06-08T03:17:33.082762159Z
 history:
 - id: 85c8ba87-e9f7-4814-81ed-19b1f46ccf45
   author: '@joe'
