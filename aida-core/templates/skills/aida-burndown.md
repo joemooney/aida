@@ -51,8 +51,22 @@ the backlog is drained for this selector.
 
 ### 2. Fan out a wave (the engine)
 
-For up to **N** ready specs (a bounded wave; `N ≈ 4`, or scale to budget), spawn
-one **worktree-isolated implementer subagent per spec**:
+**First, drop any ready spec that's already in flight.** The gate is
+pure/store-only — it can't see transient forge or session state, so a spec
+mid-merge (open PR) or actively being worked (live session lease) can still come
+back `ready`. Spawning a second implementer for it duplicates effort and races.
+Before fanning out, filter the ready set against both:
+
+```
+gh pr list --state open --json headRefName,title    # specs with an open PR
+aida session leases                                  # specs with an active lease
+```
+
+Skip any ready spec whose SPEC-ID matches an open PR branch/title or an active
+lease scope; carry only the genuinely-idle remainder into the wave below.
+
+For up to **N** of the remaining ready specs (a bounded wave; `N ≈ 4`, or scale
+to budget), spawn one **worktree-isolated implementer subagent per spec**:
 
 > `Agent(subagent_type: "general-purpose", isolation: "worktree")` — each gets
 > ONE ready spec and a self-contained prompt: read it (`aida show <SPEC> -c`),
