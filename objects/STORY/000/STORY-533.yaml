@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:32:51.295299528Z
-modified_at: 2026-06-08T04:47:34.697253469Z
+modified_at: 2026-06-08T05:03:24.998044269Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -30,3 +30,9 @@ relationships:
   target_id: 019ea54a-defc-7703-94d9-6103ecdc96ce
   created_at: 2026-06-08T04:47:34.697250745Z
   created_by: joe
+comments:
+- id: 019ea59d-3946-78a3-abf6-99a9d91d34e9
+  author: joe
+  content: Commit 86806f38c references this requirement
+  created_at: 2026-06-08T05:03:24.998044269Z
+  modified_at: 2026-06-08T05:03:24.998044269Z
