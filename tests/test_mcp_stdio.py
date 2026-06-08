@@ -417,7 +417,13 @@ def test_resources(client: McpClient, seed_spec: str) -> None:
     resources = result.get("resources")
     require(isinstance(resources, list), f"resources/list missing resources array: {result}")
     by_uri = {resource.get("uri"): resource for resource in resources if isinstance(resource, dict)}
-    for uri in ("aida://project/summary", "aida://requirements/tree"):
+    # EPIC-27 (STORY-535): the static live-state resources join the original two.
+    for uri in (
+        "aida://project/summary",
+        "aida://requirements/tree",
+        "aida://queue/in-flight",
+        "aida://session/leases",
+    ):
         require(uri in by_uri, f"resources/list missing {uri}: {resources}")
         resource = by_uri[uri]
         require(isinstance(resource.get("name"), str), f"{uri} missing name: {resource}")
@@ -427,6 +433,41 @@ def test_resources(client: McpClient, seed_spec: str) -> None:
     require("Project Summary" in summary, f"project summary resource has unexpected body: {summary}")
     tree = read_resource_text(client, "aida://requirements/tree")
     require(seed_spec in tree, f"requirements tree resource missing seed spec {seed_spec}: {tree}")
+
+    # EPIC-27 (STORY-535): live-state resource bodies are readable + framed.
+    in_flight = read_resource_text(client, "aida://queue/in-flight")
+    require(
+        "Queue — in-flight" in in_flight,
+        f"queue in-flight resource has unexpected body: {in_flight}",
+    )
+    leases = read_resource_text(client, "aida://session/leases")
+    require(
+        "Session leases" in leases,
+        f"session leases resource has unexpected body: {leases}",
+    )
+
+    # EPIC-27 (STORY-535): parameterized resources are advertised as URI
+    # templates and matched by the resources/read handler.
+    tresp = client.request("resources/templates/list")
+    tresult = tresp.get("result")
+    require(isinstance(tresult, dict), f"resources/templates/list result must be object: {tresp}")
+    templates = tresult.get("resourceTemplates")
+    require(
+        isinstance(templates, list),
+        f"resources/templates/list missing resourceTemplates array: {tresult}",
+    )
+    by_template = {
+        t.get("uriTemplate"): t for t in templates if isinstance(t, dict)
+    }
+    for tmpl in ("aida://pr/{n}", "aida://batch/{name}"):
+        require(tmpl in by_template, f"resources/templates/list missing {tmpl}: {templates}")
+
+    # Reading an expanded template URI returns a framed body (empty buckets
+    # are valid for a fresh project — we only assert the framing).
+    pr_body = read_resource_text(client, "aida://pr/1")
+    require("PR #1" in pr_body, f"pr resource has unexpected body: {pr_body}")
+    batch_body = read_resource_text(client, "aida://batch/demo")
+    require("Batch `demo`" in batch_body, f"batch resource has unexpected body: {batch_body}")
 
 
 def test_tool_error_envelope(client: McpClient) -> None:
