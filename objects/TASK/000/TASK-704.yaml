@@ -3,10 +3,14 @@ spec_id: TASK-704
 agreed_id: TASK-704
 title: 'burndown gate: park needs-design-signoff + operator-action tags (found dogfooding STORY-527)'
 description: 'Dogfooding /aida-burndown surfaced a gate gap: the pickability gate''s parking-tag set missed needs-design-signoff (STORY-493) and operator-action (STORY-497) — both human-gated but bounded+unblocked, so they slipped into ''ready''. Added needs-design-signoff/needs-design/operator-action to parking_tag(). Follow-on to STORY-527 (now Completed). trace:STORY-527'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:14:51.566256188Z
-modified_at: 2026-06-08T03:14:51.566256188Z
+modified_at: 2026-06-08T03:20:07.029745841Z
 req_type: Task
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-08T03:20:07.029745841Z
+  completion_sha: ed200d96f7b30181f66e967d8dbbe4576b050614
