@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:33:27.932411948Z
-modified_at: 2026-06-08T04:15:12.114398127Z
+modified_at: 2026-06-08T04:47:32.636202907Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -17,4 +17,8 @@ relationships:
 - rel_type: BlockedBy
   target_id: 019ea54a-2edb-7d82-bb9e-9ca3b3534973
   created_at: 2026-06-08T04:15:12.114392049Z
+  created_by: joe
+- rel_type: BlockedBy
+  target_id: 019ea54a-4fdf-71a0-b8db-f90d6ff34b03
+  created_at: 2026-06-08T04:47:32.636195724Z
   created_by: joe
