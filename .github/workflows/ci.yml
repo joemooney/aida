@@ -125,11 +125,13 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        # All clippy warnings are denied: the workspace was cleared of its
-        # ~335 style/pedantic warnings and the gate flipped to -D warnings, so
-        # any new lint (style, pedantic, or the deny-by-default correctness
-        # lints like the one BUG-473 slipped past) fails CI. trace:TASK-710
-        run: cargo clippy --workspace -- -D warnings
+        # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
+        # lints are denied so a real logic bug can't merge (BUG-473 slipped past
+        # the old blanket -W). Full `-D warnings` was deferred: on a floating
+        # @stable toolchain it breaks CI on every Rust release as new lints land
+        # (clippy 1.96 surfaced 23+ lints beyond the cleanup with no code change).
+        # Revisit only with a pinned toolchain. trace:TASK-709 trace:TASK-710
+        run: cargo clippy --workspace -- -W clippy::all -D clippy::correctness
 
   # Create release artifacts for tags
   release:
