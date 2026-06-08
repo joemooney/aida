@@ -793,6 +793,19 @@ impl<'a> McpServer<'a> {
             "read_brief" => self.tool_read_brief(&arguments),
             "ack_brief" => self.tool_ack_brief(&arguments),
 
+            // Queue tools — STORY-532 (EPIC-27). Mirror the `aida queue`
+            // CLI surface so agents can manage the work queue over MCP
+            // instead of shelling out. trace:EPIC-27
+            "queue_list" => self.tool_queue_list(&arguments),
+            "queue_add" => self.tool_queue_add(&arguments),
+            "queue_work" => self.tool_queue_work(&arguments),
+            "queue_done" => self.tool_queue_done(&arguments),
+            "queue_next" => self.tool_queue_next(&arguments),
+            "queue_progress" => self.tool_queue_progress(&arguments),
+            "queue_rework" => self.tool_queue_rework(&arguments),
+            "queue_move" => self.tool_queue_move(&arguments),
+            "queue_remove" => self.tool_queue_remove(&arguments),
+
             _ => Err(format!("Unknown tool: {}", tool_name)),
         };
 
@@ -2596,6 +2609,606 @@ impl<'a> McpServer<'a> {
     }
 
     // ========================================================================
+    // Queue tool implementations — STORY-532 (EPIC-27)
+    //
+    // These mirror the `aida queue <subcommand>` CLI surface so MCP-speaking
+    // agents can manage the work queue without shelling out. They reuse the
+    // same underlying `Storage::queue_*` library functions the CLI handlers
+    // call (no subprocess to `aida`), and resolve the queue `user_id` through
+    // `crate::current_user_id` exactly like the CLI — so MCP and CLI see the
+    // same queue (BUG-89 identity rule). trace:EPIC-27
+    // ========================================================================
+
+    /// Resolve the queue `user_id` the same way every CLI queue path does:
+    /// `user` arg → AIDA_USER → USER → USERNAME → "default". trace:EPIC-27
+    fn queue_user_id(&self, args: &Value) -> String {
+        crate::current_user_id(args.get("user").and_then(|v| v.as_str()))
+    }
+
+    /// Resolve a requirement by UUID or SPEC-ID (the CLI's two-step lookup).
+    /// trace:EPIC-27
+    fn resolve_requirement<'s>(
+        store: &'s aida_core::RequirementsStore,
+        id: &str,
+    ) -> Result<&'s Requirement, String> {
+        if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+            store.requirements.iter().find(|r| r.id == uuid)
+        } else {
+            store.get_requirement_by_spec_id(id)
+        }
+        .ok_or_else(|| format!("Requirement '{}' not found", id))
+    }
+
+    fn display_id_of(req: &Requirement) -> String {
+        req.agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| "???".to_string())
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_list(&self, args: &Value) -> Result<String, String> {
+        let user_id = self.queue_user_id(args);
+        let include_completed = args
+            .get("include_completed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let include_terminal = args
+            .get("include_terminal")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let role = args.get("for").and_then(|v| v.as_str());
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        let entries = self
+            .storage
+            .queue_list(&user_id, include_completed)
+            .map_err(|e| e.to_string())?;
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // Same role-filter resolution as `aida queue list` (BUG-87). MCP has
+        // no shell role context, so the active-role default is None — pass
+        // `for` to scope. trace:EPIC-27
+        let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+        let (role_filter, only_unrouted) =
+            crate::resolve_queue_role_filter(role, all, session_role.as_deref());
+
+        let mut lines: Vec<String> = Vec::new();
+        let mut shown = 0usize;
+        for entry in &entries {
+            if !crate::entry_matches_role_filter(
+                entry.for_role.as_deref(),
+                role_filter.as_deref(),
+                only_unrouted,
+            ) {
+                continue;
+            }
+            let req = store
+                .requirements
+                .iter()
+                .find(|r| r.id == entry.requirement_id);
+            // TASK-46: hide terminal-status entries unless include_terminal.
+            if let Some(r) = req {
+                if !include_terminal && crate::is_terminal_status(&r.status) {
+                    continue;
+                }
+            }
+            shown += 1;
+            let (disp, title, status) = match req {
+                Some(r) => (
+                    Self::display_id_of(r),
+                    r.title.clone(),
+                    r.status.to_string(),
+                ),
+                None => (
+                    entry.requirement_id.to_string(),
+                    "(unknown requirement)".to_string(),
+                    "?".to_string(),
+                ),
+            };
+            let routing = entry
+                .for_role
+                .as_deref()
+                .map(|r| format!(" [for:{}]", r))
+                .unwrap_or_default();
+            lines.push(format!(
+                "{}. [{}] {} ({}){}",
+                shown, disp, title, status, routing
+            ));
+        }
+
+        if shown == 0 {
+            return Ok(format!("Queue is empty for user '{}'.", user_id));
+        }
+        Ok(format!(
+            "Queue for '{}' ({} item{}):\n{}",
+            user_id,
+            shown,
+            if shown == 1 { "" } else { "s" },
+            lines.join("\n")
+        ))
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_add(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let top = args.get("top").and_then(|v| v.as_bool()).unwrap_or(false);
+        let note = args
+            .get("note")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        // BUG-18 routing: `for` = "any" → unrouted; an explicit role routes;
+        // absent falls back to the active session role (if any). trace:EPIC-27
+        let for_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
+            Some("any") => None,
+            Some(role) => Some(role.to_string()),
+            None => std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+        };
+        let for_scope = args
+            .get("scope")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
+        let title = req.title.clone();
+
+        // TASK-45: refuse re-queueing terminal work without force.
+        if crate::is_terminal_status(&req.status) && !force {
+            return Err(format!(
+                "{} is {} — re-queueing closed work is usually a mistake. \
+                 Pass `force: true` if you really mean to re-queue it.",
+                display, req.status
+            ));
+        }
+
+        let position = if top {
+            let entries = self
+                .storage
+                .queue_list(&user_id, true)
+                .map_err(|e| e.to_string())?;
+            entries.first().map(|e| e.position - 1000).unwrap_or(1000)
+        } else {
+            i64::MAX // backend resolves to max+1000
+        };
+
+        let entry = aida_core::QueueEntry {
+            user_id: user_id.clone(),
+            requirement_id: req_id,
+            position,
+            added_by: user_id.clone(),
+            note,
+            added_at: chrono::Utc::now(),
+            for_role: for_role.clone(),
+            for_scope,
+            for_session: None,
+            added_by_machine: None,
+        };
+        self.storage.queue_add(entry).map_err(|e| e.to_string())?;
+        crate::record_role_activity(&spec_id, "queue-add");
+
+        let routing = for_role
+            .as_deref()
+            .map(|r| format!(" [for:{}]", r))
+            .unwrap_or_default();
+        Ok(format!("Added {} ({}) to queue{}", display, title, routing))
+    }
+
+    // trace:EPIC-27
+    //
+    // `aida queue work` launches a Claude session in a fresh worktree — an
+    // act that cannot (and should not) happen inside the MCP server process.
+    // The MCP tool is therefore a metadata-only PEEK: it resolves the item
+    // that `aida queue work` WOULD pick up (the named id, or the head of the
+    // role queue) and returns it plus the routed role, so an agent can decide
+    // and then run the CLI to actually launch. This is the read-tier mirror
+    // of the resolver, not the launcher.
+    fn tool_queue_work(&self, args: &Value) -> Result<String, String> {
+        let user_id = self.queue_user_id(args);
+        let role = args.get("for").and_then(|v| v.as_str());
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // Explicit id → resolve that specific spec.
+        if let Some(id) = args.get("id").and_then(|v| v.as_str()) {
+            let req = Self::resolve_requirement(&store, id)?;
+            let display = Self::display_id_of(req);
+            let entries = self
+                .storage
+                .queue_list(&user_id, false)
+                .map_err(|e| e.to_string())?;
+            let queued = entries.iter().find(|e| e.requirement_id == req.id);
+            return match queued {
+                Some(entry) => Ok(format!(
+                    "Pickup target: {} ({}) [status:{}{}]\nRun `aida queue work {}` to launch a session.",
+                    display,
+                    req.title,
+                    req.status,
+                    entry
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(", for:{}", r))
+                        .unwrap_or_default(),
+                    display
+                )),
+                None => Err(format!(
+                    "{} is {} and not currently queued — queue it first (`aida queue add {}`).",
+                    display, req.status, display
+                )),
+            };
+        }
+
+        // No id → peek the head of the (role-filtered) queue, mirroring the
+        // no-arg `aida queue work` head pickup. trace:EPIC-27
+        let entries = self
+            .storage
+            .queue_list(&user_id, false)
+            .map_err(|e| e.to_string())?;
+        let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+        let (role_filter, only_unrouted) =
+            crate::resolve_queue_role_filter(role, all, session_role.as_deref());
+        let head = entries
+            .iter()
+            .filter(|e| {
+                crate::entry_matches_role_filter(
+                    e.for_role.as_deref(),
+                    role_filter.as_deref(),
+                    only_unrouted,
+                )
+            })
+            .find(|e| {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == e.requirement_id)
+                    .map(|r| !crate::is_terminal_status(&r.status))
+                    .unwrap_or(true)
+            });
+        match head {
+            Some(entry) => {
+                let req = store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == entry.requirement_id);
+                let (disp, title, status) = match req {
+                    Some(r) => (
+                        Self::display_id_of(r),
+                        r.title.clone(),
+                        r.status.to_string(),
+                    ),
+                    None => (entry.requirement_id.to_string(), String::new(), "?".into()),
+                };
+                Ok(format!(
+                    "Next pickup: {} ({}) [status:{}{}]\nRun `aida queue work` to launch a session.",
+                    disp,
+                    title,
+                    status,
+                    entry
+                        .for_role
+                        .as_deref()
+                        .map(|r| format!(", for:{}", r))
+                        .unwrap_or_default(),
+                ))
+            }
+            None => Ok("Queue is empty — nothing to pick up.".to_string()),
+        }
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_done(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
+
+        // STORY-86: queue done flips to Done (work finished on a branch), not
+        // Completed — the auto-bump on merge advances Done → Completed. Stamp
+        // implementation_info the same way the CLI path does. trace:EPIC-27
+        let now = chrono::Utc::now();
+        let completer = crate::get_default_author();
+        let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
+        self.storage
+            .update_atomically(|s| {
+                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                    r.set_status_from_str("Done");
+                    r.modified_at = now;
+                    let info = r
+                        .implementation_info
+                        .get_or_insert_with(aida_core::ImplementationInfo::default);
+                    info.implemented = true;
+                    info.implemented_at.get_or_insert(now);
+                    if info.implemented_by.is_none() {
+                        info.implemented_by = Some(completer.clone());
+                    }
+                    if let Some(ref tool) = source_tool {
+                        info.source_tool.get_or_insert_with(|| tool.clone());
+                    }
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        self.storage
+            .queue_remove(&user_id, &req_id)
+            .map_err(|e| e.to_string())?;
+        crate::record_role_activity(&spec_id, "done");
+        crate::update_manifest_for_status(&spec_id, "Done");
+
+        Ok(format!("{} marked done and removed from queue.", display))
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_next(&self, args: &Value) -> Result<String, String> {
+        // `next` is "peek the head" — the same resolution as the no-id
+        // `queue_work` peek, so delegate to it. trace:EPIC-27
+        let mut peek_args = args.clone();
+        if let Some(obj) = peek_args.as_object_mut() {
+            obj.remove("id");
+        }
+        self.tool_queue_work(&peek_args)
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_progress(&self, args: &Value) -> Result<String, String> {
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+
+        // Resolve the spec set from a `batch:NAME` tag (the manifest/session
+        // source the CLI uses needs cwd + leases, which MCP has no handle on;
+        // batch + explicit spec ids are the portable axes). trace:EPIC-27
+        let specs: Vec<String> = if let Some(batch) = args.get("batch").and_then(|v| v.as_str()) {
+            let tag = format!("batch:{}", batch);
+            let members: Vec<String> = store
+                .requirements
+                .iter()
+                .filter(|r| r.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)))
+                .map(|r| r.display_id())
+                .collect();
+            if members.is_empty() {
+                return Ok(format!(
+                    "No requirements tagged `batch:{}` — tag members via update_requirement.",
+                    batch
+                ));
+            }
+            members
+        } else if let Some(arr) = args.get("specs").and_then(|v| v.as_array()) {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        } else {
+            return Err(
+                "queue_progress needs `batch: <name>` or `specs: [<id>, ...]` to define the \
+                 set to report on (session-manifest progress is CLI-only)."
+                    .to_string(),
+            );
+        };
+
+        // Bucket by live status (same buckets as `aida queue progress`).
+        // trace:EPIC-27
+        let (mut shipped, mut in_flight, mut working, mut remaining) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for spec in &specs {
+            let Some(req) = store.get_requirement_by_spec_id(spec) else {
+                continue;
+            };
+            let disp = req.display_id();
+            match req.status {
+                RequirementStatus::Completed | RequirementStatus::Rejected => shipped.push(disp),
+                RequirementStatus::Done => in_flight.push(disp),
+                RequirementStatus::InProgress => working.push(disp),
+                _ => remaining.push(disp),
+            }
+        }
+        let total = shipped.len() + in_flight.len() + working.len() + remaining.len();
+        let fmt = |label: &str, items: &[String]| {
+            if items.is_empty() {
+                format!("{}: 0", label)
+            } else {
+                format!("{}: {} ({})", label, items.len(), items.join(", "))
+            }
+        };
+        Ok(format!(
+            "Progress ({} item{}):\n{}\n{}\n{}\n{}",
+            total,
+            if total == 1 { "" } else { "s" },
+            fmt("Shipped", &shipped),
+            fmt("In flight", &in_flight),
+            fmt("Working now", &working),
+            fmt("Remaining", &remaining),
+        ))
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_rework(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+        let reason = args.get("reason").and_then(|v| v.as_str());
+        let status_override = args.get("status").and_then(|v| v.as_str());
+
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
+        let title = req.title.clone();
+        let current_status = req.status.clone();
+
+        // Smart target-status resolution (`--status` wins). trace:EPIC-27
+        let target_status: Option<RequirementStatus> = match status_override {
+            Some(s) => Some(parse_status(s).ok_or_else(|| format!("invalid status '{}'", s))?),
+            None => crate::rework_smart_target(&current_status),
+        };
+
+        // Terminal-status guard (mirrors the CLI). trace:EPIC-27
+        if matches!(
+            current_status,
+            RequirementStatus::Completed | RequirementStatus::Rejected
+        ) && !force
+        {
+            return Err(format!(
+                "{} is {} — re-opening closed work is usually a mistake. \
+                 Pass `force: true` if you really mean to rework it.",
+                display, current_status
+            ));
+        }
+        if matches!(current_status, RequirementStatus::InProgress) && !force {
+            return Err(format!(
+                "{} is already In Progress — pass `force: true` to re-queue it anyway.",
+                display
+            ));
+        }
+
+        let mut summary = String::new();
+        if let Some(ref new_status) = target_status {
+            if new_status != &current_status {
+                let new_status = new_status.clone();
+                let now = chrono::Utc::now();
+                self.storage
+                    .update_atomically(|s| {
+                        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                            r.set_status_from_str(&format!("{:?}", new_status));
+                            r.modified_at = now;
+                        }
+                    })
+                    .map_err(|e| e.to_string())?;
+                crate::record_role_activity(&spec_id, "rework");
+                crate::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
+                summary.push_str(&format!(
+                    "{} status: {} → {}\n",
+                    display, current_status, new_status
+                ));
+            }
+        }
+
+        // Optional audit comment.
+        if let Some(reason_text) = reason {
+            let author = crate::get_default_author();
+            let comment = aida_core::Comment::new(author, reason_text.to_string());
+            self.storage
+                .update_atomically(|s| {
+                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                        r.add_comment(comment);
+                    }
+                })
+                .map_err(|e| e.to_string())?;
+        }
+
+        // Routing: `for` wins, else active role, else unrouted. trace:EPIC-27
+        let for_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
+            Some("any") => None,
+            Some(role) => Some(role.to_string()),
+            None => std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+        };
+        let entry = aida_core::QueueEntry {
+            user_id: user_id.clone(),
+            requirement_id: req_id,
+            position: i64::MAX,
+            added_by: user_id.clone(),
+            note: reason.map(|r| r.to_string()),
+            added_at: chrono::Utc::now(),
+            for_role: for_role.clone(),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        self.storage.queue_add(entry).map_err(|e| e.to_string())?;
+        crate::record_role_activity(&spec_id, "queue-add");
+
+        let routing = for_role
+            .as_deref()
+            .map(|r| format!(" [for:{}]", r))
+            .unwrap_or_default();
+        summary.push_str(&format!("Queued {} ({}){}", display, title, routing));
+        Ok(summary)
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_move(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let top = args.get("top").and_then(|v| v.as_bool()).unwrap_or(false);
+        let bottom = args
+            .get("bottom")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let before = args.get("before").and_then(|v| v.as_str());
+        let after = args.get("after").and_then(|v| v.as_str());
+
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let req_id = req.id;
+        let display = Self::display_id_of(req);
+
+        let entries = self
+            .storage
+            .queue_list(&user_id, true)
+            .map_err(|e| e.to_string())?;
+        if !entries.iter().any(|e| e.requirement_id == req_id) {
+            return Err(format!("{} is not in the queue.", display));
+        }
+
+        let new_position = if top {
+            entries.first().map(|e| e.position - 1000).unwrap_or(0)
+        } else if bottom {
+            entries.last().map(|e| e.position + 1000).unwrap_or(1000)
+        } else if let Some(before_id) = before {
+            let before_req = Self::resolve_requirement(&store, before_id)?;
+            if before_req.id == req_id {
+                return Err("`before` target is the same as the moved item".to_string());
+            }
+            entries
+                .iter()
+                .find(|e| e.requirement_id == before_req.id)
+                .ok_or_else(|| format!("{} is not in the queue", before_id))
+                .map(|e| e.position - 1)?
+        } else if let Some(after_id) = after {
+            let after_req = Self::resolve_requirement(&store, after_id)?;
+            if after_req.id == req_id {
+                return Err("`after` target is the same as the moved item".to_string());
+            }
+            entries
+                .iter()
+                .find(|e| e.requirement_id == after_req.id)
+                .ok_or_else(|| format!("{} is not in the queue", after_id))
+                .map(|e| e.position + 1)?
+        } else {
+            return Err(
+                "specify a destination: `top`, `bottom`, `before: <id>`, or `after: <id>`"
+                    .to_string(),
+            );
+        };
+
+        self.storage
+            .queue_reorder(&user_id, &[(req_id, new_position)])
+            .map_err(|e| e.to_string())?;
+        Ok(format!("Moved {} in queue.", display))
+    }
+
+    // trace:EPIC-27
+    fn tool_queue_remove(&self, args: &Value) -> Result<String, String> {
+        let id = required_string(args, "id")?;
+        let user_id = self.queue_user_id(args);
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let req = Self::resolve_requirement(&store, id)?;
+        let display = Self::display_id_of(req);
+        self.storage
+            .queue_remove(&user_id, &req.id)
+            .map_err(|e| e.to_string())?;
+        Ok(format!("Removed {} from queue.", display))
+    }
+
+    // ========================================================================
     // Resource implementations
     // ========================================================================
 
@@ -2995,15 +3608,30 @@ pub fn tool_min_profile(tool_name: &str) -> McpProfile {
         | "list_active_leases"
         | "list_directives"
         | "list_briefs"
-        | "read_brief" => McpProfile::ReadOnly,
+        | "read_brief"
+        // STORY-532 (EPIC-27): pure-read queue tools (peek / list / resolve).
+        // queue_work over MCP is a metadata-only peek (it never launches a
+        // session — that is a CLI-only act), so it lives in the read tier.
+        // trace:EPIC-27
+        | "queue_list"
+        | "queue_next"
+        | "queue_progress"
+        | "queue_work" => McpProfile::ReadOnly,
 
         // ---- Coordination-substrate writes (coordination tier) ----
         "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
         | "escalate_punt" | "file_finding" | "triage_finding" | "claim_task" | "release_task"
-        | "post_directive" | "ack_directive" | "ack_brief" => McpProfile::Coordination,
+        | "post_directive" | "ack_directive" | "ack_brief"
+        // STORY-532 (EPIC-27): queue housekeeping (reorder / drop) mutates only
+        // the queue, not spec status — coordination tier. trace:EPIC-27
+        | "queue_move" | "queue_remove" => McpProfile::Coordination,
 
         // ---- Spec-graph writes (operator tier) ----
-        "add_requirement" | "update_requirement" => McpProfile::Operator,
+        // STORY-532 (EPIC-27): queue_add commits a spec to the execution
+        // pipeline (advisor-authority act) and queue_done / queue_rework flip
+        // spec status — all operator tier. trace:EPIC-27
+        "add_requirement" | "update_requirement" | "queue_add" | "queue_done"
+        | "queue_rework" => McpProfile::Operator,
 
         // Unknown / not-yet-classified tools: gate at the most restrictive
         // non-full tier so they never leak into a conservative profile.
@@ -3171,7 +3799,7 @@ fn text_envelope_output_schema(payload_description: &str) -> Value {
 /// `aida mcp register-agent --print-tools` can render it without spinning up
 /// the JSON-RPC loop.
 pub fn tool_descriptors() -> Value {
-    json!([
+    let mut descriptors = json!([
         // ---- Spec graph ----
         {
             "name": "list_requirements",
@@ -4034,6 +4662,175 @@ pub fn tool_descriptors() -> Value {
             },
             "outputSchema": text_envelope_output_schema(
                 "a confirmation line `acked: <project-relative .acked path>` or idempotent `already_acked: <project-relative .acked path>`. On failure, the envelope sets `isError: true` with a human-readable message."
+            )
+        }
+    ]);
+    // STORY-532 (EPIC-27): the queue tool descriptors live in their own
+    // `json!` array (the single combined literal blew the macro recursion
+    // limit) and are appended here. trace:EPIC-27
+    if let (Some(base), Some(queue)) = (
+        descriptors.as_array_mut(),
+        queue_tool_descriptors().as_array(),
+    ) {
+        base.extend(queue.iter().cloned());
+    }
+    descriptors
+}
+
+// STORY-532 (EPIC-27): queue tool descriptors, factored into their own
+// `json!` array so the combined `tool_descriptors()` literal stays under the
+// macro recursion limit. trace:EPIC-27
+fn queue_tool_descriptors() -> Value {
+    json!([
+        // ---- Queue (STORY-532 / EPIC-27) ----
+        {
+            "name": "queue_list",
+            "description": "List items in the work queue. Mirrors `aida queue list`. Resolves the queue user identity like the CLI (user arg → AIDA_USER → USER → USERNAME → default), so MCP and CLI see the same queue. Terminal-status entries are hidden unless `include_terminal` is set.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "user": { "type": "string", "description": "Override the queue user id (defaults to the shell identity).", "example": "alice" },
+                    "for": { "type": "string", "description": "Filter to items routed to this role (e.g. `implementer`). Pass `any` for UNROUTED items.", "example": "implementer" },
+                    "all": { "type": "boolean", "description": "Show all roles (override any active-role default filter).", "example": true },
+                    "include_completed": { "type": "boolean", "description": "Include Completed requirements in the underlying load (default false).", "example": false },
+                    "include_terminal": { "type": "boolean", "description": "Show Completed/Rejected entries in the listing (default hides them).", "example": false }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Queue for '<user>' (N items):` followed by `N. [SPEC-ID] <title> (<status>) [for:<role>]` lines, or `Queue is empty for user '<user>'.`"
+            )
+        },
+        {
+            "name": "queue_add",
+            "description": "Add a requirement to the work queue. Mirrors `aida queue add`. Routes to the role named by `for` (or the active session role; pass `for: any` to stay unrouted). Refuses to queue Completed/Rejected work unless `force` is set.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to queue.", "example": "STORY-42" },
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
+                    "top": { "type": "boolean", "description": "Add to the top of the queue (default appends to the bottom).", "example": true },
+                    "note": { "type": "string", "description": "Note explaining why this was queued.", "example": "blocks the release" },
+                    "for": { "type": "string", "description": "Route to a specific role queue; `any` keeps it unrouted.", "example": "implementer" },
+                    "scope": { "type": "string", "description": "Restrict routing to sessions whose lease scope matches (e.g. an EPIC id).", "example": "EPIC-20" },
+                    "force": { "type": "boolean", "description": "Bypass the guard that refuses queueing a Completed/Rejected requirement.", "example": true }
+                },
+                "required": ["id"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Added <SPEC-ID> (<title>) to queue [for:<role>]`. On a terminal-status spec without `force`, the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "queue_work",
+            "description": "Peek at the item `aida queue work` WOULD pick up. With `id`, resolves that specific queued spec; with no `id`, peeks the head of the (role-filtered) queue. This is a metadata-only resolver — launching a Claude session is a CLI-only act, so this never starts work. Run `aida queue work` from a shell to actually launch.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "A queued requirement id to resolve as the pickup target. Omit to peek the queue head.", "example": "STORY-42" },
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
+                    "for": { "type": "string", "description": "Filter the head peek to this role; `any` for unrouted.", "example": "implementer" },
+                    "all": { "type": "boolean", "description": "Peek across all roles.", "example": true }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Next pickup: <SPEC-ID> (<title>) [status:...]` / `Pickup target: ...` with a `Run \\`aida queue work\\`` hint, or `Queue is empty — nothing to pick up.`"
+            )
+        },
+        {
+            "name": "queue_done",
+            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to mark done.", "example": "STORY-42" },
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" }
+                },
+                "required": ["id"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `<SPEC-ID> marked done and removed from queue.`"
+            )
+        },
+        {
+            "name": "queue_next",
+            "description": "Peek the top item in the queue without removing it. Mirrors `aida queue next`. Equivalent to a no-`id` queue_work peek.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
+                    "for": { "type": "string", "description": "Filter to this role; `any` for unrouted.", "example": "implementer" },
+                    "all": { "type": "boolean", "description": "Peek across all roles.", "example": true }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "either `Next pickup: <SPEC-ID> (<title>) [status:...]`, or `Queue is empty — nothing to pick up.`"
+            )
+        },
+        {
+            "name": "queue_progress",
+            "description": "Bucketed progress (Shipped / In flight / Working now / Remaining) over a set of specs. Mirrors `aida queue progress`. Define the set with `batch: <name>` (a `batch:NAME` tag) or `specs: [<id>, ...]`. Session-manifest progress is CLI-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "batch": { "type": "string", "description": "Report on members of this `batch:NAME` tag.", "example": "fall-cleanup" },
+                    "specs": { "type": "array", "items": { "type": "string" }, "description": "Explicit list of requirement ids to report on.", "example": ["STORY-42", "TASK-7"] }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a `Progress (N items):` header followed by `Shipped:` / `In flight:` / `Working now:` / `Remaining:` count lines (each listing member ids)."
+            )
+        },
+        {
+            "name": "queue_rework",
+            "description": "Re-open a spec: flip its status, route it to a role's queue, and optionally capture a reason. Mirrors `aida queue rework` (metadata-only — it does not launch a session). Smart status transitions (Planned→InProgress, Done→InProgress, Rejected→Approved, …) unless overridden with `status`. Terminal-status and already-InProgress re-opens require `force`.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to rework.", "example": "STORY-42" },
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
+                    "for": { "type": "string", "description": "Override the routing role (default: active role).", "example": "implementer" },
+                    "status": { "type": "string", "description": "Override the smart target status.", "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"], "example": "in-progress" },
+                    "reason": { "type": "string", "description": "Capture a comment on the spec at rework time (audit trail).", "example": "reviewer requested changes" },
+                    "force": { "type": "boolean", "description": "Bypass the terminal-status and already-in-progress guards.", "example": true }
+                },
+                "required": ["id"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "an optional `<SPEC-ID> status: <old> → <new>` line followed by `Queued <SPEC-ID> (<title>) [for:<role>]`. On a guarded re-open without `force`, the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "queue_move",
+            "description": "Move a queue item to a new position. Mirrors `aida queue move`. Specify exactly one destination: `top`, `bottom`, `before: <id>`, or `after: <id>`.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to move.", "example": "STORY-42" },
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
+                    "top": { "type": "boolean", "description": "Move to the front of the queue.", "example": true },
+                    "bottom": { "type": "boolean", "description": "Move to the back of the queue.", "example": true },
+                    "before": { "type": "string", "description": "Move immediately before this requirement id.", "example": "STORY-42" },
+                    "after": { "type": "string", "description": "Move immediately after this requirement id.", "example": "STORY-42" }
+                },
+                "required": ["id"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Moved <SPEC-ID> in queue.` On a spec not in the queue, or with no destination, the envelope sets `isError: true`."
+            )
+        },
+        {
+            "name": "queue_remove",
+            "description": "Remove a requirement from the queue. Mirrors `aida queue remove`. Does not change the spec's status.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to remove.", "example": "STORY-42" },
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" }
+                },
+                "required": ["id"]
+            },
+            "outputSchema": text_envelope_output_schema(
+                "a confirmation line `Removed <SPEC-ID> from queue.`"
             )
         }
     ])
@@ -7086,5 +7883,323 @@ mod tests {
                 McpProfile::Coordination
             );
         }
+    }
+
+    // =====================================================================
+    // STORY-532 (EPIC-27): queue MCP tools
+    // =====================================================================
+
+    /// A git-canonical-backed server — the queue layer (`Storage::queue_*`)
+    /// only works against a SQLite or directory backend, so the queue tests
+    /// need this rather than the plain-YAML `mk_server`. trace:EPIC-27
+    fn mk_git_server(dir: &Path) -> McpServer<'static> {
+        use aida_core::db::{DatabaseBackend, GitBackend};
+        let store_dir = dir.join(".aida-store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+        let seed = GitBackend::new(&store_dir).unwrap();
+        seed.save(&aida_core::RequirementsStore::new()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(&store_dir)));
+        McpServer::new(storage, dir.to_path_buf())
+    }
+
+    /// Seed a requirement via the MCP add tool (works against the git store)
+    /// and return its SPEC-ID. trace:EPIC-27
+    fn seed_req(server: &McpServer<'static>, title: &str) -> String {
+        let resp = server
+            .tool_add_requirement(&json!({
+                "title": title,
+                "description": "queue-test seed",
+                "type": "task",
+            }))
+            .expect("seed add_requirement failed");
+        added_spec_id(&resp).to_string()
+    }
+
+    // Queue tests pass `user` explicitly (rather than relying on AIDA_USER /
+    // USER env) so they stay deterministic under cargo's parallel test
+    // runner — env mutation would race across threads. trace:EPIC-27
+    const QU: &str = "queue-test-user";
+
+    #[test]
+    fn queue_add_list_remove_roundtrip() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+
+        let spec = seed_req(&server, "Queue roundtrip");
+
+        // Empty to start.
+        let listed = server.tool_queue_list(&json!({ "user": QU })).unwrap();
+        assert!(listed.contains("Queue is empty"), "listed: {listed}");
+
+        // Add.
+        let added = server
+            .tool_queue_add(&json!({ "id": spec, "for": "implementer", "user": QU }))
+            .unwrap();
+        assert!(added.contains(&spec), "added: {added}");
+        assert!(added.contains("for:implementer"), "added: {added}");
+
+        // List shows it.
+        let listed = server.tool_queue_list(&json!({ "user": QU })).unwrap();
+        assert!(listed.contains(&spec), "listed: {listed}");
+        assert!(listed.contains("Queue roundtrip"), "listed: {listed}");
+
+        // Remove.
+        let removed = server
+            .tool_queue_remove(&json!({ "id": spec, "user": QU }))
+            .unwrap();
+        assert!(removed.contains(&spec), "removed: {removed}");
+
+        let listed = server.tool_queue_list(&json!({ "user": QU })).unwrap();
+        assert!(listed.contains("Queue is empty"), "listed: {listed}");
+    }
+
+    #[test]
+    fn queue_add_refuses_terminal_without_force() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let spec = seed_req(&server, "Terminal spec");
+        force_status(&server, &spec, RequirementStatus::Completed);
+
+        let err = server
+            .tool_queue_add(&json!({ "id": spec }))
+            .expect_err("should refuse terminal without force");
+        assert!(err.contains("re-queueing closed work"), "err: {err}");
+
+        // force overrides.
+        let ok = server
+            .tool_queue_add(&json!({ "id": spec, "force": true }))
+            .expect("force should allow queueing terminal");
+        assert!(ok.contains(&spec), "ok: {ok}");
+    }
+
+    #[test]
+    fn queue_next_and_work_peek_the_head() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let u = "queue-peek-user";
+
+        // Empty: both report nothing.
+        let next = server.tool_queue_next(&json!({ "user": u })).unwrap();
+        assert!(next.contains("Queue is empty"), "next: {next}");
+
+        let a = seed_req(&server, "First");
+        let b = seed_req(&server, "Second");
+        server
+            .tool_queue_add(&json!({ "id": a, "for": "any", "user": u }))
+            .unwrap();
+        server
+            .tool_queue_add(&json!({ "id": b, "for": "any", "user": u }))
+            .unwrap();
+
+        // `all: true` bypasses any ambient active-role default filter so the
+        // unrouted (`for: any`) entries are visible regardless of the test
+        // shell's AIDA_SESSION_ROLE. trace:EPIC-27
+        let next = server
+            .tool_queue_next(&json!({ "user": u, "all": true }))
+            .unwrap();
+        assert!(next.contains(&a), "head should be first-added: {next}");
+
+        // queue_work with no id mirrors the head peek.
+        let work = server
+            .tool_queue_work(&json!({ "user": u, "all": true }))
+            .unwrap();
+        assert!(work.contains(&a), "work peek: {work}");
+        assert!(work.contains("aida queue work"), "work hint: {work}");
+
+        // queue_work with an explicit queued id resolves that spec.
+        let work_b = server
+            .tool_queue_work(&json!({ "id": &b, "user": u }))
+            .unwrap();
+        assert!(work_b.contains(&b), "work_b: {work_b}");
+    }
+
+    #[test]
+    fn queue_done_flips_to_done_and_dequeues() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let u = "queue-done-user";
+
+        let spec = seed_req(&server, "To finish");
+        server
+            .tool_queue_add(&json!({ "id": &spec, "user": u }))
+            .unwrap();
+
+        let done = server
+            .tool_queue_done(&json!({ "id": &spec, "user": u }))
+            .unwrap();
+        assert!(done.contains("marked done"), "done: {done}");
+
+        // Status is Done, queue is empty.
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&spec).unwrap();
+        assert_eq!(req.status, RequirementStatus::Done);
+        assert!(req
+            .implementation_info
+            .as_ref()
+            .map(|i| i.implemented)
+            .unwrap_or(false));
+
+        let listed = server.tool_queue_list(&json!({ "user": u })).unwrap();
+        assert!(listed.contains("Queue is empty"), "listed: {listed}");
+    }
+
+    #[test]
+    fn queue_rework_flips_status_and_requeues() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let u = "queue-rework-user";
+
+        let spec = seed_req(&server, "Reworkable");
+        // Done → rework smart-targets InProgress.
+        force_status(&server, &spec, RequirementStatus::Done);
+
+        let resp = server
+            .tool_queue_rework(&json!({ "id": &spec, "for": "implementer", "reason": "PR review found issues", "user": u }))
+            .unwrap();
+        assert!(resp.contains("Done → In Progress"), "resp: {resp}");
+        assert!(resp.contains("Queued"), "resp: {resp}");
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&spec).unwrap();
+        assert_eq!(req.status, RequirementStatus::InProgress);
+        // Reason captured as a comment.
+        assert!(req.comments.iter().any(|c| c.content.contains("PR review")));
+
+        // It's back in the queue.
+        let listed = server.tool_queue_list(&json!({ "user": u })).unwrap();
+        assert!(listed.contains(&spec), "listed: {listed}");
+    }
+
+    #[test]
+    fn queue_rework_refuses_terminal_without_force() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let spec = seed_req(&server, "Closed spec");
+        force_status(&server, &spec, RequirementStatus::Rejected);
+
+        let err = server
+            .tool_queue_rework(&json!({ "id": &spec }))
+            .expect_err("should refuse terminal rework without force");
+        assert!(err.contains("re-opening closed work"), "err: {err}");
+    }
+
+    #[test]
+    fn queue_move_reorders() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let u = "queue-move-user";
+
+        let a = seed_req(&server, "Alpha");
+        let b = seed_req(&server, "Bravo");
+        let c = seed_req(&server, "Charlie");
+        for id in [&a, &b, &c] {
+            server
+                .tool_queue_add(&json!({ "id": id, "for": "any", "user": u }))
+                .unwrap();
+        }
+
+        // Move C to the top.
+        let moved = server
+            .tool_queue_move(&json!({ "id": &c, "top": true, "user": u }))
+            .unwrap();
+        assert!(moved.contains(&c), "moved: {moved}");
+
+        let next = server
+            .tool_queue_next(&json!({ "user": u, "all": true }))
+            .unwrap();
+        assert!(next.contains(&c), "C should now be the head: {next}");
+
+        // Moving a spec not in the queue errors.
+        let stray = seed_req(&server, "Stray");
+        let err = server
+            .tool_queue_move(&json!({ "id": &stray, "top": true, "user": u }))
+            .expect_err("non-queued move should error");
+        assert!(err.contains("not in the queue"), "err: {err}");
+
+        // No destination errors.
+        let err = server
+            .tool_queue_move(&json!({ "id": &a, "user": u }))
+            .expect_err("no destination should error");
+        assert!(err.contains("specify a destination"), "err: {err}");
+    }
+
+    #[test]
+    fn queue_progress_buckets_by_status() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+
+        let done = seed_req(&server, "Shipped one");
+        let inprog = seed_req(&server, "Working one");
+        let todo = seed_req(&server, "Remaining one");
+        force_status(&server, &done, RequirementStatus::Completed);
+        force_status(&server, &inprog, RequirementStatus::InProgress);
+        // todo stays Draft.
+
+        let resp = server
+            .tool_queue_progress(&json!({ "specs": [done, inprog, todo] }))
+            .unwrap();
+        assert!(resp.contains("Progress (3 items)"), "resp: {resp}");
+        assert!(resp.contains("Shipped: 1"), "resp: {resp}");
+        assert!(resp.contains("Working now: 1"), "resp: {resp}");
+        assert!(resp.contains("Remaining: 1"), "resp: {resp}");
+    }
+
+    #[test]
+    fn queue_progress_needs_a_source() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let err = server
+            .tool_queue_progress(&json!({}))
+            .expect_err("progress with no source should error");
+        assert!(err.contains("batch"), "err: {err}");
+    }
+
+    #[test]
+    fn queue_tools_are_in_descriptors_and_classified() {
+        let names: Vec<String> = tool_descriptors()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t.get("name").unwrap().as_str().unwrap().to_string())
+            .collect();
+        for t in [
+            "queue_list",
+            "queue_add",
+            "queue_work",
+            "queue_done",
+            "queue_next",
+            "queue_progress",
+            "queue_rework",
+            "queue_move",
+            "queue_remove",
+        ] {
+            assert!(names.contains(&t.to_string()), "missing descriptor: {t}");
+            // No queue tool may fall through to the Admin catch-all.
+            assert_ne!(
+                tool_min_profile(t),
+                McpProfile::Admin,
+                "{t} is unclassified"
+            );
+        }
+        // Read vs write tier sanity.
+        assert_eq!(tool_min_profile("queue_list"), McpProfile::ReadOnly);
+        assert_eq!(tool_min_profile("queue_work"), McpProfile::ReadOnly);
+        assert_eq!(tool_min_profile("queue_remove"), McpProfile::Coordination);
+        assert_eq!(tool_min_profile("queue_add"), McpProfile::Operator);
+    }
+
+    #[test]
+    fn queue_user_id_honors_explicit_user_arg() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        // Explicit `user` arg wins over any ambient env (deterministic under
+        // the parallel test runner). The env-fallback chain itself is covered
+        // by `current_user_id_*` tests in main.rs. trace:EPIC-27
+        assert_eq!(
+            server.queue_user_id(&json!({ "user": "explicit" })),
+            "explicit"
+        );
+        // With no arg, it never returns empty — resolves to *some* identity.
+        assert!(!server.queue_user_id(&json!({})).is_empty());
     }
 }
