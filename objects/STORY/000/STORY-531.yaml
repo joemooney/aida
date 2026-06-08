@@ -8,10 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T03:31:52.631747927Z
-modified_at: 2026-06-08T03:32:01.130482219Z
+modified_at: 2026-06-08T04:47:19.279664257Z
 req_type: Story
 tags:
-- needs-design-signoff
+- deferred:tier1-data
 relationships:
 - rel_type: Child
   target_id: 019e9826-5d9d-7f10-ab36-bd783796aae1
