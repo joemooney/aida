@@ -1,0 +1,41 @@
+id: 019eaa00-1276-7833-8087-692723218558
+spec_id: TASK-713
+agreed_id: TASK-713
+title: Role picker should stay scannable in narrow terminals
+description: |-
+  ## Problem
+
+  The interactive role picker used by `aida agent new` and related role-selection flows becomes hard to read when role descriptions wrap. In a normal terminal, each row is rendered as one long paragraph: the role name, scope, recency, and description all run together, and wrapped continuation lines lose indentation/association with the selected row. The selected item is visually difficult to track once adjacent descriptions span multiple lines.
+
+  Observed example from operator on 2026-06-08: `aida agent new claude` in `~/work/dumm2` showed roles such as advisor/product/implementer, but long descriptions wrapped across multiple terminal lines and made the prompt difficult to scan.
+
+  ## Desired direction
+
+  Improve the role picker presentation so the decision fields stay readable: role name, scope, activity recency, and the purpose/description should remain visually distinct even in narrower terminals. Consider color for role names and metadata when color is enabled, and consider a more TUI-like selector where arrow keys move selection without requiring the user to parse numbered wrapped paragraphs. Keep the implementation proportional; a well-formatted terminal list is acceptable if it solves the readability issue without pulling in excessive complexity.
+
+  ## Acceptance criteria
+
+  - [ ] `aida agent new <agent>` role selection remains scannable in common terminal widths, including around 80 columns. Wrapped descriptions are indented or otherwise visually associated with their role row.
+  - [ ] The selected row is easy to identify after wrapping; cursor/marker placement does not get visually separated from the role name.
+  - [ ] Role names and key metadata are visually distinct when color is enabled, while no-color output remains readable.
+  - [ ] Description text is bounded or progressively disclosed so long role purpose text does not dominate the whole picker.
+  - [ ] Keyboard behavior is documented by tests or covered by the existing interactive picker test strategy; non-interactive behavior remains unchanged.
+  - [ ] The stdout/stderr contract from TASK-644 is preserved: picker UI never corrupts eval-oriented stdout for `aida role enter`.
+
+  ## Notes
+
+  Related completed work: TASK-644 introduced the TTY role picker for `aida role enter`; TASK-646 reused it for `aida agent new`. This is a UX follow-up on the row layout and interaction polish, not a replacement for those completed tasks.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:29:51.990422340Z
+modified_at: 2026-06-09T01:29:51.990422340Z
+req_type: Task
+tags:
+- aida:agent:new
+- aida:role:enter
+- cli-ux
+- interactive
+- papercut
+- roles
