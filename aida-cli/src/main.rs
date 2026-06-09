@@ -64546,8 +64546,12 @@ fn handle_digest_command(
         );
     }
     let include_next = include_next.unwrap_or(true);
-    let include_process =
-        include_process.unwrap_or(!matches!(audience, digest::DigestAudience::Customer));
+    // operator is a CLI-surface lens (not a work narrative), so process/memory
+    // artifacts are off by default just like customer. trace:STORY-541
+    let include_process = include_process.unwrap_or(!matches!(
+        audience,
+        digest::DigestAudience::Customer | digest::DigestAudience::Operator
+    ));
     let opts = digest::DigestOptions {
         since,
         until,

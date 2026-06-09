@@ -51,10 +51,19 @@ This is the **advisor seat's** primary outward-facing artifact:
 | `customer`  | feature framing, release-centric       | hidden   | off     |
 | `team`      | technical depth, cluster-PR shape      | shown    | on      |
 | `self`      | full retrospective, memory + pivots    | shown    | on      |
+| `operator`  | CLI-surface diff: what you can now DO  | hidden   | off     |
 
 Customer is the **default** — and the audience to lead with when the user has
-not specified. Switching to team / self is a deliberate ask, not an implicit
-fallback.
+not specified. Switching to team / self / operator is a deliberate ask, not an
+implicit fallback.
+
+`operator` is the only **capabilities lens**: it answers "what changed in the
+CLI surface that I, the day-to-day user, can now do?" — not the work narrative.
+The CLI replaces the Released / Major-progress / Strategic sections with
+surface-grouped buckets: **New commands / Changed flags & behaviors / Fixes
+you'll notice / New skills**, value-framed with SPEC-IDs stripped. Reach for it
+when the user asks "what's new for me", "what changed in the CLI", "what can I
+do now that I couldn't last week".
 
 ## Workflow
 
@@ -78,6 +87,7 @@ If unclear, ask. The three concrete reads:
 - "Share with the world / friends / a colleague" → `--audience customer`
 - "Show the team where we are" → `--audience team`
 - "I want a retrospective for myself" → `--audience self`
+- "What's new in the CLI for me / what can I do now?" → `--audience operator`
 
 ### Step 3: Run the digest
 
@@ -89,6 +99,33 @@ Add `--format brief` when the user wants the single-paragraph TL;DR.
 Add `--format json` when they want machine-readable output.
 Add `--out <path>` to write to a file instead of stdout (useful for
 `docs/digests/` archives or release-notes drafts).
+
+### Step 3b: Operator lens — apply the Layer-2 value translation
+
+For `--audience operator`, the CLI emits the deterministic **Layer-1 candidate
+set** (run `--format json` to see the raw `capabilities` buckets): dev-noise
+already dropped, commits classified by surface, SPEC-IDs stripped. The CLI cannot
+do the non-deterministic part — judging user-impact and rewriting a dev-task
+subject into value — so that is **your** job before presenting:
+
+- **Re-judge the kept set by user IMPACT, not commit type.** The classifier keeps
+  `feat`/`fix` and drops `clippy`/`refactor`/`test`, but a kept commit may still
+  be invisible to the operator (internal MCP plumbing that changed no surface).
+  Drop those. Conversely a `fix` that reads dev-internal is often a real
+  user-facing crash/bug — keep + translate it.
+- **Rewrite each line from the CLI/value perspective, not the dev-task title:**
+  - New command → "you can now `aida X` — <what it does>."
+  - Changed flag/behavior → "`aida Y --z` now does W (was V)."
+  - Fix → "no longer <bad thing> when <case>." (e.g. `conflict.rs truncate
+    panics on non-ASCII` → "AIDA no longer crashes on spec descriptions with
+    emoji / non-ASCII.")
+- **Keep the surface grouping** (New commands / Changed flags & behaviors /
+  Fixes you'll notice / New skills) and keep SPEC-IDs out.
+
+The deterministic buckets are the floor; your translation is what makes the
+operator digest readable. (The committed-facts manifest + cached-narrative
+storage split described on STORY-541 is the durable version of this loop; today
+the Layer-1 set is recomputed from git per run.)
 
 ### Step 4: Present the result
 
