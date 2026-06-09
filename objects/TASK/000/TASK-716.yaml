@@ -11,12 +11,12 @@ description: |-
   3. DEEPER FIX (substrate-as-bouncer, prevents re-drift): where practical, have the docs point at  (now reflection-derived, STORY-538) as the canonical type/vocab source instead of re-hand-listing, so this can't silently drift again. Depends on STORY-538 (#691) landing.
 
   Acceptance: no user-facing surface lists a stale subset; either all 19 documented or the intentionally-hidden ones suppressed from schema/help consistently.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:04:00.191165207Z
-modified_at: 2026-06-09T02:28:24.893334863Z
+modified_at: 2026-06-09T02:31:07.213029856Z
 req_type: Task
 tags:
 - docs
@@ -35,3 +35,7 @@ comments:
   content: Commit fd2733d2e references this requirement
   created_at: 2026-06-09T02:28:24.893334863Z
   modified_at: 2026-06-09T02:28:24.893334863Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T02:31:07.213029856Z
+  completion_sha: 9ab26cadb6c7f2521208dd5053eec4da8d67845f

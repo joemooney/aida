@@ -3,12 +3,12 @@ spec_id: BUG-483
 agreed_id: BUG-483
 title: aida session end force-removes a worktree without checking other leases/agents share it
 description: 'Found by quality-sweep reviewer. session_end (main.rs:36687) probes for live claude processes inside the worktree (BUG-61) but never consults list_leases / agent_registry for ANOTHER registered session/agent sharing the same worktree_path, then runs ''git worktree remove --force'' unconditionally. BUG-416 already acknowledges two ''aida agent new'' sessions can share a worktree. When they do, ending one force-removes the dir out from under the peer → the peer''s next git/cargo op fails on a deleted path (TASK-0396 cross-worktree fingerprint hazard + BUG-108 ''(deleted)'' cwd). The claude-process probe misses a headless ''claude -p'' past the probe window or a non-claude tool. Fix: before remove, check no other live lease/agent covers the worktree_path; skip removal (or warn) if shared.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:14:04.248990774Z
-modified_at: 2026-06-09T01:14:04.248990774Z
+modified_at: 2026-06-09T02:31:07.213029856Z
 req_type: Bug
 tags:
 - from-review:quality-sweep
@@ -16,3 +16,7 @@ tags:
 - session
 - severity:medium
 - worktree
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T02:31:07.213029856Z
+  completion_sha: bd7246007e35863aeeef180c8468493960ffb5db
