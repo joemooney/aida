@@ -7,10 +7,16 @@ priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-25T19:48:24.400247266Z
-modified_at: 2026-06-09T04:18:05.703540858Z
+modified_at: 2026-06-09T05:00:51.467970895Z
 req_type: Functional
 relationships:
 - rel_type: Child
   target_id: 59d3cc0b-25a5-4076-8966-94b8ef4e36b1
 - rel_type: Parent
   target_id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
+comments:
+- id: 019eaac1-3d8b-7551-933a-da2a343fc044
+  author: joe
+  content: Commit d2b210540 references this requirement
+  created_at: 2026-06-09T05:00:51.467970895Z
+  modified_at: 2026-06-09T05:00:51.467970895Z
