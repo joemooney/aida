@@ -1,0 +1,40 @@
+id: 019eab19-7d45-7510-a8a3-f65e75733e7b
+spec_id: SPIKE-51
+agreed_id: SPIKE-51
+title: Can headless 'claude -p' invoke the disable-model-invocation /aida-burndown skill?
+description: |-
+  ## Question (gates STORY-545 implementation strategy)
+
+  STORY-545 ('aida burndown run', headless parallel overnight drain) has two implementation strategies:
+  - B (preferred): `aida burndown run` launches `claude -p \"/aida-burndown <selector>\"` and reuses the proven skill fan-out.
+  - A (fallback): CLI reimplements parallel headless worker fan-out in Rust.
+
+  B is far cheaper (no second fan-out engine to harden) BUT depends on an unknown: `/aida-burndown` is declared `disable-model-invocation: true`. Can a headless `claude -p` session invoke that skill at all — via an explicit `/aida-burndown` slash command in the prompt, or some headless flag — or does disable-model-invocation also block explicit/headless invocation?
+
+  ## Deliverable
+
+  - Determine whether headless `claude -p` can run `/aida-burndown` (explicit slash-command in the -p prompt, or documented headless skill-invocation path).
+  - If yes: confirm the skill's Agent-tool fan-out actually executes under headless `-p` (subagents spawn, worktrees isolate, PRs integrate) — not just that the command is accepted.
+  - If no: STORY-545 falls back to Strategy A; record why.
+
+  ## Method
+
+  - Read Claude Code docs on `claude -p` headless mode + skill/slash-command invocation + `disable-model-invocation` semantics.
+  - Empirical: `claude -p '/aida-burndown --status approved --dry-run'` (or equivalent) in a throwaway repo with a tiny ready set; observe whether the skill runs and fans out.
+
+  ## Decision
+
+  Resolves STORY-545's B-vs-A fork. Blocks STORY-545 build.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T06:37:14.949124082Z
+modified_at: 2026-06-09T06:37:14.949124082Z
+req_type: Spike
+tags:
+- aida:burndown
+- blocks:STORY-545
+- claude-code-compose
+- from-self-test
+human_only: true
