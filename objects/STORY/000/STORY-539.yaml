@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:11:58.453597427Z
-modified_at: 2026-06-09T04:18:21.118948858Z
+modified_at: 2026-06-09T04:52:29.752794273Z
 req_type: Story
 tags:
 - aida:mailbox
@@ -38,3 +38,9 @@ tags:
 - from-user-friction
 - multi-agent
 - parent:STORY-493
+comments:
+- id: 019eaab9-95b8-7073-93e7-25121fb513ee
+  author: joe
+  content: Commit bc1674fd9 references this requirement
+  created_at: 2026-06-09T04:52:29.752794273Z
+  modified_at: 2026-06-09T04:52:29.752794273Z
