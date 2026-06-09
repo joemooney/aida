@@ -15871,5 +15871,53 @@ operations:
 
       ## Relationships
       - New audience/lens on `aida digest` (STORY-252); the user-facing counterpart to the dev-facing `aida changelog`. Storage model: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db).
-clock: 1584
+- id: 019eaa90-3479-7971-ad50-e34023694fc1
+  target_id: 019eaa2e-50a7-74f1-b1b5-bcb4947c58ad
+  author: aida
+  node_id: '1'
+  lamport: 1585
+  timestamp: 2026-06-09T04:07:17.881699615Z
+  kind: !SetDescription
+    description: |-
+      ## Want (operator, 2026-06-09)
+
+      The digest must let the operator/customer learn what changed for THEM, without reading spec titles. Today even `aida digest --audience customer --since 1d` is a SPEC-TITLE DUMP with raw dev-internal noise and no value framing — e.g. it surfaces "3 clippy correctness errors hidden by CI's -W mode" (a developer task title) to a *customer*, which has zero user value. STORY-252's editorial filter ("drop chore/typo/style") is far too weak.
+
+      ## The fix: filter by USER-IMPACT, render as VALUE (a capabilities lens)
+
+      `aida digest --audience operator --since <window>` (+ improve `customer`), reusing the digest window/machinery, with two changes the current digest lacks:
+
+      1. **Filter by user IMPACT, not spec type.** "feat vs chore" is the wrong cut — *did it change what the user can do / experience* is the cut.
+         - DROP zero-impact dev work: clippy/lint hygiene, internal refactors, internal MCP plumbing that changes no user surface, test-only.
+         - KEEP + TRANSLATE internal work that DOES touch the user: a crash fix is not noise — `conflict.rs truncate panics on non-ASCII` → "AIDA no longer crashes on spec descriptions with non-ASCII/emoji."
+      2. **Render from the CLI/value perspective, not the dev-task title.**
+         - New command → "you can now `aida X` — <what it does>."
+         - Changed flag/behavior → "`aida Y --z` now does W (was V)."
+         - Fix → "no longer <bad thing> when <case>."
+         - operator audience adds the try-it command; customer audience gives the value story. Both DROP dev noise + TRANSLATE.
+      3. Group by surface: New commands / Changed flags & behaviors / Fixes-you'll-notice / New skills.
+
+      ## Why this needs the LLM layer (validates the storage split)
+
+      The impact-judgment + translation is NON-deterministic: you can't mechanically know "clippy = drop" but "non-ASCII panic = keep+translate." That is the Layer-2 LLM job. Layer-1 (deterministic) yields the candidate change set; Layer-2 (LLM) judges user-impact + writes the value framing.
+
+      ## Storage architecture: commit FACTS, cache-never-commit NARRATIVE
+
+      - **Layer 1 — deterministic FACTS = COMMITTED release-surface manifest (JSON).** Per release, the user-facing surface deltas (new commands / changed flags / behaviors / skills) + spec links + help deltas. Idempotent (same git state → byte-identical) → commit it like CHANGELOG.md / Cargo.lock, regenerated at release by scripts/release.sh. Shared input for changelog + digest + this lens.
+      - **Layer 2 — LLM NARRATIVE = on-demand, CACHED, never frozen.** Generated from the manifest + current context (audience); cached keyed on (source-git-sha, audience, since-window), invalidated on source advance — the .aida/cache.db model. NEVER committed: "contextually relevant to the current user" and "frozen commit" are incompatible.
+
+      Same Tier-1/Tier-2 split as EPIC-36; same source-vs-projection model as the spec graph vs cache.db.
+
+      ## Acceptance (sketch — master refines)
+
+      - [ ] Output FILTERS by user-impact: zero-impact dev work (clippy/lint/refactor/internal-MCP/test-only) excluded; user-impacting fixes KEPT and translated to value.
+      - [ ] Output RENDERS value/CLI-perspective, not dev-task titles (new command → try-it; changed flag/behavior → what changed; fix → "no longer X when Y"). SPEC-IDs stripped.
+      - [ ] Grouped by surface (new commands / changed flags & behaviors / fixes-you'll-notice / new skills).
+      - [ ] Existing `--audience customer` no longer leaks dev-internal titles (clippy etc.).
+      - [ ] Layer-1 release-surface manifest (JSON) generated idempotently at release + committed; changelog + digest render from it.
+      - [ ] Layer-2 narrative generated on demand + cached keyed on (source-sha, audience, window), invalidated on source change; never committed.
+
+      ## Relationships
+      - Sharpens/extends `aida digest` (STORY-252) — its customer filter is too weak today. Storage: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db). The user-facing counterpart to the dev-facing `aida changelog`.
+clock: 1585
 node_id: '1'
