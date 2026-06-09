@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:29:51.990422340Z
-modified_at: 2026-06-09T01:45:44.494867592Z
+modified_at: 2026-06-09T01:46:09.653492784Z
 req_type: Task
 tags:
 - aida:agent:new
@@ -39,3 +39,9 @@ tags:
 - interactive
 - papercut
 - roles
+comments:
+- id: 019eaa0e-fd75-7df1-9acc-0260ca927601
+  author: joe
+  content: 'Approved (advisor, 2026-06-08). Scope fence: prefer the well-formatted-terminal-list solution (indent/associate wrapped description lines with their row, bound/truncate long descriptions, color role-name+metadata when enabled) over a full arrow-key TUI rewrite — only go interactive-selector if the existing picker (TASK-644) already supports it cheaply. Must preserve the TASK-644 stdout/stderr eval contract (picker UI on stderr, never corrupt eval-oriented stdout for ''aida role enter'').'
+  created_at: 2026-06-09T01:46:09.653492784Z
+  modified_at: 2026-06-09T01:46:09.653492784Z
