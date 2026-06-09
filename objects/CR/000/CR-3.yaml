@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 112-Uncategorized
 created_at: 2025-11-26T01:15:26.926247061Z
-modified_at: 2026-06-09T05:02:16.920608062Z
+modified_at: 2026-06-09T05:04:11.804393787Z
 req_type: ChangeRequest
 relationships:
 - rel_type: Parent
@@ -18,6 +18,11 @@ comments:
   content: 'Implementer investigation (2026-06-09): exhaustively searched aida-web-react/src for any scroll-wheel -> selection coupling. Findings: NO onWheel/WheelEvent/deltaY handler, NO onScroll/IntersectionObserver/scroll-snap anywhere in the React dashboard. Selection (selectedId in useListSelection; selectedCardId in KanbanBoard) is mutated ONLY by click, drag, and keyboard hotkeys (j/k/Arrow/Enter via HotkeyProvider keydown). The only scroll-related code is selection->scrollIntoView({block:''nearest''}) in RequirementsList/QueuePage and focusCard() in KanbanBoard — i.e. selection drives scroll, never the reverse. CR-3 dates to 2025-11 against the prior egui GUI (cf. commits a49c31b14 ''navigation lock for synchronized list scrolling'' + 4cc8c936d ''keep selected requirement visible when scrolling reqlist''), where list-scroll and selection were coupled. That coupling does not exist in the React rewrite — the bug appears resolved-by-rearchitecture. No code change made; recommend closing as obsolete/won''t-fix or re-scoping with a concrete repro. Web gates baseline: ''npm run build'' GREEN; ''npm run lint'' has 27 pre-existing problems across many untouched files (already red on main).'
   created_at: 2026-06-09T05:02:16.920608062Z
   modified_at: 2026-06-09T05:02:16.920608062Z
+- id: 019eaac4-4c1c-7e81-8615-35ca10392be2
+  author: joe
+  content: 'Rejecting as OBSOLETE (advisor, 2026-06-08): burndown implementer found no scroll→selection coupling anywhere in aida-web-react/ — selection is mutated only by click/drag/keyboard; the only scroll code is the inverse (selection→scrollIntoView). CR-3 was filed against the prior egui GUI (commits a49c31b14 / 4cc8c936d coupled them there); the React rewrite decoupled them = resolved-by-rearchitecture. No code to change. Re-open only with a concrete repro in the running React app.'
+  created_at: 2026-06-09T05:04:11.804393787Z
+  modified_at: 2026-06-09T05:04:11.804393787Z
 history:
 - id: 17574998-ff09-4a7c-bf46-655118ac8a17
   author: '@joe'
