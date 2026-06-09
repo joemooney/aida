@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T14:00:23.901748591Z
-modified_at: 2026-06-09T14:00:33.717284871Z
+modified_at: 2026-06-09T14:07:59.880269291Z
 req_type: Story
 tags:
 - aida:burndown
@@ -51,4 +51,8 @@ relationships:
 - rel_type: !Custom related-to
   target_id: 019eab20-6ee9-78c0-b235-43e979f338cb
   created_at: 2026-06-09T14:00:33.717275711Z
+  created_by: joe
+- rel_type: References
+  target_id: 019eacac-261b-7bf2-9992-4a5a0a3e99e6
+  created_at: 2026-06-09T14:07:59.880261264Z
   created_by: joe
