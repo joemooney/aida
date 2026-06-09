@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:31:01.033281119Z
-modified_at: 2026-06-09T06:45:33.568843269Z
+modified_at: 2026-06-09T15:05:45.309068390Z
 req_type: Story
 tags:
 - aida:burndown
@@ -61,3 +61,8 @@ comments:
     Recommendation: default to (1). plan stays read-only and never queues.
   created_at: 2026-06-09T06:39:46.916636955Z
   modified_at: 2026-06-09T06:39:46.916636955Z
+- id: 019eaceb-0a5d-7652-956d-2a0f05e3bbe0
+  author: joe
+  content: 'UNBLOCKED by SPIKE-51 (2026-06-09): Strategy B CONFIRMED viable. Implement `aida burndown run` as a shell-out to `claude -p "/aida-burndown <selector>"` — reuse the proven skill fan-out; do NOT reimplement parallel worktree fan-out in Rust. Empirically verified (CLI 2.1.169): headless `claude -p` resolves /aida-burndown AND its Agent-tool worktree-isolated fan-out executes under -p. Build note: gate `run` on the STORY-546 queued+pickable set (advisor sign-off = queue membership), add a build-time smoke test that re-asserts headless skill invocation + a spawned worktree subagent (version-sensitive), and surface the resolved `claude` version. The remaining BlockedBy is STORY-546 (the queued gate) — build that first.'
+  created_at: 2026-06-09T15:05:45.309068390Z
+  modified_at: 2026-06-09T15:05:45.309068390Z
