@@ -25,12 +25,12 @@ description: |-
   ## Notes
 
   Related completed work: TASK-644 introduced the TTY role picker for `aida role enter`; TASK-646 reused it for `aida agent new`. This is a UX follow-up on the row layout and interaction polish, not a replacement for those completed tasks.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:29:51.990422340Z
-modified_at: 2026-06-09T02:23:19.978079176Z
+modified_at: 2026-06-09T02:31:07.213029856Z
 req_type: Task
 tags:
 - aida:agent:new
@@ -50,3 +50,7 @@ comments:
   content: Commit 526be87a2 references this requirement
   created_at: 2026-06-09T02:23:19.978079176Z
   modified_at: 2026-06-09T02:23:19.978079176Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T02:31:07.213029856Z
+  completion_sha: 20877ca3ff1e71239d6a1ef179930377620990e6
