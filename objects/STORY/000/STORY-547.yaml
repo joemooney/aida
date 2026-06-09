@@ -25,12 +25,12 @@ description: |-
   5. NOT findings: steady-state 'why open' is a derived view. ONLY emit a finding when the explainer detects an ANOMALY (mis-tagged, stale blocker, epic with zero children).
 
   Vehicle decision (resolves operator's 'should there be findings? comment-prefix?' question): derive-first; tag for category + comment for prose; findings reserved for anomalies. trace:from-operator-2026-06-09
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T13:57:03.643084760Z
-modified_at: 2026-06-09T14:10:12.463253213Z
+modified_at: 2026-06-09T14:17:26.299261587Z
 req_type: Story
 tags:
 - aida:burndown
