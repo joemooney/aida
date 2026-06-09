@@ -100,6 +100,40 @@ pub(crate) fn partition(candidates: &[BurndownCandidate]) -> (Vec<String>, Vec<(
     (ready, parked)
 }
 
+/// Plain-language description of the active selector for the human-facing
+/// header — glosses the bare word "selector" so a new user understands what is
+/// being shown and how to narrow it. Pure (no color), so it's unit-testable;
+/// the caller colorizes. trace:STORY-544 | ai:claude
+pub(crate) fn selector_summary(status: &str, tag: Option<&str>, batch: Option<&str>) -> String {
+    let mut filters: Vec<String> = Vec::new();
+    if let Some(t) = tag {
+        filters.push(format!("tag {t}"));
+    }
+    if let Some(b) = batch {
+        filters.push(format!("batch {b}"));
+    }
+    let scope = if filters.is_empty() {
+        format!("Showing {status} specs (default).")
+    } else {
+        format!(
+            "Showing {status} specs filtered to {}.",
+            filters.join(" + ")
+        )
+    };
+    format!("{scope} Narrow with --batch NAME, --tag X, or --status <s>.")
+}
+
+/// The next-step footer printed after a non-empty ready set. Tells the user the
+/// run itself is the `/aida-burndown` Claude Code skill — there is deliberately
+/// no `aida burndown run`/`start` CLI verb — so they stop hunting for one.
+/// Pure text (no color); the caller colorizes. trace:STORY-544 | ai:claude
+pub(crate) fn next_step_footer() -> String {
+    "Next step: invoke /aida-burndown in Claude Code to fan out the ready set above.\n\
+     There is no `aida burndown run`/`start` — the runner is the /aida-burndown skill, \
+     not a CLI subcommand."
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,5 +229,36 @@ mod tests {
             parked.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
             vec!["B".to_string(), "C".to_string()]
         );
+    }
+
+    // STORY-544: the human-facing presentation helpers — plain-language
+    // selector gloss + next-step footer pointing at the /aida-burndown skill.
+    #[test]
+    fn selector_summary_default_is_plain_language() {
+        let s = selector_summary("approved", None, None);
+        assert!(s.contains("Showing approved specs (default)."));
+        // The narrowing hint names all three knobs and drops bare "selector".
+        assert!(s.contains("--batch NAME"));
+        assert!(s.contains("--tag X"));
+        assert!(s.contains("--status <s>"));
+        assert!(!s.to_lowercase().contains("selector:"));
+    }
+
+    #[test]
+    fn selector_summary_reflects_filters() {
+        let s = selector_summary("draft", Some("papercut"), Some("scaffolding"));
+        assert!(s.contains("Showing draft specs filtered to tag papercut + batch scaffolding."));
+    }
+
+    #[test]
+    fn next_step_footer_points_at_skill_and_denies_cli_verb() {
+        let f = next_step_footer();
+        // (a) tells the user to invoke the skill.
+        assert!(f.contains("/aida-burndown"));
+        // (b) explicitly states there is no `aida burndown run`/`start`.
+        assert!(f.contains("no `aida burndown run`/`start`"));
+        assert!(f.to_lowercase().contains("skill"));
+        // No internal trace SPEC-IDs leak into user-facing text.
+        assert!(!f.contains("STORY-"));
     }
 }
