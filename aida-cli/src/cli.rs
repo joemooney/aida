@@ -2140,7 +2140,8 @@ pub enum DoctorCommand {
     /// Focused multi-agent drift diagnostic for one category.
     // trace:STORY-462 | ai:codex
     Check {
-        /// Category to check, e.g. stale-leases, orphan-branches, OBE-briefs.
+        /// Category to check, e.g. stale-leases, orphan-branches,
+        /// stale-remote-branches, OBE-briefs.
         category: String,
 
         /// Emit machine-readable JSON.
@@ -2151,7 +2152,8 @@ pub enum DoctorCommand {
     /// Focused multi-agent drift heal for one category.
     // trace:STORY-462 | ai:codex
     Heal {
-        /// Category to heal, e.g. stale-leases, orphan-branches, OBE-briefs.
+        /// Category to heal, e.g. stale-leases, orphan-branches,
+        /// stale-remote-branches, OBE-briefs.
         category: String,
 
         /// Skip confirmation prompts.

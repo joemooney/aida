@@ -23536,6 +23536,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-717: stale-remote-branch scan. Like completed-without-commit it runs
+    // git ancestry probes + a `gh pr list`, so it is kept OUT of the hot
+    // `collect_doctor_findings` path and appended here where only `aida doctor`
+    // reaches it. Honours the same `--category` filter. trace:TASK-717
+    if doctor_category_selected(opts.category.as_deref(), "stale-remote-branches")? {
+        findings.extend(scan_stale_remote_branches(&project_root, &store));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     let mut report = DoctorReport::from_findings(findings);
 
     if opts.heal {
@@ -23943,6 +23952,13 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         "spec-status" | "spec-status-drift" => "spec-status-drift",
         "orphan-worktree" | "orphan-worktrees" | "worktrees" => "orphan-worktrees",
         "orphan-branch" | "orphan-branches" | "branches" => "orphan-branches",
+        // TASK-717: stale REMOTE branches (origin/*) verify-and-prune.
+        // trace:TASK-717
+        "stale-remote-branch"
+        | "stale-remote-branches"
+        | "remote-branch"
+        | "remote-branches"
+        | "remote-branch-prune" => "stale-remote-branches",
         "stale-reviewer" | "stale-reviewer-lease" | "stale-reviewer-leases" => {
             "stale-reviewer-leases"
         }
@@ -23972,8 +23988,9 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
-             orphan-branches, orphan-queue-entries, stale-reviewer-leases, stale-locks, \
-             dead-agents, OBE-briefs, completed-without-commit)",
+             orphan-branches, stale-remote-branches, orphan-queue-entries, \
+             stale-reviewer-leases, stale-locks, dead-agents, OBE-briefs, \
+             completed-without-commit)",
             other
         ),
     };
@@ -24122,6 +24139,301 @@ fn scan_completed_without_commit(
     }
     findings.sort_by(|a, b| a.id.cmp(&b.id));
     findings
+}
+
+// ============================================================================
+// TASK-717 — `aida doctor`: verify-and-prune stale REMOTE branches.
+//
+// `aida doctor --heal --category orphan-branches` only deletes LOCAL orphan
+// branches; stale `origin/*` branches accumulate and must be pruned by hand.
+// This adds a `stale-remote-branches` category that surfaces remote branches
+// and verify-and-prunes them with a squash-aware safety model:
+//
+//   safe-to-delete iff ANY of:
+//     - the branch's spec is Completed/Rejected, OR
+//     - the branch HEAD is an ancestor of origin/main (already merged), OR
+//     - origin/main carries a commit referencing the spec `(SPEC-ID)`
+//   AND none of the EXCLUDE conditions apply:
+//     - the branch is a protected ref (main/master/aida-store), OR
+//     - the branch has an open PR
+//   AND the branch has NO genuinely-unique unmerged commits (those are KEPT
+//   and flagged for the operator, never deleted).
+//
+// Dry-run by default (read-only list + per-branch verdict/reason); the heal
+// is gated behind --yes --force (destructive remote deletion). trace:TASK-717
+// ============================================================================
+
+/// The classification verdict for one remote branch. trace:TASK-717
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RemoteBranchVerdict {
+    /// Protected or open-PR — excluded from any consideration.
+    Excluded(String),
+    /// Verified merged/terminal AND no unique unmerged commits → safe to prune.
+    SafeToDelete(String),
+    /// Has genuinely-unique unmerged commits → keep, flag for the operator.
+    Keep(String),
+}
+
+/// Inputs to the pure remote-branch classifier — every git/gh probe result the
+/// safety model needs, gathered once per branch by the scanner. Keeping the
+/// classification pure makes the squash-aware safety model unit-testable
+/// without git or gh. trace:TASK-717
+#[derive(Debug, Clone)]
+struct RemoteBranchFacts {
+    /// True when the branch is a protected ref (main/master/aida-store).
+    protected: bool,
+    /// True when an open PR currently has this branch as its head.
+    has_open_pr: bool,
+    /// True when the branch HEAD is an ancestor of origin/main (fully merged —
+    /// covers fast-forward / non-squash merges).
+    ancestor_of_main: bool,
+    /// True when origin/main carries a commit whose subject/trailer references
+    /// the branch's spec id (covers squash merges, where the branch tip keeps a
+    /// different SHA but the work shipped).
+    spec_referenced_on_main: bool,
+    /// The branch's spec status, when the branch name maps to a known spec and
+    /// that spec is Completed or Rejected (terminal). None otherwise.
+    spec_terminal: bool,
+    /// Count of commits on the branch not reachable from origin/main. Zero means
+    /// nothing unique is at risk; non-zero with no other "merged" signal means
+    /// the branch carries unique unmerged work that must be KEPT.
+    unique_unmerged_commits: u32,
+}
+
+/// Pure squash-aware classification of one remote branch. No git/gh — every
+/// input is pre-gathered in `RemoteBranchFacts`. This is the safety model:
+/// excludes protected + open-PR branches first; declares safe-to-delete only on
+/// a positive "merged/terminal" signal AND zero unique unmerged commits;
+/// otherwise keeps the branch and flags it. trace:TASK-717
+fn classify_stale_remote_branch(facts: &RemoteBranchFacts) -> RemoteBranchVerdict {
+    // EXCLUDE first — protected and open-PR branches are never candidates.
+    if facts.protected {
+        return RemoteBranchVerdict::Excluded("protected ref".to_string());
+    }
+    if facts.has_open_pr {
+        return RemoteBranchVerdict::Excluded("has an open PR".to_string());
+    }
+
+    // A positive "this work has shipped / is terminal" signal — any one suffices.
+    let merged_reason = if facts.ancestor_of_main {
+        Some("HEAD is an ancestor of origin/main (merged)")
+    } else if facts.spec_referenced_on_main {
+        Some("origin/main carries a commit referencing its spec (squash-merged)")
+    } else if facts.spec_terminal {
+        Some("its spec is Completed/Rejected")
+    } else {
+        None
+    };
+
+    let Some(merged_reason) = merged_reason else {
+        // No merged/terminal signal at all → never delete; flag for the operator.
+        return RemoteBranchVerdict::Keep(
+            "no merge/terminal signal — operator decision".to_string(),
+        );
+    };
+
+    // Even with a merged signal, a branch carrying genuinely-unique unmerged
+    // commits (e.g. an unmerged migration-guide on a squash-merged branch) must
+    // be KEPT — deleting it would lose work. Ancestor-of-main implies zero unique
+    // commits, so this only bites the squash/terminal paths.
+    if facts.unique_unmerged_commits > 0 && !facts.ancestor_of_main {
+        return RemoteBranchVerdict::Keep(format!(
+            "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
+            facts.unique_unmerged_commits
+        ));
+    }
+
+    RemoteBranchVerdict::SafeToDelete(merged_reason.to_string())
+}
+
+/// Derive the candidate spec id from a work-branch name (`task-281-foo` →
+/// `TASK-281`). Returns None when the branch doesn't follow the work-branch
+/// convention. trace:TASK-717
+fn spec_id_from_work_branch(branch: &str) -> Option<String> {
+    if !is_work_spec_branch_name(branch) {
+        return None;
+    }
+    // `<type>-<digits>[-suffix...]` → keep `<type>-<digits>`.
+    let mut parts = branch.splitn(3, '-');
+    let kind = parts.next()?;
+    let num = parts.next()?;
+    if kind.is_empty() || num.is_empty() || !num.chars().next()?.is_ascii_digit() {
+        return None;
+    }
+    // The number segment can carry a trailing `.suffix` (e.g. `epic-20.batch7`);
+    // trim at the first non-digit so we land on the bare spec id.
+    let digits: String = num.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    Some(format!("{}-{}", kind.to_ascii_uppercase(), digits))
+}
+
+/// TASK-717: scan stale `origin/*` branches and classify each under the
+/// squash-aware safety model. Read-only — performs git ancestry/rev-list probes
+/// and one `gh pr list` for the open-PR set, never mutates anything. Returns a
+/// `stale-remote-branches` finding for every branch that is either SafeToDelete
+/// (verdict carries the merge reason; `safe_heal=false` so deletion stays gated
+/// behind --yes --force) or Keep (flagged for the operator, never auto-healed).
+/// Excluded branches produce no finding. trace:TASK-717
+fn scan_stale_remote_branches(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+) -> Vec<DoctorFinding> {
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<String> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+
+    // No resolvable default branch → we cannot corroborate merges, so stay
+    // silent rather than risk flagging every remote branch.
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+
+    // Spec ids referenced by commits on origin/main (squash-merge signal).
+    let mut referenced_on_main: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    if let Some(log) = git(&["log", "--pretty=format:%s", &default_ref]) {
+        for subject in log.lines() {
+            let subject = subject.trim();
+            if subject.is_empty() || is_plan_commit_subject(subject) {
+                continue;
+            }
+            for id in extract_spec_ids_from_commit(subject) {
+                referenced_on_main.insert(id.to_ascii_uppercase());
+            }
+        }
+    }
+
+    let open_pr_branches = collect_open_prs(project_root).by_branch;
+    const PROTECTED: &[&str] = &["main", "master", "aida-store", "HEAD"];
+
+    let mut findings = Vec::new();
+    for rc in collect_remote_branch_commits(project_root) {
+        let branch = rc.branch;
+        let protected = PROTECTED.iter().any(|p| p.eq_ignore_ascii_case(&branch));
+        let has_open_pr = open_pr_branches.contains_key(&branch);
+
+        // Ancestor-of-main check: empty `origin/main..origin/branch` rev-list.
+        let ancestor_of_main = git(&[
+            "rev-list",
+            "--count",
+            &format!("{default_ref}..origin/{branch}"),
+        ])
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .map(|n| n == 0)
+        .unwrap_or(false);
+
+        // unique_unmerged_commits == ancestor-count above; reuse it.
+        let unique_unmerged_commits = git(&[
+            "rev-list",
+            "--count",
+            &format!("{default_ref}..origin/{branch}"),
+        ])
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+
+        let spec_id = spec_id_from_work_branch(&branch);
+        let spec_referenced_on_main = spec_id
+            .as_deref()
+            .map(|id| referenced_on_main.contains(&id.to_ascii_uppercase()))
+            .unwrap_or(false);
+        let spec_terminal = spec_id
+            .as_deref()
+            .and_then(|id| store.get_requirement_by_spec_id(id))
+            .map(|req| {
+                matches!(
+                    req.status,
+                    RequirementStatus::Completed | RequirementStatus::Rejected
+                )
+            })
+            .unwrap_or(false);
+
+        let facts = RemoteBranchFacts {
+            protected,
+            has_open_pr,
+            ancestor_of_main,
+            spec_referenced_on_main,
+            spec_terminal,
+            unique_unmerged_commits,
+        };
+
+        match classify_stale_remote_branch(&facts) {
+            RemoteBranchVerdict::Excluded(_) => {
+                // Protected / open-PR — never surfaced as a finding.
+            }
+            RemoteBranchVerdict::SafeToDelete(reason) => {
+                findings.push(DoctorFinding {
+                    category: "stale-remote-branches".to_string(),
+                    id: branch.clone(),
+                    summary: format!("remote branch `origin/{branch}` is stale ({reason})"),
+                    action: format!(
+                        "delete remote branch (`aida doctor --heal --category \
+                         stale-remote-branches --yes --force`, or `git push origin \
+                         --delete {branch}`)"
+                    ),
+                    // Remote deletion is destructive — gate behind --yes --force.
+                    safe_heal: false,
+                });
+            }
+            RemoteBranchVerdict::Keep(reason) => {
+                findings.push(DoctorFinding {
+                    category: "stale-remote-branches".to_string(),
+                    id: branch.clone(),
+                    summary: format!("remote branch `origin/{branch}` flagged: {reason}"),
+                    action: "operator decision: review and keep, open a PR, or delete by hand"
+                        .to_string(),
+                    // Never auto-deleted — flag-only.
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+    findings.sort_by(|a, b| a.id.cmp(&b.id));
+    findings
+}
+
+/// TASK-717: delete one stale remote branch via `git push origin --delete`.
+/// Only reachable when the finding's action surfaced it as SafeToDelete and the
+/// caller passed --yes --force (see `heal_doctor_finding`). A Keep-flagged
+/// branch never routes here — its action string is operator-only. trace:TASK-717
+fn heal_doctor_stale_remote_branch(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    // Keep-flagged findings carry an operator-only action and must never be
+    // auto-deleted, even under --yes --force.
+    if !finding.action.contains("--category stale-remote-branches") {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some("flagged for operator decision — not auto-deleted".to_string()),
+        });
+    }
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["push", "origin", "--delete", &finding.id])
+        .status()
+        .with_context(|| format!("deleting remote branch origin/{}", finding.id))?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "deleted stale remote branch".to_string(),
+        status: if status.success() { "healed" } else { "failed" }.to_string(),
+        detail: None,
+    })
 }
 
 /// Parse the spec id out of a `git grep -o` hit on the trace regex. The line is
@@ -24336,6 +24648,12 @@ fn heal_doctor_finding(
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
+        }
+        // TASK-717: prune a verified-stale REMOTE branch. DESTRUCTIVE (deletes
+        // origin/*) so force+yes gated like local orphan-branch deletion.
+        // trace:TASK-717
+        "stale-remote-branches" if opts.force && opts.yes => {
+            heal_doctor_stale_remote_branch(project_root, finding)
         }
         // TASK-673: re-open an uncorroborated Completed spec to Done so it
         // surfaces in the queue's "awaiting commit" lane for triage rather than
@@ -24832,6 +25150,152 @@ mod story_462_doctor_tests {
         for alias in ["dead-agents", "dead-agent", "stale-agents", "agents"] {
             assert_eq!(normalize_doctor_category(alias).unwrap(), "dead-agents");
         }
+    }
+
+    // ── TASK-717: stale-remote-branch classification ──
+
+    #[test]
+    fn normalize_doctor_category_accepts_stale_remote_branches() {
+        // TASK-717
+        for alias in [
+            "stale-remote-branches",
+            "stale-remote-branch",
+            "remote-branch",
+            "remote-branches",
+            "remote-branch-prune",
+        ] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                "stale-remote-branches"
+            );
+        }
+    }
+
+    fn remote_facts() -> RemoteBranchFacts {
+        RemoteBranchFacts {
+            protected: false,
+            has_open_pr: false,
+            ancestor_of_main: false,
+            spec_referenced_on_main: false,
+            spec_terminal: false,
+            unique_unmerged_commits: 0,
+        }
+    }
+
+    #[test]
+    fn classify_squash_merged_remote_branch_is_safe_to_delete() {
+        // TASK-717: squash-merged → origin/main references the spec, branch tip
+        // has a different SHA (so NOT an ancestor) but zero unique commits.
+        let facts = RemoteBranchFacts {
+            spec_referenced_on_main: true,
+            ..remote_facts()
+        };
+        assert!(matches!(
+            classify_stale_remote_branch(&facts),
+            RemoteBranchVerdict::SafeToDelete(_)
+        ));
+    }
+
+    #[test]
+    fn classify_ancestor_of_main_remote_branch_is_safe_to_delete() {
+        // TASK-717: fast-forward / non-squash merge → HEAD is an ancestor.
+        let facts = RemoteBranchFacts {
+            ancestor_of_main: true,
+            ..remote_facts()
+        };
+        assert!(matches!(
+            classify_stale_remote_branch(&facts),
+            RemoteBranchVerdict::SafeToDelete(_)
+        ));
+    }
+
+    #[test]
+    fn classify_terminal_spec_remote_branch_is_safe_to_delete() {
+        // TASK-717: spec is Completed/Rejected with no unique commits.
+        let facts = RemoteBranchFacts {
+            spec_terminal: true,
+            ..remote_facts()
+        };
+        assert!(matches!(
+            classify_stale_remote_branch(&facts),
+            RemoteBranchVerdict::SafeToDelete(_)
+        ));
+    }
+
+    #[test]
+    fn classify_unique_unmerged_remote_branch_is_kept() {
+        // TASK-717: squash-merged BUT carries genuinely-unique unmerged commits
+        // (the spock-dev migration-guide case) → KEEP, never delete.
+        let facts = RemoteBranchFacts {
+            spec_referenced_on_main: true,
+            unique_unmerged_commits: 3,
+            ..remote_facts()
+        };
+        assert!(matches!(
+            classify_stale_remote_branch(&facts),
+            RemoteBranchVerdict::Keep(_)
+        ));
+    }
+
+    #[test]
+    fn classify_no_merge_signal_remote_branch_is_kept() {
+        // TASK-717: no merged/terminal signal at all → never delete; flag.
+        let facts = remote_facts();
+        assert!(matches!(
+            classify_stale_remote_branch(&facts),
+            RemoteBranchVerdict::Keep(_)
+        ));
+    }
+
+    #[test]
+    fn classify_open_pr_remote_branch_is_excluded() {
+        // TASK-717: an open-PR branch is excluded even if it looks merged.
+        let facts = RemoteBranchFacts {
+            has_open_pr: true,
+            spec_referenced_on_main: true,
+            ..remote_facts()
+        };
+        assert!(matches!(
+            classify_stale_remote_branch(&facts),
+            RemoteBranchVerdict::Excluded(_)
+        ));
+    }
+
+    #[test]
+    fn classify_protected_remote_branch_is_excluded() {
+        // TASK-717: protected refs (main/master/aida-store) are excluded first,
+        // even when every "merged" signal is set.
+        let facts = RemoteBranchFacts {
+            protected: true,
+            ancestor_of_main: true,
+            spec_referenced_on_main: true,
+            spec_terminal: true,
+            ..remote_facts()
+        };
+        assert!(matches!(
+            classify_stale_remote_branch(&facts),
+            RemoteBranchVerdict::Excluded(_)
+        ));
+    }
+
+    #[test]
+    fn spec_id_from_work_branch_derives_spec_id() {
+        // TASK-717
+        assert_eq!(
+            spec_id_from_work_branch("task-281-foo"),
+            Some("TASK-281".to_string())
+        );
+        assert_eq!(
+            spec_id_from_work_branch("bug-100"),
+            Some("BUG-100".to_string())
+        );
+        assert_eq!(
+            spec_id_from_work_branch("STORY-86"),
+            Some("STORY-86".to_string())
+        );
+        // Non-work branches yield nothing.
+        assert_eq!(spec_id_from_work_branch("spock-dev"), None);
+        assert_eq!(spec_id_from_work_branch("pr-271"), None);
     }
 
     #[test]
