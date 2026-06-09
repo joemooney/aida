@@ -1673,7 +1673,11 @@ impl<'a> McpServer<'a> {
                 // legitimate transitions (InProgress/Done/NeedsAttention/Draft/
                 // Rejected) stay allowed. trace:BUG-449 | ai:claude
                 if new_status != req.status {
-                    if let Some(msg) = mcp_status_gate_message(&new_status) {
+                    // BUG-481: gate on the (current, requested) pair so a
+                    // Draft/NeedsAttention → InProgress/Done bypass is closed
+                    // while in-pipeline execution flips stay allowed.
+                    // trace:BUG-481 | ai:claude
+                    if let Some(msg) = mcp_status_gate_message(&req.status, &new_status) {
                         return Err(msg);
                     }
                 }
@@ -2494,7 +2498,10 @@ impl<'a> McpServer<'a> {
             "dismiss" => RequirementStatus::Rejected,
             other => return Err(format!("unknown action '{}'", other)),
         };
-        if let Some(msg) = mcp_status_gate_message(&new_status) {
+        // BUG-481: a finding is a Draft until triaged; promote → Approved is
+        // always-gated regardless of source, so the Draft source here is
+        // conservative-correct (dismiss → Rejected stays ungated).
+        if let Some(msg) = mcp_status_gate_message(&RequirementStatus::Draft, &new_status) {
             return Err(msg);
         }
 
@@ -2995,8 +3002,28 @@ impl<'a> McpServer<'a> {
         ))
     }
 
-    // trace:EPIC-27
+    // trace:EPIC-27 trace:BUG-480
     fn tool_queue_add(&self, args: &Value) -> Result<String, String> {
+        // BUG-480 (TASK-647 / ADR-3 caller parity): queuing a spec for
+        // execution commits it to the pipeline — an advisor-authority act, the
+        // exact decision the CLI `aida queue add` gates on
+        // (`has_advisor_authority()`). MCP is never advisor authority (the
+        // server runs non-TTY and may merely inherit an advisor role from the
+        // launching shell), so it refuses unconditionally, mirroring how
+        // `add_requirement` / `update_requirement` (BUG-449) treat MCP as
+        // untrusted. Without this, an MCP agent could file a Draft and then
+        // push it straight into the execution queue, bypassing intake triage.
+        // The queue mechanics live in `tool_queue_add_inner` so tests (and any
+        // future advisor-corroborated caller) can seed the queue out-of-band,
+        // mirroring the `force_status` precedent. trace:BUG-480 | ai:claude
+        if let Some(msg) = mcp_queue_authority_message() {
+            return Err(msg);
+        }
+        self.tool_queue_add_inner(args)
+    }
+
+    // trace:EPIC-27 trace:BUG-480
+    fn tool_queue_add_inner(&self, args: &Value) -> Result<String, String> {
         let id = required_string(args, "id")?;
         let user_id = self.queue_user_id(args);
         let top = args.get("top").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -3292,8 +3319,21 @@ impl<'a> McpServer<'a> {
         ))
     }
 
-    // trace:EPIC-27
+    // trace:EPIC-27 trace:BUG-480
     fn tool_queue_rework(&self, args: &Value) -> Result<String, String> {
+        // BUG-480: rework re-queues a spec for execution (and may flip its
+        // status), so it carries the same advisor-authority weight as
+        // queue_add. MCP is never advisor authority — refuse unconditionally,
+        // matching the queue_add gate above. Mechanics live in
+        // `tool_queue_rework_inner`. trace:BUG-480 | ai:claude
+        if let Some(msg) = mcp_queue_authority_message() {
+            return Err(msg);
+        }
+        self.tool_queue_rework_inner(args)
+    }
+
+    // trace:EPIC-27 trace:BUG-480
+    fn tool_queue_rework_inner(&self, args: &Value) -> Result<String, String> {
         let id = required_string(args, "id")?;
         let user_id = self.queue_user_id(args);
         let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -4771,25 +4811,73 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
     }
 }
 
-/// BUG-449: status transitions an MCP caller may NOT make itself, with the
-/// message explaining why. `None` = the transition is allowed. Mirrors the
-/// `add_requirement` intake gate (TASK-647 / ADR-3) on the update path so
-/// `add`-then-`update` isn't a one-line bypass of advisor authority. MCP is
-/// never advisor authority (unlike the CLI, which can be the advisor seat or
-/// orchestrator-corroborated), so this stays strict regardless of context.
-/// trace:BUG-449 | ai:claude
-fn mcp_status_gate_message(new_status: &RequirementStatus) -> Option<String> {
-    match new_status {
+/// BUG-480: the refusal message for MCP queue-for-execution tools
+/// (`queue_add` / `queue_rework`). Queuing a spec for work is an
+/// advisor-authority act (the CLI gates it on `has_advisor_authority()`); MCP
+/// is never advisor authority, so these tools refuse unconditionally and tell
+/// the agent to file the spec for advisor triage instead. Returns `Some(msg)`
+/// always — a function (not a constant) so it composes like
+/// `mcp_status_gate_message` at the call site. trace:BUG-480 | ai:claude
+fn mcp_queue_authority_message() -> Option<String> {
+    Some(
+        "Cannot queue work for execution via MCP: committing a spec to the execution \
+         pipeline is the advisor's decision and needs advisor authority. File the spec (it \
+         lands as a draft for advisor triage) and let the advisor queue it, or run the CLI \
+         as the advisor (AIDA_SESSION_ROLE=advisor)."
+            .to_string(),
+    )
+}
+
+/// BUG-449 / BUG-481: status transitions an MCP caller may NOT make itself,
+/// with the message explaining why. `None` = the transition is allowed.
+/// Mirrors the `add_requirement` intake gate (TASK-647 / ADR-3) on the update
+/// path so `add`-then-`update` isn't a one-line bypass of advisor authority.
+/// MCP is never advisor authority (unlike the CLI, which can be the advisor
+/// seat or orchestrator-corroborated), so this stays strict regardless of
+/// context.
+///
+/// The gate is keyed off the **(source, target) pair**, not the target alone
+/// (BUG-481). `Approved` / `Planned` / `Completed` are **always** gated as
+/// targets, regardless of source — approving/planning is the advisor's triage
+/// decision, and Completed is merge-driven. `InProgress` / `Done` are gated
+/// **only when the source is `Draft` or `NeedsAttention`**: advancing a
+/// never-triaged Draft (or a punted `NeedsAttention` spec) straight into the
+/// execution pipeline is the same intake-bypass the advisor gate exists to
+/// prevent; before BUG-481 the `_ => None` arm let `add_requirement` (Draft) →
+/// `update_requirement` {status: in-progress|done} sail through. A spec
+/// *already* in the pipeline (e.g. `Approved → InProgress`, `InProgress →
+/// Done`) is an implementer-legitimate execution flip and stays allowed.
+/// trace:BUG-449 trace:BUG-481 | ai:claude
+fn mcp_status_gate_message(from: &RequirementStatus, to: &RequirementStatus) -> Option<String> {
+    match to {
         RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
-            "Cannot set status to {new_status} via MCP: approving or planning a spec is the \
+            "Cannot set status to {to} via MCP: approving or planning a spec is the \
              advisor's triage decision and needs advisor authority. File the spec and let the \
              advisor promote it, or run the CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
         )),
         RequirementStatus::Completed => Some(format!(
-            "Cannot set status to {new_status} via MCP: this is set automatically when a \
+            "Cannot set status to {to} via MCP: this is set automatically when a \
              (SPEC-ID) commit lands on the default branch (merge-driven auto-bump), not by hand. \
              Mark the work `done` and let the merge promote it."
         )),
+        // BUG-481: advancing an un-triaged spec (Draft) or a punted spec
+        // (NeedsAttention) directly into the execution pipeline is itself an
+        // advisor-authority act — it commits the spec to execution without the
+        // intake decision. Block it; a spec already in the pipeline flips
+        // InProgress/Done freely (the `_` source arm below returns None).
+        RequirementStatus::InProgress | RequirementStatus::Done
+            if matches!(
+                from,
+                RequirementStatus::Draft | RequirementStatus::NeedsAttention
+            ) =>
+        {
+            Some(format!(
+                "Cannot advance {from} → {to} via MCP: moving an un-triaged or punted spec \
+                 into the execution pipeline needs advisor authority. Let the advisor approve \
+                 it first (it will then flip to {to} as implementation proceeds), or run the \
+                 CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
+            ))
+        }
         _ => None,
     }
 }
@@ -7613,9 +7701,9 @@ mod tests {
             }))
             .unwrap();
         let working_id = added_spec_id(&working).to_string();
-        server
-            .tool_update_requirement(&json!({ "id": working_id, "status": "in-progress" }))
-            .unwrap();
+        // BUG-481: Draft → InProgress via MCP is now advisor-gated; reach the
+        // InProgress filter target out-of-band like the other gated statuses.
+        force_status(&server, &working_id, RequirementStatus::InProgress);
         let planned = server
             .tool_add_requirement(&json!({
                 "title": "Planned MCP item",
@@ -8152,12 +8240,16 @@ mod tests {
             }))
             .unwrap();
         let spec_id = added_spec_id(&response).to_string();
+        // BUG-481: Draft → InProgress via MCP is now advisor-gated; this test is
+        // about field persistence, so triage the spec into the pipeline
+        // out-of-band first (Approved → InProgress is implementer-legitimate).
+        force_status(&server, &spec_id, RequirementStatus::Approved);
 
         let result = server
             .tool_update_requirement(&json!({
                 "id": spec_id,
-                // BUG-449: use an implementer-legitimate transition (Planned is
-                // advisor-gated via MCP); this test is about field persistence.
+                // BUG-449/BUG-481: Approved → InProgress is an implementer-
+                // legitimate transition; this test is about field persistence.
                 "status": "in-progress",
                 "description": "after",
                 "title": "new title",
@@ -8208,19 +8300,91 @@ mod tests {
             .expect_err("completed via MCP must be refused");
         assert!(err.contains("merge") || err.contains("(SPEC-ID)"), "{err}");
 
-        // Implementer-legitimate transitions are still allowed. Ordered to also
-        // satisfy forbidden_attention_transition (NeedsAttention only from
-        // InProgress; leaving it only to Approved/InProgress/Rejected).
-        for status in ["in-progress", "needs-attention", "in-progress", "done"] {
+        // BUG-481: Draft → InProgress/Done via MCP is now also refused — a
+        // never-triaged Draft can't be pushed into the execution pipeline.
+        for status in ["in-progress", "done"] {
+            let err = server
+                .tool_update_requirement(&json!({ "id": id, "status": status }))
+                .expect_err("Draft → in-progress/done via MCP must be refused (BUG-481)");
+            assert!(err.contains("advisor"), "{status}: {err}");
+        }
+
+        // Once the advisor has triaged the spec into the pipeline (set
+        // out-of-band here, as the advisor/CLI would), the in-pipeline
+        // execution flips are implementer-legitimate and stay allowed.
+        force_status(&server, &id, RequirementStatus::Approved);
+        for status in ["in-progress", "done"] {
             server
                 .tool_update_requirement(&json!({ "id": id, "status": status }))
                 .unwrap_or_else(|e| panic!("{status} should be allowed via MCP: {e}"));
         }
+        // Punting (InProgress → NeedsAttention) stays implementer-legitimate;
+        // it is the design-fork escape, not a pipeline advance.
+        force_status(&server, &id, RequirementStatus::InProgress);
+        server
+            .tool_update_requirement(&json!({ "id": id, "status": "needs-attention" }))
+            .expect("punt (InProgress → NeedsAttention) stays allowed via MCP");
+        // …but re-advancing OUT of NeedsAttention into the pipeline is gated
+        // (BUG-481 — the same intake-bypass class as Draft).
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .expect_err("NeedsAttention → in-progress via MCP must be refused (BUG-481)");
+        assert!(err.contains("advisor"), "{err}");
+        // Reach Done legitimately again so the final assertion holds.
+        force_status(&server, &id, RequirementStatus::Done);
 
         // Nothing slipped the gate: the spec never reached an advisor/merge status.
         let store = server.storage.load().unwrap();
         let req = store.get_requirement_by_spec_id(&id).unwrap();
         assert_eq!(req.status, RequirementStatus::Done);
+    }
+
+    /// BUG-481: the update_requirement status gate keyed only on the TARGET
+    /// status (`Approved|Planned|Completed`), so `add_requirement` (Draft) →
+    /// `update_requirement{status:in-progress|done}` was a two-tool bypass that
+    /// pushed a never-triaged Draft into the execution pipeline. The gate is
+    /// now keyed on the (SOURCE, TARGET) pair: Draft → InProgress/Done is
+    /// refused, while a legitimately-triaged Approved → InProgress still works.
+    // trace:BUG-481 | ai:claude
+    #[test]
+    fn mcp_update_requirement_gates_draft_into_pipeline() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Pipeline bypass attempt",
+                "description": "BUG-481 (source,target) gate",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+
+        // Draft → InProgress and Draft → Done are both refused.
+        for status in ["in-progress", "done"] {
+            let err = server
+                .tool_update_requirement(&json!({ "id": id, "status": status }))
+                .expect_err("Draft → in-progress/done via MCP must be refused");
+            assert!(err.contains("advisor"), "{status}: {err}");
+        }
+        // The spec never left Draft.
+        let store = server.storage.load().unwrap();
+        assert_eq!(
+            store.get_requirement_by_spec_id(&id).unwrap().status,
+            RequirementStatus::Draft
+        );
+
+        // A legitimately-triaged spec (advisor set it Approved out-of-band)
+        // flips Approved → InProgress freely — the gate only blocks the
+        // un-triaged source, not in-pipeline execution.
+        force_status(&server, &id, RequirementStatus::Approved);
+        server
+            .tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .expect("Approved → in-progress is implementer-legitimate via MCP");
+        let store = server.storage.load().unwrap();
+        assert_eq!(
+            store.get_requirement_by_spec_id(&id).unwrap().status,
+            RequirementStatus::InProgress
+        );
     }
 
     // ===================================================================
@@ -8675,9 +8839,9 @@ mod tests {
             .unwrap();
         let id = added_spec_id(&add).to_string();
         // TASK-647 (ADR-3): MCP add lands draft; reach In Progress (the punt
-        // pre-state) via the ungated update tool.
-        srv.tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
-            .unwrap();
+        // pre-state). BUG-481: Draft → InProgress via MCP is now advisor-gated,
+        // so set the pre-state out-of-band like the other gated statuses.
+        force_status(&srv, &id, RequirementStatus::InProgress);
 
         let r = srv
             .tool_post_punt(
@@ -9750,7 +9914,7 @@ mod tests {
 
         // Add.
         let added = server
-            .tool_queue_add(&json!({ "id": spec, "for": "implementer", "user": QU }))
+            .tool_queue_add_inner(&json!({ "id": spec, "for": "implementer", "user": QU }))
             .unwrap();
         assert!(added.contains(&spec), "added: {added}");
         assert!(added.contains("for:implementer"), "added: {added}");
@@ -9778,13 +9942,13 @@ mod tests {
         force_status(&server, &spec, RequirementStatus::Completed);
 
         let err = server
-            .tool_queue_add(&json!({ "id": spec }))
+            .tool_queue_add_inner(&json!({ "id": spec }))
             .expect_err("should refuse terminal without force");
         assert!(err.contains("re-queueing closed work"), "err: {err}");
 
         // force overrides.
         let ok = server
-            .tool_queue_add(&json!({ "id": spec, "force": true }))
+            .tool_queue_add_inner(&json!({ "id": spec, "force": true }))
             .expect("force should allow queueing terminal");
         assert!(ok.contains(&spec), "ok: {ok}");
     }
@@ -9802,10 +9966,10 @@ mod tests {
         let a = seed_req(&server, "First");
         let b = seed_req(&server, "Second");
         server
-            .tool_queue_add(&json!({ "id": a, "for": "any", "user": u }))
+            .tool_queue_add_inner(&json!({ "id": a, "for": "any", "user": u }))
             .unwrap();
         server
-            .tool_queue_add(&json!({ "id": b, "for": "any", "user": u }))
+            .tool_queue_add_inner(&json!({ "id": b, "for": "any", "user": u }))
             .unwrap();
 
         // `all: true` bypasses any ambient active-role default filter so the
@@ -9838,7 +10002,7 @@ mod tests {
 
         let spec = seed_req(&server, "To finish");
         server
-            .tool_queue_add(&json!({ "id": &spec, "user": u }))
+            .tool_queue_add_inner(&json!({ "id": &spec, "user": u }))
             .unwrap();
 
         let done = server
@@ -9871,7 +10035,7 @@ mod tests {
         force_status(&server, &spec, RequirementStatus::Done);
 
         let resp = server
-            .tool_queue_rework(&json!({ "id": &spec, "for": "implementer", "reason": "PR review found issues", "user": u }))
+            .tool_queue_rework_inner(&json!({ "id": &spec, "for": "implementer", "reason": "PR review found issues", "user": u }))
             .unwrap();
         assert!(resp.contains("Done → In Progress"), "resp: {resp}");
         assert!(resp.contains("Queued"), "resp: {resp}");
@@ -9895,9 +10059,43 @@ mod tests {
         force_status(&server, &spec, RequirementStatus::Rejected);
 
         let err = server
-            .tool_queue_rework(&json!({ "id": &spec }))
+            .tool_queue_rework_inner(&json!({ "id": &spec }))
             .expect_err("should refuse terminal rework without force");
         assert!(err.contains("re-opening closed work"), "err: {err}");
+    }
+
+    /// BUG-480: the public MCP `queue_add` / `queue_rework` tools had NO
+    /// advisor-authority check — an MCP agent could push a spec straight into
+    /// the execution pipeline, the exact act the CLI `aida queue add` gates on.
+    /// Both public tools now refuse unconditionally (MCP is never advisor
+    /// authority); the queue mechanics still work via the `_inner` methods
+    /// (used by the advisor-corroborated CLI and by the mechanics tests above).
+    // trace:BUG-480 | ai:claude
+    #[test]
+    fn mcp_queue_add_and_rework_are_advisor_gated() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let spec = seed_req(&server, "Authority-gated queue target");
+
+        // queue_add via the public MCP tool is refused.
+        let err = server
+            .tool_queue_add(&json!({ "id": &spec, "for": "implementer" }))
+            .expect_err("queue_add via MCP must be advisor-gated");
+        assert!(err.contains("advisor"), "queue_add err: {err}");
+
+        // queue_rework via the public MCP tool is refused too.
+        let err = server
+            .tool_queue_rework(&json!({ "id": &spec, "reason": "self-requeue attempt" }))
+            .expect_err("queue_rework via MCP must be advisor-gated");
+        assert!(err.contains("advisor"), "queue_rework err: {err}");
+
+        // Nothing slipped the gate: the spec is not in any queue and its status
+        // is unchanged (the public tools mutated nothing).
+        let store = server.storage.load().unwrap();
+        assert_eq!(
+            store.get_requirement_by_spec_id(&spec).unwrap().status,
+            RequirementStatus::Draft
+        );
     }
 
     #[test]
@@ -9911,7 +10109,7 @@ mod tests {
         let c = seed_req(&server, "Charlie");
         for id in [&a, &b, &c] {
             server
-                .tool_queue_add(&json!({ "id": id, "for": "any", "user": u }))
+                .tool_queue_add_inner(&json!({ "id": id, "for": "any", "user": u }))
                 .unwrap();
         }
 

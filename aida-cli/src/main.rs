@@ -10339,15 +10339,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // advisor (or an interactive human) owns. Execution flips
                 // (Approved→InProgress→Done) are NOT gated, so drains are
                 // unaffected. trace:TASK-647 | ai:claude
+                //
+                // BUG-482: gate `NeedsAttention` as a source too. A punted spec
+                // sits in NeedsAttention awaiting advisor triage;
+                // `forbidden_attention_transition` permits NeedsAttention →
+                // Approved as a triage outcome, but *who* may make that triage
+                // call is still advisor authority. Without NeedsAttention in
+                // the source set, a non-advisor could self-re-approve a spec it
+                // (or the orchestrator) just punted — bypassing the human/advisor
+                // triage the punt exists to request. trace:BUG-482 | ai:claude
                 let new_status = parse_status(canonical)?;
-                if matches!(req.status, RequirementStatus::Draft)
-                    && status_requires_advisor_authority(&new_status)
+                if status_advance_requires_advisor_authority(&req.status, &new_status)
                     && !has_advisor_authority()
                 {
                     anyhow::bail!(
-                        "promoting a draft to {} needs advisor authority (advisor role or an \
-                         interactive session). Leave it draft for advisor triage, or run as \
+                        "promoting a {} spec to {} needs advisor authority (advisor role or an \
+                         interactive session). Leave it for advisor triage, or run as \
                          the advisor.",
+                        req.status,
                         canonical
                     );
                 }
@@ -45479,6 +45488,41 @@ mod statusline_tests {
         assert!(!status_requires_advisor_authority(&S::NeedsAttention));
     }
 
+    /// BUG-482: `aida edit` gated only a `Draft` source, so a non-advisor could
+    /// self-re-approve a punted (`NeedsAttention`) spec — bypassing the triage
+    /// the punt requests. The (source, target) predicate now gates BOTH `Draft`
+    /// and `NeedsAttention` sources into the approved+ pipeline, while leaving
+    /// in-pipeline execution flips ungated.
+    // trace:BUG-482 | ai:claude
+    #[test]
+    fn status_advance_authority_gate_covers_draft_and_needs_attention_sources() {
+        use super::status_advance_requires_advisor_authority as gate;
+        use aida_core::models::RequirementStatus as S;
+
+        // NeedsAttention → Approved is the headline hole: re-approving a punted
+        // spec is now an advisor-authority act.
+        assert!(gate(&S::NeedsAttention, &S::Approved));
+        assert!(gate(&S::NeedsAttention, &S::Planned));
+        assert!(gate(&S::NeedsAttention, &S::InProgress));
+        // Draft → approved+ stays gated (the original TASK-647 behaviour).
+        assert!(gate(&S::Draft, &S::Approved));
+        assert!(gate(&S::Draft, &S::InProgress));
+
+        // In-pipeline execution flips (source already past intake) are NOT
+        // gated — drains and implementers move freely.
+        assert!(!gate(&S::Approved, &S::InProgress));
+        assert!(!gate(&S::InProgress, &S::Done));
+        assert!(!gate(&S::Planned, &S::InProgress));
+
+        // Triage to a non-pipeline outcome is not an authority act either.
+        assert!(!gate(&S::NeedsAttention, &S::Rejected));
+        assert!(!gate(&S::Draft, &S::Rejected));
+        // NeedsAttention → InProgress would be gated (above); but the
+        // design-fork ENTRY (InProgress → NeedsAttention) is not — NeedsAttention
+        // is not a pipeline target.
+        assert!(!gate(&S::InProgress, &S::NeedsAttention));
+    }
+
     /// BUG-444: the keystone phase-1 decision. When both PR lookups return
     /// empty-but-successful, ONLY a branch genuinely absent from origin is a
     /// definitive NoPr; an on-origin (or unconfirmable) branch is a retryable
@@ -55873,6 +55917,29 @@ fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
             | RequirementStatus::Done
             | RequirementStatus::Completed
     )
+}
+
+/// BUG-482: whether advancing a spec from `from` to `to` (via `aida edit
+/// --status`) is an advisor-authority act keyed on the (source, target) pair.
+///
+/// A non-advisor may not lift an **un-triaged** (`Draft`) *or* a **punted**
+/// (`NeedsAttention`) spec into the approved+ pipeline — both sources sit
+/// awaiting the advisor's (or interactive human's) triage decision.
+/// `forbidden_attention_transition` *permits* `NeedsAttention → Approved` as a
+/// triage outcome, but *who* may make that call is still advisor authority;
+/// before BUG-482 only `Draft` was a gated source, so a non-advisor could
+/// self-re-approve a spec it (or the orchestrator) had just punted, bypassing
+/// the triage the punt exists to request. Execution flips from a source
+/// already in the pipeline (`Approved → InProgress → Done`) are NOT gated, so
+/// drains are unaffected. trace:BUG-482 | ai:claude
+fn status_advance_requires_advisor_authority(
+    from: &RequirementStatus,
+    to: &RequirementStatus,
+) -> bool {
+    matches!(
+        from,
+        RequirementStatus::Draft | RequirementStatus::NeedsAttention
+    ) && status_requires_advisor_authority(to)
 }
 
 /// TASK-130: resolve the `human_only` marker for a freshly-added spec from its

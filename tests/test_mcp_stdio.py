@@ -514,7 +514,7 @@ def test_mcp_to_cli_visibility(client: McpClient, aida: Path, root: Path, strict
     return spec
 
 
-def test_spec_graph_round_trips(client: McpClient, spec: str, strict: bool) -> None:
+def test_spec_graph_round_trips(client: McpClient, spec: str, aida: Path, root: Path, strict: bool) -> None:
     commented = client.tool("add_comment", {"id": spec, "text": "MCP stdio comment probe"})
     require_structured_content_if_requested(commented, "add_comment", strict)
     require("Comment added" in content_text(commented), f"unexpected add_comment response: {commented}")
@@ -525,8 +525,17 @@ def test_spec_graph_round_trips(client: McpClient, spec: str, strict: bool) -> N
     searched = content_text(client.tool("search_requirements", {"query": "visibility probe"}))
     require(spec in searched, f"search_requirements missing {spec}:\n{searched}")
 
-    # BUG-449: use an implementer-legitimate transition (Planned is advisor-gated
-    # via MCP — asserted negatively below).
+    # BUG-481: Draft → InProgress via MCP is now advisor-gated (the
+    # add-then-update intake bypass). The advisor (or interactive human) owns
+    # that triage; an MCP client must not self-advance an un-triaged spec into
+    # the execution pipeline. Triage the spec into the pipeline out-of-band as
+    # the advisor (CLI with AIDA_SESSION_ROLE=advisor) so the implementer-
+    # legitimate Approved → InProgress flip below is exercised through MCP.
+    approved = run([str(aida), "edit", spec, "--status", "approved"], root, {"AIDA_SESSION_ROLE": "advisor"})
+    require(approved.returncode == 0, f"advisor CLI could not approve {spec}:\nstdout={approved.stdout}\nstderr={approved.stderr}")
+
+    # BUG-449/BUG-481: Approved → InProgress is an implementer-legitimate
+    # transition (Planned is advisor-gated via MCP — asserted negatively below).
     updated = client.tool("update_requirement", {"id": spec, "status": "in-progress"})
     require_structured_content_if_requested(updated, "update_requirement", strict)
     shown_after = content_text(client.tool("show_requirement", {"id": spec}))
@@ -735,7 +744,7 @@ def main() -> int:
 
         run_test("CLI-created spec visible through MCP", lambda: test_cli_to_mcp_visibility(client, seed_spec, args.require_structured_content))
         mcp_spec = run_test("MCP-created spec visible through CLI", lambda: test_mcp_to_cli_visibility(client, aida, tmp, args.require_structured_content))
-        run_test("spec graph round trips", lambda: test_spec_graph_round_trips(client, mcp_spec, args.require_structured_content))
+        run_test("spec graph round trips", lambda: test_spec_graph_round_trips(client, mcp_spec, aida, tmp, args.require_structured_content))
         run_test("coordination tools round trips", lambda: test_coordination_round_trips(client, args.require_structured_content))
         run_test("brief tools round trip", lambda: test_brief_round_trip(client, tmp))
         run_test("findings round trip", lambda: test_finding_round_trip(client))
