@@ -33,12 +33,12 @@ description: |-
   - aida type list (existing, type-vocabulary subset)
   - MCP resources (aida://project/summary) — a schema resource is a natural MCP companion
   - The agent-collaboration / quiet-depth positioning (OVERVIEW.md)
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:26:59.842729463Z
-modified_at: 2026-06-09T01:26:59.842729463Z
+modified_at: 2026-06-09T01:33:13.377643756Z
 req_type: Story
 tags:
 - agent-collaboration
