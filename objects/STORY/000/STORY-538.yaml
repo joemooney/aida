@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:26:59.842729463Z
-modified_at: 2026-06-09T01:33:13.377643756Z
+modified_at: 2026-06-09T01:33:26.890107003Z
 req_type: Story
 tags:
 - agent-collaboration
@@ -47,3 +47,9 @@ tags:
 - introspection
 - mcp
 - schema
+comments:
+- id: 019eaa03-59ea-76c1-aff0-a836756006b4
+  author: joe
+  content: 'Approved to the MVP slice (advisor review, 2026-06-08, operator delegated the call). Verdict: implement — it''s core agent-collaboration discoverability (on-thesis, not marketing → bugs-first phase doesn''t gate it), read-only quiet-depth, and substrate-DERIVED with a drift guard. SCOPE FENCE for this story: catalog listing (curated one-liners OK for non-Requirement objects) + ''aida schema requirement'' full detail + --json for Requirement + the drift-guard test. The reflection-registry EXTENSION (Finding/Brief/Directive/Lease/QueueItem full detail) + a schema MCP resource are FOLLOW-UPS, filed separately — not this PR.'
+  created_at: 2026-06-09T01:33:26.890107003Z
+  modified_at: 2026-06-09T01:33:26.890107003Z
