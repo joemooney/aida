@@ -22,7 +22,7 @@ The runbook (exact commands, timing, fallbacks) is docs/presentation/demo-runboo
 
 A git-canonical requirement graph that survives across **agents, sessions, and vendors.**
 
-<small>June 2026 · v0.11.0</small>
+<small>June 2026 · v0.12.0</small>
 
 <!--
 Open cold. One sentence: "I'm going to show you the thing, not tell you about it — but first, 90 seconds on the problem it solves, because if you've run coding agents at any scale you've already felt it."
@@ -146,7 +146,7 @@ THE CLAUDE-CODE QUESTION WILL COME (technical room). Expand the one-liner: "Clau
 
 **Proof: AIDA builds AIDA (fully dogfooded)**
 
-- **1,671** specs in the graph · **983** completed · **19** releases (latest **v0.11.0**) · **1,429** commits
+- **1,899** specs in the graph · **1,306** completed · **20** releases (latest **v0.12.0**) · **1,728** commits
 - **Multi-agent**: Claude + Codex + Antigravity drive one shared git-canonical substrate
 - **Evolution of formalism through experimentation**
 - **Persistent autonomous worker** (EPIC-30) — continuous queue drain, not one-shot
