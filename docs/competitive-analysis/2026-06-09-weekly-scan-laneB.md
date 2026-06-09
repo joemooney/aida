@@ -2,7 +2,7 @@
 
 **Lane:** B (agent orchestration & swarm frontier) · **Status:** lane fragment, pending A/C/D + synthesis · **Run by:** claude (implementer seat, dispatched)
 **Provenance key:** ✅ *verified* = I read the primary source (linked) · 🟡 *secondary* = read a secondary writeup, not the primary · 🔸 *inferred* = my reasoning, not a sourced claim
-**Coverage caveat (no silent truncation):** I sampled the named seeds (Claude Code Agent Teams/Workflows, Codex, Ruflo/Claude-Flow, Gas Town/Beads, Vibe Kanban, Claude Squad, Wit) plus the two provider changelogs. I did **not** survey the long tail of the `awesome-agent-orchestrators` list, nor verify star counts beyond the two I fetched live. Star figures from secondary sources are flagged.
+**Coverage caveat (no silent truncation):** I sampled the named seeds (Claude Code Agent Teams/Workflows, Codex, Ruflo/Claude-Flow, Gas Town/Beads, Vibe Kanban, Claude Squad, Wit) plus the two provider changelogs, and **Devin/Cognition (added 2026-06-09 after an initial omission — operator-caught; see B5)**. I did **not** survey the long tail of the `awesome-agent-orchestrators` list, nor verify star counts beyond the two I fetched live. Star figures from secondary sources are flagged.
 
 ## Pre-scan expectation vs. reality (the surprises are the value)
 
@@ -69,6 +69,21 @@ Codex changelog (✅ fetched): **June 2026 (26.527)** — *"Added thread coordin
 - **Vibe Kanban** (Kanban UI for parallel agents; Bloop shut down early 2026, project continues OSS), **Claude Squad** (zero-setup terminal parallelism), **Wit** (🟡 locks *functions* not files via Tree-sitter AST — finer-grained than AIDA's spec/worktree lease; interesting prior art for sub-file coordination). All mechanical; none carry a persistent typed requirement graph.
 - 🟡 Source: [Nimbalyst — best multi-agent coding tools 2026](https://nimbalyst.com/blog/best-multi-agent-coding-tools-2026/) · [awesome-agent-orchestrators](https://github.com/andyrewlee/awesome-agent-orchestrators)
 
+## Finding B5 — Devin (Cognition): the managed autonomous **implementer** — a Lane B executor competitor, not a substrate one
+
+*(Added 2026-06-09 after initial omission — flagged honestly; Devin was missing from the first sweep.)*
+
+Devin is *"an autonomous AI software engineer that can write, run and test code"* — consumes Linear/Jira tickets + prompts with explicit completion criteria, implements features, fixes bugs, **self-reviews PRs**, works via Slack/Teams/web/CLI. **Devin 2.0 (Feb 2026) added parallel sessions** — *"10 tickets → 10 Devins in parallel"* — plus planning tools and faster startup; price dropped to ~$20 entry. Strong Lane B credentials: autonomous implementation, parallel backlog execution, PR workflow, team handoff.
+
+**But it is NOT a substrate competitor (✅ verified from Devin's intro docs):** no persistent requirements graph, no stable IDs, no typed relationships, no code↔spec trace enforcement. It *consumes* tickets and *produces* work; "Knowledge"/"Playbooks" are guidance/automation, not a spec graph. It rides existing trackers (Jira/Linear) rather than maintaining its own typed requirement layer.
+
+**Where it sits:** Devin commoditizes the **autonomous-implementer + parallel-backlog-execution** layer — the managed-cloud, polished analog of AIDA's *drain*. **AIDA's response is not to out-implement Devin** (a cloud labor product billed per-ACU, single-vendor Cognition) but to be the **substrate the implementer drains**: the same "graph feeds the executor tickets, harvests its PRs back with trace enforcement + lifecycle bump" pattern as the Agent-Teams bridge (SPIKE-52) generalizes to Devin/Codex as executors. **Incentive anchor:** Devin monetizes *execution* (ACU billing), so it integrates with trackers rather than replacing them with a durable requirements graph — it *won't* build the substrate because its product is the engineer-as-a-service, not the spec layer. (Ages well.)
+
+**Cross-lane:** also a **Lane A** adjacency (buyer alternative, *not* a spec-driven-dev artifact system) and a **Lane C** distribution/integration data point (repo indexing, Knowledge, API, MCP docs, enterprise Jira/Linear/GitHub/GitLab/Bitbucket reach).
+
+- ✅ Source (primary): [Devin intro docs](https://docs.devin.ai/get-started/devin-intro) · [Devin doc index](https://docs.devin.ai/llms.txt)
+- 🟡 2026 deltas: [Devin 2.0 review (price drop, parallel)](https://weavai.app/blog/en/2026/05/13/devin-2-0-review-2026-ai-engineer-price-drops-to-20/) · [Kiro vs Devin — spec-IDE vs autonomous engineer](https://www.augmentcode.com/tools/kiro-vs-devin)
+
 ---
 
 ## Commoditized vs differentiated — Lane B deltas only (vs the 2026-05-31 keystone)
@@ -79,6 +94,7 @@ Codex changelog (✅ fetched): **June 2026 (26.527)** — *"Added thread coordin
 | Shared task-claiming + lease race-prevention | DIFFERENTIATED (mechanical moat) | **COMMODITIZING within-session** — Agent Teams shared task list + file-locking + auto-unblocking dependencies. AIDA's edge = the *durable, cross-session* version. |
 | Substrate-as-bouncer (quality gates) | DIFFERENTIATED principle | **VALIDATED + COMMODITIZING** — Agent Teams `TaskCompleted`/`TaskCreated`/`TeammateIdle` hooks are the same idea, native. Ride them. |
 | Worktree-per-agent isolation | TABLE STAKES | **Doubly table-stakes** — Anthropic + Codex both native now. |
+| **Autonomous implementer + parallel-backlog execution** | (AIDA's drain) | **COMMODITIZING** — Devin 2.0 (parallel sessions, self-reviewing PRs), Codex app, Agent Teams. AIDA's edge ≠ being a better implementer; it's the **substrate the implementer drains**. Don't out-implement Devin — feed it. |
 | **Typed relationship graph** | DIFFERENTIATED ("absent from agents") | **CONTESTED** — Beads has one. Stale line. |
 | **Multi-vendor durable graph** | DIFFERENTIATED ("the only one") | **CONTESTED** — Beads is vendor-neutral + git-backed. |
 | **Code↔spec trace enforcement** | DIFFERENTIATED | **STILL DIFFERENTIATED** — absent from Beads, Agent Teams, Codex, Ruflo. The sharpest surviving edge. **Defend loudly.** |
@@ -112,6 +128,7 @@ The surviving, defensible core is **enforcement + lifecycle + requirements-frami
 - **Beads/Gas Town adds code↔spec trace enforcement OR a lifecycle state machine** → would close the last substrate gap; highest-impact Lane-B tail risk. Watch `gastownhall/beads` releases + roadmap.
 - **MCP standardizes an inter-agent communication protocol** (keystone already flagged the workstream) — Agent Teams' Mailbox is a de-facto implementation; if it generalizes cross-vendor, AIDA's mailbox content (spec-anchored) is the defense, not the transport.
 - **Codex/Agent-Teams add persistence/resumption** (Agent Teams' "no session resumption" is an explicit current limitation) — if either makes coordination durable, the cross-session edge narrows toward the cross-*vendor* + requirements edge only.
+- **Devin turns Jira/Linear/issues into a durable, queryable requirements graph with stable IDs + trace-to-code checks** — would move Devin from the executor lane *into AIDA's core substrate lane*. Today it rides trackers and consumes tickets; watch Cognition's "Knowledge"/spec features + doc index for any move toward an owned typed requirement graph. (Operator-surfaced 2026-06-09.)
 
 ## Honest meta-read
 
