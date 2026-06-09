@@ -13,6 +13,7 @@ impl Scaffolder {
     /// Code does, so we inline rather than reference. Trade: drift detection
     /// is delimiter-based instead of single-file checksum.
     /// trace:FR-1-035 | ai:claude
+    // trace:TASK-0413 | ai:claude
     pub(super) fn generate_agents_md(&self, store: &RequirementsStore) -> String {
         let project_name = if !store.title.is_empty() {
             &store.title
@@ -83,6 +84,28 @@ aida brief ack .aida/agent-briefs/codex/<brief>.md
 tests/test_mcp_stdio.sh --skip-agent-contract
 tests/test_mcp_doc_consistency.sh
 ```
+
+### Optional Status Lines
+
+AIDA's bootstrap goal is to make other projects agent-ready without forcing a
+house style. The AIDA-aware status line is therefore a convenience, not a
+requirement: use `aida statusline --color=always` anywhere your shell, terminal
+multiplexer, or agent client can run a command-backed status line.
+
+Claude Code supports that directly through `.claude/settings.json`. Codex CLI
+has its own built-in TUI footer, configured with `[tui].status_line` in Codex
+`config.toml` or interactively with `/statusline`. Codex's current footer
+accepts built-in item IDs; it does not run `aida statusline` as an arbitrary
+command. For Codex, use the built-in footer fields as a lightweight companion
+to the AIDA-aware shell/statusline command:
+
+```toml
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+```
+
+Put that in `~/.codex/config.toml` for a personal default, or in a trusted
+project's `.codex/config.toml` if the whole team wants the same footer.
 
 ### MCP Coordination
 
@@ -191,6 +214,10 @@ mod tests {
         assert!(md.contains("docs/agents/codex-mcp-setup.md"));
         assert!(md.contains("docs/agents/session-communication.md"));
         assert!(md.contains("[AI:codex]"));
+        assert!(md.contains("### Optional Status Lines"));
+        assert!(md.contains("status_line = [\"model-with-reasoning\""));
+        assert!(md.contains("without forcing a"));
+        assert!(md.contains("does not run `aida statusline`"));
         assert!(md.contains("SPEC-410"));
         assert!(md.contains("BUG-345"));
         assert!(md.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
