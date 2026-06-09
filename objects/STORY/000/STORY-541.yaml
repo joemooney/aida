@@ -5,41 +5,50 @@ title: 'aida digest --audience operator (capabilities lens): new USER-FACING CLI
 description: |-
   ## Want (operator, 2026-06-09)
 
-  As tasks ship, there are CLI/UX changes the operator wants to learn WITHOUT reading mountains of spec info. `aida digest --since` exists (STORY-252) but is a WORK-STATUS narrative (Released / Major progress = a dump of every spec title) — too dense, and answers "what did we accomplish," not "what can I now DO."
+  The digest must let the operator/customer learn what changed for THEM, without reading spec titles. Today even `aida digest --audience customer --since 1d` is a SPEC-TITLE DUMP with raw dev-internal noise and no value framing — e.g. it surfaces "3 clippy correctness errors hidden by CI's -W mode" (a developer task title) to a *customer*, which has zero user value. STORY-252's editorial filter ("drop chore/typo/style") is far too weak.
 
-  ## Proposal: a capabilities lens on `aida digest`
+  ## The fix: filter by USER-IMPACT, render as VALUE (a capabilities lens)
 
-  `aida digest --since <window> --audience operator` (or `--capabilities`/`--whats-new`), reusing the existing digest window + editorial machinery:
-  1. **Filters to user-facing changes only** — new commands, changed flags, new/changed behaviors, new skills. DROP internal: refactors, tests, chores, non-UX bugfixes. Signal: `cli-ux` tag, new-command detection, help-text deltas, new `.claude/skills/`.
-  2. **Renders each as a try-it capability** — "**`aida mailbox list`** — see all agents' mailboxes + unread counts. Try: `aida mailbox list`". One line + the command.
-  3. **Groups by surface** — New commands / Changed flags & behaviors / New skills.
-  4. Honors `--since` like the rest of `aida digest`.
+  `aida digest --audience operator --since <window>` (+ improve `customer`), reusing the digest window/machinery, with two changes the current digest lacks:
 
-  ## Storage architecture (operator design, 2026-06-09): commit FACTS, cache-never-commit NARRATIVE
+  1. **Filter by user IMPACT, not spec type.** "feat vs chore" is the wrong cut — *did it change what the user can do / experience* is the cut.
+     - DROP zero-impact dev work: clippy/lint hygiene, internal refactors, internal MCP plumbing that changes no user surface, test-only.
+     - KEEP + TRANSLATE internal work that DOES touch the user: a crash fix is not noise — `conflict.rs truncate panics on non-ASCII` → "AIDA no longer crashes on spec descriptions with non-ASCII/emoji."
+  2. **Render from the CLI/value perspective, not the dev-task title.**
+     - New command → "you can now `aida X` — <what it does>."
+     - Changed flag/behavior → "`aida Y --z` now does W (was V)."
+     - Fix → "no longer <bad thing> when <case>."
+     - operator audience adds the try-it command; customer audience gives the value story. Both DROP dev noise + TRANSLATE.
+  3. Group by surface: New commands / Changed flags & behaviors / Fixes-you'll-notice / New skills.
 
-  Two layers, stored differently — "committed/frozen" and "contextually relevant to the current user" are incompatible, so split them:
+  ## Why this needs the LLM layer (validates the storage split)
 
-  - **Layer 1 — deterministic FACTS = a COMMITTED release-surface manifest (JSON).** Per release, the user-facing surface deltas (new commands / changed flags / new behaviors / new skills) + spec links + help deltas. Rebuildable + idempotent (same git state → byte-identical), so commit it like CHANGELOG.md / Cargo.lock — regenerated at release by scripts/release.sh. The SHARED deterministic input that `aida changelog`, `aida digest`, and this capabilities lens all render from (one facts artifact, many renders).
-  - **Layer 2 — LLM-curated NARRATIVE = regenerate on demand, CACHE, never freeze.** Generated from the Layer-1 manifest + current context; cached with staleness-detection keyed on (source-git-sha, audience, since-window), invalidated when the source advances — the `.aida/cache.db` model (rebuildable, gitignored, HEAD-sha invalidation). NEVER committed as canonical: a committed narrative goes stale the moment context moves. The cache makes repeat-asks free; "rejigger as behavior changes" happens automatically on source advance.
+  The impact-judgment + translation is NON-deterministic: you can't mechanically know "clippy = drop" but "non-ASCII panic = keep+translate." That is the Layer-2 LLM job. Layer-1 (deterministic) yields the candidate change set; Layer-2 (LLM) judges user-impact + writes the value framing.
+
+  ## Storage architecture: commit FACTS, cache-never-commit NARRATIVE
+
+  - **Layer 1 — deterministic FACTS = COMMITTED release-surface manifest (JSON).** Per release, the user-facing surface deltas (new commands / changed flags / behaviors / skills) + spec links + help deltas. Idempotent (same git state → byte-identical) → commit it like CHANGELOG.md / Cargo.lock, regenerated at release by scripts/release.sh. Shared input for changelog + digest + this lens.
+  - **Layer 2 — LLM NARRATIVE = on-demand, CACHED, never frozen.** Generated from the manifest + current context (audience); cached keyed on (source-git-sha, audience, since-window), invalidated on source advance — the .aida/cache.db model. NEVER committed: "contextually relevant to the current user" and "frozen commit" are incompatible.
 
   Same Tier-1/Tier-2 split as EPIC-36; same source-vs-projection model as the spec graph vs cache.db.
 
   ## Acceptance (sketch — master refines)
 
-  - [ ] `aida digest --audience operator --since <window>` lists ONLY user-facing CLI/UX/skill changes, each with a one-line "what + how to try it".
-  - [ ] Internal-only work (refactor/test/chore/non-UX bugfix) is excluded; grouped by surface.
-  - [ ] A deterministic release-surface manifest (JSON) is generated at release (idempotent) and committed alongside CHANGELOG.md; changelog + digest + this lens render from it.
-  - [ ] The operator-narrative is generated on demand and cached keyed on (source-sha, audience, window), invalidated on source change; NEVER committed as canonical.
-  - [ ] Reuses the existing `--since` window + digest machinery; SPEC-IDs stripped from operator-facing output.
+  - [ ] Output FILTERS by user-impact: zero-impact dev work (clippy/lint/refactor/internal-MCP/test-only) excluded; user-impacting fixes KEPT and translated to value.
+  - [ ] Output RENDERS value/CLI-perspective, not dev-task titles (new command → try-it; changed flag/behavior → what changed; fix → "no longer X when Y"). SPEC-IDs stripped.
+  - [ ] Grouped by surface (new commands / changed flags & behaviors / fixes-you'll-notice / new skills).
+  - [ ] Existing `--audience customer` no longer leaks dev-internal titles (clippy etc.).
+  - [ ] Layer-1 release-surface manifest (JSON) generated idempotently at release + committed; changelog + digest render from it.
+  - [ ] Layer-2 narrative generated on demand + cached keyed on (source-sha, audience, window), invalidated on source change; never committed.
 
   ## Relationships
-  - New audience/lens on `aida digest` (STORY-252); the user-facing counterpart to the dev-facing `aida changelog`. Storage model: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db).
+  - Sharpens/extends `aida digest` (STORY-252) — its customer filter is too weak today. Storage: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db). The user-facing counterpart to the dev-facing `aida changelog`.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:20:22.567385072Z
-modified_at: 2026-06-09T02:33:20.399427183Z
+modified_at: 2026-06-09T04:07:17.786370843Z
 req_type: Story
 tags:
 - aida:digest
