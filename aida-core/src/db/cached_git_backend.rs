@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use super::cache::{ArchiveFilter, Cache, ListFilter, RequirementSummary};
+use super::cache::{ArchiveFilter, Cache, CacheRead, ListFilter, RequirementSummary};
 use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
 use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
@@ -104,6 +104,23 @@ impl CachedGitBackend {
         self.cache.list_summaries(filter)
     }
 
+    /// Fail-soft list (STORY-543 / L3). Under cache lock contention this does NOT
+    /// hard-error: it returns best-effort rows plus a `degraded` flag so the
+    /// caller can emit a staleness signal (stderr warning / `"stale": true`) and
+    /// still exit 0. The stale-check rebuild is itself fail-soft — if the cache
+    /// is locked while we try to refresh it, we proceed to read whatever the
+    /// (possibly slightly stale) snapshot holds rather than blocking on the
+    /// writer. trace:STORY-543
+    pub fn list_summaries_soft(
+        &self,
+        filter: &ListFilter,
+    ) -> Result<CacheRead<Vec<RequirementSummary>>> {
+        let refresh_degraded = self.ensure_cache_fresh_soft();
+        let mut read = self.cache.list_summaries_soft(filter)?;
+        read.degraded = read.degraded || refresh_degraded;
+        Ok(read)
+    }
+
     /// Cache-backed FTS5 search across spec_id, agreed_id, title, description.
     /// `archive` controls the archive axis — STORY-441.
     pub fn search(
@@ -114,6 +131,29 @@ impl CachedGitBackend {
     ) -> Result<Vec<RequirementSummary>> {
         self.ensure_cache_fresh()?;
         self.cache.search(query, limit, archive)
+    }
+
+    /// Fail-soft FTS search (STORY-543 / L3). See `list_summaries_soft`.
+    /// trace:STORY-543
+    pub fn search_soft(
+        &self,
+        query: &str,
+        limit: usize,
+        archive: ArchiveFilter,
+    ) -> Result<CacheRead<Vec<RequirementSummary>>> {
+        let refresh_degraded = self.ensure_cache_fresh_soft();
+        let mut read = self.cache.search_soft(query, limit, archive)?;
+        read.degraded = read.degraded || refresh_degraded;
+        Ok(read)
+    }
+
+    /// Fail-soft variant of `ensure_cache_fresh`: returns `true` (degraded) when
+    /// the staleness rebuild could not run because the cache (or git store) was
+    /// busy/locked, instead of propagating the error. The caller then reads the
+    /// last-readable snapshot — possibly slightly stale, which is exactly the
+    /// fail-soft contract. trace:STORY-543
+    fn ensure_cache_fresh_soft(&self) -> bool {
+        self.ensure_cache_fresh().is_err()
     }
 
     /// Force a full cache rebuild, regardless of staleness. Used by the

@@ -5257,6 +5257,15 @@ pub enum Command {
         // trace:TASK-670 | ai:claude
         #[clap(long)]
         no_glyph: bool,
+
+        /// Fail (exit 75) instead of degrading gracefully when the cache is
+        /// locked and the listing can't be read freshly. By default a busy
+        /// cache yields best-effort results plus a stderr staleness warning and
+        /// exit 0 (pipeline-safe); pass this to make stale reads a hard error
+        /// for callers that need guaranteed-fresh data.
+        // trace:STORY-543
+        #[clap(long)]
+        strict_fresh: bool,
     },
 
     /// Show details for a specific requirement
@@ -6751,6 +6760,13 @@ pub enum Command {
         // trace:STORY-441 | ai:claude
         #[clap(long, conflicts_with = "all")]
         archived: bool,
+
+        /// Fail (exit 75) instead of degrading gracefully when the cache is
+        /// locked and results can't be read freshly. By default a busy cache
+        /// yields best-effort results plus a stderr staleness warning and exit 0.
+        // trace:STORY-543
+        #[clap(long)]
+        strict_fresh: bool,
     },
 
     /// Project activity — what's been touched and how it stands now.

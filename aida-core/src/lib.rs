@@ -129,8 +129,8 @@ pub use db::PostgresBackend;
 pub use db::{
     cache_lock_info_path, create_backend, export_to_json, import_from_json, migrate_sqlite_to_yaml,
     migrate_yaml_to_sqlite, open_or_create, read_cache_lock_info, ArchiveFilter, Cache,
-    CacheLockInfo, CachedGitBackend, GitBackend, ListFilter, RequirementSummary, SqliteBackend,
-    YamlBackend,
+    CacheLockInfo, CacheRead, CachedGitBackend, GitBackend, ListFilter, RequirementSummary,
+    SqliteBackend, YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};

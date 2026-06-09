@@ -132,6 +132,17 @@ const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
 const META_KEY_BUILT_AT: &str = "built_at";
 const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[100, 200, 400, 800, 1600, 3200, 6400, 12800];
 
+// STORY-543: read-side lock-wait budget. WAL mode (enabled at connection open)
+// lets a reader see the last-committed snapshot without blocking on a writer, so
+// the long write-side retry ladder (`with_cache_retry`, ~25.6s) is the WRONG
+// budget for a read — a read that still can't acquire should fail soft, not wait
+// the writer out. This bounded `busy_timeout` is the ONLY wait a read incurs; on
+// expiry the read degrades (caller falls back to the lock-free git store / emits
+// a staleness signal) rather than hard-erroring. Configurable via
+// `AIDA_CACHE_READ_WAIT_MS` for tuning/testing.
+// trace:STORY-543
+const DEFAULT_READ_WAIT_MS: u64 = 1000;
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 pub struct CacheLockInfo {
     pub pid: u32,
@@ -189,11 +200,95 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
     with_cache_retry(path, "open cache", || {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open cache at {:?}", path))?;
+        // STORY-543 / L1: enable WAL on the cache. In the default rollback-journal
+        // mode a writer takes an EXCLUSIVE lock that blocks ALL readers, which is
+        // the root of the ~25s read hang under concurrent writes. WAL lets readers
+        // see the last-committed snapshot without ever blocking on the writer. The
+        // legacy `sqlite_backend.rs` already runs `PRAGMA journal_mode=WAL`; the
+        // git-canonical cache never got it. Safe because cache.db is local,
+        // gitignored, per-clone state (WAL's same-machine/filesystem constraint
+        // holds). `query_row` because journal_mode returns the resulting mode.
+        // trace:STORY-543
+        let _: String = conn
+            .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+            .with_context(|| format!("Failed to enable WAL on cache at {:?}", path))?;
         // AIDA owns retry/backoff timing; rusqlite's default busy handler can
         // otherwise block inside a single attempt and hide the lock holder.
         conn.busy_timeout(Duration::from_millis(0))?;
         Ok(conn)
     })
+}
+
+/// Read-side lock-wait budget in milliseconds (STORY-543 / L2). Bounded and
+/// SEPARATE from the write-side retry ladder (`cache_retry_delays`): a read that
+/// can't acquire within this window degrades (fail-soft) rather than waiting the
+/// writer out. Override with `AIDA_CACHE_READ_WAIT_MS` (0 = no wait, fail fast).
+// trace:STORY-543
+fn read_wait_ms() -> u64 {
+    std::env::var("AIDA_CACHE_READ_WAIT_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_READ_WAIT_MS)
+}
+
+/// Apply the bounded read-wait to a connection just before a read query, so a
+/// read blocks at most `read_wait_ms()` on a concurrent writer's lock instead of
+/// returning SQLITE_BUSY instantly (busy_timeout=0, the write-path default) or
+/// inheriting the long write retry ladder. Best-effort: a failed pragma leaves
+/// the existing timeout in place, which is still correct (just less tolerant).
+// trace:STORY-543
+fn set_read_busy_timeout(conn: &Connection) {
+    let _ = conn.busy_timeout(Duration::from_millis(read_wait_ms()));
+}
+
+/// Restore the write-path default busy_timeout (0) after a bounded read, so the
+/// read-side wait never bleeds into a later write on the same shared connection
+/// (AIDA owns write retry/backoff timing via `with_cache_retry`). trace:STORY-543
+fn clear_read_busy_timeout(conn: &Connection) {
+    let _ = conn.busy_timeout(Duration::from_millis(0));
+}
+
+/// Result of a fail-soft cache read (STORY-543 / L3). Carries the value plus a
+/// `degraded` flag: when true the cache could not be read within the bounded
+/// wait (lock contention) and `value` is the supplied fallback — the caller
+/// should treat results as potentially stale and signal that out of band
+/// (stderr warning / `"stale": true` in JSON), never by failing the command.
+/// trace:STORY-543
+#[derive(Debug, Clone)]
+pub struct CacheRead<T> {
+    pub value: T,
+    pub degraded: bool,
+}
+
+impl<T> CacheRead<T> {
+    pub fn fresh(value: T) -> Self {
+        Self {
+            value,
+            degraded: false,
+        }
+    }
+
+    pub fn degraded(value: T) -> Self {
+        Self {
+            value,
+            degraded: true,
+        }
+    }
+}
+
+/// Turn a read `Result` into a fail-soft `CacheRead`: a SQLITE lock error
+/// (DatabaseBusy / DatabaseLocked) after the bounded wait degrades to the
+/// `fallback` value with `degraded = true`; every other error propagates (a
+/// genuine fault, not contention). trace:STORY-543
+fn soften_lock<T, F>(result: Result<T>, fallback: F) -> Result<CacheRead<T>>
+where
+    F: FnOnce() -> T,
+{
+    match result {
+        Ok(value) => Ok(CacheRead::fresh(value)),
+        Err(err) if is_sqlite_lock_error(&err) => Ok(CacheRead::degraded(fallback())),
+        Err(err) => Err(err),
+    }
 }
 
 fn with_cache_write<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
@@ -630,13 +725,40 @@ impl Cache {
         }
 
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(&sql)?;
-        let param_refs: Vec<&dyn rusqlite::ToSql> =
-            args.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-        let rows = stmt
-            .query_map(param_refs.as_slice(), row_to_summary)?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(rows)
+        // STORY-543 / L2: a read waits at most the bounded read budget for a
+        // concurrent writer's lock, NOT the long write-side retry ladder. WAL
+        // makes this rarely matter (readers see the last-committed snapshot), but
+        // the bound caps the worst case. The timeout is restored to the write-path
+        // default (0) afterwards so it never bleeds into a later write on the same
+        // shared connection. trace:STORY-543
+        set_read_busy_timeout(&conn);
+        let result = (|| {
+            let mut stmt = conn.prepare(&sql)?;
+            let param_refs: Vec<&dyn rusqlite::ToSql> =
+                args.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+            let rows = stmt
+                .query_map(param_refs.as_slice(), row_to_summary)?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok::<_, anyhow::Error>(rows)
+        })();
+        clear_read_busy_timeout(&conn);
+        result
+    }
+
+    /// Fail-soft list (STORY-543 / L3). Same query as `list_summaries`, but on a
+    /// lock error after the bounded read-wait it does NOT propagate the error —
+    /// it returns whatever the caller should treat as degraded so the command can
+    /// still emit best-effort output + a staleness signal and exit 0. The
+    /// returned `degraded` flag is true when the cache could not be read; in that
+    /// case `rows` is empty and the caller is expected to fall back to the
+    /// lock-free git store (or surface the staleness warning). Non-lock errors
+    /// (corruption, schema bugs) still propagate — fail-soft is for contention,
+    /// not for genuine faults. trace:STORY-543
+    pub fn list_summaries_soft(
+        &self,
+        filter: &ListFilter,
+    ) -> Result<CacheRead<Vec<RequirementSummary>>> {
+        soften_lock(self.list_summaries(filter), Vec::new)
     }
 
     /// FTS5 full-text search over spec_id, agreed_id, title, description.
@@ -660,7 +782,6 @@ impl Cache {
             ArchiveFilter::ArchivedOnly => " AND c.archived = 1",
             ArchiveFilter::Both => "",
         };
-        let conn = self.conn.lock().unwrap();
         // FTS5 requires the MATCH clause to use the bare table name, not an
         // alias — hence no `f` alias on requirements_fts.
         let sql = format!(
@@ -674,11 +795,30 @@ impl Cache {
                    ORDER BY rank
                    LIMIT ?"
         );
-        let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt
-            .query_map(params![escaped, limit as i64], row_to_summary)?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(rows)
+        let conn = self.conn.lock().unwrap();
+        // STORY-543 / L2: bounded read-wait, separate from the write ladder;
+        // restored to the write default afterwards (see `list_summaries`).
+        set_read_busy_timeout(&conn);
+        let result = (|| {
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt
+                .query_map(params![escaped, limit as i64], row_to_summary)?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok::<_, anyhow::Error>(rows)
+        })();
+        clear_read_busy_timeout(&conn);
+        result
+    }
+
+    /// Fail-soft FTS search (STORY-543 / L3). See `list_summaries_soft`.
+    /// trace:STORY-543
+    pub fn search_soft(
+        &self,
+        query: &str,
+        limit: usize,
+        archive: ArchiveFilter,
+    ) -> Result<CacheRead<Vec<RequirementSummary>>> {
+        soften_lock(self.search(query, limit, archive), Vec::new)
     }
 
     // ----------------------------------------------------------------- stats
@@ -1535,5 +1675,145 @@ mod tests {
 
         std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
         std::env::remove_var("AIDA_CACHE_RETRY_MS");
+    }
+
+    /// STORY-543: the cache opens in WAL journal mode (matching
+    /// sqlite_backend.rs), which is what lets readers see the last-committed
+    /// snapshot without blocking on a writer's lock. trace:STORY-543
+    #[test]
+    fn cache_opens_in_wal_mode() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        Cache::open(&cache_path).unwrap();
+
+        // Open an independent connection and confirm the on-disk journal mode
+        // is persisted as WAL (journal_mode=WAL is sticky on the database file).
+        let probe = Connection::open(&cache_path).unwrap();
+        let mode: String = probe
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode.to_lowercase(), "wal", "cache should be in WAL mode");
+
+        // The WAL sidecar files exist once the database has been written.
+        assert!(
+            cache_path.with_extension("db-wal").exists()
+                || cache_path
+                    .parent()
+                    .map(|p| p.join("cache.db-wal").exists())
+                    .unwrap_or(false),
+            "a -wal sidecar should accompany a WAL-mode cache"
+        );
+    }
+
+    /// STORY-543 / L1: a concurrent writer holding the cache does NOT block a
+    /// reader — WAL lets the read complete against the last-committed snapshot
+    /// well under 1s, instead of the ~25s write-ladder hang. trace:STORY-543
+    #[test]
+    fn wal_read_does_not_block_on_concurrent_writer() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let cache = Cache::open(&cache_path).unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("FR-1-001", "first"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Hold an open WRITE transaction on a separate connection (WAL allows a
+        // single writer; readers proceed against the prior committed snapshot).
+        let writer = Connection::open(&cache_path).unwrap();
+        writer.busy_timeout(Duration::from_millis(0)).unwrap();
+        writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+        let start = std::time::Instant::now();
+        let rows = cache.list_summaries(&ListFilter::default()).unwrap();
+        let elapsed = start.elapsed();
+
+        writer.execute_batch("ROLLBACK").unwrap();
+
+        assert_eq!(rows.len(), 1, "reader sees the committed snapshot");
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "WAL read must not block on the writer (took {elapsed:?})"
+        );
+    }
+
+    /// STORY-543 / L2: the read-side lock-wait budget is bounded and
+    /// configurable via `AIDA_CACHE_READ_WAIT_MS`, separate from the long
+    /// write-side retry ladder. trace:STORY-543
+    #[test]
+    fn read_wait_budget_is_bounded_and_configurable() {
+        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
+
+        std::env::remove_var("AIDA_CACHE_READ_WAIT_MS");
+        assert_eq!(read_wait_ms(), DEFAULT_READ_WAIT_MS);
+
+        std::env::set_var("AIDA_CACHE_READ_WAIT_MS", "250");
+        assert_eq!(read_wait_ms(), 250);
+
+        std::env::set_var("AIDA_CACHE_READ_WAIT_MS", "0");
+        assert_eq!(read_wait_ms(), 0, "0 = fail fast (no wait)");
+
+        // Garbage falls back to the default rather than panicking.
+        std::env::set_var("AIDA_CACHE_READ_WAIT_MS", "not-a-number");
+        assert_eq!(read_wait_ms(), DEFAULT_READ_WAIT_MS);
+
+        std::env::remove_var("AIDA_CACHE_READ_WAIT_MS");
+    }
+
+    /// STORY-543 / L3: `soften_lock` degrades a SQLITE lock error to a
+    /// best-effort `CacheRead` (degraded = true, fallback value) instead of
+    /// propagating it; non-lock errors still propagate. trace:STORY-543
+    #[test]
+    fn soften_lock_degrades_on_lock_but_propagates_other_errors() {
+        // A lock error degrades to the fallback, flagged degraded.
+        let lock_err: Result<Vec<i32>> = Err(anyhow::Error::new(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error {
+                code: rusqlite::ErrorCode::DatabaseBusy,
+                extended_code: 5,
+            },
+            None,
+        )));
+        let read = soften_lock(lock_err, Vec::new).unwrap();
+        assert!(read.degraded, "a lock error must degrade, not error");
+        assert!(read.value.is_empty(), "degraded value is the fallback");
+
+        // A non-lock error still propagates (a genuine fault, not contention).
+        let other_err: Result<Vec<i32>> = Err(anyhow::anyhow!("disk corruption"));
+        assert!(
+            soften_lock(other_err, Vec::new).is_err(),
+            "non-lock errors must NOT be swallowed by fail-soft"
+        );
+
+        // A success is reported fresh.
+        let ok: Result<Vec<i32>> = Ok(vec![1, 2, 3]);
+        let read = soften_lock(ok, Vec::new).unwrap();
+        assert!(!read.degraded);
+        assert_eq!(read.value, vec![1, 2, 3]);
+    }
+
+    /// STORY-543 / L3: the fail-soft read APIs return fresh results on the happy
+    /// path (the contention path is exercised structurally by
+    /// `soften_lock_degrades_*` since reliably wedging an EXCLUSIVE rollback lock
+    /// is racy across platforms). trace:STORY-543
+    #[test]
+    fn soft_reads_return_fresh_on_happy_path() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("FR-1-001", "lock tolerant"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let listed = cache.list_summaries_soft(&ListFilter::default()).unwrap();
+        assert!(!listed.degraded);
+        assert_eq!(listed.value.len(), 1);
+
+        let searched = cache
+            .search_soft("tolerant", 10, ArchiveFilter::NonArchivedOnly)
+            .unwrap();
+        assert!(!searched.degraded);
+        assert_eq!(searched.value.len(), 1);
     }
 }

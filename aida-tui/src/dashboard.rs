@@ -274,9 +274,23 @@ pub struct ListJsonRow {
     pub tags: Vec<String>,
 }
 
-/// Parse `aida list --json` output. Tolerant: a JSON shape mismatch
-/// returns an empty list rather than crashing the launcher.
+/// Wrapped `aida list --json` envelope (STORY-543): `{ "stale": bool, "rows":
+/// [...] }`. The launcher ignores `stale` but must still parse the rows out of
+/// the wrapper. trace:STORY-543
+#[derive(Debug, Clone, Deserialize)]
+struct ListJsonEnvelope {
+    #[serde(default)]
+    rows: Vec<ListJsonRow>,
+}
+
+/// Parse `aida list --json` output. Tolerant: accepts both the STORY-543
+/// `{ stale, rows }` envelope and the historical bare-array shape, and a JSON
+/// shape mismatch returns an empty list rather than crashing the launcher.
+/// trace:STORY-543
 pub fn parse_list_json(bytes: &[u8]) -> Vec<ListJsonRow> {
+    if let Ok(envelope) = serde_json::from_slice::<ListJsonEnvelope>(bytes) {
+        return envelope.rows;
+    }
     serde_json::from_slice(bytes).unwrap_or_default()
 }
 

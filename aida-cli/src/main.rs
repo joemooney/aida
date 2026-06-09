@@ -313,6 +313,30 @@ fn build_sha_short() -> Option<String> {
     }
 }
 
+// STORY-543: reserved exit code for a stale (cache-busy) read under
+// `--strict-fresh`. By default a stale read exits 0 (pipeline-safe) and signals
+// staleness out of band (stderr warning / JSON `stale`); this reserved code is
+// the opt-in machine signal for callers that demand guaranteed-fresh data.
+// 75 = EX_TEMPFAIL (sysexits.h): "temporary failure, retry later" — precisely
+// the semantics of a contended cache. trace:STORY-543
+const STALE_READ_EXIT_CODE: i32 = 75;
+
+/// Emit the STORY-543 staleness signal. On the human path (`json == false`) it
+/// writes a one-line stderr warning; the JSON path carries `stale` in structured
+/// output so this is a no-op there (avoids polluting machine output). Called
+/// before a `--strict-fresh` exit and on the degraded human listing.
+// trace:STORY-543
+fn emit_cache_stale_signal(strict: bool, json: bool) {
+    if json {
+        return;
+    }
+    if strict {
+        eprintln!("cache busy: could not read a fresh listing in time, and --strict-fresh was set");
+    } else {
+        eprintln!("cache busy: results may be stale (read the lock-free store with `aida cache rebuild` if this persists)");
+    }
+}
+
 const ASCIINEMA_WRAPPED_ENV: &str = "AIDA_ASCIINEMA_WRAPPED";
 // Keep generated cast names readable while preventing pathological command
 // lines from becoming filesystem-hostile. Truncated slugs end in "-trunc".
@@ -8735,6 +8759,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             blocked,
             no_flow,
             no_glyph,
+            strict_fresh,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -8800,7 +8825,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 archive,
                 ..Default::default()
             };
-            let mut reqs = backend.list_summaries(&filter)?;
+            // STORY-543: fail-soft read. Under cache lock contention the bounded
+            // read-wait expires and we degrade to best-effort rows + a staleness
+            // signal rather than the ~25s write-ladder hang. `--strict-fresh`
+            // turns a degraded read into exit 75; otherwise we warn on stderr
+            // (human path) / set `stale: true` (JSON) and exit 0. trace:STORY-543
+            let list_read = backend.list_summaries_soft(&filter)?;
+            let stale = list_read.degraded;
+            if stale && *strict_fresh {
+                emit_cache_stale_signal(true, *json);
+                std::process::exit(STALE_READ_EXIT_CODE);
+            }
+            // Human path: one-line stderr warning (JSON path carries `stale`).
+            if stale && !*json {
+                emit_cache_stale_signal(false, false);
+            }
+            let mut reqs = list_read.value;
 
             // STORY-62: --parent <id> restricts to direct children of <id>.
             // We don't materialize a parent->children index in the cache;
@@ -8941,6 +8981,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     in_flight: bool,
                     blocked: bool,
                 }
+                // STORY-543: wrap the rows so machine consumers can detect a
+                // degraded (cache-busy) read via the top-level `stale` flag
+                // instead of inferring it from a non-zero exit code.
+                // trace:STORY-543
+                #[derive(serde::Serialize)]
+                struct ListJson<'a> {
+                    stale: bool,
+                    rows: Vec<ListJsonRow<'a>>,
+                }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
                     .map(|r| {
@@ -8961,7 +9010,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         }
                     })
                     .collect();
-                println!("{}", serde_json::to_string_pretty(&out)?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&ListJson { stale, rows: out })?
+                );
                 return Ok(());
             }
 
@@ -10820,6 +10872,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             sync,
             all,
             archived,
+            strict_fresh,
             ..
         } => {
             // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
@@ -10838,7 +10891,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // Cache-backed FTS5 search (EPIC-1-001 Phase 2). Replaces a
             // full-store load + in-memory substring scan.
             // trace:EPIC-1-001 | ai:claude
-            let mut results = backend.search(query, *limit, archive)?;
+            //
+            // STORY-543: fail-soft read — a busy cache degrades to best-effort
+            // results + a staleness warning rather than the write-ladder hang.
+            // trace:STORY-543
+            let search_read = backend.search_soft(query, *limit, archive)?;
+            if search_read.degraded && *strict_fresh {
+                emit_cache_stale_signal(true, false);
+                std::process::exit(STALE_READ_EXIT_CODE);
+            }
+            if search_read.degraded {
+                emit_cache_stale_signal(false, false);
+            }
+            let mut results = search_read.value;
             if let Some(s) = status {
                 let needle = s.clone();
                 results.retain(|r| r.status.eq_ignore_ascii_case(&needle));

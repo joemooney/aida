@@ -22,8 +22,8 @@ mod yaml_backend;
 
 #[cfg(feature = "native")]
 pub use cache::{
-    cache_lock_info_path, read_cache_lock_info, ArchiveFilter, Cache, CacheLockInfo, ListFilter,
-    RequirementSummary,
+    cache_lock_info_path, read_cache_lock_info, ArchiveFilter, Cache, CacheLockInfo, CacheRead,
+    ListFilter, RequirementSummary,
 };
 #[cfg(feature = "native")]
 pub use cached_git_backend::CachedGitBackend;
