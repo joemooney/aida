@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T14:00:23.901748591Z
-modified_at: 2026-06-09T14:07:59.880269291Z
+modified_at: 2026-06-09T14:08:01.743194759Z
 req_type: Story
 tags:
 - aida:burndown
@@ -56,3 +56,15 @@ relationships:
   target_id: 019eacac-261b-7bf2-9992-4a5a0a3e99e6
   created_at: 2026-06-09T14:07:59.880261264Z
   created_by: joe
+comments:
+- id: 019eacb6-30cf-7561-9f8e-ef8a1edc9a1b
+  author: joe
+  content: |-
+    RECONCILED with STORY-547 (advisor, 2026-06-09) — NOT a duplicate; sliced. STORY-547 ships the DERIVABLE view now (acceptance #1 derivable, #2 single-reason, #6 json, #7 standalone) as `aida burndown explain` + `aida why <ID>`. This spec (548) retains the residual scope that 547 does NOT build:
+      - #3 findings-link: fold the existing FINDING for attempted-and-shelved specs into the view (reuse, don't recompute).
+      - #4 residual-note vehicle: a single structured note (prefixed comment or typed parking-reason) for NON-derivable reasons ("waiting on upstream X"), folded into the view; derivable state never written here (staleness trap).
+      - #2 (full) multiple reasons per spec, most-fundamental-first.
+      - #5 post-drain emission: /aida-burndown skill emits `explain` as its shipped/parked→findings/still-open→reasons summary.
+    Naming question RESOLVED by 547: `aida burndown explain` (all-open) + `aida why <ID>` (single). Build on burndown::explain_open / OpenBucket rather than re-deriving. Keep the three-source PRINCIPLE as the spec's spine.
+  created_at: 2026-06-09T14:08:01.743194759Z
+  modified_at: 2026-06-09T14:08:01.743194759Z
