@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:20:22.567385072Z
-modified_at: 2026-06-09T02:20:22.567385072Z
+modified_at: 2026-06-09T02:32:42.725559695Z
 req_type: Story
 tags:
 - aida:digest
@@ -47,3 +47,22 @@ tags:
 - from-user-direction
 - operator-experience
 - parent:STORY-252
+comments:
+- id: 019eaa39-9be5-7540-87d2-ae98daf06ed2
+  author: joe
+  content: |-
+    STORAGE ARCHITECTURE (operator design discussion, 2026-06-09) — fold into acceptance:
+
+    Two layers, stored differently (the principle: COMMIT facts, CACHE-never-commit narrative):
+
+    1. DETERMINISTIC FACTS = a committed release-surface manifest (JSON): per release, the user-facing surface deltas (new commands / changed flags / new behaviors / new skills) + spec links + help deltas. Rebuildable + idempotent (same git state → byte-identical), so commit it like CHANGELOG.md / Cargo.lock — regenerated at release time by scripts/release.sh. Readily available, diffable, survives in clones. This is the SHARED deterministic input that aida changelog, aida digest, and the capabilities lens all render from (one facts artifact, many renders).
+
+    2. LLM-CURATED NARRATIVE (the contextually-relevant capabilities digest) = regenerate on demand from the manifest + current context; CACHE with staleness-detection keyed on (source-git-sha, audience, since-window), invalidated when the source advances — the .aida/cache.db model (rebuildable projection, gitignored, HEAD-sha invalidation). NEVER commit/freeze it: "contextually relevant to the current user" and "frozen commit" are incompatible; a committed narrative goes stale the moment context moves. The cache makes repeat-asks against unchanged source free, and "rejigger as behavior changes" happens automatically on source advance.
+
+    Acceptance additions:
+    - [ ] A deterministic release-surface manifest (JSON) is generated at release (idempotent) and committed alongside CHANGELOG.md; capabilities digest + changelog render from it.
+    - [ ] The operator-narrative is generated on demand, cached keyed on (source-sha, audience, window), invalidated on source change; never committed as canonical.
+
+    Same Tier-1/Tier-2 split as EPIC-36; same source-vs-projection model as the spec graph vs cache.db.
+  created_at: 2026-06-09T02:32:42.725559695Z
+  modified_at: 2026-06-09T02:32:42.725559695Z
