@@ -39,13 +39,20 @@ Everything in this directory is in service of making that scope honest. If a com
 | [vs-karpathy-md.md](vs-karpathy-md.md) | When structured markdown alone is enough vs when you actually need a relationship graph + stable IDs + MCP server. |
 | [vs-saas-pm.md](vs-saas-pm.md) | When Linear / Jira / GitHub Projects make sense vs the lightweight git-canonical, code-aware angle AIDA serves. |
 
+### Cross-cutting decision aids
+
+Not one-neighbor-at-a-time comparisons, but the questions that span all of them:
+
+| File | The question it answers |
+|---|---|
+| [when-not-to-use-aida.md](when-not-to-use-aida.md) | The honest scope limits — six cases where a neighbor tool alone is the right call, and AIDA's overhead wouldn't earn its keep. Read this *first* if you're deciding whether to adopt at all. |
+| [composition.md](composition.md) | The recipe book for *"use AIDA **with** X"* — Spec Kit, Agent Teams, MCP editors, `/workflow`, GitHub Issues, Karpathy markdown. Names the seam (and where a bridge is still manual today) for each. |
+
 Future-work files mentioned in [STORY-107](../../) and not yet seeded:
 
 - `vs-github-projects.md` (separate from `vs-saas-pm.md` if/when the GitHub-specific angle warrants its own page)
 - `vs-aider.md`, `vs-cursor.md`, `vs-continue.md` (AI code-editor neighbors — composition story, not replacement)
 - `vs-mdbook.md`, `vs-docusaurus.md` (documentation tooling — `aida docs build` projects *to* one of these, not a substitute)
-- `composition.md` (which tools to layer with AIDA, with concrete recipes)
-- `when-not-to-use-aida.md` (honest scope limits — when X is better, full stop)
 
 ---
 
