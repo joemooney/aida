@@ -1,0 +1,22 @@
+id: 019eacf6-5aa7-79f1-bd0e-b21bf9b7001a
+spec_id: TASK-720
+agreed_id: TASK-720
+title: 'Positioning doc: AIDA vs Claude Code Agent Teams (vs-agent-teams.md)'
+description: |-
+  Lane B weekly scan (docs/competitive-analysis/2026-06-09-weekly-scan-laneB.md) finding B1: Anthropic shipped Agent Teams (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS, Claude Code >=2.1.32) — native mailbox + shared task-list (self-claim, file-locking, auto-unblocking dependencies) + plan-approval gate + quality-gate hooks. This is the most-overlapping provider primitive yet — closer to AIDA's coordination layer than subagents. The existing docs/positioning/vs-claude-code-subagents.md PREDATES it (last updated 2026-05-20) and explicitly addresses only subagents.
+
+  Write docs/positioning/vs-agent-teams.md mirroring the vs-claude-code-subagents.md / vs-claude-code-workflows.md shape: honest layer story — Agent Teams = ephemeral, local-JSON, Claude-only, no-session-resumption, within-session task list; AIDA = durable git-canonical cross-vendor requirement graph with typed relations + trace enforcement + lifecycle. They COMPOSE (AIDA seeds/harvests an Agent Team; AIDA is the layer above). Anchor 'why the gap persists' on incentive: Anthropic is single-vendor by business model. Source: https://code.claude.com/docs/en/agent-teams
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T15:18:06.759239677Z
+modified_at: 2026-06-09T15:18:06.759239677Z
+req_type: Task
+tags:
+- agent-teams
+- competitive
+- docs
+- from-scan:2026-06-09
+- lane-b
+- positioning
