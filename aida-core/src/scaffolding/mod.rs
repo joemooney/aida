@@ -667,7 +667,9 @@ impl FileCategory {
     pub fn from_path(path: &Path) -> FileCategory {
         let s = path.to_string_lossy();
         // ManagedMerge: JSON config files where AIDA + user share keys.
-        if s == ".claude/settings.json" || s == ".mcp.json" {
+        // settings.local.json is the per-user, gitignored MCP-trust override
+        // (AIDA owns /enabledMcpjsonServers). trace:BUG-484
+        if s == ".claude/settings.json" || s == ".mcp.json" || s == ".claude/settings.local.json" {
             return FileCategory::ManagedMerge;
         }
         // Seed: top-level project docs the user is expected to tailor.
@@ -2039,6 +2041,32 @@ impl Scaffolder {
             }
 
             artifacts.push(artifact);
+
+            // settings.local.json — per-user, gitignored MCP pre-approval so a
+            // fresh project trusts its OWN scaffolded .mcp.json server and a
+            // first launch doesn't show the scary "⚠ 1 setup issue: MCP"
+            // prompt. Local (not committed) by design: a committed pre-approval
+            // is the exact clone-attack vector Claude Code guards against, and
+            // `aida init` runs per-clone so each user grants their own local
+            // trust to the server they just installed. trace:BUG-484
+            let path = PathBuf::from(".claude/settings.local.json");
+            let artifact = self.create_artifact(
+                path.clone(),
+                "{\n  \"enabledMcpjsonServers\": [\n    \"aida\"\n  ]\n}\n".to_string(),
+                "Per-user MCP pre-approval for the scaffolded aida server".to_string(),
+                false, // JSON file
+            );
+
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+
+            artifacts.push(artifact);
         }
 
         // Filter new_dirs to only include those that don't exist
@@ -2765,6 +2793,66 @@ mod tests {
             .find(|a| a.path == Path::new("CLAUDE.md"));
         assert!(claude_md.is_some());
         assert!(claude_md.unwrap().content.contains("Test Project"));
+    }
+
+    // trace:BUG-484 — a fresh init must pre-approve its own scaffolded MCP
+    // server so Claude Code doesn't show "⚠ 1 setup issue: MCP" on first launch.
+    #[test]
+    fn test_settings_local_json_preapproves_mcp_server() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+
+        let local = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(".claude/settings.local.json"))
+            .expect(".claude/settings.local.json should be scaffolded");
+
+        // Must be valid JSON (Claude Code parses it strictly — no AIDA header).
+        let parsed: serde_json::Value = serde_json::from_str(&local.content)
+            .expect("settings.local.json must be valid JSON with no comment header");
+        let servers = parsed
+            .get("enabledMcpjsonServers")
+            .and_then(|v| v.as_array())
+            .expect("enabledMcpjsonServers must be an array");
+        assert!(
+            servers.iter().any(|s| s == "aida"),
+            "the scaffolded aida MCP server must be pre-approved"
+        );
+
+        // It's a ManagedMerge file (per-user override; AIDA owns the trust slot,
+        // re-init never clobbers a user's own edits).
+        assert_eq!(local.category(), FileCategory::ManagedMerge);
+    }
+
+    // trace:BUG-484 — the pre-approval file lands on disk on apply and reads
+    // back as the expected trust document.
+    #[test]
+    fn test_apply_writes_settings_local_json_preapproval() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        let local_path = temp_dir.path().join(".claude/settings.local.json");
+        assert!(
+            local_path.exists(),
+            ".claude/settings.local.json should be written on apply"
+        );
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&local_path).unwrap()).unwrap();
+        assert_eq!(
+            parsed["enabledMcpjsonServers"],
+            serde_json::json!(["aida"]),
+            "fresh init must pre-approve the aida MCP server"
+        );
     }
 
     #[test]
