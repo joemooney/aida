@@ -48,7 +48,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:20:22.567385072Z
-modified_at: 2026-06-09T04:07:17.786370843Z
+modified_at: 2026-06-09T04:10:34.981481775Z
 req_type: Story
 tags:
 - aida:digest
@@ -76,3 +76,8 @@ comments:
     Same Tier-1/Tier-2 split as EPIC-36; same source-vs-projection model as the spec graph vs cache.db.
   created_at: 2026-06-09T02:32:42.725559695Z
   modified_at: 2026-06-09T02:32:42.725559695Z
+- id: 019eaa93-3665-77a0-9eb2-07e75c7f6c7a
+  author: joe
+  content: 'PERSONA definition (operator, 2026-06-09): the four audiences are customer / team / self / **operator**. The first three are WORK-NARRATIVE views (what shipped / where are we / advisor''s-own-detail). `operator` is the ONLY one whose lens is the CLI SURFACE itself — the day-to-day CLI user/power-user who wants the command-surface diff (new commands / changed flags / changed behaviors / fixes-you''ll-notice), value-framed + try-it. Do NOT build operator as a synonym for self (self = SPEC-ID-rich work narrative; operator = CLI-surface changes, SPEC-IDs stripped, value-translated). This is the ''cli changes'' perspective the operator asked for.'
+  created_at: 2026-06-09T04:10:34.981481775Z
+  modified_at: 2026-06-09T04:10:34.981481775Z
