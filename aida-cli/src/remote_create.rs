@@ -1,0 +1,663 @@
+//! Guided origin bootstrap — `aida remote create` / `aida remote attach`.
+//!
+//! When a project has no git `origin`, both legs of `aida push` silently skip
+//! ("no origin — will skip"), leaving the operator to manually create the repo
+//! on GitHub/GitLab + `git remote add origin` + push. This module smooths that:
+//! a guided flow that offers GitHub (via `gh repo create`), personal-GitLab
+//! push-to-create over SSH (token-free, no `glab` required), an
+//! attempt-then-degrade path for corporate GitLab, and attach-existing.
+//!
+//! Design split (deliberate, for testability): the *pure* pieces — command
+//! construction, URL building, repo-name derivation, host memory, and the
+//! non-interactive manual recipe — live as free functions with unit tests.
+//! The interactive prompting + process execution is the thin shell around
+//! them. The non-interactive path (no TTY) prints the manual recipe and exits
+//! cleanly rather than guessing.
+//!
+//! Honors the EPIC-35 forge abstraction for WHICH forge a remembered host maps
+//! to; repo creation is "step 0" before the forge lifecycle takes over.
+//!
+//! trace:STORY-537 | ai:claude
+
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// A GitLab host AIDA remembers per machine so "your personal GitLab" is a
+/// one-key choice rather than a re-typed host. The working SSH route is
+/// remembered alongside (personal GitLab is SSH :2222 locally, for example).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownHost {
+    /// The forge host, e.g. `gitlab.joemooney.com`.
+    pub host: String,
+    /// A friendly label for the menu, e.g. `personal GitLab`.
+    pub label: Option<String>,
+    /// Preferred SSH port for push-to-create (None → 22).
+    pub ssh_port: Option<u16>,
+}
+
+// ───────────────────────────── pure helpers ─────────────────────────────
+
+/// Derive a default repo name from the project directory's basename.
+/// Falls back to `"repo"` for a root/empty path. Pure.
+pub fn default_repo_name(project_root: &Path) -> String {
+    project_root
+        .file_name()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("repo")
+        .to_string()
+}
+
+/// Build the `gh repo create` argv (after the `gh` binary itself) for creating
+/// a repo from the current directory, wiring `origin` and pushing in one shot.
+/// `ns_name` may be bare (`myrepo`) or namespaced (`owner/myrepo`). Pure so the
+/// exact command shape is unit-testable without invoking `gh`.
+/// trace:STORY-537 | ai:claude
+pub fn gh_repo_create_args(ns_name: &str, private: bool) -> Vec<String> {
+    vec![
+        "repo".to_string(),
+        "create".to_string(),
+        ns_name.to_string(),
+        if private { "--private" } else { "--public" }.to_string(),
+        "--source".to_string(),
+        ".".to_string(),
+        "--remote".to_string(),
+        "origin".to_string(),
+        "--push".to_string(),
+    ]
+}
+
+/// Build a GitLab SSH push-to-create origin URL. Uses the `ssh://` scheme form
+/// when a non-default port is given (scp-like syntax can't carry a port),
+/// otherwise the compact scp-like `git@host:ns/name.git`. Pure.
+/// trace:STORY-537 | ai:claude
+pub fn gitlab_ssh_origin_url(host: &str, port: Option<u16>, namespace: &str, name: &str) -> String {
+    let repo = name.trim_end_matches(".git");
+    let path = if namespace.is_empty() {
+        format!("{repo}.git")
+    } else {
+        format!("{}/{repo}.git", namespace.trim_matches('/'))
+    };
+    match port {
+        Some(p) if p != 22 => format!("ssh://git@{host}:{p}/{path}"),
+        _ => format!("git@{host}:{path}"),
+    }
+}
+
+/// The manual recipe AIDA prints in a non-interactive context (no TTY) when it
+/// finds no origin. It can't prompt, so it hands the operator the exact steps
+/// for each forge and exits cleanly (exit 0 — this is guidance, not an error).
+/// Pure → snapshot-testable. trace:STORY-537 | ai:claude
+pub fn manual_recipe(repo_name: &str, branch: &str) -> String {
+    let mut s = String::new();
+    s.push_str("No `origin` remote — create or attach one, then push:\n\n");
+    s.push_str("  GitHub (gh):\n");
+    s.push_str(&format!(
+        "    gh repo create {repo_name} --private --source . --remote origin --push\n\n"
+    ));
+    s.push_str("  GitLab push-to-create (SSH, no glab/token needed):\n");
+    s.push_str(&format!(
+        "    git remote add origin git@<gitlab-host>:<namespace>/{repo_name}.git\n"
+    ));
+    s.push_str(&format!("    git push -u origin {branch}\n\n"));
+    s.push_str("  Attach an existing repo:\n");
+    s.push_str("    aida remote attach <url>\n\n");
+    s.push_str("Then `aida push` syncs both the code and the aida-store legs.");
+    s
+}
+
+/// The clear UI-step + attach instruction printed when an auto-create attempt
+/// fails on a forge AIDA can't guarantee (corporate GitLab: push-to-create off,
+/// API namespace perms). Never leaves the operator stuck. Pure.
+/// trace:STORY-537 | ai:claude
+pub fn attach_fallback_hint(host: &str, repo_name: &str) -> String {
+    format!(
+        "Couldn't auto-create the repo on {host} (push-to-create may be disabled, \
+         or you may lack namespace permissions).\n\
+         Create it in the GitLab UI:\n  \
+         1. Open https://{host}/projects/new and create an empty project named \"{repo_name}\"\n  \
+         2. Copy its clone URL, then run:  aida remote attach <url>\n\
+         AIDA will wire origin + push both legs."
+    )
+}
+
+// ───────────────────────────── host memory ─────────────────────────────
+
+/// Path to the machine-global remote-hosts memory file (`~/.aida/remotes.toml`).
+/// Returns None when the home dir can't be resolved.
+pub fn known_hosts_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".aida").join("remotes.toml"))
+}
+
+/// Parse the `[[gitlab_host]]` array-of-tables from a `remotes.toml` body.
+/// Hand-rolled (mirrors the project's other section parsers) to avoid a serde
+/// round-trip for a tiny file. Pure over its `&str` input → unit-testable.
+/// trace:STORY-537 | ai:claude
+pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
+    let mut hosts = Vec::new();
+    let mut cur: Option<KnownHost> = None;
+    let flush = |cur: &mut Option<KnownHost>, hosts: &mut Vec<KnownHost>| {
+        if let Some(h) = cur.take() {
+            if !h.host.is_empty() {
+                hosts.push(h);
+            }
+        }
+    };
+    for raw in toml_body.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line == "[[gitlab_host]]" {
+            flush(&mut cur, &mut hosts);
+            cur = Some(KnownHost {
+                host: String::new(),
+                label: None,
+                ssh_port: None,
+            });
+            continue;
+        }
+        if line.starts_with('[') {
+            // Some other table — stop accumulating into the current host.
+            flush(&mut cur, &mut hosts);
+            continue;
+        }
+        if let (Some(entry), Some((key, val))) = (cur.as_mut(), line.split_once('=')) {
+            let key = key.trim();
+            let val = val.trim().trim_matches('"');
+            match key {
+                "host" => entry.host = val.to_string(),
+                "label" => entry.label = Some(val.to_string()),
+                "ssh_port" => entry.ssh_port = val.parse::<u16>().ok(),
+                _ => {}
+            }
+        }
+    }
+    flush(&mut cur, &mut hosts);
+    hosts
+}
+
+/// Serialize known hosts back to a `remotes.toml` body. Pure → round-trippable.
+/// trace:STORY-537 | ai:claude
+pub fn serialize_known_hosts(hosts: &[KnownHost]) -> String {
+    let mut s = String::from(
+        "# AIDA remembered forge hosts (machine-global).\n\
+         # `aida remote create` offers these as one-key choices.\n",
+    );
+    for h in hosts {
+        s.push_str("\n[[gitlab_host]]\n");
+        s.push_str(&format!("host = \"{}\"\n", h.host));
+        if let Some(label) = &h.label {
+            s.push_str(&format!("label = \"{label}\"\n"));
+        }
+        if let Some(port) = h.ssh_port {
+            s.push_str(&format!("ssh_port = {port}\n"));
+        }
+    }
+    s
+}
+
+/// Read remembered GitLab hosts from `~/.aida/remotes.toml`. Empty on any error
+/// (missing file / unreadable / no home dir) — host memory is a convenience, so
+/// absence degrades to "ask the host".
+pub fn load_known_hosts() -> Vec<KnownHost> {
+    let Some(path) = known_hosts_path() else {
+        return Vec::new();
+    };
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    parse_known_hosts(&body)
+}
+
+/// Insert-or-update a host in the remembered set (dedup by host), then persist.
+/// Idempotent on a repeat bootstrap of the same host. Returns the path written.
+/// trace:STORY-537 | ai:claude
+pub fn remember_host(new: KnownHost) -> Result<PathBuf> {
+    let path = known_hosts_path().context("cannot resolve home dir for remotes.toml")?;
+    let mut hosts = load_known_hosts();
+    if let Some(existing) = hosts.iter_mut().find(|h| h.host == new.host) {
+        // Update label/port when the new bootstrap learned a working route.
+        if new.label.is_some() {
+            existing.label = new.label.clone();
+        }
+        if new.ssh_port.is_some() {
+            existing.ssh_port = new.ssh_port;
+        }
+    } else {
+        hosts.push(new);
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    std::fs::write(&path, serialize_known_hosts(&hosts))
+        .with_context(|| format!("writing {}", path.display()))?;
+    Ok(path)
+}
+
+// ───────────────────────────── git plumbing ─────────────────────────────
+
+/// Run `git -C <root> remote add origin <url>`, then `git -C <root> push -u
+/// origin <branch>`. Returns Ok(()) only when both succeed.
+/// trace:STORY-537 | ai:claude
+fn add_origin_and_push(project_root: &Path, url: &str, branch: &str) -> Result<()> {
+    let add = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["remote", "add", "origin", url])
+        .status()
+        .context("invoking git remote add origin")?;
+    if !add.success() {
+        anyhow::bail!("`git remote add origin {url}` failed");
+    }
+    let push = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["push", "-u", "origin", branch])
+        .status()
+        .context("invoking git push -u origin")?;
+    if !push.success() {
+        anyhow::bail!("`git push -u origin {branch}` failed");
+    }
+    Ok(())
+}
+
+/// True when AIDA is interactive (both stdin and stdout are a TTY). The flow
+/// only prompts when interactive; otherwise it prints the manual recipe.
+fn is_interactive() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+fn is_on_path(bin: &str) -> bool {
+    Command::new(bin)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn current_branch(project_root: &Path) -> String {
+    Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        })
+        .filter(|b| !b.is_empty() && b != "HEAD")
+        .unwrap_or_else(|| "main".to_string())
+}
+
+fn has_origin(project_root: &Path) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn origin_url(project_root: &Path) -> String {
+    Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+fn prompt_line(prompt: &str) -> Result<String> {
+    use std::io::Write;
+    print!("{prompt}");
+    std::io::stdout().flush()?;
+    let mut s = String::new();
+    std::io::stdin().read_line(&mut s)?;
+    Ok(s.trim().to_string())
+}
+
+// ───────────────────────────── command entry points ─────────────────────
+
+/// `aida remote attach <url>` — wire an existing repo's URL as origin and push
+/// the code leg. The clean-degradation target for corporate GitLab. The store
+/// leg is synced by a follow-up `aida push`; we only own the code leg + origin
+/// wiring here so the module stays store-agnostic. trace:STORY-537 | ai:claude
+pub fn handle_remote_attach(project_root: &Path, url: &str) -> Result<()> {
+    if has_origin(project_root) {
+        anyhow::bail!(
+            "origin already set — remove it first with `git remote remove origin` if you mean to re-point it"
+        );
+    }
+    let branch = current_branch(project_root);
+    add_origin_and_push(project_root, url, &branch)?;
+    println!("Attached origin {url} and pushed {branch}.");
+    println!("Run `aida push` to sync the aida-store leg too.");
+    Ok(())
+}
+
+/// `aida remote create` — the guided bootstrap. Non-interactive prints the
+/// recipe and exits cleanly; interactive walks the forge menu. The
+/// `--attach <url>` / `--github` / `--gitlab <host>` flags pre-select a route
+/// so the flow stays scriptable. trace:STORY-537 | ai:claude
+pub fn handle_remote_create(
+    project_root: &Path,
+    attach: Option<&str>,
+    github: bool,
+    gitlab_host: Option<&str>,
+    private: bool,
+) -> Result<()> {
+    if has_origin(project_root) {
+        let url = origin_url(project_root);
+        println!("origin already set ({url}). Nothing to do — `aida push` will sync it.");
+        return Ok(());
+    }
+
+    let repo_name = default_repo_name(project_root);
+    let branch = current_branch(project_root);
+
+    // Pre-selected route via flag — works with or without a TTY (scriptable).
+    if let Some(url) = attach {
+        return handle_remote_attach(project_root, url);
+    }
+    if github {
+        return create_via_github(project_root, &repo_name, private);
+    }
+    if let Some(host) = gitlab_host {
+        return create_via_gitlab_ssh(project_root, host, &repo_name, &branch, private);
+    }
+
+    // No pre-selected route and no TTY → print the recipe and exit 0.
+    if !is_interactive() {
+        println!("{}", manual_recipe(&repo_name, &branch));
+        return Ok(());
+    }
+
+    interactive_menu(project_root, &repo_name, &branch, private)
+}
+
+fn create_via_github(project_root: &Path, repo_name: &str, private: bool) -> Result<()> {
+    if !is_on_path("gh") {
+        anyhow::bail!(
+            "GitHub CLI (`gh`) is not on PATH — install it (https://cli.github.com) or use \
+             `aida remote attach <url>` after creating the repo in the GitHub UI."
+        );
+    }
+    let args = gh_repo_create_args(repo_name, private);
+    // `gh repo create … --source .` operates on the repo at the current dir.
+    let status = Command::new("gh")
+        .args(&args)
+        .current_dir(project_root)
+        .status()
+        .context("invoking gh repo create")?;
+    if !status.success() {
+        anyhow::bail!("`gh repo create` failed — check `gh auth status` and try again");
+    }
+    println!("Created GitHub repo and pushed code. Run `aida push` to sync the aida-store leg.");
+    Ok(())
+}
+
+fn create_via_gitlab_ssh(
+    project_root: &Path,
+    host: &str,
+    repo_name: &str,
+    branch: &str,
+    _private: bool,
+) -> Result<()> {
+    // Use a remembered SSH port for this host if we have one.
+    let known = load_known_hosts();
+    let port = known
+        .iter()
+        .find(|h| h.host == host)
+        .and_then(|h| h.ssh_port);
+
+    let namespace = if is_interactive() {
+        prompt_line(&format!(
+            "GitLab namespace (user/group) on {host} [press Enter for your default]: "
+        ))?
+    } else {
+        String::new()
+    };
+
+    let url = gitlab_ssh_origin_url(host, port, &namespace, repo_name);
+    println!("Push-to-create on {host} via SSH:");
+    println!("  origin = {url}");
+    match add_origin_and_push(project_root, &url, branch) {
+        Ok(()) => {
+            // Remember the host (+ port) for next time.
+            let _ = remember_host(KnownHost {
+                host: host.to_string(),
+                label: None,
+                ssh_port: port,
+            });
+            println!("Wired origin + pushed {branch}. Run `aida push` to sync the aida-store leg.");
+            Ok(())
+        }
+        Err(e) => {
+            // Degrade cleanly — clean up the half-wired origin, show the
+            // attach-existing fallback (corporate case).
+            let _ = Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["remote", "remove", "origin"])
+                .status();
+            eprintln!("{}", attach_fallback_hint(host, repo_name));
+            Err(e.context("push-to-create over SSH failed"))
+        }
+    }
+}
+
+fn interactive_menu(
+    project_root: &Path,
+    repo_name: &str,
+    branch: &str,
+    private: bool,
+) -> Result<()> {
+    println!("No `origin` remote. Where should I create one?\n");
+    let known = load_known_hosts();
+    let mut idx = 1;
+    println!("  {idx}) GitHub (via gh)");
+    let github_choice = idx;
+    idx += 1;
+    let mut host_choices: Vec<(usize, KnownHost)> = Vec::new();
+    for h in &known {
+        let label = h.label.clone().unwrap_or_else(|| h.host.clone());
+        println!("  {idx}) {label} ({})", h.host);
+        host_choices.push((idx, h.clone()));
+        idx += 1;
+    }
+    let other_gitlab_choice = idx;
+    println!("  {idx}) Other GitLab host (push-to-create over SSH)");
+    idx += 1;
+    let attach_choice = idx;
+    println!("  {idx}) Attach an existing URL (created elsewhere)");
+
+    let answer = prompt_line("\nChoice: ")?;
+    let choice: usize = answer.parse().unwrap_or(0);
+
+    if choice == github_choice {
+        return create_via_github(project_root, repo_name, private);
+    }
+    if let Some((_, h)) = host_choices.iter().find(|(n, _)| *n == choice) {
+        return create_via_gitlab_ssh(project_root, &h.host, repo_name, branch, private);
+    }
+    if choice == other_gitlab_choice {
+        let host = prompt_line("GitLab host (e.g. gitlab.example.com): ")?;
+        if host.is_empty() {
+            anyhow::bail!("no host given");
+        }
+        let port_in = prompt_line("SSH port [Enter for 22]: ")?;
+        if !port_in.is_empty() {
+            if let Ok(p) = port_in.parse::<u16>() {
+                let _ = remember_host(KnownHost {
+                    host: host.clone(),
+                    label: None,
+                    ssh_port: Some(p),
+                });
+            }
+        }
+        return create_via_gitlab_ssh(project_root, &host, repo_name, branch, private);
+    }
+    if choice == attach_choice {
+        let url = prompt_line("Existing repo URL: ")?;
+        if url.is_empty() {
+            anyhow::bail!("no URL given");
+        }
+        return handle_remote_attach(project_root, &url);
+    }
+    anyhow::bail!("no valid choice — aborting");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_repo_name_uses_basename() {
+        assert_eq!(
+            default_repo_name(Path::new("/home/joe/ai/aida")),
+            "aida".to_string()
+        );
+        assert_eq!(
+            default_repo_name(Path::new("/tmp/my-project")),
+            "my-project".to_string()
+        );
+    }
+
+    #[test]
+    fn default_repo_name_falls_back_for_root() {
+        assert_eq!(default_repo_name(Path::new("/")), "repo".to_string());
+    }
+
+    #[test]
+    fn gh_create_args_private_and_public() {
+        let priv_args = gh_repo_create_args("owner/repo", true);
+        assert_eq!(
+            priv_args,
+            vec![
+                "repo",
+                "create",
+                "owner/repo",
+                "--private",
+                "--source",
+                ".",
+                "--remote",
+                "origin",
+                "--push"
+            ]
+        );
+        let pub_args = gh_repo_create_args("repo", false);
+        assert!(pub_args.contains(&"--public".to_string()));
+        assert!(!pub_args.contains(&"--private".to_string()));
+        // Always wires origin + pushes in one shot.
+        assert!(pub_args.contains(&"--remote".to_string()));
+        assert!(pub_args.contains(&"origin".to_string()));
+        assert!(pub_args.contains(&"--push".to_string()));
+    }
+
+    #[test]
+    fn gitlab_url_default_port_is_scp_like() {
+        assert_eq!(
+            gitlab_ssh_origin_url("gitlab.com", None, "joe", "aida"),
+            "git@gitlab.com:joe/aida.git"
+        );
+        assert_eq!(
+            gitlab_ssh_origin_url("gitlab.com", Some(22), "joe", "aida"),
+            "git@gitlab.com:joe/aida.git"
+        );
+    }
+
+    #[test]
+    fn gitlab_url_nonstandard_port_uses_ssh_scheme() {
+        assert_eq!(
+            gitlab_ssh_origin_url("gitlab.joemooney.com", Some(2222), "joe", "aida"),
+            "ssh://git@gitlab.joemooney.com:2222/joe/aida.git"
+        );
+    }
+
+    #[test]
+    fn gitlab_url_strips_redundant_dot_git_and_namespace_slashes() {
+        assert_eq!(
+            gitlab_ssh_origin_url("h", None, "/grp/", "repo.git"),
+            "git@h:grp/repo.git"
+        );
+    }
+
+    #[test]
+    fn gitlab_url_empty_namespace_omits_path_segment() {
+        assert_eq!(
+            gitlab_ssh_origin_url("h", None, "", "repo"),
+            "git@h:repo.git"
+        );
+    }
+
+    #[test]
+    fn manual_recipe_names_all_three_routes() {
+        let r = manual_recipe("myrepo", "main");
+        assert!(r.contains("gh repo create myrepo"));
+        assert!(r.contains("git@<gitlab-host>"));
+        assert!(r.contains("aida remote attach"));
+        assert!(r.contains("git push -u origin main"));
+    }
+
+    #[test]
+    fn attach_fallback_hint_points_at_ui_and_attach() {
+        let h = attach_fallback_hint("gitlab.corp.com", "myrepo");
+        assert!(h.contains("gitlab.corp.com"));
+        assert!(h.contains("aida remote attach"));
+        assert!(h.contains("projects/new"));
+    }
+
+    #[test]
+    fn known_hosts_round_trip() {
+        let hosts = vec![
+            KnownHost {
+                host: "gitlab.joemooney.com".to_string(),
+                label: Some("personal GitLab".to_string()),
+                ssh_port: Some(2222),
+            },
+            KnownHost {
+                host: "gitlab.corp.com".to_string(),
+                label: None,
+                ssh_port: None,
+            },
+        ];
+        let body = serialize_known_hosts(&hosts);
+        let parsed = parse_known_hosts(&body);
+        assert_eq!(parsed, hosts);
+    }
+
+    #[test]
+    fn parse_known_hosts_ignores_other_tables_and_comments() {
+        let body = "\
+# a comment
+[[gitlab_host]]
+host = \"gitlab.example.com\"  # inline comment
+ssh_port = 2222
+
+[other_table]
+host = \"should.not.count\"
+";
+        let parsed = parse_known_hosts(body);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].host, "gitlab.example.com");
+        assert_eq!(parsed[0].ssh_port, Some(2222));
+        assert_eq!(parsed[0].label, None);
+    }
+
+    #[test]
+    fn parse_known_hosts_empty_body_is_empty() {
+        assert!(parse_known_hosts("").is_empty());
+        assert!(parse_known_hosts("# just a comment\n").is_empty());
+    }
+}
