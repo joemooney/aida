@@ -3,12 +3,12 @@ spec_id: BUG-480
 agreed_id: BUG-480
 title: MCP tool_queue_add bypasses the advisor-authority gate the CLI enforces (TASK-647) — MCP agent can self-queue work for execution
 description: 'VERIFIED (advisor confirmed CLI gate at main.rs:83289 ''if !has_advisor_authority() bail!(queuing work for execution needs advisor authority)'' + grep shows ZERO advisor-authority checks in mcp.rs, found by quality-sweep reviewer). The CLI ''aida queue add'' refuses from a non-advisor/non-TTY context (TASK-647/ADR-3 — committing a spec to the execution pipeline is an advisor act). MCP tool_queue_add (mcp.rs:2999) goes straight to storage.queue_add(entry) with no equivalent check. The MCP server is exactly the headless/non-TTY/non-advisor case the gate exists to refuse. Combined with add_requirement (which correctly downgrades approved→Draft because ''MCP cannot be trusted as advisor authority'') an MCP agent can: add_requirement (lands Draft) → queue_add (commits that Draft into the implementer execution queue) — the exact advisor-bypass that add_requirement + update_requirement (BUG-449) close. Default profile is Full so queue_add is callable. Fix: gate tool_queue_add behind the same has_advisor_authority semantics (or refuse on the MCP profile), mirroring add_requirement/update_requirement.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:12:33.644295625Z
-modified_at: 2026-06-09T01:14:09.542639898Z
+modified_at: 2026-06-09T01:58:19.126869413Z
 req_type: Bug
 tags:
 - authority
@@ -23,3 +23,7 @@ comments:
   content: Quality-sweep reviewer 5 independently confirmed this AND found tool_queue_rework (mcp.rs:~3391) has the same gap — no advisor-authority check, only the coarse Operator-profile tier (default profile is Full). Fix should cover BOTH tool_queue_add and tool_queue_rework.
   created_at: 2026-06-09T01:14:09.542639898Z
   modified_at: 2026-06-09T01:14:09.542639898Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T01:58:19.126869413Z
+  completion_sha: 48ff2a0dde4a633aa434c621c1aa3156089b13c0
