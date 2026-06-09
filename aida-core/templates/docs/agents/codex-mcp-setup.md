@@ -70,6 +70,49 @@ codex --cd /path/to/aida-project
 
 The MCP server is launched by Codex over stdio. You do not need to run `aida mcp-serve` in a separate terminal for the Codex integration. Running it manually is still useful for debugging JSON-RPC framing or the black-box stdio tests.
 
+## Optional AIDA-Aware Status Lines
+
+AIDA is meant to bootstrap other projects, so status-line setup should stay
+optional. Some teams want a quiet default; others want the visible AIDA context
+right away.
+
+The AIDA-aware renderer is:
+
+```bash
+aida statusline --color=always
+```
+
+It prints the project, role, active spec/session hint, queue depth, and cache
+freshness. Use it wherever your shell, terminal multiplexer, or agent client
+can run a command-backed status line.
+
+Claude Code can run that command through
+`.claude/settings.json`:
+
+```json
+{"statusLine": {"type": "command", "command": "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\""}}
+```
+
+Codex CLI has a footer concept too, but its current `status_line` setting
+chooses from Codex built-in item IDs. It does not execute arbitrary commands
+like `aida statusline`, so treat Codex's footer as a companion to the AIDA-aware
+shell/statusline command rather than as a replacement.
+
+For Codex, use the built-in footer fields that best complement AIDA's session
+and worktree model:
+
+```toml
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+```
+
+Put this in `~/.codex/config.toml` for your personal Codex default. For a
+trusted AIDA project, the same snippet can live in `.codex/config.toml`.
+Continue using `aida statusline` directly in the shell when you need the
+AIDA-specific role, queue, cache, and session summary.
+
+trace:TASK-0413 | ai:claude
+
 ## Launch Codex Through AIDA
 
 For AIDA projects, prefer the supervised launcher:
