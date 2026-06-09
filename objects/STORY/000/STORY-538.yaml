@@ -38,7 +38,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:26:59.842729463Z
-modified_at: 2026-06-09T01:57:57.365196230Z
+modified_at: 2026-06-09T01:58:01.458689376Z
 req_type: Story
 tags:
 - agent-collaboration
@@ -51,6 +51,10 @@ relationships:
 - rel_type: Parent
   target_id: 019eaa19-3a6d-76e1-a351-5add9c1cfc09
   created_at: 2026-06-09T01:57:57.365191112Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 019eaa19-81d2-7751-95d0-29436d718983
+  created_at: 2026-06-09T01:58:01.458682327Z
   created_by: joe
 comments:
 - id: 019eaa03-59ea-76c1-aff0-a836756006b4
