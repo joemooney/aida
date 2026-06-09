@@ -19,6 +19,61 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+// STORY-528 (SPIKE-13 MVP): an agent's *availability* is a coarse, explicit
+// operator-set state that is orthogonal to the heartbeat-derived busy/idle
+// signal. A budget-exhausted or rate-limited agent is still a live process
+// (so STORY-435 keeps reading it Busy/Idle), but it cannot usefully take new
+// work until its quota resets. `Paused` records that fact so `aida status`
+// can warn an operator (and brief-time dispatch can flag) before work is
+// routed to an agent that will just sit on it. trace:STORY-528 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Availability {
+    #[default]
+    Available,
+    Paused,
+}
+
+impl Availability {
+    pub(crate) fn is_paused(self) -> bool {
+        matches!(self, Self::Paused)
+    }
+}
+
+/// Why an agent is paused. `Unknown` is the safe fallback for a record that
+/// somehow carries `availability = paused` without a recorded reason.
+// trace:STORY-528 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum PauseReason {
+    Budget,
+    RateLimit,
+    Manual,
+    #[default]
+    Unknown,
+}
+
+impl PauseReason {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Budget => "budget",
+            Self::RateLimit => "rate-limit",
+            Self::Manual => "manual",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    pub(crate) fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "budget" => Some(Self::Budget),
+            "rate-limit" | "ratelimit" => Some(Self::RateLimit),
+            "manual" => Some(Self::Manual),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct AgentRegistryEntry {
     pub(crate) id: String,
@@ -40,6 +95,17 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) binary_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) build_sha: Option<String>,
+    // STORY-528: paused-availability state. `serde(default)` keeps legacy
+    // records (written before this field existed) readable — they deserialize
+    // as `Available` with no pause metadata. trace:STORY-528 | ai:claude
+    #[serde(default)]
+    pub(crate) availability: Availability,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) paused_since: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) paused_reason: Option<PauseReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) expected_back: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -76,6 +142,11 @@ pub(crate) struct AgentRegistryView {
     pub(crate) binary_version: Option<String>,
     pub(crate) build_sha: Option<String>,
     pub(crate) status: AgentStatus,
+    // trace:STORY-528 | ai:claude
+    pub(crate) availability: Availability,
+    pub(crate) paused_since: Option<DateTime<Utc>>,
+    pub(crate) paused_reason: Option<PauseReason>,
+    pub(crate) expected_back: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,6 +342,10 @@ pub(crate) fn touch_mcp_agent(
             source: "mcp".to_string(),
             binary_version: None,
             build_sha: None,
+            availability: Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
         });
 
     entry.id = id;
@@ -327,6 +402,10 @@ pub(crate) fn register_spawned_agent(
         source: "agent-launcher".to_string(),
         binary_version: binary.map(|b| b.version.clone()),
         build_sha: binary.map(|b| b.sha.clone()),
+        availability: Availability::Available,
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -543,6 +622,10 @@ pub(crate) fn register_existing_agent(
         source: "manual-register".to_string(),
         binary_version: None,
         build_sha: None,
+        availability: Availability::Available,
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -559,6 +642,154 @@ pub(crate) fn remove_agent(project_root: &Path, agent_type: &str, pid: u32) -> R
             Err(err).with_context(|| format!("removing agent registry entry {}", path.display()))
         }
     }
+}
+
+/// Load every registry entry (alive or stale) as `(path, entry)` pairs.
+/// Unlike `list_agent_views` this hands back the raw record so callers can
+/// mutate + rewrite it (pause/resume). trace:STORY-528 | ai:claude
+fn load_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            let Ok(body) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) else {
+                continue;
+            };
+            out.push((path, record));
+        }
+    }
+    out
+}
+
+/// Resolve a `<target>` (name, `<type>#<pid>`, or `<type>-<pid>` id) to the
+/// single matching live registry entry. Prefers an exact name match, falling
+/// back to the synthetic id forms. Errors on no-match or ambiguity so the
+/// caller can surface a clear message rather than silently picking one.
+/// trace:STORY-528 | ai:claude
+fn resolve_target_entry(
+    project_root: &Path,
+    target: &str,
+) -> Result<(PathBuf, AgentRegistryEntry)> {
+    let target = target.trim();
+    if target.is_empty() {
+        anyhow::bail!("agent target cannot be empty");
+    }
+    let mut matches: Vec<(PathBuf, AgentRegistryEntry)> = load_entries(project_root)
+        .into_iter()
+        .filter(|(_, e)| crate::process_probe::pid_is_alive(e.pid))
+        .filter(|(_, e)| {
+            let name_match = e
+                .name
+                .as_deref()
+                .map(|n| n.eq_ignore_ascii_case(target))
+                .unwrap_or(false);
+            let hash_id = format!("{}#{}", e.agent_type, e.pid);
+            let dash_id = format!("{}-{}", e.agent_type, e.pid);
+            name_match
+                || e.id.eq_ignore_ascii_case(target)
+                || hash_id.eq_ignore_ascii_case(target)
+                || dash_id.eq_ignore_ascii_case(target)
+        })
+        .collect();
+
+    match matches.len() {
+        0 => anyhow::bail!("no active agent found matching '{}'", target),
+        1 => Ok(matches.remove(0)),
+        _ => {
+            let ids: Vec<String> = matches
+                .iter()
+                .map(|(_, e)| {
+                    e.name
+                        .clone()
+                        .unwrap_or_else(|| format!("{}#{}", e.agent_type, e.pid))
+                })
+                .collect();
+            anyhow::bail!(
+                "agent target '{}' is ambiguous — matches: {}",
+                target,
+                ids.join(", ")
+            )
+        }
+    }
+}
+
+/// Mark a live agent `Paused`. Returns the updated entry so the caller can
+/// render a confirmation. trace:STORY-528 | ai:claude
+pub(crate) fn pause_agent(
+    project_root: &Path,
+    target: &str,
+    reason: PauseReason,
+    expected_back: Option<DateTime<Utc>>,
+) -> Result<AgentRegistryEntry> {
+    let (_, mut entry) = resolve_target_entry(project_root, target)?;
+    entry.availability = Availability::Paused;
+    entry.paused_since = Some(Utc::now());
+    entry.paused_reason = Some(reason);
+    entry.expected_back = expected_back;
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
+/// Clear a paused agent back to `Available`, dropping all pause metadata.
+/// trace:STORY-528 | ai:claude
+pub(crate) fn resume_agent(project_root: &Path, target: &str) -> Result<AgentRegistryEntry> {
+    let (_, mut entry) = resolve_target_entry(project_root, target)?;
+    entry.availability = Availability::Available;
+    entry.paused_since = None;
+    entry.paused_reason = None;
+    entry.expected_back = None;
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
+/// Brief-time GUARD: if a brief target resolves to a *paused* live agent,
+/// return a one-line warning string (does NOT refuse). Returns `None` when
+/// the target isn't a paused live agent (unknown target, available agent,
+/// stale entry — all of those are "no warning"). trace:STORY-528 | ai:claude
+pub(crate) fn paused_warning_for_target(project_root: &Path, target: &str) -> Option<String> {
+    let (_, entry) = resolve_target_entry(project_root, target).ok()?;
+    if !entry.availability.is_paused() {
+        return None;
+    }
+    let view_like = pause_detail(entry.paused_reason.unwrap_or_default(), entry.expected_back);
+    let name = entry
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
+    Some(format!(
+        "⚠ {name} is {view_like} — it may not pick this up until it resumes"
+    ))
+}
+
+/// Render the `paused (budget, ~back HH:MM)` detail fragment shared by the
+/// status line and the brief-time warning. trace:STORY-528 | ai:claude
+pub(crate) fn pause_detail(reason: PauseReason, expected_back: Option<DateTime<Utc>>) -> String {
+    match expected_back {
+        Some(when) => format!(
+            "paused ({}, ~back {})",
+            reason.as_str(),
+            when.with_timezone(&chrono::Local).format("%H:%M")
+        ),
+        None => format!("paused ({})", reason.as_str()),
+    }
+}
+
+/// The `⏸ paused (...)` glyph fragment for an agent view, or `None` when the
+/// agent is Available. trace:STORY-528 | ai:claude
+pub(crate) fn paused_glyph(view: &AgentRegistryView) -> Option<String> {
+    if !view.availability.is_paused() {
+        return None;
+    }
+    Some(format!(
+        "⏸ {}",
+        pause_detail(view.paused_reason.unwrap_or_default(), view.expected_back)
+    ))
 }
 
 pub(crate) fn list_agent_views(
@@ -615,15 +846,22 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
             } else {
                 ""
             };
+            // STORY-528: a paused agent gets its `⏸ paused (...)` state
+            // appended so the operator sees budget/rate-limit holds inline.
+            let paused_note = match paused_glyph(agent) {
+                Some(g) => format!("  {g}"),
+                None => String::new(),
+            };
             format!(
-                "  {:<15} {:<11} {:<12} {:<5} {:<8} {}{}",
+                "  {:<15} {:<11} {:<12} {:<5} {:<8} {}{}{}",
                 identity,
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
                 agent.status.as_str(),
                 format!("({elapsed})"),
                 agent.worktree_path.display(),
-                source_note
+                source_note,
+                paused_note
             )
         })
         .collect()
@@ -658,6 +896,10 @@ fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegis
         binary_version: entry.binary_version,
         build_sha: entry.build_sha,
         status,
+        availability: entry.availability,
+        paused_since: entry.paused_since,
+        paused_reason: entry.paused_reason,
+        expected_back: entry.expected_back,
     }
 }
 
@@ -802,6 +1044,10 @@ mod tests {
             source: "mcp".to_string(),
             binary_version: Some("0.9.1".to_string()),
             build_sha: Some("abc123".to_string()),
+            availability: Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
         }
     }
 
@@ -1016,6 +1262,10 @@ mod tests {
             binary_version: None,
             build_sha: None,
             status: AgentStatus::Busy,
+            availability: Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
         };
 
         let lines = format_agent_status_lines(&[view]);
@@ -1085,6 +1335,160 @@ mod tests {
         )
         .unwrap();
         assert_eq!(Config::load(tmp.path()).busy_threshold_secs, 7);
+    }
+
+    // STORY-528: a registry record written before the availability field
+    // existed must still deserialize — defaulting to Available with no pause
+    // metadata. This is the backward-compatibility guarantee.
+    #[test]
+    fn legacy_record_without_availability_reads_as_available() {
+        let legacy = r#"
+id = "codex-42"
+agent_type = "codex"
+pid = 42
+started_at = "2026-06-07T10:00:00Z"
+last_active_at = "2026-06-07T10:00:00Z"
+worktree_path = "/tmp/aida-story"
+source = "mcp"
+"#;
+        let entry: AgentRegistryEntry = toml::from_str(legacy).unwrap();
+        assert_eq!(entry.availability, Availability::Available);
+        assert!(entry.paused_since.is_none());
+        assert!(entry.paused_reason.is_none());
+        assert!(entry.expected_back.is_none());
+    }
+
+    // STORY-528: pause then resume roundtrips through the on-disk record.
+    #[test]
+    fn pause_then_resume_roundtrips() {
+        let tmp = TempDir::new().unwrap();
+        let mut e = entry_with(std::process::id(), Utc::now());
+        e.name = Some("codex-impl-1".to_string());
+        write_entry(tmp.path(), &e).unwrap();
+
+        let paused = pause_agent(
+            tmp.path(),
+            "codex-impl-1",
+            PauseReason::Budget,
+            Some(Utc::now() + Duration::hours(2)),
+        )
+        .unwrap();
+        assert_eq!(paused.availability, Availability::Paused);
+        assert_eq!(paused.paused_reason, Some(PauseReason::Budget));
+        assert!(paused.paused_since.is_some());
+        assert!(paused.expected_back.is_some());
+
+        // Reloaded from disk it's still paused.
+        let ctx = ctx(Utc::now(), 30, vec![]);
+        let views = list_agent_views(tmp.path(), &ctx);
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].availability, Availability::Paused);
+
+        let resumed = resume_agent(tmp.path(), "codex-impl-1").unwrap();
+        assert_eq!(resumed.availability, Availability::Available);
+        assert!(resumed.paused_since.is_none());
+        assert!(resumed.paused_reason.is_none());
+        assert!(resumed.expected_back.is_none());
+    }
+
+    // STORY-528: pausing resolves via the synthetic <type>#<pid> id too.
+    #[test]
+    fn pause_resolves_via_hash_id() {
+        let tmp = TempDir::new().unwrap();
+        let e = entry_with(std::process::id(), Utc::now());
+        write_entry(tmp.path(), &e).unwrap();
+        let target = format!("codex#{}", std::process::id());
+        let paused = pause_agent(tmp.path(), &target, PauseReason::RateLimit, None).unwrap();
+        assert_eq!(paused.availability, Availability::Paused);
+        assert_eq!(paused.paused_reason, Some(PauseReason::RateLimit));
+    }
+
+    // STORY-528: an unknown target errors rather than silently no-op'ing.
+    #[test]
+    fn pause_unknown_target_errors() {
+        let tmp = TempDir::new().unwrap();
+        let err = pause_agent(tmp.path(), "nope-9999", PauseReason::Manual, None).unwrap_err();
+        assert!(err.to_string().contains("no active agent"));
+    }
+
+    // STORY-528: brief-time guard WARNS (returns Some) for a paused agent and
+    // is silent (None) for an available agent / unknown target.
+    #[test]
+    fn paused_warning_fires_only_for_paused_target() {
+        let tmp = TempDir::new().unwrap();
+        let mut e = entry_with(std::process::id(), Utc::now());
+        e.name = Some("codex-impl-1".to_string());
+        write_entry(tmp.path(), &e).unwrap();
+
+        // Available → no warning.
+        assert!(paused_warning_for_target(tmp.path(), "codex-impl-1").is_none());
+        // Unknown target → no warning.
+        assert!(paused_warning_for_target(tmp.path(), "ghost").is_none());
+
+        pause_agent(tmp.path(), "codex-impl-1", PauseReason::Budget, None).unwrap();
+        let warning = paused_warning_for_target(tmp.path(), "codex-impl-1").unwrap();
+        assert!(warning.contains("paused"));
+        assert!(warning.contains("budget"));
+    }
+
+    // STORY-528: the status-line formatter appends the ⏸ glyph for a paused
+    // agent and leaves an available agent's line glyph-free.
+    #[test]
+    fn format_status_line_appends_pause_glyph() {
+        let now = Utc::now();
+        let mk = |availability: Availability, reason: Option<PauseReason>| AgentRegistryView {
+            id: "codex-42".to_string(),
+            agent_type: "codex".to_string(),
+            pid: 42,
+            name: None,
+            tty: None,
+            started_at: now,
+            last_active_at: now,
+            role: Some("implementer".to_string()),
+            current_spec: Some("STORY-528".to_string()),
+            worktree_path: PathBuf::from("/tmp/aida-story-528"),
+            source: "mcp".to_string(),
+            binary_version: None,
+            build_sha: None,
+            status: AgentStatus::Idle,
+            availability,
+            paused_since: reason.map(|_| now),
+            paused_reason: reason,
+            expected_back: None,
+        };
+
+        let avail_line = &format_agent_status_lines(&[mk(Availability::Available, None)])[0];
+        assert!(!avail_line.contains("⏸"), "available agent: {avail_line:?}");
+
+        let paused_line =
+            &format_agent_status_lines(&[mk(Availability::Paused, Some(PauseReason::Budget))])[0];
+        assert!(paused_line.contains("⏸ paused (budget)"), "{paused_line:?}");
+    }
+
+    // STORY-528: pause_detail formats the ~back HH:MM fragment when an
+    // expected-back time is present, and omits it otherwise.
+    #[test]
+    fn pause_detail_formats_expected_back() {
+        assert_eq!(pause_detail(PauseReason::Budget, None), "paused (budget)");
+        let detail = pause_detail(PauseReason::RateLimit, Some(Utc::now()));
+        assert!(detail.starts_with("paused (rate-limit, ~back "));
+    }
+
+    // STORY-528: reason parsing accepts the documented spellings.
+    #[test]
+    fn pause_reason_parse_accepts_known_reasons() {
+        assert_eq!(PauseReason::parse("budget"), Some(PauseReason::Budget));
+        assert_eq!(
+            PauseReason::parse("RATE-LIMIT"),
+            Some(PauseReason::RateLimit)
+        );
+        assert_eq!(
+            PauseReason::parse("rate_limit"),
+            Some(PauseReason::RateLimit)
+        );
+        assert_eq!(PauseReason::parse("manual"), Some(PauseReason::Manual));
+        assert_eq!(PauseReason::parse("unknown"), Some(PauseReason::Unknown));
+        assert_eq!(PauseReason::parse("bogus"), None);
     }
 
     #[test]
