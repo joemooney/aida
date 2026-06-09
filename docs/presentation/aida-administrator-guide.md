@@ -21,7 +21,7 @@ Verify every command against `aida <cmd> --help` before presenting.
 
 Init · the shared/local split · config · maintenance · multi-node · security
 
-<small>v0.11.0 · administrator guide</small>
+<small>v0.12.0 · administrator guide</small>
 
 ---
 

@@ -38,14 +38,23 @@ Everything in this directory is in service of making that scope honest. If a com
 | [vs-agent-teams.md](vs-agent-teams.md) | When Claude Code's Agent Teams (within-session multi-agent coordination — shared mailbox, self-claim task-list, file-locking, auto-unblocking dependencies, plan-approval gate) fits vs AIDA's cross-session, cross-vendor graph + lifecycle. The closest provider overlap yet — on the *coordination* layer — and why the gap persists on incentive, not capability. Companion to vs-claude-code-subagents.md + vs-claude-code-workflows.md. |
 | [vs-karpathy-md.md](vs-karpathy-md.md) | When structured markdown alone is enough vs when you actually need a relationship graph + stable IDs + MCP server. |
 | [vs-saas-pm.md](vs-saas-pm.md) | When Linear / Jira / GitHub Projects make sense vs the lightweight git-canonical, code-aware angle AIDA serves. |
+| [vs-aider.md](vs-aider.md) | **(adjacent neighbor, not competitor)** Aider is a terminal pair-programmer that auto-commits every change; AIDA is the spec graph + lifecycle above the editing. Different layers — "Aider edits, AIDA remembers why" — and how to run Aider as the implementer inside AIDA. |
+| [vs-continue.md](vs-continue.md) | **(adjacent neighbor, not competitor)** Continue is a CI-native AI assistant with declarative `.continue/checks/` markdown gates; AIDA is the requirement graph + lifecycle. Continue enforces *how* code looks; AIDA remembers *what* it was for. How they layer. |
+
+### Cross-cutting decision aids
+
+Not one-neighbor-at-a-time comparisons, but the questions that span all of them:
+
+| File | The question it answers |
+|---|---|
+| [when-not-to-use-aida.md](when-not-to-use-aida.md) | The honest scope limits — six cases where a neighbor tool alone is the right call, and AIDA's overhead wouldn't earn its keep. Read this *first* if you're deciding whether to adopt at all. |
+| [composition.md](composition.md) | The recipe book for *"use AIDA **with** X"* — Spec Kit, Agent Teams, MCP editors, `/workflow`, GitHub Issues, Karpathy markdown. Names the seam (and where a bridge is still manual today) for each. |
 
 Future-work files mentioned in [STORY-107](../../) and not yet seeded:
 
 - `vs-github-projects.md` (separate from `vs-saas-pm.md` if/when the GitHub-specific angle warrants its own page)
-- `vs-aider.md`, `vs-cursor.md`, `vs-continue.md` (AI code-editor neighbors — composition story, not replacement)
+- `vs-cursor.md` (AI code-editor neighbor — composition story; deferred until there's a verified Cursor scan to ground it, since Cursor's proprietary surface moves fast)
 - `vs-mdbook.md`, `vs-docusaurus.md` (documentation tooling — `aida docs build` projects *to* one of these, not a substitute)
-- `composition.md` (which tools to layer with AIDA, with concrete recipes)
-- `when-not-to-use-aida.md` (honest scope limits — when X is better, full stop)
 
 ---
 
