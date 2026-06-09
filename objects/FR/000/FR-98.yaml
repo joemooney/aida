@@ -2,12 +2,12 @@ id: 043639ed-7c12-4d99-acc2-587a38b0d25d
 spec_id: FR-98
 title: Drag a requirement to make child
 description: dragging a requirement in the left panel on top of another requirement should make it a child (or whatever the relationship view that we have selected)
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-25T19:48:24.400247266Z
-modified_at: 2026-06-09T05:00:51.467970895Z
+modified_at: 2026-06-09T05:09:08.919851079Z
 req_type: Functional
 relationships:
 - rel_type: Child
@@ -20,3 +20,15 @@ comments:
   content: Commit d2b210540 references this requirement
   created_at: 2026-06-09T05:00:51.467970895Z
   modified_at: 2026-06-09T05:00:51.467970895Z
+history:
+- id: 019eaac8-d53c-7d62-b280-cb5b33395118
+  author: aida-auto-bump
+  timestamp: 2026-06-09T05:09:09.052236549Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T05:09:08.919851079Z
+  completion_sha: 8264a65023d4afa4551e90d267f251750ee6e20c
