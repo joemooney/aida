@@ -3,15 +3,19 @@ spec_id: BUG-482
 agreed_id: BUG-482
 title: CLI 'aida edit' advisor gate misses NeedsAttention→Approved (only Draft source is gated)
 description: 'Found by quality-sweep reviewer. The TASK-647 edit gate (main.rs:10343) is ''if matches!(req.status, Draft) && status_requires_advisor_authority(new) && !has_advisor_authority()'' — keyed on Draft as the ONLY gated source. forbidden_attention_transition (models.rs:224) explicitly allows NeedsAttention→Approved. So a non-advisor headless agent that punted a spec to NeedsAttention can self-flip it back to Approved without advisor authority, defeating the advisor-triage the punt was meant to invoke. Fix: gate any source whose transition to an approved+ status requires authority (NeedsAttention as well as Draft).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:13:58.791206366Z
-modified_at: 2026-06-09T01:13:58.791206366Z
+modified_at: 2026-06-09T01:58:19.126869413Z
 req_type: Bug
 tags:
 - authority
 - from-review:quality-sweep
 - lifecycle
 - severity:medium
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T01:58:19.126869413Z
+  completion_sha: 48ff2a0dde4a633aa434c621c1aa3156089b13c0
