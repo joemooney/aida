@@ -190,6 +190,18 @@ pub(crate) fn resume_plan(
         Resumability::NotInFlight => ResumeOutcome::NothingToResume,
         Resumability::Shelved => ResumeOutcome::LeaveShelved,
         Resumability::ResumableCrash => {
+            // trace:TASK-712 — terminal short-circuit. Once the PR is merged AND
+            // the spec is Completed (auto-bump landed), the lifecycle is finished
+            // regardless of any earlier phase's probe. In particular `ci_green`
+            // commonly probes FALSE post-merge — the branch (and its CI run) is
+            // deleted on merge — which would otherwise make reconcile pick
+            // `ResumeAt(Ci)` and waste a drain slot re-running reviewer+merge on
+            // an already-merged spec (the re-run is redeemed by BUG-241's merge
+            // reconcile, but the slot churn is pure waste). Treating
+            // merged+completed as AlreadyComplete avoids the wasted re-entry.
+            if facts.pr_merged && facts.spec_completed {
+                return ResumeOutcome::AlreadyComplete;
+            }
             const ALL_PHASES: [Phase; 6] = [
                 Phase::Implementer,
                 Phase::Ci,
@@ -533,6 +545,23 @@ mod tests {
             &facts(true, true, true, true, false, false),
         );
         assert_eq!(out, ResumeOutcome::ResumeAt(Phase::Pull));
+    }
+
+    // trace:TASK-712 — merged + completed is terminal even when ci_green probes
+    // FALSE (the branch and its CI run were deleted on merge). Before the fix the
+    // absent CI postcondition forced ResumeAt(Ci), wasting a slot re-running
+    // reviewer+merge on an already-merged spec.
+    #[test]
+    fn resume_plan_merged_and_completed_is_complete_despite_false_ci() {
+        let out = resume_plan(
+            false, // orchestrator dead
+            true,  // member in-flight
+            true,  // member state in-phase
+            false, // no failure reason
+            // branch gone, CI gone (false), review gone, but PR merged + spec completed:
+            &facts(false, false, false, true, true, false),
+        );
+        assert_eq!(out, ResumeOutcome::AlreadyComplete);
     }
 
     // --- TASK-405: from_pr_plan (PR-only invocation) ---

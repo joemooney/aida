@@ -133,9 +133,16 @@ pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     Ok(())
 }
 
-/// Get the current HEAD commit SHA (short form).
+/// Get the current HEAD commit SHA (full 40-char form).
+///
+/// Uses the full SHA, not `--short`: this value is the cache-staleness key
+/// (compared against the cache's recorded source HEAD). The abbreviated length
+/// git picks for `--short` grows with the repo's object count, so a short SHA
+/// can change length over a store's lifetime and read as falsely-stale, and two
+/// short prefixes can (rarely) collide and read as falsely-fresh. The full SHA
+/// is stable and collision-free. trace:TASK-712
 pub fn head_sha(repo: &Path) -> Result<String> {
-    let result = git(repo, &["rev-parse", "--short", "HEAD"])?;
+    let result = git(repo, &["rev-parse", "HEAD"])?;
     if !result.success {
         anyhow::bail!("git rev-parse HEAD failed: {}", result.stderr);
     }
@@ -1186,7 +1193,10 @@ mod tests {
 
         let sha = head_sha(&repo).unwrap();
         assert!(!sha.is_empty());
-        assert!(sha.len() >= 7);
+        // trace:TASK-712 — head_sha returns the FULL 40-char SHA (no --short),
+        // so the cache-staleness key is abbreviation-length-stable.
+        assert_eq!(sha.len(), 40, "head_sha must be the full SHA, got {sha:?}");
+        assert!(sha.bytes().all(|b| b.is_ascii_hexdigit()));
 
         let branch = current_branch(&repo).unwrap();
         // Could be "main" or "master" depending on git config
