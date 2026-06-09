@@ -22,12 +22,12 @@ description: |-
   ## Rationale
 
   The plan/run split is correct (deterministic gate in CLI, LLM fan-out in skill) — but it's invisible. AIDA's house style is a next-step footer on every read command; burndown plan is the one place that drops it, exactly where a new user most needs the hand-off. Pure discoverability fix; no behavior change to the gate. Relates to the next-steps-footer convention in state_snapshot.rs.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:25:53.014226020Z
-modified_at: 2026-06-09T06:25:53.014226020Z
+modified_at: 2026-06-09T06:27:53.044149858Z
 req_type: Story
 tags:
 - aida:burndown
