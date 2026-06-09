@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:37:14.949124082Z
-modified_at: 2026-06-09T06:37:32.953141276Z
+modified_at: 2026-06-09T15:05:40.148430481Z
 req_type: Spike
 tags:
 - aida:burndown
@@ -42,4 +42,19 @@ relationships:
   target_id: 019eab13-c8a9-7430-83ad-d220620f0a2e
   created_at: 2026-06-09T06:37:32.953133635Z
   created_by: joe
+comments:
+- id: 019eacea-f634-77f1-8923-7fd82bcbd47d
+  author: joe
+  content: |-
+    DECISION (empirical, 2026-06-09, Claude Code CLI 2.1.169): STRATEGY B IS VIABLE — `aida burndown run` shells out to `claude -p "/aida-burndown <selector>"`. No Rust fan-out reimplementation (Strategy A dropped).
+
+    Both deliverables confirmed by direct experiment:
+    1. Can headless `claude -p` invoke the disable-model-invocation /aida-burndown skill? YES. `claude -p "/aida-burndown --status approved"` resolved + ran the skill: executed `aida burndown plan`, reported the exact parked set (TASK-715/STORY-543 review:draft-only, BUG-486 needs-design-signoff) with correct reasons, and applied the skill's "filtered selector != drained" discipline. `disable-model-invocation: true` blocks only MODEL auto-trigger, NOT explicit /skill-name invocation — and explicit invocation works in -p. Corroborated by `claude --help`: "Skills still resolve via /skill-name" + the `--disable-slash-commands` flag (disabling implies enabled-by-default in print mode).
+    2. Does the Agent-tool fan-out (worktree-isolated subagents) execute under -p? YES. A headless `claude -p` PRIMARY session spawned one Agent subagent with isolation:worktree; it ran in a distinct worktree (/tmp/spike51-test/.claude/worktrees/agent-<hash>, != the session toplevel) and auto-cleaned when unchanged.
+
+    CAVEAT (version-dependent): verified on CLI 2.1.169. STORY-545 should re-assert both with a smoke test at build time and pin/record the CLI version, since headless skill+fan-out support could regress.
+
+    PROVENANCE NOTE: a docs-based claude-code-guide subagent concluded the OPPOSITE on all three points (slash commands unavailable in -p, fan-out unsupported, "reimplement in Rust") — it read stale docs. The installed --help + two experiments overruled it. Decision rests on the experiments, not the delegated read.
+  created_at: 2026-06-09T15:05:40.148430481Z
+  modified_at: 2026-06-09T15:05:40.148430481Z
 human_only: true
