@@ -56,7 +56,8 @@ pub const LINKED_PREFIX: &str = "linked:";
 ///   - unknown   — no/garbled tag
 ///
 /// trace:STORY-467 trace:TASK-120 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// trace:TASK-714
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ts_rs_forge::TS)]
 pub enum Severity {
     Major,
     Minor,
@@ -280,7 +281,8 @@ pub fn parse_promote_threshold(content: &str) -> Option<u32> {
 }
 
 /// One row in the triage view.
-#[derive(Debug, Clone)]
+// trace:TASK-714
+#[derive(Debug, Clone, ts_rs_forge::TS)]
 pub struct FindingRow {
     pub display_id: String,
     pub title: String,

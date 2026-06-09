@@ -24,10 +24,17 @@
 // trace:STORY-538 | ai:claude
 
 use aida_core::models::{
-    RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
+    Comment, HistoryEntry, QueueEntry, Relationship, RelationshipType, Requirement,
+    RequirementPriority, RequirementStatus, RequirementType,
 };
 use serde_json::{json, Value};
 use ts_rs_forge::TS;
+
+// trace:TASK-714 — the catalog kinds whose canonical struct lives CLI-side.
+use crate::findings::FindingRow;
+use crate::punt::PuntRecord;
+use crate::worker::Directive;
+use crate::{BriefListEntry, SessionLease};
 
 /// One row in the storable-object catalog.
 struct CatalogEntry {
@@ -35,53 +42,94 @@ struct CatalogEntry {
     name: &'static str,
     /// One-line description of what it stores / where it lives.
     description: &'static str,
+    /// Reflection hook: returns the `TS::decl()` of the canonical Rust struct
+    /// that backs this object, so `aida schema <object>` can render a
+    /// reflection-derived field table the same way the Requirement view does.
+    /// `None` for objects with no single serde-reflectable struct (today: none
+    /// — every catalog kind now has a reflected backing type). The closure is
+    /// what the drift-guard tests pin: a field added/removed/renamed on the
+    /// backing struct changes its `decl()` and ripples through here.
+    /// trace:TASK-714 | ai:claude
+    decl: fn() -> String,
+    /// Optional note rendered under the field table — used where the reflected
+    /// struct is a *projection* (a derived in-memory shape) rather than the
+    /// exact on-disk record, so the reader isn't misled. trace:TASK-714
+    note: Option<&'static str>,
 }
 
-/// The curated catalog of storable object kinds. The listing is a hand-written
-/// one-liner table on purpose — full per-object field reflection for the
-/// non-Requirement kinds is a deferred follow-up (it needs the reflection
-/// registry extended). The Requirement *detail* view, by contrast, is fully
-/// reflection-derived. trace:STORY-538 | ai:claude
+/// The curated catalog of storable object kinds. The one-liner descriptions are
+/// hand-written; the per-object *field detail* (`aida schema <object>`) is
+/// reflection-derived from the `decl` closure on each entry — never
+/// hand-maintained. STORY-538 shipped Requirement detail; TASK-714 extended the
+/// reflection registry to every remaining kind. trace:STORY-538 trace:TASK-714 | ai:claude
 const CATALOG: &[CatalogEntry] = &[
     CatalogEntry {
         name: "Requirement",
         description: "The core spec node (epic/story/task/bug/...) — title, status, type, priority, relationships, history.",
+        decl: Requirement::decl,
+        note: None,
     },
     CatalogEntry {
         name: "Finding",
         description: "A shelved phase-failure or advisor observation surfaced for triage (aida findings).",
+        decl: FindingRow::decl,
+        note: Some(
+            "A Finding has no standalone record — it is a draft Requirement carrying a \
+             `from-review:` / `from-implementer:` / `from-advisor:` tag. The fields below are \
+             the triage-row projection `aida findings list` derives from that tagged spec.",
+        ),
     },
     CatalogEntry {
         name: "Brief",
         description: "A local pickup brief routing work to an agent without scrollback (.aida/agent-briefs/).",
+        decl: BriefListEntry::decl,
+        note: Some(
+            "A brief is a markdown file with YAML frontmatter; the fields below are the listing \
+             projection `aida brief list` parses from that frontmatter (spec_id / agent / \
+             generated_at / depends_on / status), plus its on-disk path.",
+        ),
     },
     CatalogEntry {
         name: "Punt",
         description: "A design-fork an autonomous agent could not safely resolve; parks the spec NeedsAttention.",
+        decl: PuntRecord::decl,
+        note: Some("One append-only line in `.aida/punts.jsonl`."),
     },
     CatalogEntry {
         name: "Directive",
         description: "A standing instruction posted to an agent/role via the inter-agent mailbox.",
+        decl: Directive::decl,
+        note: Some("One parsed line of `.aida/worker.cmd` (verb + args)."),
     },
     CatalogEntry {
         name: "Comment",
         description: "A threaded note on a Requirement (carries reactions; doc-seed carrier).",
+        decl: Comment::decl,
+        note: None,
     },
     CatalogEntry {
         name: "Lease",
         description: "An active claim on a spec/worktree by a session — prevents double-driving.",
+        decl: SessionLease::decl,
+        note: Some("One session lease file under `.aida/sessions/`."),
     },
     CatalogEntry {
         name: "QueueItem",
         description: "A position in a role's work queue (keyed off the shell user identity).",
+        decl: QueueEntry::decl,
+        note: None,
     },
     CatalogEntry {
         name: "HistoryEntry",
         description: "An immutable change row inside a Requirement's YAML (the spec-state time series).",
+        decl: HistoryEntry::decl,
+        note: None,
     },
     CatalogEntry {
         name: "Relationship",
         description: "A typed edge between two Requirements (parent/child/blocked-by/blocks/references/...).",
+        decl: Relationship::decl,
+        note: None,
     },
 ];
 
@@ -199,61 +247,86 @@ fn requirement_fields() -> Vec<FieldSchema> {
     parse_struct_fields(&Requirement::decl())
 }
 
-/// The named-struct field parser shared by `requirement_fields` (and the
-/// drift-guard test). Skips doc-comment lines (`/**`, ` *`, ` */`) and the
-/// enclosing braces; matches `name(?): type,` lines.
+/// The named-struct field parser shared by every catalog kind (and the
+/// drift-guard tests). Handles both `TS::decl()` field layouts:
+///   - one field per line (ts-rs-forge emits this when a field carries a
+///     `/** ... */` doc-comment — the Requirement case STORY-538 shipped), and
+///   - several fields on one line (`{ a: string, b: string, c: T, ` — the
+///     layout ts-rs-forge uses for fields with no doc-comment; TASK-714's
+///     CLI-side structs hit this).
+///
+/// It first strips all `/** ... */` doc blocks, then the `type X = {` header
+/// and trailing `};`, then splits the remaining body on **top-level** commas
+/// (commas inside nested `{}`/`<>`/`[]`/`()` are part of a type, not field
+/// separators) and parses each segment as `name(?): type`. A `| null` type
+/// arm is treated as optional, matching the `name?:` convention.
+/// trace:STORY-538 trace:TASK-714 | ai:claude
 fn parse_struct_fields(decl: &str) -> Vec<FieldSchema> {
-    let mut fields = Vec::new();
-    let mut in_doc = false;
-    for raw in decl.lines() {
-        let line = raw.trim();
-        if line.is_empty() {
-            continue;
+    // 1. Strip `/** ... */` doc-comment blocks (they may span lines).
+    let mut body = String::with_capacity(decl.len());
+    let mut rest = decl;
+    while let Some(open) = rest.find("/**") {
+        body.push_str(&rest[..open]);
+        if let Some(close) = rest[open..].find("*/") {
+            rest = &rest[open + close + 2..];
+        } else {
+            rest = "";
+            break;
         }
-        // Skip doc-comment blocks.
-        if line.starts_with("/**") {
-            in_doc = !line.ends_with("*/");
-            continue;
-        }
-        if in_doc {
-            if line.ends_with("*/") {
-                in_doc = false;
+    }
+    body.push_str(rest);
+
+    // 2. Reduce to the brace body: drop everything up to and including the
+    //    first `{`, and the trailing `};` / `}`.
+    let inner = match (body.find('{'), body.rfind('}')) {
+        (Some(o), Some(c)) if c > o => &body[o + 1..c],
+        _ => return Vec::new(),
+    };
+
+    // 3. Split on top-level commas, depth-aware over `{}` `<>` `[]` `()`.
+    let mut segments: Vec<String> = Vec::new();
+    let mut depth: i32 = 0;
+    let mut cur = String::new();
+    for ch in inner.chars() {
+        match ch {
+            '{' | '<' | '[' | '(' => {
+                depth += 1;
+                cur.push(ch);
             }
+            '}' | '>' | ']' | ')' => {
+                depth -= 1;
+                cur.push(ch);
+            }
+            ',' if depth == 0 => {
+                segments.push(std::mem::take(&mut cur));
+            }
+            _ => cur.push(ch),
+        }
+    }
+    if !cur.trim().is_empty() {
+        segments.push(cur);
+    }
+
+    // 4. Parse each `name(?): type` segment.
+    let mut fields = Vec::new();
+    for seg in segments {
+        let seg = seg.trim();
+        if seg.is_empty() {
             continue;
         }
-        if line.starts_with('*') || line.starts_with("//") {
-            continue;
-        }
-        // Skip the declaration header and the closing brace.
-        if line.starts_with("type ") || line.starts_with("export ") || line == "{" || line == "};" {
-            continue;
-        }
-        // A field line: `name: type,` or `name?: type | null,`.
-        let Some(colon) = line.find(':') else {
+        let Some(colon) = seg.find(':') else {
             continue;
         };
-        let (name_part, type_part) = line.split_at(colon);
-        let name_part = name_part.trim();
-        // The first ':' may belong to the type (it never does for our flat
-        // fields), but guard anyway: a valid field name is a bare identifier.
-        let optional = name_part.ends_with('?');
+        let name_part = seg[..colon].trim();
+        let optional_marker = name_part.ends_with('?');
         let name = name_part.trim_end_matches('?').trim();
         if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             continue;
         }
-        // Strip the leading ':' then everything from the field-terminating ','
-        // onward — the last field shares its line with the struct's closing
-        // brace (`... | null, };`), so a plain trailing-comma trim isn't enough.
-        let mut ts_type = type_part[1..].trim().to_string();
-        if let Some(comma) = ts_type.rfind(',') {
-            // Only treat a comma as the terminator if what follows it is the
-            // closing brace / whitespace (never part of a real TS type here).
-            let tail = ts_type[comma + 1..].trim();
-            if tail.is_empty() || tail == "};" || tail == "}" {
-                ts_type.truncate(comma);
-            }
-        }
-        let ts_type = ts_type.trim().to_string();
+        let ts_type = seg[colon + 1..].trim().to_string();
+        // A field is optional if it was declared `name?:` OR its type admits
+        // `null` (ts-rs-forge renders `Option<T>` as `T | null`).
+        let optional = optional_marker || type_admits_null(&ts_type);
         fields.push(FieldSchema {
             name: name.to_string(),
             ts_type,
@@ -261,6 +334,40 @@ fn parse_struct_fields(decl: &str) -> Vec<FieldSchema> {
         });
     }
     fields
+}
+
+/// True if a reflected TS type admits `null` — i.e. it is (or unions in) the
+/// `null` literal, the shape ts-rs-forge gives an `Option<T>`. Checked on
+/// top-level union arms only so a nested `{ x: T | null }` doesn't count.
+/// trace:TASK-714 | ai:claude
+fn type_admits_null(ts_type: &str) -> bool {
+    let mut depth: i32 = 0;
+    let mut arm = String::new();
+    let mut admits = false;
+    let mut consider = |arm: &str| {
+        if arm.trim() == "null" {
+            admits = true;
+        }
+    };
+    for ch in ts_type.chars() {
+        match ch {
+            '{' | '<' | '[' | '(' => {
+                depth += 1;
+                arm.push(ch);
+            }
+            '}' | '>' | ']' | ')' => {
+                depth -= 1;
+                arm.push(ch);
+            }
+            '|' if depth == 0 => {
+                consider(&arm);
+                arm.clear();
+            }
+            _ => arm.push(ch),
+        }
+    }
+    consider(&arm);
+    admits
 }
 
 /// `aida schema` (no args) — the storable-object catalog.
@@ -281,9 +388,66 @@ pub fn print_catalog(json_out: bool) {
         println!("  {:<width$}  {}", e.name, e.description, width = width);
     }
     println!(
-        "\nFull field + enum detail today: `aida schema requirement`. Detail for the other \
-         objects is coming — use the one-liners above for now."
+        "\nField detail for any kind: `aida schema <object>` \
+         (e.g. `aida schema requirement`, `aida schema punt`)."
     );
+}
+
+/// Look up a catalog entry by case-insensitive name. trace:TASK-714
+fn catalog_entry(name: &str) -> Option<&'static CatalogEntry> {
+    CATALOG.iter().find(|e| e.name.eq_ignore_ascii_case(name))
+}
+
+/// `aida schema <object>` for any catalog kind other than `requirement`
+/// (which keeps its enum-augmented view in [`print_requirement`]). Renders the
+/// reflection-derived field table for the kind's backing struct. The caller has
+/// already confirmed `name` is a catalog kind. trace:TASK-714 | ai:claude
+pub fn print_object(name: &str, json_out: bool) {
+    let Some(entry) = catalog_entry(name) else {
+        // Defensive: the dispatcher only calls this for catalog kinds.
+        return;
+    };
+    let fields = parse_struct_fields(&(entry.decl)());
+
+    if json_out {
+        let field_vals: Vec<Value> = fields
+            .iter()
+            .map(|f| {
+                json!({
+                    "name": f.name,
+                    "type": f.ts_type,
+                    "optional": f.optional,
+                })
+            })
+            .collect();
+        let mut obj = serde_json::Map::new();
+        obj.insert("object".to_string(), json!(entry.name));
+        obj.insert("fields".to_string(), json!(field_vals));
+        if let Some(note) = entry.note {
+            obj.insert("note".to_string(), json!(note));
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&Value::Object(obj)).unwrap()
+        );
+        return;
+    }
+
+    println!("{} — fields\n", entry.name);
+    let name_w = fields.iter().map(|f| f.name.len()).max().unwrap_or(0);
+    for f in &fields {
+        let opt = if f.optional { " (optional)" } else { "" };
+        println!(
+            "  {:<name_w$}  {}{}",
+            f.name,
+            f.ts_type,
+            opt,
+            name_w = name_w
+        );
+    }
+    if let Some(note) = entry.note {
+        println!("\nNote: {note}");
+    }
 }
 
 /// `aida schema requirement` — the reflection-derived field table and the
@@ -357,6 +521,25 @@ mod tests {
         assert_eq!(variant_to_wire_token("VerifiedBy"), "verified-by");
         assert_eq!(variant_to_wire_token("BlockedBy"), "blocked-by");
         assert_eq!(variant_to_wire_token("High"), "high");
+    }
+
+    #[test]
+    fn parse_struct_fields_handles_inline_and_null_layouts() {
+        // ts-rs-forge packs doc-comment-less fields onto one line, and renders
+        // `Option<T>` as `T | null`. Both must parse. trace:TASK-714
+        let decl = "type X = { a: string, b: number, c: string | null, };";
+        let fields = parse_struct_fields(decl);
+        let names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, vec!["a", "b", "c"]);
+        // `c: string | null` → optional; the others are required.
+        assert!(!fields[0].optional);
+        assert!(!fields[1].optional);
+        assert!(fields[2].optional);
+        // A top-level comma inside a nested object/array must NOT split a field.
+        let nested = "type Y = { m: Array<string>, n: { p: number, q: number }, };";
+        let nf = parse_struct_fields(nested);
+        let nn: Vec<&str> = nf.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(nn, vec!["m", "n"]);
     }
 
     #[test]
@@ -502,5 +685,58 @@ mod tests {
         // Touch the Relationship type's reflection so the catalog's claim that
         // it is a storable kind stays grounded in a type that actually exists.
         let _ = aida_core::models::Relationship::decl();
+    }
+
+    /// DRIFT-GUARD (TASK-714): every catalog kind must reflect a non-empty field
+    /// set through its `decl` closure, AND a representative stable field per kind
+    /// must be present. A field rename/removal on the backing struct changes its
+    /// `decl()` and breaks the matching anchor here — forcing the schema (and
+    /// this list) to be updated deliberately rather than silently rotting. This
+    /// extends `schema_fields_track_reflection` (Requirement-only) to the rest.
+    #[test]
+    fn schema_object_fields_track_reflection() {
+        // (catalog name, a field that must survive on the backing struct).
+        let anchors: &[(&str, &str)] = &[
+            ("Requirement", "spec_id"),
+            ("Finding", "display_id"),
+            ("Brief", "spec_id"),
+            ("Punt", "category"),
+            ("Directive", "verb"),
+            ("Comment", "content"),
+            ("Lease", "scope"),
+            ("QueueItem", "user_id"),
+            ("HistoryEntry", "changes"),
+            ("Relationship", "target_id"),
+        ];
+        for (name, anchor) in anchors {
+            let entry =
+                catalog_entry(name).unwrap_or_else(|| panic!("catalog missing kind `{name}`"));
+            let fields = parse_struct_fields(&(entry.decl)());
+            assert!(
+                !fields.is_empty(),
+                "schema reflected zero fields for `{name}` — reflection parse drifted"
+            );
+            let names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
+            assert!(
+                names.contains(anchor),
+                "schema lost reflected field `{anchor}` on `{name}` — \
+                 schema drifted from the backing struct"
+            );
+        }
+    }
+
+    /// Smoke: `print_object` runs for every non-Requirement catalog kind without
+    /// panicking, in both text and JSON modes. trace:TASK-714
+    #[test]
+    fn print_object_covers_every_catalog_kind() {
+        for entry in CATALOG {
+            if entry.name.eq_ignore_ascii_case("requirement") {
+                continue;
+            }
+            // Exercises the reflection + render path; a parse that emits nothing
+            // would surface as an empty table, caught by the drift guard above.
+            print_object(entry.name, false);
+            print_object(entry.name, true);
+        }
     }
 }
