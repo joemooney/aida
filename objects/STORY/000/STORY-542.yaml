@@ -38,12 +38,12 @@ description: |-
 
   ## Relationships
   - The deterministic Layer-1 source for STORY-541 (operator digest). Close-checkpoint sits with TASK-96 (followups at done). Context-quarantine: feedback_quarantine_specialized_context_in_skills. Surface-change facts also feed aida changelog.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T04:17:01.789619351Z
-modified_at: 2026-06-09T04:17:01.789619351Z
+modified_at: 2026-06-09T06:27:57.415080803Z
 req_type: Story
 tags:
 - aida:digest
