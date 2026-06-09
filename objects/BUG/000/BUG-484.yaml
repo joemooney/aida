@@ -1,0 +1,41 @@
+id: 019eaa09-2f10-72c3-9aba-75f75e21e6bb
+spec_id: BUG-484
+agreed_id: BUG-484
+title: 'Fresh aida init project shows confusing ''⚠ 1 setup issue: MCP'' on every Claude launch — scaffolded .mcp.json server is never pre-approved'
+description: |-
+  SYMPTOM: A brand-new `aida init` project shows "⚠ 1 setup issue: MCP · /doctor" on EVERY Claude Code launch (seen via `aida agent new claude` and plain `claude` in ~/work/dumm2; also in the earlier ~/work/dummy1 sessions). For a new user this reads as "something is broken" with no context.
+
+  (Post-EPIC-37 finding: EPIC-37 onboarding-hardening is already Completed; this MCP-trust gap was never one of its children -- it is a fresh onboarding papercut found 2026-06-08. Tagged batch:onboarding-hardening for association.)
+
+  ROOT CAUSE (verified 2026-06-08, ~/work/dumm2):
+  - The server is NOT broken: `aida mcp-serve` responds correctly to the MCP initialize handshake (serverInfo: aida 0.12.0, "AIDA MCP server started (profile: full)"). The `aida` binary resolves on PATH.
+  - `aida init` scaffolds .mcp.json (the `aida`/`mcp-serve` stdio server) but does NOT scaffold the corresponding APPROVAL. The scaffolded .claude/settings.json has hooks/statusLine keys but no enableAllProjectMcpServers / enabledMcpjsonServers. No .claude/settings.local.json exists.
+  - Claude Code does not auto-trust project-scoped .mcp.json servers (a clone could ship a malicious one), so it shows "1 setup issue: MCP" until the user approves the server. Every fresh AIDA project trips this on first launch, and a first-user has no idea it's just an unapproved-server prompt.
+
+  WHY IT MATTERS: AIDA's highest-leverage surface is the MCP server (spec-graph tools). A new user hitting a scary "setup issue" before they even get the tools is the worst possible first impression, and the agent-context vision depends on the MCP server being live.
+
+  FIX (triage; do not implement):
+  - `aida init` should pre-approve its OWN scaffolded server by writing the trust to .claude/settings.local.json (per-user, gitignored): {"enabledMcpjsonServers": ["aida"]} (or enableAllProjectMcpServers: true).
+  - Use settings.local.json (NOT the committed settings.json) because a committed pre-approval is the exact clone-attack vector Claude Code guards against. `aida init` runs per-clone (the onboarding model), so each user who runs init grants their own LOCAL trust to the server they just installed -- an informed, safe, local action.
+  - Ensure .claude/settings.local.json is gitignored by the scaffolded .gitignore (Claude Code's own /init does this; AIDA's scaffold currently tracks .claude/ and may not ignore settings.local.json -> would leak local trust if committed).
+  - Alternative/also: `aida agent new claude` could approve at launch, but the scaffolding fix is better because it covers plain `claude` runs too, not just agent-new.
+  - If pre-approval is declined: at minimum, `aida init` / `aida agent new` output should name the upcoming "1 setup issue: MCP" and tell the user it's the unapproved aida server (run /mcp to approve) -- but fixing > explaining.
+
+  IMMEDIATE WORKAROUND: run /mcp (or /doctor) in the Claude session and approve the `aida` server; the spec-graph tools then load and the setup-issue clears.
+
+  Verified: aida mcp-serve initialize handshake returns a valid result; .claude/settings.json has no MCP key; no settings.local.json present.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:39:49.136332224Z
+modified_at: 2026-06-09T01:39:49.136332224Z
+req_type: Bug
+tags:
+- aida:init
+- batch:onboarding-hardening
+- first-run
+- from-self-test
+- mcp
+- onboarding
+- papercut
