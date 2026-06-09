@@ -44,6 +44,8 @@ mod punt;
 mod queue_recover;
 // trace:STORY-452 | ai:claude — inferred recent-remote-agent-activity for `aida status`.
 mod remote_activity;
+// trace:STORY-537 | ai:claude — guided origin bootstrap for `aida remote create`/`attach`.
+mod remote_create;
 mod reviewer_summary;
 mod rules_sync;
 // trace:STORY-262 | ai:claude
@@ -1120,6 +1122,31 @@ fn run() -> Result<()> {
         return handle_store_command(store_cmd);
     }
 
+    // `aida remote create`/`attach` bootstrap a git origin — they operate on a
+    // project that, by definition, may not have a working store/remote yet, so
+    // dispatch before storage init. trace:STORY-537 | ai:claude
+    if let Command::Remote(remote_cmd) = &cli.command {
+        let project_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        return match remote_cmd {
+            crate::cli::RemoteCommand::Create {
+                attach,
+                github,
+                gitlab,
+                public,
+            } => remote_create::handle_remote_create(
+                &project_root,
+                attach.as_deref(),
+                *github,
+                gitlab.as_deref(),
+                !*public,
+            ),
+            crate::cli::RemoteCommand::Attach { url } => {
+                remote_create::handle_remote_attach(&project_root, url)
+            }
+        };
+    }
+
     // Sandbox commands MANAGE a throwaway store directory; they don't read the
     // project's store, so dispatch before store detection (and so they work
     // even from a non-AIDA cwd). trace:SPIKE-48 | ai:claude
@@ -1841,6 +1868,7 @@ fn run() -> Result<()> {
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
+        Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
@@ -8601,6 +8629,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
+        Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
@@ -66029,6 +66058,31 @@ fn handle_push_command(
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // STORY-537: with no `origin`, both push legs would silently skip. Offer a
+    // guided origin bootstrap (TTY) so the user isn't left to manually create
+    // the repo + `git remote add origin` + push. Declining (or no TTY) falls
+    // through to the existing "no origin — skipping" path, which still works.
+    // trace:STORY-537 | ai:claude
+    if !store_only && !git_ops::has_remote(&project_root, "origin") {
+        if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
+            if prompt_yes_no(
+                "No `origin` remote — set one up now (create on a forge or attach existing)? [Y/n] ",
+                true,
+            )
+            .unwrap_or(false)
+            {
+                remote_create::handle_remote_create(&project_root, None, false, None, true)?;
+            }
+        } else {
+            // Non-interactive: print the manual recipe once so a scripted push
+            // tells the operator how to bootstrap, then continue (legs skip).
+            let repo_name = remote_create::default_repo_name(&project_root);
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "main".to_string());
+            println!("{}", remote_create::manual_recipe(&repo_name, &branch));
+        }
+    }
 
     // TASK-106: pre-push summary. Show what each in-scope leg will do
     // BEFORE touching origin; prompt only when both legs have commits

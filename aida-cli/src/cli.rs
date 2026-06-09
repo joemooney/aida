@@ -1680,6 +1680,44 @@ pub enum MailboxCommand {
     Sync,
 }
 
+/// Guided origin bootstrap for a project with no git `origin`.
+// trace:STORY-537 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RemoteCommand {
+    /// Create (or attach) an `origin` for a project that has none. At a TTY,
+    /// walks a menu: GitHub (via gh), a remembered GitLab host, another GitLab
+    /// host (push-to-create over SSH), or attach-existing. Without a TTY (and
+    /// no route flag) prints the manual recipe and exits cleanly. Pre-select a
+    /// route with --github / --gitlab <host> / --attach <url> to stay
+    /// scriptable.
+    Create {
+        /// Attach this existing repo URL as origin and push (skip the menu).
+        #[clap(long)]
+        attach: Option<String>,
+
+        /// Create on GitHub via `gh repo create … --source . --remote origin
+        /// --push` (skip the menu).
+        #[clap(long, conflicts_with_all = ["attach", "gitlab"])]
+        github: bool,
+
+        /// Push-to-create on this GitLab host over SSH (skip the menu).
+        #[clap(long, conflicts_with_all = ["attach", "github"], value_name = "HOST")]
+        gitlab: Option<String>,
+
+        /// Create the repo public instead of private (GitHub path).
+        #[clap(long)]
+        public: bool,
+    },
+
+    /// Wire an existing repo's URL as `origin` and push the current branch.
+    /// The clean fallback when auto-create isn't possible (corporate GitLab):
+    /// create the repo in the UI, then `aida remote attach <url>`.
+    Attach {
+        /// The existing repo's clone URL (SSH or HTTPS).
+        url: String,
+    },
+}
+
 /// Claude Code path-gated rules sync.
 // trace:SPIKE-31 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -5800,6 +5838,14 @@ pub enum Command {
         #[clap(long)]
         reset: bool,
     },
+
+    /// Set up a git `origin` for a project that has none — guided origin
+    /// bootstrap. `create` offers GitHub (via gh), personal-GitLab
+    /// push-to-create over SSH (no glab/token needed), or attach-existing;
+    /// `attach <url>` wires an existing repo. Non-interactive prints the
+    /// manual recipe and exits cleanly.
+    #[clap(subcommand)]
+    Remote(RemoteCommand),
 
     /// Push code branch AND orphan aida-store branch to origin. Use
     /// --code-only or --store-only to scope. Equivalent to running
