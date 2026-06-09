@@ -1,0 +1,45 @@
+id: 019eacaf-345d-7561-b27c-a1cc5d2c4ae6
+spec_id: STORY-548
+agreed_id: STORY-548
+title: 'aida why-open: per-open-spec openness explanation (derive + findings + residual note); burndown post-drain report'
+description: |-
+  ## Problem (operator Q 2026-06-09)
+
+  After a burndown, there's no easy way to understand WHY each still-open item remains open. burndown plan explains 'what's pickable'; nothing explains 'why does each open item stay open' end-to-end. (Surfaced when the advisor resorted to brittle ad-hoc `aida show --json` loops to hand-compute per-spec signals — the fragile script was a symptom of this missing surface.)
+
+  ## Design — a COMPUTED view unioning three sources (NOT one stored container)
+
+  'Why is X open?' decomposes into reason classes, each with its right vehicle:
+
+  1. DERIVABLE FROM GRAPH (majority) — draft (unapproved), unqueued (no advisor sign-off), blocked-by <id> (unsatisfied BlockedBy), needs-decision (<pending question>), epic (has children — roll up), parking-tagged (<tag>), in-flight (lease held / PR open), or pickable-but-unworked. COMPUTE, never store (a stored 'blocked by Y' lies once Y merges). burndown's existing Pickability::Parked(reason) engine is ~80% of this — broaden it beyond the selector to ALL open statuses and emit the COMPLETE reason set.
+  2. ATTEMPT OUTCOME (CI red / RequestChanges / build fail) — reuse FINDINGS (already filed by shelved drains). Link the finding; don't reinvent.
+  3. NON-DERIVABLE EXTERNAL ('waiting on upstream X', 'deferred pending budget') — a structured residual note (prefixed comment or typed parking-reason) the view folds in. ONLY for the residual; never duplicate computable state (staleness trap).
+
+  Principle: derive what's computable, reuse findings for attempt-outcomes, store only the residual human note.
+
+  ## Acceptance
+
+  - [ ] `aida why-open [selector]` (and/or `aida burndown plan --explain`; decide naming) lists every OPEN spec with the reason(s) it isn't draining, DERIVED live from the graph (status / queue membership / BlockedBy / pending decision / type / parking tags / lease+PR state).
+  - [ ] Multiple reasons per spec where applicable, ordered most-fundamental-first (same ordering discipline as the pickability gate).
+  - [ ] For attempted-and-shelved specs, the view links the existing FINDING rather than recomputing — single source for outcome reasons.
+  - [ ] A single structured residual vehicle (prefixed comment or typed note) lets a human record a NON-derivable reason; the view folds it in. Derivable reasons are NOT written to this vehicle.
+  - [ ] `aida burndown run` (STORY-545) emits this as its post-drain summary: shipped / parked(→findings) / still-open(→reasons).
+  - [ ] `--json` for machine consumers.
+  - [ ] Available standalone anytime, not only post-drain.
+
+  ## Rationale
+
+  Closes the 'what's pickable' vs 'why each open' gap. The missing native surface forced brittle multi-interpreter scripting — building it removes that whole class of ad-hoc introspection. Reuses the burndown parked-reason engine + findings; adds only the residual-note vehicle. Relates to STORY-545/546 (the burndown set) and the findings surface.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T14:00:23.901748591Z
+modified_at: 2026-06-09T14:00:23.901748591Z
+req_type: Story
+tags:
+- aida:burndown
+- aida:findings
+- from-self-test
+- observability
+- papercut
