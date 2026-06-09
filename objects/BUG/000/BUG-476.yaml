@@ -3,12 +3,12 @@ spec_id: BUG-476
 agreed_id: BUG-476
 title: aida pull exits 0 over a stale code tree when code leg fails + store has no worktree/origin (BUG-254 contract bypassed)
 description: 'VERIFIED (advisor read main.rs:65599-65614, found by quality-sweep reviewer). handle_pull_command sets code_failed=Some(...) when ''git pull --ff-only'' fails (line 65589), and the BUG-254 contract is to exit non-zero at the bottom (~65726) so the orchestrator''s phase 5 doesn''t announce success over a stale tree. BUT the store-pull block has two unconditional early returns — ''return Ok(())'' at 65606 (no orphan worktree) and 65613 (store has no origin) — that fire AFTER code_failed is set but BEFORE the bottom check. So if the code leg failed AND the store has no worktree/origin (code-only clone, or store not yet attached — common in CI/orchestrator), aida pull returns Ok(()) and exits 0 over a code tree that did NOT advance. Fix: the early returns must honor code_failed (return the BUG-254 error / fall through to the bottom check if code_failed.is_some()).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:09:41.991644382Z
-modified_at: 2026-06-09T01:09:41.991644382Z
+modified_at: 2026-06-09T01:31:52.912388792Z
 req_type: Bug
 tags:
 - from-review:quality-sweep
@@ -16,3 +16,7 @@ tags:
 - pull
 - severity:high
 - verified-by-advisor
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T01:31:52.912388792Z
+  completion_sha: c2df4bba7b4a8e3ee92ac70393971510bcc524cb
