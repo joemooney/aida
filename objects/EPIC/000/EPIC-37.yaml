@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-05T19:31:00.203994130Z
-modified_at: 2026-06-07T02:09:19.429104603Z
+modified_at: 2026-06-09T01:49:28.684061336Z
 req_type: Epic
 tags:
 - batch:onboarding-hardening
@@ -51,3 +51,8 @@ comments:
   content: '✅ COMPLETE (2026-06-06). Onboarding-hardening delivered + verified end-to-end via a fresh ''git init && aida init'' dogfood. Children all shipped: BUG-446 (workspace-of-projects init guard), BUG-447 (project-scoped session-resume), TASK-631 (init commits its own scaffolding — clean tree), BUG-445 (scaffolding-commit task stays primary-worktree-only), TASK-671 (id-real remote-aware awaiting-commit hint), + last-mile BUG-464 (status no longer miscounts seeded META as untriaged drafts) and BUG-465 (empty-queue first-run now GUIDES: file→queue→work, instead of dead-ending). Acceptance met: a fresh init → first ''aida queue work'' is boring and correct. Fold-in disposition: TASK-450 rejected (superseded by TASK-631); BUG-433 (silent-wrong-data store detection) left OPEN as a standalone store-detection bug — TASK-631 narrowed its trigger but the detection hole is orthogonal to onboarding.'
   created_at: 2026-06-07T02:09:17.713359733Z
   modified_at: 2026-06-07T02:09:17.713359733Z
+- id: 019eaa12-06ec-7452-b6f7-572f726b10ae
+  author: joe
+  content: 'Independently verified COMPLETE 2026-06-08 against a fresh `aida init` project (~/work/dumm2) + the running binary (v0.12.0). All 5 children legitimately fixed, no BUG-449-style divergence: TASK-631 (dumm2 has a ''chore: scaffold AIDA'' commit with .aida/config.toml + skills; working tree CLEAN — scaffolding now auto-committed at init); BUG-445 (dissolved by 631 — worktree off a scaffold-bearing commit has the files); BUG-446 (code: refuse-on-workspace-of-projects guard at main.rs:15079 + regression test); BUG-447 (no stale ~/ai-task-007 session bleed; TASK-007 no longer a global match — project-scoped); TASK-671 (hint at main.rs:59479-85 is id-substituted + remote-aware, two variants). BUG-448 (graph --tree, not an EPIC-37 child) also fixed: tree now renders rel-add children + rollup. The dummy1-dogfood → file → burndown → land → verify loop worked end-to-end. Remaining onboarding gap is the NEW post-epic BUG-484 (MCP server not pre-approved → ''1 setup issue'' on first launch).'
+  created_at: 2026-06-09T01:49:28.684061336Z
+  modified_at: 2026-06-09T01:49:28.684061336Z
