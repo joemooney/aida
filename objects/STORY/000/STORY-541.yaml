@@ -43,12 +43,12 @@ description: |-
 
   ## Relationships
   - Sharpens/extends `aida digest` (STORY-252) — its customer filter is too weak today. Storage: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db). The user-facing counterpart to the dev-facing `aida changelog`.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:20:22.567385072Z
-modified_at: 2026-06-09T04:10:34.981481775Z
+modified_at: 2026-06-09T04:18:29.455233575Z
 req_type: Story
 tags:
 - aida:digest
