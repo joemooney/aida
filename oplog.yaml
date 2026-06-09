@@ -16134,5 +16134,43 @@ operations:
       ## Rationale
 
       The overnight autonomous burn-down the operator has asked for: gated, parallel, headless, walk-away. Prefer composing the proven skill engine (B) over a second Rust fan-out engine (A). Queue stays a curated surface; burndown is the declarative drainer. Relates to STORY-544 + the `feedback_parallel_implementer_fanout_burndown` pattern.
-clock: 1603
+- id: 019eab21-1976-7773-80a6-8a61348785b9
+  target_id: 019eab13-c8a9-7430-83ad-d220620f0a2e
+  author: aida
+  node_id: '1'
+  lamport: 1604
+  timestamp: 2026-06-09T06:45:33.686164037Z
+  kind: !SetDescription
+    description: |-
+      ## Goal (operator, dumm2 dogfood 2026-06-08)
+
+      A kick-off-and-walk-away OVERNIGHT burn-down runnable from a plain shell (no Claude Code session): drain the advisor-blessed ready set in PARALLEL, integrate greens, loop until drained, exit. `aida burndown run [selector]`.
+
+      ## Advisor sign-off is MANDATORY (corrects earlier framing)
+
+      Earlier this spec said 'the operator's run launch is the disposition for approved scope.' REJECTED by the operator — that bypasses the advisor. The burndown set is **approved + QUEUED + pickable** (STORY-546); queue membership IS the advisor sign-off. `run` drains ONLY the pickable subset of the advisor-curated queue — it can never touch an unqueued spec. No transient-enqueue, no draft-opt-in, no operator-launch-as-disposition. Those are all dropped.
+
+      ## What run does
+
+      Parallel-drain the pickable queued set. Because the set is pre-queued by the advisor, run is essentially a PARALLEL `queue work --auto-complete` over the pickable queue items — the queue-coupling is now a feature (the queue is the gate), not a wrinkle.
+
+      ## Two implementation strategies — SPIKE-51 (blocks this)
+
+      - STRATEGY B (preferred): launch headless `claude -p \"/aida-burndown <selector>\"`, reuse the proven skill fan-out. Open Q: can headless `claude -p` invoke the `disable-model-invocation` skill? (SPIKE-51).
+      - STRATEGY A (fallback): CLI reimplements parallel headless worker fan-out in Rust (N x `claude -p` implementer in worktrees + integrator loop + punt-and-continue).
+
+      ## Acceptance
+
+      - [ ] `aida burndown run` drains ONLY approved + QUEUED + pickable specs (the STORY-546 set). It can never act on an unqueued spec — advisor sign-off (= queue membership) is enforced, not bypassable.
+      - [ ] Workers run in PARALLEL (worktree-isolated), bounded by `--concurrency N`; integrate PRs as they go green; punt-and-continue on a blocker (one parked spec never halts the run).
+      - [ ] Each in-flight spec is LEASE-claimed so concurrent workers never collide; leases release on completion/park. No spec tagging.
+      - [ ] `--dry-run` == `aida burndown plan` output (the queued ready set), no draining.
+      - [ ] Exit code follows the drain convention (2 when anything shelved/skipped); respects `--max-failures` + lifecycle short-circuit tags.
+      - [ ] Help + the STORY-544 footer disambiguate: `aida burndown run` = headless parallel, any shell, overnight; `/aida-burndown` skill = in Claude Code, interactive driver. Both drain the SAME advisor-queued set.
+      - [ ] Depends on STORY-546 (queued-scoping gate). SPIKE-51 (Strategy B vs A) resolved before implementation.
+
+      ## Rationale
+
+      The overnight autonomous burn-down the operator asked for — gated by advisor sign-off (the queue), parallel, headless, walk-away. Prefer composing the proven skill engine (B) over a second Rust engine (A). Depends on STORY-546; relates to STORY-544 + `feedback_parallel_implementer_fanout_burndown`.
+clock: 1604
 node_id: '1'
