@@ -1469,6 +1469,18 @@ pub enum BurndownCommand {
         #[clap(long)]
         json: bool,
     },
+    /// Explain why EVERY open spec is still open — not just the candidate set.
+    /// Where `plan` shows ready-vs-parked for the specs a burndown would fan
+    /// out, `explain` classifies all open specs (drafts, epics, deferred,
+    /// held-for-review, blocked, in-flight, vision) into a bucket + one-line
+    /// reason, derived purely from store signals. The post-burndown "why is
+    /// each of these still here?" view.
+    // trace:STORY-547 | ai:claude
+    Explain {
+        /// Machine-readable JSON (`[{spec, bucket, reason, needs_human}]`).
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// of an in-repo build, running dev servers, installing shell helpers).
@@ -6124,6 +6136,19 @@ pub enum Command {
     /// read-only foundation it drives its worktree fan-out from.
     #[clap(subcommand)]
     Burndown(BurndownCommand),
+
+    // trace:STORY-547 | ai:claude
+    /// Explain why one open spec is still open — a single-spec drill-down using
+    /// the same classifier as `burndown explain`. Answers "what's keeping
+    /// SPEC-ID from being done?" with a bucket + reason derived from store
+    /// signals (status, type, tags, blockers, decisions, live leases).
+    Why {
+        /// The SPEC-ID to explain (e.g. STORY-543).
+        id: String,
+        /// Machine-readable JSON (`{spec, bucket, reason, needs_human}`).
+        #[clap(long)]
+        json: bool,
+    },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
     /// run dev servers, install shell helpers. End users don't need these.

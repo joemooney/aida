@@ -1120,6 +1120,12 @@ fn run() -> Result<()> {
         return handle_burndown_command(cmd);
     }
 
+    // STORY-547: `aida why <ID>` reads the requirement graph like burndown —
+    // dispatch early, no shared storage handle needed. trace:STORY-547
+    if let Command::Why { id, json } = &cli.command {
+        return handle_why(id, *json);
+    }
+
     // Doctor commands run before storage init — they may need to operate
     // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
     if let Command::Doctor {
@@ -1899,6 +1905,7 @@ fn run() -> Result<()> {
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
+        Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -8687,6 +8694,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
+        Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -64549,7 +64557,254 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             batch,
             json,
         } => handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *json),
+        crate::cli::BurndownCommand::Explain { json } => handle_burndown_explain(*json),
     }
+}
+
+/// STORY-547: build the [`burndown::OpenFacts`] for every OPEN spec in the store
+/// (non-archived, status not Completed/Rejected). Reasons are derived purely
+/// from store signals + the live lease set — no new stored field. Shared by
+/// `burndown explain` and `aida why`. trace:STORY-547 | ai:claude
+fn collect_open_facts(
+    store: &aida_core::RequirementsStore,
+    in_flight_scopes: &std::collections::HashSet<String>,
+) -> Vec<burndown::OpenFacts> {
+    let norm = |s: &str| -> String {
+        s.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect::<String>()
+            .to_ascii_lowercase()
+    };
+    let mut facts = Vec::new();
+    for req in &store.requirements {
+        if req.archived {
+            continue;
+        }
+        // "Open" = not yet terminal. Completed/Rejected are done with.
+        if matches!(
+            req.status,
+            aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+        ) {
+            continue;
+        }
+        let id = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        let in_flight = !in_flight_scopes.is_empty()
+            && [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| in_flight_scopes.contains(&s.to_ascii_lowercase()));
+        facts.push(burndown::OpenFacts {
+            id,
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+            status: norm(&format!("{:?}", req.status)),
+            tags: req.tags.iter().cloned().collect(),
+            has_unsatisfied_blocker: aida_core::pickability::blocked_by_incomplete(req, store),
+            has_pending_decision: req
+                .decision_request
+                .as_ref()
+                .map(|d| d.is_pending())
+                .unwrap_or(false),
+            in_flight,
+        });
+    }
+    facts
+}
+
+/// STORY-547: `aida burndown explain` — classify every open spec into its
+/// "why still open" bucket + one-line reason. The post-burndown companion to
+/// `plan`: where `plan` answers "what can I fan out?", `explain` answers "why
+/// is everything that's left still here?". trace:STORY-547 | ai:claude
+fn handle_burndown_explain(json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let facts = collect_open_facts(&store, &in_flight_scopes);
+
+    // Classify, preserving store order within each bucket.
+    let classified: Vec<(burndown::OpenFacts, burndown::OpenBucket, String)> = facts
+        .into_iter()
+        .map(|f| {
+            let (bucket, reason) = burndown::explain_open(&f);
+            (f, bucket, reason)
+        })
+        .collect();
+
+    if json {
+        let payload = classified
+            .iter()
+            .map(|(f, bucket, reason)| {
+                serde_json::json!({
+                    "spec": f.id,
+                    "bucket": bucket.key(),
+                    "reason": reason,
+                    "needs_human": bucket.needs_human(),
+                })
+            })
+            .collect::<Vec<_>>();
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    println!("{} why each open spec is still open", "▸".cyan().bold());
+    if classified.is_empty() {
+        println!("  {}", "Nothing open — the backlog is clear.".dimmed());
+        return Ok(());
+    }
+    let needs = classified
+        .iter()
+        .filter(|(_, b, _)| b.needs_human())
+        .count();
+    println!(
+        "  {} {} open · {} need a human nudge, {} self-resolve through normal flow",
+        "→".green(),
+        classified.len(),
+        needs,
+        classified.len() - needs
+    );
+
+    // Group by bucket for a scannable read; ordering matches the precedence in
+    // explain_open so the "needs you" buckets surface first.
+    use burndown::OpenBucket::*;
+    let order = [
+        HeldForReview,
+        AwaitingDecision,
+        Ungroomed,
+        Umbrella,
+        Blocked,
+        Deferred,
+        InFlight,
+        InProgress,
+        AwaitingMerge,
+        LongLived,
+        Actionable,
+    ];
+    for bucket in order {
+        let rows: Vec<&(burndown::OpenFacts, burndown::OpenBucket, String)> =
+            classified.iter().filter(|(_, b, _)| *b == bucket).collect();
+        if rows.is_empty() {
+            continue;
+        }
+        let marker = if bucket.needs_human() {
+            "●".yellow()
+        } else {
+            "·".dimmed()
+        };
+        let (_, _, sample_reason) = rows[0];
+        println!(
+            "\n{} {} — {}",
+            marker,
+            bucket.key().bold(),
+            sample_reason.dimmed()
+        );
+        for (f, _, reason) in rows {
+            // Only repeat the per-spec reason when it differs from the bucket's
+            // header (e.g. `deferred:<why>` / decision tags vary per spec); for
+            // uniform buckets just list the IDs to keep the view scannable.
+            if reason == sample_reason {
+                println!("    {}", f.id.cyan());
+            } else {
+                println!("    {} {}", f.id.cyan(), format!("({reason})").dimmed());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// STORY-547: `aida why <ID>` — single-spec drill-down using the same
+/// classifier as `burndown explain`. trace:STORY-547 | ai:claude
+fn handle_why(id: &str, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+
+    // Resolve the spec by agreed/spec id (case-insensitive).
+    let want = id.trim().to_ascii_uppercase();
+    let req = store.requirements.iter().find(|r| {
+        [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|s| s.eq_ignore_ascii_case(&want))
+    });
+    let Some(req) = req else {
+        anyhow::bail!("no spec found matching `{id}` — check the ID with `aida list`.");
+    };
+
+    // Terminal specs aren't "open" — answer plainly rather than forcing a bucket.
+    if matches!(
+        req.status,
+        aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+    ) {
+        let disp = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        let status = format!("{:?}", req.status);
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "spec": disp,
+                    "bucket": "closed",
+                    "reason": format!("{status} — not open"),
+                    "needs_human": false,
+                }))?
+            );
+        } else {
+            println!(
+                "{} {} is {} — not open. Nothing keeping it back.",
+                "▸".cyan().bold(),
+                disp.cyan(),
+                status.green()
+            );
+        }
+        return Ok(());
+    }
+
+    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let facts = collect_open_facts(&store, &in_flight_scopes);
+    let Some(f) = facts.iter().find(|f| f.id.eq_ignore_ascii_case(&want)) else {
+        anyhow::bail!("`{id}` is not in the open set.");
+    };
+    let (bucket, reason) = burndown::explain_open(f);
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "spec": f.id,
+                "bucket": bucket.key(),
+                "reason": reason,
+                "needs_human": bucket.needs_human(),
+            }))?
+        );
+        return Ok(());
+    }
+    let marker = if bucket.needs_human() {
+        "●".yellow()
+    } else {
+        "·".dimmed()
+    };
+    println!("{} {}", "▸".cyan().bold(), f.id.cyan().bold());
+    println!("  {} {} — {}", marker, bucket.key().bold(), reason);
+    Ok(())
 }
 
 /// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
