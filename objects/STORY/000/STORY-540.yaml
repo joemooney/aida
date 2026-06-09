@@ -1,0 +1,48 @@
+id: 019eaa2d-7958-76e1-b109-765cb39109bf
+spec_id: STORY-540
+agreed_id: STORY-540
+title: 'Single-writer scope-lane (docs lane): scope-owned agent fed by needs-docs flag + periodic sweep — SPIKE-10 MVP'
+description: |-
+  ## Problem
+  Multi-agent parallelism scales best when scopes don't collide. Some scopes are *naturally single-writer* and low-conflict — documentation is the cleanest case. But there's no formalized "scope-owned lane" convention: doc work happens ad-hoc, isn't reliably routed to one owner, and isn't swept for gaps. We want a durable lane: one agent owns a scope, work flows to it (pushed by other agents or pulled by sweep), it drains sequentially within-scope, and runs in parallel with other lanes.
+
+  ## Insight
+  AIDA already has ~all the primitives — this is a COMPOSITION + a thin convention, not new machinery:
+  - roles are an open set; `aida queue add --for docs` already routes to a `docs` lane (same shape as the integrator role we just added)
+  - leases carry a scope; one-agent-per-lane gives conflict-freedom by construction
+  - push-feed = `file_finding`/`aida brief docs <SPEC>` (the capture-doc-seeds discipline); pull-feed = a periodic sweep skill (`/aida-docs-review`) on a `/loop`
+  - EPIC-24 `doc` type + `aida doc add --about <ID>` makes docs first-class linkable specs
+
+  ## Chosen scope (MVP — docs lane as SPIKE-10 proof-of-concept)
+  1. Document a `docs` lane convention (role + scope) in the discipline pack: one agent durably owns docs; others never edit docs, they FLAG.
+  2. Canonical routing primitive (the "doc inbox"): a `needs-docs` tag/finding any agent files; the doc lane's queue filter / sweep picks it up. Optional thin convenience: `aida flag-docs <SPEC> --note`.
+  3. The doc agent drains via the existing burndown/drain filtered to the docs lane, PLUS a periodic `/aida-docs-review` sweep on a `/loop`.
+  4. Single-writer is CONVENTION, not enforced — do NOT build a scope-ownership registry to police exclusivity; conflict-freedom is a property of the topology.
+
+  ## Why docs first
+  Docs is the safest subsystem to prove the persistent-scope-lane pattern (single-writer, minimal cross-talk) before generalizing to a code subsystem. This is the concrete, shippable form of SPIKE-10 (subsystem-scoped agents).
+
+  ## Acceptance (MVP-first)
+  - [ ] A `docs` lane convention is documented in docs/aida/discipline (role + scope + the flag-not-edit rule for non-doc agents)
+  - [ ] A canonical `needs-docs` routing primitive exists (tag or finding kind) that lands doc work in the doc lane's pickable set
+  - [ ] The doc agent can drain its lane: `/aida-burndown` (or queue work) filtered to docs + a periodic `/aida-docs-review` sweep
+  - [ ] Single-writer remains conventional (no ownership-enforcement code)
+  - [ ] Revisit-trigger documented: after the doc lane runs cleanly for N drain cycles, evaluate generalizing to a code subsystem (promote SPIKE-10 proper)
+
+  ## Composes with
+  SPIKE-10 (subsystem-scoped agents — this is its MVP), EPIC-24 (living docs), roles + queue --for routing, findings/briefs (push-feed), /aida-burndown + /aida-docs-review (drain + sweep), the capture-doc-seeds discipline.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T02:19:27.448888948Z
+modified_at: 2026-06-09T02:19:27.448888948Z
+req_type: Story
+tags:
+- architecture
+- docs
+- from-spike:SPIKE-10
+- from-user-direction
+- multi-agent
+- roles
+- scope
