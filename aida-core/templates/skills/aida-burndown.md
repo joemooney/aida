@@ -44,10 +44,14 @@ Parse the selector from `$ARGUMENTS` (default `--status approved`):
 aida burndown plan --status approved --json     # or --tag <T> / --batch <B>
 ```
 
-This returns `{ ready: [...], parked: [{spec, reason}] }`. **Only `ready` is
-fan-out-able.** Report the parked count + reasons once (so the operator sees
-what's held + why) but never act on parked specs. If `ready` is empty, stop —
-the backlog is drained for this selector.
+This returns `{ ready: [...], awaiting_signoff: [...], parked: [{spec, reason}] }`.
+**Only `ready` is fan-out-able.** `ready` is the advisor-blessed drain set:
+queued + bounded + unblocked + decision-free — queue membership IS the advisor
+sign-off (STORY-546), so the runner can never drain a spec the advisor didn't
+deliberately queue. `awaiting_signoff` is pickable-but-unqueued (the advisor
+hasn't blessed it yet) — report it but never act on it. Report the parked count
++ reasons once (so the operator sees what's held + why) but never act on parked
+specs. If `ready` is empty, stop — nothing blessed to drain for this selector.
 
 ### 2. Fan out a wave (the engine)
 

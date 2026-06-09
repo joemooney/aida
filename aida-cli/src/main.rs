@@ -64555,8 +64555,9 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             status,
             tag,
             batch,
+            candidates,
             json,
-        } => handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *json),
+        } => handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *candidates, *json),
         crate::cli::BurndownCommand::Explain { json } => handle_burndown_explain(*json),
     }
 }
@@ -64809,11 +64810,19 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
 
 /// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
 /// pure pickability gate. Read-only — the deterministic input the
-/// `/aida-burndown` skill fans out. trace:STORY-527 | ai:claude
+/// `/aida-burndown` skill fans out.
+///
+/// STORY-546: the ready set now ALSO requires queue membership — queueing a
+/// spec IS the advisor sign-off (`queue add` is advisor-authority-gated, ADR-3
+/// / TASK-647), so burndown can never drain a spec the advisor didn't bless.
+/// Pickable-but-unqueued specs surface as "awaiting sign-off", and
+/// `--candidates` shows exactly that set (the advisor's "what to bless next"
+/// aid). trace:STORY-527 trace:STORY-546 | ai:claude
 fn handle_burndown_plan(
     status: &str,
     tag: Option<&str>,
     batch: Option<&str>,
+    candidates_view: bool,
     json: bool,
 ) -> Result<()> {
     let project_root =
@@ -64844,7 +64853,16 @@ fn handle_burndown_plan(
         .map(|r| (r.id, r.status.clone()))
         .collect();
 
+    // STORY-546: queue membership = advisor sign-off. Union of every user's
+    // queue (matches `aida list --queued`). A spec is drainable only if the
+    // advisor deliberately queued it.
+    let queued_ids = all_queued_requirement_ids(&project_root);
+
     let mut candidates: Vec<burndown::BurndownCandidate> = Vec::new();
+    // Display-ids of queued specs in the selector scope, so the pickable set can
+    // be split into the blessed (queued) drain set vs awaiting-sign-off.
+    // trace:STORY-546
+    let mut queued_disp: std::collections::HashSet<String> = std::collections::HashSet::new();
     for req in &store.requirements {
         // Archived specs are out of active scope — never fan them out (matches
         // `aida list`'s default non-archived view). trace:STORY-527
@@ -64875,12 +64893,16 @@ fn handle_burndown_plan(
                     .map(|s| *s != aida_core::RequirementStatus::Completed)
                     .unwrap_or(true)
         });
+        let disp = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        if queued_ids.contains(&req.id) {
+            queued_disp.insert(disp.clone());
+        }
         candidates.push(burndown::BurndownCandidate {
-            id: req
-                .agreed_id
-                .clone()
-                .or_else(|| req.spec_id.clone())
-                .unwrap_or_else(|| req.id.to_string()),
+            id: disp,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
             tags,
             has_unsatisfied_blocker,
@@ -64892,15 +64914,52 @@ fn handle_burndown_plan(
         });
     }
 
-    let (ready, parked) = burndown::partition(&candidates);
+    let (pickable, parked) = burndown::partition(&candidates);
+    // STORY-546: split the pickable set by advisor sign-off (queue membership).
+    // `ready` = blessed + drainable; `awaiting_signoff` = pickable but the
+    // advisor hasn't queued it yet (the `--candidates` curation list).
+    let (ready, awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
 
     if json {
         let payload = serde_json::json!({
             "selector": { "status": status, "tag": tag, "batch": batch },
             "ready": ready,
+            "awaiting_signoff": awaiting_signoff,
             "parked": parked.iter().map(|(id, reason)| serde_json::json!({ "spec": id, "reason": reason })).collect::<Vec<_>>(),
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    // `--candidates`: the advisor's curation view — approved + pickable + NOT
+    // yet queued. Read-only; the answer to "what could I bless next?".
+    // trace:STORY-546
+    if candidates_view {
+        println!("{} burndown candidates", "▸".cyan().bold());
+        println!(
+            "  {}",
+            burndown::selector_summary(status, tag, batch).dimmed()
+        );
+        println!(
+            "  {} {} pickable + unqueued — bless with `aida queue add <id>` to make them drainable",
+            "→".green(),
+            awaiting_signoff.len()
+        );
+        if awaiting_signoff.is_empty() {
+            println!(
+                "\n{} Nothing to bless — every pickable {} spec is already queued (or none are pickable).",
+                "·".dimmed(),
+                status
+            );
+        } else {
+            println!(
+                "\n{}",
+                "Candidates to bless (pickable, not yet queued):".bold()
+            );
+            for id in &awaiting_signoff {
+                println!("  {} {}", "+".yellow(), id.cyan());
+            }
+        }
         return Ok(());
     }
 
@@ -64912,18 +64971,30 @@ fn handle_burndown_plan(
         burndown::selector_summary(status, tag, batch).dimmed()
     );
     println!(
-        "  {} {} ready to fan out, {} parked",
+        "  {} {} ready to fan out, {} awaiting sign-off, {} parked",
         "→".green(),
         ready.len(),
+        awaiting_signoff.len(),
         parked.len()
     );
     if !ready.is_empty() {
         println!(
             "\n{}",
-            "Ready (bounded + unblocked + decision-free):".bold()
+            "Ready (queued + bounded + unblocked + decision-free):".bold()
         );
         for id in &ready {
             println!("  {} {}", "✓".green(), id.cyan());
+        }
+    }
+    // STORY-546: pickable but not blessed — show them so the advisor knows what
+    // they could queue, but they are NOT in the drain set.
+    if !awaiting_signoff.is_empty() {
+        println!(
+            "\n{}",
+            "Awaiting sign-off (pickable, not queued — `aida queue add <id>` to bless):".bold()
+        );
+        for id in &awaiting_signoff {
+            println!("  {} {}", "+".yellow(), id);
         }
     }
     if !parked.is_empty() {
@@ -64939,10 +65010,17 @@ fn handle_burndown_plan(
     // Suppressed under --json (handled above) and when nothing is ready.
     // trace:STORY-544
     if ready.is_empty() {
-        println!(
-            "\n{} Nothing ready to fan out — adjust the selector above or unblock parked specs.",
-            "·".dimmed()
-        );
+        if awaiting_signoff.is_empty() {
+            println!(
+                "\n{} Nothing ready to fan out — adjust the selector above or unblock parked specs.",
+                "·".dimmed()
+            );
+        } else {
+            println!(
+                "\n{} Nothing blessed yet — queue a candidate above (`aida queue add <id>`) to make it drainable.",
+                "·".dimmed()
+            );
+        }
     } else {
         println!("\n{}", burndown::next_step_footer().bold());
     }

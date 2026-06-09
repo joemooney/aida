@@ -100,6 +100,19 @@ pub(crate) fn partition(candidates: &[BurndownCandidate]) -> (Vec<String>, Vec<(
     (ready, parked)
 }
 
+/// STORY-546: split the pickable set into `(ready, awaiting_signoff)` by advisor
+/// sign-off. Queue membership IS the sign-off (`queue add` is advisor-authority-
+/// gated, ADR-3 / TASK-647), so `ready` = blessed + drainable and
+/// `awaiting_signoff` = pickable but not yet queued. Order-preserving + pure so
+/// the queue-gate is unit-testable independent of the filesystem queue read.
+/// trace:STORY-546 | ai:claude
+pub(crate) fn split_by_signoff(
+    pickable: Vec<String>,
+    queued: &std::collections::HashSet<String>,
+) -> (Vec<String>, Vec<String>) {
+    pickable.into_iter().partition(|id| queued.contains(id))
+}
+
 /// STORY-547: the broader "why is this open spec *still open*?" classifier.
 /// Where [`classify`] answers the narrow pickability question for the candidate
 /// set (the approved+queued specs a burndown would fan out), `explain_open`
@@ -426,6 +439,31 @@ mod tests {
     fn selector_summary_reflects_filters() {
         let s = selector_summary("draft", Some("papercut"), Some("scaffolding"));
         assert!(s.contains("Showing draft specs filtered to tag papercut + batch scaffolding."));
+    }
+
+    // STORY-546: the queue-gate split.
+    #[test]
+    fn split_by_signoff_blesses_only_queued_pickable_specs() {
+        let pickable = vec![
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+            "STORY-3".to_string(),
+        ];
+        let queued: std::collections::HashSet<String> =
+            ["TASK-2".to_string()].into_iter().collect();
+        let (ready, awaiting) = split_by_signoff(pickable, &queued);
+        // Only the queued pickable spec is drainable.
+        assert_eq!(ready, vec!["TASK-2".to_string()]);
+        // The rest are pickable but await advisor sign-off (queueing).
+        assert_eq!(awaiting, vec!["TASK-1".to_string(), "STORY-3".to_string()]);
+    }
+
+    #[test]
+    fn split_by_signoff_empty_queue_blesses_nothing() {
+        let pickable = vec!["TASK-1".to_string(), "TASK-2".to_string()];
+        let (ready, awaiting) = split_by_signoff(pickable, &std::collections::HashSet::new());
+        assert!(ready.is_empty());
+        assert_eq!(awaiting.len(), 2);
     }
 
     // STORY-547: the broader "why still open" explainer.

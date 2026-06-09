@@ -1465,7 +1465,14 @@ pub enum BurndownCommand {
         /// Only specs in this batch (matches the `batch:<name>` tag).
         #[clap(long)]
         batch: Option<String>,
-        /// Machine-readable JSON (`{ready:[...], parked:[{spec,reason}]}`).
+        /// Curation view: show approved + pickable specs that are NOT yet
+        /// queued — the advisor's "what could I bless next" aid. Read-only;
+        /// never auto-queues. (The default view's ready set requires queue
+        /// membership — queueing a spec IS the advisor sign-off.)
+        // trace:STORY-546 | ai:claude
+        #[clap(long)]
+        candidates: bool,
+        /// Machine-readable JSON (`{ready, awaiting_signoff, parked}`).
         #[clap(long)]
         json: bool,
     },
