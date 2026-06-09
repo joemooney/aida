@@ -42,6 +42,15 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub in_reply_to: Option<String>,
     pub body: String,
+    /// Light urgency flag (STORY-539): `true` marks an out-of-band escalation /
+    /// "stop" that should be surfaced (e.g. statusline nag) instead of sitting
+    /// unseen in a purely-chronological inbox. Defaults to `false`, so messages
+    /// written before this field existed (and the common informational case)
+    /// deserialize unchanged — append-only, non-breaking. Deliberately a single
+    /// bool, not a priority scheme: this is a lightweight channel.
+    /// trace:STORY-539 | ai:claude
+    #[serde(default)]
+    pub urgent: bool,
 }
 
 impl Message {
@@ -100,6 +109,96 @@ pub fn merge_dedup(local: &[Message], canonical: &[Message]) -> Vec<Message> {
     out
 }
 
+/// One row of the operator overview (`aida mailbox list`): an agent that has
+/// mail waiting, with how much of it is unread / urgent-unread relative to that
+/// agent's read-watermark. trace:STORY-539 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentMailSummary {
+    /// The recipient agent.
+    pub agent: String,
+    /// Total messages in this agent's inbox (direct + broadcast).
+    pub total: usize,
+    /// Messages newer than the agent's read-watermark.
+    pub unread: usize,
+    /// Of the unread, how many are flagged urgent.
+    pub urgent_unread: usize,
+    /// Timestamp of the most recent message in the inbox (for sort + display).
+    pub latest_ts: i64,
+}
+
+/// Count how many of `agent`'s inbox messages are unread — i.e. have a
+/// timestamp strictly greater than `read_watermark` (the timestamp of the last
+/// message the agent has seen; `None` = never read, so everything is unread).
+/// Returns `(unread, urgent_unread)`. trace:STORY-539 | ai:claude
+pub fn unread_counts(
+    agent: &str,
+    messages: &[Message],
+    read_watermark: Option<i64>,
+) -> (usize, usize) {
+    let mark = read_watermark.unwrap_or(i64::MIN);
+    let mut unread = 0usize;
+    let mut urgent = 0usize;
+    for m in inbox_for(agent, messages) {
+        if m.timestamp > mark {
+            unread += 1;
+            if m.urgent {
+                urgent += 1;
+            }
+        }
+    }
+    (unread, urgent)
+}
+
+/// Build the operator overview across every agent that appears as a recipient.
+/// `watermarks` maps an agent id to its read-watermark timestamp (absent = the
+/// agent has read nothing). Broadcasts count toward every *known* recipient's
+/// inbox, so the agent set is the union of explicit `Agent(..)` recipients and
+/// the watermark keys (operators who have read at least once are "known"). The
+/// rows are ordered most-recent-activity-first. trace:STORY-539 | ai:claude
+pub fn agent_summaries(
+    messages: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+) -> Vec<AgentMailSummary> {
+    use std::collections::BTreeSet;
+    // Known agents = every explicit direct-recipient + every sender (so an
+    // agent that has only ever sent still shows once it receives a broadcast)
+    // + every agent with a recorded watermark.
+    let mut agents: BTreeSet<String> = BTreeSet::new();
+    for m in messages {
+        agents.insert(m.from.clone());
+        if let Recipient::Agent(a) = &m.to {
+            agents.insert(a.clone());
+        }
+    }
+    for k in watermarks.keys() {
+        agents.insert(k.clone());
+    }
+
+    let mut out: Vec<AgentMailSummary> = Vec::new();
+    for agent in agents {
+        let inbox = inbox_for(&agent, messages);
+        if inbox.is_empty() {
+            continue; // only list agents that actually have mail waiting
+        }
+        let latest_ts = inbox.iter().map(|m| m.timestamp).max().unwrap_or(0);
+        let (unread, urgent_unread) =
+            unread_counts(&agent, messages, watermarks.get(&agent).copied());
+        out.push(AgentMailSummary {
+            agent,
+            total: inbox.len(),
+            unread,
+            urgent_unread,
+            latest_ts,
+        });
+    }
+    out.sort_by(|a, b| {
+        b.latest_ts
+            .cmp(&a.latest_ts)
+            .then_with(|| a.agent.cmp(&b.agent))
+    });
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +212,14 @@ mod tests {
             timestamp: ts,
             in_reply_to: None,
             body: format!("body-{id}"),
+            urgent: false,
+        }
+    }
+
+    fn urgent_msg(id: &str, thread: &str, from: &str, to: Recipient, ts: i64) -> Message {
+        Message {
+            urgent: true,
+            ..msg(id, thread, from, to, ts)
         }
     }
 
@@ -206,5 +313,79 @@ mod tests {
             let back: Recipient = serde_json::from_str(&s).unwrap();
             assert_eq!(r, back);
         }
+    }
+
+    #[test]
+    fn message_without_urgent_field_deserializes_as_not_urgent() {
+        // A message JSON written before the urgent field existed (no `urgent`
+        // key) must round-trip as not-urgent — append-only, non-breaking.
+        let legacy = r#"{
+            "id":"m1","thread_id":"t","from":"codex",
+            "to":{"kind":"broadcast"},"timestamp":10,"body":"hi"
+        }"#;
+        let m: Message = serde_json::from_str(legacy).unwrap();
+        assert!(!m.urgent, "absent urgent field defaults to false");
+    }
+
+    #[test]
+    fn unread_counts_splits_unread_and_urgent_by_watermark() {
+        let msgs = vec![
+            msg("1", "t", "codex", Recipient::Agent("claude".into()), 10),
+            urgent_msg("2", "t", "agy", Recipient::Broadcast, 20),
+            msg("3", "t", "codex", Recipient::Agent("claude".into()), 30),
+        ];
+        // Read up to ts=10: messages 2 (urgent) and 3 are unread.
+        let (unread, urgent) = unread_counts("claude", &msgs, Some(10));
+        assert_eq!((unread, urgent), (2, 1));
+        // Never read: all three unread, one urgent.
+        let (unread, urgent) = unread_counts("claude", &msgs, None);
+        assert_eq!((unread, urgent), (3, 1));
+        // Caught up: nothing unread.
+        let (unread, urgent) = unread_counts("claude", &msgs, Some(30));
+        assert_eq!((unread, urgent), (0, 0));
+    }
+
+    #[test]
+    fn agent_summaries_lists_agents_with_mail_ordered_by_recency() {
+        let msgs = vec![
+            msg("1", "t", "codex", Recipient::Agent("claude".into()), 10),
+            urgent_msg("2", "t", "claude", Recipient::Agent("codex".into()), 50),
+            msg("3", "t", "agy", Recipient::Broadcast, 30),
+        ];
+        let mut wm = std::collections::HashMap::new();
+        wm.insert("claude".to_string(), 10i64); // claude read msg 1 but not the broadcast
+        let rows = agent_summaries(&msgs, &wm);
+        // codex (latest 50) first, then claude (broadcast at 30), then agy
+        // (only inbox is... agy sent the broadcast so excludes own; agy has no
+        // inbox → not listed).
+        let agents: Vec<&str> = rows.iter().map(|r| r.agent.as_str()).collect();
+        assert_eq!(agents, vec!["codex", "claude"]);
+
+        let codex = &rows[0];
+        assert_eq!(codex.agent, "codex");
+        assert_eq!(codex.total, 2); // broadcast(30) + direct urgent(50)
+        assert_eq!(codex.unread, 2); // no watermark for codex
+        assert_eq!(codex.urgent_unread, 1);
+
+        let claude = &rows[1];
+        assert_eq!(claude.total, 2); // direct(10) + broadcast(30)
+        assert_eq!(claude.unread, 1); // only the broadcast(30) is past the wm(10)
+        assert_eq!(claude.urgent_unread, 0);
+    }
+
+    #[test]
+    fn agent_summaries_skips_agents_with_empty_inbox() {
+        // An agent that has only sent (no inbound) is not listed.
+        let msgs = vec![msg(
+            "1",
+            "t",
+            "codex",
+            Recipient::Agent("claude".into()),
+            10,
+        )];
+        let wm = std::collections::HashMap::new();
+        let rows = agent_summaries(&msgs, &wm);
+        let agents: Vec<&str> = rows.iter().map(|r| r.agent.as_str()).collect();
+        assert_eq!(agents, vec!["claude"], "only the recipient is listed");
     }
 }
