@@ -16172,5 +16172,13 @@ operations:
       ## Rationale
 
       The overnight autonomous burn-down the operator asked for — gated by advisor sign-off (the queue), parallel, headless, walk-away. Prefer composing the proven skill engine (B) over a second Rust engine (A). Depends on STORY-546; relates to STORY-544 + `feedback_parallel_implementer_fanout_burndown`.
-clock: 1604
+- id: 019eab28-8cb3-7c52-9726-1a81c829e408
+  target_id: 019eab25-bbb9-7332-a50f-22328e115b72
+  author: aida
+  node_id: '1'
+  lamport: 1605
+  timestamp: 2026-06-09T06:53:41.939861529Z
+  kind: !SetStatus
+    status: Approved
+clock: 1605
 node_id: '1'
