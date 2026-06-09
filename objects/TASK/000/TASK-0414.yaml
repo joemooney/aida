@@ -1,0 +1,16 @@
+id: 019eaa1c-01b2-7cb2-b1ac-d22ddd5aaee0
+spec_id: TASK-0414
+title: Add opt-in AIDA-aware statusline bootstrap path
+description: 'AIDA''s primary goal is bootstrapping other projects, so new users should have a simple optional way to enable a pretty AIDA-aware status line without forcing AIDA''s house style. Acceptance criteria: provide an opt-in command or init/scaffold option that installs or prints client-appropriate statusline setup; preserve quiet defaults for users who do not want it; support command-backed clients with `aida statusline --color=always`; for clients like Codex whose native footer only supports built-in item IDs, explain and configure companion built-in footer fields without claiming arbitrary command execution; document how to remove or disable the statusline after bootstrap.'
+status: Draft
+priority: Medium
+owner: ''
+feature: agents
+created_at: 2026-06-09T02:00:22.706418547Z
+modified_at: 2026-06-09T02:00:22.706418547Z
+req_type: Task
+tags:
+- bootstrap
+- codex
+- role:advisor
+- statusline
