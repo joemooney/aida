@@ -3,12 +3,12 @@ spec_id: TASK-712
 agreed_id: TASK-712
 title: 'Quality-sweep: batch of low-severity robustness findings (7)'
 description: 'Low-severity / lower-confidence findings from the 2026-06-08 quality sweep, batched to avoid backlog spam. Each is real but minor; fix opportunistically. (1) hlc.rs:112-130/149 — Hlc::now/receive counter += 1 unguarded (u32 overflow: panic debug / wrap release; receive on remote counter==u32::MAX). (2) cached_git_backend.rs:133 restamp_head can mark cache fresh while missing externally-pulled rows for a long-lived backend that pulls without reopening — verify orchestrator/MCP pull sites. (3) git_ops.rs:137 head_sha uses --short → abbrev-length drift causes false staleness (harmless) / rare prefix-collision false-fresh; use full rev-parse HEAD. (4) git_backend.rs queue reads serde_yaml...unwrap_or_default() → a momentarily-unparseable queue file (forward-version/partial write) makes queue_add silently overwrite ALL prior entries (data-loss; same class as BUG-96 but swallowed). MED-ish — consider promoting. (5) drain_resume.rs:93 reconcile_resume_phase re-runs reviewer+merge on an already-merged spec when ci_green probes false post-branch-deletion (redeemed by BUG-241, wastes a drain slot). (6) mcp.rs:3732 peek tools interpolate unquoted user args into the returned command string (display-only, user-in-the-loop). (7) worktree_lease.rs:68 lease_id_from_agent_id strips all non-alphanumerics+lowercases → distinct agent ids differing only in punctuation/case collide on one lease file (cross-release). All file:line refs are advisor- or reviewer-located.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:14:10.608373771Z
-modified_at: 2026-06-09T02:34:08.899973881Z
+modified_at: 2026-06-09T02:40:23.078911168Z
 req_type: Task
 tags:
 - batch:quality-sweep-lows
@@ -21,3 +21,7 @@ comments:
   content: Commit da209bd9e references this requirement
   created_at: 2026-06-09T02:34:08.899973881Z
   modified_at: 2026-06-09T02:34:08.899973881Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T02:40:23.078911168Z
+  completion_sha: 89999cdd70324e9c4a3191761f8c0fc045e12ce4
