@@ -1032,15 +1032,11 @@ fn run() -> Result<()> {
                 schema::print_requirement(*json)
             }
             Some(other) if schema::is_catalog_object(other) => {
-                // Known catalog object whose full field detail isn't built yet —
-                // this MVP ships Requirement detail only. Not an error: a valid
-                // kind the caller saw in the catalog. (No SPEC-ID in user-facing
-                // text, per TASK-268.) trace:STORY-538
-                println!(
-                    "`{other}` is in the storable-object catalog, but full field detail \
-                     isn't available yet — `aida schema requirement` is the only detailed \
-                     view today. Run `aida schema` for the catalog."
-                );
+                // A catalog object other than Requirement — render its
+                // reflection-derived field table. STORY-538 shipped Requirement
+                // detail only; TASK-714 extended the reflection registry to
+                // every remaining kind. trace:STORY-538 trace:TASK-714
+                schema::print_object(other, *json)
             }
             Some(other) => {
                 anyhow::bail!(
@@ -12206,8 +12202,9 @@ fn brief_relationship_lines(req: &Requirement, store: &RequirementsStore) -> Vec
     lines
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct BriefListEntry {
+// trace:TASK-714
+#[derive(Debug, Clone, PartialEq, Eq, ts_rs_forge::TS)]
+pub(crate) struct BriefListEntry {
     path: std::path::PathBuf,
     spec_id: String,
     agent: String,
@@ -30829,8 +30826,9 @@ mod agent_launcher_tests {
 // trace:EPIC-20 | ai:claude
 // ----------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct SessionLease {
+// trace:TASK-714
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
+pub(crate) struct SessionLease {
     /// 12-char hex id derived from the time-ordered uuid v7, for short refs.
     id: String,
     /// Raw scope string the user passed to `--owns`.
