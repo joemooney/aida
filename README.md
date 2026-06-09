@@ -391,15 +391,23 @@ Run `aida` (no args) for the full CLI surface.
 
 <!-- trace:TASK-276 | ai:claude -->
 
-You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/) carries one focused comparison per neighbouring tool, each answering the *"why AIDA instead of X?"* question for one specific X:
+You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/README.md) carries one focused comparison per neighbouring tool, each answering *"why AIDA instead of X?"* — always honestly, including when X is the better call. **Start with the two nearest competitors:**
 
-- [**AIDA vs `/ultraplan`**](docs/positioning/vs-ultraplan.md) — AIDA layers requirement structure on top of Claude's planning; `/ultraplan` is the planning primitive AIDA composes with.
-- [**AIDA vs `/ultrareview`**](docs/positioning/vs-ultrareview.md) — AIDA's `/aida-review` is workflow-integrated, single-perspective; `/ultrareview` is parallel cloud multi-agent. Complementary, not competing.
-- [**AIDA vs Claude Code subagents (`/agents`)**](docs/positioning/vs-claude-code-subagents.md) — Subagents are a within-conversation primitive; AIDA's roles are a cross-conversation workflow layer. Different layers — AIDA roles compose subagents inside them. <!-- trace:TASK-337 | ai:claude -->
-- [**AIDA vs Karpathy-style markdown**](docs/positioning/vs-karpathy-md.md) — Structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
+- [**AIDA vs GitHub Spec Kit**](docs/positioning/vs-spec-kit.md) — *(nearest competitor)* Spec Kit scaffolds a great first-feature `spec → plan → tasks`; AIDA keeps specs a maintained, cross-cutting graph — stable IDs, typed relationships, trace enforcement, lifecycle — for the project's whole life. They compose.
+- [**AIDA vs AWS Kiro**](docs/positioning/vs-kiro.md) — *(nearest competitor)* Kiro's polished agentic IDE with EARS requirements + per-feature traceability vs AIDA's vendor-neutral, git-canonical graph readable by *any* agent over MCP, independent of the editor that produced the specs.
+- [**AIDA vs Claude Code Agent Teams**](docs/positioning/vs-agent-teams.md) — native *within-session* multi-agent coordination vs AIDA's *cross-session, cross-vendor* graph + lifecycle. The closest provider overlap yet — and why the gap persists on incentive, not capability.
+- [**AIDA vs Claude Code subagents / workflows**](docs/positioning/vs-claude-code-subagents.md) — within-conversation primitives vs AIDA's cross-conversation lifecycle layer; AIDA composes them inside its roles. <!-- trace:TASK-337 | ai:claude -->
+- [**AIDA vs `/ultraplan` & `/ultrareview`**](docs/positioning/vs-ultraplan.md) — AIDA layers persistent requirement structure on top of Claude's planning/review primitives, which it composes with rather than replaces.
+- [**AIDA vs Karpathy-style markdown**](docs/positioning/vs-karpathy-md.md) — structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
 - [**AIDA vs SaaS PM tools**](docs/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
+- **AI code-editor neighbors** — [Aider](docs/positioning/vs-aider.md), [Continue](docs/positioning/vs-continue.md) — a different layer entirely: they *edit*, AIDA is the spec graph + lifecycle *above* the editing.
 
-For the broader problem statement behind all five, see [Why AIDA?](docs/WHY-AIDA.md).
+**Deciding whether to adopt at all?** Two cross-cutting guides cut through it:
+
+- [**When *not* to use AIDA**](docs/positioning/when-not-to-use-aida.md) — the honest scope limits: six cases where a neighbour tool alone is the right call, full stop.
+- [**Composition recipes**](docs/positioning/composition.md) — when the answer is *"use AIDA **with** X"* (Spec Kit, Agent Teams, MCP editors, GitHub Issues…), with the concrete seam for each.
+
+For the broader problem statement behind all of it, see [Why AIDA?](docs/WHY-AIDA.md).
 
 ## Architecture (one paragraph)
 
@@ -410,6 +418,8 @@ Git is the canonical store: one YAML file per requirement on the orphan `aida-st
 Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Linux-only for a fast ~3-5 min cycle. macOS and Windows are **Tier 2**: supported, but validated by a nightly [cross-platform CI run](https://github.com/joemooney/aida/actions/workflows/cross-platform.yml) rather than on every change, so cross-platform regressions surface within ~24h. Pre-built macOS tarballs ship with each [release](https://github.com/joemooney/aida/releases); Windows builds from source (`cargo install --git https://github.com/joemooney/aida.git aida-cli`). Releases are gated on a green cross-platform run.
 
 ## Documentation
+
+The full, journey-ordered index lives at [`docs/`](docs/README.md) (start there if you're browsing). The highlights:
 
 | Doc | What it covers |
 |-----|----------------|
