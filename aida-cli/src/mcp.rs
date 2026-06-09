@@ -3252,6 +3252,46 @@ impl<'a> McpServer<'a> {
         let now = chrono::Utc::now();
         let completer = crate::get_default_author();
         let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
+
+        // STORY-542: capture user-facing interface changes (the deterministic
+        // operator-digest source). MCP has no TTY, so it is flag-shaped only:
+        // string-array params `interface_cli` / `interface_mcp` / `interface_tui`
+        // / `interface_other`, or boolean `no_interface_change` to record an
+        // explicit "no impact" marker. Absent ⇒ left untouched, exactly like a
+        // non-interactive CLI `queue done`. trace:STORY-542 | ai:claude
+        let str_array = |key: &str| -> Vec<String> {
+            args.get(key)
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let no_interface_change = args
+            .get("no_interface_change")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let ic_cli = str_array("interface_cli");
+        let ic_mcp = str_array("interface_mcp");
+        let ic_tui = str_array("interface_tui");
+        let ic_other = str_array("interface_other");
+        let any_ic =
+            !ic_cli.is_empty() || !ic_mcp.is_empty() || !ic_tui.is_empty() || !ic_other.is_empty();
+        let captured_ic: Option<aida_core::InterfaceChanges> = if no_interface_change {
+            Some(aida_core::InterfaceChanges::default())
+        } else if any_ic {
+            Some(aida_core::InterfaceChanges {
+                cli: ic_cli,
+                mcp: ic_mcp,
+                tui: ic_tui,
+                other: ic_other,
+            })
+        } else {
+            None
+        };
+
         self.storage
             .update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
@@ -3267,6 +3307,9 @@ impl<'a> McpServer<'a> {
                     }
                     if let Some(ref tool) = source_tool {
                         info.source_tool.get_or_insert_with(|| tool.clone());
+                    }
+                    if let Some(ref ic) = captured_ic {
+                        r.interface_changes = Some(ic.clone());
                     }
                 }
             })
@@ -6405,12 +6448,17 @@ fn queue_tool_descriptors() -> Value {
         },
         {
             "name": "queue_done",
-            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info.",
+            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to mark done.", "example": "STORY-42" },
-                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" }
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
+                    "interface_cli": { "type": "array", "items": { "type": "string" }, "description": "User-facing CLI surface changes (new commands, changed flags/behavior). Feeds the operator digest.", "example": ["aida mailbox list — new command"] },
+                    "interface_mcp": { "type": "array", "items": { "type": "string" }, "description": "User-facing MCP surface changes (new tools, gating, schema).", "example": ["queue_add — now advisor-gated"] },
+                    "interface_tui": { "type": "array", "items": { "type": "string" }, "description": "User-facing TUI surface changes (keybindings, panes, overlays).", "example": [] },
+                    "interface_other": { "type": "array", "items": { "type": "string" }, "description": "Any other user-facing interface change (not cli/mcp/tui).", "example": ["REST /digest endpoint added"] },
+                    "no_interface_change": { "type": "boolean", "description": "Explicitly mark this spec as having no user-facing interface change (clippy/refactor/test). Keeps it out of the operator digest.", "example": true }
                 },
                 "required": ["id"]
             },

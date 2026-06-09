@@ -214,6 +214,8 @@ pub use models::{
     // New ID system types
     IdFormat,
     ImplementationInfo,
+    // Interface-change capture for the operator digest (STORY-542)
+    InterfaceChanges,
     LinkOrigin,
     MetaSubtype,
     NumberingStrategy,

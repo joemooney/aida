@@ -359,6 +359,45 @@ pub fn forbidden_attention_transition(
     }
 }
 
+/// User-facing interface changes captured AT SPEC CLOSE (`aida queue done` /
+/// the merge auto-bump), by the implementer who knows the impact.
+///
+/// This is the DETERMINISTIC Layer-1 source for the operator digest
+/// (STORY-541 / STORY-542): rather than re-inferring surface deltas from git
+/// commit subjects on every `aida digest --audience operator` run (which leaks
+/// clippy / internal-noise), the implementer records exactly which CLI / MCP /
+/// TUI surfaces changed when they close the spec. Empty / absent ⇒ no
+/// user-facing interface change ⇒ the spec NEVER appears in the operator
+/// digest. The filter is then fully deterministic — the LLM (Layer-2) only
+/// value-frames the captured lines, it does not judge what to keep.
+///
+/// Each `Vec<String>` holds short, human-readable surface-delta lines, e.g.
+/// `cli: ["aida mailbox list — new command", "aida agent new: native default now"]`.
+// trace:STORY-542 | ai:claude
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct InterfaceChanges {
+    /// CLI-surface deltas: new commands/subcommands, changed flags/behavior.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cli: Vec<String>,
+    /// MCP tool/resource surface deltas (new tools, gating, schema changes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp: Vec<String>,
+    /// TUI surface deltas: new keybindings, panes, overlays, status.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tui: Vec<String>,
+    /// Any other user-facing interface delta that is not cli/mcp/tui.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub other: Vec<String>,
+}
+
+impl InterfaceChanges {
+    /// True when no surface delta is recorded — the spec carries no
+    /// user-facing interface change and must not appear in the operator digest.
+    pub fn is_empty(&self) -> bool {
+        self.cli.is_empty() && self.mcp.is_empty() && self.tui.is_empty() && self.other.is_empty()
+    }
+}
+
 /// One enumerated answer to a [`DecisionRequest`].
 ///
 /// Each choice carries a human-readable `label` and `consequence` plus a
@@ -3633,6 +3672,15 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decision_request: Option<DecisionRequest>,
 
+    /// User-facing interface changes captured at spec close — the deterministic
+    /// Layer-1 source for the operator digest. `None` / empty ⇒ no user-facing
+    /// surface change ⇒ never appears in the operator digest. Populated by
+    /// `aida queue done` (interactive derive-and-confirm at a TTY, or
+    /// `--interface-{cli,mcp,tui,other}` flags non-interactively) and readable
+    /// by the digest's capabilities lens. trace:STORY-542 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interface_changes: Option<InterfaceChanges>,
+
     /// Version number for optimistic locking (SQLite only)
     /// Incremented on each update, used to detect concurrent modifications
     #[serde(skip)]
@@ -3682,6 +3730,8 @@ impl Requirement {
             human_only: false,
             // trace:STORY-522 | ai:claude
             decision_request: None,
+            // trace:STORY-542 | ai:claude
+            interface_changes: None,
             urls: Vec::new(),
             attachments: Vec::new(),
             trace_links: Vec::new(),
@@ -6454,6 +6504,45 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// STORY-542: `InterfaceChanges` round-trips through YAML, empties skip
+    /// serialization, and `is_empty()` reflects the captured surfaces.
+    /// trace:STORY-542 | ai:claude
+    #[test]
+    fn interface_changes_serde_and_is_empty() {
+        let empty = InterfaceChanges::default();
+        assert!(empty.is_empty());
+        // Empty vecs are skipped → serializes to an empty mapping.
+        let yaml = serde_yaml::to_string(&empty).unwrap();
+        assert_eq!(yaml.trim(), "{}");
+
+        let ic = InterfaceChanges {
+            cli: vec!["aida foo — new command".to_string()],
+            mcp: vec!["queue_add — now advisor-gated".to_string()],
+            tui: vec![],
+            other: vec![],
+        };
+        assert!(!ic.is_empty());
+        let yaml = serde_yaml::to_string(&ic).unwrap();
+        let back: InterfaceChanges = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back, ic);
+        // Empty surfaces are not serialized.
+        assert!(!yaml.contains("tui"));
+        assert!(!yaml.contains("other"));
+    }
+
+    /// STORY-542: a `Requirement` with no captured `interface_changes`
+    /// serializes without the key and deserializes back to `None` (absent ⇒ no
+    /// operator-digest entry). trace:STORY-542 | ai:claude
+    #[test]
+    fn requirement_interface_changes_default_absent() {
+        let r = Requirement::new("t".into(), "d".into());
+        assert!(r.interface_changes.is_none());
+        let yaml = serde_yaml::to_string(&r).unwrap();
+        assert!(!yaml.contains("interface_changes"));
+        let back: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert!(back.interface_changes.is_none());
+    }
 
     /// BUG-251: forward-compat — an unknown `RelationshipType` variant (a newer
     /// binary's addition, read by an older one) deserializes to `Custom(name)`
