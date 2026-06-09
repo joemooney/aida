@@ -1,0 +1,56 @@
+id: 019ea9ed-7fc7-7f72-b7c3-f1f4e4631342
+spec_id: STORY-537
+agreed_id: STORY-537
+title: 'aida remote create: guided origin bootstrap (gh / GitLab push-to-create / glab / attach-existing) when a project has no remote'
+description: |-
+  ## Friction (operator-found, 2026-06-08)
+
+  `aida push` in a project with no `origin` remote silently skips both legs ("no origin — will skip"), leaving the user to manually create the repo on GitHub/GitLab + `git remote add origin` + push. There is no `aida remote` subcommand and no create flow. The operator has GitHub, a personal GitLab (gitlab.joemooney.com), and a corporate GitLab — and wants AIDA to smooth creating the origin.
+
+  ## Proposal: guided origin bootstrap
+
+  A new verb (`aida remote create` / `aida remote setup`), also OFFERED when `aida push` / end-of-`aida init` finds no origin (TTY). Flow:
+
+  1. Detect no origin → prompt "Create one? Where?":
+     - **GitHub** (via `gh`) — `gh repo create <ns>/<name> --private --source . --remote origin --push`.
+     - **Personal GitLab** (a remembered host, e.g. gitlab.joemooney.com) — **push-to-create over SSH** (token-free; proven) or `glab repo create`. `git remote add origin ssh://git@<host>:<port>/<ns>/<name>.git` → `git push -u origin <branch>`.
+     - **Other GitLab** (corporate) — try push-to-create; if disabled / no perms, **degrade**: "create the repo in the UI, then `aida remote attach <url>`".
+     - **Attach existing URL** — `git remote add origin <url>` + push (repo created elsewhere).
+  2. After origin exists → push code + store (the legs that were no-op'ing).
+
+  ## Provider + host memory
+
+  - Reuse the EPIC-35 forge-provider detection for WHICH forge; repo-creation is "step 0" before the forge lifecycle.
+  - Remember known forge hosts per machine (e.g. ~/.aida/config) so "your personal GitLab" is a one-key choice, not a re-typed host. Remember the working ROUTE per machine: personal GitLab is SSH (:2222) locally but HTTPS (tunnel) from elsewhere — don't offer SSH where it can't route.
+
+  ## Graceful degradation (the corporate case)
+
+  AIDA cannot guarantee repo creation on a corporate GitLab (push-to-create may be off, API may need namespace perms). When auto-create fails, fall back cleanly to attach-existing: tell the user the exact UI step + `aida remote attach <url>`. Never leave them stuck.
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] `aida push` (and end-of-init) with no origin offers to create/attach one (TTY); non-interactive prints the manual recipe and exits cleanly.
+  - [ ] GitHub path: `gh repo create … --source . --remote origin --push` then store push.
+  - [ ] Personal-GitLab path: push-to-create over SSH (no glab/token required) wires origin + pushes code + store.
+  - [ ] Unknown/corporate GitLab: attempt → on failure, attach-existing fallback with a clear UI instruction.
+  - [ ] Host + route remembered so repeat bootstraps don't re-ask the host.
+  - [ ] Works without glab installed for GitHub + personal-GitLab-push-to-create.
+
+  ## Relationships
+  - Sibling/slice of EPIC-35 (forge providers — repo-create uses the same provider detection; the lifecycle work is the next step). Onboarding cluster: TASK-638/645/698 (machine setup at init) — this is project-remote setup. Builds on the proven push-to-create (store-validation, 2026-06-04).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:09:34.791313142Z
+modified_at: 2026-06-09T01:09:34.791313142Z
+req_type: Story
+tags:
+- aida:remote
+- forge-provider
+- from-product
+- from-user-friction
+- github
+- gitlab
+- onboarding-flow
+- parent:EPIC-35
