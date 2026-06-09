@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:12:33.644295625Z
-modified_at: 2026-06-09T01:12:33.644295625Z
+modified_at: 2026-06-09T01:14:09.542639898Z
 req_type: Bug
 tags:
 - authority
@@ -17,3 +17,9 @@ tags:
 - security
 - severity:high
 - verified-by-advisor
+comments:
+- id: 019ea9f1-b106-7ca1-bd05-35d3ed3a5053
+  author: joe
+  content: Quality-sweep reviewer 5 independently confirmed this AND found tool_queue_rework (mcp.rs:~3391) has the same gap — no advisor-authority check, only the coarse Operator-profile tier (default profile is Full). Fix should cover BOTH tool_queue_add and tool_queue_rework.
+  created_at: 2026-06-09T01:14:09.542639898Z
+  modified_at: 2026-06-09T01:14:09.542639898Z
