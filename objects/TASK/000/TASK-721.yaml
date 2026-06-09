@@ -1,0 +1,24 @@
+id: 019ead1d-2e7b-7df2-b194-9f3fea48364e
+spec_id: TASK-721
+agreed_id: TASK-721
+title: 'burndown/skill: prune merged implementer worktree + branch after auto-merge'
+description: |-
+  Empirical (first real `aida burndown run`, TASK-720, 2026-06-09): after the integrator merges an implementer's PR, the implementer's worktree-isolated branch + worktree are NOT pruned. The drain itself flagged it: 'the merged branch task-720-vs-agent-teams couldn't be auto-deleted locally because the subagent's worktree still references it.'
+
+  Observed: 3 stale `.claude/worktrees/agent-*` worktrees linger (task-715, task-720, story-543) after their work shipped/PR'd. `git worktree list` shows them holding branch refs, which blocks `git branch -d` and leaves disk cruft.
+
+  Fix direction (in the /aida-burndown skill's integrate step, or a post-merge hook): after a successful squash-merge, remove the implementer's worktree (`git worktree remove`) and delete the local branch, so a long unattended drain doesn't accumulate worktrees. Auto-clean only worktrees whose spec reached Completed (leave held/draft-PR worktrees alone). Low priority — cosmetic/disk, not correctness; the drain completes fine regardless.
+
+  Caller note: the Agent tool's `isolation: worktree` auto-cleans only if UNCHANGED; a committed+merged implementer worktree has changes, so it persists by design — the skill must prune explicitly.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T16:00:31.355691491Z
+modified_at: 2026-06-09T16:00:31.355691491Z
+req_type: Task
+tags:
+- aida:burndown
+- follow-up:STORY-545
+- from-self-test
+- papercut
