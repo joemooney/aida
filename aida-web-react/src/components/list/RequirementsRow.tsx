@@ -1,5 +1,6 @@
+// trace:FR-98 | ai:claude
 import { forwardRef, useCallback } from 'react';
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { GripVertical, ListPlus } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
@@ -24,10 +25,17 @@ export const RequirementsRow = forwardRef<HTMLTableRowElement, RequirementsRowPr
     const {
       attributes,
       listeners,
-      setNodeRef,
+      setNodeRef: setDragRef,
       transform,
       isDragging,
     } = useDraggable({ id: requirement.id });
+
+    // Droppable so another requirement can be dropped on top of this one to
+    // make the dragged requirement a child of this one. trace:FR-98 | ai:claude
+    const {
+      setNodeRef: setDropRef,
+      isOver,
+    } = useDroppable({ id: requirement.id });
 
     const style = transform
       ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
@@ -35,11 +43,12 @@ export const RequirementsRow = forwardRef<HTMLTableRowElement, RequirementsRowPr
 
     const setRefs = useCallback(
       (el: HTMLTableRowElement | null) => {
-        setNodeRef(el);
+        setDragRef(el);
+        setDropRef(el);
         if (typeof ref === 'function') ref(el);
         else if (ref) ref.current = el;
       },
-      [setNodeRef, ref],
+      [setDragRef, setDropRef, ref],
     );
 
     return (
@@ -55,6 +64,7 @@ export const RequirementsRow = forwardRef<HTMLTableRowElement, RequirementsRowPr
         className={cn(
           'border-b border-edge hover:bg-surface-hover/50 transition-colors cursor-pointer group',
           isDragging && 'opacity-40',
+          isOver && !isSelected && 'ring-2 ring-accent/60 bg-accent/5',
           isSelected && 'ring-2 ring-accent/40 bg-accent/5',
         )}
       >

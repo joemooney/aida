@@ -314,19 +314,21 @@ export function RequirementsList() {
         return;
       }
 
-      if (isTree && overId === 'root-drop-zone') {
+      if (overId === 'root-drop-zone') {
         setParent.mutate({ id: draggedId, parentId: null });
         return;
       }
 
-      // Tree reparent: drop onto another requirement row
-      if (isTree && overId !== draggedId) {
-        // Prevent circular reference
+      // Reparent: drop a requirement onto another requirement row to make the
+      // dragged requirement a child of the drop target. Works in both flat and
+      // tree views. trace:FR-98 | ai:claude
+      if (overId !== draggedId) {
+        // Prevent a circular reference (dropping a parent onto its descendant).
         if (isDescendant(roots, draggedId, overId)) return;
         setParent.mutate({ id: draggedId, parentId: overId });
       }
     },
-    [addToQueue, setParent, isTree, roots],
+    [addToQueue, setParent, roots],
   );
 
   const applySavedView = useCallback(
@@ -595,7 +597,7 @@ export function RequirementsList() {
             </div>
           </div>
 
-          {isTree && activeId !== null && (
+          {activeId !== null && (
             <RootDropZone isActive={true} />
           )}
 
