@@ -1,0 +1,38 @@
+id: 019eacf3-b6b0-7993-bee7-57646f035ddb
+spec_id: STORY-550
+agreed_id: STORY-550
+title: Reassess P3 inter-agent mailbox roadmap vs SHIPPED Claude Code Agent Teams (tripwire fired)
+description: |-
+  ## Trigger (weekly scan 2026-06-09, Lane D)
+
+  The keystone's #1 watched tripwire FIRED: Anthropic Claude Code Agent Teams shipped (experimental) with native parallel agents + team-lead coordination + DIRECT INTER-AGENT MESSAGING + shared tasks (code.claude.com/docs/en/agent-teams; InfoQ Code-with-Claude-2026). This pre-empts AIDA's P3 'live inter-agent mailbox on the substrate' gap BEFORE it was built — Anthropic shipped the ephemeral version natively.
+
+  ## Decision needed (master/operator)
+
+  Do NOT build what Anthropic now ships for free. Reassess P3:
+  - Is the only defensible residual 'git-canonical + replayable + queryable' inter-agent comms vs Teams' ephemeral messaging? Is that a real edge or a second-order pitch?
+  - Verify whether Agent Teams messages are already durable/queryable — if yes, P3 is fully obviated; if no, the durability angle is the only surviving differentiation.
+  - Reconcile against SPIKE-10 (subsystem advisors) and the existing mailbox surface (docs/mailbox.md).
+
+  ## Acceptance
+
+  - [ ] Empirically verify Agent Teams message persistence/queryability (durable vs ephemeral).
+  - [ ] Decision recorded (ADR): build the durable-substrate residual, ride Agent Teams + project our graph into it, or drop P3.
+  - [ ] If kept, P3 scope rewritten to ONLY the verified residual edge, not a reimplementation of Teams.
+
+  ## Rationale
+
+  Time-sensitive: building a native-already feature wastes the scarce build window the distribution clock (Kill-shot 1) makes precious. Defensive reassessment, not new capability.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T15:15:13.712942473Z
+modified_at: 2026-06-09T15:15:13.712942473Z
+req_type: Story
+tags:
+- competitive-analysis
+- defensive
+- from-self-test
+- orchestrator
+- severity:major
