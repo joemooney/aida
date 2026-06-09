@@ -24,12 +24,12 @@ description: |-
 
   ## Notes
   - Builds on STORY-493 (hybrid mailbox) + the new docs/mailbox.md chapter (documents these as current limitations). Identity/addressing reuse the queue user_id resolution (BUG-89). Local-time display per the local-time convention.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:11:58.453597427Z
-modified_at: 2026-06-09T02:11:58.453597427Z
+modified_at: 2026-06-09T04:18:21.118948858Z
 req_type: Story
 tags:
 - aida:mailbox
