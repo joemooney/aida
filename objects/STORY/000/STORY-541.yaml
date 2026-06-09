@@ -1,0 +1,49 @@
+id: 019eaa2e-50a7-74f1-b1b5-bcb4947c58ad
+spec_id: STORY-541
+agreed_id: STORY-541
+title: 'aida digest --audience operator (capabilities lens): new USER-FACING CLI/UX changes + how to try them, since a window'
+description: |-
+  ## Want (operator, 2026-06-09)
+
+  As tasks ship, there are CLI/UX changes the operator wants to learn WITHOUT reading mountains of spec info. `aida digest --since` exists (STORY-252) but is a WORK-STATUS narrative (Released / Major progress = a dump of every spec title) — too dense, and it answers "what did we accomplish," not "what can I now DO."
+
+  ## Proposal: a capabilities lens on `aida digest`
+
+  `aida digest --since <window> --audience operator` (or a `--capabilities` / `--whats-new` flag), reusing the existing digest window + editorial machinery, that:
+
+  1. **Filters to user-facing changes only** — specs/commits that changed the USER-FACING SURFACE: new commands, changed flags, new/changed behaviors, new skills. DROP everything internal — refactors, tests, chores, and bug-fixes that don't change what the operator can do.
+     - Signal: `cli-ux` tag, new-command detection (new `aida <verb>`), help-text deltas, new `.claude/skills/`, behavior-change markers. Lean on the changelog/spec graph the digest already walks.
+  2. **Renders each as a try-it capability**, not a spec title:
+     - "**`aida mailbox list`** — see all agents' mailboxes + unread counts. Try: `aida mailbox list`"
+     - one line + the command to run, so the operator can go exercise it themselves.
+  3. **Groups by surface**: New commands / Changed flags & behaviors / New skills.
+  4. Honors `--since` (Nd/Nh/ISO/git-ref) like the rest of `aida digest`; marker-based default window.
+
+  ## Why a new lens (not a new command)
+
+  Reuses `aida digest`'s window + editorial logic (drops chore/typo, collapses cluster-PRs). This is a new AUDIENCE/lens — "operator learning the surface" — alongside customer/team/self. Distinct from `aida changelog` (mechanical, spec-titled, dev-facing) and the existing digest audiences (status narrative).
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] `aida digest --audience operator --since <window>` lists ONLY user-facing CLI/UX/skill changes in the window, each with a one-line "what + how to try it".
+  - [ ] Internal-only work (refactor/test/chore/non-UX bugfix) is excluded.
+  - [ ] Grouped by surface (new commands / changed flags+behaviors / new skills).
+  - [ ] Reuses the existing `--since` window + digest machinery; no separate spec-graph walk.
+  - [ ] SPEC-IDs stripped from the operator-facing output (per user-facing-text convention).
+
+  ## Relationships
+  - New audience/lens on `aida digest` (STORY-252). Sibling of `aida changelog` (mechanical). The user-facing-capabilities counterpart to the dev-facing changelog.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T02:20:22.567385072Z
+modified_at: 2026-06-09T02:20:22.567385072Z
+req_type: Story
+tags:
+- aida:digest
+- cli-ux
+- from-product
+- from-user-direction
+- operator-experience
+- parent:STORY-252
