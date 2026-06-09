@@ -6202,6 +6202,14 @@ pub enum Command {
         /// is a TTY and `NO_COLOR` is unset), `always`, `never`.
         #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
         color: String,
+
+        /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
+        /// renders the one-liner (the default, quiet behavior); the
+        /// `setup` subcommand prints (or installs) client-appropriate
+        /// statusline configuration.
+        // trace:TASK-0414
+        #[clap(subcommand)]
+        action: Option<StatuslineAction>,
     },
 
     /// (internal) Background fetch worker spawned by `aida statusline`.
@@ -6917,6 +6925,34 @@ pub enum Command {
     /// Stock and local skill tooling.
     #[clap(subcommand)]
     Skill(SkillCommand),
+}
+
+/// Opt-in statusline bootstrap actions. AIDA's bootstrap goal is to make
+/// other projects agent-ready without forcing a house style, so the
+/// AIDA-aware statusline is a convenience the user enables deliberately —
+/// the bare `aida statusline` render stays the quiet default.
+// trace:TASK-0414
+#[derive(Subcommand, Debug)]
+pub enum StatuslineAction {
+    /// Print (or install) client-appropriate statusline configuration so a
+    /// user can enable the AIDA-aware statusline segment. Prints by default;
+    /// pass `--install` to write the Claude Code `settings.json` entry.
+    // trace:TASK-0414
+    Setup {
+        /// Which client to emit setup for: `claude` (command-backed
+        /// statusLine in settings.json), `codex` (built-in TUI footer
+        /// fields — Codex does not run arbitrary commands in its footer),
+        /// or `all` (default — print guidance for every supported client).
+        #[clap(long, value_parser = ["claude", "codex", "all"], default_value = "all")]
+        client: String,
+
+        /// Install the configuration instead of only printing it. Only the
+        /// `claude` client supports install (it writes/merges the
+        /// `statusLine` block into `.claude/settings.json`); other clients
+        /// stay print-only because their footer config is hand-edited.
+        #[clap(long)]
+        install: bool,
+    },
 }
 
 /// Stock and local skill tooling.
