@@ -112,6 +112,23 @@ aida add --title "Security audit" \
 # Filter by status
 aida list --status Approved
 
+# Status shortcut — a recognized status as the positional arg is the same
+# as --status; `aida list approved` == `aida list --status approved`
+aida list approved
+
+# Comma-separated statuses are a logical OR within the status filter
+aida list draft,approved
+aida list --status draft,approved
+
+# `open` / `closed` aliases:
+#   open   = Draft, Approved, Planned, InProgress, NeedsAttention
+#   closed = Done, Completed, Rejected
+aida list open
+aida list --status closed
+
+# Status filters still compose with the other filters via AND
+aida list open --type bug
+
 # Filter by priority
 aida list --priority High
 

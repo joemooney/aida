@@ -8713,6 +8713,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::List {
+            shortcut,
             status,
             r#type,
             priority,
@@ -8733,6 +8734,44 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_glyph,
             ..
         } => {
+            // TASK-0415: resolve the optional positional status shortcut.
+            // `aida list approved` == `aida list --status approved`; the
+            // positional and `--status` are two spellings of the same axis,
+            // so reject using both at once rather than silently picking one.
+            // Both forms run through `expand_filter_spec`, which expands the
+            // `open` / `closed` aliases and the comma-separated OR set, and
+            // errors clearly on an unrecognized token (pointing at the real
+            // filters) instead of swallowing it.
+            // trace:TASK-0415 | ai:claude
+            let raw_status: Option<String> = match (shortcut.as_deref(), status.as_deref()) {
+                (Some(_), Some(_)) => {
+                    anyhow::bail!(
+                        "Pass the status filter once: either the positional \
+                         `aida list <status>` or `--status <status>`, not both."
+                    );
+                }
+                (Some(s), None) | (None, Some(s)) => Some(s.to_string()),
+                (None, None) => None,
+            };
+            let status: Option<String> = match raw_status {
+                Some(spec) => {
+                    let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
+                        .map_err(|tok| {
+                            anyhow::anyhow!(
+                                "Unknown status filter '{tok}'. Use a status \
+                                 (draft, approved, planned, in-progress, done, \
+                                 completed, rejected, needs-attention), an alias \
+                                 (open, closed), or a comma-separated set \
+                                 (draft,approved). To filter by something else \
+                                 try --type, --tags, or `aida search`."
+                            )
+                        })?;
+                    // expand_filter_spec returns canonical cache-keys; join
+                    // them back into the comma-OR spec the cache understands.
+                    Some(expanded.join(","))
+                }
+                None => None,
+            };
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
             // on no-op (already current), warns + falls back on errors.
             // Must run BEFORE the cache-backed list query because the
