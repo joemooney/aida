@@ -3,12 +3,12 @@ spec_id: BUG-485
 agreed_id: BUG-485
 title: 'Cache FTS schema drift: ''requirements_fts has no column named external_refs'' on db sync, not auto-rebuilt'
 description: 'Hit during the 2026-06-08 burndown: ''aida db sync --push'' failed with ''table requirements_fts has no column named external_refs; SQL error or missing database''. CLAUDE.md says the cache does schema-migration via drop-on-version-mismatch + source-SHA delete to FORCE a rebuild on drift — but here the external_refs FTS column (STORY-476 external-refs work) was missing from the on-disk cache.db''s requirements_fts and the migration did NOT auto-trigger; the write errored instead. Manual ''aida cache rebuild'' fixed it (reprojected 1878 reqs). Likely cause: the external_refs FTS column was added to the projection without bumping the cache SCHEMA VERSION (so the version-mismatch rebuild never fired), OR concurrent writers during the merge spree raced a partial schema. Fix: ensure any FTS/cache schema change bumps the cache schema version so existing caches auto-rebuild; and/or make the FTS write resilient (rebuild-on-missing-column rather than hard SQL error). Verify by pointing a new binary (with external_refs) at an old-schema cache.db and confirming auto-rebuild, not error.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T05:16:26.984018563Z
-modified_at: 2026-06-09T05:35:16.491990430Z
+modified_at: 2026-06-09T05:41:55.558294109Z
 req_type: Bug
 tags:
 - cache
@@ -21,3 +21,15 @@ comments:
   content: Commit bcae69ec9 references this requirement
   created_at: 2026-06-09T05:35:16.491990430Z
   modified_at: 2026-06-09T05:35:16.491990430Z
+history:
+- id: 019eaae6-d772-7d42-8ab3-187a50667aaa
+  author: aida-auto-bump
+  timestamp: 2026-06-09T05:41:55.698934816Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T05:41:55.558294109Z
+  completion_sha: 8407e86640f8dd2aacb5b3435a2d40bfc5beb371
