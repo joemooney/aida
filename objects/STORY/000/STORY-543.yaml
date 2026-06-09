@@ -1,0 +1,51 @@
+id: 019eaaa5-5a9a-70c1-96cb-c69ff4ac2876
+spec_id: STORY-543
+agreed_id: STORY-543
+title: 'Lock-tolerant reads: WAL cache + bounded read-wait + fail-soft staleness signal'
+description: |-
+  ## Problem
+
+  Read commands (`aida queue list`, `aida list`, `aida search`) can hang for ~25s under concurrent writes (master loop, implementers, cache rebuilds). Operator-reported 2026-06-08.
+
+  ## Root cause (grounded)
+
+  `.aida/cache.db` runs in DEFAULT rollback-journal mode — NO `journal_mode=WAL` pragma anywhere in `aida-core/src/db/cache.rs`. In rollback-journal mode a writer takes an EXCLUSIVE lock that blocks ALL readers. `busy_timeout=0` (cache.rs:194) returns SQLITE_BUSY immediately, then AIDA's own retry ladder `with_cache_retry` (cache.rs:209) backs off `[100,200,400,800,1600,3200,6400,12800]`ms = ~25.6s total before erroring 'database is locked'. That is the hang.
+
+  Note: the LEGACY backend (`sqlite_backend.rs:50`) already runs `PRAGMA journal_mode=WAL`; the git-canonical cache never got it.
+
+  ## Design (three layers)
+
+  L1 ROOT CAUSE — Enable WAL on cache.db. Readers never block writers; a reader sees the last-committed snapshot (the consistent equivalent of the operator's requested 'dirty read'). Likely removes ~95% of the pain with no new flag.
+
+  L2 BOUND — Reads must not share the 25.6s write ladder. Cap read-side lock-wait at ~1s (configurable). Writes keep the long ladder.
+
+  L3 FAIL-SOFT — On a read that still can't acquire after the bounded wait: degrade, don't error. Emit the last-readable snapshot (or fall back to the lock-free git store), and signal staleness OUT OF BAND — NOT by overloading the exit code (a non-zero exit means 'command failed' and breaks `list && …` pipelines). Default: results + stderr warning + exit 0. Opt-in machine signal: reserved code 75 behind `--strict-fresh`, and/or a `\"stale\": true` field in `--json`.
+
+  Pattern name: stale-while-revalidate / fail-soft read.
+
+  ## Acceptance
+
+  - [ ] cache.db opens with `PRAGMA journal_mode=WAL` (match sqlite_backend.rs); verify `-wal`/`-shm` sidecars are gitignored under the existing `.aida/*` deny block.
+  - [ ] A read issued while a writer holds the cache returns the last-committed snapshot WITHOUT waiting ~25s (WAL concurrent read); add a test that writes + reads concurrently and asserts the read completes < 1s.
+  - [ ] Read-side lock-wait budget is bounded (~1s default) and SEPARATE from the write-side ladder; configurable via env/config.
+  - [ ] On a read that exhausts the bounded wait: command still emits best-effort output + a one-line stderr staleness warning + exits 0 by DEFAULT (pipeline-safe).
+  - [ ] `--json` output carries a `stale` boolean; opt-in `--strict-fresh` flag makes a stale read exit with reserved code 75.
+  - [ ] WAL same-machine/same-filesystem constraint documented (cache.db is local gitignored per-clone state — safe).
+
+  ## Rationale
+
+  Operator asked for 'ignore the lock, dirty read, signal via return code.' WAL delivers the lock-free read consistently and for free; the staleness signal belongs on stderr + structured output (exit code stays semantically 'did it work?'). Refines the operator's pattern rather than implementing it literally.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T04:30:23.898104612Z
+modified_at: 2026-06-09T04:30:23.898104612Z
+req_type: Story
+tags:
+- aida:cache
+- aida:list
+- aida:queue:list
+- concurrency
+- from-self-test
+- papercut
