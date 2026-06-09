@@ -15832,5 +15832,44 @@ operations:
   timestamp: 2026-06-09T01:45:44.512212484Z
   kind: !SetStatus
     status: Approved
-clock: 1583
+- id: 019eaa3a-2f6d-7a80-969f-9b48438559f4
+  target_id: 019eaa2e-50a7-74f1-b1b5-bcb4947c58ad
+  author: aida
+  node_id: '1'
+  lamport: 1584
+  timestamp: 2026-06-09T02:33:20.493568356Z
+  kind: !SetDescription
+    description: |-
+      ## Want (operator, 2026-06-09)
+
+      As tasks ship, there are CLI/UX changes the operator wants to learn WITHOUT reading mountains of spec info. `aida digest --since` exists (STORY-252) but is a WORK-STATUS narrative (Released / Major progress = a dump of every spec title) — too dense, and answers "what did we accomplish," not "what can I now DO."
+
+      ## Proposal: a capabilities lens on `aida digest`
+
+      `aida digest --since <window> --audience operator` (or `--capabilities`/`--whats-new`), reusing the existing digest window + editorial machinery:
+      1. **Filters to user-facing changes only** — new commands, changed flags, new/changed behaviors, new skills. DROP internal: refactors, tests, chores, non-UX bugfixes. Signal: `cli-ux` tag, new-command detection, help-text deltas, new `.claude/skills/`.
+      2. **Renders each as a try-it capability** — "**`aida mailbox list`** — see all agents' mailboxes + unread counts. Try: `aida mailbox list`". One line + the command.
+      3. **Groups by surface** — New commands / Changed flags & behaviors / New skills.
+      4. Honors `--since` like the rest of `aida digest`.
+
+      ## Storage architecture (operator design, 2026-06-09): commit FACTS, cache-never-commit NARRATIVE
+
+      Two layers, stored differently — "committed/frozen" and "contextually relevant to the current user" are incompatible, so split them:
+
+      - **Layer 1 — deterministic FACTS = a COMMITTED release-surface manifest (JSON).** Per release, the user-facing surface deltas (new commands / changed flags / new behaviors / new skills) + spec links + help deltas. Rebuildable + idempotent (same git state → byte-identical), so commit it like CHANGELOG.md / Cargo.lock — regenerated at release by scripts/release.sh. The SHARED deterministic input that `aida changelog`, `aida digest`, and this capabilities lens all render from (one facts artifact, many renders).
+      - **Layer 2 — LLM-curated NARRATIVE = regenerate on demand, CACHE, never freeze.** Generated from the Layer-1 manifest + current context; cached with staleness-detection keyed on (source-git-sha, audience, since-window), invalidated when the source advances — the `.aida/cache.db` model (rebuildable, gitignored, HEAD-sha invalidation). NEVER committed as canonical: a committed narrative goes stale the moment context moves. The cache makes repeat-asks free; "rejigger as behavior changes" happens automatically on source advance.
+
+      Same Tier-1/Tier-2 split as EPIC-36; same source-vs-projection model as the spec graph vs cache.db.
+
+      ## Acceptance (sketch — master refines)
+
+      - [ ] `aida digest --audience operator --since <window>` lists ONLY user-facing CLI/UX/skill changes, each with a one-line "what + how to try it".
+      - [ ] Internal-only work (refactor/test/chore/non-UX bugfix) is excluded; grouped by surface.
+      - [ ] A deterministic release-surface manifest (JSON) is generated at release (idempotent) and committed alongside CHANGELOG.md; changelog + digest + this lens render from it.
+      - [ ] The operator-narrative is generated on demand and cached keyed on (source-sha, audience, window), invalidated on source change; NEVER committed as canonical.
+      - [ ] Reuses the existing `--since` window + digest machinery; SPEC-IDs stripped from operator-facing output.
+
+      ## Relationships
+      - New audience/lens on `aida digest` (STORY-252); the user-facing counterpart to the dev-facing `aida changelog`. Storage model: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db).
+clock: 1584
 node_id: '1'
