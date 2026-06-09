@@ -54,6 +54,11 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
             "/statusLine",
         ],
         "mcp.json" | ".mcp.json" => &["/mcpServers/aida"],
+        // settings.local.json — per-user, gitignored Claude Code overrides.
+        // AIDA owns the MCP pre-approval slot so a fresh init trusts its own
+        // scaffolded .mcp.json server; the user owns the rest of the file.
+        // trace:BUG-484
+        "settings.local.json" => &["/enabledMcpjsonServers"],
         _ => &[],
     }
 }
@@ -177,6 +182,16 @@ mod tests {
     #[test]
     fn slots_for_unknown_returns_empty() {
         assert!(slots_for_file(Path::new("CLAUDE.md")).is_empty());
+    }
+
+    // trace:BUG-484 — settings.local.json's MCP-trust slot is AIDA-managed so
+    // re-init slot-merges the pre-approval without clobbering user-owned keys.
+    #[test]
+    fn slots_for_settings_local_json() {
+        assert_eq!(
+            slots_for_file(Path::new(".claude/settings.local.json")),
+            &["/enabledMcpjsonServers"]
+        );
     }
 
     /// Drifted slot replaced; matching slot untouched; user keys
