@@ -311,6 +311,50 @@ mod tests {
     }
 
     #[test]
+    fn bug478_failure_reason_not_member_state_decides_shelved_vs_crash() {
+        // BUG-478: the classification distinguishes a deliberate shelve from a
+        // non-shelve resume failure SOLELY by `has_failure_reason` (the
+        // requirement's `failure_reason` field), NOT by the drain-state member
+        // being stamped STATE_FAILED. Given identical mid-flight / in-phase
+        // facts, a failed resume with NO recorded failure_reason must classify
+        // ResumableCrash (re-resumable, per BUG-438), while a genuinely shelved
+        // spec with a recorded failure_reason classifies Shelved.
+        // No failure_reason on the requirement ⇒ re-resumable crash, even though
+        // the caller previously (wrongly) derived has_failure_reason from the
+        // member's STATE_FAILED.
+        assert_eq!(
+            classify_resumability(false, true, true, false),
+            Resumability::ResumableCrash
+        );
+        // failure_reason present on the requirement ⇒ deliberately shelved.
+        assert_eq!(
+            classify_resumability(false, true, true, true),
+            Resumability::Shelved
+        );
+        // Same contract at the resume_plan composition layer.
+        assert_eq!(
+            resume_plan(
+                false,
+                true,
+                true,
+                false,
+                &facts(true, false, false, false, false, false)
+            ),
+            ResumeOutcome::ResumeAt(Phase::Ci)
+        );
+        assert_eq!(
+            resume_plan(
+                false,
+                true,
+                true,
+                true,
+                &facts(true, false, false, false, false, false)
+            ),
+            ResumeOutcome::LeaveShelved
+        );
+    }
+
+    #[test]
     fn nothing_in_flight_is_not_resumable() {
         assert_eq!(
             classify_resumability(false, false, false, false),
