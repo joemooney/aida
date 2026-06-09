@@ -2,14 +2,26 @@ id: 019eaa0a-fa8d-7f01-bc48-8a2f06ad2d9c
 spec_id: TASK-0413
 title: Document and scaffold Codex status-line support
 description: 'Add Codex-facing AIDA guidance for Codex CLI''s built-in status_line footer. Acceptance criteria: AGENTS.md/Codex setup docs explain that Codex supports built-in footer items via [tui].status_line but does not currently support Claude Code-style arbitrary command status lines; AIDA''s existing `aida statusline` remains the command-backed source for Claude Code and shell use; scaffolded Codex guidance gives a concrete `~/.codex/config.toml` or `.codex/config.toml` snippet using built-in status_line IDs that complement AIDA sessions without claiming command execution support.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-09T01:41:46.765929805Z
-modified_at: 2026-06-09T04:18:35.195460822Z
+modified_at: 2026-06-09T06:12:20.556194273Z
 req_type: Task
 tags:
 - codex
 - role:implementer
 - statusline
+history:
+- id: 019eab02-b059-7a63-a5e9-d8f2a5bcf739
+  author: aida-auto-bump
+  timestamp: 2026-06-09T06:12:20.697675310Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T06:12:20.556194273Z
+  completion_sha: 05f2d86705230fabd9ac885b85914872494d9c59
