@@ -36,7 +36,7 @@ AIDA's MCP server exposes **57 tools** in six clusters:
 
 - `list_requirements({status})` → list specs (optionally filtered)
 - `show_requirement({id})` → full spec content, relationships, comments
-- `add_requirement({title, description, type, ...})` → file a new spec. `type` is required and must be one of the canonical taxonomy values: `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `doc`. AIDA auto-assigns the ID prefix from that type (for example, `task` → `TASK-N`), so agents should not invent generic `SPEC-N` IDs.
+- `add_requirement({title, description, type, ...})` → file a new spec. `type` is required and must be one of the canonical taxonomy values: `functional`, `non-functional`, `system`, `user`, `change-request`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `principle`, `vision`, `constraint`, `decision`, `term`, `doc` (the last five — `principle`/`vision`/`constraint`/`decision`/`term` — are the ADR + knowledge-graph family). AIDA auto-assigns the ID prefix from that type (for example, `task` → `TASK-N`), so agents should not invent generic `SPEC-N` IDs.
 - `update_requirement({id, ...})` → edit
 - `search_requirements({query})` → FTS5 search
 - `add_comment({id, text})` → comment on a spec  *(arg is `text`, not `body`)*

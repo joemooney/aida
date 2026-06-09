@@ -278,7 +278,7 @@ For hook control-flow semantics, keep `docs/agents/session-communication.md` cur
 
 Always verify CLI arguments with `aida <command> --help`. Common parameters:
 
-- `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `doc`
+- `--type` (lowercase, 19 total): `functional`, `non-functional`, `system`, `user`, `change-request`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `principle`, `vision`, `constraint`, `decision`, `term`, `doc` (canonical source is the `RequirementType` enum in `aida-core/src/models.rs`; `aida schema` will become the reflection-derived source once STORY-538 / PR #691 merges)
 - `--feature`: feature category name (NOT a type)
 - `--status`: `draft`, `approved`, `planned`, `in-progress`, `done`, `completed`, `rejected`
   - The full state machine — Draft → Approved → Planned → In Progress → Done → Completed → Released, with the precise verb for each transition and the edge cases (cluster PRs, parallel pipelining, autonomous drains) — is documented in `docs/lifecycle.md` and the README's "Spec lifecycle" section. trace:TASK-273
@@ -288,11 +288,18 @@ Always verify CLI arguments with `aida <command> --help`. Common parameters:
 
 ### Requirement types
 
-Use `task` for chores, documentation, tooling, and work that doesn't fit a traditional requirement.
+The `RequirementType` enum (`aida-core/src/models.rs`) is the canonical source — 19 variants. Use `task` for chores, documentation, tooling, and work that doesn't fit a traditional requirement. (Once `aida schema` ships — STORY-538 / PR #691 — it becomes the reflection-derived list, so docs can point at it instead of re-hand-listing.)
 
 - **Requirements**: `functional`, `non-functional`, `system`, `user` (features, behaviors, constraints)
+- **Workflow**: `change-request` (`CR-N`) — a proposed change to an existing requirement/system (distinct from a `bug`, which records a defect)
 - **Agile**: `epic`, `story`, `task`, `bug`, `spike`, `sprint`
 - **Organizational**: `folder` (hierarchy, stateless), `meta` (AI prompts, templates, stateless)
+- **ADR + knowledge-graph family** (FR-1-074, the docs-layer types that drive the `aida-docs` projection):
+  - `principle` (`PRIN-N`) — constitution clause / non-negotiable principle governing how the project is built (stateless)
+  - `vision` (`VIS-N`) — vision / target outcome: what we're building, for whom, by when (stateful)
+  - `constraint` (`CON-N`) — external or technical constraint: regulation, dependency, deadline (stateful)
+  - `decision` (`ADR-N`) — Architecture Decision Record: a recorded decision + its rationale (stateful: proposed / accepted / superseded / deprecated)
+  - `term` (`TERM-N`) — glossary term / ubiquitous-language anchor (stateless)
 - **Living docs**: `doc` (EPIC-24 — narrative explanation linked to other specs via `aida doc add --about <ID>`)
 
 ### Meta requirements (AI prompt customization)
