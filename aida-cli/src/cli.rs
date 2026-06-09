@@ -6264,6 +6264,19 @@ pub enum Command {
     #[clap(subcommand, name = "type", hide = true)]
     Type(TypeCommand),
 
+    /// Introspect the storable substrate: object catalog, Requirement fields,
+    /// and the controlled-vocabulary tokens (status/type/priority/relationship)
+    // trace:STORY-538 | ai:claude
+    Schema {
+        /// Optional object to detail (currently: `requirement`). Omit for the
+        /// storable-object catalog.
+        object: Option<String>,
+
+        /// Emit machine-readable JSON instead of the human table.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Export requirements to different formats
     #[clap(hide = true)]
     Export {
