@@ -16039,5 +16039,56 @@ operations:
   timestamp: 2026-06-09T06:28:11.643260215Z
   kind: !SetStatus
     status: Approved
-clock: 1600
+- id: 019eab19-2557-7d90-ae87-db9f2b74d1f5
+  target_id: 019eab13-c8a9-7430-83ad-d220620f0a2e
+  author: aida
+  node_id: '1'
+  lamport: 1601
+  timestamp: 2026-06-09T06:36:52.439593675Z
+  kind: !SetTitle
+    title: 'aida burndown run: headless PARALLEL overnight drain over the gated ready set'
+- id: 019eab19-2586-7a82-a6f3-5303c2924dda
+  target_id: 019eab13-c8a9-7430-83ad-d220620f0a2e
+  author: aida
+  node_id: '1'
+  lamport: 1602
+  timestamp: 2026-06-09T06:36:52.486907110Z
+  kind: !SetDescription
+    description: |-
+      ## Goal (operator, dumm2 dogfood 2026-06-08)
+
+      A kick-off-and-walk-away OVERNIGHT burn-down runnable from a plain shell (no Claude Code session): gate the ready set, fan out workers in PARALLEL, integrate greens, loop until drained, exit. `aida burndown run [selector]`.
+
+      ## Correction to the earlier framing
+
+      Earlier framing said this had to be SEQUENTIAL / that parallel fan-out is harness-only. That was too strong. 'Harness-only' is true only for the Agent-tool SUBAGENT mechanism. The CLI CAN parallelize: spawn N headless `claude -p` workers in isolated worktrees, gated identically, integrate as PRs land. Genuine parallelism, no Claude Code session. This spec is now the PARALLEL headless engine.
+
+      ## Two implementation strategies — KEY OPEN QUESTION (spike first)
+
+      - STRATEGY B (preferred if viable — compose, don't reimplement): `aida burndown run` launches a headless `claude -p \"/aida-burndown <selector>\"` and REUSES the empirically-working skill fan-out. Open question: can headless `claude -p` invoke the `/aida-burndown` skill, which is `disable-model-invocation: true`? If yes, the CLI is a thin headless launcher of the proven engine — no second fan-out engine to harden.
+      - STRATEGY A (fallback): CLI reimplements parallel headless worker fan-out in Rust (N x `claude -p` implementer in worktrees + integrator loop + punt-and-continue), extending the orchestrator's existing per-spec `claude -p` path N-wide.
+
+      Resolve B-vs-A in a short spike BEFORE building. Default to investigating B first (avoids the two-competing-fan-out-engines problem the skill doc warns about).
+
+      ## Answers folded in from the design discussion
+
+      - SELECTOR SCOPE: `plan` ALREADY has `--status`/`--tag`/`--batch` and scans the backlog (status+pickability, NOT queue membership). `run` inherits the same selector. Default `--status approved`.
+      - DRAFTS / ADR-3: `--status draft` (or any unapproved scope) must be a LOUD explicit opt-in — auto-draining drafts overnight bypasses the human approval gate. Approved is the safe overnight default. The pickability gate protects against malformed work, NOT against unapproved work.
+      - NO TAGGING: `plan` stays read-only — do NOT tag selected/parked specs. Parallel claim = LEASE (existing ephemeral concurrency primitive), not a tag. Tags persist and go stale; leases auto-release. Claiming belongs on `run`, not the gate.
+
+      ## Acceptance
+
+      - [ ] `aida burndown run` gates the set through the SAME pickability check as `aida burndown plan` (bounded/unblocked/decision-free) — 'never stop to ask' safe by construction.
+      - [ ] Workers run in PARALLEL (worktree-isolated), bounded by a `--concurrency N` cap; integrate PRs as they go green; punt-and-continue on a blocker (one parked spec never halts the run).
+      - [ ] Each in-flight spec is LEASE-claimed so concurrent workers never collide; leases release on completion/park. No spec tagging.
+      - [ ] Selector inherits `--status`/`--tag`/`--batch` from `plan`; default `approved`. Unapproved scopes (`--status draft`) require an explicit confirm/flag and print an ADR-3 bypass warning.
+      - [ ] `--dry-run` == `aida burndown plan` output, no draining.
+      - [ ] Exit code follows the drain convention (2 when anything shelved/skipped); respects `--max-failures` + lifecycle short-circuit tags.
+      - [ ] Help + the STORY-544 footer disambiguate: `aida burndown run` = headless parallel, any shell, overnight; `/aida-burndown` skill = in Claude Code, interactive driver. Not conflatable.
+      - [ ] Spike resolving Strategy B vs A is filed/closed before implementation.
+
+      ## Rationale
+
+      This is the overnight autonomous burn-down the operator has asked for: gated, parallel, headless, walk-away. Prefer composing the proven skill engine (B) over a second Rust fan-out engine (A). Relates to STORY-544 (footer points here) and the `feedback_parallel_implementer_fanout_burndown` pattern (the integrator + punt-and-continue discipline this must encode).
+clock: 1602
 node_id: '1'
