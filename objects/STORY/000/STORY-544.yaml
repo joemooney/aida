@@ -1,0 +1,38 @@
+id: 019eab0f-1576-7050-8a91-4e9f69502b39
+spec_id: STORY-544
+agreed_id: STORY-544
+title: 'burndown plan: next-step footer + plain-language selector (new-user dead-end)'
+description: |-
+  ## Problem (operator dogfood, fresh project ~/work/dumm2, role:implementer, 2026-06-08)
+
+  A new user runs `aida burndown plan`, sees a ready set, and hits a DEAD END — nothing tells them what to do next. They reasonably hunt for `aida burndown run` / `aida burndown start` (neither exists). Two concrete gaps:
+
+  1. NO next-step footer. `main.rs:64325-64353` prints the ready/parked lists then `Ok(())` — no pointer to the actual runner. The run is NOT a CLI verb by design: it's the `/aida-burndown` Claude Code skill (disable-model-invocation, harness-only — it fans out worktree-isolated implementer subagents). The user has no way to discover this from the CLI.
+
+  2. 'selector' is unexplained jargon. The output line `selector: status=approved` and the `--help` use 'selector' with no gloss. A new user doesn't know what a selector is, that it defaulted to approved, or how to change it.
+
+  ## Acceptance
+
+  - [ ] `aida burndown plan` ends with a next-step footer (matching the existing `/aida-pickup` / `/aida-pr` next-steps convention) that: (a) tells the user to invoke `/aida-burndown` in Claude Code to fan out the ready set, and (b) explicitly states there is NO `aida burndown run`/`start` — the runner is the skill — so users stop hunting for a CLI verb.
+  - [ ] Footer is suppressed when `--json` is set (machine output stays clean) and when ready is empty (print a 'nothing ready' line instead).
+  - [ ] The selector line is reworded in plain language, e.g. 'Showing approved specs (default). Narrow with --batch NAME, --tag X, or --status <s>.' — drop or gloss the bare word 'selector' in user-facing stdout.
+  - [ ] `aida burndown --help` and `aida burndown plan --help` name the skill relationship in one line ('the run itself is the /aida-burndown skill in Claude Code, not a CLI subcommand') and explain what a selector narrows.
+  - [ ] SPEC-IDs / skill-internals stay out of nothing-user-facing-leaks per user-facing-text conventions; the footer names the /aida-burndown skill (user-facing surface), not internal trace IDs.
+
+  ## Rationale
+
+  The plan/run split is correct (deterministic gate in CLI, LLM fan-out in skill) — but it's invisible. AIDA's house style is a next-step footer on every read command; burndown plan is the one place that drops it, exactly where a new user most needs the hand-off. Pure discoverability fix; no behavior change to the gate. Relates to the next-steps-footer convention in state_snapshot.rs.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T06:25:53.014226020Z
+modified_at: 2026-06-09T06:25:53.014226020Z
+req_type: Story
+tags:
+- aida:burndown
+- first-user-papercut
+- from-self-test
+- onboarding-flow
+- papercut
+- severity:major
