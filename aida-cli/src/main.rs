@@ -53569,6 +53569,58 @@ mod handle_pull_command_tests {
         );
     }
 
+    /// BUG-476: when the code leg fails AND the store pull is skipped (no
+    /// orphan worktree / no `origin` — a code-only clone or not-yet-attached
+    /// store, common in CI), `handle_pull_command` must STILL return Err.
+    /// The store-pull block's early returns used to fire AFTER `code_failed`
+    /// was set but BEFORE the bottom BUG-254 check, so a failed code leg +
+    /// skipped store leg returned Ok(()) → exit 0 over a stale tree, and the
+    /// orchestrator's phase 5 falsely announced success. Here the store path
+    /// is a plain `requirements.yaml` file (not a git repo), so the first
+    /// early return is taken — with `code_only=false` so the store block
+    /// actually runs. trace:BUG-476 | ai:claude
+    #[test]
+    fn pull_code_leg_failure_with_store_skipped_returns_err() {
+        let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+        let store_path = project_root.join("requirements.yaml");
+        let storage = Storage::new(store_path.clone());
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
+
+        // Force the code-leg `git pull --ff-only` to fail (untracked-file
+        // conflict), exactly like the BUG-254 test.
+        let spec_id = "STORY-99476".to_string();
+        seed_done_spec_at(&store_path, &spec_id);
+        push_remote_file(&bare, "conflict.txt", "from remote\n", &spec_id);
+        std::fs::write(project_root.join("conflict.txt"), "from local untracked\n").unwrap();
+
+        // code_only=false → the store-pull block runs. `store_path` is a
+        // plain file, not a git repo, so `git_ops::is_git_repo` is false and
+        // the "no orphan worktree — skipping store pull" early return is hit.
+        // Pre-fix that early return swallowed the code failure and returned
+        // Ok(()). Post-fix it must bail with the code-leg error.
+        let result = handle_pull_command(&store_path, false, false, true, true, false);
+        let err = result.expect_err(
+            "BUG-476: handle_pull_command must return Err when the code leg fails and the \
+             store pull is skipped, not Ok over a stale tree",
+        );
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("code leg"),
+            "BUG-476: error message should name the code leg, got: {msg}"
+        );
+
+        // Defensive: the Done spec must NOT have been auto-bumped.
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Done),
+            "BUG-476: failed code leg must not auto-bump; status was {:?}",
+            req.status
+        );
+    }
+
     /// BUG-95 mirror: `aida pull --store-only` should NOT touch the code
     /// branch (no code pull happens), so the auto-bump correctly does
     /// not fire — even if there's a Done spec that a separate code pull
@@ -65603,6 +65655,16 @@ fn handle_pull_command(
                 "  {} no orphan worktree — skipping store pull",
                 "Note:".dimmed()
             );
+            // BUG-476: skipping the store pull must NOT launder a failed code
+            // leg into a success. A code-only clone (or a not-yet-attached
+            // store, common in CI) hits this early return with `code_failed`
+            // already set; returning Ok(()) here would exit 0 over a stale,
+            // non-advanced tree — exactly the BUG-254 contract this is meant
+            // to honor. Bail with the same code-leg error the bottom check
+            // produces. trace:BUG-476
+            if let Some(c) = code_failed.as_deref() {
+                anyhow::bail!("aida pull: code leg failed ({c})");
+            }
             return Ok(());
         }
         if !git_ops::has_remote(store_path, "origin") {
@@ -65610,6 +65672,11 @@ fn handle_pull_command(
                 "  {} orphan store has no `origin` — skipping store pull",
                 "Note:".dimmed()
             );
+            // BUG-476: same as above — a no-origin store does not redeem a
+            // failed code leg. trace:BUG-476
+            if let Some(c) = code_failed.as_deref() {
+                anyhow::bail!("aida pull: code leg failed ({c})");
+            }
             return Ok(());
         }
         // Mirror `aida db sync --pull`: commit any pending orphan
