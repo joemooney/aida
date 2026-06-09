@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:57:38.898670345Z
-modified_at: 2026-06-09T06:28:07.165221295Z
+modified_at: 2026-06-09T06:48:52.066046727Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019ea9fd-7202-7032-ae1b-6324f38d1586
   created_at: 2026-06-09T01:57:59.695750155Z
   created_by: joe
+comments:
+- id: 019eab24-2062-7db1-bd64-264acbb99712
+  author: joe
+  content: Commit aa7201b7e references this requirement
+  created_at: 2026-06-09T06:48:52.066046727Z
+  modified_at: 2026-06-09T06:48:52.066046727Z
