@@ -25,12 +25,12 @@ description: |-
   ## Decision
 
   Resolves STORY-545's B-vs-A fork. Blocks STORY-545 build.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:37:14.949124082Z
-modified_at: 2026-06-09T15:05:40.148430481Z
+modified_at: 2026-06-09T15:05:41.926887375Z
 req_type: Spike
 tags:
 - aida:burndown
