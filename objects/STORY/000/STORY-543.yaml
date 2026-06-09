@@ -40,12 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T04:30:23.898104612Z
-modified_at: 2026-06-09T06:28:11.623056764Z
+modified_at: 2026-06-09T07:30:42.354321196Z
 req_type: Story
 tags:
-- aida:cache
-- aida:list
-- aida:queue:list
-- concurrency
-- from-self-test
-- papercut
+- review:draft-only
