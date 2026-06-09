@@ -43,12 +43,12 @@ description: |-
 
   ## Relationships
   - Sharpens/extends `aida digest` (STORY-252) — its customer filter is too weak today. Storage: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db). The user-facing counterpart to the dev-facing `aida changelog`.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:20:22.567385072Z
-modified_at: 2026-06-09T04:18:29.455233575Z
+modified_at: 2026-06-09T04:54:31.797437391Z
 req_type: Story
 tags:
 - aida:digest
@@ -81,3 +81,15 @@ comments:
   content: 'PERSONA definition (operator, 2026-06-09): the four audiences are customer / team / self / **operator**. The first three are WORK-NARRATIVE views (what shipped / where are we / advisor''s-own-detail). `operator` is the ONLY one whose lens is the CLI SURFACE itself — the day-to-day CLI user/power-user who wants the command-surface diff (new commands / changed flags / changed behaviors / fixes-you''ll-notice), value-framed + try-it. Do NOT build operator as a synonym for self (self = SPEC-ID-rich work narrative; operator = CLI-surface changes, SPEC-IDs stripped, value-translated). This is the ''cli changes'' perspective the operator asked for.'
   created_at: 2026-06-09T04:10:34.981481775Z
   modified_at: 2026-06-09T04:10:34.981481775Z
+history:
+- id: 019eaabb-72fb-7373-932d-cd6a7ee1db57
+  author: aida-auto-bump
+  timestamp: 2026-06-09T04:54:31.931025693Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T04:54:31.797437391Z
+  completion_sha: 5e0f6eaa1537a56b376b570b2ed0d92a514b3cb2
