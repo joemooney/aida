@@ -38,12 +38,12 @@ description: |-
 
   ## Relationships
   - Sibling/slice of EPIC-35 (forge providers — repo-create uses the same provider detection; the lifecycle work is the next step). Onboarding cluster: TASK-638/645/698 (machine setup at init) — this is project-remote setup. Builds on the proven push-to-create (store-validation, 2026-06-04).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:09:34.791313142Z
-modified_at: 2026-06-09T04:18:16.299489042Z
+modified_at: 2026-06-09T05:03:15.787227805Z
 req_type: Story
 tags:
 - aida:remote
@@ -54,3 +54,15 @@ tags:
 - gitlab
 - onboarding-flow
 - parent:EPIC-35
+history:
+- id: 019eaac3-72cc-7c40-913c-303755b8d0c4
+  author: aida-auto-bump
+  timestamp: 2026-06-09T05:03:16.172189731Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T05:03:15.787227805Z
+  completion_sha: 27440f0eed469b50da5ba9decc3a9574127342d4

@@ -24,12 +24,12 @@ description: |-
   IMMEDIATE WORKAROUND: run /mcp (or /doctor) in the Claude session and approve the `aida` server; the spec-graph tools then load and the setup-issue clears.
 
   Verified: aida mcp-serve initialize handshake returns a valid result; .claude/settings.json has no MCP key; no settings.local.json present.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:39:49.136332224Z
-modified_at: 2026-06-09T04:53:47.598794582Z
+modified_at: 2026-06-09T05:03:15.787227805Z
 req_type: Bug
 tags:
 - aida:init
@@ -45,3 +45,15 @@ comments:
   content: Commit a0c74548a references this requirement
   created_at: 2026-06-09T04:53:47.598794582Z
   modified_at: 2026-06-09T04:53:47.598794582Z
+history:
+- id: 019eaac3-72cc-7c40-913c-3029bf7cd2c4
+  author: aida-auto-bump
+  timestamp: 2026-06-09T05:03:16.172141737Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T05:03:15.787227805Z
+  completion_sha: 8357e5a077262a29b15a21a5983005b02b219fe3
