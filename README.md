@@ -419,6 +419,8 @@ Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Lin
 
 ## Documentation
 
+The full, journey-ordered index lives at [`docs/`](docs/README.md) (start there if you're browsing). The highlights:
+
 | Doc | What it covers |
 |-----|----------------|
 | [Getting Started](docs/getting-started.md) | Install, init, first requirement |
