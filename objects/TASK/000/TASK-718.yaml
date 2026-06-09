@@ -14,10 +14,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:25:19.944564150Z
-modified_at: 2026-06-09T02:25:19.944564150Z
+modified_at: 2026-06-09T05:42:45.908162527Z
 req_type: Task
 tags:
 - design-decision
 - from-bug:BUG-480
 - from-session:2026-06-08
 - mcp
+- operator-action
