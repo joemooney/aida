@@ -1,0 +1,39 @@
+id: 019eacac-261b-7bf2-9992-4a5a0a3e99e6
+spec_id: STORY-547
+agreed_id: STORY-547
+title: 'aida burndown plan: derived ''why still open'' reason for EVERY open spec (+ aida why <ID>)'
+description: |-
+  After a burndown, the operator needs to understand why each STILL-open spec remains open. Today `aida burndown plan` only emits READY/PARKED for the CANDIDATE set (approved+queued); the other ~12 open items (drafts, epics, deferred, held-for-review, vision) get no explanation. Gap surfaced 2026-06-09 from operator question on a 15-item `aida list open`.
+
+  KEY INSIGHT: the reason is DERIVABLE from existing substrate — no new storage vehicle needed. Classify every open spec from {type, status, queued, in_flight, blocked, parking-tags, BlockedBy relationships}.
+
+  Bucket taxonomy (one-line reason per spec):
+  - held-for-review  : review:draft-only tag + open draft PR (built, awaiting human merge)
+  - awaiting-decision: needs-design-signoff / operator-action tag (operator's call)
+  - deferred         : deferred:<why> tag (deliberately postponed; reason in the suffix)
+  - ungroomed        : status=Draft, no parking tag (awaiting advisor approval)
+  - blocked          : blocked=true or BlockedBy -> an open spec
+  - umbrella         : type=epic (rolled up from children)
+  - long-lived       : type=vision/principle (no terminal state by design)
+  - in-flight        : active lease / open non-draft PR right now
+
+  Acceptance:
+  1. `aida burndown plan` (or `--explain`/`--all-open`) lists EVERY open spec with its bucket + one-line reason, not just the candidate set.
+  2. Reason is purely derived from store signals (no new field, no new manual comment-prefix convention). Parking TAG = category; existing comment carries prose only where the tag suffix is insufficient.
+  3. `aida why <ID>` drill-down reuses the same classifier for a single spec.
+  4. JSON output for machine consumers (mirror existing burndown plan --json shape: spec, bucket, reason).
+  5. NOT findings: steady-state 'why open' is a derived view. ONLY emit a finding when the explainer detects an ANOMALY (mis-tagged, stale blocker, epic with zero children).
+
+  Vehicle decision (resolves operator's 'should there be findings? comment-prefix?' question): derive-first; tag for category + comment for prose; findings reserved for anomalies. trace:from-operator-2026-06-09
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T13:57:03.643084760Z
+modified_at: 2026-06-09T13:57:03.643084760Z
+req_type: Story
+tags:
+- aida:burndown
+- derived-not-stored
+- ergonomics
+- from-self-test
