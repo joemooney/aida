@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T13:57:03.643084760Z
-modified_at: 2026-06-09T14:08:00.640762235Z
+modified_at: 2026-06-09T14:10:12.463253213Z
 req_type: Story
 tags:
 - aida:burndown
@@ -43,3 +43,8 @@ comments:
   content: 'SLICE 1 of the why-open surface — SHIPPED in this PR. Implements the DERIVABLE view (source #1 of STORY-548''s three-source design): `aida burndown explain` (every open spec, grouped by bucket + one-line reason) and `aida why <ID>` (single-spec drill-down), both with --json. Buckets: held-for-review, in-flight, awaiting-decision, deferred, blocked, umbrella, long-lived, ungroomed, awaiting-merge, in-progress, actionable. Pure classifier (aida-cli/src/burndown.rs::explain_open) reusing the pickability engine; reasons derived live from {status, type, tags, BlockedBy, pending-decision, live-lease}. Nothing stored. RESOLVES STORY-548''s open naming question: chose `aida burndown explain` + `aida why <ID>` (kept under the burndown namespace so it doubles as the post-drain companion to `plan`). The residual two sources (findings-link for attempt-outcomes, structured residual-note for non-derivable reasons, post-drain emission) remain in STORY-548.'
   created_at: 2026-06-09T14:08:00.640762235Z
   modified_at: 2026-06-09T14:08:00.640762235Z
+- id: 019eacb8-2f6f-7f12-85f6-c2a4ac8f22f3
+  author: joe
+  content: Commit a1b141b67 references this requirement
+  created_at: 2026-06-09T14:10:12.463253213Z
+  modified_at: 2026-06-09T14:10:12.463253213Z
