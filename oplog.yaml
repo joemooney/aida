@@ -15919,5 +15919,13 @@ operations:
 
       ## Relationships
       - Sharpens/extends `aida digest` (STORY-252) — its customer filter is too weak today. Storage: Tier-1/Tier-2 (EPIC-36) + source-vs-projection (cache.db). The user-facing counterpart to the dev-facing `aida changelog`.
-clock: 1585
+- id: 019eaa99-d48d-7750-9d21-299dcd9cab5c
+  target_id: 3ae5cfd3-1913-4b54-8f60-3efe7ab3ffb0
+  author: aida
+  node_id: '1'
+  lamport: 1586
+  timestamp: 2026-06-09T04:17:48.685603567Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1586
 node_id: '1'
