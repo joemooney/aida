@@ -51974,6 +51974,65 @@ mod auto_bump_done_tests {
         assert!(info.completed_at.is_some(), "completed_at should be set");
     }
 
+    /// BUG-477: the merge-driven Done→Completed auto-bump must record the
+    /// status transition in the per-spec `history:` array (the source-of-truth
+    /// for spec-state time series), the same way the manual `aida edit --status`
+    /// path does. Before the fix the bump only assigned `status` and wrote no
+    /// `HistoryEntry`, so burn-down analytics walking history under-counted the
+    /// most common completion transition. trace:BUG-477
+    #[test]
+    fn auto_bump_records_status_transition_in_history() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9477");
+
+        let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                &format!("feat: land the thing ({})", spec_id),
+            ],
+        );
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage)
+                .unwrap();
+        assert_eq!(flips.len(), 1, "exactly one spec should flip");
+
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "status should be Completed, was {:?}",
+            req.status
+        );
+
+        // The transition must land as a structured history row recording the
+        // status field change Done → Completed.
+        let status_entry = req
+            .history
+            .iter()
+            .find(|h| h.changes.iter().any(|c| c.field_name == "status"))
+            .expect("auto-bump must record a status field change in history");
+        let change = status_entry
+            .changes
+            .iter()
+            .find(|c| c.field_name == "status")
+            .unwrap();
+        assert_eq!(
+            change.old_value, "Done",
+            "history old_value should be the prior status (Done)"
+        );
+        assert_eq!(
+            change.new_value, "Completed",
+            "history new_value should be Completed"
+        );
+    }
+
     /// BUG-426: a `docs(plans): …` plan commit names the specs it PLANS for
     /// in its trailing `(SPEC-ID …)` group, but a plan is pre-implementation
     /// — those specs stay Approved. The auto-bump candidate scan must NOT
@@ -67419,7 +67478,22 @@ fn auto_bump_done_to_completed(
                 {
                     continue;
                 }
+                // BUG-477: the merge-driven Done→Completed bump is the most
+                // common completion transition; record it in the per-spec
+                // history (the source-of-truth for spec-state time series)
+                // the same way the manual `aida edit --status` path does —
+                // a status field_change (old→new, Debug-formatted enums).
+                // Capture the prior status before the set. trace:BUG-477
+                let prior_status = r.status.clone();
                 r.set_status_from_str("Completed");
+                r.record_change(
+                    "aida-auto-bump".to_string(),
+                    vec![aida_core::Requirement::field_change(
+                        "status",
+                        format!("{:?}", prior_status),
+                        format!("{:?}", r.status),
+                    )],
+                );
                 r.modified_at = now;
                 // BUG-405: a Completed spec must not carry a stale
                 // FailureReason — it drives the "CI is red" finding that
@@ -67459,6 +67533,17 @@ fn auto_bump_done_to_completed(
                 }
                 let prior = r.status.clone();
                 r.set_status_from_str("Completed");
+                // BUG-477: record the stale-review flip-to-Completed in the
+                // per-spec history too, mirroring the manual edit path's
+                // status field_change shape. trace:BUG-477
+                r.record_change(
+                    "aida-auto-bump".to_string(),
+                    vec![aida_core::Requirement::field_change(
+                        "status",
+                        format!("{:?}", prior),
+                        format!("{:?}", r.status),
+                    )],
+                );
                 r.modified_at = now;
                 // BUG-405 contract (review finding): a Completed spec must not
                 // keep a stale FailureReason (it drives a false "CI red"
@@ -67839,7 +67924,19 @@ fn handle_db_reconcile_status(
                 {
                     continue;
                 }
+                // BUG-477: record the reconcile-driven Done→Completed bump
+                // in the per-spec history, matching the manual edit path's
+                // status field_change shape. trace:BUG-477
+                let prior_status = r.status.clone();
                 r.set_status_from_str("Completed");
+                r.record_change(
+                    "aida-reconcile".to_string(),
+                    vec![aida_core::Requirement::field_change(
+                        "status",
+                        format!("{:?}", prior_status),
+                        format!("{:?}", r.status),
+                    )],
+                );
                 r.modified_at = now;
                 // BUG-405 contract (review finding): a Completed spec must not
                 // keep a stale FailureReason (it drives a false "CI red"
@@ -67875,6 +67972,17 @@ fn handle_db_reconcile_status(
                 }
                 let prior = r.status.clone();
                 r.set_status_from_str("Completed");
+                // BUG-477: record the reconcile stale-review flip-to-Completed
+                // in the per-spec history too, mirroring the manual edit
+                // path's status field_change shape. trace:BUG-477
+                r.record_change(
+                    "aida-reconcile".to_string(),
+                    vec![aida_core::Requirement::field_change(
+                        "status",
+                        format!("{:?}", prior),
+                        format!("{:?}", r.status),
+                    )],
+                );
                 r.modified_at = now;
                 // BUG-405 contract (review finding): a Completed spec must not
                 // keep a stale FailureReason (it drives a false "CI red"
