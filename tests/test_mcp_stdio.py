@@ -423,6 +423,8 @@ def test_resources(client: McpClient, seed_spec: str) -> None:
         "aida://requirements/tree",
         "aida://queue/in-flight",
         "aida://session/leases",
+        # TASK-715: storable-substrate schema catalog resource.
+        "aida://schema",
     ):
         require(uri in by_uri, f"resources/list missing {uri}: {resources}")
         resource = by_uri[uri]
@@ -459,7 +461,12 @@ def test_resources(client: McpClient, seed_spec: str) -> None:
     by_template = {
         t.get("uriTemplate"): t for t in templates if isinstance(t, dict)
     }
-    for tmpl in ("aida://pr/{n}", "aida://batch/{name}"):
+    for tmpl in (
+        "aida://pr/{n}",
+        "aida://batch/{name}",
+        # TASK-715: per-object schema-detail template.
+        "aida://schema/{object}",
+    ):
         require(tmpl in by_template, f"resources/templates/list missing {tmpl}: {templates}")
 
     # Reading an expanded template URI returns a framed body (empty buckets
@@ -469,6 +476,22 @@ def test_resources(client: McpClient, seed_spec: str) -> None:
     batch_body = read_resource_text(client, "aida://batch/demo")
     require("Batch `demo`" in batch_body, f"batch resource has unexpected body: {batch_body}")
 
+    # TASK-715: the schema catalog resource is pretty JSON with an `objects`
+    # array; the `aida://schema/requirement` detail resource carries the
+    # reflection-derived field table + the four controlled-vocabulary enums.
+    schema_catalog = json.loads(read_resource_text(client, "aida://schema"))
+    require(
+        isinstance(schema_catalog.get("objects"), list) and schema_catalog["objects"],
+        f"aida://schema resource missing non-empty objects array: {schema_catalog}",
+    )
+    schema_req = json.loads(read_resource_text(client, "aida://schema/requirement"))
+    require(
+        schema_req.get("object") == "Requirement"
+        and isinstance(schema_req.get("fields"), list)
+        and {"status", "type", "priority", "relationship"} <= set(schema_req.get("enums", {})),
+        f"aida://schema/requirement resource has unexpected shape: {schema_req}",
+    )
+
 
 def test_tool_error_envelope(client: McpClient) -> None:
     resp = client.request("tools/call", {"name": "definitely_not_a_tool", "arguments": {}})
@@ -477,6 +500,31 @@ def test_tool_error_envelope(client: McpClient) -> None:
     require(result.get("isError") is True, f"unknown tool should set isError=true: {result}")
     text = content_text(result)
     require("Unknown tool" in text, f"unknown tool error text should name failure: {text}")
+
+
+def test_schema_tool(client: McpClient, strict: bool) -> None:
+    # TASK-715: the `schema` tool mirrors `aida schema [<object>] --json`.
+    # No object -> catalog of storable kinds.
+    catalog_resp = client.tool("schema", {})
+    require_structured_content_if_requested(catalog_resp, "schema", strict)
+    catalog = json.loads(content_text(catalog_resp))
+    require(
+        isinstance(catalog.get("objects"), list) and catalog["objects"],
+        f"schema tool catalog missing non-empty objects array: {catalog}",
+    )
+    # object=requirement -> reflection-derived field table + the four enums.
+    req = json.loads(content_text(client.tool("schema", {"object": "requirement"})))
+    require(
+        req.get("object") == "Requirement"
+        and isinstance(req.get("fields"), list)
+        and {"status", "type", "priority", "relationship"} <= set(req.get("enums", {})),
+        f"schema tool requirement detail has unexpected shape: {req}",
+    )
+    # Unknown object -> error envelope (isError=true), not a silent empty body.
+    bad = client.request("tools/call", {"name": "schema", "arguments": {"object": "definitely_not_an_object"}})
+    bad_result = bad.get("result")
+    require(isinstance(bad_result, dict), f"schema bad-object should return result object: {bad}")
+    require(bad_result.get("isError") is True, f"schema bad-object should set isError=true: {bad_result}")
 
 
 def test_cli_to_mcp_visibility(client: McpClient, seed_spec: str, strict: bool) -> None:
@@ -765,6 +813,7 @@ def main() -> int:
         run_test("initialize", lambda: test_initialize(client))
         tool_descriptors = run_test("tools/list descriptors", lambda: test_tool_descriptors(client))
         run_test("resources/list + resources/read", lambda: test_resources(client, seed_spec))
+        run_test("schema tool", lambda: test_schema_tool(client, args.require_structured_content))
         run_test("tool error envelope", lambda: test_tool_error_envelope(client))
 
         if args.require_agent_contract:

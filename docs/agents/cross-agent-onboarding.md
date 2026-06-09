@@ -28,7 +28,7 @@ The strategic positioning: the IDE-embedded coding assistants (Cursor, Cline, Ai
 
 ## What you can do via MCP today
 
-AIDA's MCP server exposes **57 tools** in six clusters:
+AIDA's MCP server exposes **58 tools** in six clusters:
 
 **Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
 
@@ -118,7 +118,7 @@ These mirror the `aida role <subcommand>` CLI surface so MCP-speaking agents can
 - `role_enter({name, cd?, ...})` → **peek**, not switcher (read-only): validates the role exists and returns the `aida role enter` command to run, plus the resolved role context (required: `name`).
 - `role_end({...})` → **peek**, not actor (read-only): reports the active shell role and returns the `aida role end` command to run.
 
-### Cluster 6 — Workflow (10 tools, STORY-536 / EPIC-27)
+### Cluster 6 — Workflow (11 tools, STORY-536 / EPIC-27, TASK-715)
 
 The remaining `aida` CLI long tail. Seven are read-only library mirrors — they compute in-process from the same helpers the CLI uses (cache reads, the plan-lint pass, the ultraplan assembler, the goal-clause builder, the usage-log aggregator), with no subprocess to `aida`. Three are git-network / working-tree / store mutations driven by subprocess `git` (`db_sync` / `fetch` / `pull`); surfacing those as in-process MCP mutations would surprise the caller (working-tree changes, remote pushes), so they are **peeks**, not actors — they return the exact `aida …` command to run (the `queue_work` / `session_start` peek precedent).
 
@@ -132,21 +132,24 @@ The remaining `aida` CLI long tail. Seven are read-only library mirrors — they
 - `db_sync({pull?, push?, ...})` → **peek**, not actor (read-only): returns the `aida db sync` command to run (git network I/O against the orphan store branch).
 - `fetch({code_only?, store_only?, quiet?, ...})` → **peek**, not actor (read-only): returns the `aida fetch` command to run (refreshes remote refs via git network I/O).
 - `pull({code_only?, store_only?, ...})` → **peek**, not actor (read-only): returns the `aida pull` command to run (mutates the working tree + local store, auto-bumps merged specs).
+- `schema({object?})` → introspect the storable substrate (mirrors `aida schema [<object>] --json`). With no `object`, returns the catalog of storable object kinds; with `object` (e.g. `requirement`), returns that object's detail — for Requirement, the reflection-derived field table plus the four controlled-vocabulary enums (status / type / priority / relationship) in on-the-wire token form (a paste-ready cheat-sheet for `--status` / `--type` / `--priority` / relationship-type arguments). Reflection-derived, so it can't drift from `models.rs`. **Read mirror** — also addressable as the `aida://schema` / `aida://schema/{object}` resources below (TASK-715).
 
-### MCP resources (live state — STORY-535 / EPIC-27)
+### MCP resources (live state — STORY-535 / EPIC-27, TASK-715)
 
-Resources are a **distinct MCP concept from tools**: addressable read-only state you fetch via `resources/read` (and discover via `resources/list` / `resources/templates/list`), not verbs you invoke via `tools/call`. They back onto the same library helpers the equivalent CLI surfaces use — no subprocess to `aida`. Six resources today:
+Resources are a **distinct MCP concept from tools**: addressable read-only state you fetch via `resources/read` (and discover via `resources/list` / `resources/templates/list`), not verbs you invoke via `tools/call`. They back onto the same library helpers the equivalent CLI surfaces use — no subprocess to `aida`. Seven resources today:
 
 - `aida://project/summary` — project statistics + feature list.
 - `aida://requirements/tree` — requirement hierarchy overview.
 - `aida://queue/in-flight` — specs held by a live session/MCP-claim lease, plus the Done-awaiting-merge bucket (mirrors `aida queue list --in-flight-only`).
 - `aida://session/leases` — active scoped session leases (mirrors `aida session leases`).
+- `aida://schema` — the catalog of storable object kinds as JSON (mirrors `aida schema --json`); per-object field/enum detail via the `aida://schema/{object}` template. Same data as the `schema` tool above (TASK-715).
 - `aida://pr/{n}` *(template)* — git-canonical, gh-free PR linkage for PR number N: merged specs whose squash-merge subject carries `(#N)`, plus review findings tagged `from-review:PR-N`.
 - `aida://batch/{name}` *(template)* — progress buckets (Shipped / In flight / Working now / Remaining) for the `batch:<name>` tag set (mirrors `aida queue progress --batch`).
+- `aida://schema/{object}` *(template)* — per-object schema detail (mirrors `aida schema <object> --json`); `requirement` is reflection-derived field + enum detail, other catalog kinds return a detail-pending stub (TASK-715).
 
-The two `{…}` URIs are **resource templates** (advertised on `resources/templates/list`); the `resources/read` handler matches them by prefix and parses the tail (`aida://pr/<n>`, `aida://batch/<name>`).
+The `{…}` URIs are **resource templates** (advertised on `resources/templates/list`); the `resources/read` handler matches them by prefix and parses the tail (`aida://pr/<n>`, `aida://batch/<name>`, `aida://schema/<object>`).
 
-> **Schemas:** all 57 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
+> **Schemas:** all 58 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
 
 ## How to connect (minimum viable)
 
@@ -225,7 +228,7 @@ Different agent types have different conventions for invoking AIDA workflows (th
 
 **Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. If you don't know the slash/skill name for your agent type, run the CLI verb directly. It works for every agent type.
 
-**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 57 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph and queue operations; use CLI for orchestration verbs that manage live process state (`aida session start`, `aida pr ship`, and the actual launch behind `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
+**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 58 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph and queue operations; use CLI for orchestration verbs that manage live process state (`aida session start`, `aida pr ship`, and the actual launch behind `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
 
 ## What's in flight / known rough edges
 

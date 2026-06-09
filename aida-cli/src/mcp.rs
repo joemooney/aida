@@ -1044,6 +1044,9 @@ impl<'a> McpServer<'a> {
             "fetch" => self.tool_fetch(&arguments),
             "pull" => self.tool_pull(&arguments),
 
+            // TASK-715: storable-substrate introspection. trace:TASK-715
+            "schema" => self.tool_schema(&arguments),
+
             _ => Err(format!("Unknown tool: {}", tool_name)),
         };
 
@@ -1115,6 +1118,20 @@ impl<'a> McpServer<'a> {
                         "name": "Session leases",
                         "description": "Active scoped session leases (who holds what right now)",
                         "mimeType": "text/plain"
+                    },
+                    // TASK-715: the storable-substrate schema as a resource — the
+                    // catalog of storable object kinds an agent can read to
+                    // discover the shape natively (mirrors `aida schema --json`).
+                    // Per-object detail is the `aida://schema/{object}` template
+                    // below. Backs onto `crate::schema::catalog_json` (the same
+                    // value the CLI emits) — no subprocess to `aida`. Body is the
+                    // pretty JSON carried in the `text/plain` envelope all AIDA
+                    // resources use. trace:TASK-715
+                    {
+                        "uri": "aida://schema",
+                        "name": "Storable-object schema (catalog)",
+                        "description": "Catalog of storable object kinds (mirrors `aida schema --json`); per-object field/enum detail via aida://schema/{object}",
+                        "mimeType": "text/plain"
                     }
                 ]
             }),
@@ -1143,6 +1160,18 @@ impl<'a> McpServer<'a> {
                         "name": "Batch progress",
                         "description": "Progress buckets for the batch:<name> tag set",
                         "mimeType": "text/plain"
+                    },
+                    // TASK-715: per-object schema detail. `aida://schema/requirement`
+                    // returns the reflection-derived field table + the four
+                    // controlled-vocabulary enums (status/type/priority/relationship)
+                    // in on-the-wire token form; other catalog kinds return a
+                    // detail-pending stub. Mirrors `aida schema <object> --json`.
+                    // trace:TASK-715
+                    {
+                        "uriTemplate": "aida://schema/{object}",
+                        "name": "Storable-object schema (detail)",
+                        "description": "Per-object field + controlled-vocabulary detail (mirrors `aida schema <object> --json`; Requirement is reflection-derived)",
+                        "mimeType": "text/plain"
                     }
                 ]
             }),
@@ -1162,8 +1191,14 @@ impl<'a> McpServer<'a> {
             "aida://requirements/tree" => self.resource_requirements_tree(),
             "aida://queue/in-flight" => self.resource_queue_in_flight(),
             "aida://session/leases" => self.resource_session_leases(),
+            // TASK-715: `aida://schema` (exact) is the catalog; the
+            // `aida://schema/<object>` template is matched below after the
+            // exact-URI cases so the bare catalog URI wins. trace:TASK-715
+            "aida://schema" => self.resource_schema_catalog(),
             _ => {
-                if let Some(n) = uri.strip_prefix("aida://pr/") {
+                if let Some(object) = uri.strip_prefix("aida://schema/") {
+                    self.resource_schema_object(object)
+                } else if let Some(n) = uri.strip_prefix("aida://pr/") {
                     self.resource_pr(n)
                 } else if let Some(name) = uri.strip_prefix("aida://batch/") {
                     self.resource_batch(name)
@@ -4585,6 +4620,34 @@ impl<'a> McpServer<'a> {
         ))
     }
 
+    /// TASK-715: `schema` tool — read-only introspection of the storable
+    /// substrate for MCP clients that consume tools rather than resources. With
+    /// no `object`, returns the storable-object catalog; with `object`, returns
+    /// that object's detail (Requirement = reflection-derived field table + the
+    /// four controlled-vocabulary enums; other catalog kinds = detail-pending
+    /// stub). Mirrors `aida schema [<object>] --json` and the
+    /// `aida://schema[/{object}]` resources — all back onto
+    /// `crate::schema::{catalog_json, object_json}` so the surfaces can't drift.
+    /// trace:TASK-715 | ai:claude
+    fn tool_schema(&self, args: &Value) -> Result<String, String> {
+        let object = args
+            .get("object")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let value = match object {
+            None => crate::schema::catalog_json(),
+            Some(name) => crate::schema::object_json(name).ok_or_else(|| {
+                format!(
+                    "Unknown schema object: {} (omit `object` for the catalog of storable kinds)",
+                    name
+                )
+            })?,
+        };
+        serde_json::to_string_pretty(&value)
+            .map_err(|e| format!("failed to serialize schema: {}", e))
+    }
+
     // ========================================================================
     // Resource implementations
     // ========================================================================
@@ -4740,6 +4803,30 @@ impl<'a> McpServer<'a> {
             ));
         }
         Ok(output)
+    }
+
+    /// `aida://schema` — the storable-object catalog as pretty JSON. Mirrors
+    /// `aida schema --json`; backs onto `crate::schema::catalog_json` so the
+    /// MCP surface can't drift from the CLI. trace:TASK-715 | ai:claude
+    fn resource_schema_catalog(&self) -> Result<String, String> {
+        serde_json::to_string_pretty(&crate::schema::catalog_json())
+            .map_err(|e| format!("failed to serialize schema catalog: {}", e))
+    }
+
+    /// `aida://schema/{object}` — per-object schema detail as pretty JSON.
+    /// `requirement` returns the reflection-derived field table + the four
+    /// controlled-vocabulary enums; other catalog kinds return a
+    /// detail-pending stub; an unknown name is a -32602 error. Mirrors
+    /// `aida schema <object> --json`. trace:TASK-715 | ai:claude
+    fn resource_schema_object(&self, object: &str) -> Result<String, String> {
+        match crate::schema::object_json(object) {
+            Some(v) => serde_json::to_string_pretty(&v)
+                .map_err(|e| format!("failed to serialize schema for {}: {}", object, e)),
+            None => Err(format!(
+                "Unknown schema object: {} (try `aida://schema` for the catalog)",
+                object
+            )),
+        }
     }
 
     /// `aida://pr/{n}` — git-canonical, gh-free PR linkage for PR number N.
@@ -5354,7 +5441,10 @@ pub fn tool_min_profile(tool_name: &str) -> McpProfile {
         | "usage_query"
         | "db_sync"
         | "fetch"
-        | "pull" => McpProfile::ReadOnly,
+        | "pull"
+        // TASK-715: `schema` is a pure read of the (reflection-derived)
+        // storable-substrate shape — no store access, no mutation. trace:TASK-715
+        | "schema" => McpProfile::ReadOnly,
 
         // ---- Coordination-substrate writes (coordination tier) ----
         "add_comment" | "add_relationship" | "send_message" | "post_punt" | "resolve_punt"
@@ -6895,6 +6985,25 @@ fn workflow_tool_descriptors() -> Value {
             },
             "outputSchema": text_envelope_output_schema(
                 "a note explaining the peek plus a `Run:` block with the `aida pull …` command."
+            )
+        },
+        // ---- Schema introspection (TASK-715) ----
+        {
+            "name": "schema",
+            // trace:TASK-715 | ai:claude
+            "description": "Introspect AIDA's storable substrate, mirroring `aida schema [<object>] --json`. With no `object`, returns the catalog of storable object kinds. With `object` (e.g. `requirement`), returns that object's detail — for Requirement, the reflection-derived field table plus the four controlled-vocabulary enums (status/type/priority/relationship) in their on-the-wire token form (a paste-ready cheat-sheet for `--status` / `--type` / `--priority` / relationship-type arguments). The same data is also addressable as the `aida://schema` / `aida://schema/{object}` resources. Reflection-derived — never hand-maintained — so it can't drift from `models.rs`.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "description": "Optional storable-object kind to detail (e.g. `requirement`). Omit for the catalog of kinds. Case-insensitive.",
+                        "example": "requirement"
+                    }
+                }
+            },
+            "outputSchema": text_envelope_output_schema(
+                "pretty-printed JSON. Catalog form: `{ objects: [{ name, description }] }`. Requirement detail: `{ object: \"Requirement\", fields: [{ name, type, optional }], enums: { status, type, priority, relationship } }`. Other catalog kinds return a `{ object, description, detail: \"pending\", note }` stub."
             )
         }
     ])
