@@ -118,8 +118,11 @@ impl Hlc {
             state.last_wall_time_ms = physical;
             state.last_counter = 0;
         } else {
-            // Wall clock hasn't advanced (same ms or skew) — increment counter
-            state.last_counter += 1;
+            // Wall clock hasn't advanced (same ms or skew) — increment counter.
+            // saturating_add so a pathological burst (>u32::MAX events in one ms)
+            // can never panic (debug) or wrap to 0 (release) and break
+            // monotonicity. trace:TASK-712
+            state.last_counter = state.last_counter.saturating_add(1);
         }
 
         HlcTimestamp {
@@ -141,15 +144,17 @@ impl Hlc {
             state.last_wall_time_ms = physical;
             state.last_counter = 0;
         } else if remote.wall_time_ms > state.last_wall_time_ms {
-            // Remote is ahead — adopt its wall time
+            // Remote is ahead — adopt its wall time. saturating_add guards
+            // against a remote counter == u32::MAX. trace:TASK-712
             state.last_wall_time_ms = remote.wall_time_ms;
-            state.last_counter = remote.counter + 1;
+            state.last_counter = remote.counter.saturating_add(1);
         } else if state.last_wall_time_ms > remote.wall_time_ms {
-            // We're ahead — just increment our counter
-            state.last_counter += 1;
+            // We're ahead — just increment our counter. trace:TASK-712
+            state.last_counter = state.last_counter.saturating_add(1);
         } else {
-            // Same wall time — take max counter + 1
-            state.last_counter = std::cmp::max(state.last_counter, remote.counter) + 1;
+            // Same wall time — take max counter + 1 (saturating). trace:TASK-712
+            state.last_counter =
+                std::cmp::max(state.last_counter, remote.counter).saturating_add(1);
         }
 
         HlcTimestamp {
@@ -219,5 +224,33 @@ mod tests {
         let clock = Hlc::new(0); // centralized mode
         let ts = clock.now();
         assert_eq!(ts.node_id, 0);
+    }
+
+    // trace:TASK-712 — receiving a remote whose counter is at u32::MAX must not
+    // panic (debug overflow) nor wrap to 0 (release) and break monotonicity.
+    #[test]
+    fn test_receive_remote_counter_at_max_does_not_overflow() {
+        let clock = Hlc::new(7);
+        // Force the local clock's wall time to match the remote so we take the
+        // "same wall time — max(counter)+1" branch with a maxed remote counter.
+        let now_ms = Utc::now().timestamp_millis();
+        let remote = HlcTimestamp::new(now_ms, u32::MAX, 11);
+        let ts = clock.receive(&remote);
+        // saturating_add clamps at u32::MAX rather than wrapping/panicking.
+        assert_eq!(ts.counter, u32::MAX);
+        assert!(ts.wall_time_ms >= remote.wall_time_ms);
+    }
+
+    // trace:TASK-712 — the "remote is ahead" branch also guards a maxed counter.
+    #[test]
+    fn test_receive_future_remote_counter_at_max_does_not_overflow() {
+        let clock = Hlc::new(7);
+        // Remote wall time well in the future so we take the "adopt remote wall
+        // time" branch, with a maxed remote counter.
+        let future_ms = Utc::now().timestamp_millis() + 1_000_000;
+        let remote = HlcTimestamp::new(future_ms, u32::MAX, 11);
+        let ts = clock.receive(&remote);
+        assert_eq!(ts.wall_time_ms, future_ms);
+        assert_eq!(ts.counter, u32::MAX);
     }
 }

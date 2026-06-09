@@ -130,10 +130,43 @@ impl CachedGitBackend {
     /// `delete_requirement` succeed. Best-effort: if git HEAD can't be read
     /// (auto_commit disabled, not in a git repo) we leave the SHA alone and
     /// the cache will be considered fresh until a real commit happens.
-    fn restamp_head(&self) {
+    ///
+    /// HAZARD this guards (TASK-712): a long-lived `CachedGitBackend` whose
+    /// store branch was advanced by an EXTERNAL `git pull` (without reopening
+    /// the backend) holds a cache that is stale — it is missing the pulled rows.
+    /// A single-row write then upserts just the one written row and, if we
+    /// blindly stamped the post-write HEAD, would mark the cache *fresh* while
+    /// the pulled rows are still absent — they'd stay invisible until the next
+    /// HEAD move. The single-row write paths do NOT call `ensure_cache_fresh`
+    /// first (they are write-through, not read-then-write), so we cannot assume
+    /// freshness here.
+    ///
+    /// Guard: only advance the recorded SHA when the cache was already current
+    /// with the PRE-write HEAD (`pre_write_head`). If it was stale (recorded SHA
+    /// differs, e.g. an external pull moved HEAD underneath us), we instead
+    /// CLEAR the recorded SHA — exactly the "mark stale" signal used on a cache
+    /// upsert failure — so the next read does a full rebuild from the store and
+    /// picks up the pulled rows. This trades one extra rebuild for correctness.
+    /// trace:TASK-712
+    fn restamp_head(&self, pre_write_head: &str) {
         let head = self.current_head_sha();
-        if !head.is_empty() {
+        if head.is_empty() {
+            return;
+        }
+        let recorded = self.cache.source_head_sha().ok().flatten();
+        // Fresh iff the cache was recorded at the pre-write HEAD (the write's
+        // own commit then advanced HEAD from pre_write_head to `head`). A
+        // recorded SHA that is neither the pre-write HEAD nor absent means the
+        // cache never ingested some externally-committed state → don't claim
+        // freshness; force a rebuild.
+        let was_current = match recorded.as_deref() {
+            None => true,                   // first stamp / freshly rebuilt
+            Some(s) => s == pre_write_head, // unchanged since we last freshened
+        };
+        if was_current {
             let _ = self.cache.set_source_head_sha(&head);
+        } else {
+            let _ = self.cache.set_source_head_sha("");
         }
     }
 
@@ -145,6 +178,9 @@ impl CachedGitBackend {
     /// from the store. Returns the count whose YAML actually changed.
     /// trace:BUG-425 | ai:claude
     pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
+        // Capture HEAD BEFORE the write so restamp_head can tell our own commit
+        // apart from an external pull that moved HEAD underneath us. trace:TASK-712
+        let pre_write_head = self.current_head_sha();
         let n = self.inner.bulk_update(requirements, commit_subject)?;
         let mut cache_ok = true;
         for req in requirements {
@@ -158,7 +194,7 @@ impl CachedGitBackend {
             }
         }
         if cache_ok {
-            self.restamp_head();
+            self.restamp_head(&pre_write_head);
         } else {
             let _ = self.cache.set_source_head_sha("");
         }
@@ -210,6 +246,8 @@ impl DatabaseBackend for CachedGitBackend {
     }
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
+        // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        let pre_write_head = self.current_head_sha();
         let added = self.inner.add_requirement(requirement)?;
         if let Err(e) = self.cache.upsert_requirement(&added) {
             // Cache write failure is non-fatal — mark stale by clearing the
@@ -217,42 +255,48 @@ impl DatabaseBackend for CachedGitBackend {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
-            self.restamp_head();
+            self.restamp_head(&pre_write_head);
         }
         Ok(added)
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
+        // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        let pre_write_head = self.current_head_sha();
         self.inner.update_requirement(requirement)?;
         if let Err(e) = self.cache.upsert_requirement(requirement) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
-            self.restamp_head();
+            self.restamp_head(&pre_write_head);
         }
         Ok(())
     }
 
     fn update_requirement_versioned(&self, requirement: &Requirement) -> Result<UpdateResult> {
+        // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        let pre_write_head = self.current_head_sha();
         let result = self.inner.update_requirement_versioned(requirement)?;
         if matches!(result, UpdateResult::Success) {
             if let Err(e) = self.cache.upsert_requirement(requirement) {
                 let _ = self.cache.set_source_head_sha("");
                 eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
             } else {
-                self.restamp_head();
+                self.restamp_head(&pre_write_head);
             }
         }
         Ok(result)
     }
 
     fn delete_requirement(&self, id: &Uuid) -> Result<()> {
+        // trace:TASK-712 — capture HEAD before the write (see restamp_head).
+        let pre_write_head = self.current_head_sha();
         self.inner.delete_requirement(id)?;
         if let Err(e) = self.cache.delete_requirement(id) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache delete failed, cache marked stale: {}", e);
         } else {
-            self.restamp_head();
+            self.restamp_head(&pre_write_head);
         }
         Ok(())
     }
@@ -393,6 +437,52 @@ mod tests {
             })
             .unwrap();
         assert_eq!(archived.len(), 3, "cache reflects the bulk archive");
+    }
+
+    // trace:TASK-712 — a long-lived backend whose store HEAD was advanced by an
+    // external writer (simulating a `git pull`) must NOT lose the externally
+    // added rows when it next does a local write. Before the fix, restamp_head
+    // blindly stamped the post-write HEAD as fresh, hiding the external row;
+    // now it detects the pre-write HEAD drift and marks the cache stale so the
+    // next read rebuilds and surfaces every committed row.
+    #[test]
+    fn local_write_after_external_commit_does_not_hide_pulled_rows() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        // A REAL git repo so HEAD advances on each commit — the staleness key
+        // (and thus the restamp_head guard) is a no-op without one. trace:TASK-712
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+
+        // Long-lived backend: add one row, cache fresh at HEAD-A.
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "a"))
+            .unwrap();
+        assert_eq!(backend.cache().requirement_count().unwrap(), 1);
+
+        // External writer (a second backend on the same store, no shared cache)
+        // commits another row, advancing the store HEAD to HEAD-B underneath the
+        // long-lived backend. Stands in for an external `git pull`.
+        {
+            let external = GitBackend::new(&store_root).unwrap();
+            external
+                .add_requirement(sample_req("FR-1-002", "b (external)"))
+                .unwrap();
+        }
+
+        // Long-lived backend does a LOCAL write (HEAD advances to HEAD-C).
+        backend
+            .add_requirement(sample_req("FR-1-003", "c"))
+            .unwrap();
+
+        // A subsequent read must surface ALL THREE rows — the external one is
+        // not silently dropped. (ensure_cache_fresh rebuilds because restamp_head
+        // cleared the recorded SHA when it saw the pre-write HEAD had drifted.)
+        let all = backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(all.len(), 3, "external row must not be hidden, got {all:?}");
     }
 
     #[test]
