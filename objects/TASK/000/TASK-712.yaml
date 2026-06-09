@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:14:10.608373771Z
-modified_at: 2026-06-09T01:14:10.608373771Z
+modified_at: 2026-06-09T02:34:08.899973881Z
 req_type: Task
 tags:
 - batch:quality-sweep-lows
 - from-review:quality-sweep
 - robustness
 - tech-debt
+comments:
+- id: 019eaa3a-ec83-7432-b98a-eb82084e3d40
+  author: joe
+  content: Commit da209bd9e references this requirement
+  created_at: 2026-06-09T02:34:08.899973881Z
+  modified_at: 2026-06-09T02:34:08.899973881Z
