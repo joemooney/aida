@@ -1,0 +1,23 @@
+id: 019eaa32-da48-7510-9830-e536b07fda03
+spec_id: TASK-718
+agreed_id: TASK-718
+title: 'MCP queue_add/queue_rework always-refuse after BUG-480 — decide: remove from surface or keep as refuse-with-guidance'
+description: |-
+  BUG-480 gated the MCP tools tool_queue_add / tool_queue_rework to refuse UNCONDITIONALLY (queuing for execution is an advisor-authority act; MCP is never advisor authority). Correct security-wise, but it leaves two advertised MCP tools that now ALWAYS return an error. Decide the surface disposition:
+
+  (a) REMOVE queue_add + queue_rework from the MCP tool surface entirely — do not advertise tools that always fail; update docs/agents/cross-agent-onboarding.md + the tool count + dispatch. Cleaner contract.
+  (b) KEEP them as refuse-WITH-guidance — the refusal message already points the caller at add_requirement (lands Draft for advisor triage) + the CLI; an advertised-but-gated tool documents the boundary explicitly.
+
+  Lean: (b) if the refusal genuinely aids agent onboarding; (a) if "advertised tool that always errors" is the worse smell. Either way the doc-consistency gate must reflect the choice. Surfaced by the BUG-480 fix, 2026-06-08.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T02:25:19.944564150Z
+modified_at: 2026-06-09T02:25:19.944564150Z
+req_type: Task
+tags:
+- design-decision
+- from-bug:BUG-480
+- from-session:2026-06-08
+- mcp
