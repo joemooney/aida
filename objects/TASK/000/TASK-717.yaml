@@ -6,12 +6,12 @@ description: |-
   `aida doctor --heal --category orphan-branches` only deletes LOCAL orphan branches; stale REMOTE branches (origin/*) accumulate and must be pruned manually. This session I swept ~250 remote branches down to the protected/in-use set by hand (per-branch remote-branch deletion), using a squash-aware verification: safe-to-delete iff the spec is Completed/Rejected, OR the branch HEAD is an ancestor of origin/main, OR origin/main carries a commit referencing the spec (SPEC-ID); EXCLUDE open-PR branches and protected refs (main, master, aida-store); KEEP any branch with genuinely-unique unmerged content (e.g. spock-dev had an unmerged migration-guide).
 
   Add this to aida doctor: a remote-branch category that surfaces stale origin branches and verify-and-prunes them with the SAME safety checks. Dry-run by default (read-only list with per-branch verdict + reason); an explicit confirm flag to actually delete; never touch open-PR or protected branches; never delete a branch with unique unmerged commits (flag it for the operator instead). Mirror the squash-aware classification used above (it is the right safety model). Closes the "doctor heal is local-only" gap surfaced 2026-06-08.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:25:05.466733823Z
-modified_at: 2026-06-09T04:17:54.651164783Z
+modified_at: 2026-06-09T04:46:01.991208631Z
 req_type: Task
 tags:
 - cleanup
@@ -19,3 +19,15 @@ tags:
 - from-session:2026-06-08
 - git
 - maintenance
+history:
+- id: 019eaab3-ad6f-7f93-afba-b4abc759d42f
+  author: aida-auto-bump
+  timestamp: 2026-06-09T04:46:02.607713006Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T04:46:01.991208631Z
+  completion_sha: 4b6e506d0c9cb21c52f95ee308dd0349088176a8
