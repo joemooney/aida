@@ -20866,6 +20866,7 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             thread,
             in_reply_to,
             from,
+            urgent,
         } => {
             let recipient = if *broadcast {
                 Recipient::Broadcast
@@ -20886,22 +20887,49 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 in_reply_to: in_reply_to.clone(),
                 body: body.clone(),
+                urgent: *urgent,
             };
             mailbox_store::write_message(project_root, &msg)?;
+            let flag = if *urgent {
+                format!(" {}", "[urgent]".red().bold())
+            } else {
+                String::new()
+            };
             println!(
-                "{} sent {} (thread {})",
+                "{} sent {} (thread {}){}",
                 "✉".green(),
                 id.cyan(),
-                thread_id.dimmed()
+                thread_id.dimmed(),
+                flag
             );
             Ok(())
         }
-        MailboxCommand::Inbox { agent } => {
-            let who = agent.clone().unwrap_or_else(|| current_user_id(None));
+        MailboxCommand::Inbox { agent, all } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
-            let all = merge_dedup(&local, &canonical);
-            let inbox = inbox_for(&who, &all);
+            let merged = merge_dedup(&local, &canonical);
+
+            // Operator-wide read-only view: every message across all agents.
+            if *all {
+                let mut msgs: Vec<&Message> = merged.iter().collect();
+                msgs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+                if msgs.is_empty() {
+                    println!("{} no messages", "✉".dimmed());
+                    return Ok(());
+                }
+                println!(
+                    "{} {}",
+                    "All messages".bold(),
+                    format!("({})", msgs.len()).dimmed()
+                );
+                for m in msgs {
+                    print_mailbox_line(m);
+                }
+                return Ok(());
+            }
+
+            let who = agent.clone().unwrap_or_else(|| current_user_id(None));
+            let inbox = inbox_for(&who, &merged);
             if inbox.is_empty() {
                 println!("{} inbox empty for {}", "✉".dimmed(), who.cyan());
                 return Ok(());
@@ -20911,8 +20939,49 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 format!("Inbox for {who}").bold(),
                 format!("({})", inbox.len()).dimmed()
             );
-            for m in inbox {
+            for m in &inbox {
                 print_mailbox_line(m);
+            }
+            // Reading marks this agent's inbox seen up to its newest message,
+            // so unread / urgent-unread surfacing clears. trace:STORY-539
+            if let Some(newest) = inbox.iter().map(|m| m.timestamp).max() {
+                let _ = mailbox_store::set_watermark(project_root, &who, newest);
+            }
+            Ok(())
+        }
+        MailboxCommand::List => {
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let merged = merge_dedup(&local, &canonical);
+            let watermarks = mailbox_store::read_all_watermarks(project_root)?;
+            let summaries = aida_core::mailbox::agent_summaries(&merged, &watermarks);
+            if summaries.is_empty() {
+                println!("{} no agents have mail", "✉".dimmed());
+                return Ok(());
+            }
+            println!("{}", "Mailbox overview".bold());
+            for s in &summaries {
+                let when = chrono::DateTime::from_timestamp_millis(s.latest_ts)
+                    .map(|dt| humanize_relative(dt.with_timezone(&chrono::Utc)))
+                    .unwrap_or_else(|| "?".to_string());
+                let unread = if s.unread > 0 {
+                    format!("{} unread", s.unread).cyan().to_string()
+                } else {
+                    "all read".dimmed().to_string()
+                };
+                let urgent = if s.urgent_unread > 0 {
+                    format!(" {}", format!("⚠ {} urgent", s.urgent_unread).red().bold())
+                } else {
+                    String::new()
+                };
+                println!(
+                    "  {:<14} {} total · {}{}  {}",
+                    s.agent.yellow().bold(),
+                    s.total,
+                    unread,
+                    urgent,
+                    when.dimmed()
+                );
             }
             Ok(())
         }
@@ -20966,18 +21035,34 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
     }
 }
 
-/// One mailbox message as a compact line: short-id, from → to, body.
+/// One mailbox message as a compact line: short-id, urgency flag, originator →
+/// recipient, local time, body. trace:STORY-539 | ai:claude
 fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     let to = match &m.to {
         aida_core::mailbox::Recipient::Agent(a) => a.clone(),
         aida_core::mailbox::Recipient::Broadcast => "all".to_string(),
     };
     let short = m.id.split('-').next().unwrap_or(m.id.as_str());
+    // Local time per the local-time convention (UTC only on disk).
+    let when = chrono::DateTime::from_timestamp_millis(m.timestamp)
+        .map(|dt| {
+            dt.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string()
+        })
+        .unwrap_or_else(|| "?".to_string());
+    let flag = if m.urgent {
+        format!("{} ", "⚠".red().bold())
+    } else {
+        String::new()
+    };
     println!(
-        "  {} {} → {}  {}",
+        "  {}{} {} → {}  {}  {}",
+        flag,
         short.dimmed(),
         m.from.cyan(),
         to.yellow(),
+        when.dimmed(),
         m.body
     );
 }
@@ -56487,6 +56572,22 @@ fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
     .unwrap_or(0)
 }
 
+/// STORY-539: count URGENT unread mailbox messages for the current shell user,
+/// for the statusline nag. Reads only the LOCAL fast layer (`.aida/mailbox/`)
+/// plus the local read-watermark — no git / orphan-store I/O — to honor the
+/// statusline's cache-only contract. Returns `None` when there is no mailbox
+/// dir at all (nothing to count, stay silent). trace:STORY-539 | ai:claude
+fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
+    let local = mailbox_store::read_local_messages(project_root).ok()?;
+    if local.is_empty() {
+        return None;
+    }
+    let who = current_user_id(None);
+    let watermark = mailbox_store::read_watermark(project_root, &who);
+    let (_unread, urgent) = aida_core::mailbox::unread_counts(&who, &local, watermark);
+    Some(urgent)
+}
+
 // ─── STORY-127: Scope-B runtime anti-pattern detectors ──────────────────
 //
 // Each surface the user TYPES (`aida pull`, `git pull` (via the code leg),
@@ -57160,6 +57261,16 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         let inbox_depth = read_draft_inbox_depth(&cache_path);
         if inbox_depth > 0 {
             parts.push(format!("inbox:{}", inbox_depth).cyan().to_string());
+        }
+    }
+    // STORY-539: surface URGENT unread mailbox messages so an out-of-band
+    // escalation/"stop" doesn't sit unseen. Only urgent-unread is loud — a
+    // normal informational message stays quiet (the mailbox is a deliberately
+    // lightweight channel). Identity is this shell's user id (BUG-89), matching
+    // `aida mailbox inbox`. trace:STORY-539 | ai:claude
+    if let Some(urgent) = read_urgent_unread_count(&project_root) {
+        if urgent > 0 {
+            parts.push(format!("⚠ mail:{}", urgent).red().bold().to_string());
         }
     }
     // Cache freshness: only surface non-fresh states. Fresh is the boring
@@ -65665,6 +65776,7 @@ mod mailbox_digest_autotrigger_tests {
             timestamp: 1,
             in_reply_to: None,
             body: format!("body-{id}"),
+            urgent: false,
         }
     }
 

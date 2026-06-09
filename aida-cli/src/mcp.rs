@@ -2002,6 +2002,11 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(str::to_string)
             .unwrap_or_else(|| id.clone());
+        // STORY-539: light urgency flag, mirroring the CLI `--urgent`.
+        let urgent = args
+            .get("urgent")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let msg = Message {
             id: id.clone(),
             thread_id: thread_id.clone(),
@@ -2013,6 +2018,7 @@ impl<'a> McpServer<'a> {
                 .and_then(|v| v.as_str())
                 .map(str::to_string),
             body: body.to_string(),
+            urgent,
         };
         crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
         Ok(format!("Message sent: {id} (thread {thread_id})"))
@@ -2046,6 +2052,7 @@ impl<'a> McpServer<'a> {
                     "timestamp": m.timestamp,
                     "in_reply_to": m.in_reply_to,
                     "body": m.body,
+                    "urgent": m.urgent,
                 })
             })
             .collect();
@@ -5803,7 +5810,8 @@ pub fn tool_descriptors() -> Value {
                     "broadcast": { "type": "boolean", "description": "Send to every agent instead of a single recipient.", "example": true },
                     "thread": { "type": "string", "description": "Attach to an existing thread id (default: start a new thread).", "example": "0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
                     "in_reply_to": { "type": "string", "description": "Id of the message this replies to.", "example": "0193a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
-                    "from": { "type": "string", "description": "Sender id (default: this server's agent/user identity).", "example": "claude" }
+                    "from": { "type": "string", "description": "Sender id (default: this server's agent/user identity).", "example": "claude" },
+                    "urgent": { "type": "boolean", "description": "Flag as an urgent escalation so it is surfaced out-of-band (statusline nag) instead of sitting unseen. Lightweight: normal vs urgent only.", "example": true }
                 },
                 "required": ["body"]
             },
@@ -5821,7 +5829,7 @@ pub fn tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON `{agent, count, messages:[{id,thread_id,from,to,timestamp,in_reply_to,body}]}`."
+                "pretty-printed JSON `{agent, count, messages:[{id,thread_id,from,to,timestamp,in_reply_to,body,urgent}]}`."
             )
         },
         {

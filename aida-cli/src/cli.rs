@@ -1661,13 +1661,30 @@ pub enum MailboxCommand {
         /// Override the sender id (default: this shell's agent/user identity).
         #[clap(long)]
         from: Option<String>,
+
+        /// Flag this as an urgent escalation ("stop"/heads-up) so it is
+        /// surfaced out-of-band (statusline nag) instead of sitting unseen in
+        /// a purely-chronological inbox. Lightweight: normal vs urgent only.
+        #[clap(long)]
+        urgent: bool,
     },
 
     /// Show an agent's inbox: messages addressed to it + broadcasts, oldest-first.
+    /// Reading marks the inbox seen (clears unread); `--all` is the operator-wide
+    /// read-only view across every agent.
     Inbox {
         /// Whose inbox (default: this shell's agent/user identity).
         agent: Option<String>,
+
+        /// Operator-wide view: every message across all agents, oldest-first,
+        /// with its recipient shown. Read-only — does not mark anything seen.
+        #[clap(long, conflicts_with = "agent")]
+        all: bool,
     },
+
+    /// Operator overview: agents with mail waiting + unread / urgent-unread
+    /// counts, most-recent-activity first.
+    List,
 
     /// Show a full conversation thread, oldest-first.
     Thread {

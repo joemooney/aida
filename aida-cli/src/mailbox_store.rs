@@ -103,6 +103,69 @@ pub(crate) fn digest_local_to_canonical(store_root: &Path, project_root: &Path) 
     Ok(written)
 }
 
+/// Per-agent read-watermark directory: `<project_root>/.aida/mailbox/.read/`.
+/// One file per agent (`<agent>.txt`) holding the timestamp (epoch millis) of
+/// the newest message that agent has seen. Lets the operator overview compute
+/// unread counts without mutating the append-only message model. Lives under
+/// the existing `.aida/*` deny-by-default gitignore — local runtime state.
+/// trace:STORY-539 | ai:claude
+fn read_marker_dir(project_root: &Path) -> PathBuf {
+    mailbox_dir(project_root).join(".read")
+}
+
+/// Read one agent's read-watermark (epoch millis of newest seen message), or
+/// `None` if the agent has never read its inbox.
+pub(crate) fn read_watermark(project_root: &Path, agent: &str) -> Option<i64> {
+    let path = read_marker_dir(project_root).join(format!("{}.txt", sanitize_id(agent)));
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| s.trim().parse::<i64>().ok())
+}
+
+/// Set one agent's read-watermark to `ts` (epoch millis). Monotonic: never
+/// lowers an existing watermark, so re-reading an older view doesn't "un-read"
+/// newer messages. trace:STORY-539 | ai:claude
+pub(crate) fn set_watermark(project_root: &Path, agent: &str, ts: i64) -> Result<()> {
+    let dir = read_marker_dir(project_root);
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating read-marker dir {}", dir.display()))?;
+    let path = dir.join(format!("{}.txt", sanitize_id(agent)));
+    let current = read_watermark(project_root, agent).unwrap_or(i64::MIN);
+    if ts <= current {
+        return Ok(());
+    }
+    aida_core::write_atomic(&path, ts.to_string().as_bytes())
+        .with_context(|| format!("writing read-marker {}", path.display()))?;
+    Ok(())
+}
+
+/// Read every recorded read-watermark, keyed by agent id. Absent dir → empty.
+pub(crate) fn read_all_watermarks(
+    project_root: &Path,
+) -> Result<std::collections::HashMap<String, i64>> {
+    let dir = read_marker_dir(project_root);
+    let mut out = std::collections::HashMap::new();
+    if !dir.exists() {
+        return Ok(out);
+    }
+    for entry in std::fs::read_dir(&dir).with_context(|| format!("reading {}", dir.display()))? {
+        let path = entry?.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("txt") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if let Some(ts) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| s.trim().parse::<i64>().ok())
+        {
+            out.insert(stem.to_string(), ts);
+        }
+    }
+    Ok(out)
+}
+
 /// Keep a message id safe as a filename component (ids are uuid/HLC strings, but
 /// be defensive against path separators / traversal in a hand-set id).
 fn sanitize_id(id: &str) -> String {
@@ -132,6 +195,7 @@ mod tests {
             timestamp: ts,
             in_reply_to: None,
             body: format!("body-{id}"),
+            urgent: false,
         }
     }
 
@@ -211,5 +275,46 @@ mod tests {
             1
         );
         assert_eq!(read_canonical_messages(store.path()).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn watermark_roundtrips_and_is_monotonic() {
+        // trace:STORY-539 | ai:claude
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        assert_eq!(read_watermark(root, "claude"), None, "never read → None");
+        set_watermark(root, "claude", 50).unwrap();
+        assert_eq!(read_watermark(root, "claude"), Some(50));
+        // A lower value never lowers the watermark.
+        set_watermark(root, "claude", 10).unwrap();
+        assert_eq!(read_watermark(root, "claude"), Some(50));
+        // A higher value advances it.
+        set_watermark(root, "claude", 99).unwrap();
+        assert_eq!(read_watermark(root, "claude"), Some(99));
+    }
+
+    #[test]
+    fn read_all_watermarks_collects_every_agent() {
+        // trace:STORY-539 | ai:claude
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        assert!(read_all_watermarks(root).unwrap().is_empty());
+        set_watermark(root, "claude", 10).unwrap();
+        set_watermark(root, "codex", 20).unwrap();
+        let all = read_all_watermarks(root).unwrap();
+        assert_eq!(all.get("claude"), Some(&10));
+        assert_eq!(all.get("codex"), Some(&20));
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn read_markers_do_not_leak_into_message_reads() {
+        // The `.read/` subdir must not be parsed as messages.
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        write_message(root, &msg("m1", "codex", Recipient::Broadcast, 10)).unwrap();
+        set_watermark(root, "claude", 10).unwrap();
+        let all = read_local_messages(root).unwrap();
+        assert_eq!(all.len(), 1, "read-markers are not messages");
     }
 }
