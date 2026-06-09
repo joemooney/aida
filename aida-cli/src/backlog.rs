@@ -791,6 +791,8 @@ mod tests {
             human_only: false,
             // trace:STORY-522 | ai:claude
             decision_request: None,
+            // trace:STORY-542 | ai:claude
+            interface_changes: None,
             version: 1,
         }
     }

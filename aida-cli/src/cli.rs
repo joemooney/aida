@@ -3313,6 +3313,35 @@ pub enum QueueCommand {
         // trace:BUG-285 TASK-447 | ai:claude
         #[clap(long)]
         skip_pr_check: bool,
+        /// Record a user-facing CLI surface change for the operator digest.
+        /// Repeatable. e.g. `--interface-cli "aida foo — new command"`. The
+        /// deterministic source for `aida digest --audience operator`; absent ⇒
+        /// this spec never appears there. Skips the interactive capture prompt
+        /// when any --interface-* flag is given.
+        // trace:STORY-542 | ai:claude
+        #[clap(long = "interface-cli", value_name = "LINE")]
+        interface_cli: Vec<String>,
+        /// Record a user-facing MCP surface change (new tool, gating, schema).
+        /// Repeatable. See `--interface-cli`.
+        // trace:STORY-542 | ai:claude
+        #[clap(long = "interface-mcp", value_name = "LINE")]
+        interface_mcp: Vec<String>,
+        /// Record a user-facing TUI surface change (keybinding, pane, overlay).
+        /// Repeatable. See `--interface-cli`.
+        // trace:STORY-542 | ai:claude
+        #[clap(long = "interface-tui", value_name = "LINE")]
+        interface_tui: Vec<String>,
+        /// Record some other user-facing interface change (not cli/mcp/tui).
+        /// Repeatable. See `--interface-cli`.
+        // trace:STORY-542 | ai:claude
+        #[clap(long = "interface-other", value_name = "LINE")]
+        interface_other: Vec<String>,
+        /// Explicitly mark this spec as having NO user-facing interface change
+        /// (clippy/refactor/test/internal). Skips the capture prompt and
+        /// records nothing — the spec stays out of the operator digest.
+        // trace:STORY-542 | ai:claude
+        #[clap(long)]
+        no_interface_change: bool,
     },
     /// Pick up a queued item (or scope-cluster of queued items) and launch
     /// claude in a fresh session worktree, with the role + skill routed

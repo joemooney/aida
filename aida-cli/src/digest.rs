@@ -559,6 +559,157 @@ pub fn collect_capabilities(commits: &[CommitRec]) -> CapabilitiesReport {
     report
 }
 
+/// True when any spec completed in the window carries captured
+/// `interface_changes` — i.e. the deterministic Layer-1 source (STORY-542) is
+/// populated and the operator lens should read from it instead of re-inferring
+/// from git commit subjects. trace:STORY-542
+pub fn has_captured_interface_changes(store: &RequirementsStore, opts: &DigestOptions) -> bool {
+    store.requirements.iter().any(|req| {
+        if !matches!(
+            req.status,
+            RequirementStatus::Completed | RequirementStatus::Done
+        ) {
+            return false;
+        }
+        let when = req
+            .implementation_info
+            .as_ref()
+            .and_then(|i| i.completed_at)
+            .unwrap_or(req.modified_at);
+        if when < opts.since || when > opts.until {
+            return false;
+        }
+        req.interface_changes
+            .as_ref()
+            .is_some_and(|ic| !ic.is_empty())
+    })
+}
+
+/// Build the operator capabilities candidate set from the DETERMINISTIC
+/// `interface_changes` captured at spec close (STORY-542), rather than
+/// re-inferring surface deltas from git commit subjects. Only specs completed
+/// in the window with a non-empty `interface_changes` contribute; a spec with
+/// no captured changes (or `Some(empty)` — decided "no impact") is silently
+/// skipped, which is exactly the deterministic noise-filter the operator digest
+/// wants.
+///
+/// `cli`/`tui`/`other` lines bucket by their heuristic surface (a "new
+/// command" line vs a changed-behavior line vs a fix line); `mcp` lines bucket
+/// as changed-behavior since the operator's MCP surface is API-shaped. The
+/// Layer-2 `/aida-digest` skill still value-frames; this just yields the
+/// candidate set deterministically. trace:STORY-542
+pub fn collect_capabilities_from_store(
+    store: &RequirementsStore,
+    opts: &DigestOptions,
+) -> CapabilitiesReport {
+    let mut report = CapabilitiesReport::default();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+
+    // Newest-completed first so the operator sees recent changes at the top.
+    let mut specs: Vec<&Requirement> = store
+        .requirements
+        .iter()
+        .filter(|req| {
+            matches!(
+                req.status,
+                RequirementStatus::Completed | RequirementStatus::Done
+            )
+        })
+        .filter(|req| {
+            let when = req
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completed_at)
+                .unwrap_or(req.modified_at);
+            when >= opts.since && when <= opts.until
+        })
+        .filter(|req| {
+            req.interface_changes
+                .as_ref()
+                .is_some_and(|ic| !ic.is_empty())
+        })
+        .collect();
+    specs.sort_by(|a, b| {
+        let aw = a
+            .implementation_info
+            .as_ref()
+            .and_then(|i| i.completed_at)
+            .unwrap_or(a.modified_at);
+        let bw = b
+            .implementation_info
+            .as_ref()
+            .and_then(|i| i.completed_at)
+            .unwrap_or(b.modified_at);
+        bw.cmp(&aw)
+    });
+
+    // Bucket a single captured surface-line. `dedupe` keeps a spec from
+    // contributing the same line twice across surfaces.
+    let mut push = |surface: CapabilitySurface, line: &str, report: &mut CapabilitiesReport| {
+        let value = strip_spec_ids(line.trim());
+        if value.is_empty() || !seen.insert(value.to_lowercase()) {
+            return;
+        }
+        let change = CapabilityChange { surface, value };
+        match surface {
+            CapabilitySurface::NewCommand => report.new_commands.push(change),
+            CapabilitySurface::ChangedBehavior => report.changed_behaviors.push(change),
+            CapabilitySurface::Fix => report.fixes.push(change),
+            CapabilitySurface::NewSkill => report.new_skills.push(change),
+        }
+    };
+
+    for req in specs {
+        let Some(ic) = req.interface_changes.as_ref() else {
+            continue;
+        };
+        for line in &ic.cli {
+            push(classify_interface_line(line), line, &mut report);
+        }
+        // MCP surface lines are API-shaped — bucket as changed-behavior unless
+        // the line clearly reads as a fix / new tool.
+        for line in &ic.mcp {
+            push(classify_interface_line(line), line, &mut report);
+        }
+        for line in &ic.tui {
+            push(classify_interface_line(line), line, &mut report);
+        }
+        for line in &ic.other {
+            push(classify_interface_line(line), line, &mut report);
+        }
+    }
+    report
+}
+
+/// Heuristically bucket a captured interface-change line (free-form prose
+/// authored by the implementer) into a [`CapabilitySurface`]. Light keyword
+/// cues only — the implementer already decided this line is user-facing, so we
+/// never DROP, we only group. trace:STORY-542
+pub fn classify_interface_line(line: &str) -> CapabilitySurface {
+    let lower = line.to_lowercase();
+    if lower.contains("skill") || lower.contains("slash command") || lower.contains("/aida-") {
+        return CapabilitySurface::NewSkill;
+    }
+    if lower.contains("no longer")
+        || lower.contains("fix")
+        || lower.contains("crash")
+        || lower.contains("panic")
+        || lower.contains("broken")
+    {
+        return CapabilitySurface::Fix;
+    }
+    if lower.contains("new command")
+        || lower.contains("new subcommand")
+        || lower.contains("— new")
+        || lower.contains("- new")
+        || lower.contains("added")
+        || lower.contains("new tool")
+    {
+        return CapabilitySurface::NewCommand;
+    }
+    CapabilitySurface::ChangedBehavior
+}
+
 // ============================================================================
 // Strategic filings — EPICs (and STORYs tagged foundational/strategic) created
 // in the window. Always SPEC-ID-aware (customer rendering strips later).
@@ -1474,11 +1625,19 @@ pub fn render_string(
     let releases = list_release_tags(project_root, opts.since, opts.until);
     let completed = collect_completed(store, opts);
     let commits = scan_commits(project_root, opts.since, opts.until);
-    // The capabilities lens (operator) classifies the FULL window over its own
-    // dev-only filter; the work-narrative sections use the noise filter.
-    // trace:STORY-541
+    // The capabilities lens (operator) prefers the DETERMINISTIC source: when
+    // any in-window completed spec carries captured `interface_changes`
+    // (STORY-542), read the candidate set from those rather than re-inferring
+    // surface deltas from git commit subjects (STORY-541's fallback). Specs
+    // with no captured changes are deterministically absent — no clippy/internal
+    // noise to filter. Falls back to the commit-classifier when nothing has
+    // been captured yet (pre-STORY-542 history). trace:STORY-542 STORY-541
     let capabilities = if opts.audience.is_capabilities_lens() {
-        collect_capabilities(&commits)
+        if has_captured_interface_changes(store, opts) {
+            collect_capabilities_from_store(store, opts)
+        } else {
+            collect_capabilities(&commits)
+        }
     } else {
         CapabilitiesReport::default()
     };
@@ -1972,5 +2131,163 @@ mod tests {
         // Work-narrative section + SPEC-IDs absent.
         assert!(!md.contains("## Major progress"));
         assert!(!md.contains("STORY-99"));
+    }
+
+    // ---- STORY-542: deterministic interface_changes source ----
+
+    fn completed_with_ic(
+        id: &str,
+        ic: aida_core::InterfaceChanges,
+        when: DateTime<Utc>,
+    ) -> Requirement {
+        let mut r = fake_req(id, RequirementType::Story, RequirementStatus::Completed);
+        r.interface_changes = Some(ic);
+        // Put it in the window via implementation_info.completed_at.
+        let mut info = aida_core::ImplementationInfo::default();
+        info.completed_at = Some(when);
+        r.implementation_info = Some(info);
+        r
+    }
+
+    #[test]
+    fn interface_changes_is_empty_semantics() {
+        assert!(aida_core::InterfaceChanges::default().is_empty());
+        let ic = aida_core::InterfaceChanges {
+            cli: vec!["aida foo — new command".into()],
+            ..Default::default()
+        };
+        assert!(!ic.is_empty());
+    }
+
+    #[test]
+    fn classify_interface_line_buckets() {
+        assert_eq!(
+            classify_interface_line("aida mailbox list — new command"),
+            CapabilitySurface::NewCommand
+        );
+        assert_eq!(
+            classify_interface_line("aida agent new: native default now (was bypass)"),
+            CapabilitySurface::ChangedBehavior
+        );
+        assert_eq!(
+            classify_interface_line("no longer crashes on non-ASCII descriptions"),
+            CapabilitySurface::Fix
+        );
+        assert_eq!(
+            classify_interface_line("/aida-digest skill now renders an operator lens"),
+            CapabilitySurface::NewSkill
+        );
+    }
+
+    #[test]
+    fn has_captured_interface_changes_window_and_nonempty() {
+        let now = Utc::now();
+        let opts = opts_at(
+            now - chrono::Duration::days(7),
+            now + chrono::Duration::days(1),
+        );
+        let mut store = RequirementsStore::default();
+
+        // In-window, non-empty → counts.
+        store.requirements.push(completed_with_ic(
+            "STORY-1",
+            aida_core::InterfaceChanges {
+                cli: vec!["aida foo — new command".into()],
+                ..Default::default()
+            },
+            now,
+        ));
+        assert!(has_captured_interface_changes(&store, &opts));
+
+        // Empty captured (decided no-impact) → does NOT count.
+        let mut store2 = RequirementsStore::default();
+        store2.requirements.push(completed_with_ic(
+            "STORY-2",
+            aida_core::InterfaceChanges::default(),
+            now,
+        ));
+        assert!(!has_captured_interface_changes(&store2, &opts));
+
+        // Out of window → does NOT count.
+        let mut store3 = RequirementsStore::default();
+        store3.requirements.push(completed_with_ic(
+            "STORY-3",
+            aida_core::InterfaceChanges {
+                cli: vec!["aida bar — new command".into()],
+                ..Default::default()
+            },
+            now - chrono::Duration::days(30),
+        ));
+        assert!(!has_captured_interface_changes(&store3, &opts));
+    }
+
+    #[test]
+    fn collect_capabilities_from_store_buckets_and_skips_empty() {
+        let now = Utc::now();
+        let opts = opts_at(
+            now - chrono::Duration::days(7),
+            now + chrono::Duration::days(1),
+        );
+        let mut store = RequirementsStore::default();
+
+        store.requirements.push(completed_with_ic(
+            "STORY-10",
+            aida_core::InterfaceChanges {
+                cli: vec!["aida mailbox list — new command (STORY-10)".into()],
+                mcp: vec!["queue_add — now advisor-gated".into()],
+                tui: vec![],
+                other: vec![],
+            },
+            now,
+        ));
+        // No-impact spec — must contribute nothing.
+        store.requirements.push(completed_with_ic(
+            "STORY-11",
+            aida_core::InterfaceChanges::default(),
+            now,
+        ));
+        // A spec with NO interface_changes field at all — also nothing.
+        store.requirements.push(fake_req(
+            "STORY-12",
+            RequirementType::Story,
+            RequirementStatus::Completed,
+        ));
+
+        let report = collect_capabilities_from_store(&store, &opts);
+        // New command bucketed; SPEC-ID stripped.
+        assert_eq!(report.new_commands.len(), 1);
+        assert!(report.new_commands[0].value.contains("aida mailbox list"));
+        assert!(!report.new_commands[0].value.contains("STORY-10"));
+        // MCP gating line is changed-behavior.
+        assert_eq!(report.changed_behaviors.len(), 1);
+        assert!(report.changed_behaviors[0].value.contains("advisor-gated"));
+        // Nothing leaked from the empty / absent specs.
+        assert!(report.fixes.is_empty());
+        assert!(report.new_skills.is_empty());
+    }
+
+    #[test]
+    fn operator_lens_prefers_captured_over_git() {
+        // With captured interface_changes present, render must surface them and
+        // NOT re-derive from commit subjects.
+        let now = Utc::now();
+        let mut opts = opts_at(
+            now - chrono::Duration::days(7),
+            now + chrono::Duration::days(1),
+        );
+        opts.audience = DigestAudience::Operator;
+        let mut store = RequirementsStore::default();
+        store.requirements.push(completed_with_ic(
+            "STORY-20",
+            aida_core::InterfaceChanges {
+                cli: vec!["aida widgets — new command".into()],
+                ..Default::default()
+            },
+            now,
+        ));
+        assert!(has_captured_interface_changes(&store, &opts));
+        let report = collect_capabilities_from_store(&store, &opts);
+        assert_eq!(report.new_commands.len(), 1);
+        assert!(report.new_commands[0].value.contains("aida widgets"));
     }
 }

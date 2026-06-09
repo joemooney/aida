@@ -103,10 +103,18 @@ Add `--out <path>` to write to a file instead of stdout (useful for
 ### Step 3b: Operator lens — apply the Layer-2 value translation
 
 For `--audience operator`, the CLI emits the deterministic **Layer-1 candidate
-set** (run `--format json` to see the raw `capabilities` buckets): dev-noise
-already dropped, commits classified by surface, SPEC-IDs stripped. The CLI cannot
-do the non-deterministic part — judging user-impact and rewriting a dev-task
-subject into value — so that is **your** job before presenting:
+set** (run `--format json` to see the raw `capabilities` buckets). The CLI now
+**prefers a captured source over git inference**: when any spec completed in the
+window carries `interface_changes` recorded at close (`aida queue done`), those
+exact surface-delta lines ARE the candidate set — no clippy/internal noise to
+filter, because the implementer only recorded user-facing changes. When nothing
+in the window has captured `interface_changes` (older history), the CLI falls
+back to classifying commit subjects (dev-noise dropped, surface-bucketed,
+SPEC-IDs stripped).
+
+Either way the CLI cannot do the non-deterministic part — judging user-impact
+and rewriting a dev-task subject into value — so that is **your** job before
+presenting:
 
 - **Re-judge the kept set by user IMPACT, not commit type.** The classifier keeps
   `feat`/`fix` and drops `clippy`/`refactor`/`test`, but a kept commit may still
@@ -123,9 +131,25 @@ subject into value — so that is **your** job before presenting:
   Fixes you'll notice / New skills) and keep SPEC-IDs out.
 
 The deterministic buckets are the floor; your translation is what makes the
-operator digest readable. (The committed-facts manifest + cached-narrative
-storage split described on STORY-541 is the durable version of this loop; today
-the Layer-1 set is recomputed from git per run.)
+operator digest readable.
+
+**Capture at close (the durable feed).** The cleanest Layer-1 source is the
+implementer recording interface changes when they close a spec, not git
+inference at digest time. At `aida queue done` (at a TTY) you are prompted per
+surface; non-interactively (or as an agent) pass the lines explicitly:
+
+```
+aida queue done STORY-42 \
+  --interface-cli "aida mailbox list — new command" \
+  --interface-mcp "queue_add — now advisor-gated"
+# or, for a no-impact spec (clippy/refactor/test):
+aida queue done STORY-43 --no-interface-change
+```
+
+The MCP `queue_done` tool mirrors this via `interface_cli` / `interface_mcp` /
+`interface_tui` / `interface_other` arrays (or `no_interface_change: true`).
+Absent ⇒ the spec never appears in the operator digest. This is the deterministic
+filter STORY-542 added; the digest reads it automatically.
 
 ### Step 4: Present the result
 

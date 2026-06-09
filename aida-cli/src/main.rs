@@ -10108,6 +10108,25 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             }
                         }
                     }
+                    // STORY-542: user-facing interface changes captured at
+                    // close — the deterministic source the operator digest
+                    // reads. trace:STORY-542 | ai:claude
+                    if let Some(ic) = req.interface_changes.as_ref() {
+                        if !ic.is_empty() {
+                            println!("{}:", "Interface changes".bold());
+                            let surfaces: [(&str, &Vec<String>); 4] = [
+                                ("CLI", &ic.cli),
+                                ("MCP", &ic.mcp),
+                                ("TUI", &ic.tui),
+                                ("Other", &ic.other),
+                            ];
+                            for (label, lines) in surfaces {
+                                for line in lines {
+                                    println!("  {} {}", format!("[{label}]").cyan(), line);
+                                }
+                            }
+                        }
+                    }
                     // TASK-102: enumerate relationships inline when there are
                     // few (≤5) or `--rels` is passed; otherwise print the count
                     // + a pointer to `aida rel list`. Truncate past 10 with a
@@ -16732,6 +16751,25 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ");
         println!("{}: {}", "Dependencies".blue(), deps_str);
+    }
+
+    // STORY-542: user-facing interface changes captured at close — the
+    // deterministic source the operator digest reads. trace:STORY-542
+    if let Some(ic) = req.interface_changes.as_ref() {
+        if !ic.is_empty() {
+            println!("\n{}:", "Interface changes".green());
+            let surfaces: [(&str, &Vec<String>); 4] = [
+                ("CLI", &ic.cli),
+                ("MCP", &ic.mcp),
+                ("TUI", &ic.tui),
+                ("Other", &ic.other),
+            ];
+            for (label, lines) in surfaces {
+                for line in lines {
+                    println!("  {} {}", format!("[{label}]").cyan(), line);
+                }
+            }
+        }
     }
 
     if !req.relationships.is_empty() {
@@ -39388,6 +39426,179 @@ fn aida_subcmd_add_followup_task(
         return None;
     }
     parse_spec_id_from_add_output(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// True when interface-change capture is disabled via
+/// `AIDA_CAPTURE_INTERFACE_CHANGES=0|false|no`. Mirrors
+/// [`auto_followups_disabled`]: the env-opt-out keeps the close-checkpoint out
+/// of unattended drains that don't want the prompt. trace:STORY-542 | ai:claude
+fn capture_interface_changes_disabled() -> bool {
+    matches!(
+        std::env::var("AIDA_CAPTURE_INTERFACE_CHANGES")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "0" | "false" | "no"
+    )
+}
+
+/// Prompt for the surface-delta lines on one interface (cli/mcp/tui/other) at a
+/// TTY: one line per `Enter`, blank line ends the surface. Returns the
+/// collected lines. trace:STORY-542 | ai:claude
+fn prompt_interface_surface(label: &str, example: &str) -> Vec<String> {
+    use std::io::Write;
+    let mut lines = Vec::new();
+    eprintln!(
+        "  {} {} change(s)? One per line, blank line when done.",
+        "→".cyan(),
+        label.bold()
+    );
+    eprintln!("    {} {}", "e.g.".dimmed(), example.dimmed());
+    loop {
+        eprint!("    > ");
+        let _ = std::io::stderr().flush();
+        let mut answer = String::new();
+        if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+            break;
+        }
+        let trimmed = answer.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        lines.push(trimmed.to_string());
+    }
+    lines
+}
+
+/// Capture the spec's user-facing interface changes at close (`aida queue
+/// done`) — the deterministic Layer-1 source for the operator digest
+/// (STORY-541 / STORY-542). Precedence:
+///
+/// 1. `--no-interface-change` ⇒ record nothing (the spec stays out of the
+///    operator digest), no prompt.
+/// 2. Any `--interface-{cli,mcp,tui,other}` flag ⇒ use exactly those lines,
+///    no prompt (the deterministic / agent path).
+/// 3. Otherwise, at a TTY and when `interactive` (not `--yes`) and not
+///    env-disabled ⇒ prompt per surface (derive-and-confirm is future work;
+///    today the implementer types the lines).
+/// 4. Non-interactive with no flags ⇒ leave `interface_changes` untouched
+///    (empty), exactly as a no-impact spec.
+///
+/// Idempotent: if the spec already carries a non-empty `interface_changes`
+/// (e.g. `/aida-pr` populated it earlier), and no flags override it, it is left
+/// alone. Best-effort — any failure returns `Ok(())` so it never breaks
+/// `queue done`. trace:STORY-542 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn capture_interface_changes(
+    storage: &Storage,
+    req_id: uuid::Uuid,
+    display_id: &str,
+    flag_cli: &[String],
+    flag_mcp: &[String],
+    flag_tui: &[String],
+    flag_other: &[String],
+    no_interface_change: bool,
+    interactive: bool,
+) -> Result<()> {
+    let any_flag = !flag_cli.is_empty()
+        || !flag_mcp.is_empty()
+        || !flag_tui.is_empty()
+        || !flag_other.is_empty();
+
+    // Resolve the changes to record. `None` ⇒ leave the spec untouched.
+    let changes: Option<aida_core::InterfaceChanges> = if no_interface_change {
+        // Explicit "no user-facing change" — record an empty marker so a
+        // re-run / the auto-bump path both treat this spec as decided and the
+        // operator digest skips it. We persist `Some(empty)` to distinguish
+        // "decided: nothing" from "never asked".
+        Some(aida_core::InterfaceChanges::default())
+    } else if any_flag {
+        Some(aida_core::InterfaceChanges {
+            cli: flag_cli.to_vec(),
+            mcp: flag_mcp.to_vec(),
+            tui: flag_tui.to_vec(),
+            other: flag_other.to_vec(),
+        })
+    } else {
+        // No flags: only prompt at a TTY, interactively, and not opted out.
+        let at_tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+        if !interactive || !at_tty || capture_interface_changes_disabled() {
+            return Ok(());
+        }
+        // Idempotency: don't re-prompt if a non-empty capture already exists.
+        let store = storage.load()?;
+        if let Some(r) = store.requirements.iter().find(|r| r.id == req_id) {
+            if r.interface_changes
+                .as_ref()
+                .is_some_and(|ic| !ic.is_empty())
+            {
+                return Ok(());
+            }
+        }
+        eprintln!();
+        eprintln!(
+            "{} How does {} change the user-facing interface? (feeds the operator digest)",
+            "→".cyan().bold(),
+            display_id.bold()
+        );
+        eprintln!(
+            "  {} no user-facing change (clippy/refactor/test)? Just press Enter through each.",
+            "·".dimmed()
+        );
+        let ic = aida_core::InterfaceChanges {
+            cli: prompt_interface_surface("CLI", "aida foo — new command"),
+            mcp: prompt_interface_surface("MCP", "queue_add — now advisor-gated"),
+            tui: prompt_interface_surface("TUI", "press `g` — jump to graph view"),
+            other: prompt_interface_surface("Other", "REST /digest endpoint added"),
+        };
+        Some(ic)
+    };
+
+    let Some(changes) = changes else {
+        return Ok(());
+    };
+
+    let now = chrono::Utc::now();
+    let was_empty = changes.is_empty();
+    let summary = if was_empty {
+        "no user-facing interface change".to_string()
+    } else {
+        let mut parts = Vec::new();
+        if !changes.cli.is_empty() {
+            parts.push(format!("{} cli", changes.cli.len()));
+        }
+        if !changes.mcp.is_empty() {
+            parts.push(format!("{} mcp", changes.mcp.len()));
+        }
+        if !changes.tui.is_empty() {
+            parts.push(format!("{} tui", changes.tui.len()));
+        }
+        if !changes.other.is_empty() {
+            parts.push(format!("{} other", changes.other.len()));
+        }
+        parts.join(", ")
+    };
+
+    storage.update_atomically(|s| {
+        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+            // Store `Some(empty)` for the explicit no-change case so it reads as
+            // "decided"; store the populated set otherwise.
+            r.interface_changes = Some(changes.clone());
+            r.modified_at = now;
+        }
+    })?;
+
+    if was_empty {
+        println!("  {} interface changes: none recorded", "·".dimmed());
+    } else {
+        println!(
+            "  {} interface changes captured for {} ({})",
+            "✓".green(),
+            display_id.bold(),
+            summary.dimmed()
+        );
+    }
+    Ok(())
 }
 
 /// Extract the Followups section of any plan owned by `spec_id` and file
@@ -86361,6 +86572,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             yes,
             force,
             skip_pr_check,
+            interface_cli,
+            interface_mcp,
+            interface_tui,
+            interface_other,
+            no_interface_change,
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
@@ -86621,6 +86837,30 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         e
                     );
                 }
+            }
+
+            // STORY-542: capture the spec's user-facing interface changes (the
+            // deterministic Layer-1 source for `aida digest --audience
+            // operator`). Flags win and skip the prompt; otherwise at a TTY
+            // (and unless --yes / --no-interface-change) ask per surface.
+            // Best-effort — a failure here never blocks `queue done`.
+            // trace:STORY-542 | ai:claude
+            if let Err(e) = capture_interface_changes(
+                storage,
+                req_id,
+                display_id,
+                interface_cli,
+                interface_mcp,
+                interface_tui,
+                interface_other,
+                *no_interface_change,
+                /* interactive = */ !yes,
+            ) {
+                eprintln!(
+                    "{} interface-change capture skipped: {}",
+                    "Warning:".yellow().bold(),
+                    e
+                );
             }
 
             // STORY-106: workflow hint when the queue is now empty for the
