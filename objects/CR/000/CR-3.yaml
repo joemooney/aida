@@ -2,12 +2,12 @@ id: 07f7e655-742d-44c9-ba9d-c77762ae7090
 spec_id: CR-3
 title: scroll wheel should not change selected requirement
 description: ''
-status: Planned
+status: Approved
 priority: Medium
 owner: ''
 feature: 112-Uncategorized
 created_at: 2025-11-26T01:15:26.926247061Z
-modified_at: 2026-02-20T22:53:27.037026231Z
+modified_at: 2026-06-09T04:17:59.586773834Z
 req_type: ChangeRequest
 relationships:
 - rel_type: Parent
