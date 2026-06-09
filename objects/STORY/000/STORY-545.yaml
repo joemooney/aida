@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:31:01.033281119Z
-modified_at: 2026-06-09T06:36:52.406870394Z
+modified_at: 2026-06-09T06:39:46.916636955Z
 req_type: Story
 tags:
 - aida:burndown
@@ -51,3 +51,18 @@ tags:
 - ergonomics
 - from-self-test
 - onboarding-flow
+comments:
+- id: 019eab1b-cee4-7283-b700-cce4942fc4db
+  author: joe
+  content: |-
+    QUEUE RELATIONSHIP (design decision, operator Q 2026-06-08 'should we move items to the queue?'):
+
+    NO bulk-move. The queue (curated/ordered/deliberate advisor routing surface) and the burndown ready-set (derived 'everything approved+pickable' projection) are TWO MODELS by design. Bulk-dumping the ready-set into the queue destroys the queue's value as a selective list AND performs a bulk advisor disposition (ADR-3 / TASK-647 — queue add is advisor-gated) as a side effect.
+
+    WRINKLE: orchestrator is queue-COUPLED — 'aida queue work <id>' errors if the spec isn't already queued ('not in the queue — run queue add first'). So burndown run must bridge to the queue somehow. The bridge must NOT be a bulk dump. Two options:
+     (1) TRANSIENT queue-on-pickup (preferred, less code): each worker enqueues the ONE spec it claims, drives queue work --auto-complete, dequeues on completion → queue shows only live in-flight work. Operator launching 'burndown run' IS the disposition (authorized-at-launch); drafts still need the loud ADR-3 opt-in.
+     (2) Queue-BYPASS drive path (cleaner, more code): extend orchestrator to accept the gated ready-set by id directly, claim via leases, queue untouched.
+
+    Recommendation: default to (1). plan stays read-only and never queues.
+  created_at: 2026-06-09T06:39:46.916636955Z
+  modified_at: 2026-06-09T06:39:46.916636955Z
