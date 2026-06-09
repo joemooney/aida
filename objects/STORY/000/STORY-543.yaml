@@ -35,12 +35,12 @@ description: |-
   ## Rationale
 
   Operator asked for 'ignore the lock, dirty read, signal via return code.' WAL delivers the lock-free read consistently and for free; the staleness signal belongs on stderr + structured output (exit code stays semantically 'did it work?'). Refines the operator's pattern rather than implementing it literally.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T04:30:23.898104612Z
-modified_at: 2026-06-09T04:30:23.898104612Z
+modified_at: 2026-06-09T06:28:11.623056764Z
 req_type: Story
 tags:
 - aida:cache
