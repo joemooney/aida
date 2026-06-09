@@ -1,0 +1,49 @@
+id: 019ea9fd-7202-7032-ae1b-6324f38d1586
+spec_id: STORY-538
+agreed_id: STORY-538
+title: 'aida schema: introspect the storable substrate (object catalog + per-object field/enum detail)'
+description: |-
+  ## Problem
+
+  There is no single command that answers "what can AIDA store, and what is its shape?" The knowledge is scattered across CLAUDE.md, --help text, and aida-core/src/models.rs. `aida type list` covers requirement TYPES only; the Requirement's ~35 fields, the four controlled-vocabulary enums (status/type/relationship/priority), and the auxiliary object stores (Finding, Brief, Punt, Directive, Comment, Lease, QueueItem) are not introspectable anywhere.
+
+  This matters most for the agent-collaboration thesis: an agent that can run `aida schema --json` and learn the exact storable shape (instead of guessing from prose) is the discoverability surface that thesis implies. Read-only introspection — strengthens quiet depth, not TUI surface complexity.
+
+  ## Chosen scope (operator, 2026-06-08): whole-substrate catalog
+
+  `aida schema` (no args) -> lists every storable object type with a one-line description (Requirement, Finding, Brief, Punt, Directive, Comment, Lease, QueueItem, HistoryEntry, Relationship...). `aida schema <object>` -> drills into that object's fields + the enums they reference. `--json` everywhere for machine consumers.
+
+  ## Design notes
+
+  - DERIVE, don't hand-maintain (substrate-as-bouncer): reuse the reflection that `aida-generate-types` already performs so schema output cannot drift from the code. NOTE: the generator currently reflects only Requirement/Comment/HistoryEntry/Punt/Relationship — the whole-substrate catalog requires extending that registry (or an object-enumeration shim) to cover Finding/Brief/Directive/Lease/QueueItem.
+  - Read-only. `aida type add/remove` (mutation of the custom-type set) stays separate; `aida schema` supersedes `aida type list` for the read/vocabulary slice only.
+  - Enums rendered with their on-the-wire token forms (e.g. status: draft|approved|...|needs-attention; relationship: parent|child|...|references) so the output doubles as a CLI/MCP cheat-sheet.
+
+  ## Acceptance (MVP-first)
+
+  - [ ] `aida schema` lists the storable object catalog (one line each) — human-readable
+  - [ ] `aida schema requirement` shows the Requirement field table + the status/type/relationship/priority enum token lists
+  - [ ] `--json` mode emits a machine-readable schema for at least Requirement (agent consumer)
+  - [ ] Schema is DERIVED from the type reflection, with a test asserting it stays in sync with the model (drift guard)
+  - [ ] Follow-up TASKs filed for each remaining object's --detail (Finding, Brief, Punt, Directive, Lease, QueueItem) once the framework exists
+
+  ## Composes with
+
+  - aida-generate-types (Rust->TS reflection — the derivation seed)
+  - aida type list (existing, type-vocabulary subset)
+  - MCP resources (aida://project/summary) — a schema resource is a natural MCP companion
+  - The agent-collaboration / quiet-depth positioning (OVERVIEW.md)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:26:59.842729463Z
+modified_at: 2026-06-09T01:26:59.842729463Z
+req_type: Story
+tags:
+- agent-collaboration
+- discoverability
+- from-user-direction
+- introspection
+- mcp
+- schema
