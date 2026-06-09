@@ -21,7 +21,7 @@ COMPANION DECKS: developer-deep-dive, administrator-guide, user-walkthrough.
 
 A git-canonical requirement graph that survives across **agents, sessions, and vendors.**
 
-<small>v0.11.0 · executive briefing</small>
+<small>v0.12.0 · executive briefing</small>
 
 <!--
 One line to open: "Coding agents are getting dramatically more capable. The bottleneck is no longer writing code — it's remembering why, across many agents and many months. AIDA is the memory."
@@ -114,8 +114,8 @@ The exec question: "Couldn't Anthropic just build this?" Answer: a vertical shri
 
 Fully dogfooded — every feature shipped through the system being demonstrated.
 
-- **1,686** specs in the graph · **991** completed
-- **19** releases · **1,439** commits
+- **1,899** specs in the graph · **1,306** completed
+- **20** releases · **1,728** commits
 - **Multi-agent**: Claude + Codex + Antigravity drive one shared git-canonical substrate
 - **Autonomous drains** ship batches of work overnight, escalating only what they can't safely decide
 

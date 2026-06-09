@@ -18,7 +18,7 @@ COMPANION DECKS: executive-briefing, developer-deep-dive, administrator-guide.
 
 ### File it · queue it · ship it · keep code tied to intent
 
-<small>v0.11.0 · user walkthrough</small>
+<small>v0.12.0 · user walkthrough</small>
 
 <!--
 Framing: "AIDA is requirement-first. You don't start by writing code — you start by filing what you're about to do. Everything else hangs off that one habit."

@@ -21,7 +21,7 @@ COMPANION DECKS: executive-briefing, administrator-guide, user-walkthrough.
 
 Storage · distributed IDs · the orchestrator · MCP · traceability
 
-<small>v0.11.0 · developer deep dive</small>
+<small>v0.12.0 · developer deep dive</small>
 
 <!--
 Framing: "AIDA looks like a CLI. Underneath it's a git-canonical graph database, a distributed-ID scheme, and a six-phase orchestrator. Here's each layer."
