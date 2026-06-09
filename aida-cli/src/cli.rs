@@ -1488,6 +1488,39 @@ pub enum BurndownCommand {
         #[clap(long)]
         json: bool,
     },
+    /// Kick off and walk away: drain the advisor-blessed ready set in a headless
+    /// Claude Code session. Launches `claude -p "/aida-burndown <selector>"`,
+    /// which fans out worktree-isolated implementers in parallel, integrates
+    /// their PRs, and loops until drained. Drains ONLY the queued + pickable set
+    /// (advisor sign-off = queue membership) — never an unqueued spec.
+    // trace:STORY-545 | ai:claude
+    Run {
+        /// Which specs to consider (the "selector"). Default: approved.
+        #[clap(long, default_value = "approved")]
+        status: String,
+        /// Only specs carrying this tag.
+        #[clap(long)]
+        tag: Option<String>,
+        /// Only specs in this batch (matches the `batch:<name>` tag).
+        #[clap(long)]
+        batch: Option<String>,
+        /// Cap the total number of specs drained this run (passed to the skill
+        /// as `--max`). Default: drain until the blessed set is empty.
+        #[clap(long)]
+        max: Option<usize>,
+        /// Parallel wave size — how many implementers fan out at once.
+        #[clap(long)]
+        concurrency: Option<usize>,
+        /// Claude permission mode for the headless drain. Defaults to
+        /// `bypassPermissions` so the unattended drain can push/merge/fan-out
+        /// without stalling on prompts. Override with e.g. `acceptEdits`.
+        #[clap(long)]
+        permission_mode: Option<String>,
+        /// Show the blessed ready set + the exact `claude -p` command that
+        /// would run, then exit without launching.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 /// of an in-repo build, running dev servers, installing shell helpers).

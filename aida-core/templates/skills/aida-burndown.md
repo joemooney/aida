@@ -69,8 +69,10 @@ aida session leases                                  # specs with an active leas
 Skip any ready spec whose SPEC-ID matches an open PR branch/title or an active
 lease scope; carry only the genuinely-idle remainder into the wave below.
 
-For up to **N** of the remaining ready specs (a bounded wave; `N ≈ 4`, or scale
-to budget), spawn one **worktree-isolated implementer subagent per spec**:
+For up to **N** of the remaining ready specs (a bounded wave), spawn one
+**worktree-isolated implementer subagent per spec**. **N = the `--concurrency`
+value from `$ARGUMENTS` if provided** (so `aida burndown run --concurrency 6`
+flows through), else `N ≈ 4` — or scale to budget:
 
 > `Agent(subagent_type: "general-purpose", isolation: "worktree")` — each gets
 > ONE ready spec and a self-contained prompt: read it (`aida show <SPEC> -c`),

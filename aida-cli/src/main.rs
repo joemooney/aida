@@ -64559,6 +64559,192 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             json,
         } => handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *candidates, *json),
         crate::cli::BurndownCommand::Explain { json } => handle_burndown_explain(*json),
+        crate::cli::BurndownCommand::Run {
+            status,
+            tag,
+            batch,
+            max,
+            concurrency,
+            permission_mode,
+            dry_run,
+        } => handle_burndown_run(
+            status,
+            tag.as_deref(),
+            batch.as_deref(),
+            *max,
+            *concurrency,
+            permission_mode.as_deref(),
+            *dry_run,
+        ),
+    }
+}
+
+/// STORY-545: build the `/aida-burndown` slash-command string the headless
+/// session runs, from the selector + caps. Pure + unit-testable. The skill
+/// reads these args ($ARGUMENTS): `--status`, `--tag`, `--batch`, `--max`,
+/// `--concurrency`. trace:STORY-545 | ai:claude
+fn burndown_skill_prompt(
+    status: &str,
+    tag: Option<&str>,
+    batch: Option<&str>,
+    max: Option<usize>,
+    concurrency: Option<usize>,
+) -> String {
+    let mut s = format!("/aida-burndown --status {status}");
+    if let Some(t) = tag {
+        s.push_str(&format!(" --tag {t}"));
+    }
+    if let Some(b) = batch {
+        s.push_str(&format!(" --batch {b}"));
+    }
+    if let Some(m) = max {
+        s.push_str(&format!(" --max {m}"));
+    }
+    if let Some(c) = concurrency {
+        s.push_str(&format!(" --concurrency {c}"));
+    }
+    s
+}
+
+#[cfg(test)]
+mod burndown_run_tests {
+    use super::*;
+
+    // trace:STORY-545 | ai:claude
+    #[test]
+    fn skill_prompt_defaults_to_status_only() {
+        assert_eq!(
+            burndown_skill_prompt("approved", None, None, None, None),
+            "/aida-burndown --status approved"
+        );
+    }
+
+    #[test]
+    fn skill_prompt_appends_each_provided_knob_in_order() {
+        assert_eq!(
+            burndown_skill_prompt("draft", Some("papercut"), Some("scaffold"), Some(10), Some(4)),
+            "/aida-burndown --status draft --tag papercut --batch scaffold --max 10 --concurrency 4"
+        );
+    }
+
+    #[test]
+    fn skill_prompt_omits_unset_caps() {
+        assert_eq!(
+            burndown_skill_prompt("approved", None, None, None, Some(3)),
+            "/aida-burndown --status approved --concurrency 3"
+        );
+    }
+}
+
+/// STORY-545: `aida burndown run` — kick off and walk away. Preflights the
+/// advisor-blessed ready set (the same gate `plan` shows), then launches a
+/// headless `claude -p "/aida-burndown <selector>"` that fans out
+/// worktree-isolated implementers, integrates PRs, and loops until drained.
+/// Strategy B (SPIKE-51): reuse the proven skill fan-out, don't reimplement it.
+/// trace:STORY-545 | ai:claude
+fn handle_burndown_run(
+    status: &str,
+    tag: Option<&str>,
+    batch: Option<&str>,
+    max: Option<usize>,
+    concurrency: Option<usize>,
+    permission_mode: Option<&str>,
+    dry_run: bool,
+) -> Result<()> {
+    let (ready, awaiting_signoff, parked) = resolve_burndown_sets(status, tag, batch)?;
+
+    println!("{} burndown run", "▸".cyan().bold());
+    println!(
+        "  {}",
+        burndown::selector_summary(status, tag, batch).dimmed()
+    );
+
+    // Nothing blessed → don't launch a session for no work.
+    if ready.is_empty() {
+        println!(
+            "  {} 0 blessed specs to drain ({} pickable awaiting sign-off, {} parked).",
+            "→".green(),
+            awaiting_signoff.len(),
+            parked.len()
+        );
+        if !awaiting_signoff.is_empty() {
+            println!(
+                "\n{} Pickable but not queued — bless with `aida queue add <id>`, then re-run:",
+                "·".dimmed()
+            );
+            for id in &awaiting_signoff {
+                println!("  {} {}", "+".yellow(), id);
+            }
+        }
+        return Ok(());
+    }
+
+    println!(
+        "  {} {} blessed spec(s) will drain: {}",
+        "→".green(),
+        ready.len(),
+        ready.join(", ").cyan()
+    );
+
+    // The skill re-resolves the ready set authoritatively (same gate), so the
+    // preflight list is what WILL drain. Build the headless invocation.
+    let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
+    let mode = permission_mode.unwrap_or("bypassPermissions");
+
+    if dry_run {
+        println!("\n{} dry run — not launching. Would run:", "·".dimmed());
+        println!("  claude -p {:?} --permission-mode {}", prompt, mode.cyan());
+        return Ok(());
+    }
+
+    // The default posture is faithful to the operator's walk-away intent: a
+    // headless drain that pushes/merges/fans-out can't stall on prompts, so
+    // default to bypassed permissions — but say so loudly and let `--permission-mode`
+    // override. trace:STORY-545
+    if permission_mode.is_none() {
+        println!(
+            "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
+            "⚠".yellow(),
+            "BYPASSED".yellow().bold()
+        );
+    } else {
+        println!(
+            "  {} launching headless `claude -p` with permission mode `{}`",
+            "→".green(),
+            mode
+        );
+    }
+    println!(
+        "  {} {}",
+        "→".green(),
+        format!("claude -p {prompt:?}").dimmed()
+    );
+    println!();
+
+    // Inherit stdio so the drain streams live; propagate its exit code so
+    // scripts can branch on success/parked (the skill exits non-zero when it
+    // shelves work, mirroring the orchestrator drain's exit-2 convention).
+    // `claude` is resolved off PATH (matching every other launch site); a
+    // missing binary surfaces as a guided error, not a raw ENOENT.
+    let status_code = std::process::Command::new("claude")
+        .arg("-p")
+        .arg(&prompt)
+        .arg("--permission-mode")
+        .arg(mode)
+        .status()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "failed to launch `claude -p` ({e}) — the headless drain needs the Claude Code \
+                 CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
+                 orchestrator drain) instead."
+            )
+        })?;
+
+    if status_code.success() {
+        Ok(())
+    } else {
+        let code = status_code.code().unwrap_or(1);
+        std::process::exit(code);
     }
 }
 
@@ -64808,23 +64994,16 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
-/// pure pickability gate. Read-only — the deterministic input the
-/// `/aida-burndown` skill fans out.
-///
-/// STORY-546: the ready set now ALSO requires queue membership — queueing a
-/// spec IS the advisor sign-off (`queue add` is advisor-authority-gated, ADR-3
-/// / TASK-647), so burndown can never drain a spec the advisor didn't bless.
-/// Pickable-but-unqueued specs surface as "awaiting sign-off", and
-/// `--candidates` shows exactly that set (the advisor's "what to bless next"
-/// aid). trace:STORY-527 trace:STORY-546 | ai:claude
-fn handle_burndown_plan(
+/// STORY-545: resolve a selector to `(ready, awaiting_signoff, parked)` via the
+/// pickability gate + the STORY-546 queue gate. Shared by `burndown plan` (which
+/// renders it) and `burndown run` (which preflights + drains it) so the two can
+/// NEVER disagree on what's drainable. trace:STORY-527 trace:STORY-546 trace:STORY-545
+#[allow(clippy::type_complexity)]
+fn resolve_burndown_sets(
     status: &str,
     tag: Option<&str>,
     batch: Option<&str>,
-    candidates_view: bool,
-    json: bool,
-) -> Result<()> {
+) -> Result<(Vec<String>, Vec<String>, Vec<(String, String)>)> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let store = load_store_for_lookup(&project_root).ok_or_else(|| {
@@ -64919,6 +65098,27 @@ fn handle_burndown_plan(
     // `ready` = blessed + drainable; `awaiting_signoff` = pickable but the
     // advisor hasn't queued it yet (the `--candidates` curation list).
     let (ready, awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
+    Ok((ready, awaiting_signoff, parked))
+}
+
+/// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
+/// pure pickability gate. Read-only — the deterministic input the
+/// `/aida-burndown` skill fans out.
+///
+/// STORY-546: the ready set now ALSO requires queue membership — queueing a
+/// spec IS the advisor sign-off (`queue add` is advisor-authority-gated, ADR-3
+/// / TASK-647), so burndown can never drain a spec the advisor didn't bless.
+/// Pickable-but-unqueued specs surface as "awaiting sign-off", and
+/// `--candidates` shows exactly that set (the advisor's "what to bless next"
+/// aid). trace:STORY-527 trace:STORY-546 | ai:claude
+fn handle_burndown_plan(
+    status: &str,
+    tag: Option<&str>,
+    batch: Option<&str>,
+    candidates_view: bool,
+    json: bool,
+) -> Result<()> {
+    let (ready, awaiting_signoff, parked) = resolve_burndown_sets(status, tag, batch)?;
 
     if json {
         let payload = serde_json::json!({
