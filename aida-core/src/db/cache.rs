@@ -579,10 +579,25 @@ impl Cache {
             // "In Progress", "InProgress", etc. Strip space/hyphen/underscore
             // from both sides and lowercase so every variant matches.
             // trace:BUG-1-025 | ai:claude
-            sql.push_str(
-                " AND LOWER(REPLACE(REPLACE(REPLACE(status, ' ', ''), '-', ''), '_', '')) = ?",
-            );
-            args.push(normalize_status_filter(s));
+            //
+            // TASK-0415: a comma-separated status spec is a logical OR within
+            // the status axis (`draft,approved` → Draft OR Approved). Each
+            // token is normalized and the set is OR'd in a single grouped
+            // clause so it still composes with the other filters via AND.
+            // A single value (no comma) reduces to the original equality.
+            // trace:TASK-0415
+            let normalized: Vec<String> = s
+                .split(',')
+                .map(normalize_status_filter)
+                .filter(|t| !t.is_empty())
+                .collect();
+            if !normalized.is_empty() {
+                let clause =
+                    "LOWER(REPLACE(REPLACE(REPLACE(status, ' ', ''), '-', ''), '_', '')) = ?";
+                let ored = vec![clause; normalized.len()].join(" OR ");
+                sql.push_str(&format!(" AND ({})", ored));
+                args.extend(normalized);
+            }
         }
         if let Some(t) = &filter.req_type {
             sql.push_str(" AND LOWER(req_type) = LOWER(?)");
@@ -1025,6 +1040,47 @@ mod tests {
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spec_id.as_deref(), Some("TASK-132-001"));
+    }
+
+    /// trace:TASK-0415 — a comma-separated status spec is a logical OR within
+    /// the status axis, and still composes with other filters via AND.
+    #[test]
+    fn list_summaries_status_comma_is_or() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut draft = sample_req("TASK-415-001", "draft task");
+        draft.status = RequirementStatus::Draft;
+        let mut approved = sample_req("TASK-415-002", "approved task");
+        approved.status = RequirementStatus::Approved;
+        let mut planned = sample_req("TASK-415-003", "planned task");
+        planned.status = RequirementStatus::Planned;
+        store.requirements.push(draft);
+        store.requirements.push(approved);
+        store.requirements.push(planned);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Draft OR Approved → two rows, Planned excluded.
+        let rows = cache
+            .list_summaries(&ListFilter {
+                status: Some("Draft,Approved".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        let mut ids: Vec<_> = rows.iter().filter_map(|r| r.spec_id.clone()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["TASK-415-001", "TASK-415-002"]);
+
+        // A single value still behaves like equality (backward compat).
+        let one = cache
+            .list_summaries(&ListFilter {
+                status: Some("Planned".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].spec_id.as_deref(), Some("TASK-415-003"));
     }
 
     /// trace:STORY-441 | ai:claude

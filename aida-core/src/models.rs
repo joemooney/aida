@@ -46,6 +46,135 @@ impl fmt::Display for RequirementStatus {
     }
 }
 
+impl RequirementStatus {
+    /// Parse one of the eight canonical statuses from a user-typed string,
+    /// tolerant of casing and `-`/`_`/space word-breaks (e.g. "in-progress",
+    /// "In Progress", "InProgress" all map to `InProgress`). Returns `None`
+    /// for anything that isn't a recognized status — the caller decides
+    /// whether that's an error (positional shortcut) or a custom status.
+    ///
+    /// This is the single recognizer behind `aida list`'s status shortcuts and
+    /// the `open`/`closed` alias expansion, so "what is a valid status" stays
+    /// defined in one place. trace:TASK-0415
+    pub fn from_filter_str(s: &str) -> Option<RequirementStatus> {
+        match Self::normalize_token(s).as_str() {
+            "draft" => Some(RequirementStatus::Draft),
+            "approved" => Some(RequirementStatus::Approved),
+            "planned" => Some(RequirementStatus::Planned),
+            "inprogress" => Some(RequirementStatus::InProgress),
+            "done" => Some(RequirementStatus::Done),
+            "completed" => Some(RequirementStatus::Completed),
+            "rejected" => Some(RequirementStatus::Rejected),
+            "needsattention" => Some(RequirementStatus::NeedsAttention),
+            _ => None,
+        }
+    }
+
+    /// Lowercase + drop space/hyphen/underscore so casing and word-break
+    /// variants collapse to one canonical comparison key. trace:TASK-0415
+    fn normalize_token(s: &str) -> String {
+        s.chars()
+            .filter_map(|c| match c {
+                ' ' | '-' | '_' => None,
+                c if c.is_ascii_alphabetic() => Some(c.to_ascii_lowercase()),
+                c => Some(c),
+            })
+            .collect()
+    }
+
+    /// The canonical no-space variant name as stored in the cache (Debug form,
+    /// e.g. "InProgress", "NeedsAttention"). This is what the `status` column
+    /// holds, so it's the value a status filter must compare against.
+    /// trace:TASK-0415
+    pub fn cache_key(&self) -> &'static str {
+        match self {
+            RequirementStatus::Draft => "Draft",
+            RequirementStatus::Approved => "Approved",
+            RequirementStatus::Planned => "Planned",
+            RequirementStatus::InProgress => "InProgress",
+            RequirementStatus::Done => "Done",
+            RequirementStatus::Completed => "Completed",
+            RequirementStatus::Rejected => "Rejected",
+            RequirementStatus::NeedsAttention => "NeedsAttention",
+        }
+    }
+
+    /// The non-terminal ("open") lifecycle statuses: a spec still in flight.
+    /// The `open` list alias expands to these. trace:TASK-0415
+    pub fn open_statuses() -> [RequirementStatus; 5] {
+        [
+            RequirementStatus::Draft,
+            RequirementStatus::Approved,
+            RequirementStatus::Planned,
+            RequirementStatus::InProgress,
+            RequirementStatus::NeedsAttention,
+        ]
+    }
+
+    /// The terminal ("closed") lifecycle statuses: a spec that is finished or
+    /// abandoned. The `closed` list alias expands to these. `Done` is terminal
+    /// here (work finished on a branch) — it sits with Completed / Rejected on
+    /// the "no longer open" side. trace:TASK-0415
+    pub fn closed_statuses() -> [RequirementStatus; 3] {
+        [
+            RequirementStatus::Done,
+            RequirementStatus::Completed,
+            RequirementStatus::Rejected,
+        ]
+    }
+
+    /// Expand a single status filter token into one or more canonical status
+    /// cache-keys. Recognizes the `open` / `closed` aliases (case/word-break
+    /// tolerant) and the eight canonical statuses. Returns `None` for an
+    /// unrecognized token so the caller can produce a clear error.
+    /// trace:TASK-0415
+    pub fn expand_filter_token(token: &str) -> Option<Vec<&'static str>> {
+        match Self::normalize_token(token).as_str() {
+            "open" => Some(
+                RequirementStatus::open_statuses()
+                    .iter()
+                    .map(|s| s.cache_key())
+                    .collect(),
+            ),
+            "closed" => Some(
+                RequirementStatus::closed_statuses()
+                    .iter()
+                    .map(|s| s.cache_key())
+                    .collect(),
+            ),
+            _ => RequirementStatus::from_filter_str(token).map(|s| vec![s.cache_key()]),
+        }
+    }
+
+    /// Expand a comma-separated status filter spec (`"open"`, `"draft,approved"`,
+    /// `"closed"`) into the deduplicated set of canonical status cache-keys it
+    /// matches. Each comma-separated token is OR'd together; aliases expand
+    /// in place. Returns `Err(token)` naming the first unrecognized token so
+    /// the caller can produce a clear, actionable error. Empty/blank tokens
+    /// are skipped. trace:TASK-0415
+    pub fn expand_filter_spec(spec: &str) -> Result<Vec<String>, String> {
+        let mut out: Vec<String> = Vec::new();
+        for raw in spec.split(',') {
+            let token = raw.trim();
+            if token.is_empty() {
+                continue;
+            }
+            match Self::expand_filter_token(token) {
+                Some(keys) => {
+                    for k in keys {
+                        let k = k.to_string();
+                        if !out.contains(&k) {
+                            out.push(k);
+                        }
+                    }
+                }
+                None => return Err(token.to_string()),
+            }
+        }
+        Ok(out)
+    }
+}
+
 /// The kind of obstacle that triggered a punt — the machine-readable category
 /// `aida punt` / `/aida-punt` records on a [`RequirementStatus::NeedsAttention`]
 /// spec (STORY-332).
@@ -6654,6 +6783,96 @@ mod tests {
         // the original casing.
         req.set_status_from_str("Awaiting Review");
         assert_eq!(req.custom_status.as_deref(), Some("Awaiting Review"));
+    }
+
+    /// trace:TASK-0415 — the `open` / `closed` aliases must expand to exactly
+    /// the non-terminal / terminal status sets, regardless of casing or
+    /// word-break punctuation.
+    #[test]
+    fn expand_filter_token_handles_aliases() {
+        for alias in &["open", "OPEN", " Open "] {
+            assert_eq!(
+                RequirementStatus::expand_filter_token(alias),
+                Some(vec![
+                    "Draft",
+                    "Approved",
+                    "Planned",
+                    "InProgress",
+                    "NeedsAttention",
+                ]),
+                "{:?} should expand to the open set",
+                alias
+            );
+        }
+        for alias in &["closed", "CLOSED", "Closed"] {
+            assert_eq!(
+                RequirementStatus::expand_filter_token(alias),
+                Some(vec!["Done", "Completed", "Rejected"]),
+                "{:?} should expand to the closed set",
+                alias
+            );
+        }
+    }
+
+    /// trace:TASK-0415 — a single canonical status token expands to itself
+    /// (cache-key form), tolerant of casing and word-break punctuation.
+    #[test]
+    fn expand_filter_token_handles_single_status() {
+        assert_eq!(
+            RequirementStatus::expand_filter_token("draft"),
+            Some(vec!["Draft"])
+        );
+        assert_eq!(
+            RequirementStatus::expand_filter_token("in-progress"),
+            Some(vec!["InProgress"])
+        );
+        assert_eq!(
+            RequirementStatus::expand_filter_token("Needs Attention"),
+            Some(vec!["NeedsAttention"])
+        );
+        // Unknown token → None (caller turns this into a clear error).
+        assert_eq!(RequirementStatus::expand_filter_token("bogus"), None);
+        assert_eq!(RequirementStatus::expand_filter_token("inflight"), None);
+    }
+
+    /// trace:TASK-0415 — a comma-separated spec is OR'd; aliases expand in
+    /// place; duplicate cache-keys collapse; blank tokens are skipped.
+    #[test]
+    fn expand_filter_spec_ors_and_dedups() {
+        assert_eq!(
+            RequirementStatus::expand_filter_spec("draft,approved"),
+            Ok(vec!["Draft".to_string(), "Approved".to_string()])
+        );
+        // alias + explicit status overlapping → deduped (Draft once).
+        assert_eq!(
+            RequirementStatus::expand_filter_spec("open,draft"),
+            Ok(vec![
+                "Draft".to_string(),
+                "Approved".to_string(),
+                "Planned".to_string(),
+                "InProgress".to_string(),
+                "NeedsAttention".to_string(),
+            ])
+        );
+        // whitespace + blank tokens tolerated.
+        assert_eq!(
+            RequirementStatus::expand_filter_spec(" done , , completed "),
+            Ok(vec!["Done".to_string(), "Completed".to_string()])
+        );
+    }
+
+    /// trace:TASK-0415 — an unrecognized token surfaces as Err naming the
+    /// offending token so the CLI can point the user at the real filters.
+    #[test]
+    fn expand_filter_spec_errors_on_unknown_token() {
+        assert_eq!(
+            RequirementStatus::expand_filter_spec("draft,wat"),
+            Err("wat".to_string())
+        );
+        assert_eq!(
+            RequirementStatus::expand_filter_spec("nonsense"),
+            Err("nonsense".to_string())
+        );
     }
 
     /// trace:BUG-1-025 | ai:claude — regression: setting Completed must clear

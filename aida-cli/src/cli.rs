@@ -5132,7 +5132,20 @@ pub enum Command {
 
     /// List all requirements
     List {
-        /// Filter by status
+        /// Optional status shortcut: `aida list approved` is the same as
+        /// `aida list --status approved`. Accepts a single status, a
+        /// comma-separated OR set (`draft,approved`), or an alias (`open`,
+        /// `closed`). An unrecognized token errors with guidance rather than
+        /// being silently ignored.
+        // trace:TASK-0415 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(value_name = "STATUS")]
+        shortcut: Option<String>,
+
+        /// Filter by status. Accepts a comma-separated OR set
+        /// (`--status draft,approved`) and the `open` / `closed` aliases:
+        /// `open` = Draft, Approved, Planned, InProgress, NeedsAttention;
+        /// `closed` = Done, Completed, Rejected.
+        // trace:TASK-0415 | ai:claude
         #[clap(long)]
         status: Option<String>,
 
@@ -7586,5 +7599,32 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+    }
+
+    // trace:TASK-0415 — the positional status shortcut parses into the List
+    // command's `shortcut` field; `--status` still parses into `status`.
+    #[test]
+    fn list_positional_status_shortcut_parses() {
+        let cli = Cli::try_parse_from(["aida", "list", "approved"]).unwrap();
+        match cli.command {
+            Command::List {
+                shortcut, status, ..
+            } => {
+                assert_eq!(shortcut.as_deref(), Some("approved"));
+                assert_eq!(status, None);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        let cli = Cli::try_parse_from(["aida", "list", "--status", "open"]).unwrap();
+        match cli.command {
+            Command::List {
+                shortcut, status, ..
+            } => {
+                assert_eq!(shortcut, None);
+                assert_eq!(status.as_deref(), Some("open"));
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
     }
 }
