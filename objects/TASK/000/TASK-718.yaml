@@ -9,12 +9,12 @@ description: |-
   (b) KEEP them as refuse-WITH-guidance — the refusal message already points the caller at add_requirement (lands Draft for advisor triage) + the CLI; an advertised-but-gated tool documents the boundary explicitly.
 
   Lean: (b) if the refusal genuinely aids agent onboarding; (a) if "advertised tool that always errors" is the worse smell. Either way the doc-consistency gate must reflect the choice. Surfaced by the BUG-480 fix, 2026-06-08.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:25:19.944564150Z
-modified_at: 2026-06-09T06:08:30.776713691Z
+modified_at: 2026-06-09T06:08:32.287116095Z
 req_type: Task
 tags:
 - design-decision
