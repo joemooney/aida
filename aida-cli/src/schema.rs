@@ -85,6 +85,13 @@ const CATALOG: &[CatalogEntry] = &[
     },
 ];
 
+/// True if `name` (case-insensitive) is a kind in the storable-object catalog —
+/// lets the dispatcher tell "known object, detail not built yet" from a typo.
+/// trace:STORY-538 | ai:claude
+pub fn is_catalog_object(name: &str) -> bool {
+    CATALOG.iter().any(|e| e.name.eq_ignore_ascii_case(name))
+}
+
 /// A controlled-vocabulary enum the CLI/MCP accept as argument tokens.
 struct EnumSchema {
     /// Field name on the Requirement this enum controls.
@@ -273,7 +280,10 @@ pub fn print_catalog(json_out: bool) {
     for e in CATALOG {
         println!("  {:<width$}  {}", e.name, e.description, width = width);
     }
-    println!("\nRun `aida schema requirement` for the Requirement field table + enum tokens.");
+    println!(
+        "\nFull field + enum detail today: `aida schema requirement`. Detail for the other \
+         objects is coming — use the one-liners above for now."
+    );
 }
 
 /// `aida schema requirement` — the reflection-derived field table and the

@@ -1029,6 +1029,17 @@ fn run() -> Result<()> {
             Some("requirement") | Some("requirements") | Some("req") => {
                 schema::print_requirement(*json)
             }
+            Some(other) if schema::is_catalog_object(other) => {
+                // Known catalog object whose full field detail isn't built yet —
+                // this MVP ships Requirement detail only. Not an error: a valid
+                // kind the caller saw in the catalog. (No SPEC-ID in user-facing
+                // text, per TASK-268.) trace:STORY-538
+                println!(
+                    "`{other}` is in the storable-object catalog, but full field detail \
+                     isn't available yet — `aida schema requirement` is the only detailed \
+                     view today. Run `aida schema` for the catalog."
+                );
+            }
             Some(other) => {
                 anyhow::bail!(
                     "unknown schema object `{other}` — run `aida schema` for the catalog, \
