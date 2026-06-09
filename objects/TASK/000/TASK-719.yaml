@@ -1,0 +1,16 @@
+id: 019eaab6-7dcd-7431-a551-521298bea936
+spec_id: TASK-719
+agreed_id: TASK-719
+title: 'aida digest: durable Layer-1 release-surface manifest (JSON) + cached Layer-2 narrative'
+description: STORY-541 shipped the operator capabilities lens but recomputes the candidate set from git per run. The full spec also wants a COMMITTED Layer-1 release-surface manifest (JSON) + a CACHED Layer-2 narrative keyed on (source-sha, audience, window) so the narrative isn't regenerated each run. That storage split is EPIC-shaped (a new committed artifact + a cache keyed on 3 dims) — deferred from the STORY-541 MVP. Build when digest regeneration cost or cross-run consistency actually warrants it. Tier-1 deterministic facts in Rust / Tier-2 LLM translation in the skill division is already honored.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T04:49:07.021268432Z
+modified_at: 2026-06-09T04:49:07.021268432Z
+req_type: Task
+tags:
+- deferred:epic-shaped
+- digest
+- from-task:STORY-541
