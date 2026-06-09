@@ -35,11 +35,21 @@ pub enum DigestAudience {
     Team,
     #[value(name = "self")]
     Slf,
+    /// CLI-surface diff for the day-to-day operator / power-user: new commands,
+    /// changed flags & behaviors, fixes-you'll-notice, new skills — value-framed,
+    /// SPEC-IDs stripped, dev-noise dropped. trace:STORY-541
+    Operator,
 }
 
 impl DigestAudience {
     fn keep_spec_ids(self) -> bool {
-        !matches!(self, DigestAudience::Customer)
+        !matches!(self, DigestAudience::Customer | DigestAudience::Operator)
+    }
+
+    /// The operator lens replaces the work-narrative sections (Released / Major
+    /// progress / …) with a capabilities-surface view. trace:STORY-541
+    fn is_capabilities_lens(self) -> bool {
+        matches!(self, DigestAudience::Operator)
     }
 }
 
@@ -370,6 +380,183 @@ pub fn is_noise_commit(subject: &str) -> bool {
         }
     }
     lower.contains("typo")
+}
+
+// ============================================================================
+// Capabilities lens (operator audience). trace:STORY-541
+//
+// The operator wants the CLI-SURFACE diff, not the work narrative: what changed
+// that they can now DO + the command to try it. This is the Layer-1 deterministic
+// candidate set — it classifies window commits into surface buckets and DROPS
+// zero-impact dev work (clippy/lint/refactor/internal-MCP/test-only). The Layer-2
+// LLM judgment (user-impact translation of a kept fix → value framing) lives in
+// the `/aida-digest` skill, which reads this candidate set and rewrites it.
+// ============================================================================
+
+/// Which user-facing surface a commit touches. Drives the operator grouping.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum CapabilitySurface {
+    /// A brand-new command/subcommand a user can now run.
+    NewCommand,
+    /// A changed flag or behavior on an existing surface.
+    ChangedBehavior,
+    /// A fix a user will notice (crash, wrong output, broken flag).
+    Fix,
+    /// A new skill / slash command.
+    NewSkill,
+}
+
+#[derive(Debug, Clone)]
+pub struct CapabilityChange {
+    // Retained on the record for JSON/debug + future per-surface rendering;
+    // the bucketing match reads the local `surface`, not this field.
+    #[allow(dead_code)]
+    pub surface: CapabilitySurface,
+    /// Value-framed line, SPEC-IDs already stripped. The Layer-2 skill may
+    /// rewrite this; the deterministic default is the cleaned commit subject.
+    pub value: String,
+}
+
+/// True when a commit is zero-user-impact dev work that the operator lens must
+/// DROP: lint/clippy hygiene, internal refactors, internal-only plumbing,
+/// test-only, plus the existing docs/style/chore/revert/typo noise. The cut is
+/// "did it change what the user can do / experience" — NOT "feat vs chore".
+/// trace:STORY-541
+/// Strip a leading `[AI:tool] ` (or `[AI:tool1+tool2:conf] `) authorship prefix
+/// so the conventional-commit type is at the start of the string for the noise /
+/// classification checks. trace:STORY-541
+fn strip_ai_prefix(subject: &str) -> &str {
+    let t = subject.trim_start();
+    if let Some(rest) = t.strip_prefix("[AI:") {
+        if let Some(close) = rest.find(']') {
+            return rest[close + 1..].trim_start();
+        }
+    }
+    t
+}
+
+pub fn is_dev_only_commit(subject: &str) -> bool {
+    let subject = strip_ai_prefix(subject);
+    if is_noise_commit(subject) {
+        return true;
+    }
+    let lower = subject.trim().to_lowercase();
+    // Conventional-commit type prefixes that never change a user surface.
+    for prefix in [
+        "refactor:",
+        "refactor(",
+        "test:",
+        "test(",
+        "build:",
+        "build(",
+        "ci:",
+        "ci(",
+        "perf:",
+        "perf(",
+    ] {
+        if lower.starts_with(prefix) {
+            return true;
+        }
+    }
+    // Substantive-noise keywords: clippy / lint hygiene, internal-only changes
+    // that touch no user surface (the operator never sees them).
+    const DEV_KEYWORDS: [&str; 4] = ["clippy", "lint", "warning", "rustfmt"];
+    if DEV_KEYWORDS.iter().any(|k| lower.contains(k)) {
+        return true;
+    }
+    // "internal" MCP/plumbing wording — only when paired with an internal cue,
+    // so we don't drop a real feature that merely mentions "internal".
+    if lower.contains("internal")
+        && (lower.contains("refactor")
+            || lower.contains("plumb")
+            || lower.contains("rename")
+            || lower.contains("cleanup"))
+    {
+        return true;
+    }
+    false
+}
+
+/// Classify a (non-dev-only) commit subject into its capability surface. Reads
+/// the conventional-commit type + light keyword cues. Returns None when the
+/// subject does not clearly map to a user-facing surface (it is then dropped —
+/// the operator lens errs toward signal over completeness). trace:STORY-541
+pub fn classify_capability(subject: &str) -> Option<CapabilitySurface> {
+    let lower = strip_ai_prefix(subject).to_lowercase();
+    let is_feat = lower.starts_with("feat:") || lower.starts_with("feat(");
+    let is_fix = lower.starts_with("fix:") || lower.starts_with("fix(");
+    let mentions_skill =
+        lower.contains("skill") || lower.contains("slash command") || lower.contains("/aida-");
+
+    // A `feat` that adds a skill / slash command lands in New skills (checked
+    // before the generic feat branch). A `fix` that merely touches a skill is
+    // still a Fix, not a new skill.
+    if is_feat && mentions_skill {
+        return Some(CapabilitySurface::NewSkill);
+    }
+    if is_fix {
+        return Some(CapabilitySurface::Fix);
+    }
+    if is_feat {
+        // A feat that adds a command/subcommand vs one that changes a flag.
+        let adds_command = lower.contains("command")
+            || lower.contains("subcommand")
+            || lower.contains(" add ")
+            || lower.contains("new ");
+        if adds_command {
+            return Some(CapabilitySurface::NewCommand);
+        }
+        return Some(CapabilitySurface::ChangedBehavior);
+    }
+    None
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CapabilitiesReport {
+    pub new_commands: Vec<CapabilityChange>,
+    pub changed_behaviors: Vec<CapabilityChange>,
+    pub fixes: Vec<CapabilityChange>,
+    pub new_skills: Vec<CapabilityChange>,
+}
+
+impl CapabilitiesReport {
+    pub fn is_empty(&self) -> bool {
+        self.new_commands.is_empty()
+            && self.changed_behaviors.is_empty()
+            && self.fixes.is_empty()
+            && self.new_skills.is_empty()
+    }
+}
+
+/// Build the deterministic capabilities candidate set from the window's commits.
+/// Dev-only commits are dropped; the survivors are value-cleaned (PR suffix +
+/// SPEC-IDs stripped) and bucketed by surface. trace:STORY-541
+pub fn collect_capabilities(commits: &[CommitRec]) -> CapabilitiesReport {
+    let mut report = CapabilitiesReport::default();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for c in commits {
+        if is_dev_only_commit(&c.subject) {
+            continue;
+        }
+        let Some(surface) = classify_capability(&c.subject) else {
+            continue;
+        };
+        // Value framing: drop the `[AI:tool]` authorship prefix, the trailing PR
+        // suffix, and the SPEC-ID tokens so the operator sees the change, not the
+        // dev-task breadcrumb.
+        let value = strip_spec_ids(&strip_pr_suffix(strip_ai_prefix(&c.subject)));
+        if value.is_empty() || !seen.insert(value.to_lowercase()) {
+            continue;
+        }
+        let change = CapabilityChange { surface, value };
+        match surface {
+            CapabilitySurface::NewCommand => report.new_commands.push(change),
+            CapabilitySurface::ChangedBehavior => report.changed_behaviors.push(change),
+            CapabilitySurface::Fix => report.fixes.push(change),
+            CapabilitySurface::NewSkill => report.new_skills.push(change),
+        }
+    }
+    report
 }
 
 // ============================================================================
@@ -746,9 +933,63 @@ pub struct DigestReport {
     pub next: NextSection,
     pub plans: Vec<PlanRef>,
     pub process: Vec<MemoryEntry>,
+    /// Operator-audience capabilities lens (CLI-surface diff). trace:STORY-541
+    pub capabilities: CapabilitiesReport,
+}
+
+/// Render the operator (capabilities) lens: grouped by surface, value-framed,
+/// SPEC-IDs stripped, including any releases in the window. trace:STORY-541
+fn render_capabilities_markdown(report: &DigestReport, _opts: &DigestOptions) -> String {
+    let mut s = String::new();
+    s.push_str(&format!(
+        "# AIDA — what changed for you {} → {}\n\n",
+        report.since.format("%Y-%m-%d"),
+        report.until.format("%Y-%m-%d")
+    ));
+
+    if !report.releases.is_empty() {
+        s.push_str("## Released\n\n");
+        for r in &report.releases {
+            let subject = r.subject.as_deref().unwrap_or("");
+            let subject = strip_spec_ids(subject);
+            s.push_str(&format!("- **{}** ({})", r.name, r.date.format("%Y-%m-%d")));
+            if !subject.is_empty() && subject != r.name {
+                s.push_str(&format!(" — {}", subject));
+            }
+            s.push('\n');
+        }
+        s.push('\n');
+    }
+
+    let cap = &report.capabilities;
+    let section = |s: &mut String, heading: &str, items: &[CapabilityChange]| {
+        if items.is_empty() {
+            return;
+        }
+        s.push_str(&format!("## {}\n\n", heading));
+        for c in items {
+            s.push_str(&format!("- {}\n", c.value));
+        }
+        s.push('\n');
+    };
+    section(&mut s, "New commands", &cap.new_commands);
+    section(&mut s, "Changed flags & behaviors", &cap.changed_behaviors);
+    section(&mut s, "Fixes you'll notice", &cap.fixes);
+    section(&mut s, "New skills", &cap.new_skills);
+
+    if cap.is_empty() && report.releases.is_empty() {
+        s.push_str("_No user-facing changes in this window._\n");
+    }
+    s
 }
 
 pub fn render_markdown(report: &DigestReport, opts: &DigestOptions) -> String {
+    // The operator lens is a capabilities-surface view, not a work narrative.
+    // trace:STORY-541
+    if opts.audience.is_capabilities_lens() {
+        return render_capabilities_markdown(report, opts);
+    }
+
     let mut s = String::new();
     s.push_str(&format!(
         "# AIDA — work digest {} → {}\n\n",
@@ -1063,6 +1304,16 @@ fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
         next_queued_loose: &'a Vec<String>,
         plans: Vec<PlanJson<'a>>,
         process: Vec<&'a MemoryEntry>,
+        /// Operator-lens candidate set (Layer-1 facts the skill renders from).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        capabilities: Option<CapabilitiesJson<'a>>,
+    }
+    #[derive(Serialize)]
+    struct CapabilitiesJson<'a> {
+        new_commands: Vec<&'a str>,
+        changed_behaviors: Vec<&'a str>,
+        fixes: Vec<&'a str>,
+        new_skills: Vec<&'a str>,
     }
     #[derive(Serialize)]
     struct ReleaseJson<'a> {
@@ -1094,6 +1345,20 @@ fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
     let pivots: Vec<&Pivot> = report.pivots.iter().collect();
     let in_flight: Vec<&InFlightSpec> = report.next.in_flight.iter().collect();
     let process: Vec<&MemoryEntry> = report.process.iter().collect();
+    let capabilities = if opts.audience.is_capabilities_lens() {
+        let cap = &report.capabilities;
+        fn values(items: &[CapabilityChange]) -> Vec<&str> {
+            items.iter().map(|c| c.value.as_str()).collect()
+        }
+        Some(CapabilitiesJson {
+            new_commands: values(&cap.new_commands),
+            changed_behaviors: values(&cap.changed_behaviors),
+            fixes: values(&cap.fixes),
+            new_skills: values(&cap.new_skills),
+        })
+    } else {
+        None
+    };
 
     let doc = DigestJson {
         since: report.since.to_rfc3339(),
@@ -1142,6 +1407,7 @@ fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
             })
             .collect(),
         process,
+        capabilities,
     };
     serde_json::to_string_pretty(&doc).context("serialize digest as JSON")
 }
@@ -1208,6 +1474,14 @@ pub fn render_string(
     let releases = list_release_tags(project_root, opts.since, opts.until);
     let completed = collect_completed(store, opts);
     let commits = scan_commits(project_root, opts.since, opts.until);
+    // The capabilities lens (operator) classifies the FULL window over its own
+    // dev-only filter; the work-narrative sections use the noise filter.
+    // trace:STORY-541
+    let capabilities = if opts.audience.is_capabilities_lens() {
+        collect_capabilities(&commits)
+    } else {
+        CapabilitiesReport::default()
+    };
     let interesting: Vec<CommitRec> = commits
         .into_iter()
         .filter(|c| !is_noise_commit(&c.subject))
@@ -1238,6 +1512,7 @@ pub fn render_string(
         next,
         plans,
         process,
+        capabilities,
     };
 
     Ok(match opts.format {
@@ -1510,6 +1785,7 @@ mod tests {
             next: NextSection::default(),
             plans: vec![],
             process: vec![],
+            capabilities: CapabilitiesReport::default(),
         };
         let customer = render_markdown(&report, &opts);
         assert!(!customer.contains("STORY-"));
@@ -1539,11 +1815,162 @@ mod tests {
             next: NextSection::default(),
             plans: vec![],
             process: vec![],
+            capabilities: CapabilitiesReport::default(),
         };
         let brief = render_brief(&report, &opts);
         assert!(!brief.contains("##"));
         // Single paragraph means no internal blank line.
         let trimmed = brief.trim_end();
         assert!(!trimmed.contains("\n\n"));
+    }
+
+    // ---- operator (capabilities) lens — STORY-541 ----
+
+    #[test]
+    fn is_dev_only_commit_drops_clippy_and_refactor_keeps_feat() {
+        // Zero-impact dev work → dropped.
+        assert!(is_dev_only_commit(
+            "fix: 3 clippy correctness errors hidden by CI (TASK-9)"
+        ));
+        assert!(is_dev_only_commit(
+            "refactor(core): extract helper (TASK-1)"
+        ));
+        assert!(is_dev_only_commit("test(digest): add cases (TASK-2)"));
+        assert!(is_dev_only_commit("perf: faster scan"));
+        assert!(is_dev_only_commit(
+            "refactor(mcp): internal plumbing rename (TASK-3)"
+        ));
+        // Existing noise still dropped.
+        assert!(is_dev_only_commit("chore(deps): bump tokio"));
+        assert!(is_dev_only_commit("docs: README polish"));
+        // User-facing work → kept.
+        assert!(!is_dev_only_commit(
+            "feat(queue): add --batch flag (STORY-42)"
+        ));
+        assert!(!is_dev_only_commit("fix(core): no longer panics on emoji"));
+    }
+
+    #[test]
+    fn ai_authorship_prefix_does_not_defeat_noise_and_classify() {
+        // `[AI:tool]` prefix must not hide the conventional-commit type.
+        assert!(is_dev_only_commit(
+            "[AI:claude] docs(skills): migrate preamble (TASK-1)"
+        ));
+        assert!(is_dev_only_commit(
+            "[AI:codex] test(templates): widen guard (TASK-2)"
+        ));
+        // A real feat behind the prefix still classifies + value-strips it.
+        let commits = vec![commit(
+            "a",
+            "[AI:claude] feat(queue): add prune --merged command (STORY-1)",
+            &["STORY-1"],
+            None,
+        )];
+        let report = collect_capabilities(&commits);
+        assert_eq!(report.new_commands.len(), 1);
+        let v = &report.new_commands[0].value;
+        assert!(!v.contains("[AI:"));
+        assert!(!v.contains("STORY-"));
+        assert!(v.starts_with("feat(queue)"));
+    }
+
+    #[test]
+    fn classify_capability_buckets_by_surface() {
+        assert_eq!(
+            classify_capability("feat(digest): add operator audience command (STORY-541)"),
+            Some(CapabilitySurface::NewCommand)
+        );
+        assert_eq!(
+            classify_capability("feat(queue): --auto-complete now skips reviewer (STORY-1)"),
+            Some(CapabilitySurface::ChangedBehavior)
+        );
+        assert_eq!(
+            classify_capability("fix(core): no longer crashes on non-ASCII (BUG-1)"),
+            Some(CapabilitySurface::Fix)
+        );
+        assert_eq!(
+            classify_capability("feat: new /aida-digest skill (STORY-2)"),
+            Some(CapabilitySurface::NewSkill)
+        );
+    }
+
+    #[test]
+    fn collect_capabilities_drops_noise_strips_ids_and_buckets() {
+        let commits = vec![
+            commit(
+                "a",
+                "feat(plan): add aida plan verify command (TASK-93)",
+                &["TASK-93"],
+                None,
+            ),
+            commit(
+                "b",
+                "fix(core): no longer crashes on emoji titles (BUG-7)",
+                &["BUG-7"],
+                None,
+            ),
+            // dev-only noise — must be dropped.
+            commit(
+                "c",
+                "fix: clippy correctness warnings (TASK-9)",
+                &["TASK-9"],
+                None,
+            ),
+            commit("d", "refactor(core): tidy (TASK-10)", &["TASK-10"], None),
+            commit("e", "chore(deps): bump", &[], None),
+        ];
+        let report = collect_capabilities(&commits);
+        assert_eq!(report.new_commands.len(), 1);
+        assert_eq!(report.fixes.len(), 1);
+        assert!(report.changed_behaviors.is_empty());
+        assert!(report.new_skills.is_empty());
+        // SPEC-IDs stripped from the value framing.
+        let all: String = report
+            .new_commands
+            .iter()
+            .chain(&report.fixes)
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!all.contains("TASK-"));
+        assert!(!all.contains("BUG-"));
+        assert!(all.contains("aida plan verify"));
+    }
+
+    #[test]
+    fn operator_lens_renders_capabilities_not_work_narrative() {
+        let now = Utc::now();
+        let mut opts = opts_at(now - chrono::Duration::days(7), now);
+        opts.audience = DigestAudience::Operator;
+        let mut capabilities = CapabilitiesReport::default();
+        capabilities.new_commands.push(CapabilityChange {
+            surface: CapabilitySurface::NewCommand,
+            value: "feat(plan): add aida plan verify command".into(),
+        });
+        let report = DigestReport {
+            since: opts.since,
+            until: opts.until,
+            releases: vec![],
+            // Work-narrative content that the operator lens must IGNORE.
+            completed: vec![CompletedSpec {
+                display_id: "STORY-99".into(),
+                title: "internal refactor".into(),
+                req_type: RequirementType::Story,
+                completed_at: now,
+            }],
+            cluster_prs: vec![],
+            strategic: vec![],
+            pivots: vec![],
+            next: NextSection::default(),
+            plans: vec![],
+            process: vec![],
+            capabilities,
+        };
+        let md = render_markdown(&report, &opts);
+        assert!(md.contains("## New commands"));
+        assert!(md.contains("aida plan verify"));
+        // Work-narrative section + SPEC-IDs absent.
+        assert!(!md.contains("## Major progress"));
+        assert!(!md.contains("STORY-99"));
     }
 }
