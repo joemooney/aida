@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:04:00.191165207Z
-modified_at: 2026-06-09T02:04:00.191165207Z
+modified_at: 2026-06-09T02:04:59.969357532Z
 req_type: Task
 tags:
 - docs
@@ -24,3 +24,9 @@ tags:
 - onboarding
 - schema
 - substrate-as-bouncer
+comments:
+- id: 019eaa20-3cc1-7c62-b3ab-defd9f807b4c
+  author: joe
+  content: 'Filing repair: two backticked tokens were shell-eaten in the description above. Item 2 should read "...the `--type` --help text..."; item 3 should read "...have the docs point at the `aida schema` command (now reflection-derived, STORY-538)...". Meaning unchanged.'
+  created_at: 2026-06-09T02:04:59.969357532Z
+  modified_at: 2026-06-09T02:04:59.969357532Z
