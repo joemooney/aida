@@ -8,5 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:57:38.898670345Z
-modified_at: 2026-06-09T01:57:38.898670345Z
+modified_at: 2026-06-09T01:57:59.695758047Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 019ea9fd-7202-7032-ae1b-6324f38d1586
+  created_at: 2026-06-09T01:57:59.695750155Z
+  created_by: joe
