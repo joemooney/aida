@@ -11886,6 +11886,12 @@ fn handle_brief_command(
             } else {
                 spec.to_string()
             };
+            // STORY-528: brief-time GUARD — warn (do NOT refuse) when the
+            // target agent is paused (budget/rate-limit), so the operator
+            // knows the brief may sit unread until the agent resumes.
+            if let Some(warning) = agent_registry::paused_warning_for_target(project_root, agent) {
+                eprintln!("{}", warning.yellow());
+            }
             let note = read_brief_note(note)?;
             let path = create_agent_brief(
                 project_root,
@@ -27863,9 +27869,76 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             name,
         } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
         AgentCommand::Ls => agent_ls(),
+        AgentCommand::Status => agent_ls(),
+        AgentCommand::Pause {
+            agent,
+            reason,
+            resets,
+        } => agent_pause(agent, reason, resets.as_deref()),
+        AgentCommand::Resume { agent } => agent_resume(agent),
         AgentCommand::Stop { name } => agent_stop(name),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
     }
+}
+
+// trace:STORY-528 | ai:claude
+fn agent_pause(agent: &str, reason: &str, resets: Option<&str>) -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let reason = agent_registry::PauseReason::parse(reason).ok_or_else(|| {
+        anyhow::anyhow!(
+            "invalid pause reason '{}' (expected: budget, rate-limit, manual, unknown)",
+            reason
+        )
+    })?;
+    let expected_back = match resets {
+        Some(when) => Some(parse_resets_when(when)?),
+        None => None,
+    };
+    let entry = agent_registry::pause_agent(&project_root, agent, reason, expected_back)?;
+    let identity = entry
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
+    let detail = agent_registry::pause_detail(reason, entry.expected_back);
+    println!("{} {} {}", "⏸".yellow(), identity.cyan(), detail);
+    Ok(())
+}
+
+// trace:STORY-528 | ai:claude
+fn agent_resume(agent: &str) -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let entry = agent_registry::resume_agent(&project_root, agent)?;
+    let identity = entry
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
+    println!("{} {} resumed (available)", "▶".green(), identity.cyan());
+    Ok(())
+}
+
+/// Parse a `--resets` value: an RFC3339 timestamp, or a relative duration
+/// (`2h` / `90m` / `45s`) added to now. trace:STORY-528 | ai:claude
+fn parse_resets_when(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
+    let raw = raw.trim();
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
+        return Ok(dt.with_timezone(&chrono::Utc));
+    }
+    let (num, unit) = raw.split_at(raw.find(|c: char| !c.is_ascii_digit()).unwrap_or(raw.len()));
+    let n: i64 = num.parse().map_err(|_| {
+        anyhow::anyhow!(
+            "invalid --resets value '{}' (expected RFC3339 timestamp or relative duration like 2h/90m/45s)",
+            raw
+        )
+    })?;
+    let delta = match unit.trim() {
+        "h" => chrono::Duration::hours(n),
+        "m" => chrono::Duration::minutes(n),
+        "s" => chrono::Duration::seconds(n),
+        other => anyhow::bail!("invalid --resets unit '{}' (expected h, m, or s)", other),
+    };
+    Ok(chrono::Utc::now() + delta)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29323,15 +29396,21 @@ fn agent_ls() -> Result<()> {
         } else {
             agent.pid.to_string()
         };
+        // STORY-528: surface paused-availability inline after the worktree.
+        let paused_note = match agent_registry::paused_glyph(&agent) {
+            Some(g) => format!("  {g}"),
+            None => String::new(),
+        };
         println!(
-            "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}",
+            "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}{}",
             identity,
             pid_str,
             agent.role.as_deref().unwrap_or("(none)"),
             agent.current_spec.as_deref().unwrap_or("(none)"),
             agent.status.as_str(),
             format!("({elapsed})"),
-            agent.worktree_path.display()
+            agent.worktree_path.display(),
+            paused_note
         );
     }
     Ok(())
@@ -71961,6 +72040,12 @@ fn lease_agent_view(
         binary_version: None,
         build_sha: None,
         status,
+        // STORY-528: lease-derived views have no availability state of their
+        // own — only registry-backed agents can be paused.
+        availability: agent_registry::Availability::Available,
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
     }
 }
 
@@ -74422,6 +74507,10 @@ mod task_515_status_agent_lease_fallback_tests {
             binary_version: Some("0.9.1".to_string()),
             build_sha: Some("abc123".to_string()),
             status: agent_registry::AgentStatus::Busy,
+            availability: agent_registry::Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
         };
         let ctx = agent_registry::AgentClassifyContext::new(lease.started_at, 30, vec![]);
 

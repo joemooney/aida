@@ -4838,6 +4838,34 @@ pub enum AgentCommand {
     // trace:TASK-542 | ai:antigravity
     Ls,
 
+    /// Show active agent processes (alias of `ls`).
+    // trace:STORY-528 | ai:claude
+    Status,
+
+    /// Mark an agent paused (e.g. budget exhausted / rate-limited) so status
+    /// and brief-time dispatch flag it. Does not stop the process.
+    // trace:STORY-528 | ai:claude
+    Pause {
+        /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
+        agent: String,
+
+        /// Why it is paused: budget, rate-limit, manual, or unknown.
+        #[clap(long, value_name = "REASON", default_value = "manual")]
+        reason: String,
+
+        /// When the quota is expected to reset — an RFC3339 timestamp
+        /// (2026-06-09T18:00:00Z) or a relative duration (2h, 90m, 45s).
+        #[clap(long, value_name = "WHEN")]
+        resets: Option<String>,
+    },
+
+    /// Clear an agent's paused state back to available.
+    // trace:STORY-528 | ai:claude
+    Resume {
+        /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
+        agent: String,
+    },
+
     /// Stop an active agent process by name.
     // trace:TASK-542 | ai:antigravity
     Stop {
