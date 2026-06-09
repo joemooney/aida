@@ -1,0 +1,45 @@
+id: 019eab20-6ee9-78c0-b235-43e979f338cb
+spec_id: STORY-546
+agreed_id: STORY-546
+title: 'burndown gate requires QUEUED (advisor sign-off): set = approved + queued + pickable'
+description: |-
+  ## Operator decision (2026-06-08)
+
+  'I want the advisor to sign off on any burndown — I don't like bypassing the advisor. I want a mechanism to identify a set of approved AND queued items ready for burndown.'
+
+  This OVERRIDES the earlier 'operator launch = disposition' framing (which weakened the advisor gate — explicitly rejected). The advisor sign-off must be explicit, not collapsed into running the command.
+
+  ## Mechanism
+
+  The burndown set is redefined: **approved + QUEUED + pickable** (pickable = bounded, unblocked, decision-free). Queue membership IS the advisor sign-off — `queue add` is already advisor-authority-gated (ADR-3 / TASK-647). Burndown can therefore NEVER touch a spec the advisor didn't deliberately queue. No bypass, by construction.
+
+  Flow: ADVISOR curates (queues the blessed set) -> BURNDOWN drains the pickable subset of that queue. Burndown never auto-populates the queue and never reaches past it.
+
+  ## Change vs today
+
+  `aida burndown plan` currently filters by STATUS only (scans the whole approved backlog, queued-or-not). It must ALSO require queue membership so the drained set == advisor-curated queue ∩ pickable.
+
+  ## Acceptance
+
+  - [ ] `aida burndown plan` (default) shows ONLY approved + queued + pickable specs — the advisor-blessed, ready-to-drain set. Unqueued approved specs are NOT in the default ready set.
+  - [ ] A curation view (`--candidates` or equiv) shows approved + pickable + NOT-yet-queued specs — the advisor's 'what could I bless next' aid (so filling the burndown queue is easy). Read-only; never auto-queues.
+  - [ ] Existing `--tag`/`--batch` selectors compose with the queued requirement (e.g. advisor tags a `batch:tonight` subset within the queue and scopes burndown to it).
+  - [ ] Drafts/unapproved are excluded by definition (not approved) — the earlier draft-opt-in is dropped.
+  - [ ] `--json` reflects the queued scoping.
+  - [ ] Docs/help state plainly: queue membership = advisor sign-off; burndown drains only what the advisor queued.
+
+  ## Rationale
+
+  The advisor-sign-off mechanism the operator asked for, using the existing advisor-gated queue as the gate rather than inventing a new blessing. Foundational: both `aida burndown plan` (STORY-544 footer) and `aida burndown run` (STORY-545) depend on this scoping. Ships independently of the run engine (you get the curated ready-view first).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T06:44:50.025366020Z
+modified_at: 2026-06-09T06:44:50.025366020Z
+req_type: Story
+tags:
+- advisor-gate
+- aida:burndown
+- blocks:STORY-545
+- from-self-test
