@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T16:03:47.430563250Z
-modified_at: 2026-06-09T16:04:02.210632105Z
+modified_at: 2026-06-09T16:28:43.221116043Z
 req_type: ChangeRequest
 tags:
 - brand
@@ -27,3 +27,9 @@ relationships:
   target_id: 019e0dee-b039-7102-b19c-0923ad150658
   created_at: 2026-06-09T16:04:02.210626493Z
   created_by: joe
+comments:
+- id: 019ead36-ff55-77a1-9b52-36afaa2a32aa
+  author: joe
+  content: Commit f534b0105 references this requirement
+  created_at: 2026-06-09T16:28:43.221116043Z
+  modified_at: 2026-06-09T16:28:43.221116043Z
