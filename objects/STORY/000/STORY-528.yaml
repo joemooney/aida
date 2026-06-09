@@ -3,12 +3,12 @@ spec_id: STORY-528
 agreed_id: STORY-528
 title: Agent registry paused-availability state + brief-time budget warning
 description: 'SPIKE-13 recommendation (docs/spikes/2026-06-07-spike-13-budget-aware-dispatch.md): fused Path 2+3+4 MVP. Add availability:{Available|Paused} + paused_since + paused_reason{budget|rate-limit|manual|unknown} + expected_back to the EPIC-31 agent registry record (extends STORY-435 heartbeat last_active_at). Commands: `aida agent pause <agent> --reason budget [--resets <when>]` / `aida agent resume`. Surface a per-agent ''⏸ paused (budget, ~back HH:MM)'' line in `aida status`/`aida agent status`. Brief-time GUARD: `aida brief <agent> <SPEC>` WARNS (not refuses) when target is Paused. Path 1 (per-provider budget APIs) explicitly rejected as non-portable/pre-evidence. RECURRENCE-GATED: pull only when budget-pause events reach >=3 (we have 2 as of 2026-06-07). Composes with EPIC-31 + STORY-435.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-07T21:39:15.720072755Z
-modified_at: 2026-06-07T21:39:40.551986057Z
+modified_at: 2026-06-09T06:53:59.583341026Z
 req_type: Story
 tags:
 - agent-coordination
