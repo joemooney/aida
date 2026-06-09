@@ -1,0 +1,41 @@
+id: 019eaced-f417-7ec3-85a1-469e59a5f767
+spec_id: STORY-549
+agreed_id: STORY-549
+title: Weekly multi-agent competitive deep-dive ritual (brief-driven) → adversarial deep-research via ultraplan
+description: |-
+  ## Operator ask (2026-06-09)
+
+  Run marketplace/competitive analysis WEEKLY (was quarterly per docs/competitive-analysis/README.md). An all-day-if-needed deep dive: what AIDA is, who the competitors are, where to go, what to adopt, how to adapt. Hand a reusable brief to multiple agents (operator has 3 + the advisor). Evolve into an adversarial deep-research capability, eventually assembled via 'aida ultraplan'.
+
+  ## Delivered now
+
+  `docs/competitive-analysis/research-brief.md` — reusable, self-contained, multi-agent brief: 5 mission questions, required grounding reading, 4 parallel lanes (A spec-driven-dev neighbors / B orchestration+swarm frontier / C memory+MCP+distribution / D adversarial red-team), independent-then-reconcile discipline, source/rigor rules (provenance tags, no-overclaim, incentive-not-capability), dated-snapshot output contract, paste-ready hand-off.
+
+  ## Acceptance (the recurring ritual)
+
+  - [ ] Cadence formalized: weekly deep-dive (the brief) layered over the existing quarterly+signal-triggered discipline; README updated to point at the brief as the run vehicle.
+  - [ ] Each run produces a NEW dated `YYYY-MM-DD-weekly-scan.md` (immutable snapshots) + updates ecosystem-watch.md + opens DRAFT specs for adopt/adapt items (master triages — never self-approve/queue).
+  - [ ] Lanes are dispatchable to ≥3 agents in parallel; a synthesis + red-team reconciliation pass runs last.
+  - [ ] EVOLUTION: an `aida ultraplan`-assembled adversarial deep-research run that fans the lanes out as agents and auto-synthesizes (the brief's lane structure is designed to become the workflow stages). File as a child SPIKE/STORY when the ritual has run a few times and the lane structure has stabilized.
+  - [ ] Decide whether the Ecosystem Watch Captain (advisor's 7th responsibility) owns dispatch, or it rotates.
+
+  ## Open question for the master
+
+  Weekly all-day multi-agent is aggressive on agent budget (3+ agents, possibly full-day). Confirm weekly deep-dive vs weekly light-signal-sweep + monthly deep-dive. The brief supports either; cadence is a dial. Aligns with the LEAD-don't-wait competitive-race mandate.
+
+  ## Rationale
+
+  Turns a quarterly, captain-led, ad-hoc scan into a repeatable weekly multi-agent ritual with an adversarial spine — and seeds the ultraplan-driven automation. Brief built ON the existing corpus (keystone synthesis + positioning papers + signals-to-watch), not a reinvention.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T15:08:56.215925139Z
+modified_at: 2026-06-09T15:08:56.215925139Z
+req_type: Story
+tags:
+- advisor
+- cadence
+- competitive-analysis
+- ecosystem-watch
+- from-self-test
