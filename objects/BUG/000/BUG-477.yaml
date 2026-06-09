@@ -1,0 +1,19 @@
+id: 019ea9ed-c594-7c93-9920-7dd7b1570de9
+spec_id: BUG-477
+agreed_id: BUG-477
+title: Merge-driven done→completed auto-bump + reconcile write NO history entry (history-as-source-of-truth contract broken)
+description: 'VERIFIED (advisor read models.rs:3605 + the 4 call sites, found by quality-sweep reviewer). set_status_from_str (models.rs:3605) only assigns self.status — it does NOT push a HistoryEntry. All four merge-driven completion sites — auto_bump_done_to_completed (main.rs:66982, 67021) and handle_db_reconcile_status (67402, 67437) — use set_status_from_str("Completed"). update_atomically/the git backends do not synthesize history by diffing. So the single most common completion transition (merge-driven done→completed) leaves NO row in the per-spec history: array. The manual ''aida edit --status'' path DOES record it (via record_change). CLAUDE.md declares the history: array ''the source-of-truth for spec-state time series'' that ''aida history --events'' reads — so burn-down/status-flow analytics walking history systematically under-count completions, and modified_at alone can''t reconstruct the from→to pair. Fix: the auto-bump/reconcile paths should record a status field_change via record_change (like the manual edit path) rather than the low-level setter.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:09:52.660571479Z
+modified_at: 2026-06-09T01:09:52.660571479Z
+req_type: Bug
+tags:
+- analytics
+- auto-bump
+- from-review:quality-sweep
+- history
+- severity:medium
+- verified-by-advisor
