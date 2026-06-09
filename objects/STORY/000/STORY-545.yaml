@@ -1,0 +1,45 @@
+id: 019eab13-c8a9-7430-83ad-d220620f0a2e
+spec_id: STORY-545
+agreed_id: STORY-545
+title: 'aida burndown run: CLI verb for the headless sequential drain over the gated ready set'
+description: |-
+  ## Problem (operator, dumm2 dogfood 2026-06-08)
+
+  `aida burndown plan` has no CLI sibling that RUNS the result, so a user at a plain shell (not in a Claude Code session) hits a dead end — the only runner offered is the `/aida-burndown` skill, which needs the harness. The operator asked: 'could we invoke it via `aida queue burndown` or similar which would imply --no-human=both and --auto-complete?'
+
+  ## Key context — two runners exist
+
+  - PARALLEL fan-out = `/aida-burndown` skill: spawns worktree-isolated implementer SUBAGENTS; HARNESS-ONLY (a plain `aida` process cannot spawn subagents). Stays a skill. Recommended/fastest.
+  - SEQUENTIAL drain = `aida queue work --auto-complete --no-human=both <selector>`: `claude -p` subprocess per spec, one lifecycle at a time. ALREADY pure CLI.
+
+  The proposed verb wraps the SEQUENTIAL one. `aida burndown plan` is confirmed read-only (gate only).
+
+  ## Proposal
+
+  `aida burndown run [selector]` (alias considered: `aida queue burndown`) = apply the burndown-plan pickability gate (bounded + unblocked + decision-free), then drain the resulting ready set via `queue work --auto-complete --no-human=both`. Selector defaults to `--status approved`, same shape as `plan`.
+
+  ## Acceptance
+
+  - [ ] `aida burndown run` resolves the ready set through the SAME gate as `aida burndown plan` (only bounded/unblocked/decision-free specs drain — the 'never stop to ask' safety property is preserved by construction).
+  - [ ] It drives each ready spec through `--auto-complete --no-human=both` (headless implementer + orchestrator), SEQUENTIALLY; exit code follows the existing drain convention (2 when anything shelved/skipped).
+  - [ ] `--dry-run` prints exactly what `plan` shows and exits without draining (so plan/run share one mental model).
+  - [ ] Respects `--max-failures` and the lifecycle short-circuit tags, same as `queue work`.
+  - [ ] Help text + the STORY-544 plan footer DISAMBIGUATE the two runners loudly: 'aida burndown run = sequential, headless, works in any shell. /aida-burndown (Claude Code) = parallel fan-out, faster.' Same name family, different engine/parallelism — must not be conflatable.
+  - [ ] Decide the alias question (run subcommand under `burndown` vs `queue burndown`); default to `aida burndown run` to complete the plan/run verb pair under one noun.
+
+  ## Rationale
+
+  Completes the obvious verb pair (`plan` had no `run`) and gives CLI-only / cron / server users a real runner without a Claude Code session. Thin wrapper over existing machinery — no new drain engine. Relates to STORY-544 (the plan footer must point at this once it lands). The skill stays the premium parallel path; this is the portable sequential one.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T06:31:01.033281119Z
+modified_at: 2026-06-09T06:31:01.033281119Z
+req_type: Story
+tags:
+- aida:burndown
+- aida:queue:work
+- ergonomics
+- from-self-test
+- onboarding-flow
