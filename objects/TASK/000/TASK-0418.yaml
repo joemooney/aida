@@ -1,0 +1,17 @@
+id: 019eacf3-80a5-71e3-92b2-c92c36f347fc
+spec_id: TASK-0418
+title: Add context-grounded pre-plan scan for spec imports and generation
+description: 'Add an opt-in context-grounding pass before AIDA plan generation or neighbor-artifact import. Acceptance criteria: scan relevant code/contracts/docs before generating or importing specs; summarize current APIs and architectural constraints; flag likely stale assumptions before implementation; attach scan provenance to the requirement or plan; keep the scan read-only by default; document composition with Spec Kit/OpenSpec-style artifact generators. Filed from Lane A competitive scan, 2026-06-09.'
+status: Draft
+priority: Medium
+owner: ''
+feature: cli
+created_at: 2026-06-09T15:14:59.877407160Z
+modified_at: 2026-06-09T15:14:59.877407160Z
+req_type: Task
+tags:
+- adopt-adapt
+- competitive-scan:2026-06-09
+- lane:a
+- openspec
+- spec-kit
