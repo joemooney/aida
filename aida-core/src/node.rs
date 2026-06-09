@@ -637,20 +637,73 @@ impl BlockRegistry {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let content = std::fs::read_to_string(path)?;
+        // Read through `read_atomic`: a concurrent `aida add` writer may be
+        // mid-`write_atomic` rename on Windows, which surfaces as a transient
+        // PermissionDenied/NotFound. The bounded retry absorbs it.
+        // trace:BUG-474 | ai:claude
+        let content = crate::read_atomic(path)?;
         let registry: BlockRegistry = serde_yaml::from_str(&content)?;
         Ok(registry)
     }
 
     /// Save to a YAML file.
+    ///
+    /// Writes atomically (tempfile + rename) so a concurrent reader — or a
+    /// crash — never observes a torn, half-written block registry. The
+    /// advisory lock in [`with_dispense_lock`](Self::with_dispense_lock)
+    /// serializes the read-modify-write writers; the atomic rename
+    /// additionally guarantees the on-disk file is never half-updated.
+    /// trace:BUG-474 | ai:claude
     #[cfg(feature = "native")]
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let content = serde_yaml::to_string(self)?;
-        std::fs::write(path, content)?;
+        crate::write_atomic(path, content)?;
         Ok(())
+    }
+
+    /// Run `f` while holding an exclusive advisory lock tied to the block
+    /// registry at `blocks_path`.
+    ///
+    /// The agreed-id dispense path is a read-modify-write: `load` → find
+    /// active block → `dispense` (advances `next`) → `save`. Without a lock
+    /// two concurrent `aida add` processes both load `next = N`, both
+    /// dispense `<TYPE>-N`, and both save → a **duplicate stable id**. This
+    /// serializes the whole sequence on a sibling `<blocks>.lock` file using
+    /// an `fs2` exclusive advisory lock, mirroring the pattern TASK-331 used
+    /// for the `FileDispenser` counter. The closure performs the full
+    /// load→dispense→save under the lock; callers must not load/save the
+    /// registry outside it. The lock is released when this returns (success
+    /// or error).
+    ///
+    /// trace:BUG-474 | ai:claude
+    #[cfg(feature = "native")]
+    pub fn with_dispense_lock<T, F>(blocks_path: &Path, f: F) -> anyhow::Result<T>
+    where
+        F: FnOnce() -> anyhow::Result<T>,
+    {
+        use fs2::FileExt;
+        use std::fs::OpenOptions;
+
+        if let Some(parent) = blocks_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let lock_path = blocks_path.with_extension("lock");
+        let lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)?;
+        lock_file.lock_exclusive()?;
+
+        let result = f();
+
+        // Release the lock regardless of how the closure exited.
+        let _ = lock_file.unlock();
+        result
     }
 
     /// Find the active (non-exhausted) block for a given node + type prefix.
@@ -1291,5 +1344,103 @@ registered = "2026-05-09T00:00:00Z"
         assert_eq!(loaded.blocks[0].range_start, 1);
         assert_eq!(loaded.blocks[0].range_end, 100);
         assert_eq!(loaded.blocks[0].node_id, "2");
+    }
+
+    // BUG-474: two serialized load→dispense→save sequences under
+    // `with_dispense_lock` must yield distinct ids. This is the unit-level
+    // proof that the lock-wrapped read-modify-write advances the persisted
+    // `next` pointer between dispenses rather than replaying it.
+    #[cfg(feature = "native")]
+    #[test]
+    fn with_dispense_lock_serialized_dispenses_are_distinct() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blocks.yaml");
+
+        let mut registry = BlockRegistry::default();
+        registry.claim_block("1".into(), "a".into(), "h".into(), "FR".into(), 100);
+        registry.save(&path).unwrap();
+
+        // Each closure mirrors the `aida add` call site: load, dispense, save.
+        let dispense_once = |path: &Path| -> anyhow::Result<String> {
+            BlockRegistry::with_dispense_lock(path, || {
+                let mut reg = BlockRegistry::load(path)?;
+                let (id, _is_low) = reg
+                    .dispense("1", "FR")
+                    .ok_or_else(|| anyhow::anyhow!("no active block"))?;
+                reg.save(path)?;
+                Ok(id)
+            })
+        };
+
+        let first = dispense_once(&path).unwrap();
+        let second = dispense_once(&path).unwrap();
+        assert_eq!(first, "FR-1");
+        assert_eq!(second, "FR-2");
+        assert_ne!(first, second, "serialized dispenses replayed an id");
+    }
+
+    // BUG-474: concurrent-writer stress test mirroring the FileDispenser
+    // concurrency test in dispenser.rs. N threads each run the full
+    // load→dispense→save sequence under `with_dispense_lock` against the
+    // SAME blocks file. The lock serializes the read-modify-write, so every
+    // id handed out must be unique and the dispensed ids must cover a
+    // contiguous range — a missing lock would let two threads both load the
+    // same `next` and emit a duplicate stable id (BUG-474's exact failure).
+    #[cfg(feature = "native")]
+    #[test]
+    fn concurrent_dispense_under_lock_allocates_unique_ids() {
+        use std::sync::Arc;
+        const THREADS: usize = 8;
+        const PER_THREAD: usize = 25;
+        const CAPACITY: u32 = (THREADS * PER_THREAD) as u32;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = Arc::new(dir.path().join("blocks.yaml"));
+
+        let mut registry = BlockRegistry::default();
+        registry.claim_block("1".into(), "a".into(), "h".into(), "FR".into(), CAPACITY);
+        registry.save(&path).unwrap();
+
+        let handles: Vec<_> = (0..THREADS)
+            .map(|_| {
+                let path = Arc::clone(&path);
+                std::thread::spawn(move || {
+                    (0..PER_THREAD)
+                        .map(|_| {
+                            BlockRegistry::with_dispense_lock(&path, || {
+                                let mut reg = BlockRegistry::load(&path)?;
+                                let (id, _is_low) = reg
+                                    .dispense("1", "FR")
+                                    .ok_or_else(|| anyhow::anyhow!("exhausted"))?;
+                                reg.save(&path)?;
+                                Ok(id)
+                            })
+                            .unwrap()
+                        })
+                        .collect::<Vec<String>>()
+                })
+            })
+            .collect();
+
+        let mut ids: Vec<String> = handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect();
+        let total = ids.len();
+        assert_eq!(total, THREADS * PER_THREAD);
+
+        ids.sort();
+        ids.dedup();
+        assert_eq!(
+            ids.len(),
+            total,
+            "dispense handed out duplicate agreed-ids under concurrency"
+        );
+
+        // The block (1..=CAPACITY) is fully consumed and the persisted file
+        // still parses — no torn write replayed or lost a counter.
+        let mut reopened = BlockRegistry::load(&path).unwrap();
+        assert!(reopened.blocks[0].is_exhausted());
+        assert!(reopened.dispense("1", "FR").is_none());
     }
 }
