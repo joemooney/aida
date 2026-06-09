@@ -9320,7 +9320,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // BUG-48: surface the error instead of dropping silently.
                 let rt = parse_requirement_type(t).map_err(|e| {
                     anyhow::anyhow!(
-                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
+                        "{} — expected one of: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
                         e
                     )
                 })?;
@@ -10400,7 +10400,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // valid-list hint as --status / --priority.
                 let rt = parse_requirement_type(t).map_err(|e| {
                     anyhow::anyhow!(
-                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
+                        "{} — expected one of: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
                         e
                     )
                 })?;
@@ -14956,6 +14956,8 @@ pub(crate) fn parse_requirement_type(s: &str) -> Result<RequirementType> {
         "non-functional" | "nonfunctional" | "nfr" => Ok(RequirementType::NonFunctional),
         "system" | "sr" => Ok(RequirementType::System),
         "user" | "ur" => Ok(RequirementType::User),
+        // Workflow type: a proposed change. trace:TASK-716 | ai:claude
+        "change-request" | "changerequest" | "change" | "cr" => Ok(RequirementType::ChangeRequest),
         "bug" => Ok(RequirementType::Bug),
         "epic" => Ok(RequirementType::Epic),
         "story" => Ok(RequirementType::Story),
@@ -14994,6 +14996,72 @@ mod parse_requirement_type_tests {
             parse_requirement_type("documentation").unwrap(),
             RequirementType::Doc
         );
+    }
+
+    /// Drift guard (TASK-716): every `RequirementType` variant must have a
+    /// canonical lowercase string that `parse_requirement_type` round-trips.
+    /// The `match` below is exhaustive, so adding a new variant to the enum
+    /// without wiring it into the CLI parser fails to compile here — keeping
+    /// the documented/user-facing type list from silently drifting behind the
+    /// model (the 13-vs-19 drift this test was filed to prevent).
+    /// trace:TASK-716 | ai:claude
+    #[test]
+    fn every_requirement_type_variant_round_trips() {
+        use aida_core::models::RequirementType::*;
+        // One representative variant per arm; the exhaustive match means a new
+        // enum variant forces a compile error until it is added here.
+        let all = [
+            Functional,
+            NonFunctional,
+            System,
+            User,
+            ChangeRequest,
+            Bug,
+            Epic,
+            Story,
+            Task,
+            Spike,
+            Sprint,
+            Folder,
+            Meta,
+            Principle,
+            Vision,
+            Constraint,
+            Decision,
+            Term,
+            Doc,
+        ];
+        assert_eq!(all.len(), 19, "RequirementType is expected to have 19 variants; update docs (CLAUDE.md, --type help, MCP schema) and this guard when it changes");
+        // Exhaustiveness check: maps each variant to its canonical CLI token.
+        // The compiler enforces every variant is covered.
+        for variant in all {
+            let token = match &variant {
+                Functional => "functional",
+                NonFunctional => "non-functional",
+                System => "system",
+                User => "user",
+                ChangeRequest => "change-request",
+                Bug => "bug",
+                Epic => "epic",
+                Story => "story",
+                Task => "task",
+                Spike => "spike",
+                Sprint => "sprint",
+                Folder => "folder",
+                Meta => "meta",
+                Principle => "principle",
+                Vision => "vision",
+                Constraint => "constraint",
+                Decision => "decision",
+                Term => "term",
+                Doc => "doc",
+            };
+            assert_eq!(
+                parse_requirement_type(token).unwrap(),
+                variant,
+                "type token {token:?} must parse back to its variant"
+            );
+        }
     }
 }
 
@@ -17181,9 +17249,15 @@ fn edit_requirement_cli(
             "sprint" => RequirementType::Sprint,
             "folder" => RequirementType::Folder,
             "meta" => RequirementType::Meta,
+            // ADR / knowledge-graph family (FR-1-074). trace:TASK-716 | ai:claude
+            "principle" | "prin" => RequirementType::Principle,
+            "vision" | "vis" => RequirementType::Vision,
+            "constraint" | "con" => RequirementType::Constraint,
+            "decision" | "adr" => RequirementType::Decision,
+            "term" | "glossary" => RequirementType::Term,
             // trace:STORY-104 | ai:claude
             "doc" | "documentation" => RequirementType::Doc,
-            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc", type_str),
+            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc", type_str),
         };
         if new_type != req.req_type {
             changes.push(Requirement::field_change(

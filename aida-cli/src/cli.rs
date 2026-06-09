@@ -5000,7 +5000,7 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// Type of requirement: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
+        /// Type of requirement: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
         #[clap(long)]
         r#type: Option<String>,
 
@@ -5339,7 +5339,7 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// New type: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
+        /// New type: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
         #[clap(long)]
         r#type: Option<String>,
 

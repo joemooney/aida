@@ -85,8 +85,13 @@ use crate::punt::{
     PuntResolution, PuntResponse,
 };
 
+// Mirrors the full RequirementType taxonomy (aida-core models.rs, 19 variants).
+// The ADR / knowledge-graph family (principle, vision, constraint, decision,
+// term) and the change-request workflow type are first-class — keep this list in
+// sync with `parse_requirement_type` below and the `add_requirement` /
+// `update_requirement` schema enums. trace:TASK-716 | ai:claude
 const VALID_MCP_REQUIREMENT_TYPES: &str =
-    "functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc";
+    "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct McpBinaryIdentity {
@@ -4897,6 +4902,7 @@ fn parse_requirement_type(s: &str) -> Option<RequirementType> {
         "nonfunctional" => Some(RequirementType::NonFunctional),
         "system" => Some(RequirementType::System),
         "user" => Some(RequirementType::User),
+        "changerequest" | "change" | "cr" => Some(RequirementType::ChangeRequest),
         "bug" => Some(RequirementType::Bug),
         "epic" => Some(RequirementType::Epic),
         "story" => Some(RequirementType::Story),
@@ -4905,6 +4911,12 @@ fn parse_requirement_type(s: &str) -> Option<RequirementType> {
         "sprint" => Some(RequirementType::Sprint),
         "folder" => Some(RequirementType::Folder),
         "meta" => Some(RequirementType::Meta),
+        // ADR / knowledge-graph family (FR-1-074). trace:TASK-716 | ai:claude
+        "principle" | "prin" => Some(RequirementType::Principle),
+        "vision" | "vis" => Some(RequirementType::Vision),
+        "constraint" | "con" => Some(RequirementType::Constraint),
+        "decision" | "adr" => Some(RequirementType::Decision),
+        "term" | "glossary" => Some(RequirementType::Term),
         "doc" => Some(RequirementType::Doc),
         _ => None,
     }
@@ -5404,7 +5416,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "Filter by the semantic type of the requirement.",
-                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
                         "example": "story"
                     },
                     "priority": {
@@ -5510,8 +5522,8 @@ pub fn tool_descriptors() -> Value {
                     },
                     "type": {
                         "type": "string",
-                        "description": "Required requirement type. Valid types: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc. Normalizes the assigned SPEC-ID prefix (e.g., 'task' becomes 'TASK-N').",
-                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "description": "Required requirement type. Valid types: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc. (change-request is the workflow type for a proposed change; principle/vision/constraint/decision/term are the ADR + knowledge-graph family.) Normalizes the assigned SPEC-ID prefix (e.g., 'task' becomes 'TASK-N').",
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
                         "example": "story"
                     },
                     "status": {
@@ -5576,7 +5588,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "New semantic type. Changing the type does NOT renumber the existing SPEC-ID.",
-                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
                         "example": "story"
                     },
                     "status": {
@@ -5630,7 +5642,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "Restrict results to this semantic type.",
-                        "enum": ["functional", "non-functional", "system", "user", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "doc"],
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
                         "example": "bug"
                     },
                     "status": {
