@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T02:04:00.191165207Z
-modified_at: 2026-06-09T02:04:59.969357532Z
+modified_at: 2026-06-09T02:28:24.893334863Z
 req_type: Task
 tags:
 - docs
@@ -30,3 +30,8 @@ comments:
   content: 'Filing repair: two backticked tokens were shell-eaten in the description above. Item 2 should read "...the `--type` --help text..."; item 3 should read "...have the docs point at the `aida schema` command (now reflection-derived, STORY-538)...". Meaning unchanged.'
   created_at: 2026-06-09T02:04:59.969357532Z
   modified_at: 2026-06-09T02:04:59.969357532Z
+- id: 019eaa35-acbd-7b90-8f36-fb1d93d1ff60
+  author: joe
+  content: Commit fd2733d2e references this requirement
+  created_at: 2026-06-09T02:28:24.893334863Z
+  modified_at: 2026-06-09T02:28:24.893334863Z
