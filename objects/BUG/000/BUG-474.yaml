@@ -3,12 +3,12 @@ spec_id: BUG-474
 agreed_id: BUG-474
 title: Concurrent 'aida add' can dispense duplicate agreed-IDs (BlockRegistry load→dispense→save has no lock)
 description: 'VERIFIED (advisor code-read, found by quality-sweep reviewer). The agreed-id block path in aida-cli/src/main.rs (~9494 BlockRegistry::load → ~9562 registry.dispense → ~9612 registry.save) has NO advisory lock around the read-modify-write. node.rs BlockRegistry::load/save are plain (no fs2/flock/write_atomic — confirmed via grep). Two concurrent ''aida add'' on the same clone both load next=N, both dispense the same FR-N, both save → two requirements share one stable ID. The in-loop get_requirement_by_spec_id collision-skip does NOT help (neither YAML is written/committed at dispense time). Same torn-counter class TASK-331 fixed for FileDispenser/merge-gate (fs2 lock_exclusive + write_atomic) but never applied to BlockRegistry. Directly in tension with the parallel-implementer-fanout workflow. Also: BlockRegistry::save (node.rs:647) is non-atomic → torn-read hazard. Fix: lock_exclusive + write_atomic around the BlockRegistry dispense path, mirroring TASK-331.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:08:19.194842316Z
-modified_at: 2026-06-09T01:08:19.194842316Z
+modified_at: 2026-06-09T01:44:25.435525595Z
 req_type: Bug
 tags:
 - concurrency
@@ -16,3 +16,7 @@ tags:
 - from-review:quality-sweep
 - severity:high
 - verified-by-advisor
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T01:44:25.435525595Z
+  completion_sha: e887191dc89fa376be25b4aef5d9d8f69f72a51c
