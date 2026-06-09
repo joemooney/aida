@@ -387,19 +387,32 @@ impl Cache {
                 |row| row.get::<_, String>(0),
             )
             .ok();
-        if let Some(v) = &on_disk_version {
-            if v != SCHEMA_VERSION {
-                // Drop the cache tables — the next stale-check will rebuild
-                // from git. `cache_meta` survives so the source HEAD SHA
-                // tracking continues to work after the rebuild stamps it.
-                with_cache_write(&path, "drop cache tables for schema migration", || {
-                    conn.execute_batch(
-                        "DROP TABLE IF EXISTS requirements_cache;
-                         DROP TABLE IF EXISTS requirements_fts;",
-                    )
-                    .context("Failed to drop cache tables for schema migration")
-                })?;
-            }
+        // BUG-485: trigger a migration drop on EITHER a stamped-version
+        // mismatch OR a structural drift in the actual on-disk schema. The
+        // version stamp alone is not enough: a cache can carry the current
+        // `schema_version` yet still have an old `requirements_fts` table
+        // (e.g. a column added to the FTS projection while the version bump
+        // was missed, or a partially-applied earlier migration). In that
+        // state the version check never fires again — a one-way trap — and
+        // the write hard-errors with `table requirements_fts has no column
+        // named external_refs`. Detecting the missing column structurally
+        // makes the cache self-heal: drop + rebuild-from-git on next read.
+        let version_mismatch = on_disk_version
+            .as_deref()
+            .map(|v| v != SCHEMA_VERSION)
+            .unwrap_or(false);
+        let schema_drifted = fts_schema_drifted(&conn);
+        if version_mismatch || schema_drifted {
+            // Drop the cache tables — the next stale-check will rebuild
+            // from git. `cache_meta` survives so the source HEAD SHA
+            // tracking continues to work after the rebuild stamps it.
+            with_cache_write(&path, "drop cache tables for schema migration", || {
+                conn.execute_batch(
+                    "DROP TABLE IF EXISTS requirements_cache;
+                     DROP TABLE IF EXISTS requirements_fts;",
+                )
+                .context("Failed to drop cache tables for schema migration")
+            })?;
         }
         with_cache_write(&path, "apply cache schema", || {
             conn.execute_batch(SCHEMA_SQL)
@@ -411,17 +424,16 @@ impl Cache {
             path,
         };
         cache.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
-        // After a schema-version bump, the head SHA is no longer valid for
-        // the (now-empty) cache tables — delete it so `is_stale` returns
-        // true (None → stale) and the next read triggers a rebuild.
-        if let Some(v) = on_disk_version {
-            if v != SCHEMA_VERSION {
-                let conn = cache.conn.lock().unwrap();
-                conn.execute(
-                    "DELETE FROM cache_meta WHERE key = ?1",
-                    params![META_KEY_SOURCE_HEAD_SHA],
-                )?;
-            }
+        // After a schema-version bump (or a structural-drift drop, BUG-485)
+        // the head SHA is no longer valid for the (now-empty) cache tables —
+        // delete it so `is_stale` returns true (None → stale) and the next
+        // read triggers a rebuild.
+        if version_mismatch || schema_drifted {
+            let conn = cache.conn.lock().unwrap();
+            conn.execute(
+                "DELETE FROM cache_meta WHERE key = ?1",
+                params![META_KEY_SOURCE_HEAD_SHA],
+            )?;
         }
         Ok(cache)
     }
@@ -676,6 +688,49 @@ impl Cache {
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM requirements_cache", [], |r| r.get(0))?;
         Ok(n as usize)
     }
+}
+
+// --------------------------------------------------------------- schema drift
+
+/// Columns the current `requirements_fts` projection must expose. Adding a
+/// column here (and to `cache_schema.sql` + `insert_one`) makes existing
+/// caches self-heal on next open even if the SCHEMA_VERSION bump is missed.
+// trace:BUG-485
+const FTS_REQUIRED_COLUMNS: &[&str] = &[
+    "id",
+    "spec_id",
+    "agreed_id",
+    "title",
+    "description",
+    "external_refs",
+];
+
+/// Returns true when the on-disk `requirements_fts` table exists but is missing
+/// one or more of the columns the current binary writes. A drifted FTS table
+/// would make `insert_one`'s write hard-error (`table requirements_fts has no
+/// column named external_refs`); detecting it structurally lets `open()` drop +
+/// force a rebuild from git regardless of the stamped schema version (BUG-485).
+///
+/// When the table does not exist yet (fresh cache) this returns false — the
+/// schema apply will create it correctly and no migration is needed.
+// trace:BUG-485
+fn fts_schema_drifted(conn: &Connection) -> bool {
+    // `PRAGMA table_info` works on FTS5 virtual tables and lists the
+    // user-visible columns. If the table is absent the pragma yields no rows.
+    let cols: Vec<String> = match conn.prepare("PRAGMA table_info(requirements_fts)") {
+        Ok(mut stmt) => match stmt.query_map([], |row| row.get::<_, String>(1)) {
+            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+            Err(_) => return false,
+        },
+        Err(_) => return false,
+    };
+    if cols.is_empty() {
+        // Table doesn't exist yet — schema apply will create it fresh.
+        return false;
+    }
+    FTS_REQUIRED_COLUMNS
+        .iter()
+        .any(|required| !cols.iter().any(|c| c == required))
 }
 
 // ---------------------------------------------------------------- row helpers
@@ -1182,6 +1237,97 @@ mod tests {
             .unwrap();
         assert_eq!(hits2.len(), 1);
         assert_eq!(hits2[0].spec_id.as_deref(), Some("STORY-476"));
+    }
+
+    #[test]
+    fn old_schema_fts_cache_self_heals_on_open() {
+        // BUG-485: a cache whose `requirements_fts` predates the
+        // `external_refs` column must drop + rebuild on open rather than
+        // hard-erroring on the next write with `table requirements_fts has no
+        // column named external_refs`. Worst-case: the on-disk schema_version
+        // already matches the current SCHEMA_VERSION (the bump was missed /
+        // the FTS table drifted), so a version-stamp check alone would NOT
+        // fire — the structural drift detector must.
+        // trace:BUG-485
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+
+        // Hand-build an OLD-schema cache: the FTS table is the pre-STORY-476
+        // 5-column shape (no `external_refs`), but the meta version is stamped
+        // to the CURRENT value to prove the trap a pure version-check leaves.
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE cache_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE VIRTUAL TABLE requirements_fts USING fts5(
+                     id UNINDEXED, spec_id, agreed_id, title, description,
+                     tokenize = 'porter unicode61'
+                 );",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, SCHEMA_VERSION],
+            )
+            .unwrap();
+            // Stamp a head SHA so a naive open would think the cache is fresh.
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "stalehead"],
+            )
+            .unwrap();
+        }
+
+        // Open with the current binary — must self-heal (drop drifted table)
+        // and clear the stamped head SHA so the next read rebuilds from git.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "self-heal should invalidate the recorded head SHA so a rebuild fires"
+        );
+
+        // A write that uses the new `external_refs` FTS column must now
+        // succeed (would have hard-errored against the old table).
+        let mut store = RequirementsStore::new();
+        let mut a = sample_req("BUG-485", "fts drift heals");
+        a.external_refs = vec!["linear:LIN-485".into()];
+        store.requirements.push(a);
+        cache
+            .rebuild_from_store(&store, "newhead")
+            .expect("rebuild against the healed FTS schema must succeed");
+
+        // And the external ref is searchable, proving the column is live.
+        let hits = cache
+            .search("LIN-485", 10, ArchiveFilter::NonArchivedOnly)
+            .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].spec_id.as_deref(), Some("BUG-485"));
+    }
+
+    #[test]
+    fn fts_schema_drift_detects_missing_column_only() {
+        // trace:BUG-485 — the detector must fire on a drifted (old) FTS table
+        // and stay quiet on a current one and on a fresh (absent) one.
+        let dir = tempdir().unwrap();
+
+        // Absent table → not drifted (fresh apply will create it).
+        let fresh = Connection::open(dir.path().join("fresh.db")).unwrap();
+        assert!(!fts_schema_drifted(&fresh));
+
+        // Old 5-column FTS table → drifted.
+        let old = Connection::open(dir.path().join("old.db")).unwrap();
+        old.execute_batch(
+            "CREATE VIRTUAL TABLE requirements_fts USING fts5(
+                 id UNINDEXED, spec_id, agreed_id, title, description
+             );",
+        )
+        .unwrap();
+        assert!(fts_schema_drifted(&old));
+
+        // Current schema → not drifted (no spurious rebuild on normal runs).
+        let current = Connection::open(dir.path().join("current.db")).unwrap();
+        current.execute_batch(SCHEMA_SQL).unwrap();
+        assert!(!fts_schema_drifted(&current));
     }
 
     #[test]
