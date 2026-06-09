@@ -3,12 +3,12 @@ spec_id: TASK-714
 agreed_id: TASK-714
 title: 'aida schema: full per-object field detail (Finding/Brief/Punt/Directive/Lease/QueueItem)'
 description: Follow-up to STORY-538. Extend the ts-rs-forge reflection registry to the non-Requirement storable types so 'aida schema <object>' can render their field tables the same reflection-derived way 'aida schema requirement' does today. Currently only Requirement has full reflected detail; the others are catalog one-liners.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:57:20.621574075Z
-modified_at: 2026-06-09T01:57:54.658847961Z
+modified_at: 2026-06-09T06:28:02.516307407Z
 req_type: Task
 relationships:
 - rel_type: Child
