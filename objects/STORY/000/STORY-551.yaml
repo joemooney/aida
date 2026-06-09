@@ -1,0 +1,33 @@
+id: 019eacf3-dcc9-78e3-a54c-f65fc5d492c0
+spec_id: STORY-551
+agreed_id: STORY-551
+title: 'Positioning: reclaim ''intent/spec traceability + lifecycle truth'' — ''missing index'' collides with free auto-code-graph tools'
+description: |-
+  ## Trigger (weekly scan 2026-06-09, Lane D, Kill-shot 3)
+
+  Auto-derived CODE-graph tools over MCP (CodeGraph, Augment Context Engine [80% quality lift on Opus 4.5], CodeCompass / the 'Navigation Paradox' arXiv 2602.20048) commoditize 'structural index over MCP' at ZERO discipline cost. AIDA's tagline 'your project's missing index' (VIS-1) collides with them head-on, on their turf, where they win on effort-adjusted value. AIDA's genuinely-defensible value — maintained requirement↔code INTENT traceability, the why, lifecycle truth — is under-told because cheaper claimants own the word 'index'.
+
+  Note: the research VALIDATES AIDA's 'structure beats raw context' premise (Navigation Paradox) — the problem is positioning, not the thesis.
+
+  ## Acceptance
+
+  - [ ] Re-test VIS-1 / the README one-liner: does 'missing index' invite the wrong comparison (vs free auto-code-graph tools)?
+  - [ ] Draft positioning that leads with INTENT/spec traceability + lifecycle truth + cross-vendor portability — the layer auto-code-graphs structurally do NOT have (they're code↔code; AIDA is intent↔code) — and explicitly distinguishes AIDA's graph from auto-derived code graphs.
+  - [ ] Add a positioning paper or update positioning.md / vs-* set for the auto-code-graph category (new neighbor: CodeGraph/Augment/CodeCompass).
+  - [ ] Decide whether to keep, qualify, or retire the 'missing index' line.
+
+  ## Rationale
+
+  The moat is real but defended with a word that has cheaper claimants. Reframe to the defensible intent layer; ages on the code↔code vs intent↔code distinction.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T15:15:23.465448888Z
+modified_at: 2026-06-09T15:15:23.465448888Z
+req_type: Story
+tags:
+- competitive-analysis
+- defensive
+- from-self-test
+- positioning
