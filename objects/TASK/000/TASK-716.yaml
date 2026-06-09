@@ -1,0 +1,26 @@
+id: 019eaa1f-533f-7ba3-b0ee-9c84524e6551
+spec_id: TASK-716
+agreed_id: TASK-716
+title: 'Doc-sync: CLAUDE.md lists 13 requirement types but the model has 19 (change-request/principle/vision/constraint/decision/term undocumented)'
+description: |-
+  VERIFIED (advisor read aida-core/src/models.rs RequirementType + aida schema requirement reflected output, surfaced by STORY-538). The RequirementType enum has 19 variants: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc. CLAUDE.md's 'Requirement types' / '--type (lowercase)' lists only 13 — MISSING: change-request, principle, vision, constraint, decision, term (an ADR/glossary family).
+
+  Reconcile the docs with the model:
+  1. Per missing type, decide: DOCUMENT it (if it's a usable, intended type — principle/vision/constraint/decision/term look like deliberate ADR/knowledge-graph types; change-request too) OR, if any is vestigial/internal, hide it from user-facing surfaces rather than document.
+  2. Update every place that hand-lists types: the dev-repo CLAUDE.md, the CLAUDE.md TEMPLATE generator (aida-core/templates — what scaffolds downstream projects),  --help text, the MCP add_requirement schema enum (mcp.rs), and any positioning/onboarding docs.
+  3. DEEPER FIX (substrate-as-bouncer, prevents re-drift): where practical, have the docs point at  (now reflection-derived, STORY-538) as the canonical type/vocab source instead of re-hand-listing, so this can't silently drift again. Depends on STORY-538 (#691) landing.
+
+  Acceptance: no user-facing surface lists a stale subset; either all 19 documented or the intentionally-hidden ones suppressed from schema/help consistently.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T02:04:00.191165207Z
+modified_at: 2026-06-09T02:04:00.191165207Z
+req_type: Task
+tags:
+- docs
+- from-task:STORY-538
+- onboarding
+- schema
+- substrate-as-bouncer
