@@ -1,0 +1,56 @@
+id: 019eaa99-1d5d-7953-8d9f-06446aa0b896
+spec_id: STORY-542
+agreed_id: STORY-542
+title: Capture interface_changes at spec close (cli/mcp/tui) → the deterministic source for the operator digest
+description: |-
+  ## Want (operator, 2026-06-09)
+
+  The operator digest (STORY-541) is only reliable if the interface impact is captured by the person who made the change, not LLM-inferred from a title (which leaks clippy/internal noise). So capture it AT SPEC CLOSE as structured metadata.
+
+  ## Design
+
+  1. **`interface_changes` metadata on the spec** — a structured field, e.g.:
+     ```yaml
+     interface_changes:
+       cli: ["aida mailbox list — new command", "aida agent new: native default now (was bypass)"]
+       mcp: ["queue_add — now advisor-gated"]
+       tui: []
+     ```
+     Captured at close (`aida queue done` / the merge auto-bump), by the implementer who knows the impact. Empty/absent ⇒ no user-facing interface change ⇒ NEVER appears in the operator digest. This kills the clippy/internal-noise problem DETERMINISTICALLY — no LLM judgment needed for the filter; the LLM only value-frames.
+
+  2. **Close checkpoint** — at `aida queue done`, ask "how does this change the CLI / MCP / TUI / other interface?" (alongside the existing followups capture, TASK-96). Can be derive-and-confirm: propose interface changes from the diff/help-delta, implementer confirms. Skippable for no-impact specs.
+
+  3. **Audience = a filter over interface tags.** The metadata names the interface (cli/mcp/tui); a persona maps to interfaces of interest (operator → cli [+tui]; mcp-integration → mcp). Role-as-audience is just this filter.
+
+  4. **Feeds the digest.** The release-surface manifest (STORY-541 Layer-1) aggregates `interface_changes` across a release; `aida digest --audience operator` renders them; the LLM (Layer-2) writes the value framing.
+
+  ## Context-quarantine constraint (HARD)
+
+  The capture guidance + digest-render guidance live in SKILLS/HOOKS loaded for that objective — close-checkpoint hook at `queue done`, the digest skill — NOT in CLAUDE.md. CLAUDE.md gets at most a one-line pointer. The skill model is the quarantine: load-for-objective, evaporate after. Do NOT grow the always-on context for this. (See memory: feedback_quarantine_specialized_context_in_skills.)
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] Specs carry an optional structured `interface_changes` (cli/mcp/tui/...) field; absent ⇒ no operator-digest entry.
+  - [ ] `aida queue done` (and the merge auto-bump path) captures it — interactively at a TTY (derive-and-confirm), skippable; non-interactive derives or leaves empty.
+  - [ ] The operator digest (STORY-541) renders ONLY specs with `interface_changes`, grouped by interface; filtered per requested audience/persona.
+  - [ ] Capture + render guidance lives in a skill/hook, NOT CLAUDE.md (one-line pointer max).
+  - [ ] No-impact specs (clippy/refactor/test) never require a non-trivial entry.
+
+  ## Relationships
+  - The deterministic Layer-1 source for STORY-541 (operator digest). Close-checkpoint sits with TASK-96 (followups at done). Context-quarantine: feedback_quarantine_specialized_context_in_skills. Surface-change facts also feed aida changelog.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T04:17:01.789619351Z
+modified_at: 2026-06-09T04:17:01.789619351Z
+req_type: Story
+tags:
+- aida:digest
+- aida:queue:done
+- context-quarantine
+- from-product
+- from-user-direction
+- interface-impact
+- parent:STORY-541
+- spec-metadata
