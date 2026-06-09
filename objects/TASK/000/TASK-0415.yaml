@@ -12,14 +12,26 @@ description: |-
   - Support aliases in both positional and `--status` forms: `aida list open`, `aida list --status closed`.
   - Unknown positional shortcuts fail clearly and point users to `--status`, `--type`, `--tags`, or `aida search` rather than being silently ignored.
   - Update `aida list --help`/docs/tests to describe comma OR and alias expansions.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: cli
 created_at: 2026-06-09T06:50:37.369737142Z
-modified_at: 2026-06-09T06:53:41.890824916Z
+modified_at: 2026-06-09T07:28:40.164088323Z
 req_type: Task
 tags:
 - cli
 - role:advisor
 - ux
+history:
+- id: 019eab48-9169-7c73-b208-7de4f966269f
+  author: aida-auto-bump
+  timestamp: 2026-06-09T07:28:40.297473261Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T07:28:40.164088323Z
+  completion_sha: d5ca58ef18be733fb2501cf65ad014dde8541f46
