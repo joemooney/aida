@@ -1,0 +1,18 @@
+id: 019ea9ec-6d49-7813-ae26-3109c9a8d643
+spec_id: BUG-475
+agreed_id: BUG-475
+title: conflict.rs truncate() panics on non-ASCII descriptions (byte-slice after byte-length check)
+description: 'VERIFIED (advisor read conflict.rs:176-182, found by quality-sweep reviewer). fn truncate checks ''s.len() <= max'' (BYTE length) then slices ''&s[..max]'' (BYTE index). If s is >max bytes and a multi-byte UTF-8 char straddles byte index max, ''&s[..max]'' panics (''byte index N is not a char boundary''). truncate is called on local/remote.description in detect_conflict, so a conflict between two specs whose descriptions contain emoji/accents/CJK near offset 100 crashes conflict detection. The user explicitly likes emoji in content, so this is a live trigger. Repro: truncate(&("a".repeat(99) + "é"), 100). Fix: use chars().take(max) or a char_boundary-aware slice.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:08:24.521718788Z
+modified_at: 2026-06-09T01:08:24.521718788Z
+req_type: Bug
+tags:
+- from-review:quality-sweep
+- panic
+- severity:medium
+- utf8
+- verified-by-advisor
