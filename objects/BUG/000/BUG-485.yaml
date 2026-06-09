@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T05:16:26.984018563Z
-modified_at: 2026-06-09T05:16:26.984018563Z
+modified_at: 2026-06-09T05:35:16.491990430Z
 req_type: Bug
 tags:
 - cache
 - from-session:2026-06-08
 - fts
 - schema-migration
+comments:
+- id: 019eaae0-c00b-7cf3-8dd1-e47be945ac5a
+  author: joe
+  content: Commit bcae69ec9 references this requirement
+  created_at: 2026-06-09T05:35:16.491990430Z
+  modified_at: 2026-06-09T05:35:16.491990430Z
