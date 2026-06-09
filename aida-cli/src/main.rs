@@ -30211,6 +30211,28 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+/// BUG-483: pure decision — does any lease OTHER than the one being ended
+/// share `worktree_path`? `aida agent new` can land two sessions in one
+/// worktree (BUG-416), and `session end` force-removes the worktree
+/// unconditionally — which would strand the peer (TASK-0396 cross-worktree
+/// fingerprint hazard + BUG-108 `(deleted)` cwd). We filter the ending lease
+/// out by id and compare canonicalized paths so symlink chains don't mask a
+/// match. Conservative: returns the first peer found so the caller can SKIP
+/// the removal and name the peer. trace:BUG-483 | ai:claude
+fn peer_lease_sharing_worktree<'a>(
+    leases: &'a [SessionLease],
+    ending_id: &str,
+    worktree_path: &std::path::Path,
+) -> Option<&'a SessionLease> {
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let target_canon = canon(worktree_path);
+    leases.iter().find(|l| {
+        l.id != ending_id
+            && !l.worktree_path.as_os_str().is_empty()
+            && canon(&l.worktree_path) == target_canon
+    })
+}
+
 /// TASK-670: the set of requirement UUIDs that sit in *some* role queue
 /// (across every user's queue file), for the leading ↑ work-routing glyph on
 /// `aida list`. Cheap by design — one `read_dir` over
@@ -36701,40 +36723,65 @@ fn session_end(
     // handled separately by Layer 2's eval'd `cd`. trace:TASK-68
     let _ = std::env::set_current_dir(&project_root);
 
-    // BUG-67: always pass `--force`. We've already gated on the dirty
-    // check above, so by this point the only non-clean state is
-    // gitignored (target/, .aida/cache.db, etc.) — which git still
-    // refuses to remove without `--force`. trace:BUG-67 | ai:claude
-    let res = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&project_root)
-        .args([
-            "worktree",
-            "remove",
-            "--force",
-            target.worktree_path.to_str().unwrap_or_default(),
-        ])
-        .output();
+    // BUG-483: before force-removing the worktree, check whether another
+    // registered lease shares this same `worktree_path`. `aida agent new`
+    // can land two sessions in one worktree (BUG-416); force-removing it
+    // out from under the peer strands them (TASK-0396 cross-worktree
+    // fingerprint hazard + BUG-108 `(deleted)` cwd). The target lease was
+    // already deleted above, so the live lease set is peers-only, but we
+    // still filter by id for robustness. Be conservative: any peer ⇒ skip
+    // the removal entirely (leaving a worktree is recoverable; deleting a
+    // shared one is not). We still ended THIS lease/registry entry above.
+    // trace:BUG-483 | ai:claude
+    let remaining_leases = list_leases(&project_root);
     use std::io::Write;
-    match res {
-        Ok(o) if o.status.success() => {
-            let _ = std::io::stderr().write_all(&o.stdout);
-            let _ = std::io::stderr().write_all(&o.stderr);
-            eprintln!("{} worktree removed", "✓".green());
-        }
-        Ok(o) => {
-            let _ = std::io::stderr().write_all(&o.stdout);
-            let _ = std::io::stderr().write_all(&o.stderr);
-            eprintln!(
-                "{} `git worktree remove` failed; you may need to run it manually with --force",
-                "Warning:".yellow().bold()
-            );
-        }
-        Err(_) => {
-            eprintln!(
-                "{} `git worktree remove` failed to spawn; you may need to run it manually",
-                "Warning:".yellow().bold()
-            );
+    let shared_peer =
+        peer_lease_sharing_worktree(&remaining_leases, &target.id, &target.worktree_path);
+    if let Some(peer) = shared_peer {
+        // Skip the removal; this lease/registry entry is already gone, so the
+        // session has ended — we just leave the shared worktree standing.
+        eprintln!(
+            "{} worktree {} is shared by lease {} ({}) — ending this session but leaving the shared worktree in place",
+            "→".dimmed(),
+            target.worktree_path.display(),
+            peer.id.yellow(),
+            peer.scope
+        );
+    } else {
+        // BUG-67: always pass `--force`. We've already gated on the dirty
+        // check above, so by this point the only non-clean state is
+        // gitignored (target/, .aida/cache.db, etc.) — which git still
+        // refuses to remove without `--force`. trace:BUG-67 | ai:claude
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args([
+                "worktree",
+                "remove",
+                "--force",
+                target.worktree_path.to_str().unwrap_or_default(),
+            ])
+            .output();
+        match res {
+            Ok(o) if o.status.success() => {
+                let _ = std::io::stderr().write_all(&o.stdout);
+                let _ = std::io::stderr().write_all(&o.stderr);
+                eprintln!("{} worktree removed", "✓".green());
+            }
+            Ok(o) => {
+                let _ = std::io::stderr().write_all(&o.stdout);
+                let _ = std::io::stderr().write_all(&o.stderr);
+                eprintln!(
+                    "{} `git worktree remove` failed; you may need to run it manually with --force",
+                    "Warning:".yellow().bold()
+                );
+            }
+            Err(_) => {
+                eprintln!(
+                    "{} `git worktree remove` failed to spawn; you may need to run it manually",
+                    "Warning:".yellow().bold()
+                );
+            }
         }
     }
     eprintln!(
@@ -36749,31 +36796,35 @@ fn session_end(
     // jsonls are stranded — `claude --resume <id>` may fail or behave
     // unexpectedly. Default: warn + point at `session prune --orphans`.
     // With `--purge-cc`: remove the dir atomically here.
-    // trace:TASK-70 | ai:claude
-    if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
-        if cc_dir.is_dir() {
-            if purge_cc {
-                match std::fs::remove_dir_all(&cc_dir) {
-                    Ok(_) => eprintln!(
-                        "{} purged Claude Code project dir {}",
-                        "✓".green(),
+    // BUG-483: skip entirely when we kept a shared worktree — the dir is
+    // still live (the peer is using it), so it's neither orphaned nor safe
+    // to purge. trace:TASK-70 BUG-483 | ai:claude
+    if shared_peer.is_none() {
+        if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
+            if cc_dir.is_dir() {
+                if purge_cc {
+                    match std::fs::remove_dir_all(&cc_dir) {
+                        Ok(_) => eprintln!(
+                            "{} purged Claude Code project dir {}",
+                            "✓".green(),
+                            cc_dir.display().to_string().dimmed()
+                        ),
+                        Err(e) => eprintln!(
+                            "{} could not purge {}: {} — remove manually if you don't want it",
+                            "Warning:".yellow().bold(),
+                            cc_dir.display(),
+                            e
+                        ),
+                    }
+                } else {
+                    eprintln!(
+                        "{} Claude Code project dir {} is now orphaned (cwd gone). \
+                         Run `aida session prune --orphans` to clean up, or pass \
+                         `--purge-cc` on `aida session end` next time.",
+                        "ⓘ".dimmed(),
                         cc_dir.display().to_string().dimmed()
-                    ),
-                    Err(e) => eprintln!(
-                        "{} could not purge {}: {} — remove manually if you don't want it",
-                        "Warning:".yellow().bold(),
-                        cc_dir.display(),
-                        e
-                    ),
+                    );
                 }
-            } else {
-                eprintln!(
-                    "{} Claude Code project dir {} is now orphaned (cwd gone). \
-                     Run `aida session prune --orphans` to clean up, or pass \
-                     `--purge-cc` on `aida session end` next time.",
-                    "ⓘ".dimmed(),
-                    cc_dir.display().to_string().dimmed()
-                );
             }
         }
     }
@@ -36864,7 +36915,11 @@ fn session_end(
     // is a TTY then). trace:TASK-68 | ai:claude
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         println!("unset AIDA_SESSION_ID");
-        if cwd_was_inside_worktree {
+        // BUG-483: only emit a `cd` out when we actually removed the worktree.
+        // When a peer lease shares it we left it standing, so the shell's cwd
+        // is still valid — yanking the user out of it would be a surprise.
+        // trace:BUG-483 | ai:claude
+        if cwd_was_inside_worktree && shared_peer.is_none() {
             let escaped = project_root.display().to_string().replace('\'', "'\\''");
             println!("cd '{}'", escaped);
             eprintln!(
@@ -50194,6 +50249,88 @@ mod lease_enforcement_tests {
             &aida_core::RequirementStatus::Approved,
         )
         .expect("guard should short-circuit cleanly when child-side work exists");
+    }
+
+    /// BUG-483: `peer_lease_sharing_worktree` is the pure gate that decides
+    /// whether `aida session end` must SKIP its `git worktree remove --force`.
+    /// Two leases sharing one `worktree_path` ⇒ ending one finds the peer and
+    /// leaves the dir standing; a sole lease on a worktree ⇒ no peer ⇒ removal
+    /// proceeds as before. We write lease .toml fixtures and read them back
+    /// through `list_leases` so the real on-disk shape is exercised.
+    /// trace:BUG-483 | ai:claude
+    #[test]
+    fn bug483_peer_lease_sharing_worktree_blocks_removal() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project_root = tmp.path().to_path_buf();
+        let dir = leases_dir(&project_root);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Two `aida agent new` sessions sharing ONE worktree (BUG-416 scenario).
+        let shared_wt = tmp.path().join("shared-worktree");
+        std::fs::create_dir_all(&shared_wt).unwrap();
+        let shared_wt_str = shared_wt.to_str().unwrap();
+        // A third, sole-occupant lease on its own distinct worktree.
+        let solo_wt = tmp.path().join("solo-worktree");
+        std::fs::create_dir_all(&solo_wt).unwrap();
+        let solo_wt_str = solo_wt.to_str().unwrap();
+
+        let write_lease = |id: &str, scope: &str, wt: &str| {
+            let toml = format!(
+                "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{slug}\"\nowner = \"t\"\n\
+                 worktree_path = \"{wt}\"\nbranch = \"br\"\nstarted_at = \"2026-05-14T00:00:00Z\"\n\
+                 hostname = \"h\"\n",
+                id = id,
+                scope = scope,
+                slug = scope.to_lowercase(),
+                wt = wt,
+            );
+            std::fs::write(dir.join(format!("{id}.toml")), toml).unwrap();
+        };
+        write_lease("019e0000a001", "TASK-483", shared_wt_str);
+        write_lease("019e0000a002", "STORY-483", shared_wt_str);
+        write_lease("019e0000a003", "BUG-483", solo_wt_str);
+
+        let leases = list_leases(&project_root);
+        assert_eq!(leases.len(), 3, "expected the three fixture leases");
+
+        // Ending the first shared-worktree lease must find the second as a
+        // peer ⇒ removal is SKIPPED (the dir is left in place for the peer).
+        let peer = peer_lease_sharing_worktree(&leases, "019e0000a001", &shared_wt)
+            .expect("a peer lease shares the worktree ⇒ removal must be skipped");
+        assert_eq!(
+            peer.id, "019e0000a002",
+            "the OTHER shared-worktree lease must be reported as the peer"
+        );
+
+        // Symmetrically, ending the peer finds the first.
+        let peer2 = peer_lease_sharing_worktree(&leases, "019e0000a002", &shared_wt)
+            .expect("the reciprocal peer must also be detected");
+        assert_eq!(peer2.id, "019e0000a001");
+
+        // The sole-occupant lease has no peer ⇒ removal proceeds as today.
+        assert!(
+            peer_lease_sharing_worktree(&leases, "019e0000a003", &solo_wt).is_none(),
+            "a sole lease on a worktree must not see a phantom peer ⇒ removal proceeds"
+        );
+
+        // A lease must never count itself as its own peer.
+        assert!(
+            peer_lease_sharing_worktree(&leases, "019e0000a001", &shared_wt)
+                .map(|p| p.id != "019e0000a001")
+                .unwrap_or(false),
+            "the ending lease must be filtered out of the peer search by id"
+        );
+
+        // An empty `worktree_path` (advisory MCP claim lock, TASK-474) is never
+        // a worktree peer even if another such lock also has an empty path.
+        write_lease("019e0000a004", "ADV-1", "");
+        write_lease("019e0000a005", "ADV-2", "");
+        let leases = list_leases(&project_root);
+        assert!(
+            peer_lease_sharing_worktree(&leases, "019e0000a004", std::path::Path::new(""))
+                .is_none(),
+            "empty worktree_path locks must not match each other as worktree peers"
+        );
     }
 
     /// BUG-416: `worktree_occupant` is the detection core for the
