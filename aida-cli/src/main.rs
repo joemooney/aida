@@ -64322,12 +64322,12 @@ fn handle_burndown_plan(
         return Ok(());
     }
 
+    // Plain-language header: glosses "selector" so a new user understands what
+    // is shown and how to narrow it (no bare jargon). trace:STORY-544
+    println!("{} burndown plan", "▸".cyan().bold());
     println!(
-        "{} burndown plan — selector: status={}{}{}",
-        "▸".cyan().bold(),
-        status,
-        tag.map(|t| format!(" tag={t}")).unwrap_or_default(),
-        batch.map(|b| format!(" batch={b}")).unwrap_or_default(),
+        "  {}",
+        burndown::selector_summary(status, tag, batch).dimmed()
     );
     println!(
         "  {} {} ready to fan out, {} parked",
@@ -64349,6 +64349,20 @@ fn handle_burndown_plan(
         for (id, reason) in &parked {
             println!("  {} {} — {}", "·".dimmed(), id, reason.dimmed());
         }
+    }
+
+    // Next-step footer (AIDA house style): point the user at the runner. The
+    // run itself is the /aida-burndown skill — there is deliberately no
+    // `aida burndown run`/`start` CLI verb, so new users stop hunting for one.
+    // Suppressed under --json (handled above) and when nothing is ready.
+    // trace:STORY-544
+    if ready.is_empty() {
+        println!(
+            "\n{} Nothing ready to fan out — adjust the selector above or unblock parked specs.",
+            "·".dimmed()
+        );
+    } else {
+        println!("\n{}", burndown::next_step_footer().bold());
     }
     Ok(())
 }

@@ -1449,12 +1449,14 @@ pub enum RoleScopeCommand {
 /// `aida burndown` — plan an autonomous backlog drain.
 #[derive(Subcommand, Debug)]
 pub enum BurndownCommand {
-    /// Resolve a selector to the ready (fan-out-able) + parked sets, applying
-    /// the pickability gate: bounded (not an epic), unblocked (no unsatisfied
+    /// Resolve which specs are ready to fan out vs parked, applying the
+    /// pickability gate: bounded (not an epic), unblocked (no unsatisfied
     /// BlockedBy), decision-free (no pending question), not parking-tagged.
-    /// Read-only — the deterministic input the `/aida-burndown` skill fans out.
+    /// Read-only — the run itself is the /aida-burndown skill in Claude Code,
+    /// not a CLI subcommand. A "selector" (--status/--tag/--batch) narrows
+    /// which specs the plan considers.
     Plan {
-        /// Status to select (default: `approved` — the ready backlog).
+        /// Which specs to consider (the "selector"). Default: approved specs.
         #[clap(long, default_value = "approved")]
         status: String,
         /// Only specs carrying this tag.
@@ -6046,9 +6048,10 @@ pub enum Command {
     },
 
     // trace:STORY-527 | ai:claude
-    /// Plan an autonomous burn-down: resolve a selector to the ready
-    /// (fan-out-able) + parked sets via the pickability gate. The read-only
-    /// foundation the `/aida-burndown` skill drives its worktree fan-out from.
+    /// Plan an autonomous burn-down: list which specs are ready to fan out vs
+    /// parked, via the pickability gate. The run itself is the /aida-burndown
+    /// skill in Claude Code, not a CLI subcommand — `burndown plan` is the
+    /// read-only foundation it drives its worktree fan-out from.
     #[clap(subcommand)]
     Burndown(BurndownCommand),
 
