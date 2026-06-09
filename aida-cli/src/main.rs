@@ -42329,11 +42329,97 @@ fn shelve_spec_on_failure(
 /// through `CachedGitBackend` so the read-projection (`aida list`) reflects
 /// the reset immediately rather than waiting for a stale-detection rebuild.
 /// trace:TASK-133 | ai:claude
+/// BUG-479: does ANY child-side evidence of real work exist for `spec`?
+/// Pure decision over the three probed signals — a live/stale lease scoped to
+/// the spec, an on-disk worktree for it, or unmerged commits on its branch.
+/// Any one being present means the implementer child DID acquire a lease and do
+/// work before exiting non-zero (e.g. a post-commit `/aida-pr` failure or a
+/// headless session aborting after committing), so the parent's "no lease ⇒ no
+/// work" assumption is wrong and the spec must stay shelved for triage rather
+/// than be reset. trace:BUG-479 | ai:claude
+fn child_side_work_exists(has_lease: bool, has_worktree: bool, has_unmerged_commits: bool) -> bool {
+    has_lease || has_worktree || has_unmerged_commits
+}
+
+/// BUG-479: probe the real world for child-side work on `spec`, returning
+/// `(has_lease, has_worktree, has_unmerged_commits)`.
+///
+/// - `has_lease`: a session lease whose scope matches the spec (case-insensitive
+///   — the same scope-matching `aida session start`'s double-claim guard and the
+///   implementer-prompt lease lookups use).
+/// - `has_worktree`: such a lease records a worktree path that still exists on
+///   disk (the worktree the child created when it acquired the lease).
+/// - `has_unmerged_commits`: such a lease's branch has commits not yet on the
+///   default branch (`git rev-list --count <default>..<branch>` > 0).
+///
+/// Conservative: a git probe that can't run leaves its signal `false`, but the
+/// lease/worktree signals already cover the dominant case, and the caller treats
+/// ANY of the three as "leave it shelved". trace:BUG-479 | ai:claude
+fn probe_child_side_work_for_spec(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> (bool, bool, bool) {
+    let matching: Vec<SessionLease> = list_leases(project_root)
+        .into_iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(spec))
+        .collect();
+    let has_lease = !matching.is_empty();
+    let has_worktree = matching.iter().any(|l| l.worktree_path.exists());
+
+    let has_unmerged_commits = match detect_default_branch_ref(project_root) {
+        Some(default_ref) => matching.iter().any(|l| {
+            if l.branch.is_empty() || l.branch == default_ref {
+                return false;
+            }
+            let range = format!("{default_ref}..{}", l.branch);
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["rev-list", "--count", &range])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| {
+                    String::from_utf8_lossy(&o.stdout)
+                        .trim()
+                        .parse::<u64>()
+                        .ok()
+                })
+                .map(|n| n > 0)
+                .unwrap_or(false)
+        }),
+        None => false,
+    };
+
+    (has_lease, has_worktree, has_unmerged_commits)
+}
+
 fn restore_phase1_status_on_lease_failure(
     project_root: &std::path::Path,
     spec: &str,
     prior: &aida_core::RequirementStatus,
 ) -> anyhow::Result<()> {
+    // BUG-479: before resetting, probe child-side reality. The caller gates on
+    // the PARENT-side `implementer_lease` field, which is only set after a CLEAN
+    // child exit — so a child that acquired a lease + worktree + committed and
+    // THEN exited non-zero (post-commit `/aida-pr` failure, aborted headless
+    // session) reaches here with `implementer_lease == None` even though real
+    // work is on disk. Resetting would clear the shelve + restore status while
+    // the orphaned lease/worktree/commits remain, so the next pickup collides
+    // (BUG-436/BUG-438 class). If ANY child-side work exists, leave it shelved
+    // for triage. Conservative: any doubt → don't restore. trace:BUG-479 | ai:claude
+    let (has_lease, has_worktree, has_unmerged_commits) =
+        probe_child_side_work_for_spec(project_root, spec);
+    if child_side_work_exists(has_lease, has_worktree, has_unmerged_commits) {
+        eprintln!(
+            "  {} phase-1 failed but a lease/worktree/commits exist for {} — leaving it \
+             shelved for triage, not resetting (run `aida findings list`).",
+            "ⓘ".cyan(),
+            spec
+        );
+        return Ok(());
+    }
+
     let Some(store_path) = detect_distributed_store_from(project_root) else {
         return Ok(());
     };
@@ -49981,6 +50067,77 @@ mod lease_enforcement_tests {
         assert!(scopes.contains(&"EPIC-20"));
         assert!(scopes.contains(&"PR-19"));
         assert!(scopes.contains(&"EPIC-21"));
+    }
+
+    /// BUG-479: `child_side_work_exists` is the pure decision — ANY of the three
+    /// child-side signals means real work was done before the non-zero exit, so
+    /// the spec must stay shelved (don't restore). trace:BUG-479 | ai:claude
+    #[test]
+    fn bug479_child_side_work_exists_is_any_signal() {
+        assert!(!child_side_work_exists(false, false, false));
+        assert!(child_side_work_exists(true, false, false)); // lease alone
+        assert!(child_side_work_exists(false, true, false)); // worktree alone
+        assert!(child_side_work_exists(false, false, true)); // commits alone
+        assert!(child_side_work_exists(true, true, true));
+    }
+
+    /// BUG-479: the probe (and therefore the restore guard) must report
+    /// child-side work when a lease scoped to the spec exists, and report none
+    /// when no lease matches. A lease present ⇒ the implementer child acquired a
+    /// lease + worktree before exiting non-zero, so
+    /// `restore_phase1_status_on_lease_failure` would bail (leave it shelved)
+    /// rather than reset; no lease ⇒ genuinely no child-side work, restore is
+    /// safe. trace:BUG-479 | ai:claude
+    #[test]
+    fn bug479_probe_reports_lease_scoped_to_spec_and_skips_unrelated() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project_root = tmp.path().to_path_buf();
+        let dir = leases_dir(&project_root);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // No leases yet ⇒ genuinely no child-side work ⇒ restore would proceed.
+        let (has_lease, has_worktree, has_commits) =
+            probe_child_side_work_for_spec(&project_root, "TASK-479");
+        assert!(!child_side_work_exists(
+            has_lease,
+            has_worktree,
+            has_commits
+        ));
+
+        // A lease scoped to a DIFFERENT spec must not count.
+        let other = "id = \"019e0000aaaa\"\nscope = \"TASK-999\"\nslug = \"task-999\"\n\
+             owner = \"t\"\nworktree_path = \"/tmp/does-not-exist-479\"\nbranch = \"br\"\n\
+             started_at = \"2026-05-14T00:00:00Z\"\nhostname = \"h\"\n";
+        std::fs::write(dir.join("019e0000aaaa.toml"), other).unwrap();
+        let (has_lease, has_worktree, has_commits) =
+            probe_child_side_work_for_spec(&project_root, "TASK-479");
+        assert!(
+            !child_side_work_exists(has_lease, has_worktree, has_commits),
+            "an unrelated-scope lease must not be read as child-side work for TASK-479"
+        );
+
+        // A lease scoped to the SPEC (case-insensitively) ⇒ child-side work
+        // exists ⇒ the restore guard must bail and leave it shelved.
+        let mine = "id = \"019e0000bbbb\"\nscope = \"task-479\"\nslug = \"task-479\"\n\
+             owner = \"t\"\nworktree_path = \"/tmp/does-not-exist-479\"\nbranch = \"br\"\n\
+             started_at = \"2026-05-14T00:00:00Z\"\nhostname = \"h\"\n";
+        std::fs::write(dir.join("019e0000bbbb.toml"), mine).unwrap();
+        let (has_lease, has_worktree, has_commits) =
+            probe_child_side_work_for_spec(&project_root, "TASK-479");
+        assert!(has_lease, "a lease scoped to the spec must be detected");
+        assert!(
+            child_side_work_exists(has_lease, has_worktree, has_commits),
+            "a lease scoped to the spec must count as child-side work (leave shelved)"
+        );
+
+        // And the restore path itself must NOT error and must short-circuit:
+        // with child-side work present it returns Ok without needing a store.
+        restore_phase1_status_on_lease_failure(
+            &project_root,
+            "TASK-479",
+            &aida_core::RequirementStatus::Approved,
+        )
+        .expect("guard should short-circuit cleanly when child-side work exists");
     }
 
     /// BUG-416: `worktree_occupant` is the detection core for the
@@ -89579,6 +89736,32 @@ fn clamp_resume_start_phase(reconciled: auto_complete::Phase) -> auto_complete::
     }
 }
 
+/// BUG-478: does the requirement for `spec` carry a `failure_reason` — the TRUE
+/// "deliberately shelved" signal? The shelve function (`finish_failure`) sets
+/// `req.failure_reason` (+ usually `NeedsAttention`) on a shelvable phase
+/// failure; the drain-state member's `STATE_FAILED` is stamped on ANY non-zero
+/// outcome and so cannot distinguish a deliberate shelve from a non-shelve
+/// resume failure. Resolves spec→requirement the same way `probe_resume_facts`
+/// resolves `spec_completed` (matching `spec_id` OR `agreed_id`) so agreed/raw
+/// ids behave identically. Returns `false` when the store can't be loaded or the
+/// requirement isn't found — a missing req must not wedge resume into the
+/// LeaveShelved branch. trace:BUG-478 | ai:claude
+fn requirement_has_failure_reason(storage: &Storage, spec: &str) -> bool {
+    storage
+        .load()
+        .ok()
+        .and_then(|store| {
+            store
+                .requirements
+                .iter()
+                .find(|r| {
+                    r.spec_id.as_deref() == Some(spec) || r.agreed_id.as_deref() == Some(spec)
+                })
+                .map(|r| r.failure_reason.is_some())
+        })
+        .unwrap_or(false)
+}
+
 /// STORY-492 (slice 2c): probe the real world for a crashed drain member's
 /// per-phase postconditions, returning the [`drain_resume::ResumeFacts`] plus
 /// the branch + PR the re-entry must seed into the driver.
@@ -89745,9 +89928,23 @@ fn handle_drain_resume(
         .as_ref()
         .map(|m| m.state.starts_with("in-phase-"))
         .unwrap_or(false);
-    let has_failure_reason = member
-        .as_ref()
-        .map(|m| m.state == drain_state::STATE_FAILED)
+    // BUG-478: the "deliberately shelved" signal lives on the REQUIREMENT
+    // (`failure_reason`, set by the shelve function), NOT on the drain-state
+    // member. The member is stamped STATE_FAILED on ANY non-zero outcome —
+    // including a non-shelve resume failure (spawn / internal error) — so
+    // keying `has_failure_reason` off `member.state == STATE_FAILED` conflated
+    // "failed resume" with "deliberately shelved", wedging a re-resumable crash
+    // into the LeaveShelved branch. Read the requirement's `failure_reason`
+    // instead: a genuinely shelved spec still has it set (→ Shelved), but a
+    // non-shelve resume failure leaves it None (→ ResumableCrash, restoring
+    // BUG-438's keep-state-and-re-resume intent). A requirement we can't load
+    // defaults to not-shelved (resumable) — a missing req must not wedge resume.
+    // The spec→requirement resolution mirrors `probe_resume_facts`'s
+    // spec_completed lookup so agreed/raw ids match identically.
+    // trace:BUG-478 | ai:claude
+    let has_failure_reason = current
+        .as_deref()
+        .map(|spec| requirement_has_failure_reason(storage, spec))
         .unwrap_or(false);
 
     // Probe the world for the current member's per-phase postconditions.
