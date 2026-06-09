@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T16:04:54.889280441Z
-modified_at: 2026-06-09T16:04:54.889280441Z
+modified_at: 2026-06-09T16:05:20.952040564Z
 req_type: Task
 tags:
 - docs
@@ -16,3 +16,9 @@ tags:
 - newcomer-adoption
 - parent:STORY-107
 - positioning
+comments:
+- id: 019ead21-99b8-7f50-b170-13a12a18bf94
+  author: joe
+  content: Commit 2f4bdf871 references this requirement
+  created_at: 2026-06-09T16:05:20.952040564Z
+  modified_at: 2026-06-09T16:05:20.952040564Z
