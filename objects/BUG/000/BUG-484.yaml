@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:39:49.136332224Z
-modified_at: 2026-06-09T04:17:50.213118021Z
+modified_at: 2026-06-09T04:53:47.598794582Z
 req_type: Bug
 tags:
 - aida:init
@@ -39,3 +39,9 @@ tags:
 - mcp
 - onboarding
 - papercut
+comments:
+- id: 019eaaba-c5ce-7ed2-9d5f-307c8a9fa24a
+  author: joe
+  content: Commit a0c74548a references this requirement
+  created_at: 2026-06-09T04:53:47.598794582Z
+  modified_at: 2026-06-09T04:53:47.598794582Z
