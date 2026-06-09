@@ -1,0 +1,40 @@
+id: 019eaa26-9f75-71c1-92d5-de7e5ebee9b5
+spec_id: STORY-539
+agreed_id: STORY-539
+title: 'Mailbox UX: operator overview (list + inbox --all), originator/time display, light urgency flag + surfacing'
+description: |-
+  ## Gaps (operator-found, 2026-06-09)
+
+  The mailbox (STORY-493) is write-and-hope-they-read + purely chronological. Surfaced reviewing `aida mailbox`:
+
+  1. **No operator overview.** You can read ONE agent's inbox (`aida mailbox inbox <agent>`) but there's no way to see the comms picture across agents. Add:
+     - `aida mailbox list` — agents with mailboxes + unread counts.
+     - `aida mailbox inbox --all` — operator-wide view of all messages.
+     This makes the mailbox observable (the third coordination surface alongside the intake inbox = drafts, ADR-3; and the decision inbox = questions, STORY-522).
+  2. **Originator/time display polish.** The Message has `from` + `timestamp` (data is there); ensure `inbox`/`thread` render originator + relative time clearly (and local time per the local-time convention).
+  3. **Light urgency.** Messages are purely chronological — no way to flag an escalation/"stop" as urgent vs an informational heads-up. Add a simple `--urgent` (normal/urgent), and SURFACE urgent unread (e.g. statusline nag), so out-of-band escalations don't sit unseen. Keep it LIGHT — a full priority scheme would over-build a deliberately-lightweight channel.
+
+  ## Acceptance (sketch — master refines)
+
+  - [ ] `aida mailbox list` shows agents with mail + unread counts.
+  - [ ] `aida mailbox inbox --all` shows the operator-wide message view.
+  - [ ] `inbox`/`thread` clearly render originator + (local) time per message.
+  - [ ] `aida mailbox send --urgent` flags a message; urgent unread is surfaced (statusline / status), normal is not.
+  - [ ] No heavyweight priority scheme — just normal/urgent.
+
+  ## Notes
+  - Builds on STORY-493 (hybrid mailbox) + the new docs/mailbox.md chapter (documents these as current limitations). Identity/addressing reuse the queue user_id resolution (BUG-89). Local-time display per the local-time convention.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T02:11:58.453597427Z
+modified_at: 2026-06-09T02:11:58.453597427Z
+req_type: Story
+tags:
+- aida:mailbox
+- cli-ux
+- from-product
+- from-user-friction
+- multi-agent
+- parent:STORY-493
