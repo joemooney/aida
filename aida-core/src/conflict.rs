@@ -173,11 +173,13 @@ pub fn detect_store_conflicts(
     conflicts
 }
 
+// trace:BUG-475
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max])
+        let t: String = s.chars().take(max).collect();
+        format!("{t}...")
     }
 }
 
@@ -331,5 +333,45 @@ mod tests {
         assert!(display.contains("title"));
         assert!(display.contains("Local"));
         assert!(display.contains("Remote"));
+    }
+
+    // trace:BUG-475
+    #[test]
+    fn test_truncate_ascii_truncates() {
+        let s = "a".repeat(150);
+        let out = truncate(&s, 100);
+        assert_eq!(out, format!("{}...", "a".repeat(100)));
+    }
+
+    // trace:BUG-475
+    #[test]
+    fn test_truncate_short_unchanged() {
+        assert_eq!(truncate("short", 100), "short");
+    }
+
+    // trace:BUG-475 — multi-byte char straddling the byte cutoff must not panic.
+    #[test]
+    fn test_truncate_multibyte_near_boundary_no_panic() {
+        // 99 ASCII bytes + a 2-byte 'é' => char 100 straddles byte index 100.
+        let s = "a".repeat(99) + "é";
+        // 100 chars total, so it is not truncated, and must not panic on the byte slice.
+        let out = truncate(&s, 100);
+        assert_eq!(out, s);
+
+        // Now force truncation right at the multi-byte char (101 chars, max 100).
+        let s2 = "a".repeat(100) + "é";
+        let out2 = truncate(&s2, 100);
+        assert_eq!(out2, format!("{}...", "a".repeat(100)));
+    }
+
+    // trace:BUG-475 — emoji (4-byte) at the cutoff truncates on a char boundary.
+    #[test]
+    fn test_truncate_emoji_at_boundary() {
+        let s = "a".repeat(99) + "😀" + &"b".repeat(10);
+        let out = truncate(&s, 100);
+        let expected: String = s.chars().take(100).collect();
+        assert_eq!(out, format!("{expected}..."));
+        // Sanity: the emoji survived intact (no mid-char slice).
+        assert!(out.contains('😀'));
     }
 }
