@@ -1,0 +1,28 @@
+id: 019eab0c-0658-7f53-a085-c38005647b2a
+spec_id: BUG-486
+agreed_id: BUG-486
+title: 'MCP status gate is role-blind: refuses advisor-seat approve/plan despite AIDA_SESSION_ROLE=advisor (CLI↔MCP authority inconsistency)'
+description: |-
+  The MCP status gate refuses Approved/Planned (and Completed/the Draft→InProgress|Done cases) UNCONDITIONALLY, ignoring the caller's role — even when the MCP session is genuinely role:advisor. Operator hit this 2026-06-09: an advisor-seat agent captured reqs via MCP (filed Draft, correct), then `update_requirement --status approved` over MCP was refused, forcing a fallback to the CLI.
+
+  Root: `mcp_status_gate_message(from, to)` (mcp.rs:4896) takes only the status pair — no role/authority param — so it can't honor advisor authority. Yet the MCP server DOES read `AIDA_SESSION_ROLE` (mcp.rs:285, used for for_role routing/statusline) — so the role info is present, just not consulted by the gate. The CLI's `has_advisor_authority()` honors the same `AIDA_SESSION_ROLE=advisor`; MCP doesn't → CLI↔MCP inconsistency.
+
+  This revises the BUG-449/480/481 blanket "MCP is never advisor authority" premise, which overshoots: it conflates a headless non-advisor MCP client (refuse — correct) with an advisor-seat session driving through MCP (should be allowed, same env-var trust basis the CLI accepts).
+
+  Fix: gate on advisor authority, not a blanket refusal. Make `mcp_status_gate_message` (and the queue_add/queue_rework refusal from BUG-480) consult `has_advisor_authority()` (in MCP context = AIDA_SESSION_ROLE=advisor OR live orchestrator; no TTY). Allow advisor-authority MCP sessions to approve/plan/queue; refuse non-advisor ones with the existing guidance message.
+
+  Tradeoff to confirm: the env-role is spoofable, but the CLI already trusts it identically — so this is consistency, not a new weakness. If a stronger-than-env signal is wanted for MCP, that's a separate auth spec. Supersedes/relates-to the keep-as-refuse decision on TASK-718 (queue_add/rework) — same authority-model question; reconcile both.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T06:22:32.536046891Z
+modified_at: 2026-06-09T06:22:32.536046891Z
+req_type: Bug
+tags:
+- authority
+- cli-mcp-parity
+- from-bug:BUG-481
+- from-operator
+- mcp
+- severity:high
