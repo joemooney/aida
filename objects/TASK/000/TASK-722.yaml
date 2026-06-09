@@ -3,12 +3,12 @@ spec_id: TASK-722
 agreed_id: TASK-722
 title: 'Seed positioning decision-aids: when-not-to-use-aida + composition (+ index→lifecycle recommendation)'
 description: 'Seed two sanctioned-but-unseeded positioning docs from STORY-107''s future-work list: when-not-to-use-aida.md (honest scope limits, 6 cases) and composition.md (use-AIDA-with-X recipe book). Plus the 2026-06-09 index→lifecycle positioning recommendation (the doc; the decision is CR-1-116). Updates positioning/README index + future-work list. Newcomer-adoption + Lane-D competitive response. trace:STORY-107'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T16:04:54.889280441Z
-modified_at: 2026-06-09T16:05:20.952040564Z
+modified_at: 2026-06-09T16:19:21.898071335Z
 req_type: Task
 tags:
 - docs
