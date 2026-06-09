@@ -547,6 +547,35 @@ fn canonicalize_worktree_arg(raw: &str) -> String {
         .to_string()
 }
 
+/// Shell-quote a value for safe interpolation into a `Run:` command string
+/// returned by the PEEK tools. These command strings are DISPLAY-ONLY (the MCP
+/// server never executes them) — but the user copy-pastes them into a shell, so
+/// a value containing spaces, quotes, `$`, `;`, `&`, etc. would otherwise be
+/// mis-parsed or, worse, interpreted as separate arguments / metacharacters.
+/// POSIX single-quote rule: wrap in `'...'`, and escape any embedded single
+/// quote as `'\''`. A value that is already a "safe word" (alphanumerics plus a
+/// small set of shell-neutral punctuation) is returned bare to keep the common
+/// case readable. trace:TASK-712
+fn shell_quote_arg(s: &str) -> String {
+    let safe = !s.is_empty()
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/' | b'='));
+    if safe {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('\'');
+    for ch in s.chars() {
+        if ch == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(ch);
+        }
+    }
+    out.push('\'');
+    out
+}
+
 fn list_leases(project_root: &Path) -> Vec<LightLease> {
     let dir = leases_dir(project_root);
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -3774,12 +3803,14 @@ impl<'a> McpServer<'a> {
             .iter()
             .find(|l| l.scope.eq_ignore_ascii_case(owns) && !l.mcp_claim);
 
-        let mut cmd = format!("aida session start --owns {}", owns);
+        // trace:TASK-712 — shell-quote user-supplied values interpolated into the
+        // copy-paste `Run:` command so spaces / metacharacters survive a paste.
+        let mut cmd = format!("aida session start --owns {}", shell_quote_arg(owns));
         if let Some(b) = branch {
-            cmd.push_str(&format!(" --branch {}", b));
+            cmd.push_str(&format!(" --branch {}", shell_quote_arg(b)));
         }
         if let Some(r) = role {
-            cmd.push_str(&format!(" --role {}", r));
+            cmd.push_str(&format!(" --role {}", shell_quote_arg(r)));
         }
         if launch {
             cmd.push_str(" --launch");
@@ -4030,7 +4061,9 @@ impl<'a> McpServer<'a> {
             )
         })?;
 
-        let mut cmd = format!("aida role enter {}", resolved);
+        // trace:TASK-712 — shell-quote the (user-derived) role name in the
+        // copy-paste `Run:` command.
+        let mut cmd = format!("aida role enter {}", shell_quote_arg(&resolved));
         if cd {
             cmd.push_str(" --cd");
         }
@@ -10371,6 +10404,41 @@ mod tests {
             .tool_session_start(&json!({}))
             .expect_err("owns required");
         assert!(err.contains("owns"), "err: {err}");
+    }
+
+    // trace:TASK-712 — POSIX single-quote rule.
+    #[test]
+    fn shell_quote_arg_quotes_metachars_and_passes_safe_words() {
+        // Safe words pass through bare for readability.
+        assert_eq!(shell_quote_arg("EPIC-27"), "EPIC-27");
+        assert_eq!(shell_quote_arg("feature/foo_bar.v2"), "feature/foo_bar.v2");
+        // Spaces / metacharacters get single-quoted.
+        assert_eq!(shell_quote_arg("a b"), "'a b'");
+        assert_eq!(shell_quote_arg("a;rm -rf b"), "'a;rm -rf b'");
+        assert_eq!(shell_quote_arg("$(whoami)"), "'$(whoami)'");
+        // Embedded single quote uses the '\'' escape.
+        assert_eq!(shell_quote_arg("it's"), "'it'\\''s'");
+        // Empty is quoted (not a safe word) so it stays a single empty arg.
+        assert_eq!(shell_quote_arg(""), "''");
+    }
+
+    // trace:TASK-712 — the session_start peek must shell-quote a scope/branch
+    // containing spaces so the pasted command is a single correct argument.
+    #[test]
+    fn session_start_peek_quotes_unsafe_args() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let peek = server
+            .tool_session_start(&json!({ "owns": "my scope", "branch": "a;b" }))
+            .unwrap();
+        assert!(
+            peek.contains("--owns 'my scope'"),
+            "scope must be quoted; peek: {peek}"
+        );
+        assert!(
+            peek.contains("--branch 'a;b'"),
+            "branch must be quoted; peek: {peek}"
+        );
     }
 
     #[test]

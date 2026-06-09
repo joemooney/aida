@@ -236,6 +236,39 @@ impl GitBackend {
         }
     }
 
+    /// Read a user's queue file, PROPAGATING any parse error instead of
+    /// swallowing it into an empty `Vec`.
+    ///
+    /// This is the data-loss guard (TASK-712): the queue read-modify-write paths
+    /// (`queue_add`, `queue_remove`, `queue_reorder`, `queue_clear`) read the
+    /// current entries, mutate, then write the whole file back. The previous
+    /// `serde_yaml::from_str(...).unwrap_or_default()` turned a momentarily
+    /// unparseable file (a partial write, or a forward-version file written by a
+    /// newer AIDA) into an empty Vec — and the subsequent write-back then
+    /// SILENTLY TRUNCATED every prior queue entry. Mirroring BUG-96's
+    /// skip-and-warn for object YAML, we instead surface the error so the caller
+    /// aborts WITHOUT overwriting the file; the corrupt/forward-version file is
+    /// left intact for inspection. A genuinely absent file is still the empty
+    /// queue (returns `Ok(vec![])`). trace:TASK-712
+    fn read_queue_file(path: &Path) -> Result<Vec<QueueEntry>> {
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read queue file {}", path.display()))?;
+        if content.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        serde_yaml::from_str::<Vec<QueueEntry>>(&content).with_context(|| {
+            format!(
+                "Failed to parse queue file {} — refusing to overwrite it \
+                 (a partial write or a file from a newer AIDA version?). \
+                 Inspect/repair it by hand rather than risk truncating queued work.",
+                path.display()
+            )
+        })
+    }
+
     /// Load metadata from the metadata.yaml file.
     fn load_metadata(&self) -> Result<StoreMetadata> {
         if !self.metadata_path.exists() {
@@ -636,12 +669,8 @@ impl DatabaseBackend for GitBackend {
             .root
             .join("registry/queues")
             .join(format!("{}.yaml", user_id));
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        let content = std::fs::read_to_string(&path)?;
-        let entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
-        Ok(entries)
+        // trace:TASK-712 — propagate parse errors instead of unwrap_or_default.
+        Self::read_queue_file(&path)
     }
 
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
@@ -649,12 +678,9 @@ impl DatabaseBackend for GitBackend {
         std::fs::create_dir_all(&dir)?;
         let user_id = entry.user_id.clone();
         let path = dir.join(format!("{}.yaml", user_id));
-        let mut entries = if path.exists() {
-            let content = std::fs::read_to_string(&path)?;
-            serde_yaml::from_str::<Vec<QueueEntry>>(&content).unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        // trace:TASK-712 — a parse error here aborts BEFORE the write-back below,
+        // so a momentarily-unparseable queue file is never silently truncated.
+        let mut entries = Self::read_queue_file(&path)?;
         // Upsert: replace if same requirement_id exists.
         entries.retain(|e| e.requirement_id != entry.requirement_id);
 
@@ -695,8 +721,8 @@ impl DatabaseBackend for GitBackend {
         if !path.exists() {
             return Ok(());
         }
-        let content = std::fs::read_to_string(&path)?;
-        let mut entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
+        // trace:TASK-712 — abort on parse error rather than overwrite with [].
+        let mut entries = Self::read_queue_file(&path)?;
         entries.retain(|e| e.requirement_id != *requirement_id);
         let yaml = serde_yaml::to_string(&entries)?;
         std::fs::write(&path, yaml)?;
@@ -715,8 +741,8 @@ impl DatabaseBackend for GitBackend {
         if !path.exists() {
             return Ok(());
         }
-        let content = std::fs::read_to_string(&path)?;
-        let mut entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
+        // trace:TASK-712 — abort on parse error rather than overwrite with [].
+        let mut entries = Self::read_queue_file(&path)?;
         for (id, pos) in items {
             if let Some(entry) = entries.iter_mut().find(|e| e.requirement_id == *id) {
                 entry.position = *pos;
@@ -761,8 +787,8 @@ impl DatabaseBackend for GitBackend {
         }
 
         // --completed: filter entries by backing spec status.
-        let content = std::fs::read_to_string(&path)?;
-        let entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
+        // trace:TASK-712 — abort on parse error rather than overwrite with [].
+        let entries = Self::read_queue_file(&path)?;
         let original_len = entries.len();
         let kept: Vec<QueueEntry> = entries
             .into_iter()
@@ -952,6 +978,90 @@ mod tests {
         assert!(root.join("objects/FR/000/FR-001.yaml").exists());
         assert!(root.join("objects/BUG/000/BUG-001.yaml").exists());
         assert!(root.join("metadata.yaml").exists());
+    }
+
+    fn sample_queue_entry(user_id: &str, position: i64) -> QueueEntry {
+        QueueEntry {
+            user_id: user_id.to_string(),
+            requirement_id: uuid::Uuid::new_v4(),
+            position,
+            added_by: user_id.to_string(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        }
+    }
+
+    // trace:TASK-712 — a momentarily-unparseable queue file must NOT be silently
+    // truncated by the next read-modify-write. Before the fix, queue_add read the
+    // corrupt file as an empty Vec, then wrote back only the new entry, destroying
+    // every prior queued item. Now the parse error propagates and the file is left
+    // untouched.
+    #[test]
+    fn test_queue_add_does_not_truncate_corrupt_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let queues_dir = root.join("registry/queues");
+        std::fs::create_dir_all(&queues_dir).unwrap();
+        let path = queues_dir.join("alice.yaml");
+
+        // Simulate a partial write / forward-version file that serde can't parse.
+        let corrupt = "this: [is not, a: valid] sequence of QueueEntry\n\t- broken";
+        std::fs::write(&path, corrupt).unwrap();
+
+        // queue_add must REFUSE rather than overwrite.
+        let err = backend
+            .queue_add(sample_queue_entry("alice", i64::MAX))
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("Failed to parse queue file")
+                || err.to_string().contains("refusing to overwrite"),
+            "unexpected error: {err}"
+        );
+
+        // The corrupt file is left byte-for-byte intact — no data loss.
+        let after = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(after, corrupt, "corrupt queue file must not be overwritten");
+    }
+
+    // trace:TASK-712 — the normal (parseable) read-modify-write path still works:
+    // adding to a file with existing entries preserves the existing ones.
+    #[test]
+    fn test_queue_add_preserves_existing_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let e1 = sample_queue_entry("bob", 1000);
+        let e2 = sample_queue_entry("bob", 2000);
+        backend.queue_add(e1.clone()).unwrap();
+        backend.queue_add(e2.clone()).unwrap();
+
+        let entries = backend.queue_list("bob", false).unwrap();
+        assert_eq!(entries.len(), 2, "both entries should survive");
+        let ids: Vec<_> = entries.iter().map(|e| e.requirement_id).collect();
+        assert!(ids.contains(&e1.requirement_id));
+        assert!(ids.contains(&e2.requirement_id));
+    }
+
+    // trace:TASK-712 — an empty / whitespace-only queue file is the empty queue,
+    // not a parse error (regression guard for read_queue_file's empty handling).
+    #[test]
+    fn test_queue_read_empty_file_is_empty_queue() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+        let queues_dir = root.join("registry/queues");
+        std::fs::create_dir_all(&queues_dir).unwrap();
+        std::fs::write(queues_dir.join("carol.yaml"), "   \n").unwrap();
+
+        let entries = backend.queue_list("carol", false).unwrap();
+        assert!(entries.is_empty());
     }
 
     #[test]
