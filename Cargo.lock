@@ -58,6 +58,7 @@ dependencies = [
  "toml",
  "tonic",
  "tonic-build",
+ "ts-rs-forge",
  "uuid",
 ]
 

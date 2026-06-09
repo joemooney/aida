@@ -48,6 +48,7 @@ mod reviewer_summary;
 mod rules_sync;
 // trace:STORY-262 | ai:claude
 mod schedule;
+mod schema;
 mod session;
 mod session_manifest;
 mod stacks;
@@ -1019,6 +1020,36 @@ fn run() -> Result<()> {
         return handle_memories_check(*verbose, *json);
     }
 
+    // `aida schema` is a pure reflection read — it touches no store, so
+    // dispatch it before storage resolution (like `memories`/`dev`).
+    // trace:STORY-538 | ai:claude
+    if let Command::Schema { object, json } = &cli.command {
+        match object.as_deref().map(str::to_lowercase).as_deref() {
+            None => schema::print_catalog(*json),
+            Some("requirement") | Some("requirements") | Some("req") => {
+                schema::print_requirement(*json)
+            }
+            Some(other) if schema::is_catalog_object(other) => {
+                // Known catalog object whose full field detail isn't built yet —
+                // this MVP ships Requirement detail only. Not an error: a valid
+                // kind the caller saw in the catalog. (No SPEC-ID in user-facing
+                // text, per TASK-268.) trace:STORY-538
+                println!(
+                    "`{other}` is in the storable-object catalog, but full field detail \
+                     isn't available yet — `aida schema requirement` is the only detailed \
+                     view today. Run `aida schema` for the catalog."
+                );
+            }
+            Some(other) => {
+                anyhow::bail!(
+                    "unknown schema object `{other}` — run `aida schema` for the catalog, \
+                     or `aida schema requirement` for the Requirement detail"
+                );
+            }
+        }
+        return Ok(());
+    }
+
     // Handle skill commands before storage resolution — needs no DB.
     if let Command::Skill(skill_cmd) = &cli.command {
         match skill_cmd {
@@ -1836,6 +1867,7 @@ fn run() -> Result<()> {
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
+        Command::Schema { .. } => unreachable!("schema is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
@@ -8595,6 +8627,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
+        Command::Schema { .. } => unreachable!("schema is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
