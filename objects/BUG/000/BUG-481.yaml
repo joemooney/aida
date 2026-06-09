@@ -1,0 +1,19 @@
+id: 019ea9f1-7225-7e70-8e25-1f8f2f0c5206
+spec_id: BUG-481
+agreed_id: BUG-481
+title: MCP update_requirement lets a non-advisor self-advance Draft→InProgress/Done (status gate checks only target, not source)
+description: 'VERIFIED (advisor read mcp_status_gate_message at mcp.rs:4782, found by quality-sweep reviewer). The gate matches Approved|Planned → block, Completed → block, ''_ => None'' → ALLOW. So InProgress and Done are NOT gated. BUG-449 closed the add_requirement→update_requirement(Completed) bypass but left InProgress/Done open: a non-advisor MCP agent can add_requirement (lands Draft) then update_requirement{status:in-progress|done}, placing an un-triaged spec into the active pipeline / self-marking it done — skipping the advisor intake the CLI enforces (status_requires_advisor_authority includes InProgress+Done; CLI edit blocks Draft→those). Root cause: a target-only check can''t distinguish legitimate Approved→InProgress (implementer) from illegitimate Draft→InProgress. Fix: gate on the (source,target) pair — block advancing OUT of Draft/NeedsAttention to any approved+ status without advisor authority, mirroring the CLI edit gate.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:13:53.445081740Z
+modified_at: 2026-06-09T01:13:53.445081740Z
+req_type: Bug
+tags:
+- authority
+- from-review:quality-sweep
+- mcp
+- security
+- severity:high
+- verified-by-advisor
