@@ -31,12 +31,12 @@ description: |-
   ## Rationale
 
   The advisor-sign-off mechanism the operator asked for, using the existing advisor-gated queue as the gate rather than inventing a new blessing. Foundational: both `aida burndown plan` (STORY-544 footer) and `aida burndown run` (STORY-545) depend on this scoping. Ships independently of the run engine (you get the curated ready-view first).
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:44:50.025366020Z
-modified_at: 2026-06-09T15:14:04.073390689Z
+modified_at: 2026-06-09T15:24:11.921149703Z
 req_type: Story
 tags:
 - advisor-gate
