@@ -16,6 +16,11 @@ path = "src/main.rs"
 
 [dependencies]
 aida-core = { version = "0.12", path = "../aida-core", features = ["postgres", "gitlab", "github", "jira"] }
+# `aida schema` derives the Requirement field/enum detail from the same
+# ts-rs-forge type reflection that backs aida-generate-types — the TS::decl()
+# output is the substrate-grounded source, not a hand-kept duplicate.
+# trace:STORY-538 | ai:claude
+ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
 
 # CLI-specific dependencies
 serde = { workspace = true }
