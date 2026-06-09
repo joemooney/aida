@@ -3,12 +3,12 @@ spec_id: BUG-478
 agreed_id: BUG-478
 title: Failed --resume-drain is misclassified as 'deliberately shelved' → cannot be re-resumed (BUG-438 defeated)
 description: 'VERIFIED (advisor read drain_resume.rs:49-69 + main.rs:89748-89763, found by quality-sweep reviewer). BUG-438 keeps drain-state.json when a resume fails so the operator can fix the blocker and --resume-drain again. BUT the resume gate computes has_failure_reason = (member.state == drain_state::STATE_FAILED) at main.rs:89750 — NOT the requirement''s actual FailureReason field (despite drain_resume.rs docstrings claiming the latter). A failed resume stamps the member STATE_FAILED via set_member_outcome(completed = exit_code==0). So the NEXT --resume-drain sees has_failure_reason=true → classify_resumability returns Shelved → prints ''<spec> was deliberately shelved … don''t resume'' and exits 0, defeating BUG-438''s keep-checkpoint intent. Unit-testable: classify_resumability(false,true,false,true)==Shelved conflates failed-resume with deliberate-shelve. Fix: compute has_failure_reason from the requirement''s real FailureReason field, not the drain-state member-state string.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:12:21.762836945Z
-modified_at: 2026-06-09T01:12:21.762836945Z
+modified_at: 2026-06-09T01:57:39.207787648Z
 req_type: Bug
 tags:
 - from-review:quality-sweep
@@ -16,3 +16,7 @@ tags:
 - resume
 - severity:high
 - verified-by-advisor
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-09T01:57:39.207787648Z
+  completion_sha: 99a19b73027c4e3953f50be5fab34b4402a5278d
