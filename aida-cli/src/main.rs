@@ -1287,8 +1287,13 @@ fn run() -> Result<()> {
     if let Command::Role(role_cmd) = &cli.command {
         return handle_role_command(role_cmd);
     }
-    if let Command::Statusline { color } = &cli.command {
-        return handle_statusline_command(color);
+    if let Command::Statusline { color, action } = &cli.command {
+        // trace:TASK-0414 — the opt-in `setup` subcommand bootstraps the
+        // statusline; with no subcommand we render the one-liner (default).
+        match action {
+            Some(act) => return handle_statusline_setup_command(act),
+            None => return handle_statusline_command(color),
+        }
     }
     // STORY-79: hidden background-fetch worker spawned by statusline.
     // Dispatch before storage init — this is a self-contained worker
@@ -57904,6 +57909,180 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     Ok(())
 }
 
+// ----------------------------------------------------------------------------
+// `aida statusline setup` — opt-in AIDA-aware statusline bootstrap.
+//
+// AIDA's bootstrap goal is to make other projects agent-ready without
+// forcing a house style, so enabling the AIDA-aware statusline is a
+// deliberate, opt-in step. `aida statusline` (no subcommand) renders the
+// one-liner — the quiet default; `aida statusline setup` prints (or, for
+// Claude Code, installs) client-appropriate statusline configuration.
+// trace:TASK-0414
+// ----------------------------------------------------------------------------
+
+/// The command Claude Code runs for its `statusLine`. Renders the AIDA
+/// one-liner with color forced on (Claude Code pipes the command with no
+/// TTY, so `--color=auto` would emit plain text); falls back to the cwd
+/// when `aida` is not on PATH or the cwd is outside an AIDA project. Kept
+/// in sync with the scaffolder's STATUSLINE_COMMAND so init-scaffolded and
+/// setup-installed config agree. No bashisms — runs under /bin/sh (dash).
+/// trace:TASK-0414
+const STATUSLINE_SETUP_COMMAND: &str =
+    "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\"";
+
+/// Render the Claude Code `settings.json` `statusLine` block as a snippet
+/// the user can paste (or that `--install` merges in).
+// trace:TASK-0414
+fn claude_statusline_block() -> serde_json::Value {
+    serde_json::json!({
+        "type": "command",
+        "command": STATUSLINE_SETUP_COMMAND,
+    })
+}
+
+/// Print the Claude Code statusline setup guidance (and the JSON snippet).
+// trace:TASK-0414
+fn print_claude_statusline_setup(settings_path: &std::path::Path) {
+    let snippet = serde_json::to_string_pretty(&serde_json::json!({
+        "statusLine": claude_statusline_block(),
+    }))
+    .unwrap_or_else(|_| "{}".to_string());
+
+    println!("Claude Code — command-backed statusLine");
+    println!("  Add this to {}:", settings_path.display());
+    println!();
+    for line in snippet.lines() {
+        println!("  {line}");
+    }
+    println!();
+    println!("  Or install it for this project:");
+    println!("    aida statusline setup --client claude --install");
+    println!();
+    println!("  To disable later, remove the \"statusLine\" key from");
+    println!(
+        "  {} (or run `aida statusline setup --client claude --install` after",
+        settings_path.display()
+    );
+    println!("  deleting it to re-add). Claude Code falls back to its built-in footer.");
+}
+
+/// Print the Codex TUI footer guidance. Codex's footer renders built-in
+/// item IDs only — it does NOT run `aida statusline` as a command — so we
+/// configure companion built-in fields and point at the shell statusline
+/// for the AIDA-aware segment.
+// trace:TASK-0414
+fn print_codex_statusline_setup() {
+    println!("Codex CLI — built-in TUI footer");
+    println!("  Codex's footer renders built-in item IDs; it does not run");
+    println!("  `aida statusline` as a command. Configure the companion built-in");
+    println!("  fields in `~/.codex/config.toml` (personal) or a trusted project's");
+    println!("  `.codex/config.toml` (team):");
+    println!();
+    println!("  [tui]");
+    println!(
+        "  status_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\", \"current-dir\"]"
+    );
+    println!();
+    println!("  For the AIDA-aware segment itself, run `aida statusline --color=always`");
+    println!("  anywhere your shell, multiplexer, or terminal supports a command-backed");
+    println!("  status line. To disable later, remove the `[tui] status_line` line (or");
+    println!("  the whole `[tui]` block) from your Codex config.toml.");
+}
+
+/// Merge the AIDA `statusLine` block into `.claude/settings.json`,
+/// preserving any existing keys (hooks, etc.). Creates the file if absent.
+/// Returns whether the file was created (vs merged).
+// trace:TASK-0414
+fn install_claude_statusline(settings_path: &std::path::Path) -> Result<bool> {
+    let existed = settings_path.exists();
+    let mut root: serde_json::Value = if existed {
+        let raw = std::fs::read_to_string(settings_path).with_context(|| {
+            format!(
+                "reading existing settings.json at {}",
+                settings_path.display()
+            )
+        })?;
+        serde_json::from_str(&raw).with_context(|| {
+            format!(
+                "{} is not valid JSON — fix it by hand, then re-run install",
+                settings_path.display()
+            )
+        })?
+    } else {
+        if let Some(parent) = settings_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {} for settings.json", parent.display()))?;
+        }
+        serde_json::json!({})
+    };
+
+    let obj = root
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("{} is not a JSON object", settings_path.display()))?;
+    obj.insert("statusLine".to_string(), claude_statusline_block());
+
+    let mut serialized = serde_json::to_string_pretty(&root)?;
+    serialized.push('\n');
+    std::fs::write(settings_path, serialized)
+        .with_context(|| format!("writing {}", settings_path.display()))?;
+    Ok(!existed)
+}
+
+/// Dispatch for `aida statusline setup`. trace:TASK-0414
+fn handle_statusline_setup_command(action: &cli::StatuslineAction) -> Result<()> {
+    let cli::StatuslineAction::Setup { client, install } = action;
+
+    let project_root = statusline_project_root();
+    let settings_path = project_root.join(".claude").join("settings.json");
+
+    match client.as_str() {
+        "claude" => {
+            if *install {
+                let created = install_claude_statusline(&settings_path)?;
+                if created {
+                    println!(
+                        "Created {} with the AIDA statusLine.",
+                        settings_path.display()
+                    );
+                } else {
+                    println!(
+                        "Merged the AIDA statusLine into {} (existing keys preserved).",
+                        settings_path.display()
+                    );
+                }
+                println!(
+                    "To disable later, remove the \"statusLine\" key from {}.",
+                    settings_path.display()
+                );
+            } else {
+                print_claude_statusline_setup(&settings_path);
+            }
+        }
+        "codex" => {
+            if *install {
+                anyhow::bail!(
+                    "Codex's footer config is hand-edited and cannot be auto-installed.\n\
+                     Run `aida statusline setup --client codex` to print the snippet."
+                );
+            }
+            print_codex_statusline_setup();
+        }
+        // "all" (default): print every supported client's guidance. Install
+        // is meaningless for the mixed view, so it prints rather than writes.
+        _ => {
+            if *install {
+                anyhow::bail!(
+                    "--install needs a specific client. Use `--client claude --install`."
+                );
+            }
+            print_claude_statusline_setup(&settings_path);
+            println!();
+            print_codex_statusline_setup();
+        }
+    }
+    Ok(())
+}
+
 /// TASK-60: pure function deciding what (if anything) to append to
 /// the `sess:` segment given the lease scope and branch. Returns an
 /// empty string when the branch already matches the slugified scope
@@ -102270,5 +102449,90 @@ mod story_127_antipattern_detectors {
         assert_eq!(pr_number_from_scope("STORY-127"), None);
         assert_eq!(pr_number_from_scope("PR-abc"), None);
         assert_eq!(pr_number_from_scope(""), None);
+    }
+}
+
+// trace:TASK-0414 — opt-in statusline bootstrap.
+#[cfg(test)]
+mod task_0414_statusline_setup {
+    use super::*;
+
+    /// The Claude Code statusLine block uses the same command string the
+    /// scaffolder writes (so init-scaffolded and setup-installed config
+    /// agree) and contains no bashisms — Claude Code runs it under
+    /// /bin/sh (dash).
+    #[test]
+    fn claude_block_command_is_posix_and_canonical() {
+        let block = claude_statusline_block();
+        let cmd = block["command"]
+            .as_str()
+            .expect("command should be a string");
+        assert_eq!(cmd, STATUSLINE_SETUP_COMMAND);
+        assert_eq!(block["type"], "command");
+        // POSIX printf fallback + 2>/dev/null redirect; no bash-only `[[`,
+        // `&>`, or `function` keyword.
+        assert!(cmd.contains("aida statusline --color=always"));
+        assert!(cmd.contains("printf"));
+        assert!(!cmd.contains("[["));
+        assert!(!cmd.contains("&>"));
+    }
+
+    /// Installing into a fresh project creates settings.json with only the
+    /// statusLine key, and reports creation.
+    #[test]
+    fn install_creates_settings_when_absent() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let settings = dir.path().join(".claude").join("settings.json");
+
+        let created = install_claude_statusline(&settings).expect("install should succeed");
+        assert!(created, "should report file creation");
+        assert!(settings.exists());
+
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        assert_eq!(v["statusLine"]["type"], "command");
+        assert_eq!(v["statusLine"]["command"], STATUSLINE_SETUP_COMMAND);
+    }
+
+    /// Installing into an existing settings.json MERGES the statusLine key
+    /// and preserves every pre-existing key (hooks, custom fields, etc.).
+    #[test]
+    fn install_merges_and_preserves_existing_keys() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let claude = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude).unwrap();
+        let settings = claude.join("settings.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks": {"PreToolUse": []}, "custom": "keep-me"}"#,
+        )
+        .unwrap();
+
+        let created = install_claude_statusline(&settings).expect("install should succeed");
+        assert!(!created, "should report a merge, not a creation");
+
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+        // Pre-existing keys survive.
+        assert_eq!(v["custom"], "keep-me");
+        assert!(v["hooks"]["PreToolUse"].is_array());
+        // statusLine added.
+        assert_eq!(v["statusLine"]["command"], STATUSLINE_SETUP_COMMAND);
+    }
+
+    /// A corrupt (non-JSON) settings.json is reported, not silently
+    /// clobbered — the user's hand-edited file is never overwritten blind.
+    #[test]
+    fn install_refuses_invalid_json() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let claude = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude).unwrap();
+        let settings = claude.join("settings.json");
+        std::fs::write(&settings, "{ not json").unwrap();
+
+        let err = install_claude_statusline(&settings).expect_err("invalid JSON should error");
+        assert!(err.to_string().contains("valid JSON"));
+        // The original bytes are untouched.
+        assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{ not json");
     }
 }
