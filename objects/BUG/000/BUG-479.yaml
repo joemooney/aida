@@ -1,0 +1,17 @@
+id: 019ea9f0-21ba-7d33-814b-7b8a23c61f4a
+spec_id: BUG-479
+agreed_id: BUG-479
+title: Implementer that commits then exits non-zero is treated as 'no work happened' → status restored, lease/worktree/commits stranded
+description: 'Found by quality-sweep reviewer (mechanism reviewer-verified; advisor corroborated implementer_lease assignment sites). self.implementer_lease is set in exactly one place (main.rs ~95528), reached only after a CLEAN session exit + successful discover_orchestrated_lease. The non-zero-exit path returns Err earlier (~95509), before implementer_lease is set. So when the implementer child DID acquire a lease + create a worktree + commit but then exited non-zero (e.g. /aida-pr failed after committing, or a headless session aborted post-commit), the parent''s implementer_lease stays None → TASK-133 compensation (should_compensate_phase1_bump: bumped && !lease_acquired && failed_phase==Implementer) fires → restore_phase1_status_on_lease_failure restores prior status AND clears failure_reason while reporting ''no work was stranded'' — but a real lease+worktree+commits remain on disk. Next pickup collides with the orphaned lease or re-implements over the stranded branch (BUG-436/BUG-438 class). Fix: detect a child-side lease/worktree even on non-zero exit before declaring nothing stranded. Keyboard-supervised fix (orchestrator keystone).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-09T01:12:27.322287412Z
+modified_at: 2026-06-09T01:12:27.322287412Z
+req_type: Bug
+tags:
+- from-review:quality-sweep
+- lease
+- orchestrator
+- severity:medium
