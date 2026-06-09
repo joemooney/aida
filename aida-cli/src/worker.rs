@@ -57,7 +57,8 @@ pub(crate) fn worker_cmd_path(project_root: &Path) -> PathBuf {
 }
 
 /// One parsed directive line.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+// trace:TASK-714
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs_forge::TS)]
 pub(crate) struct Directive {
     /// First whitespace-separated word of the line — `drain`, `pause`,
     /// `exit`, or any other word (defensively treated as `pause` by the

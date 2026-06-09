@@ -7155,7 +7155,8 @@ mod tests {
 
 /// Represents an entry in a user's personal work queue
 // trace:STORY-0366 | ai:claude
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// trace:TASK-714
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct QueueEntry {
     /// The user whose queue this entry belongs to
     pub user_id: String,
