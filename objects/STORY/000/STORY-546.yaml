@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:44:50.025366020Z
-modified_at: 2026-06-09T06:45:41.990431425Z
+modified_at: 2026-06-09T15:14:04.073390689Z
 req_type: Story
 tags:
 - advisor-gate
@@ -48,3 +48,9 @@ relationships:
   target_id: 019eab13-c8a9-7430-83ad-d220620f0a2e
   created_at: 2026-06-09T06:45:41.990420369Z
   created_by: joe
+comments:
+- id: 019eacf2-a6a9-75e0-9667-84c7a30d2107
+  author: joe
+  content: Commit 6c9f909a0 references this requirement
+  created_at: 2026-06-09T15:14:04.073390689Z
+  modified_at: 2026-06-09T15:14:04.073390689Z
