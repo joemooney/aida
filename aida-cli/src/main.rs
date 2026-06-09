@@ -6735,12 +6735,28 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          # with a later PR's landed plan. trace:TASK-383 | ai:claude\n\
          docs/plans/_draft/\n";
 
+    // trace:BUG-484 — .claude/settings.local.json holds the per-user MCP
+    // pre-approval (enabledMcpjsonServers: ["aida"]) that init scaffolds so a
+    // fresh project trusts its own .mcp.json server. It MUST stay gitignored:
+    // a committed pre-approval is the exact clone-attack vector Claude Code
+    // guards against. Each clone's `aida init` grants its own local trust.
+    let settings_local_entry = "\n# Per-user Claude Code overrides — never team-shared.\n\
+         # .claude/settings.local.json holds local MCP trust (the aida server\n\
+         # pre-approval) and personal settings. Gitignored so a committed\n\
+         # pre-approval can't become a clone-attack vector. trace:BUG-484\n\
+         .claude/settings.local.json\n";
+
     if !gitignore_path.exists() {
         std::fs::write(
             &gitignore_path,
             format!(
-                "{}{}{}{}{}",
-                store_entry, runtime_entry, claude_local_entry, rules_sync_entry, plans_draft_entry
+                "{}{}{}{}{}{}",
+                store_entry,
+                runtime_entry,
+                claude_local_entry,
+                rules_sync_entry,
+                plans_draft_entry,
+                settings_local_entry
             ),
         )?;
         return Ok(false);
@@ -6789,6 +6805,16 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
             .ends_with("docs/plans/_draft")
     }) {
         file.write_all(plans_draft_entry.as_bytes())?;
+        wrote = true;
+    }
+    // trace:BUG-484 — same idempotency pattern; match the bare path so an
+    // operator-added glob (e.g. `**/settings.local.json`) doesn't duplicate it.
+    if !content.lines().any(|line| {
+        line.trim()
+            .trim_end_matches('/')
+            .ends_with("settings.local.json")
+    }) {
+        file.write_all(settings_local_entry.as_bytes())?;
         wrote = true;
     }
     Ok(wrote)
@@ -55893,27 +55919,56 @@ mod add_aida_gitignore_entries_tests {
         assert!(content.contains(".aida-store/"), "{}", content);
         assert!(has_aida_runtime_deny_pattern(&content), "{}", content);
         assert!(content.contains("!.aida/config.toml"), "{}", content);
+        // trace:BUG-484 — the per-user MCP-trust file must be gitignored so a
+        // committed pre-approval can't become a clone-attack vector.
+        assert!(
+            content.contains(".claude/settings.local.json"),
+            "{}",
+            content
+        );
     }
 
-    /// Existing .gitignore that already covers ALL five blocks (store,
-    /// runtime, CLAUDE.local.md, rules/aida-specs/, docs/plans/_draft/) → no
-    /// write, returns Ok(false). The third block (CLAUDE.local.md) was added in
-    /// commit bf50e7c0 for TASK-572. The fourth (.claude/rules/aida-specs/) was
-    /// added by SPIKE-31. The fifth (docs/plans/_draft/) by TASK-383.
-    /// trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 | ai:claude
+    /// Existing .gitignore that already covers ALL six blocks (store,
+    /// runtime, CLAUDE.local.md, rules/aida-specs/, docs/plans/_draft/,
+    /// settings.local.json) → no write, returns Ok(false). The third block
+    /// (CLAUDE.local.md) was added in commit bf50e7c0 for TASK-572. The fourth
+    /// (.claude/rules/aida-specs/) was added by SPIKE-31. The fifth
+    /// (docs/plans/_draft/) by TASK-383. The sixth (settings.local.json) by
+    /// BUG-484.
+    /// trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 trace:BUG-484 | ai:claude
     #[test]
     fn idempotent_when_both_blocks_present() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".gitignore");
-        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n";
+        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
         std::fs::write(&path, original).unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
         assert!(
             !updated,
-            "all five blocks already present → expected no append"
+            "all six blocks already present → expected no append"
         );
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, original);
+    }
+
+    /// .gitignore lacking only the settings.local.json block → that block is
+    /// appended (and only that one). trace:BUG-484 | ai:claude
+    #[test]
+    fn appends_settings_local_when_missing() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".gitignore");
+        let original = "target/\n.aida-store/\n.aida-store\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n";
+        std::fs::write(&path, original).unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(
+            updated,
+            "settings.local.json block missing → expected append"
+        );
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(".claude/settings.local.json"));
+        // Idempotent on a second pass.
+        let updated2 = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(!updated2, "second pass should be a no-op");
     }
 
     /// Legacy .gitignore (has `.aida-store/` but pre-BUG-73 per-file ignores)
