@@ -1,6 +1,6 @@
 # AIDA — Overview
 
-**AIDA is your project's missing index** — a hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.
+**AIDA is your project's missing index — of intent, not just code.** A hidden kernel that maintains a stable, queryable graph of what exists *and why*, served to AI through MCP and to you through a small CLI. (Auto-derived code-graph tools index what the code *is*; AIDA indexes what it was *for* — and keeps the two linked.)
 
 **Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
 
