@@ -6893,6 +6893,11 @@ pub enum Command {
         #[clap(long)]
         sync: bool,
 
+        /// Include the seeded META AI-prompt specs in results. Default hides
+        /// them, consistent with `aida list`. trace:BUG-488 | ai:claude
+        #[clap(long)]
+        include_meta: bool,
+
         /// Include archived requirements in the search (everything-escape-hatch).
         /// Default excludes archived rows for consistency with `aida list`.
         // trace:STORY-441 | ai:claude
