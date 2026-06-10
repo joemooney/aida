@@ -7297,20 +7297,26 @@ fn complete_init_scaffolding(
         println!("  Storage: {}", storage_label.dimmed());
     }
 
-    if discipline_written > 0 {
-        println!(
-            "  {} discipline guide{} scaffolded to {}",
-            discipline_written.to_string().green(),
-            if discipline_written == 1 { "" } else { "s" },
-            "docs/aida/discipline/".dimmed(),
-        );
-    }
-
-    if ecosystem_watch_written {
-        println!(
-            "  starter ecosystem-watch log scaffolded to {}",
-            "docs/competitive-analysis/ecosystem-watch.md".dimmed(),
-        );
+    // The discipline pack + ecosystem-watch log are real, but announcing them
+    // at minute one is noise for a newcomer — they didn't ask for 21 guides or a
+    // competitive-analysis log and don't yet know what they're for. Surface the
+    // count only under --verbose; the files are on disk either way.
+    // trace:BUG-19 | ai:claude
+    if verbose {
+        if discipline_written > 0 {
+            println!(
+                "  {} discipline guide{} scaffolded to {}",
+                discipline_written.to_string().green(),
+                if discipline_written == 1 { "" } else { "s" },
+                "docs/aida/discipline/".dimmed(),
+            );
+        }
+        if ecosystem_watch_written {
+            println!(
+                "  starter ecosystem-watch log scaffolded to {}",
+                "docs/competitive-analysis/ecosystem-watch.md".dimmed(),
+            );
+        }
     }
 
     if skipped_count > 0 {
@@ -7324,47 +7330,41 @@ fn complete_init_scaffolding(
     }
 
     println!();
-    println!("  {}:", "Next".bold());
     println!(
-        "    {}{}capture project intent",
-        "aida add --type vision --title \"...\"".cyan(),
-        " ".repeat(2)
+        "  {} The loop is simple — {} a thing you want, build it, ask {} later:",
+        "▶".green().bold(),
+        "capture".bold(),
+        "\"why?\"".bold()
     );
     println!(
-        "    {}{}see what exists",
+        "    {}{}capture your first task",
+        "aida add \"Add a task from the CLI\"".cyan(),
+        " ".repeat(3)
+    );
+    println!(
+        "    {}{}see what you've captured",
         "aida list".cyan(),
-        " ".repeat(29)
+        " ".repeat(27)
     );
     println!(
-        "    {}{}project as layered docs",
-        "aida docs build".cyan(),
-        " ".repeat(23)
+        "    {}{}later — recall why a thing exists",
+        "aida show <id>".cyan(),
+        " ".repeat(22)
     );
 
     // TASK-645: surface the role model at the onboarding moment so there is
     // no undefined-role window. The default is read-side (`AIDA_SESSION_ROLE`
     // unset → implementer); init can't set the env var from a subprocess, so
     // it names the default and the switch command rather than entering one.
+    // TASK-645 / ADR-2: name the default seat so there's no undefined-role
+    // window — but for a newcomer that's one gentle line, not a lecture on the
+    // role model. The switch command + the advisor/reviewer seats surface later
+    // (`aida role --help`, the discipline pack) once the project grows into them.
+    // trace:TASK-645 | ai:claude
     println!();
-    println!("  {}:", "Your role".bold());
     println!(
-        "    You're the {} by default — the seat that picks up and ships work.",
+        "  You're set up as the {} (the default) — you can ignore roles until your project grows.",
         "implementer".green().bold()
-    );
-    println!(
-        "    {} Roles are just hats you wear as the project grows ({}/{}/{}).",
-        "·".dimmed(),
-        "implementer".cyan(),
-        "advisor".cyan(),
-        "reviewer".cyan()
-    );
-    // trace:TASK-667 — under the shell wrapper the bare `aida role enter`
-    // is correct; raw, the `eval "$(...)"` form is. eval_subcommand_hint
-    // picks based on AIDA_SHELL_WRAPPER instead of hardcoding one form.
-    println!(
-        "    {} Switch any time: {}",
-        "·".dimmed(),
-        eval_subcommand_hint("role enter <role>").cyan()
     );
 
     if !verbose {
@@ -15444,10 +15444,7 @@ fn handle_init_distributed_worktree(
         }
     }
 
-    println!(
-        "{}",
-        "Initializing AIDA in distributed mode (orphan branch + worktree)...".bold()
-    );
+    println!("{}", "Setting up AIDA in this project…".bold());
     println!();
 
     // Ensure there's at least one commit on main (worktree requires it)
