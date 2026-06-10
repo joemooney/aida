@@ -7,10 +7,11 @@ priority: Medium
 owner: ''
 feature: cli
 created_at: 2026-06-09T15:12:31.680104665Z
-modified_at: 2026-06-10T03:31:07.376535477Z
+modified_at: 2026-06-10T03:31:30.446849611Z
 req_type: Task
 tags:
 - adopt-adapt
 - competitive-scan:2026-06-09
 - lane:a
+- needs-design-signoff
 - spec-driven
