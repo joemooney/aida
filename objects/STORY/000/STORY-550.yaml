@@ -23,12 +23,12 @@ description: |-
   ## Rationale
 
   Time-sensitive: building a native-already feature wastes the scarce build window the distribution clock (Kill-shot 1) makes precious. Defensive reassessment, not new capability.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:15:13.712942473Z
-modified_at: 2026-06-09T15:15:13.712942473Z
+modified_at: 2026-06-10T03:31:20.897206816Z
 req_type: Story
 tags:
 - competitive-analysis
