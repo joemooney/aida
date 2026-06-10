@@ -1,0 +1,22 @@
+id: 019eb033-bd5c-7070-8228-2507e933ecfd
+spec_id: TASK-724
+agreed_id: TASK-724
+title: 'Spec Kit/OpenSpec/Kiro import: dry-run PREVIEW only (read-only) — TASK-0416 safe slice'
+description: |-
+  SAFE drainable slice of TASK-0416 (parent stays parked for the actual graph-WRITING import + the import contract — operator wants that in the loop). Scope: a READ-ONLY preview, writes NOTHING to the graph:
+  `aida import --dry-run <path> [--format spec-kit|openspec|kiro|auto]` parses neighbor artifacts (Spec Kit `specs/<f>/spec.md|plan.md|tasks.md`, OpenSpec `openspec/changes/<n>/...`, Kiro `requirements.md|design.md|tasks.md`), infers the records + parent/child/task edges it WOULD create, and prints a diff/preview with original artifact paths as references + source/provenance tags. Never overwrites source artifacts; never mutates the graph.
+  EXCLUDED (deferred to parent / keyboard): the actual write-import, stable-ID assignment, dedup-on-conflict (the import contract).
+  Acceptance: `aida import --dry-run <path>` auto-detects the format, prints would-create records + edges + provenance, exits with ZERO graph mutation; `--format` override works; absent/garbage path errors cleanly.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T06:24:01.372086761Z
+modified_at: 2026-06-10T06:24:01.372086761Z
+req_type: Task
+tags:
+- adopt-adapt
+- lane:a
+- parent:TASK-0416
+- safe-slice
+- spec-driven
