@@ -72,8 +72,8 @@ aida list --status approved --priority high 2>/dev/null | head -10
 git log --oneline -10 2>/dev/null
 
 # Recent requirement changes
-aida list --status in-progress --format brief 2>/dev/null | head -5
-aida list --status completed --format brief 2>/dev/null | head -5
+aida list --status in-progress 2>/dev/null | head -5
+aida list --status completed 2>/dev/null | head -5
 ```
 
 ### Step 5: Present Onboarding Summary

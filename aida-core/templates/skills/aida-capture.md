@@ -51,7 +51,7 @@ guidance: `docs/aida/discipline/skill-prompt-kinds.md`. trace:TASK-297
 
 ## In-Progress Work
 
-!`aida list --status in-progress --format brief 2>/dev/null | head -10 || echo "none"`
+!`aida list --status in-progress 2>/dev/null | head -10 || echo "none"`
 
 ## Workflow
 

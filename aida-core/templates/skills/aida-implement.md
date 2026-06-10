@@ -21,7 +21,6 @@ Implement an approved requirement with full traceability, evolving the requireme
 
 Use this skill when:
 - User says "implement <SPEC-ID>" or "work on <requirement>"
-- User triggers "Copy for Claude Code" from the aida-desktop AI menu
 - An approved requirement is ready to be implemented
 - Continuing implementation of a requirement from a previous session
 
@@ -50,7 +49,7 @@ Format: `ai:<tool>:<username>` (e.g., `ai:claude:joe`)
 
 ## Approved Requirements
 
-!`aida list --status approved --format brief 2>/dev/null | head -15 || echo "none"`
+!`aida list --status approved 2>/dev/null | head -15 || echo "none"`
 
 ## Autonomy mode — `$AIDA_ZEN` (STORY-287)
 

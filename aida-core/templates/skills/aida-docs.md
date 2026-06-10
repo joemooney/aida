@@ -78,7 +78,7 @@ For slideshow presentations:
 
 ```bash
 # Basic status report
-aida list --format markdown > docs/reports/requirements-status.md
+aida list > docs/reports/requirements-status.md
 
 # Filter by status
 aida list --status draft
@@ -110,8 +110,8 @@ aida list --type <type>
 # Show requirement details
 aida show <SPEC-ID>
 
-# Export requirements
-aida export --format markdown
+# Export requirements (formats: mapping, tree, json)
+aida export --format tree
 aida export --format json
 ```
 
