@@ -1,0 +1,18 @@
+id: 019eb2ac-c0c2-7b73-8e19-3e0d239b4bc0
+spec_id: TASK-727
+agreed_id: TASK-727
+title: 'Novice-first: ''aida done <spec>'' — the simple ''I finished it'' verb'
+description: 'Round 6 of the novice-first friction loop found a wall: a solo novice who captured + built a task could NOT mark it done. ''aida done'' didn''t exist (suggested ''doc''); ''aida edit --status completed'' is jargon and (off a TTY) authority-gated. The capture->build->done loop dead-ended at the last step. Fix: ''aida done <SPEC>'' marks it Completed (records status-change history), the simple completion verb. Authority: a human at a terminal (TTY) or the advisor role is the authority — so a solo novice''s ''aida done'' just works; agents/non-TTY get a friendly ''run in your shell'' message (the advisor gate stays intact; full exemption is BUG-486-adjacent, left for operator). Verified end-to-end: aida done TASK-1 -> Completed, idempotent. trace:TASK-728'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T17:55:26.530971775Z
+modified_at: 2026-06-10T17:55:26.530971775Z
+req_type: Task
+tags:
+- first-run
+- friction:round-6
+- lifecycle
+- novice-first
+- ux
