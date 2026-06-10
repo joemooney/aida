@@ -1593,6 +1593,14 @@ fn run() -> Result<()> {
     let storage = Storage::new(requirements_path.clone());
 
     match &cli.command {
+        // TASK-728: `aida done` is a distributed-mode (default) verb. Legacy
+        // --centralized mode keeps the explicit edit path. trace:TASK-727
+        Command::Done { .. } => {
+            anyhow::bail!(
+                "`aida done` is available in the default (distributed) mode. In legacy \
+                 --centralized mode, use `aida edit <spec> --status completed`."
+            );
+        }
         Command::Add {
             title,
             title_positional,
@@ -5319,6 +5327,51 @@ fn handle_unarchive_command(
     backend.update_requirement(&req)?;
     record_role_activity(&display_id, "unarchive");
     println!("{} {display_id}", "Unarchived:".cyan().bold());
+    Ok(())
+}
+
+/// `aida done <SPEC>` — the newcomer's "I finished it" verb. Marks a spec
+/// Completed, the solo end of the capture → build → done loop. Found running a
+/// novice's first session: there was no `aida done`, and `aida edit --status
+/// completed` is jargon (and authority-gated off a TTY). A human at a terminal
+/// IS the authority (TTY satisfies the advisor gate), so for a solo user this
+/// just works. trace:TASK-727 | ai:claude
+fn handle_done_command(
+    id: &str,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    use aida_core::RequirementStatus;
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    if matches!(req.status, RequirementStatus::Completed) {
+        println!("{} {display_id} is already done.", "✓".green().bold());
+        return Ok(());
+    }
+    let new_status = RequirementStatus::Completed;
+    if status_advance_requires_advisor_authority(&req.status, &new_status)
+        && !has_advisor_authority()
+    {
+        anyhow::bail!(
+            "marking {display_id} done needs an interactive terminal (or the advisor role). \
+             Run `aida done {display_id}` directly in your shell."
+        );
+    }
+    let old = req.status.to_string();
+    req.set_status_from_str("completed");
+    req.record_change(
+        current_user_id(None),
+        vec![aida_core::Requirement::field_change(
+            "status",
+            old,
+            "Completed".to_string(),
+        )],
+    );
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "done");
+    println!("{} {display_id} — {}", "✓".green().bold(), "done".green());
     Ok(())
 }
 
@@ -10899,6 +10952,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Unarchive { id } => {
             // STORY-441: inverse of `aida archive`. trace:STORY-441 | ai:claude
             handle_unarchive_command(id, &backend, store_path)?;
+        }
+        Command::Done { spec } => {
+            // TASK-728: the newcomer's "I finished it" verb. trace:TASK-727
+            handle_done_command(spec, &backend, store_path)?;
         }
         Command::Search {
             query,
