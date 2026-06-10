@@ -6976,6 +6976,31 @@ pub enum Command {
         archived: bool,
     },
 
+    /// Opt-in EARS-style quality lint for requirement text. AIDA stays a
+    /// graph-first substrate (stable IDs, typed relationships, traces); this
+    /// is an optional clarity lens, never a required schema. Scores a spec's
+    /// description + acceptance criteria for vague triggers, missing expected
+    /// behavior, conflicting constraints, and low-testability wording, and
+    /// prints suggested rewrites as drafts only — it never edits a spec.
+    /// Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep
+    /// every spec of that kind. Read-only and deterministic (no LLM call).
+    // trace:TASK-0417 | ai:claude
+    Lint {
+        /// SPEC-ID to lint (e.g. `STORY-42`). Omit and pass `--scope` to
+        /// sweep a group of specs.
+        spec: Option<String>,
+
+        /// Lint every spec of this kind instead of a single SPEC-ID. One of
+        /// `feature`, `task`, or `story`. `feature` covers the requirement
+        /// types (functional / non-functional / system / user).
+        #[clap(long, value_name = "KIND", conflicts_with = "spec")]
+        scope: Option<String>,
+
+        /// Emit findings as JSON for agents / scripts.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Work with implementation plans archived under `docs/plans/`.
     /// Today: `aida plan verify <file>` lints a plan against the
     /// structured template — drifted line refs, missing files, absent
