@@ -9427,11 +9427,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 eprintln!("{} {}", "Warning:".yellow().bold(), msg);
             }
 
-            // Type — interactive picker when not provided. TASK-729: lead with
+            // Type — interactive picker when not provided. TASK-728: lead with
             // the relatable everyday types a newcomer reaches for (task is the
             // default + first); push the specialized docs-layer / organizational
             // types to the end so the picker doesn't open with jargon.
-            // trace:TASK-729 | ai:claude
+            // trace:TASK-728 | ai:claude
             let interactive_type: Option<String> = if r#type.is_none() && interactive_mode {
                 let choices = vec![
                     "task",
