@@ -15,10 +15,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T16:00:31.355691491Z
-modified_at: 2026-06-10T03:31:04.845385003Z
+modified_at: 2026-06-10T06:40:34.360221854Z
 req_type: Task
 tags:
 - aida:burndown
 - follow-up:STORY-545
 - from-self-test
 - papercut
+archived: true
+archived_at: 2026-06-10T06:40:34.360221854Z
