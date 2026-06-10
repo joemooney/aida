@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T06:26:24.764935279Z
-modified_at: 2026-06-10T06:26:24.764935279Z
+modified_at: 2026-06-10T06:40:29.173107723Z
 req_type: Spike
 tags:
 - advisor
@@ -29,4 +29,6 @@ tags:
 - from-scan:2026-06-10
 - naming
 - ride-not-build
+archived: true
+archived_at: 2026-06-10T06:40:29.173107723Z
 human_only: true
