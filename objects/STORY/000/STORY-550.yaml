@@ -28,11 +28,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:15:13.712942473Z
-modified_at: 2026-06-10T03:31:20.897206816Z
+modified_at: 2026-06-10T03:31:35.546211247Z
 req_type: Story
 tags:
 - competitive-analysis
 - defensive
 - from-self-test
+- needs-design-signoff
 - orchestrator
 - severity:major
