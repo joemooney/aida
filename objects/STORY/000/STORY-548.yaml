@@ -30,12 +30,12 @@ description: |-
   ## Rationale
 
   Closes the 'what's pickable' vs 'why each open' gap. The missing native surface forced brittle multi-interpreter scripting — building it removes that whole class of ad-hoc introspection. Reuses the burndown parked-reason engine + findings; adds only the residual-note vehicle. Relates to STORY-545/546 (the burndown set) and the findings surface.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T14:00:23.901748591Z
-modified_at: 2026-06-09T14:08:01.743194759Z
+modified_at: 2026-06-10T03:31:15.927945934Z
 req_type: Story
 tags:
 - aida:burndown
