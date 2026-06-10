@@ -2,15 +2,27 @@ id: 019eacf3-7e28-7141-8786-f7e9b533dbfa
 spec_id: TASK-0417
 title: Add optional EARS-style requirement linting
 description: 'Add an opt-in lint/evaluation pass that helps AIDA requirements adopt Kiro-style EARS clarity without forcing EARS as the canonical schema. Acceptance criteria: expose a CLI/MCP-safe check for requirements and acceptance criteria; detect vague triggers, missing expected behavior, conflicting constraints, and low-testability wording; offer suggested rewrites as comments or draft edits only; support feature/task/story scopes; document that AIDA remains a graph-first substrate while EARS is an optional quality lens. Filed from Lane A competitive scan, 2026-06-09.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: cli
 created_at: 2026-06-09T15:14:59.240810051Z
-modified_at: 2026-06-10T03:31:11.248843442Z
+modified_at: 2026-06-10T03:57:38.120813370Z
 req_type: Task
 tags:
 - adopt-adapt
 - competitive-scan:2026-06-09
 - kiro
 - lane:a
+history:
+- id: 019eafad-bad7-7b21-a2c3-8fbe82f3f793
+  author: aida-auto-bump
+  timestamp: 2026-06-10T03:57:38.903225108Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-10T03:57:38.120813370Z
+  completion_sha: b1994f0680c84525b80ef8df640c69fcab5977c9
