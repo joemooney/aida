@@ -3,12 +3,12 @@ spec_id: TASK-726
 agreed_id: TASK-726
 title: 'Novice-first: aida show tells you HOW to link code when there''s no linkage yet'
 description: 'Round 4 of the novice-first friction loop. The code↔spec link is AIDA''s whole magic (it''s what makes ''recall why'' work), but a newcomer had no idea how to create one: ''aida show <id>'' reported ''no commits or trace comments reference this spec yet'' and left them at a dead end. Fix: when there''s no linkage, print a one-line how-to using the real spec id — add a ''// trace:<ID>'' comment or name ''(<ID>)'' in a commit. Verified end-to-end: novice sees the hint, follows it, ''aida show'' then shows the linkage. trace:TASK-726'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T16:55:03.102084632Z
-modified_at: 2026-06-10T16:55:36.840151009Z
+modified_at: 2026-06-10T17:17:39.193256992Z
 req_type: Task
 tags:
 - first-run
