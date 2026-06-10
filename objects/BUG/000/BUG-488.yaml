@@ -1,0 +1,18 @@
+id: 019eb2dd-f484-7523-859e-a7f744925eae
+spec_id: BUG-488
+agreed_id: BUG-488
+title: aida search leaks seeded META AI-prompt specs; aida list hides them — inconsistent
+description: 'Round 8 of the novice-first loop. ''aida list'' hides the seeded META requirements (the AI-prompt templates META-002..006) by default (BUG-27: retain non-meta unless --include-meta). But ''aida search'' has the same --include-meta flag yet never applies it — so a novice''s search surfaces ''Generate Children'' / ''Suggest Relationships'' / etc., internal machinery they don''t recognize. Fix: search applies the same META filter as list (hide meta unless --include-meta). Found running a novice''s multi-task session.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T18:49:11.044026152Z
+modified_at: 2026-06-10T18:49:11.044026152Z
+req_type: Bug
+tags:
+- consistency
+- friction:round-8
+- novice-first
+- search
+- ux
