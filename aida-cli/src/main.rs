@@ -7030,10 +7030,7 @@ fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
     }
     match git_ops::commit(root, "chore: scaffold AIDA") {
         Ok(true) => {
-            println!(
-                "  {} committed AIDA scaffolding (chore: scaffold AIDA)",
-                "Done".green()
-            );
+            println!("  {} saved your AIDA setup", "✓".green());
             Ok(true)
         }
         // Nothing staged was new (already tracked + unchanged). Not an error.
@@ -15464,12 +15461,16 @@ fn handle_init_distributed_worktree(
 
     // Create orphan branch + worktree
     let store_path = git_ops::create_store_worktree(&cwd, worktree_dir, branch_name)?;
-    println!(
-        "  {} orphan branch '{}' with worktree at {}",
-        "Created".green(),
-        branch_name,
-        worktree_dir
-    );
+    // Setup-detail (orphan branch / node id / forge) is plumbing a newcomer
+    // doesn't need to see — surface it only under --verbose. trace:TASK-725
+    if verbose {
+        println!(
+            "  {} orphan branch '{}' with worktree at {}",
+            "Created".green(),
+            branch_name,
+            worktree_dir
+        );
+    }
 
     // Configure git user in worktree
     let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
@@ -15496,11 +15497,13 @@ fn handle_init_distributed_worktree(
     }
     seed_meta_requirements(&mut store)?;
     backend.save(&store)?;
-    println!(
-        "  {} {}",
-        "Created".green(),
-        format!("{}/metadata.yaml", worktree_dir).white().bold()
-    );
+    if verbose {
+        println!(
+            "  {} {}",
+            "Created".green(),
+            format!("{}/metadata.yaml", worktree_dir).white().bold()
+        );
+    }
 
     // Create initial commit on the orphan branch
     git_ops::add(&store_path, &["metadata.yaml"])?;
@@ -15589,14 +15592,16 @@ fn handle_init_distributed_worktree(
                 } else {
                     " (local; will sync on next `aida push`)"
                 };
-                println!(
-                    "  {} acquired node id {} (hostname={}, email={}){}",
-                    "Done".green(),
-                    new_id,
-                    hn,
-                    email.as_deref().unwrap_or("-"),
-                    suffix
-                );
+                if verbose {
+                    println!(
+                        "  {} acquired node id {} (hostname={}, email={}){}",
+                        "✓".green(),
+                        new_id,
+                        hn,
+                        email.as_deref().unwrap_or("-"),
+                        suffix
+                    );
+                }
                 // FR-271: at init time, force the new-project default
                 // (Global) explicitly. Reading config.toml here would
                 // return PerType because we haven't written the config
@@ -15608,10 +15613,10 @@ fn handle_init_distributed_worktree(
                     email.as_deref(),
                     aida_core::IdCounterScope::Global,
                 ) {
-                    if !blocks.is_empty() {
+                    if !blocks.is_empty() && verbose {
                         println!(
                             "  {} auto-allocated {} initial block{}",
-                            "Done".green(),
+                            "✓".green(),
                             blocks.len(),
                             if blocks.len() == 1 { "" } else { "s" }
                         );
@@ -15682,9 +15687,9 @@ fn handle_init_distributed_worktree(
 
     // STORY-511: surface the auto-detected forge so the operator sees the
     // inference instead of having to read .aida/config.toml. EPIC-35 init UX.
-    {
+    if verbose {
         let (_, msg) = forge::init_forge_detection_message(&cwd);
-        println!("  {} {}", "Done".green(), msg);
+        println!("  {} {}", "✓".green(), msg);
     }
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
@@ -15693,11 +15698,9 @@ fn handle_init_distributed_worktree(
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
-        "{}{}Git-canonical store ({}, orphan branch '{}')",
+        "{}{}your specs live here (git-tracked, synced with your code)",
         worktree_dir.white().bold(),
         " ".repeat(20),
-        worktree_dir,
-        branch_name
     );
     complete_init_scaffolding(
         &cwd,
@@ -15711,19 +15714,24 @@ fn handle_init_distributed_worktree(
         verbose,
     )?;
 
-    println!();
-    println!("  {}:", "Push code + store together".bold());
-    println!(
-        "    {}                        push your branch and the orphan store in one go",
-        "aida push".cyan()
-    );
-    println!();
-    println!("  {}:", "Onboard a teammate".bold());
-    println!("    {}    they clone normally", "git clone <repo>".cyan());
-    println!(
-        "    {}            then `aida init` notices the orphan branch and attaches",
-        "aida init".cyan()
-    );
+    // Sharing + teammate onboarding are real, but premature for a solo
+    // newcomer with no remote yet — surface them under --verbose (and they're
+    // re-surfaced contextually when there IS an origin). trace:TASK-725
+    if verbose {
+        println!();
+        println!("  {}:", "Push code + store together".bold());
+        println!(
+            "    {}                        push your branch and the spec store in one go",
+            "aida push".cyan()
+        );
+        println!();
+        println!("  {}:", "Onboard a teammate".bold());
+        println!("    {}    they clone normally", "git clone <repo>".cyan());
+        println!(
+            "    {}            then `aida init` attaches the shared specs automatically",
+            "aida init".cyan()
+        );
+    }
     println!();
 
     Ok(())
@@ -15865,11 +15873,9 @@ fn handle_init_post_clone(
         .load()
         .unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
     let storage_label = format!(
-        "{}{}Git-canonical store ({}, orphan branch '{}')",
+        "{}{}your specs live here (git-tracked, synced with your code)",
         worktree_dir.white().bold(),
         " ".repeat(20),
-        worktree_dir,
-        branch_name
     );
     complete_init_scaffolding(
         cwd,
