@@ -1,0 +1,32 @@
+id: 019eb035-ed7c-7823-a6d2-9e2acf52a4d9
+spec_id: SPIKE-54
+agreed_id: SPIKE-54
+title: Evaluate riding Anthropic's advisor-tool (beta) for the implementer→advisor escalation hop
+description: |-
+  Anthropic shipped the 'advisor tool' (beta, advisor-tool-2026-03-01): a faster executor model consults a stronger advisor model MID-GENERATION for a plan/course-correction (~400-700 text tokens), all inside one /v1/messages call. Executor decides when to call; server forwards the full transcript; advice returns as an advisor_tool_result. Valid pairs e.g. Sonnet-4.6 executor + Opus-4.8 advisor.
+
+  This is LITERALLY AIDA's implementer→advisor escalation hop, shipped as a native inference primitive. Per [[feedback_ride_native_within_vendor_own_cross_vendor]]: RIDE it for the within-Claude implementer→advisor consult; AIDA OWNS the durable, cross-vendor advisor SEAT (memory curation, friction→filings, queue gardening, the full implementer→advisor→human cascade) that a within-generation Claude-only tool can't be.
+
+  Term collision, NOT concept collision (different layers: Anthropic = inference mechanism; AIDA = lifecycle role). Convergence VALIDATES AIDA's advisor bet.
+
+  Investigate:
+  1. Today AIDA's headless advisor tier (--no-human / /aida-advise) spawns a fresh `claude -p` PER PUNT (cold-boot, SPIKE-11). Could the advisor-tool replace/augment that hop — implementer runs as executor, punts to the Opus advisor-tool mid-generation — cheaper + lower-latency than spawning a separate advisor session?
+  2. The advisor-tool reads the executor's full transcript → the implementer's spec/acceptance context flows in automatically. Does that give advice quality comparable to the current spec-grounded /aida-advise?
+  3. The boundary to preserve: advisor-tool = within-generation TACTICAL guidance (Claude-only, ephemeral); AIDA advisor seat = cross-session STRATEGIC partner + substrate curation + cross-vendor. The tool powers a hop; it is not the seat.
+  4. Naming: KEEP AIDA 'advisor' (canonical, TASK-586). Add a one-line disambiguation in docs (advisor ROLE vs Anthropic advisor TOOL). Do NOT rename.
+  Caveat: beta (header advisor-tool-2026-03-01), Claude-API-only (not Bedrock/Vertex/Foundry), ZDR-eligible. Degrade when absent (keep the current cold-boot tier as fallback). Deliverable: ride-vs-keep recommendation + the naming-disambiguation doc edit.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T06:26:24.764935279Z
+modified_at: 2026-06-10T06:26:24.764935279Z
+req_type: Spike
+tags:
+- advisor
+- competitive
+- escalation
+- from-scan:2026-06-10
+- naming
+- ride-not-build
+human_only: true
