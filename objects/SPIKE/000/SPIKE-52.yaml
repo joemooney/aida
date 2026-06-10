@@ -11,14 +11,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:18:12.780110006Z
-modified_at: 2026-06-10T03:50:59.407788510Z
+modified_at: 2026-06-10T03:51:02.848526455Z
 req_type: Spike
 tags:
 - agent-teams
 - competitive
 - from-scan:2026-06-09
 - lane-b
-- needs-design-signoff
 - orchestrator
 - ride-not-build
 - spike
