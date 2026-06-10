@@ -103,6 +103,7 @@ aida db reconcile-status [--spec ID] [--since REF] [--dry-run]  # Replay Done→
 aida cache status                      # Compare cache HEAD vs git HEAD
 aida memories check [--verbose] [--json]   # Drift between local memory pack and binary's embedded master; fix via init --with-memories --refresh (STORY-410)
 aida plan verify <file> [--fix]        # Lint a plan: drifted refs, missing files/sections (--fix rewrites refs) (TASK-93)
+aida lint <SPEC|--scope feature|task|story> [--json]  # Opt-in EARS-style quality lens: flag vague triggers / missing behavior / conflicts / low testability; suggests rewrites, never edits (TASK-0417)
 aida plan helpers <spec> [--append <file>]  # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
 aida ultraplan <spec> [--stdout|--json]     # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
 aida goal --batch|--epic|--spec|--pr|--queue-empty ...  # Derive a machine-checkable /goal condition; flags AND-compose; --copy/--invoke (TASK-242)

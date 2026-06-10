@@ -57,7 +57,7 @@ The honest framing: **Kiro is the best integrated editor for producing a feature
 ## The honest caveats (don't let AIDA overclaim)
 
 - **Kiro's UX and funding dwarf AIDA's.** A polished AWS-backed IDE is a different category of product investment. AIDA competes on the structured-graph + portability layer, not on editor experience.
-- **EARS is a real edge for Kiro on requirement phrasing.** AIDA does not impose EARS; if testable requirement syntax is your priority, that's a point for Kiro. (Worth watching whether AIDA should offer an optional EARS lint.)
+- **EARS is a real edge for Kiro on requirement phrasing.** AIDA does not impose EARS as its canonical schema; if testable requirement syntax is your priority, Kiro's notation-first authoring is a point for Kiro. AIDA's answer is an **optional EARS lens**, not a mandate: `aida lint <SPEC|--scope feature|task|story>` runs a read-only, deterministic (no-LLM) heuristic pass that flags vague triggers, missing expected behavior, conflicting constraints, and low-testability wording, and prints suggested EARS-style rewrites as drafts. It never mutates the canonical spec — AIDA stays a graph-first substrate, EARS is layered on top as a quality lens you opt into.
 - **"Specs as artifacts" is no longer differentiating.** Kiro adopting the vocabulary means AIDA must lead with the *graph + enforcement + portability*, not the slogan.
 - **Composable in principle.** Nothing stops a team from drafting EARS specs in Kiro and holding the cross-feature graph + traces + lifecycle in AIDA — though the integration is less natural than the Spec-Kit-in-your-agent case, since Kiro is its own editor.
 
