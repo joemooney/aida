@@ -1,0 +1,23 @@
+id: 019eb033-81df-7f40-b6dc-0b665151aab9
+spec_id: TASK-723
+agreed_id: TASK-723
+title: 'burndown explain: findings-link + residual-note (prefixed comment) + multi-reason — STORY-548 safe slice'
+description: |-
+  SAFE drainable slice of STORY-548 (parent stays parked for the /aida-burndown post-drain emission = runner-touching, keyboard-only, and the full design). Scope, all read-only derivation + one comment-writer, NO runner changes:
+  1. `aida burndown explain` / `aida why` also surface any FINDING filed against a spec — link the existing finding, don't recompute (source #2).
+  2. A non-derivable residual reason can be recorded as a PREFIXED COMMENT `why-open: <reason>` on the spec, folded into the view (source #3). PREFIXED-COMMENT vehicle CHOSEN — resolves STORY-548's open fork.
+  3. Multiple reasons per spec, most-fundamental-first.
+  EXCLUDED (deferred to parent / keyboard): the post-drain summary emission from the /aida-burndown skill (touches the runner).
+  Acceptance: explain/why show derived + finding-linked + residual-note reasons; --json includes them; `why-open:` is the residual vehicle; derivable state is NEVER written to the comment (staleness trap).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T06:23:46.143970443Z
+modified_at: 2026-06-10T06:23:46.143970443Z
+req_type: Task
+tags:
+- aida:burndown
+- from-self-test
+- parent:STORY-548
+- safe-slice
