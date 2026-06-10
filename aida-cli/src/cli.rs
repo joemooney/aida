@@ -7318,6 +7318,41 @@ pub enum PlanCommand {
         #[clap(long)]
         stdout: bool,
     },
+
+    /// Context-grounding pre-plan scan for a spec. Before you generate a
+    /// plan (or import a Spec-Kit / OpenSpec-style artifact), this gathers a
+    /// read-only snapshot of the code the work will touch: the files +
+    /// symbols related specs already trace to (current APIs / architectural
+    /// constraints) and a list of likely-stale assumptions — code paths the
+    /// spec text names that no longer exist in the tree. Read-only by
+    /// default; the result is provenance you can attach to the spec or a
+    /// plan file so the grounding travels with the work.
+    ///
+    /// Compose it with external artifact generators: run the scan first,
+    /// hand its summary to Spec Kit / OpenSpec as grounding context, then
+    /// `--attach` the provenance so the imported spec records what the tree
+    /// actually looked like at plan time.
+    // trace:TASK-0418
+    Scan {
+        /// SPEC-ID (or agreed id / UUID) of the requirement to scan for.
+        spec: String,
+
+        /// Attach the scan summary to the spec as a provenance comment.
+        /// This is the only write the command performs; without it the
+        /// scan is strictly read-only and only prints.
+        #[clap(long)]
+        attach: bool,
+
+        /// Append the scan summary as a `## Pre-plan scan` section to this
+        /// plan file instead of (or in addition to) printing it.
+        #[clap(long, value_name = "PATH")]
+        append: Option<PathBuf>,
+
+        /// Emit the scan as JSON for machine consumption (e.g. piping into
+        /// an external plan/spec generator) instead of the markdown report.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Auto-generated changelog tooling. Mirrors `PlanCommand`'s shape.
