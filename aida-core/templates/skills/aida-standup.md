@@ -55,10 +55,10 @@ aida show <SPEC-ID> 2>/dev/null
 
 ```bash
 # In-progress requirements
-aida list --status in-progress --format brief 2>/dev/null | head -10
+aida list --status in-progress 2>/dev/null | head -10
 
 # Recently completed
-aida list --status completed --format brief 2>/dev/null | head -5
+aida list --status completed 2>/dev/null | head -5
 ```
 
 ### Step 5: Generate Standup
