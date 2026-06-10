@@ -26,7 +26,7 @@ Use this skill when:
 
 ## Requirement Context
 
-!`aida list --status completed --format brief 2>/dev/null | head -10 || echo "none"`
+!`aida list --status completed 2>/dev/null | head -10 || echo "none"`
 
 ## Workflow
 
