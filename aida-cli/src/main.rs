@@ -62089,10 +62089,23 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
     } = collect_git_linkage(project_root, ids);
 
     if commits.is_empty() && files.is_empty() {
+        // TASK-726: the link is AIDA's whole magic — it's what makes "recall why"
+        // work — but a newcomer has no idea how to create one. When there's no
+        // linkage yet, say exactly how, using their real spec id. Found by
+        // running a novice's first session: `aida show` reported "no linkage"
+        // and left them at a dead end. trace:TASK-726 | ai:claude
+        let example_id = ids.first().map(|s| s.as_str()).unwrap_or("TASK-1");
         println!(
             "\n{}: {}",
             "Git linkage".green().bold(),
             "no commits or trace comments reference this spec yet".dimmed()
+        );
+        println!(
+            "  {} Link your code to it: add a {} comment where you implement it, \
+             or name {} in a commit message — then this fills in on its own.",
+            "↳".dimmed(),
+            format!("// trace:{example_id}").cyan(),
+            format!("({example_id})").cyan(),
         );
         return;
     }
