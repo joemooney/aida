@@ -1,0 +1,17 @@
+id: 019eb370-d536-7032-9634-b8c4ef1e1f46
+spec_id: BUG-490
+agreed_id: BUG-490
+title: '/aida-req skill: broken context commands (--format brief, feature list) + legacy requirements.yaml/aida-desktop refs'
+description: 'Round 13. /aida-req (a novice''s AI-assisted ''add a requirement'' skill) injects project context at load via ''aida feature list'' (unsupported in git backend) and ''aida list --format brief'' (--format doesn''t exist) — both error → the context shows misleading ''none''. Also references legacy ''requirements.yaml'' storage and the extracted-to-separate-repo ''aida-desktop'' GUI. Fix: use working commands (''aida list''), drop unsupported feature-list, update storage ref to git-canonical, drop the aida-desktop line.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T21:29:36.822556975Z
+modified_at: 2026-06-10T21:29:36.822556975Z
+req_type: Bug
+tags:
+- ai-assisted
+- friction:round-13
+- novice-first
+- skills
