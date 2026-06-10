@@ -86,7 +86,12 @@ for file in $STAGED_FILES; do
     [ "$skip" = true ] && continue
 
     if [ -f "$file" ]; then
-        if grep -qiE "trace:[A-Z]+(-[A-Z0-9_]+)?-[0-9]+" "$file" 2>/dev/null; then
+        # BUG-487: only an AI-AUTHORED trace (carrying an `ai:` marker, e.g.
+        # `// trace:TASK-1 | ai:claude`) should drive the [AI:tool] commit-tag
+        # warning below. A plain human `// trace:TASK-1` (no `ai:` marker) means
+        # a person wrote the code — nagging them to add `[AI:claude]` is wrong.
+        # Found running a hand-coding novice's first session. trace:BUG-487 | ai:claude
+        if grep -qiE "trace:[A-Z]+(-[A-Z0-9_]+)?-[0-9]+[[:space:]]*[|][[:space:]]*ai:" "$file" 2>/dev/null; then
             HAS_TRACE_FILES=true
             break
         fi
