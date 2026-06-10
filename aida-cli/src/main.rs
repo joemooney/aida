@@ -1595,6 +1595,7 @@ fn run() -> Result<()> {
     match &cli.command {
         Command::Add {
             title,
+            title_positional,
             description,
             description_from_file,
             description_stdin,
@@ -1615,6 +1616,9 @@ fn run() -> Result<()> {
             no_human_only: _,
             effort: _,
         } => {
+            // TASK-725: positional title (`aida add "do X"`) — --title wins.
+            let title = title.clone().or_else(|| title_positional.clone());
+            let title = &title;
             // trace:BUG-17 | ai:claude — resolve description from inline,
             // file, or stdin sources before dispatching.
             let resolved_description =
@@ -9309,6 +9313,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Add {
             title,
+            title_positional,
             description,
             description_from_file,
             description_stdin,
@@ -9327,6 +9332,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_human_only,
             ..
         } => {
+            // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
+            // positional title is equivalent to --title; --title wins if both
+            // are given. Without this, the init greeting's own first suggestion
+            // (`aida add "Add a task from the CLI"`) errors — caught by running
+            // the novice's first session. trace:TASK-725 | ai:claude
+            let title = title.clone().or_else(|| title_positional.clone());
+            let title = &title;
             // BUG-45 + interactive expansion: when the user doesn't pass
             // --title, decide whether to prompt or bail. When prompting,
             // also walk through type / description / priority for any
@@ -9390,7 +9402,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 None
             };
-            let effective_type: Option<String> = r#type.clone().or(interactive_type);
+            // TASK-725: a newcomer who types `aida add "do X"` means a *task*,
+            // not a "Functional Requirement" — default to the relatable,
+            // catch-all type when none is given (explicit --type and the
+            // interactive picker still win). trace:TASK-725 | ai:claude
+            let effective_type: Option<String> = r#type
+                .clone()
+                .or(interactive_type)
+                .or_else(|| Some("task".to_string()));
 
             // Description — open the user's $EDITOR when not provided.
             // trace:BUG-17 | ai:claude
