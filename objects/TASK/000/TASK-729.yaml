@@ -3,12 +3,12 @@ spec_id: TASK-729
 agreed_id: TASK-729
 title: Align getting-started.md to the new simple flow (aida add "X" / aida done / TASK ids)
 description: 'Round 9 of the novice-first loop. getting-started.md still taught the old jargon-heavy flow: ''aida add --title ... --type functional'', edit --status, FR-001 ids — none of which match the simpler CLI we built (aida add "X" → TASK-1, aida done). Updated Step 3 to lead with the one-line ''aida add "..."'' (keeping the flag form as the detailed option), Step 4 to use TASK ids + add ''aida done'', and the quick-reference table to surface ''aida add "..."'' + ''aida done''. first-project.md left as-is — it''s a deliberate full-graph walkthrough (epic/story/queue). Docs now match the product a novice actually uses.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T19:48:03.547037777Z
-modified_at: 2026-06-10T19:48:27.708387371Z
+modified_at: 2026-06-10T20:09:45.041569282Z
 req_type: Task
 tags:
 - docs
