@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:18:18.102994866Z
-modified_at: 2026-06-10T03:31:27.793911841Z
+modified_at: 2026-06-10T06:40:33.058066337Z
 req_type: Spike
 tags:
 - beads
@@ -22,4 +22,6 @@ tags:
 - moat
 - spike
 - substrate
+archived: true
+archived_at: 2026-06-10T06:40:33.058066337Z
 human_only: true
