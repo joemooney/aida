@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T14:00:23.901748591Z
-modified_at: 2026-06-10T03:31:33.861541546Z
+modified_at: 2026-06-10T06:40:31.762456077Z
 req_type: Story
 tags:
 - aida:burndown
@@ -69,3 +69,5 @@ comments:
     Naming question RESOLVED by 547: `aida burndown explain` (all-open) + `aida why <ID>` (single). Build on burndown::explain_open / OpenBucket rather than re-deriving. Keep the three-source PRINCIPLE as the spec's spine.
   created_at: 2026-06-09T14:08:01.743194759Z
   modified_at: 2026-06-09T14:08:01.743194759Z
+archived: true
+archived_at: 2026-06-10T06:40:31.762456077Z
