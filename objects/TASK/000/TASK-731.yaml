@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T21:29:42.710298413Z
-modified_at: 2026-06-10T21:29:42.710298413Z
+modified_at: 2026-06-10T21:55:19.430368947Z
 req_type: Task
 tags:
 - audit
 - follow-up:BUG-489
 - skills
 - tech-debt
+comments:
+- id: 019eb388-5f06-7a62-a511-9f8dd39cf9fd
+  author: joe
+  content: Commit 472eafbc0 references this requirement
+  created_at: 2026-06-10T21:55:19.430368947Z
+  modified_at: 2026-06-10T21:55:19.430368947Z
