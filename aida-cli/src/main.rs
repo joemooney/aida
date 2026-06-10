@@ -5389,6 +5389,30 @@ fn shorten_text(s: &str, max: usize) -> String {
     }
 }
 
+/// TASK-730: when the default `aida list` view (no status filter) shows a MIX of
+/// finished and unfinished work, point a returning user at `aida list open` —
+/// the "what's left to do" view they'd otherwise never discover (Completed
+/// specs stay visible until archived, by design). No tip when everything's done
+/// or everything's open, or when a status filter is already applied.
+// trace:TASK-730 | ai:claude
+fn maybe_print_whats_left_tip(status_filter: Option<&str>, reqs: &[aida_core::RequirementSummary]) {
+    if status_filter.is_some() {
+        return;
+    }
+    let has_done = reqs
+        .iter()
+        .any(|r| r.status.eq_ignore_ascii_case("completed"));
+    let has_open = reqs
+        .iter()
+        .any(|r| !r.status.eq_ignore_ascii_case("completed"));
+    if has_done && has_open {
+        println!(
+            "{}",
+            "  Tip: `aida list open` shows just what's left to do.".dimmed()
+        );
+    }
+}
+
 fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
     let project_root = find_project_root()?;
     let records = punt::read_ledger(&project_root);
@@ -9184,6 +9208,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         .dimmed()
                     );
                 }
+                maybe_print_whats_left_tip(status.as_deref(), &reqs);
                 return Ok(());
             }
 
@@ -9363,6 +9388,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         .dimmed()
                     );
                 }
+                maybe_print_whats_left_tip(status.as_deref(), &reqs);
             }
         }
         Command::Add {
