@@ -77,6 +77,8 @@ pub mod db;
 pub mod deps_sweep;
 pub mod dispenser;
 pub mod docs_review;
+// trace:TASK-0417 | ai:claude
+pub mod ears_lint;
 pub mod export;
 // trace:STORY-476 | ai:claude
 pub mod external_refs;

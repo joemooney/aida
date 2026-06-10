@@ -1208,6 +1208,13 @@ fn run() -> Result<()> {
         return handle_deps_command(deps_cmd);
     }
 
+    // `aida lint` self-loads the store via `load_store_for_lookup` and scores
+    // requirement text with the EARS heuristics — read-only, no shared storage
+    // handle, no LLM. trace:TASK-0417 | ai:claude
+    if let Command::Lint { spec, scope, json } = &cli.command {
+        return handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
+    }
+
     // STORY-498: `aida trace gate` is self-contained — it reads git for the
     // commit range and self-loads the store via `load_store_for_lookup` to
     // resolve each `(SPEC-ID)` trailer. Dispatch it early (the other `trace`
@@ -1913,6 +1920,7 @@ fn run() -> Result<()> {
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
+        Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
@@ -8702,6 +8710,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
+        Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
@@ -58701,6 +58710,154 @@ fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
 fn handle_deps_command(cmd: &DepsCommand) -> Result<()> {
     match cmd {
         DepsCommand::Sweep { for_spec, json } => deps_sweep(for_spec.as_deref(), *json),
+    }
+}
+
+/// `aida lint [<SPEC>|--scope feature|task|story] [--json]` — opt-in EARS-style
+/// quality lint over requirement text. AIDA stays a graph-first substrate;
+/// EARS is offered here as an optional clarity lens. The pass is read-only and
+/// deterministic (heuristic, no LLM): it scores each spec's description plus
+/// acceptance criteria for vague triggers, missing expected behavior,
+/// conflicting constraints, and low-testability wording, and prints suggested
+/// rewrites as drafts only — it never mutates a spec. Exits non-zero when any
+/// finding is reported so it can gate a pre-commit hook or a drain step.
+/// trace:TASK-0417 | ai:claude
+fn handle_lint_command(spec: Option<&str>, scope: Option<&str>, json: bool) -> Result<()> {
+    use aida_core::ears_lint::lint_text;
+    use colored::Colorize;
+
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+
+    // Select the specs to lint: a single SPEC-ID, or every spec of a scope kind.
+    let targets: Vec<&aida_core::Requirement> = if let Some(id) = spec {
+        let id_lower = id.to_ascii_lowercase();
+        let req = store
+            .requirements
+            .iter()
+            .find(|r| {
+                r.display_id().eq_ignore_ascii_case(id)
+                    || r.spec_id.as_deref().map(|s| s.to_ascii_lowercase())
+                        == Some(id_lower.clone())
+                    || r.agreed_id.as_deref().map(|s| s.to_ascii_lowercase())
+                        == Some(id_lower.clone())
+            })
+            .ok_or_else(|| anyhow::anyhow!("no requirement found for {id}"))?;
+        vec![req]
+    } else if let Some(kind) = scope {
+        let wanted = match kind.to_ascii_lowercase().as_str() {
+            "feature" => vec![
+                aida_core::RequirementType::Functional,
+                aida_core::RequirementType::NonFunctional,
+                aida_core::RequirementType::System,
+                aida_core::RequirementType::User,
+            ],
+            "task" => vec![aida_core::RequirementType::Task],
+            "story" => vec![aida_core::RequirementType::Story],
+            other => {
+                anyhow::bail!("unknown scope \"{other}\" — expected one of: feature, task, story");
+            }
+        };
+        store
+            .requirements
+            .iter()
+            .filter(|r| !r.archived && wanted.contains(&r.req_type))
+            .collect()
+    } else {
+        anyhow::bail!("provide a SPEC-ID or --scope feature|task|story");
+    };
+
+    // Score each target on its description + acceptance criteria.
+    struct SpecLint<'a> {
+        req: &'a aida_core::Requirement,
+        report: aida_core::ears_lint::LintReport,
+    }
+    let scored: Vec<SpecLint> = targets
+        .into_iter()
+        .map(|req| {
+            let mut text = req.description.clone();
+            // Acceptance criteria most often live inside the description under a
+            // `## Acceptance` heading; fold in the custom field too when present.
+            if let Some(acc) = req.custom_fields.get("acceptance_criteria") {
+                text.push('\n');
+                text.push_str(acc);
+            }
+            let report = lint_text(&text);
+            SpecLint { req, report }
+        })
+        .collect();
+
+    let total_findings: usize = scored.iter().map(|s| s.report.findings.len()).sum();
+
+    if json {
+        let arr: Vec<serde_json::Value> = scored
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "id": s.req.display_id(),
+                    "title": s.req.title,
+                    "clean": s.report.is_clean(),
+                    "findings": s.report.findings.iter().map(|f| serde_json::json!({
+                        "category": f.category.slug(),
+                        "message": f.message,
+                        "evidence": f.evidence,
+                        "suggestion": f.suggestion,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "lens": "ears",
+                "graph_first_substrate": true,
+                "total_findings": total_findings,
+                "specs": arr,
+            }))?
+        );
+        return if total_findings == 0 {
+            Ok(())
+        } else {
+            std::process::exit(1);
+        };
+    }
+
+    println!(
+        "{}",
+        "EARS lint — optional clarity lens (AIDA stays a graph-first substrate; \
+         suggestions are drafts, never auto-applied)"
+            .dimmed()
+    );
+    println!();
+
+    for s in &scored {
+        let header = format!("{}  {}", s.req.display_id(), s.req.title);
+        if s.report.is_clean() {
+            println!("{} {}", "✓".green(), header);
+            continue;
+        }
+        println!("{} {}", "⚠".yellow(), header.bold());
+        for f in &s.report.findings {
+            println!(
+                "    {} {}",
+                format!("[{}]", f.category.slug()).yellow(),
+                f.message
+            );
+            println!("      {} {}", "suggest:".dimmed(), f.suggestion);
+        }
+        println!();
+    }
+
+    if total_findings == 0 {
+        println!("{}", "All specs passed the EARS lens.".green());
+        Ok(())
+    } else {
+        println!(
+            "{}",
+            format!("{total_findings} finding(s) — review the suggested rewrites above.").yellow()
+        );
+        std::process::exit(1);
     }
 }
 
