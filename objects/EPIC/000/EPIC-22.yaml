@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:51:11.398984315Z
-modified_at: 2026-06-08T06:36:23.133488067Z
+modified_at: 2026-06-10T06:40:38.822516029Z
 req_type: Epic
 tags:
 - ready-to-implement
@@ -80,3 +80,5 @@ comments:
   content: 'Moved to Draft (advisor, 2026-06-07): all children are deferred, not delivered — STORY-74 (registry) archived, STORY-75/76/77 tagged deferred:multi-repo. AIDA is single-repo today; cross-project primitives have no concrete consumer. Draft is the honest state (deferred, not done). Promote back to Approved + revive STORY-74 as the foundation when a real multi-repo workspace need arises.'
   created_at: 2026-06-08T06:36:21.783251149Z
   modified_at: 2026-06-08T06:36:21.783251149Z
+archived: true
+archived_at: 2026-06-10T06:40:38.822516029Z
