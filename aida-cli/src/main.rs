@@ -49072,6 +49072,64 @@ cargo test -p aida-cli
         );
     }
 
+    /// TASK-0418: the pre-plan scan's stale-assumption detector flags code
+    /// paths the spec names that no longer resolve — a missing file and a
+    /// missing symbol — while leaving present file+symbol refs alone and
+    /// ignoring `path:line` refs (a numeric suffix is a drift-prone line ref,
+    /// not a stale-FILE signal).
+    #[test]
+    fn preplan_scan_flags_stale_assumptions() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("aida-cli/src");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(sub.join("real.rs"), "pub fn still_here() {}\n").unwrap();
+
+        let desc = "Touches `aida-cli/src/real.rs:still_here` and \
+                    `aida-cli/src/real.rs:gone_now`. Also see \
+                    `aida-cli/src/deleted.rs`. Line ref aida-cli/src/real.rs:42 \
+                    should NOT be flagged.";
+        let stale = scan_stale_assumptions(dir.path(), desc);
+        let refs: Vec<&str> = stale.iter().map(|s| s.reference.as_str()).collect();
+
+        // Missing file and missing symbol are flagged.
+        assert!(refs.contains(&"aida-cli/src/deleted.rs"));
+        assert!(refs.contains(&"aida-cli/src/real.rs:gone_now"));
+        // The present file+symbol is NOT flagged.
+        assert!(!refs.contains(&"aida-cli/src/real.rs:still_here"));
+        // The `:42` line ref collapses to the bare (present) file and is
+        // therefore not flagged as missing.
+        assert!(!refs.iter().any(|r| r.contains(":42")));
+    }
+
+    /// TASK-0418: the markdown renderer always emits the three grounding
+    /// sections and the Spec-Kit / OpenSpec composition footer, even when a
+    /// section is empty (greenfield / no constraints / no stale refs).
+    #[test]
+    fn preplan_scan_renders_all_sections() {
+        let scan = PreplanScan {
+            spec: "TASK-9".to_string(),
+            title: "Do the thing".to_string(),
+            api_surface: vec![ScanFile {
+                file: "src/lib.rs".to_string(),
+                symbols: vec!["do_thing".to_string()],
+            }],
+            constraints: vec![],
+            stale_assumptions: vec![ScanStale {
+                reference: "src/old.rs".to_string(),
+                reason: "file `src/old.rs` not found in the tree".to_string(),
+            }],
+        };
+        let md = render_preplan_scan(&scan);
+        assert!(md.contains("## Pre-plan scan"));
+        assert!(md.contains("### Current API surface"));
+        assert!(md.contains("`src/lib.rs` — `do_thing`"));
+        assert!(md.contains("### Architectural constraints"));
+        assert!(md.contains("No graph-level constraints"));
+        assert!(md.contains("### Likely-stale assumptions"));
+        assert!(md.contains("`src/old.rs`"));
+        assert!(md.contains("Spec-Kit / OpenSpec"));
+    }
+
     /// TASK-305: the pure PR→plan synthesis fills all 11 sections from a PR
     /// fixture, mines verification commands from the description, lists the
     /// changed files under Critical Files, and credits the spec ids found in
@@ -58694,6 +58752,12 @@ fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
             *promote_only,
         ),
         PlanCommand::Capture { pr, stdout } => plan_capture(pr, *stdout),
+        PlanCommand::Scan {
+            spec,
+            attach,
+            append,
+            json,
+        } => plan_scan(spec, *attach, append.as_deref(), *json),
     }
 }
 
@@ -62232,6 +62296,406 @@ fn build_reusable_helpers_section(
         ));
     }
     Some(md)
+}
+
+// ============================================================================
+// TASK-0418 — `aida plan scan <SPEC>`. An OPT-IN, read-only context-grounding
+// pass to run BEFORE generating an AIDA plan or importing a Spec-Kit /
+// OpenSpec-style artifact. It walks the trace graph to summarize the files +
+// symbols the work will touch (current APIs / architectural constraints) and
+// flags likely-stale assumptions — code paths the spec text names that no
+// longer exist in the tree. The result is provenance: print it, append it to
+// a plan file, or `--attach` it to the spec so the grounding travels with the
+// work. Read-only unless `--attach` is passed.
+// ============================================================================
+
+/// A code path the spec's prose names (a `path/to/file.rs` or a
+/// `path/to/file.rs:symbol` ref) that the scan could not locate in the
+/// tree — a candidate stale assumption to verify before implementing.
+struct StaleCandidate {
+    /// The ref exactly as it appeared in the spec text.
+    reference: String,
+    /// Why it's flagged: the file is gone, or the file exists but the
+    /// named symbol is no longer in it.
+    reason: String,
+}
+
+/// The assembled pre-plan scan for one spec. Serializable so `--json` can
+/// hand it to an external artifact generator. trace:TASK-0418
+#[derive(serde::Serialize)]
+struct PreplanScan {
+    spec: String,
+    title: String,
+    /// Files the trace graph says this area touches, with the symbols
+    /// related specs defined there — the current-API surface.
+    api_surface: Vec<ScanFile>,
+    /// Architectural-constraint notes harvested read-only from the graph
+    /// (related-spec relationships, parent epics).
+    constraints: Vec<String>,
+    /// Likely-stale assumptions: code paths the spec names that are gone.
+    stale_assumptions: Vec<ScanStale>,
+}
+
+#[derive(serde::Serialize)]
+struct ScanFile {
+    file: String,
+    symbols: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+struct ScanStale {
+    reference: String,
+    reason: String,
+}
+
+/// Collect every `path:line`-free file/symbol ref the spec prose names that
+/// looks like a real code path, and check each against the tree. Returns the
+/// ones that no longer resolve — the stale-assumption candidates. Read-only.
+/// trace:TASK-0418
+fn scan_stale_assumptions(
+    project_root: &std::path::Path,
+    description: &str,
+) -> Vec<StaleCandidate> {
+    use regex::Regex;
+    // A path-like token: at least one `/` and a known source extension,
+    // optionally with a `:symbol` (NOT `:line` — a numeric suffix is a line
+    // ref, which drifts and isn't a stale-FILE signal). Captured from inline
+    // code spans and bare prose alike.
+    let re = Regex::new(
+        r"([A-Za-z0-9_./-]+/[A-Za-z0-9_.-]+\.(?:rs|ts|tsx|js|jsx|py|sh|toml|md))(?::([A-Za-z_][A-Za-z0-9_]*))?",
+    )
+    .unwrap();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<StaleCandidate> = Vec::new();
+    for cap in re.captures_iter(description) {
+        let file = cap[1].trim_start_matches("./").to_string();
+        let symbol = cap.get(2).map(|m| m.as_str().to_string());
+        let key = match &symbol {
+            Some(s) => format!("{file}:{s}"),
+            None => file.clone(),
+        };
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+        let abs = project_root.join(&file);
+        if !abs.exists() {
+            out.push(StaleCandidate {
+                reference: key,
+                reason: format!("file `{file}` not found in the tree"),
+            });
+            continue;
+        }
+        // File exists — if a symbol was named, confirm it's still defined.
+        if let Some(sym) = &symbol {
+            let Ok(content) = std::fs::read_to_string(&abs) else {
+                continue;
+            };
+            let def = Regex::new(&format!(
+                r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+{}\b",
+                regex::escape(sym)
+            ))
+            .unwrap();
+            if !def.is_match(&content) {
+                out.push(StaleCandidate {
+                    reference: key,
+                    reason: format!("symbol `{sym}` no longer defined in `{file}`"),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Assemble the read-only pre-plan scan for `target`: the trace-graph API
+/// surface, architectural-constraint notes, and stale-assumption candidates.
+/// Pure (no I/O beyond the read-only source scan) so it's unit-testable.
+/// trace:TASK-0418
+fn build_preplan_scan(
+    store: &aida_core::RequirementsStore,
+    project_root: &std::path::Path,
+    target: &aida_core::models::Requirement,
+) -> PreplanScan {
+    let display = target.display_id();
+
+    // ── API surface: the files + symbols related specs trace to. Reuse the
+    // same related-spec discovery + trace scan the reusable-helpers section
+    // is built on, but keep file-only hits too — a file every related spec
+    // touches is itself an architectural-constraint signal here.
+    let parent_uuids: Vec<uuid::Uuid> = target
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == aida_core::RelationshipType::Child)
+        .map(|r| r.target_id)
+        .collect();
+    let mut related_ids: HashSet<String> = HashSet::new();
+    let mut seen: HashSet<uuid::Uuid> = HashSet::new();
+    seen.insert(target.id);
+    let push_ids = |req: &aida_core::models::Requirement, set: &mut HashSet<String>| {
+        if let Some(s) = &req.spec_id {
+            set.insert(s.clone());
+        }
+        if let Some(a) = &req.agreed_id {
+            set.insert(a.clone());
+        }
+    };
+    // The target itself is part of the surface (it may already have code).
+    push_ids(target, &mut related_ids);
+    if !parent_uuids.is_empty() || !target.tags.is_empty() {
+        for req in &store.requirements {
+            if seen.contains(&req.id) {
+                continue;
+            }
+            let is_sibling = req.relationships.iter().any(|r| {
+                r.rel_type == aida_core::RelationshipType::Child
+                    && parent_uuids.contains(&r.target_id)
+            });
+            let shares_tag = req.tags.iter().any(|t| target.tags.contains(t));
+            if is_sibling || shares_tag {
+                seen.insert(req.id);
+                push_ids(req, &mut related_ids);
+            }
+        }
+    }
+
+    let hits = scan_trace_graph(project_root, &related_ids);
+    let mut by_file: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for id_hits in hits.values() {
+        for hit in id_hits {
+            let syms = by_file.entry(hit.file.clone()).or_default();
+            if let Some(sym) = &hit.symbol {
+                if !syms.contains(sym) {
+                    syms.push(sym.clone());
+                }
+            }
+        }
+    }
+    const SCAN_FILE_CAP: usize = 25;
+    const SCAN_SYM_PER_FILE_CAP: usize = 12;
+    let mut api_surface: Vec<ScanFile> = by_file
+        .into_iter()
+        .map(|(file, mut symbols)| {
+            symbols.sort();
+            symbols.truncate(SCAN_SYM_PER_FILE_CAP);
+            ScanFile { file, symbols }
+        })
+        .collect();
+    // Most-symbol-dense files first — the densest API surface leads.
+    api_surface.sort_by(|a, b| {
+        b.symbols
+            .len()
+            .cmp(&a.symbols.len())
+            .then(a.file.cmp(&b.file))
+    });
+    api_surface.truncate(SCAN_FILE_CAP);
+
+    // ── Architectural constraints from the graph: parents (the epic/story
+    // this slots under) and any non-parent/child typed relationships
+    // (blocks / depends-on / verifies) the work must respect.
+    let resolve = |id: &uuid::Uuid| store.requirements.iter().find(|r| &r.id == id);
+    let mut constraints: Vec<String> = Vec::new();
+    for rel in &target.relationships {
+        match &rel.rel_type {
+            aida_core::RelationshipType::Child => {
+                if let Some(p) = resolve(&rel.target_id) {
+                    constraints.push(format!(
+                        "Parent {} — {} ({})",
+                        p.display_id(),
+                        p.title,
+                        p.status
+                    ));
+                }
+            }
+            aida_core::RelationshipType::Parent => {}
+            other => {
+                if let Some(r) = resolve(&rel.target_id) {
+                    constraints.push(format!("{}: {} — {}", other, r.display_id(), r.title));
+                }
+            }
+        }
+    }
+
+    // ── Stale assumptions: code paths the spec names that are gone.
+    let stale_assumptions: Vec<ScanStale> =
+        scan_stale_assumptions(project_root, &target.description)
+            .into_iter()
+            .map(|c| ScanStale {
+                reference: c.reference,
+                reason: c.reason,
+            })
+            .collect();
+
+    PreplanScan {
+        spec: display,
+        title: target.title.clone(),
+        api_surface,
+        constraints,
+        stale_assumptions,
+    }
+}
+
+/// Render a [`PreplanScan`] as the `## Pre-plan scan` markdown section —
+/// the provenance shape that prints, appends to a plan file, or attaches to
+/// the spec. trace:TASK-0418
+fn render_preplan_scan(scan: &PreplanScan) -> String {
+    let mut md = String::new();
+    md.push_str("## Pre-plan scan\n\n");
+    md.push_str(&format!(
+        "Read-only context-grounding scan for {} — {}. Verify before relying on it; \
+         the tree moves.\n\n",
+        scan.spec, scan.title
+    ));
+
+    md.push_str("### Current API surface (trace-graph derived)\n\n");
+    if scan.api_surface.is_empty() {
+        md.push_str(
+            "_No related spec traces to code yet — this is greenfield for the scanner. \
+             Ground the plan by reading the modules it will touch directly._\n\n",
+        );
+    } else {
+        for sf in &scan.api_surface {
+            if sf.symbols.is_empty() {
+                md.push_str(&format!("- `{}`\n", sf.file));
+            } else {
+                let joined = sf
+                    .symbols
+                    .iter()
+                    .map(|s| format!("`{s}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                md.push_str(&format!("- `{}` — {}\n", sf.file, joined));
+            }
+        }
+        md.push('\n');
+    }
+
+    md.push_str("### Architectural constraints\n\n");
+    if scan.constraints.is_empty() {
+        md.push_str("_No graph-level constraints (no parent / typed relationships)._\n\n");
+    } else {
+        for c in &scan.constraints {
+            md.push_str(&format!("- {c}\n"));
+        }
+        md.push('\n');
+    }
+
+    md.push_str("### Likely-stale assumptions\n\n");
+    if scan.stale_assumptions.is_empty() {
+        md.push_str(
+            "_No code path named in the spec is missing from the tree — assumptions look current._\n\n",
+        );
+    } else {
+        for s in &scan.stale_assumptions {
+            md.push_str(&format!("- `{}` — {}\n", s.reference, s.reason));
+        }
+        md.push('\n');
+    }
+
+    md.push_str(&format!(
+        "_Generated by `aida plan scan {}`. Compose with Spec-Kit / OpenSpec generators: \
+         run the scan first, feed this summary in as grounding, then re-attach the provenance._\n",
+        scan.spec
+    ));
+    md
+}
+
+/// `aida plan scan <SPEC>` — the read-only pre-plan context-grounding pass.
+/// trace:TASK-0418
+fn plan_scan(
+    spec_arg: &str,
+    attach: bool,
+    append: Option<&std::path::Path>,
+    json: bool,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store
+            .requirements
+            .iter()
+            .find(|r| r.matches_id(spec_arg))
+            .or_else(|| store.get_requirement_by_spec_id(spec_arg))
+    }
+    .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+    let target_display = target.display_id();
+
+    let scan = build_preplan_scan(&store, &project_root, target);
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&scan)?);
+        // --json is the machine surface; skip the human prints, but still
+        // honor the explicit write flags below.
+    } else {
+        print!("{}", render_preplan_scan(&scan));
+    }
+
+    let md = render_preplan_scan(&scan);
+
+    if let Some(path) = append {
+        let mut existing = std::fs::read_to_string(path)
+            .with_context(|| format!("could not read plan file {}", path.display()))?;
+        if !existing.ends_with('\n') {
+            existing.push('\n');
+        }
+        existing.push('\n');
+        existing.push_str(&md);
+        std::fs::write(path, existing)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        if !json {
+            println!(
+                "{} appended Pre-plan scan section to {}",
+                "✓".green(),
+                path.display()
+            );
+        }
+    }
+
+    if attach {
+        // The only write the command performs. Open a writable backend the
+        // same way the findings-add path does, and land the scan as a
+        // provenance comment on the spec.
+        let Some(store_path) = detect_distributed_store_from(&project_root) else {
+            anyhow::bail!(
+                "--attach needs a distributed store, but none was found — \
+                 run from a project with `.aida/config.toml`."
+            );
+        };
+        let dispenser = load_dispenser(&store_path)?;
+        let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+        let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+        let mut req = backend
+            .get_requirement_by_spec_id(&target_display)?
+            .or(backend.get_requirement_by_spec_id(spec_arg)?)
+            .ok_or_else(|| {
+                anyhow::anyhow!("requirement `{target_display}` not found for attach")
+            })?;
+        let now = chrono::Utc::now();
+        req.comments.push(Comment {
+            id: Uuid::now_v7(),
+            content: format!("Pre-plan context-grounding scan:\n\n{md}"),
+            author: get_default_author(),
+            created_at: now,
+            modified_at: now,
+            parent_id: None,
+            replies: Vec::new(),
+            reactions: Vec::new(),
+        });
+        req.modified_at = now;
+        backend.update_requirement(&req)?;
+        if !json {
+            println!(
+                "{} attached pre-plan scan as a provenance comment on {}",
+                "✓".green(),
+                target_display
+            );
+        }
+    }
+
+    Ok(())
 }
 
 // ============================================================================
