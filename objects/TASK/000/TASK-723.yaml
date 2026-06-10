@@ -14,10 +14,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T06:23:46.143970443Z
-modified_at: 2026-06-10T06:23:46.143970443Z
+modified_at: 2026-06-10T06:37:42.543589237Z
 req_type: Task
 tags:
 - aida:burndown
 - from-self-test
 - parent:STORY-548
 - safe-slice
+comments:
+- id: 019eb040-450f-7902-b653-72c1425ea315
+  author: joe
+  content: Commit 9542f74b7 references this requirement
+  created_at: 2026-06-10T06:37:42.543589237Z
+  modified_at: 2026-06-10T06:37:42.543589237Z
