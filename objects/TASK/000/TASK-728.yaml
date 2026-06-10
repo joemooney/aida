@@ -3,12 +3,12 @@ spec_id: TASK-728
 agreed_id: TASK-728
 title: 'Novice-first: aida add type-picker leads with relatable types; init greeting shows the full loop (incl. aida done)'
 description: 'Round 7 polish of the novice-first loop. (1) The bare ''aida add'' interactive type-picker dumped 17 types led by ''functional/principle'' jargon with ''task'' buried at #11 — reordered to lead with task/bug/story/epic/functional/spike, specialized docs-layer types last, friendlier help. (2) The init greeting described the loop with add/list/show but not ''aida done'' (the completion verb shipped in TASK-727) — updated to ''capture → build → mark done'' showing add/list/done/show, so the whole loop is discoverable from line one. Presentation only. trace:TASK-729'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T18:21:57.923431341Z
-modified_at: 2026-06-10T18:22:41.577187206Z
+modified_at: 2026-06-10T18:44:28.235443680Z
 req_type: Task
 tags:
 - first-run
