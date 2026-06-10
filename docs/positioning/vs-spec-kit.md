@@ -63,7 +63,7 @@ The honest framing: **Spec Kit standardizes how an agent *produces* a feature's 
 - **Distribution is Spec Kit's, overwhelmingly.** ~100× the adoption and GitHub's backing. AIDA's edge is the structured-graph layer, not reach — and reach matters. AIDA's own risk is distribution, not differentiation.
 - **Spec Kit is not standing still.** Its roadmap currently aims at GitHub Issues integration and richer agent prompts — *not* (as of this snapshot) stable cross-cutting IDs, a relationship graph, or trace enforcement. If that changes, this page changes. (Tripwire tracked in `docs/competitive-analysis/`.)
 - **AIDA costs more to adopt.** Orphan branch, cache rebuilds, two-leg sync, an MCP server — a real conceptual + ops tax Spec Kit doesn't levy. AIDA earns it back only once the project is big and cross-linked enough that the graph pays for itself.
-- **They're composable, not mutually exclusive.** You can scaffold a feature with Spec Kit and let AIDA hold the cross-feature graph + traces + lifecycle. AIDA is the system-of-record layer, not a replacement for the scaffolder.
+- **They're composable, not mutually exclusive.** You can scaffold a feature with Spec Kit and let AIDA hold the cross-feature graph + traces + lifecycle. AIDA is the system-of-record layer, not a replacement for the scaffolder. The concrete composition seam is `aida plan scan <SPEC>` — a read-only context-grounding pass that summarizes the current API surface (from the trace graph), the architectural constraints, and likely-stale assumptions before you generate or import an artifact. Run it first, hand its summary to Spec Kit / OpenSpec as grounding context, then `--attach` the result so the imported spec records what the tree actually looked like at plan time.
 
 ---
 
