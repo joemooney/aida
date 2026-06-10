@@ -31,7 +31,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:08:56.215925139Z
-modified_at: 2026-06-10T03:31:18.215397967Z
+modified_at: 2026-06-10T06:40:33.758235797Z
 req_type: Story
 tags:
 - advisor
@@ -39,3 +39,5 @@ tags:
 - competitive-analysis
 - ecosystem-watch
 - from-self-test
+archived: true
+archived_at: 2026-06-10T06:40:33.758235797Z
