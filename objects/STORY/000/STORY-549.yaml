@@ -26,12 +26,12 @@ description: |-
   ## Rationale
 
   Turns a quarterly, captain-led, ad-hoc scan into a repeatable weekly multi-agent ritual with an adversarial spine — and seeds the ultraplan-driven automation. Brief built ON the existing corpus (keystone synthesis + positioning papers + signals-to-watch), not a reinvention.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:08:56.215925139Z
-modified_at: 2026-06-09T15:08:56.215925139Z
+modified_at: 2026-06-10T03:31:18.215397967Z
 req_type: Story
 tags:
 - advisor
