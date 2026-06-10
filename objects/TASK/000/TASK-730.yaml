@@ -1,0 +1,17 @@
+id: 019eb33f-c455-7383-88dd-c61b0931a56a
+spec_id: TASK-730
+agreed_id: TASK-730
+title: 'aida list: when finished work clutters the default view, point to ''aida list open'' (what''s left)'
+description: 'Round 11 of the novice-first loop — the growing-project frontier. A returning novice''s ''aida list'' shows Completed tasks first, mixed with the to-do ones (Completed stays visible until archived, by design — STORY-441). ''What''s left to do?'' isn''t obvious, and the clean view (''aida list open'') exists but is undiscoverable. Fix: when the DEFAULT view (no status filter) includes Completed items, print a dimmed footer tip: ''aida list open shows just what''s left to do.'' Surfaces the open/closed aliases at the moment of need; additive, no default-behavior change.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T20:36:01.237768490Z
+modified_at: 2026-06-10T20:36:01.237768490Z
+req_type: Task
+tags:
+- friction:round-11
+- growing-project
+- novice-first
+- ux
