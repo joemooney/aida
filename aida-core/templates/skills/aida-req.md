@@ -22,8 +22,8 @@ Use this skill when:
 
 ## Current Project Context
 
-- Features: !`aida feature list 2>/dev/null | head -20 || echo "none"`
-- Recent requirements: !`aida list --format brief 2>/dev/null | tail -10 || echo "none"`
+- Recent specs: !`aida list 2>/dev/null | head -15 || echo "none yet — run 'aida init' first"`
+- Still to do: !`aida list open 2>/dev/null | head -10 || echo "none"`
 
 ## Workflow
 
@@ -141,12 +141,11 @@ aida show <SPEC-ID>
 # Edit requirement
 aida edit <SPEC-ID> --description "..."
 
-# List features
-aida feature list
+# See what's still to do
+aida list open
 ```
 
 ## Integration Notes
 
-- Requirements are stored in `requirements.yaml` or the configured project database
+- Requirements are stored git-canonically: one YAML file per spec on the `aida-store` orphan branch, with a rebuildable `.aida/cache.db` read cache
 - SPEC-IDs are auto-generated based on type prefix configuration
-- The GUI (aida-desktop) can be used to view and manage requirements with full AI features
