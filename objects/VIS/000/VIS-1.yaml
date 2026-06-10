@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:10:07.033280927Z
-modified_at: 2026-06-10T03:34:09.433798494Z
+modified_at: 2026-06-10T03:34:10.335352984Z
 req_type: Vision
 comments:
 - id: 019e0f5e-489b-7f43-a104-c67304b927e6
@@ -16,3 +16,8 @@ comments:
   content: Commit 531a6af references this requirement
   created_at: 2026-05-10T00:51:37.755994371Z
   modified_at: 2026-05-10T00:51:37.755994371Z
+- id: 019eaf98-3c9f-7b42-9160-36c658b58cdf
+  author: joe
+  content: 'Tagline refined per CR-1-116 (operator chose option A, 2026-06-09): kept ''missing index'' but qualified it ''of intent, not just code'' to deflect the Lane-D Kill-shot-3 collision with zero-discipline auto-code-graph tools (CodeGraph, Augment) that own the bare word ''index''. AIDA''s index is the INTENT index (why-the-code-exists, spec↔code, maintained), not the auto-derived code index. Applied across README + OVERVIEW + this vision.'
+  created_at: 2026-06-10T03:34:10.335352984Z
+  modified_at: 2026-06-10T03:34:10.335352984Z
