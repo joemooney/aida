@@ -3,12 +3,12 @@ spec_id: BUG-487
 agreed_id: BUG-487
 title: 'Commit hook nags a hand-coding novice to add [AI:tool] for a plain trace: comment (no ai: marker)'
 description: 'Round 4 surfaced this: a novice building BY HAND added ''# trace:TASK-1'' (no ''| ai:'' marker) and committed — the commit hook warned ''Commit includes AI-traced files - consider adding [AI:tool] tag''. But no AI was involved. The [AI:tool] nag should fire only when a trace carries an actual ''ai:'' marker (AI authorship); a plain human ''trace:'' should not. Confusing for a solo hand-coder. Fix the hook''s detection to key on the ''ai:'' marker, not the bare ''trace:'' presence. Round-5 target.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T16:55:09.856280769Z
-modified_at: 2026-06-10T17:21:28.083852107Z
+modified_at: 2026-06-10T17:42:32.294741132Z
 req_type: Bug
 tags:
 - friction:round-5
