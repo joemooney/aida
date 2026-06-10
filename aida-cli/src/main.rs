@@ -47,9 +47,7 @@ mod events;
 mod exit_signal;
 mod external_import_bleed;
 mod findings;
-// trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
-mod first_run;
-mod focus;
+mod foreign_import;
 mod forge;
 mod global_queue;
 mod last_drain;
@@ -3528,27 +3526,20 @@ fn run() -> Result<()> {
         return handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
     }
 
-    // `aida lifecycle` (Phase 1, generate-only) is self-contained: it renders a
-    // Mermaid diagram from the declared transition model in aida-core and
-    // optionally pins it against `docs/lifecycle.md`. No storage handle, no LLM,
-    // no behavior change to any other command. trace:TASK-737 | ai:claude
-    if let Command::Lifecycle {
-        diagram,
-        check,
-        write,
-        doc,
-        empirical,
-        diff,
+    // TASK-724: `aida import --dry-run <dir>` is a READ-ONLY preview of a
+    // foreign-tool spec directory (Spec Kit / OpenSpec / Kiro). It parses
+    // markdown artifacts and prints the records + edges an import WOULD create.
+    // Dispatch it before storage init — it never constructs a `Storage`, never
+    // loads the store, and writes NOTHING to the graph, so it works even with
+    // no attached store. trace:TASK-724
+    if let Command::Import {
+        file,
+        dry_run: true,
+        format,
+        ..
     } = &cli.command
     {
-        return handle_lifecycle_command(
-            *diagram,
-            *check,
-            *write,
-            doc.as_deref(),
-            *empirical,
-            *diff,
-        );
+        return handle_import_dry_run(file, format);
     }
 
     // STORY-498: `aida trace gate` is self-contained — it reads git for the
@@ -4653,7 +4644,16 @@ fn run() -> Result<()> {
             file,
             parent,
             on_conflict,
+            dry_run,
+            format,
         } => {
+            // The dry-run preview is dispatched before storage init (read-only,
+            // zero graph mutation). It cannot reach this arm. trace:TASK-724
+            debug_assert!(
+                !*dry_run,
+                "dry-run import must dispatch before storage init"
+            );
+            let _ = format;
             handle_import_command(&storage, file, parent.as_deref(), on_conflict)?;
         }
         Command::UserGuide { dark } => {
@@ -119844,6 +119844,17 @@ where
         }
     })?;
     Ok(count)
+}
+
+/// `aida import --dry-run <dir> [--format ...]`: read-only preview of a
+/// foreign-tool spec directory. Parses the artifacts, prints the records +
+/// edges an import WOULD create, and writes NOTHING to the graph or to the
+/// source artifacts. trace:TASK-724
+fn handle_import_dry_run(dir: &std::path::Path, format: &str) -> Result<()> {
+    let forced = foreign_import::ForeignFormat::parse_flag(format)?;
+    let preview = foreign_import::build_preview(dir, forced)?;
+    print!("{}", foreign_import::render_preview(dir, &preview));
+    Ok(())
 }
 
 fn handle_import_command(

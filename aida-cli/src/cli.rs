@@ -8977,10 +8977,12 @@ pub enum Command {
         id: Option<String>,
     },
 
-    /// Import requirements from a tree JSON file
+    /// Import requirements from a tree JSON file, or preview a foreign-tool
+    /// spec directory with --dry-run
     #[clap(hide = true)]
     Import {
-        /// Path to the tree JSON file to import
+        /// Path to the tree JSON file to import, or (with --dry-run) a directory
+        /// of Spec Kit / OpenSpec / Kiro artifacts to preview
         file: PathBuf,
 
         /// Parent requirement ID (UUID or SPEC-ID) to attach imported tree under
@@ -8990,6 +8992,17 @@ pub enum Command {
         /// Conflict strategy: skip, rename, replace (default: skip)
         #[clap(long, default_value = "skip")]
         on_conflict: String,
+
+        /// Preview-only: parse a foreign-tool spec directory and print the
+        /// records + edges an import WOULD create. Writes nothing to the graph.
+        // trace:TASK-724
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Foreign-format hint for --dry-run: auto, spec-kit, openspec, kiro
+        // trace:TASK-724
+        #[clap(long, default_value = "auto")]
+        format: String,
     },
 
     /// Open the user guide in the default browser
