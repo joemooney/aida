@@ -2,12 +2,12 @@ id: 019eacf1-3dc0-7101-8bdb-3cbc0807889e
 spec_id: TASK-0416
 title: Import spec-driven artifacts into AIDA graph
 description: 'Build an opt-in import/bridge path for neighboring spec-driven-development artifacts (GitHub Spec Kit `specs/<feature>/spec.md|plan.md|tasks.md`, OpenSpec `openspec/changes/<name>/proposal.md|specs/|design.md|tasks.md`, and Kiro-style `requirements.md|design.md|tasks.md`) into AIDA records. Acceptance criteria: preserve original artifact paths as references; assign stable AIDA IDs; infer parent/child/task relationships conservatively; tag imported records with source/provenance; never overwrite source artifacts; expose a dry-run diff; and document composition as `neighbor generates first-feature artifacts, AIDA maintains the long-lived graph`. Filed from Lane A competitive scan, 2026-06-09.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: cli
 created_at: 2026-06-09T15:12:31.680104665Z
-modified_at: 2026-06-09T15:12:31.680104665Z
+modified_at: 2026-06-10T03:31:07.376535477Z
 req_type: Task
 tags:
 - adopt-adapt
