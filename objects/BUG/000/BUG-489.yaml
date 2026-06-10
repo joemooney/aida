@@ -1,0 +1,17 @@
+id: 019eb35b-86cc-73b0-9076-b0969b8e1260
+spec_id: BUG-489
+agreed_id: BUG-489
+title: /aida-onboard skill uses 'aida list --format summary' (doesn't exist) → falsely reports 'No AIDA database found'
+description: 'Round 12 of the novice-first loop — the AI-assisted onboarding path. The /aida-onboard skill (a novice''s first AI session: ''onboard me'') runs ''aida list --format summary'' for its requirements overview — but that flag doesn''t exist, so it errors and the skill''s ''|| echo "No AIDA database found"'' fallback fires, FALSELY telling the user there''s no AIDA database when there is. It also sniffs for legacy ''requirements.db''/''requirements.yaml'' (deprecated centralized mode) instead of the distributed marker. Fix: use a real command (aida list) for the overview; detect distributed mode (.aida/config.toml + .aida-store). Verified: ''aida list --format summary'' → ''error: unexpected argument --format''.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T21:06:20.492666840Z
+modified_at: 2026-06-10T21:06:20.492666840Z
+req_type: Bug
+tags:
+- ai-assisted
+- friction:round-12
+- novice-first
+- skills
