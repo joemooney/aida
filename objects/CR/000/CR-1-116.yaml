@@ -9,18 +9,17 @@ description: |-
   Proposes 3 headline options (A: keep 'index', qualify '...of intent, not just code'; B: pivot to 'specs and code stay permanently linked'; C: pivot to 'lifecycle that keeps specs and code true'). Advisor recommends A or B (lean A — smallest honest fix, preserves Trojan-horse humility). NOT applied unilaterally — touches VIS-1 + README + OVERVIEW (brand). Operator picks A/B/C/keep.
 
   Blast radius if changed: README.md line 1 + elevator para; OVERVIEW.md line 1 + Vision; VIS-1 title/description; first-project.md closing 'index' sentence (optional); docs/positioning framing (minimal). Caveat from Lane D itself: this is the CHEAP lever — distribution/use is the larger one; don't over-invest. needs-design-signoff (operator-only).
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T16:03:47.430563250Z
-modified_at: 2026-06-09T16:28:43.221116043Z
+modified_at: 2026-06-10T03:34:28.688212130Z
 req_type: ChangeRequest
 tags:
 - brand
 - competitive
 - from-scan:2026-06-09
-- needs-design-signoff
 - positioning
 relationships:
 - rel_type: References
