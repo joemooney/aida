@@ -130,6 +130,15 @@ aida node acquire   # claims a node id for this clone
 
 ## Step 3: Add Your First Requirement
 
+The simplest way — just describe it in a line:
+
+```bash
+aida add "Users can log in with email and password"
+```
+
+That captures it as a **task** (the default) with a stable id like `TASK-1`.
+Want a different type or more detail? Use the flags:
+
 ```bash
 aida add --title "User authentication" \
   --type functional \
@@ -137,37 +146,37 @@ aida add --title "User authentication" \
   --status draft
 ```
 
-Or use interactive mode (prompts for each field):
-
-```bash
-aida add
-```
+Or run `aida add` with no arguments for an interactive walkthrough that prompts
+for each field.
 
 ---
 
 ## Step 4: Work With Requirements
 
 ```bash
-# List all requirements
+# List your tasks
 aida list
 
-# Show details
-aida show FR-001
+# Mark one done (the simple way)
+aida done TASK-1
 
-# Edit
-aida edit FR-001 --status approved --owner alice
+# Show details — and how its code links back
+aida show TASK-1
 
-# Search
+# Search your tasks (add --include-meta for the seeded AI prompts)
 aida search "authentication"
 
+# Edit any field
+aida edit TASK-1 --status approved --owner alice
+
 # Add a comment
-aida comment add FR-001 --content "Needs OAuth2 support"
+aida comment add TASK-1 --content "Needs OAuth2 support"
 
 # Add a relationship
-aida rel add --from FR-002 --to FR-001 --type references
+aida rel add --from TASK-2 --to TASK-1 --type references
 
 # Delete
-aida del FR-003 --yes
+aida del TASK-3 --yes
 ```
 
 ---
@@ -245,10 +254,12 @@ aida github labels --create-missing
 | `aida init` | Initialize AIDA in current project (default: distributed git-canonical) |
 | `aida init --sibling` | Initialize for multi-repo workspace (sibling-repo store) |
 | `aida init --centralized` | Legacy SQLite mode (deprecated) |
-| `aida list` | List all requirements (cache-backed, sub-ms) |
-| `aida add --title "..." --type functional` | Add a requirement |
-| `aida show FR-1-001` | Show requirement details |
-| `aida edit FR-1-001 --status approved` | Update a requirement |
+| `aida add "..."` | Capture a task — the simple way |
+| `aida add --title "..." --type functional` | Add with an explicit type / fields |
+| `aida list` | List your tasks (cache-backed, sub-ms) |
+| `aida done TASK-1` | Mark a task done |
+| `aida show TASK-1` | Show details + how its code links back |
+| `aida edit TASK-1 --status approved` | Update any field |
 | `aida search "keyword"` | Cache-backed FTS5 search |
 | `aida comment add FR-1-001 --content "..."` | Add a comment |
 | `aida rel add --from FR-1-002 --to FR-1-001 --type references` | Add relationship |
