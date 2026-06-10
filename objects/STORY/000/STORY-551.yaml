@@ -19,12 +19,12 @@ description: |-
   ## Rationale
 
   The moat is real but defended with a word that has cheaper claimants. Reframe to the defensible intent layer; ages on the code↔code vs intent↔code distinction.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:15:23.465448888Z
-modified_at: 2026-06-09T15:15:23.465448888Z
+modified_at: 2026-06-10T03:31:23.243002223Z
 req_type: Story
 tags:
 - competitive-analysis
