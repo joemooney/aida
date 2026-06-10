@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T06:24:01.372086761Z
-modified_at: 2026-06-10T06:35:43.259886796Z
+modified_at: 2026-06-10T06:40:28.393817165Z
 req_type: Task
 tags:
 - adopt-adapt
@@ -26,3 +26,5 @@ comments:
   content: Commit 6682c3c13 references this requirement
   created_at: 2026-06-10T06:35:43.259886796Z
   modified_at: 2026-06-10T06:35:43.259886796Z
+archived: true
+archived_at: 2026-06-10T06:40:28.393817165Z
