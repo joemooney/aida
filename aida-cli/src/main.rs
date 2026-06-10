@@ -1594,7 +1594,7 @@ fn run() -> Result<()> {
 
     match &cli.command {
         // TASK-728: `aida done` is a distributed-mode (default) verb. Legacy
-        // --centralized mode keeps the explicit edit path. trace:TASK-728
+        // --centralized mode keeps the explicit edit path. trace:TASK-727
         Command::Done { .. } => {
             anyhow::bail!(
                 "`aida done` is available in the default (distributed) mode. In legacy \
@@ -5335,7 +5335,7 @@ fn handle_unarchive_command(
 /// novice's first session: there was no `aida done`, and `aida edit --status
 /// completed` is jargon (and authority-gated off a TTY). A human at a terminal
 /// IS the authority (TTY satisfies the advisor gate), so for a solo user this
-/// just works. trace:TASK-728 | ai:claude
+/// just works. trace:TASK-727 | ai:claude
 fn handle_done_command(
     id: &str,
     backend: &aida_core::CachedGitBackend,
@@ -10954,7 +10954,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             handle_unarchive_command(id, &backend, store_path)?;
         }
         Command::Done { spec } => {
-            // TASK-728: the newcomer's "I finished it" verb. trace:TASK-728
+            // TASK-728: the newcomer's "I finished it" verb. trace:TASK-727
             handle_done_command(spec, &backend, store_path)?;
         }
         Command::Search {

@@ -5506,7 +5506,7 @@ pub enum Command {
     /// Mark a spec done — the simple "I finished it". e.g. `aida done TASK-1`.
     /// A newcomer-friendly shortcut for completing a task without the
     /// `edit --status completed` jargon.
-    // trace:TASK-728 | ai:claude
+    // trace:TASK-727 | ai:claude
     Done {
         /// The spec to mark done (e.g. TASK-1).
         spec: String,
