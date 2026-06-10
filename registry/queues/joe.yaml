@@ -534,3 +534,10 @@
   added_at: 2026-06-10T06:24:39.418504178Z
   for_role: advisor
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019eb033-bd5c-7070-8228-2507e933ecfd
+  position: 380000
+  added_by: joe
+  added_at: 2026-06-10T06:24:44.348627828Z
+  for_role: advisor
+  added_by_machine: imac
