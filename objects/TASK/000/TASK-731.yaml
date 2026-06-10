@@ -1,0 +1,17 @@
+id: 019eb370-ec36-77c3-b9ac-08f9503bb1e8
+spec_id: TASK-731
+agreed_id: TASK-731
+title: 'Skill-command audit: ''aida list --format X'' + ''aida feature list'' + ''requirements.yaml'' drift across docs/sprint/release skills'
+description: BUG-489 + the /aida-req fix cleaned the two novice-facing onboarding skills. The same drift remains in power-user skills (aida-docs.md 'aida list --format markdown', aida-sprint.md/aida-req 'aida feature list', aida-release.md 'requirements.yaml'). '--format' is not a valid 'aida list' flag; 'feature list' is unsupported in the git backend. Sweep all templates/skills + templates/commands, replace with working equivalents (aida list / --json), drop unsupported, update legacy storage refs. Lower priority (AI-facing, not a novice's first session).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-10T21:29:42.710298413Z
+modified_at: 2026-06-10T21:29:42.710298413Z
+req_type: Task
+tags:
+- audit
+- follow-up:BUG-489
+- skills
+- tech-debt
