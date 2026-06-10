@@ -1595,6 +1595,7 @@ fn run() -> Result<()> {
     match &cli.command {
         Command::Add {
             title,
+            title_positional,
             description,
             description_from_file,
             description_stdin,
@@ -1615,6 +1616,9 @@ fn run() -> Result<()> {
             no_human_only: _,
             effort: _,
         } => {
+            // TASK-725: positional title (`aida add "do X"`) — --title wins.
+            let title = title.clone().or_else(|| title_positional.clone());
+            let title = &title;
             // trace:BUG-17 | ai:claude — resolve description from inline,
             // file, or stdin sources before dispatching.
             let resolved_description =
@@ -7030,10 +7034,7 @@ fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
     }
     match git_ops::commit(root, "chore: scaffold AIDA") {
         Ok(true) => {
-            println!(
-                "  {} committed AIDA scaffolding (chore: scaffold AIDA)",
-                "Done".green()
-            );
+            println!("  {} saved your AIDA setup", "✓".green());
             Ok(true)
         }
         // Nothing staged was new (already tracked + unchanged). Not an error.
@@ -7297,20 +7298,26 @@ fn complete_init_scaffolding(
         println!("  Storage: {}", storage_label.dimmed());
     }
 
-    if discipline_written > 0 {
-        println!(
-            "  {} discipline guide{} scaffolded to {}",
-            discipline_written.to_string().green(),
-            if discipline_written == 1 { "" } else { "s" },
-            "docs/aida/discipline/".dimmed(),
-        );
-    }
-
-    if ecosystem_watch_written {
-        println!(
-            "  starter ecosystem-watch log scaffolded to {}",
-            "docs/competitive-analysis/ecosystem-watch.md".dimmed(),
-        );
+    // The discipline pack + ecosystem-watch log are real, but announcing them
+    // at minute one is noise for a newcomer — they didn't ask for 21 guides or a
+    // competitive-analysis log and don't yet know what they're for. Surface the
+    // count only under --verbose; the files are on disk either way.
+    // trace:BUG-19 | ai:claude
+    if verbose {
+        if discipline_written > 0 {
+            println!(
+                "  {} discipline guide{} scaffolded to {}",
+                discipline_written.to_string().green(),
+                if discipline_written == 1 { "" } else { "s" },
+                "docs/aida/discipline/".dimmed(),
+            );
+        }
+        if ecosystem_watch_written {
+            println!(
+                "  starter ecosystem-watch log scaffolded to {}",
+                "docs/competitive-analysis/ecosystem-watch.md".dimmed(),
+            );
+        }
     }
 
     if skipped_count > 0 {
@@ -7324,47 +7331,41 @@ fn complete_init_scaffolding(
     }
 
     println!();
-    println!("  {}:", "Next".bold());
     println!(
-        "    {}{}capture project intent",
-        "aida add --type vision --title \"...\"".cyan(),
-        " ".repeat(2)
+        "  {} The loop is simple — {} a thing you want, build it, ask {} later:",
+        "▶".green().bold(),
+        "capture".bold(),
+        "\"why?\"".bold()
     );
     println!(
-        "    {}{}see what exists",
+        "    {}{}capture your first task",
+        "aida add \"Add a task from the CLI\"".cyan(),
+        " ".repeat(3)
+    );
+    println!(
+        "    {}{}see what you've captured",
         "aida list".cyan(),
-        " ".repeat(29)
+        " ".repeat(27)
     );
     println!(
-        "    {}{}project as layered docs",
-        "aida docs build".cyan(),
-        " ".repeat(23)
+        "    {}{}later — recall why a thing exists",
+        "aida show <id>".cyan(),
+        " ".repeat(22)
     );
 
     // TASK-645: surface the role model at the onboarding moment so there is
     // no undefined-role window. The default is read-side (`AIDA_SESSION_ROLE`
     // unset → implementer); init can't set the env var from a subprocess, so
     // it names the default and the switch command rather than entering one.
+    // TASK-645 / ADR-2: name the default seat so there's no undefined-role
+    // window — but for a newcomer that's one gentle line, not a lecture on the
+    // role model. The switch command + the advisor/reviewer seats surface later
+    // (`aida role --help`, the discipline pack) once the project grows into them.
+    // trace:TASK-645 | ai:claude
     println!();
-    println!("  {}:", "Your role".bold());
     println!(
-        "    You're the {} by default — the seat that picks up and ships work.",
+        "  You're set up as the {} (the default) — you can ignore roles until your project grows.",
         "implementer".green().bold()
-    );
-    println!(
-        "    {} Roles are just hats you wear as the project grows ({}/{}/{}).",
-        "·".dimmed(),
-        "implementer".cyan(),
-        "advisor".cyan(),
-        "reviewer".cyan()
-    );
-    // trace:TASK-667 — under the shell wrapper the bare `aida role enter`
-    // is correct; raw, the `eval "$(...)"` form is. eval_subcommand_hint
-    // picks based on AIDA_SHELL_WRAPPER instead of hardcoding one form.
-    println!(
-        "    {} Switch any time: {}",
-        "·".dimmed(),
-        eval_subcommand_hint("role enter <role>").cyan()
     );
 
     if !verbose {
@@ -9312,6 +9313,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Add {
             title,
+            title_positional,
             description,
             description_from_file,
             description_stdin,
@@ -9330,6 +9332,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_human_only,
             ..
         } => {
+            // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
+            // positional title is equivalent to --title; --title wins if both
+            // are given. Without this, the init greeting's own first suggestion
+            // (`aida add "Add a task from the CLI"`) errors — caught by running
+            // the novice's first session. trace:TASK-725 | ai:claude
+            let title = title.clone().or_else(|| title_positional.clone());
+            let title = &title;
             // BUG-45 + interactive expansion: when the user doesn't pass
             // --title, decide whether to prompt or bail. When prompting,
             // also walk through type / description / priority for any
@@ -9393,7 +9402,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 None
             };
-            let effective_type: Option<String> = r#type.clone().or(interactive_type);
+            // TASK-725: a newcomer who types `aida add "do X"` means a *task*,
+            // not a "Functional Requirement" — default to the relatable,
+            // catch-all type when none is given (explicit --type and the
+            // interactive picker still win). trace:TASK-725 | ai:claude
+            let effective_type: Option<String> = r#type
+                .clone()
+                .or(interactive_type)
+                .or_else(|| Some("task".to_string()));
 
             // Description — open the user's $EDITOR when not provided.
             // trace:BUG-17 | ai:claude
@@ -15444,10 +15460,7 @@ fn handle_init_distributed_worktree(
         }
     }
 
-    println!(
-        "{}",
-        "Initializing AIDA in distributed mode (orphan branch + worktree)...".bold()
-    );
+    println!("{}", "Setting up AIDA in this project…".bold());
     println!();
 
     // Ensure there's at least one commit on main (worktree requires it)
@@ -15467,12 +15480,16 @@ fn handle_init_distributed_worktree(
 
     // Create orphan branch + worktree
     let store_path = git_ops::create_store_worktree(&cwd, worktree_dir, branch_name)?;
-    println!(
-        "  {} orphan branch '{}' with worktree at {}",
-        "Created".green(),
-        branch_name,
-        worktree_dir
-    );
+    // Setup-detail (orphan branch / node id / forge) is plumbing a newcomer
+    // doesn't need to see — surface it only under --verbose. trace:TASK-725
+    if verbose {
+        println!(
+            "  {} orphan branch '{}' with worktree at {}",
+            "Created".green(),
+            branch_name,
+            worktree_dir
+        );
+    }
 
     // Configure git user in worktree
     let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
@@ -15499,11 +15516,13 @@ fn handle_init_distributed_worktree(
     }
     seed_meta_requirements(&mut store)?;
     backend.save(&store)?;
-    println!(
-        "  {} {}",
-        "Created".green(),
-        format!("{}/metadata.yaml", worktree_dir).white().bold()
-    );
+    if verbose {
+        println!(
+            "  {} {}",
+            "Created".green(),
+            format!("{}/metadata.yaml", worktree_dir).white().bold()
+        );
+    }
 
     // Create initial commit on the orphan branch
     git_ops::add(&store_path, &["metadata.yaml"])?;
@@ -15592,14 +15611,16 @@ fn handle_init_distributed_worktree(
                 } else {
                     " (local; will sync on next `aida push`)"
                 };
-                println!(
-                    "  {} acquired node id {} (hostname={}, email={}){}",
-                    "Done".green(),
-                    new_id,
-                    hn,
-                    email.as_deref().unwrap_or("-"),
-                    suffix
-                );
+                if verbose {
+                    println!(
+                        "  {} acquired node id {} (hostname={}, email={}){}",
+                        "✓".green(),
+                        new_id,
+                        hn,
+                        email.as_deref().unwrap_or("-"),
+                        suffix
+                    );
+                }
                 // FR-271: at init time, force the new-project default
                 // (Global) explicitly. Reading config.toml here would
                 // return PerType because we haven't written the config
@@ -15611,10 +15632,10 @@ fn handle_init_distributed_worktree(
                     email.as_deref(),
                     aida_core::IdCounterScope::Global,
                 ) {
-                    if !blocks.is_empty() {
+                    if !blocks.is_empty() && verbose {
                         println!(
                             "  {} auto-allocated {} initial block{}",
-                            "Done".green(),
+                            "✓".green(),
                             blocks.len(),
                             if blocks.len() == 1 { "" } else { "s" }
                         );
@@ -15685,9 +15706,9 @@ fn handle_init_distributed_worktree(
 
     // STORY-511: surface the auto-detected forge so the operator sees the
     // inference instead of having to read .aida/config.toml. EPIC-35 init UX.
-    {
+    if verbose {
         let (_, msg) = forge::init_forge_detection_message(&cwd);
-        println!("  {} {}", "Done".green(), msg);
+        println!("  {} {}", "✓".green(), msg);
     }
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
@@ -15696,11 +15717,9 @@ fn handle_init_distributed_worktree(
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
-        "{}{}Git-canonical store ({}, orphan branch '{}')",
+        "{}{}your specs live here (git-tracked, synced with your code)",
         worktree_dir.white().bold(),
         " ".repeat(20),
-        worktree_dir,
-        branch_name
     );
     complete_init_scaffolding(
         &cwd,
@@ -15714,19 +15733,24 @@ fn handle_init_distributed_worktree(
         verbose,
     )?;
 
-    println!();
-    println!("  {}:", "Push code + store together".bold());
-    println!(
-        "    {}                        push your branch and the orphan store in one go",
-        "aida push".cyan()
-    );
-    println!();
-    println!("  {}:", "Onboard a teammate".bold());
-    println!("    {}    they clone normally", "git clone <repo>".cyan());
-    println!(
-        "    {}            then `aida init` notices the orphan branch and attaches",
-        "aida init".cyan()
-    );
+    // Sharing + teammate onboarding are real, but premature for a solo
+    // newcomer with no remote yet — surface them under --verbose (and they're
+    // re-surfaced contextually when there IS an origin). trace:TASK-725
+    if verbose {
+        println!();
+        println!("  {}:", "Push code + store together".bold());
+        println!(
+            "    {}                        push your branch and the spec store in one go",
+            "aida push".cyan()
+        );
+        println!();
+        println!("  {}:", "Onboard a teammate".bold());
+        println!("    {}    they clone normally", "git clone <repo>".cyan());
+        println!(
+            "    {}            then `aida init` attaches the shared specs automatically",
+            "aida init".cyan()
+        );
+    }
     println!();
 
     Ok(())
@@ -15868,11 +15892,9 @@ fn handle_init_post_clone(
         .load()
         .unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
     let storage_label = format!(
-        "{}{}Git-canonical store ({}, orphan branch '{}')",
+        "{}{}your specs live here (git-tracked, synced with your code)",
         worktree_dir.white().bold(),
         " ".repeat(20),
-        worktree_dir,
-        branch_name
     );
     complete_init_scaffolding(
         cwd,

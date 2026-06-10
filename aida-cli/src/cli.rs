@@ -5139,6 +5139,11 @@ pub enum AgentNewCommand {
 pub enum Command {
     /// Add a new requirement
     Add {
+        /// Title, positional — the newcomer-friendly form: `aida add "Add a task
+        /// from the CLI"`. Same as `--title`; if both are given, `--title` wins.
+        // trace:TASK-725 | ai:claude
+        title_positional: Option<String>,
+
         /// Title of the requirement
         #[clap(long)]
         title: Option<String>,
