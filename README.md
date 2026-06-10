@@ -1,4 +1,4 @@
-# AIDA — Your project's missing index
+# AIDA — Your project's missing index — *of intent, not just code*
 
 **A hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.**
 
