@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:18:12.780110006Z
-modified_at: 2026-06-10T03:31:37.605971400Z
+modified_at: 2026-06-10T03:50:59.407788510Z
 req_type: Spike
 tags:
 - agent-teams
@@ -22,4 +22,17 @@ tags:
 - orchestrator
 - ride-not-build
 - spike
+comments:
+- id: 019eafa7-a24f-7c33-95a4-fd16721325b9
+  author: joe
+  content: |-
+    OPERATOR DECISION (2026-06-09) — P3 inter-agent comms = HYBRID (ride native within-vendor, OWN cross-vendor):
+
+    Cross-VENDOR inter-agent communication (codex ↔ antigravity/AGY ↔ claude) is a CORE GOAL. Claude Code Agent Teams is Claude-ONLY and structurally cannot serve it — so AIDA's cross-vendor mailbox substrate (briefs + MCP `send_message`/`read_inbox`) is NOT redundant with Agent Teams; they operate at different scopes. KEEP + INVEST in it — do NOT discard working infrastructure.
+
+    AND use native where possible: RIDE Agent Teams for WITHIN-Claude-session coordination (the mailbox/shared-task-list/file-locking it now ships natively) rather than reinventing it. Don't build what Anthropic ships free.
+
+    The boundary: within-vendor-session coordination → defer to Agent Teams (native); cross-vendor durable comms + the requirement graph → AIDA (the differentiated, working infra Anthropic is structurally disinclined to build). SPIKE-52 designs the bridge (seed an Agent-Teams task list from `aida queue`; harvest its mailbox/outcomes back into spec history; register AIDA reviewer/pre-commit gates as Agent-Teams hooks) and must DEGRADE GRACEFULLY when Agent Teams is absent (it's experimental + Claude-only). The bridge DESIGN gets master/operator review before any build.
+  created_at: 2026-06-10T03:50:59.407788510Z
+  modified_at: 2026-06-10T03:50:59.407788510Z
 human_only: true
