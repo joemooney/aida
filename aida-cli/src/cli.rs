@@ -6894,7 +6894,8 @@ pub enum Command {
         sync: bool,
 
         /// Include the seeded META AI-prompt specs in results. Default hides
-        /// them, consistent with `aida list`. trace:BUG-488 | ai:claude
+        /// them, consistent with `aida list`.
+        // trace:BUG-488 | ai:claude
         #[clap(long)]
         include_meta: bool,
 
