@@ -10969,6 +10969,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             sync,
             all,
             archived,
+            include_meta,
             ..
         } => {
             // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
@@ -10991,6 +10992,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if let Some(s) = status {
                 let needle = s.clone();
                 results.retain(|r| r.status.eq_ignore_ascii_case(&needle));
+            }
+            // BUG-488: hide the seeded META AI-prompt specs by default, same as
+            // `aida list` (BUG-27) — a newcomer's search shouldn't surface
+            // internal prompt machinery like "Generate Children". Opt in with
+            // --include-meta. trace:BUG-488 | ai:claude
+            if !*include_meta {
+                results.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
 
             if results.is_empty() {
