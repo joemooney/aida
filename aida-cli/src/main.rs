@@ -7385,23 +7385,24 @@ fn complete_init_scaffolding(
 
     println!();
     println!(
-        "  {} The loop is simple — {} a thing you want, build it, ask {} later:",
+        "  {} The loop is simple — {} a task, build it, mark it {}:",
         "▶".green().bold(),
         "capture".bold(),
-        "\"why?\"".bold()
+        "done".bold()
     );
     println!(
-        "    {}{}capture your first task",
+        "    {}{}capture a task",
         "aida add \"Add a task from the CLI\"".cyan(),
         " ".repeat(3)
     );
+    println!("    {}{}see your tasks", "aida list".cyan(), " ".repeat(27));
     println!(
-        "    {}{}see what you've captured",
-        "aida list".cyan(),
-        " ".repeat(27)
+        "    {}{}mark one finished (after you've built it)",
+        "aida done <id>".cyan(),
+        " ".repeat(22)
     );
     println!(
-        "    {}{}later — recall why a thing exists",
+        "    {}{}recall why a task exists, anytime",
         "aida show <id>".cyan(),
         " ".repeat(22)
     );
@@ -9426,29 +9427,33 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 eprintln!("{} {}", "Warning:".yellow().bold(), msg);
             }
 
-            // Type — interactive picker when not provided.
+            // Type — interactive picker when not provided. TASK-728: lead with
+            // the relatable everyday types a newcomer reaches for (task is the
+            // default + first); push the specialized docs-layer / organizational
+            // types to the end so the picker doesn't open with jargon.
+            // trace:TASK-728 | ai:claude
             let interactive_type: Option<String> = if r#type.is_none() && interactive_mode {
                 let choices = vec![
-                    "functional",
+                    "task",
                     "bug",
+                    "story",
+                    "epic",
+                    "functional",
+                    "spike",
+                    "non-functional",
+                    "system",
+                    "user",
                     "principle",
                     "vision",
                     "decision",
                     "constraint",
                     "term",
-                    "non-functional",
-                    "epic",
-                    "story",
-                    "task",
-                    "spike",
                     "sprint",
-                    "system",
-                    "user",
                     "folder",
                     "meta",
                 ];
                 let pick = inquire::Select::new("Type:", choices)
-                    .with_help_message("functional / bug for everyday work; principle / vision / decision for the docs layer.")
+                    .with_help_message("task for most things · bug for defects · story/epic to group work. The rest are for larger or docs-heavy projects.")
                     .prompt()
                     .context("Type prompt cancelled")?;
                 Some(pick.to_string())
