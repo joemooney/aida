@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: 221-Uncategorized
 created_at: 2026-02-21T16:56:14.487156534Z
-modified_at: 2026-05-31T21:36:46.262164594Z
+modified_at: 2026-06-10T16:55:34.653389758Z
 req_type: Task
 comments:
 - id: 0ae180a0-77a6-4c28-b761-003227f39ec3
@@ -20,5 +20,10 @@ comments:
   content: ''
   created_at: 2026-05-04T19:26:40.691390570Z
   modified_at: 2026-05-04T19:26:40.691390570Z
+- id: 019eb275-f1fd-7880-9e7f-bf327191c1c3
+  author: joe
+  content: Commit 1e72bf984 references this requirement
+  created_at: 2026-06-10T16:55:34.653389758Z
+  modified_at: 2026-06-10T16:55:34.653389758Z
 archived: true
 archived_at: 2026-05-31T21:36:46.262164594Z
