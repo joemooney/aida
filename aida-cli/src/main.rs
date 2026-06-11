@@ -54833,6 +54833,37 @@ mod next_keyword_tests {
 mod auto_bump_done_tests {
     use super::*;
 
+    /// TASK-740: exhaustive parity — `auto_bump_eligible_status` (now delegating
+    /// to `lifecycle::git_merge_completes`) matches the pre-migration hand-coded
+    /// predicate (BUG-328 + BUG-405) over every status. trace:TASK-740
+    #[test]
+    fn auto_bump_eligible_status_parity_with_oracle() {
+        use aida_core::models::RequirementStatus as S;
+        fn oracle(s: &S) -> bool {
+            matches!(
+                s,
+                S::Approved | S::Planned | S::InProgress | S::Done | S::NeedsAttention
+            )
+        }
+        let all = [
+            S::Draft,
+            S::Approved,
+            S::Planned,
+            S::InProgress,
+            S::Done,
+            S::Completed,
+            S::Rejected,
+            S::NeedsAttention,
+        ];
+        for s in &all {
+            assert_eq!(
+                auto_bump_eligible_status(s),
+                oracle(s),
+                "parity mismatch at {s}"
+            );
+        }
+    }
+
     /// The env-flag opt-out follows the same convention as
     /// `auto_merge_gate_enabled`: anything in {false, 0, no, off}
     /// (case-insensitive, trimmed) disables; anything else (including
@@ -72676,25 +72707,17 @@ fn auto_bump_enabled() -> bool {
 
 /// BUG-328: a commit on the default branch is authoritative evidence that
 /// approved/planned/in-flight/done work shipped. Draft preserves the approval
-/// signal; terminal statuses stay terminal.
-/// trace:BUG-328 | ai:codex
+/// signal; terminal statuses stay terminal. BUG-405 extends eligibility to a
+/// shelved `NeedsAttention` whose PR a later session merged.
+///
+/// TASK-740: single-sourced in the lifecycle model as the merge-evidence
+/// GitEvent guard — the `aida pull` scanner and the `aida db reconcile-status`
+/// replay both ask the model so the eligibility set can't drift from the
+/// declared `Done → Completed` transition (the BUG-328 / BUG-405 rationale now
+/// lives on `lifecycle::git_merge_completes`).
+/// trace:TASK-740 | ai:claude trace:BUG-328 trace:BUG-405
 fn auto_bump_eligible_status(status: &RequirementStatus) -> bool {
-    matches!(
-        status,
-        RequirementStatus::Approved
-            | RequirementStatus::Planned
-            | RequirementStatus::InProgress
-            | RequirementStatus::Done
-            // BUG-405: a spec the drain shelved into NeedsAttention (e.g. CI
-            // red) whose PR a later session/sibling-agent then fixed and
-            // merged is otherwise stranded — auto-bump skipped it and the
-            // state machine blocks a direct NeedsAttention→Completed flip, so
-            // it sits forever with a stale "CI is red" finding. A commit
-            // referencing it on the default branch is the authoritative "it
-            // shipped" signal, same as for any other eligible status.
-            // trace:BUG-405 | ai:claude
-            | RequirementStatus::NeedsAttention
-    )
+    aida_core::lifecycle::git_merge_completes(aida_core::lifecycle::State::from_status(status))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
