@@ -65538,6 +65538,13 @@ fn collect_open_facts(
             .collect::<String>()
             .to_ascii_lowercase()
     };
+    // TASK-723 (source #2): index FINDINGS by the spec they were filed against,
+    // so each open spec can link its attempt-outcome findings without
+    // recomputing them. A finding is a draft requirement carrying a
+    // `from-implementer:<SPEC>` / `from-advisor:<SPEC>` origin tag, plus any
+    // extra `linked:<SPEC>` tags. We reuse the existing finding cohort — single
+    // source of truth for attempt outcomes. trace:TASK-723 | ai:claude
+    let findings_by_spec = collect_findings_by_spec(store);
     let mut facts = Vec::new();
     for req in &store.requirements {
         if req.archived {
@@ -65560,6 +65567,21 @@ fn collect_open_facts(
                 .into_iter()
                 .flatten()
                 .any(|s| in_flight_scopes.contains(&s.to_ascii_lowercase()));
+        // TASK-723 (source #2): findings linked to this spec (deduped, stable
+        // order). Don't link a finding to itself.
+        let mut findings: Vec<String> = findings_by_spec
+            .get(&id.to_ascii_uppercase())
+            .cloned()
+            .unwrap_or_default();
+        findings.retain(|fid| !fid.eq_ignore_ascii_case(&id));
+        // TASK-723 (source #3): residual `why-open:` notes recorded on this
+        // spec's comments. Derivable state is never written here — these are
+        // the non-derivable tail only.
+        let residual_notes: Vec<String> = req
+            .comments
+            .iter()
+            .filter_map(|c| burndown::parse_why_open_comment(&c.content))
+            .collect();
         facts.push(burndown::OpenFacts {
             id,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
@@ -65572,9 +65594,57 @@ fn collect_open_facts(
                 .map(|d| d.is_pending())
                 .unwrap_or(false),
             in_flight,
+            findings,
+            residual_notes,
         });
     }
     facts
+}
+
+/// TASK-723 (source #2): map UPPERCASE origin SPEC-ID → display-ids of the
+/// findings filed against it. A finding is a draft requirement carrying a
+/// `from-implementer:<SPEC>` or `from-advisor:<SPEC>` origin tag (and possibly
+/// extra `linked:<SPEC>` tags). Reuses the existing finding cohort so the
+/// explainer links — never recomputes — attempt outcomes. trace:TASK-723 | ai:claude
+fn collect_findings_by_spec(
+    store: &aida_core::RequirementsStore,
+) -> std::collections::HashMap<String, Vec<String>> {
+    let mut by_spec: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for req in &store.requirements {
+        if req.archived {
+            continue;
+        }
+        let tags: Vec<String> = req.tags.iter().cloned().collect();
+        if !findings::is_finding(&tags) {
+            continue;
+        }
+        let finding_id = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        // Every SPEC-ID this finding points at: the origin tag's value plus any
+        // `linked:<SPEC>` tags. `general` / non-spec origins are ignored.
+        for tag in &tags {
+            let t = tag.trim();
+            let target = t
+                .strip_prefix(findings::FROM_IMPLEMENTER_PREFIX)
+                .or_else(|| t.strip_prefix(findings::FROM_ADVISOR_PREFIX))
+                .or_else(|| t.strip_prefix(findings::LINKED_PREFIX));
+            if let Some(spec) = target {
+                let spec = spec.trim();
+                if spec.is_empty() || spec.eq_ignore_ascii_case("general") {
+                    continue;
+                }
+                let entry = by_spec.entry(spec.to_ascii_uppercase()).or_default();
+                if !entry.iter().any(|e| e.eq_ignore_ascii_case(&finding_id)) {
+                    entry.push(finding_id.clone());
+                }
+            }
+        }
+    }
+    by_spec
 }
 
 /// STORY-547: `aida burndown explain` — classify every open spec into its
@@ -65594,23 +65664,37 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
     let in_flight_scopes = in_flight_lease_scopes(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
 
-    // Classify, preserving store order within each bucket.
-    let classified: Vec<(burndown::OpenFacts, burndown::OpenBucket, String)> = facts
+    // Classify, preserving store order within each bucket. TASK-723: each spec
+    // now carries the FULL reason set (derived + finding-links + residual
+    // notes), most-fundamental-first; the derived reason still drives the
+    // bucket. trace:TASK-723
+    let classified: Vec<(
+        burndown::OpenFacts,
+        burndown::OpenBucket,
+        Vec<burndown::Reason>,
+    )> = facts
         .into_iter()
         .map(|f| {
-            let (bucket, reason) = burndown::explain_open(&f);
-            (f, bucket, reason)
+            let (bucket, reasons) = burndown::explain_reasons(&f);
+            (f, bucket, reasons)
         })
         .collect();
 
     if json {
         let payload = classified
             .iter()
-            .map(|(f, bucket, reason)| {
+            .map(|(f, bucket, reasons)| {
                 serde_json::json!({
                     "spec": f.id,
                     "bucket": bucket.key(),
-                    "reason": reason,
+                    // The primary (derived) reason — first, most-fundamental.
+                    "reason": reasons.first().map(|r| r.text.as_str()).unwrap_or_default(),
+                    // TASK-723: the full reason set, most-fundamental-first.
+                    "reasons": reasons
+                        .iter()
+                        .map(|r| serde_json::json!({"source": r.source.key(), "text": r.text}))
+                        .collect::<Vec<_>>(),
+                    "findings": f.findings,
                     "needs_human": bucket.needs_human(),
                 })
             })
@@ -65653,8 +65737,11 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
         Actionable,
     ];
     for bucket in order {
-        let rows: Vec<&(burndown::OpenFacts, burndown::OpenBucket, String)> =
-            classified.iter().filter(|(_, b, _)| *b == bucket).collect();
+        let rows: Vec<&(
+            burndown::OpenFacts,
+            burndown::OpenBucket,
+            Vec<burndown::Reason>,
+        )> = classified.iter().filter(|(_, b, _)| *b == bucket).collect();
         if rows.is_empty() {
             continue;
         }
@@ -65663,21 +65750,39 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
         } else {
             "·".dimmed()
         };
-        let (_, _, sample_reason) = rows[0];
+        // The bucket header glosses the derived reason — the first reason of the
+        // first row (every row in this bucket shares the same bucket).
+        let sample_reason = rows[0]
+            .2
+            .first()
+            .map(|r| r.text.clone())
+            .unwrap_or_default();
         println!(
             "\n{} {} — {}",
             marker,
             bucket.key().bold(),
             sample_reason.dimmed()
         );
-        for (f, _, reason) in rows {
-            // Only repeat the per-spec reason when it differs from the bucket's
-            // header (e.g. `deferred:<why>` / decision tags vary per spec); for
-            // uniform buckets just list the IDs to keep the view scannable.
-            if reason == sample_reason {
+        for (f, _, reasons) in rows {
+            // The derived (first) reason: only repeat it when it differs from the
+            // bucket header (e.g. `deferred:<why>` / decision tags vary per spec);
+            // for uniform buckets just list the ID to keep the view scannable.
+            let derived = reasons.first().map(|r| r.text.clone()).unwrap_or_default();
+            if derived == sample_reason {
                 println!("    {}", f.id.cyan());
             } else {
-                println!("    {} {}", f.id.cyan(), format!("({reason})").dimmed());
+                println!("    {} {}", f.id.cyan(), format!("({derived})").dimmed());
+            }
+            // TASK-723: the additional reasons (finding-links + residual notes)
+            // hang under the spec, most-fundamental-first, so the operator sees
+            // every reason it's still open — not just the derived one.
+            for r in reasons.iter().skip(1) {
+                let tag = match r.source {
+                    burndown::ReasonSource::Finding => "finding".magenta(),
+                    burndown::ReasonSource::Residual => "note".yellow(),
+                    burndown::ReasonSource::Derived => continue,
+                };
+                println!("      {} {}", tag, r.text.dimmed());
             }
         }
     }
@@ -65746,7 +65851,9 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     let Some(f) = facts.iter().find(|f| f.id.eq_ignore_ascii_case(&want)) else {
         anyhow::bail!("`{id}` is not in the open set.");
     };
-    let (bucket, reason) = burndown::explain_open(f);
+    // TASK-723: the FULL reason set (derived + finding-links + residual notes),
+    // most-fundamental-first. trace:TASK-723
+    let (bucket, reasons) = burndown::explain_reasons(f);
 
     if json {
         println!(
@@ -65754,7 +65861,12 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
             serde_json::to_string_pretty(&serde_json::json!({
                 "spec": f.id,
                 "bucket": bucket.key(),
-                "reason": reason,
+                "reason": reasons.first().map(|r| r.text.as_str()).unwrap_or_default(),
+                "reasons": reasons
+                    .iter()
+                    .map(|r| serde_json::json!({"source": r.source.key(), "text": r.text}))
+                    .collect::<Vec<_>>(),
+                "findings": f.findings,
                 "needs_human": bucket.needs_human(),
             }))?
         );
@@ -65766,7 +65878,20 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         "·".dimmed()
     };
     println!("{} {}", "▸".cyan().bold(), f.id.cyan().bold());
-    println!("  {} {} — {}", marker, bucket.key().bold(), reason);
+    // The derived reason gets the bucket header; finding-links + residual notes
+    // each get their own labelled line beneath it.
+    let mut iter = reasons.iter();
+    if let Some(first) = iter.next() {
+        println!("  {} {} — {}", marker, bucket.key().bold(), first.text);
+    }
+    for r in iter {
+        let tag = match r.source {
+            burndown::ReasonSource::Finding => "finding".magenta(),
+            burndown::ReasonSource::Residual => "note".yellow(),
+            burndown::ReasonSource::Derived => continue,
+        };
+        println!("    {} {}", tag, r.text.dimmed());
+    }
     Ok(())
 }
 
