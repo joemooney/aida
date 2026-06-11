@@ -1,0 +1,12 @@
+id: 019eb714-f8a1-7b70-8270-04af3f2fe8c3
+spec_id: TASK-751
+agreed_id: TASK-751
+title: '**Optional: promote "needs-triage" to its own `OpenBucket` label** if the `NeedsAttention` shelf grows enough to warrant separate grouping (today it is a reason-string under `AwaitingDecision`)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T14:27:45.441330518Z
+modified_at: 2026-06-11T14:27:45.441330518Z
+req_type: Task
