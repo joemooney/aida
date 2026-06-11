@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:20:15.770546344Z
-modified_at: 2026-06-11T13:20:15.770546344Z
+modified_at: 2026-06-11T14:06:50.618639776Z
 req_type: Story
 tags:
 - aida:presence
@@ -31,3 +31,9 @@ tags:
 - needs-human
 - operator-tooling
 - ux
+comments:
+- id: 019eb701-d2fa-7783-8f2d-5262dbf1c57d
+  author: joe
+  content: 'Refinement (operator, 2026-06-11): canonical verb form is ''aida human home'' / ''aida human away'' — presence is a SUBCOMMAND of the SPIKE-57 ''aida human'' role-vector (presence belongs to the human-as-actor), with ''aida home''/''aida away'' as optional short aliases. Build under the human namespace, unified with SPIKE-57.'
+  created_at: 2026-06-11T14:06:50.618639776Z
+  modified_at: 2026-06-11T14:06:50.618639776Z
