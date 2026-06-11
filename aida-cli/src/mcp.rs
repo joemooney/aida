@@ -4899,14 +4899,44 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
     }
 }
 
-/// BUG-480: the refusal message for MCP queue-for-execution tools
+/// BUG-486: whether the current MCP caller holds advisor authority, routed
+/// through the SAME predicate the CLI uses (`advisor_authority_from`) so the two
+/// surfaces can't drift — the CLI↔MCP inconsistency *was* the bug. The MCP
+/// server runs non-TTY and is never orchestrator-corroborated, so the only axis
+/// that can grant authority here is the resolved role. Role resolution:
+/// `role_active_env()` (the canonicalized `AIDA_SESSION_ROLE` the server
+/// inherited from the launching shell) is the source — `role_enter` (STORY-534)
+/// is a peek that sets exactly that shell env, so the entered session role and
+/// the env fallback are one and the same value seen by this process. An agent
+/// that has not entered an advisor role resolves to non-advisor and is refused,
+/// matching the headless / non-TTY default. trace:BUG-486 | ai:claude
+fn mcp_caller_has_advisor_authority() -> bool {
+    // trace:BUG-486
+    let role = role_active_env().unwrap_or_default();
+    // is_tty = false, orchestrated = false: an MCP server is neither.
+    crate::advisor_authority_from(&role, false, false)
+}
+
+/// BUG-480 / BUG-486: the refusal message for MCP queue-for-execution tools
 /// (`queue_add` / `queue_rework`). Queuing a spec for work is an
-/// advisor-authority act (the CLI gates it on `has_advisor_authority()`); MCP
-/// is never advisor authority, so these tools refuse unconditionally and tell
-/// the agent to file the spec for advisor triage instead. Returns `Some(msg)`
-/// always — a function (not a constant) so it composes like
-/// `mcp_status_gate_message` at the call site. trace:BUG-480 | ai:claude
+/// advisor-authority act (the CLI gates it on `has_advisor_authority()`).
+/// BUG-486: consult the caller's role instead of refusing unconditionally — an
+/// MCP session that has entered an advisor role IS advisor authority and may
+/// queue, exactly as the CLI does under `AIDA_SESSION_ROLE=advisor`. A
+/// non-advisor caller still gets the refusal, told to file the spec for advisor
+/// triage. Returns `None` when the caller may proceed. trace:BUG-486 trace:BUG-480 | ai:claude
 fn mcp_queue_authority_message() -> Option<String> {
+    mcp_queue_authority_message_for(mcp_caller_has_advisor_authority())
+}
+
+/// Pure core of [`mcp_queue_authority_message`] (BUG-486): the queue-authority
+/// decision over an explicit `caller_is_advisor`, so it is unit-testable without
+/// mutating the process-global `AIDA_SESSION_ROLE` env. `None` = may proceed.
+/// trace:BUG-486 | ai:claude
+fn mcp_queue_authority_message_for(caller_is_advisor: bool) -> Option<String> {
+    if caller_is_advisor {
+        return None;
+    }
     Some(
         "Cannot queue work for execution via MCP: committing a spec to the execution \
          pipeline is the advisor's decision and needs advisor authority. File the spec (it \
@@ -4916,57 +4946,85 @@ fn mcp_queue_authority_message() -> Option<String> {
     )
 }
 
-/// BUG-449 / BUG-481: status transitions an MCP caller may NOT make itself,
-/// with the message explaining why. `None` = the transition is allowed.
+/// BUG-449 / BUG-481 / BUG-486: status transitions an MCP caller may NOT make
+/// itself, with the message explaining why. `None` = the transition is allowed.
 /// Mirrors the `add_requirement` intake gate (TASK-647 / ADR-3) on the update
 /// path so `add`-then-`update` isn't a one-line bypass of advisor authority.
-/// MCP is never advisor authority (unlike the CLI, which can be the advisor
-/// seat or orchestrator-corroborated), so this stays strict regardless of
-/// context.
+///
+/// BUG-486: the *authority decision* now routes through the SAME predicate the
+/// CLI uses (`status_advance_requires_advisor_authority` + `advisor_authority_from`
+/// via `mcp_caller_has_advisor_authority`), so an MCP session that has entered an
+/// advisor role may make the advisor-gated transitions exactly as the CLI does
+/// under `AIDA_SESSION_ROLE=advisor`. Before BUG-486 this gate ignored the
+/// caller's role and refused unconditionally even for a genuine advisor session —
+/// the CLI↔MCP inconsistency the bug names. A caller WITHOUT advisor authority
+/// still hits the refusal.
 ///
 /// The gate is keyed off the **(source, target) pair**, not the target alone
-/// (BUG-481). `Approved` / `Planned` / `Completed` are **always** gated as
-/// targets, regardless of source — approving/planning is the advisor's triage
-/// decision, and Completed is merge-driven. `InProgress` / `Done` are gated
-/// **only when the source is `Draft` or `NeedsAttention`**: advancing a
-/// never-triaged Draft (or a punted `NeedsAttention` spec) straight into the
-/// execution pipeline is the same intake-bypass the advisor gate exists to
-/// prevent; before BUG-481 the `_ => None` arm let `add_requirement` (Draft) →
-/// `update_requirement` {status: in-progress|done} sail through. A spec
-/// *already* in the pipeline (e.g. `Approved → InProgress`, `InProgress →
-/// Done`) is an implementer-legitimate execution flip and stays allowed.
-/// trace:BUG-449 trace:BUG-481 | ai:claude
+/// (BUG-481). `Approved` / `Planned` are advisor-authority targets regardless of
+/// source — approving/planning is the advisor's triage decision. `InProgress` /
+/// `Done` are advisor-authority **only when the source is `Draft` or
+/// `NeedsAttention`** (advancing a never-triaged / punted spec straight into the
+/// execution pipeline is the intake-bypass the advisor gate exists to prevent);
+/// a spec *already* in the pipeline (e.g. `Approved → InProgress`, `InProgress →
+/// Done`) is an implementer-legitimate execution flip and stays allowed for
+/// everyone. `Completed` is **always** refused via MCP regardless of role — it
+/// is merge-driven (set by a `(SPEC-ID)` commit landing on the default branch),
+/// not a hand-set advisor act, so advisor authority does not unlock it.
+/// trace:BUG-449 trace:BUG-481 trace:BUG-486 | ai:claude
 fn mcp_status_gate_message(from: &RequirementStatus, to: &RequirementStatus) -> Option<String> {
-    match to {
-        RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
-            "Cannot set status to {to} via MCP: approving or planning a spec is the \
-             advisor's triage decision and needs advisor authority. File the spec and let the \
-             advisor promote it, or run the CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
-        )),
-        RequirementStatus::Completed => Some(format!(
+    mcp_status_gate_message_for(from, to, mcp_caller_has_advisor_authority())
+}
+
+/// Pure core of [`mcp_status_gate_message`] (BUG-486): the status-authority
+/// decision over an explicit `caller_is_advisor`, so the gate is unit-testable
+/// without mutating the process-global `AIDA_SESSION_ROLE` env. The wrapper
+/// resolves the caller's role via `mcp_caller_has_advisor_authority`.
+/// trace:BUG-486 | ai:claude
+fn mcp_status_gate_message_for(
+    from: &RequirementStatus,
+    to: &RequirementStatus,
+    caller_is_advisor: bool,
+) -> Option<String> {
+    // Completed is merge-driven, never hand-set via MCP — gate it before the
+    // advisor-authority check (advisor authority does not unlock it).
+    if matches!(to, RequirementStatus::Completed) {
+        return Some(format!(
             "Cannot set status to {to} via MCP: this is set automatically when a \
              (SPEC-ID) commit lands on the default branch (merge-driven auto-bump), not by hand. \
              Mark the work `done` and let the merge promote it."
+        ));
+    }
+
+    // BUG-486 single source of truth: the same (from, to) predicate the CLI's
+    // `aida edit --status` path consults. Approved/Planned from any source, and
+    // InProgress/Done from a Draft/NeedsAttention source, are advisor-authority
+    // acts; everything else is an implementer-legitimate flip.
+    if !crate::status_advance_requires_advisor_authority(from, to) {
+        return None;
+    }
+
+    // The transition needs advisor authority — an entered advisor role permits it
+    // (resolved by the caller through the SAME predicate the CLI uses).
+    // trace:BUG-486
+    if caller_is_advisor {
+        return None;
+    }
+
+    match to {
+        RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
+            "Cannot set status to {to} via MCP: approving or planning a spec is the \
+             advisor's triage decision and needs advisor authority. Enter an advisor role \
+             (role_enter advisor), file the spec and let the advisor promote it, or run the \
+             CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
         )),
-        // BUG-481: advancing an un-triaged spec (Draft) or a punted spec
-        // (NeedsAttention) directly into the execution pipeline is itself an
-        // advisor-authority act — it commits the spec to execution without the
-        // intake decision. Block it; a spec already in the pipeline flips
-        // InProgress/Done freely (the `_` source arm below returns None).
-        RequirementStatus::InProgress | RequirementStatus::Done
-            if matches!(
-                from,
-                RequirementStatus::Draft | RequirementStatus::NeedsAttention
-            ) =>
-        {
-            Some(format!(
-                "Cannot advance {from} → {to} via MCP: moving an un-triaged or punted spec \
-                 into the execution pipeline needs advisor authority. Let the advisor approve \
-                 it first (it will then flip to {to} as implementation proceeds), or run the \
-                 CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
-            ))
-        }
-        _ => None,
+        _ => Some(format!(
+            "Cannot advance {from} → {to} via MCP: moving an un-triaged or punted spec \
+             into the execution pipeline needs advisor authority. Enter an advisor role \
+             (role_enter advisor), let the advisor approve it first (it will then flip to \
+             {to} as implementation proceeds), or run the CLI as the advisor \
+             (AIDA_SESSION_ROLE=advisor)."
+        )),
     }
 }
 
@@ -10196,6 +10254,109 @@ mod tests {
         assert_eq!(
             store.get_requirement_by_spec_id(&spec).unwrap().status,
             RequirementStatus::Draft
+        );
+    }
+
+    /// BUG-486 (THE FIX): the MCP authority gate was role-blind — it refused the
+    /// advisor-gated status transitions (Draft → Approved/Planned, the
+    /// Draft/NeedsAttention → InProgress/Done bypass) and the queue_add/rework
+    /// cases UNCONDITIONALLY, ignoring the caller's role even when the MCP session
+    /// was a genuine advisor. The gate now routes its authority decision through
+    /// the SAME predicate the CLI uses (`status_advance_requires_advisor_authority`
+    /// + `advisor_authority_from`): an advisor caller is permitted, a non-advisor
+    /// caller is refused.
+    ///
+    /// This test exercises the pure cores (`mcp_status_gate_message_for` /
+    /// `mcp_queue_authority_message_for`) so the authority axis is injected, not
+    /// read from the process-global `AIDA_SESSION_ROLE` env. Against the
+    /// pre-BUG-486 gate (which took no authority param and refused regardless),
+    /// the `caller_is_advisor = true` assertions below are red; with the fix they
+    /// pass.
+    // trace:BUG-486 | ai:claude
+    #[test]
+    fn mcp_authority_gate_honors_advisor_role() {
+        use RequirementStatus::*;
+
+        // ---- Status gate: advisor-gated transitions ----
+        // The advisor-authority transitions the bug names.
+        let advisor_gated = [
+            (Draft, Approved),
+            (Draft, Planned),
+            (NeedsAttention, Approved),
+            (NeedsAttention, Planned),
+            (Draft, InProgress),
+            (Draft, Done),
+            (NeedsAttention, InProgress),
+            (NeedsAttention, Done),
+        ];
+        for (from, to) in advisor_gated {
+            // Non-advisor: refused with the existing guidance message.
+            let refused = mcp_status_gate_message_for(&from, &to, false)
+                .unwrap_or_else(|| panic!("{from} → {to} must be refused for a non-advisor"));
+            assert!(
+                refused.contains("advisor"),
+                "{from} → {to} refusal should mention advisor authority: {refused}"
+            );
+            // Advisor (role entered): PERMITTED, exactly as the CLI under
+            // AIDA_SESSION_ROLE=advisor. THIS is the BUG-486 regression: the old
+            // gate refused here too.
+            assert_eq!(
+                mcp_status_gate_message_for(&from, &to, true),
+                None,
+                "{from} → {to} must be PERMITTED for an advisor (BUG-486)"
+            );
+        }
+
+        // Completed stays merge-driven: refused regardless of role (advisor
+        // authority does not unlock it).
+        for advisor in [false, true] {
+            let msg = mcp_status_gate_message_for(&Draft, &Completed, advisor)
+                .expect("Completed via MCP is always refused (merge-driven)");
+            assert!(
+                msg.contains("merge") || msg.contains("(SPEC-ID)"),
+                "Completed refusal should explain merge-driven: {msg}"
+            );
+        }
+
+        // In-pipeline execution flips are implementer-legitimate for everyone —
+        // never gated, with or without advisor authority.
+        for (from, to) in [(Approved, InProgress), (InProgress, Done)] {
+            for advisor in [false, true] {
+                assert_eq!(
+                    mcp_status_gate_message_for(&from, &to, advisor),
+                    None,
+                    "{from} → {to} is an implementer-legitimate flip (advisor={advisor})"
+                );
+            }
+        }
+
+        // ---- Queue authority gate (queue_add / queue_rework) ----
+        // Non-advisor refused; advisor permitted (BUG-480/TASK-718 reconciled).
+        let refused = mcp_queue_authority_message_for(false)
+            .expect("queue_add/rework via MCP must be refused for a non-advisor");
+        assert!(refused.contains("advisor"), "queue refusal: {refused}");
+        assert_eq!(
+            mcp_queue_authority_message_for(true),
+            None,
+            "queue_add/rework must be PERMITTED for an advisor (BUG-486)"
+        );
+
+        // ---- The env-resolving wrapper agrees with the pure core ----
+        // mcp_caller_has_advisor_authority() reads AIDA_SESSION_ROLE; in the test
+        // process no advisor role is entered, so it resolves non-advisor and the
+        // public wrappers refuse — matching the headless / non-TTY default
+        // (acceptance #5).
+        assert!(
+            !mcp_caller_has_advisor_authority(),
+            "test process has no advisor role entered"
+        );
+        assert!(
+            mcp_status_gate_message(&Draft, &Approved).is_some(),
+            "public status gate refuses without an advisor role"
+        );
+        assert!(
+            mcp_queue_authority_message().is_some(),
+            "public queue gate refuses without an advisor role"
         );
     }
 

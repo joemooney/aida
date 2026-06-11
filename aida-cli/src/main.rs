@@ -58944,7 +58944,7 @@ fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
 /// the triage the punt exists to request. Execution flips from a source
 /// already in the pipeline (`Approved → InProgress → Done`) are NOT gated, so
 /// drains are unaffected. trace:BUG-482 | ai:claude
-fn status_advance_requires_advisor_authority(
+pub(crate) fn status_advance_requires_advisor_authority(
     from: &RequirementStatus,
     to: &RequirementStatus,
 ) -> bool {
@@ -59000,7 +59000,7 @@ fn resolve_human_only(req_type: &RequirementType, human_only: bool, no_human_onl
 /// token matching the live drain-state run, which a bare agent cannot forge, so
 /// the TASK-647/ADR-3 gate still blocks an un-orchestrated agent.
 /// trace:BUG-460 trace:TASK-647 | ai:claude
-fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
+pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
     role == "advisor" || is_tty || orchestrated
 }
 
