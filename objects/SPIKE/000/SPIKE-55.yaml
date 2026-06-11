@@ -14,12 +14,12 @@ description: |-
   5. Output a prioritized gap list (the missing-CLI-verb bucket-B skills) as candidate follow-up TASKs for the operator to approve — do not file them automatically.
 
   Composes with: STORY-556 (help grouping / surface restraint), STORY-82 (CLI<->MCP mirror), SPIKE-34 (claude-wrapper launcher pattern), the existing aida ultraplan/review-prompt/burndown-plan/goal/digest slices.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:14:29.138108056Z
-modified_at: 2026-06-11T06:14:29.138108056Z
+modified_at: 2026-06-11T07:04:28.223845185Z
 req_type: Spike
 tags:
 - aida:cli
