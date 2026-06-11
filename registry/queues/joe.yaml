@@ -611,3 +611,10 @@
   added_at: 2026-06-11T05:02:20.780902645Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019eb510-760a-73e0-a849-dfefa0ed5eb8
+  position: 392000
+  added_by: joe
+  added_at: 2026-06-11T05:03:47.400428838Z
+  for_role: implementer
+  added_by_machine: imac
