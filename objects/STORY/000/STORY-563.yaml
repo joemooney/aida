@@ -11,12 +11,12 @@ description: |-
   3. DETERMINISTIC + READ-ONLY: no writes, no LLM — a prompt-assembler. The advisor (the grooming skill / the live session) is the actor the prompt drives.
   4. Lives under the 'aida human' role-vector (SPIKE-57): the 'here's the prompt to clear the human-tier bottlenecks' verb, sibling to 'aida human' (view) + 'aida human home/away' (presence).
   5. Composes with: aida list human (STORY-562 view), aida backlog groom / questions sweep / aida-clarify (the actions the prompt invokes), STORY-558/560 (the eventual agentic versions — this is the deterministic bridge toward them).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T15:11:07.054062245Z
-modified_at: 2026-06-11T15:28:15.162221518Z
+modified_at: 2026-06-11T15:40:49.171647188Z
 req_type: Story
 tags:
 - aida:backlog
@@ -31,3 +31,15 @@ comments:
   content: Commit c76abb970 references this requirement
   created_at: 2026-06-11T15:28:15.162221518Z
   modified_at: 2026-06-11T15:28:15.162221518Z
+history:
+- id: 019eb757-dd20-72c1-b367-18c6a43464f0
+  author: aida-reconcile
+  timestamp: 2026-06-11T15:40:49.312808252Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T15:40:49.171647188Z
+  completion_sha: ff76d76584c7c07af22dfcaaf891e55778323c66
