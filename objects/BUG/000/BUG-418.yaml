@@ -8,12 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T18:09:56.788195263Z
-modified_at: 2026-06-06T04:16:07.576739878Z
+modified_at: 2026-06-11T02:36:19.012132274Z
 req_type: Bug
 tags:
 - aida:db:reconcile-status
 - from-self-test
 - needs-instrumentation
 - observation
-archived: true
-archived_at: 2026-06-06T04:16:07.576739878Z
