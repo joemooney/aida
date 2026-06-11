@@ -3028,10 +3028,51 @@ fn is_in_questions_sweep_scope(req: &Requirement, scope: QuestionSweepScope) -> 
         && scope.includes_status(&req.status)
 }
 
+/// BUG-495: types an autonomous agent never "implements" — strategic
+/// (`vision`), organizational (`folder`, `meta`), and knowledge-graph
+/// (`principle`, `term`) entries. Flagging them for "missing acceptance
+/// criteria" is noise, not signal: they will never be implementation
+/// candidates, so the gap is moot.
+// trace:BUG-495
+fn is_implementable_type(req_type: &RequirementType) -> bool {
+    !matches!(
+        req_type,
+        RequirementType::Vision
+            | RequirementType::Folder
+            | RequirementType::Meta
+            | RequirementType::Principle
+            | RequirementType::Term
+    )
+}
+
+/// BUG-495: a spec whose work is already built or in-flight — at/past Done,
+/// tagged `review:draft-only` (work done, awaiting human review), or holding
+/// an active lease — has a moot acceptance gap. Excluded from the
+/// missing-acceptance flag so the sweep fires only on genuinely-implementable,
+/// not-yet-built specs. `in_flight_scopes` is the lowercased lease-scope set
+/// from [`in_flight_lease_scopes`].
+// trace:BUG-495
+fn is_built_or_held(req: &Requirement, in_flight_scopes: &HashSet<String>) -> bool {
+    let at_or_past_done = matches!(
+        req.status,
+        RequirementStatus::Done | RequirementStatus::Completed
+    );
+    let draft_only = req.tags.iter().any(|t| {
+        t.trim()
+            .eq_ignore_ascii_case(crate::pr_ship::DRAFT_ONLY_TAG)
+    });
+    let leased = req
+        .spec_id
+        .as_ref()
+        .is_some_and(|id| in_flight_scopes.contains(&id.to_ascii_lowercase()));
+    at_or_past_done || draft_only || leased
+}
+
 fn question_sweep_candidate(
     req: &Requirement,
     all: &[Requirement],
     scope: QuestionSweepScope,
+    in_flight_scopes: &HashSet<String>,
 ) -> Option<QuestionSweepCandidate> {
     if !is_in_questions_sweep_scope(req, scope) || has_open_decision_request(req) {
         return None;
@@ -3042,7 +3083,14 @@ fn question_sweep_candidate(
 
     let text = requirement_text(req).to_ascii_lowercase();
     let has_acceptance = contains_any(&text, &["acceptance", "acceptance criteria", "acceptance:"]);
-    if !has_acceptance {
+    // BUG-495: the missing-acceptance flag only makes sense for specs an agent
+    // would actually implement and that aren't already built/in-flight.
+    // Strategic/organizational/knowledge types and built-or-held specs have a
+    // moot acceptance gap — excluding them strips false positives. trace:BUG-495
+    if !has_acceptance
+        && is_implementable_type(&req.req_type)
+        && !is_built_or_held(req, in_flight_scopes)
+    {
         return Some(QuestionSweepCandidate {
             reason: "missing acceptance criteria".to_string(),
         });
@@ -3355,10 +3403,17 @@ fn questions_sweep(
 ) -> Result<usize> {
     let scope = QuestionSweepScope::parse(raw_scope)?;
     let all = backend.list_requirements(false)?;
+    // BUG-495: exclude specs holding an active lease (work in-flight) from the
+    // missing-acceptance flag. Reuse the same live-lease detection the queue +
+    // session surfaces use, so the sweep and the rest of the system agree on
+    // what's in-flight. trace:BUG-495
+    let in_flight_scopes = find_project_root()
+        .map(|root| in_flight_lease_scopes(&root))
+        .unwrap_or_default();
     let mut candidates = Vec::new();
 
     for req in &all {
-        if let Some(candidate) = question_sweep_candidate(req, &all, scope) {
+        if let Some(candidate) = question_sweep_candidate(req, &all, scope, &in_flight_scopes) {
             candidates.push((req.display_id(), candidate));
         }
     }
@@ -3407,16 +3462,26 @@ fn questions_sweep(
 
     if apply {
         println!(
-            "{} {affected} decision request{} recorded.",
+            "{} attached a DecisionRequest to {affected} spec{} — each is parked from the burndown until its question is answered (`aida questions answer`).",
             "Done.".green().bold(),
             if affected == 1 { "" } else { "s" }
         );
     } else {
+        // BUG-495: name what --apply actually does. It attaches a DecisionRequest
+        // that PARKS the spec from the burndown (records the gap); it does NOT
+        // write or generate the missing acceptance criteria. Point at the real
+        // fix for a missing-acceptance flag so the two are not conflated.
+        // trace:BUG-495
         println!(
-            "{} {affected} spec{} would get a DecisionRequest — re-run with {} to write.",
+            "{} {affected} spec{} flagged. Re-run with {} to attach a DecisionRequest (parks each spec from the burndown until answered) — it does not write the missing acceptance criteria.",
             "Dry-run:".yellow().bold(),
             if affected == 1 { "" } else { "s" },
             "--apply".cyan()
+        );
+        println!(
+            "  {} to resolve a `missing acceptance criteria` flag, add a {} section to the spec.",
+            "Tip:".dimmed(),
+            "## Acceptance".cyan()
         );
     }
     Ok(affected)
@@ -3721,6 +3786,11 @@ mod questions_tests {
         }
     }
 
+    /// No active leases — the common case for the candidate-detection tests.
+    fn no_leases() -> HashSet<String> {
+        HashSet::new()
+    }
+
     #[test]
     fn sweep_scope_excludes_low_priority_archive_and_drafts() {
         let all = Vec::new();
@@ -3730,21 +3800,33 @@ mod questions_tests {
             "Acceptance: decide whether this should be built.",
         );
         low.priority = RequirementPriority::Low;
-        assert!(question_sweep_candidate(&low, &all, QuestionSweepScope::Backlog).is_none());
+        assert!(
+            question_sweep_candidate(&low, &all, QuestionSweepScope::Backlog, &no_leases())
+                .is_none()
+        );
 
         let mut archived = sample_requirement(
             "STORY-ARCHIVE",
             "Acceptance: decide whether this should be built.",
         );
         archived.archived = true;
-        assert!(question_sweep_candidate(&archived, &all, QuestionSweepScope::Backlog).is_none());
+        assert!(question_sweep_candidate(
+            &archived,
+            &all,
+            QuestionSweepScope::Backlog,
+            &no_leases()
+        )
+        .is_none());
 
         let mut draft = sample_requirement(
             "STORY-DRAFT",
             "Acceptance: decide whether this should be built.",
         );
         draft.status = RequirementStatus::Draft;
-        assert!(question_sweep_candidate(&draft, &all, QuestionSweepScope::Backlog).is_none());
+        assert!(
+            question_sweep_candidate(&draft, &all, QuestionSweepScope::Backlog, &no_leases())
+                .is_none()
+        );
     }
 
     #[test]
@@ -3753,7 +3835,8 @@ mod questions_tests {
             "STORY-DECIDE",
             "Acceptance: implement after operator decision needed on the design fork.",
         );
-        let candidate = question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog).unwrap();
+        let candidate =
+            question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog, &no_leases()).unwrap();
         assert_eq!(candidate.reason, "decision-marker text");
     }
 
@@ -3764,7 +3847,10 @@ mod questions_tests {
             "Acceptance: operator decision needed before implementation.",
         );
         req.decision_request = Some(sample_request());
-        assert!(question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog).is_none());
+        assert!(
+            question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog, &no_leases())
+                .is_none()
+        );
     }
 
     #[test]
@@ -3773,7 +3859,77 @@ mod questions_tests {
             "STORY-ADVISOR",
             "Acceptance: operator decision needed, but this is advisor-resolvable from a recorded principle.",
         );
-        assert!(question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog).is_none());
+        assert!(
+            question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog, &no_leases())
+                .is_none()
+        );
+    }
+
+    // BUG-495: the missing-acceptance flag is noise on types an agent never
+    // implements (vision/folder/meta/principle/term) and on specs already
+    // built or in-flight (Done/Completed, review:draft-only, or leased).
+    #[test]
+    fn sweep_missing_acceptance_excludes_non_implementable_types() {
+        for ty in [
+            RequirementType::Vision,
+            RequirementType::Principle,
+            RequirementType::Term,
+        ] {
+            // No acceptance section in the text, so the only thing keeping the
+            // flag from firing is the type exclusion.
+            let mut req =
+                sample_requirement("X-NOIMPL", "Strategic note. No criteria spelled out.");
+            req.req_type = ty.clone();
+            assert!(
+                question_sweep_candidate(&req, &[], QuestionSweepScope::Backlog, &no_leases())
+                    .is_none(),
+                "{ty:?} should be excluded from the missing-acceptance flag"
+            );
+        }
+
+        // Control: an implementable Story with no criteria still fires.
+        let story = sample_requirement("STORY-NOACC", "Build the thing. No criteria spelled out.");
+        let candidate =
+            question_sweep_candidate(&story, &[], QuestionSweepScope::Backlog, &no_leases())
+                .unwrap();
+        assert_eq!(candidate.reason, "missing acceptance criteria");
+    }
+
+    #[test]
+    fn sweep_missing_acceptance_excludes_built_or_held_specs() {
+        // review:draft-only — work done, awaiting human review.
+        let mut held =
+            sample_requirement("STORY-HELD", "Build the thing. No criteria spelled out.");
+        held.tags.insert("review:draft-only".to_string());
+        assert!(
+            question_sweep_candidate(&held, &[], QuestionSweepScope::All, &no_leases()).is_none(),
+            "review:draft-only specs should be excluded"
+        );
+
+        // Active lease — work in-flight.
+        let leased =
+            sample_requirement("STORY-LEASED", "Build the thing. No criteria spelled out.");
+        let mut leases = HashSet::new();
+        leases.insert("story-leased".to_string());
+        assert!(
+            question_sweep_candidate(&leased, &[], QuestionSweepScope::Backlog, &leases).is_none(),
+            "leased specs should be excluded"
+        );
+
+        // Sanity: the same spec WITHOUT a lease and not draft-only DOES fire,
+        // proving the exclusions above are doing the work.
+        let plain = sample_requirement("STORY-PLAIN", "Build the thing. No criteria spelled out.");
+        let candidate =
+            question_sweep_candidate(&plain, &[], QuestionSweepScope::Backlog, &no_leases())
+                .unwrap();
+        assert_eq!(candidate.reason, "missing acceptance criteria");
+
+        // Done — work finished on a branch (built). Backlog scope already drops
+        // Done, but assert the built-or-held guard holds directly too.
+        let mut done =
+            sample_requirement("STORY-DONE", "Build the thing. No criteria spelled out.");
+        done.status = RequirementStatus::Done;
+        assert!(is_built_or_held(&done, &no_leases()));
     }
 
     #[test]
