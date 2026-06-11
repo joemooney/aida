@@ -1,0 +1,52 @@
+id: 019eb6c1-d4f3-7fb3-ba90-94be19cbd9e2
+spec_id: STORY-559
+agreed_id: STORY-559
+title: 'aida advisor overview: read-only advisor situational dashboard (intake + disposition + queue + in-flight + live sessions)'
+description: |-
+  ## Idea (operator, 2026-06-11)
+
+  Discoverability gap: the advisor's tools are scattered (triage, backlog, questions, findings, burndown, sessions). No single orienting surface answers 'what is the advisor's world right now + what should I act on'. Operator wants `aida advisor overview` (or `status`) as a launchpad that ALSO surfaces live sessions and other advisor-interesting state.
+
+  ## Naming
+
+  `aida advisor status` is ALREADY taken (narrow: live-advisor registration + estimated $/fork). New comprehensive dashboard = `aida advisor overview` (subsumes the registration line so it's the superset). Decide whether `status` stays narrow or aliases into `overview`.
+
+  ## Shape — a read-only LAUNCHPAD, not an alias maze
+
+  One screen: each row = a count + the canonical command to act. Pure AGGREGATION of existing surfaces (reuse their queries; do NOT reimplement). Sections:
+
+  - **Live advisor**: registered? alive? fork-vs-coldboot readiness (the existing `advisor status` data).
+  - **Intake**: N drafts to triage → `/aida-triage`.
+  - **Decisions**: N pending questions → `aida questions`.
+  - **Findings**: N awaiting triage (incl shelved / needs-attention) → `aida findings list`.
+  - **Backlog**: N approved-not-queued → `aida backlog list` / `groom`.
+  - **Burndown readiness**: N ready (queued+pickable) / M awaiting sign-off / K parked → `aida burndown plan`.
+  - **Queue**: depth + in-flight (Done-awaiting-merge).
+  - **Live sessions** (operator explicitly asked): active leases — who holds what scope right now → `aida session leases`. Flag any session whose spec is archived/rejected (catches the contradictory states like BUG-492).
+
+  ## Acceptance
+
+  - [ ] `aida advisor overview` prints the read-only dashboard above; each section shows a count + the command to act on it (launchpad, not a parallel command tree).
+  - [ ] Aggregates EXISTING surfaces (questions / findings / backlog / burndown plan / queue / session leases / advisor status) — reuse their data sources, no reimplemented counts.
+  - [ ] **Live sessions** section surfaces `aida session leases` (who holds what scope now); flags a lease whose spec is in a contradictory state (archived / rejected / completed).
+  - [ ] Includes the registration line so `overview` is a superset of `status`; decide whether `status` aliases to it.
+  - [ ] `--json` for machine consumers.
+  - [ ] Scope-aware: a subsystem advisor sees their scope (forward-looking for SPIKE-10); whole-project by default.
+  - [ ] Read-only — no writes, no auto-queue, no auto-approve.
+
+  ## Rationale
+
+  Orients a (possibly confused) advisor in one glance and routes them to the real verbs — the role-clarity 'surface the concept + a sensible default' answer, WITHOUT the surface slop of aliasing every advisor command. Complements STORY-558 (burndown-prep acts on the readiness this surfaces).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T12:56:56.819515609Z
+modified_at: 2026-06-11T12:56:56.819515609Z
+req_type: Story
+tags:
+- advisor
+- from-product
+- from-user-friction
+- observability
+- onboarding-flow
