@@ -91,6 +91,18 @@ it Completed, and pull. **Hold (do not merge) any PR whose spec is
 `review:draft-only`** — leave it a draft for the operator. On a merge conflict,
 have the agent rebase (`git merge origin/main`, resolve, push).
 
+**Verify the integrated `main` before looping (BUG-496).** After a wave's PRs
+are merged, the merges are *integrated but un-tested together* — each PR's CI ran
+against the **old** base, not the post-merge result, so two PRs that were green
+alone can break `main` **together** (the squash-merge parallel-integration
+hazard). So once a wave's PRs are merged: `git checkout main && git pull
+--ff-only && cargo build -p aida-cli` (a quick compile is enough to catch the
+usual integration breaks — a signature/import/type mismatch). **If it fails,
+HALT the drain** — do **not** launch the next wave, and do **not** report
+success. Fix-forward the break if it's mechanical, else park it and alert the
+operator with the build error. **Never loop, and never declare "complete," over
+a red `main`** — "every PR was green" is not "main is green" for a parallel wave.
+
 ### 4. Punt-and-continue (non-negotiable)
 
 A blocker parks **one** spec — tag it + leave a note — and the pipeline rolls
@@ -115,8 +127,12 @@ operator.
 - **The gate is law.** Never fan out a spec `aida burndown plan` put in `parked`
   — it's parked because it needs a human (epic to decompose, pending decision,
   unsatisfied blocker, or a parking tag).
-- **CI gates `main`.** A bad change parks (CI red → no merge); it never reaches
-  `main`. That's what lets the integrator merge greens without re-reviewing each.
+- **CI gates each PR — the integrated-`main` verify gates the wave.** A bad
+  change parks (CI red → no merge), so no *single* bad PR reaches `main`. But CI
+  ran each PR against the *old* base, so a parallel wave can still break `main`
+  *together* (BUG-496) — the per-wave `cargo build` on integrated `main` (step 3)
+  is what catches that. Both gates together are what let the integrator merge
+  greens without re-reviewing each.
 - **Keep at the keyboard, not the drain:** releases/tags and changes to the
   autonomy machinery itself (the orchestrator, this runner) ship supervised — a
   fix riding through a broken drain gets caught in the breakage.
