@@ -27,12 +27,12 @@ description: |-
   ## Remediation (separate)
 
   128 Approved specs are currently wrongly archived; the 4 queued ones are unambiguously wrong. Unarchive scope is an operator decision (some archived-approved may have been intentional shelving).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T02:25:42.486512931Z
-modified_at: 2026-06-11T02:30:56.445464472Z
+modified_at: 2026-06-11T04:35:15.260685354Z
 req_type: Bug
 tags:
 - aida:archive
