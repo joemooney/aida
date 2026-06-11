@@ -4628,13 +4628,20 @@ pub enum AdvisorCommand {
     /// registered.
     Unregister,
 
-    /// Show what's registered and whether it looks alive. Also surfaces an
-    /// estimated $/fork at the current source JSONL size.
+    /// The advisor's read-only situational dashboard — one screen of counts,
+    /// each row pointing at the canonical command to act on it: live-advisor
+    /// readiness, intake drafts, pending decisions, findings, backlog,
+    /// burndown readiness, queue depth, and live sessions. Pure aggregation of
+    /// existing surfaces; writes nothing.
     Status {
-        /// Emit `{registered, uuid, alive, ...}` as JSON instead of the
-        /// human summary.
+        /// Emit the dashboard as JSON instead of the human summary.
         #[clap(long)]
         json: bool,
+
+        /// Show only the narrow live-advisor registration block (the
+        /// pre-dashboard output) — back-compat for muscle memory and scripts.
+        #[clap(long)]
+        registration: bool,
     },
 
     /// Recurring maintenance/research tasks that land in the queue on a
