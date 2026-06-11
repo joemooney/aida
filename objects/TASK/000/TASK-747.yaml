@@ -3,12 +3,12 @@ spec_id: TASK-747
 agreed_id: TASK-747
 title: '**Phase 3: `--for human` queue routing.** Accept `human` as a `QueueEntry::for_role` target; union explicitly-routed with derived membership in the view. Establishes `human` as a first-class route target symmetric with agent roles'
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T14:27:18.380198985Z
-modified_at: 2026-06-11T15:33:17.662486877Z
+modified_at: 2026-06-11T15:41:09.419071215Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,15 @@ comments:
   content: Commit 8ed0bf581 references this requirement
   created_at: 2026-06-11T15:33:17.662486877Z
   modified_at: 2026-06-11T15:33:17.662486877Z
+history:
+- id: 019eb758-2c37-7771-b548-cfda3011d453
+  author: aida-reconcile
+  timestamp: 2026-06-11T15:41:09.559778098Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T15:41:09.419071215Z
+  completion_sha: 77a2229afd0a31406828433d825a256cebcd3185
