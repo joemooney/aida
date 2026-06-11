@@ -5584,12 +5584,13 @@ fn handle_archive_command(
     status_csv: Option<&str>,
     dry_run: bool,
     force: bool,
+    verbose: bool,
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
 ) -> Result<()> {
     match (id, older_than) {
         (Some(id), None) => archive_single(id, force, backend, store_path),
-        (None, Some(dur)) => archive_sweep(dur, status_csv, dry_run, force, backend),
+        (None, Some(dur)) => archive_sweep(dur, status_csv, dry_run, force, verbose, backend),
         (Some(_), Some(_)) => {
             // Clap's `conflicts_with` should catch this — but defend in depth.
             anyhow::bail!("--older-than cannot be used with a positional SPEC-ID");
@@ -5692,6 +5693,7 @@ fn archive_sweep(
     status_csv: Option<&str>,
     dry_run: bool,
     force: bool,
+    verbose: bool,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
     let cutoff = parse_since_arg(duration)
@@ -5796,17 +5798,27 @@ fn archive_sweep(
     // BUG-425: collect the mutations, then commit them all in ONE store commit
     // via `bulk_update`, instead of one git commit per spec. A 679-spec sweep
     // used to make 679 commits (minutes of git, burying the store history);
-    // now it's a single fast commit, so the throttled per-spec progress
-    // (TASK-616) is no longer needed. The collection loop only reads YAMLs
-    // (no commits), so it's quick even for a large sweep.
-    // trace:BUG-425 | ai:claude
+    // now it's a single fast commit. trace:BUG-425 | ai:claude
+    //
+    // BUG-497: BUG-425's premise ("single fast commit → no per-spec progress
+    // needed") breaks at scale — the collection loop reads N YAMLs and the
+    // bulk_update writes + commits N files, which is multi-second silence on a
+    // 200+ spec sweep that looks hung. Restore a THROTTLED tick (every ~250ms
+    // or every K specs) for large sweeps; small sweeps stay quiet. All
+    // progress goes to stderr so stdout stays clean for pipe consumers.
+    // trace:BUG-497 | ai:claude
+    const PROGRESS_THRESHOLD: usize = 50;
+    const PROGRESS_EVERY: usize = 25;
+    let progress_interval = std::time::Duration::from_millis(250);
+    let show_progress = total > PROGRESS_THRESHOLD;
     eprintln!(
         "{} {total} spec(s) older than {duration} (status in {})…",
         "Archiving:".cyan().bold(),
         statuses.join(",")
     );
     let mut to_archive = Vec::with_capacity(total);
-    for s in &eligible {
+    let mut last_tick = std::time::Instant::now();
+    for (i, s) in eligible.iter().enumerate() {
         let display_id = s
             .agreed_id
             .as_deref()
@@ -5822,6 +5834,16 @@ fn archive_sweep(
         req.archived = true;
         req.archived_at = Some(now);
         req.modified_at = now;
+        if verbose {
+            eprintln!("  [{}/{}] {display_id}", i + 1, total);
+        } else if show_progress
+            && (i + 1 == total
+                || (i + 1) % PROGRESS_EVERY == 0
+                || last_tick.elapsed() >= progress_interval)
+        {
+            eprintln!("  {} [{}/{}]", "…".dimmed(), i + 1, total);
+            last_tick = std::time::Instant::now();
+        }
         to_archive.push(req);
         record_role_activity(&display_id, "archive");
     }
@@ -11515,6 +11537,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             status,
             dry_run,
             force,
+            verbose,
         } => {
             // STORY-441: archive a single spec OR bulk-sweep over closed
             // work matching the duration + status filter. trace:STORY-441
@@ -11525,6 +11548,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 status.as_deref(),
                 *dry_run,
                 *force,
+                *verbose,
                 &backend,
                 store_path,
             )?;
