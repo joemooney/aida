@@ -1155,6 +1155,13 @@ fn run() -> Result<()> {
         return handle_why(id, *json);
     }
 
+    // STORY-563: `aida human unblock` self-loads the store like `aida why` /
+    // `burndown explain` — dispatch early, no shared storage handle needed.
+    // trace:STORY-563 | ai:claude
+    if let Command::Human(human_cmd) = &cli.command {
+        return handle_human_command(human_cmd);
+    }
+
     // Doctor commands run before storage init — they may need to operate
     // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
     if let Command::Doctor {
@@ -1991,6 +1998,7 @@ fn run() -> Result<()> {
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
+        Command::Human(_) => unreachable!("human is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -9683,6 +9691,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
+        Command::Human(_) => unreachable!("human is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -65634,6 +65643,10 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
             &[
                 ("queue", "Personal work queue"),
                 ("backlog", "Backlog grooming views"),
+                (
+                    "human",
+                    "Human-attention views + the unblock grooming prompt",
+                ),
                 ("rework", "Send a spec back for rework"),
                 ("burndown", "Autonomous backlog burn-down"),
                 ("findings", "Triage findings filed by drain phases"),
@@ -67827,6 +67840,198 @@ fn handle_list_human(short: bool) -> Result<()> {
         "\n  {} findings awaiting triage: `aida findings list` · decision inbox: `aida questions list`",
         "↳".dimmed()
     );
+    Ok(())
+}
+
+/// STORY-563: build [`burndown::UnblockFacts`] for every open spec — the input
+/// to the `aida human unblock` classifier. Mirrors [`collect_open_facts`] but
+/// adds the three signals the unblock lens needs that the explain lens doesn't:
+/// queue membership (advisor sign-off, ADR-3), acceptance-criteria presence,
+/// and implementable-type. Read-only. trace:STORY-563 | ai:claude
+fn collect_unblock_facts(
+    store: &aida_core::RequirementsStore,
+    in_flight_scopes: &std::collections::HashSet<String>,
+    queued_ids: &std::collections::HashSet<uuid::Uuid>,
+) -> Vec<burndown::UnblockFacts> {
+    let norm = |s: &str| -> String {
+        s.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect::<String>()
+            .to_ascii_lowercase()
+    };
+    let mut facts = Vec::new();
+    for req in &store.requirements {
+        if req.archived {
+            continue;
+        }
+        // "Open" = not yet terminal. Completed/Rejected are done with.
+        if matches!(
+            req.status,
+            aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+        ) {
+            continue;
+        }
+        let id = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        let in_flight = !in_flight_scopes.is_empty()
+            && [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| in_flight_scopes.contains(&s.to_ascii_lowercase()));
+        // Acceptance presence — same text scan the questions-sweep uses (BUG-495).
+        let text = requirement_text(req).to_ascii_lowercase();
+        let has_acceptance =
+            contains_any(&text, &["acceptance", "acceptance criteria", "acceptance:"]);
+        facts.push(burndown::UnblockFacts {
+            id,
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+            status: norm(&format!("{:?}", req.status)),
+            tags: req.tags.iter().cloned().collect(),
+            has_unsatisfied_blocker: aida_core::pickability::blocked_by_incomplete(req, store),
+            has_pending_decision: req
+                .decision_request
+                .as_ref()
+                .map(|d| d.is_pending())
+                .unwrap_or(false),
+            in_flight,
+            queued: queued_ids.contains(&req.id),
+            has_acceptance,
+            implementable: is_implementable_type(&req.req_type),
+        });
+    }
+    facts
+}
+
+/// STORY-563: `aida human unblock` — the deterministic prompt-assembler that
+/// ends the recurring "how do I get open items into the burndown?" question by
+/// GENERATING the grooming question. Read-only + no LLM (the SPIKE-55
+/// deterministic-slice pattern, like `aida ultraplan` / `aida goal`): classify
+/// every open spec by what keeps it out of the burndown ready set, then assemble
+/// a paste-ready advisor prompt that routes each to queue / clarify-first /
+/// leave-parked. The advisor (the grooming skill / live session) is the actor
+/// the prompt drives. trace:STORY-563 | ai:claude
+fn handle_human_command(cmd: &cli::HumanCommand) -> Result<()> {
+    match cmd {
+        cli::HumanCommand::Unblock { copy, stdout, json } => {
+            handle_human_unblock(*copy, *stdout, *json)
+        }
+    }
+}
+
+/// STORY-563: the `aida human unblock` body. trace:STORY-563 | ai:claude
+fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let queued_ids = all_queued_requirement_ids(&project_root);
+    let facts = collect_unblock_facts(&store, &in_flight_scopes, &queued_ids);
+
+    // Classify each open spec, dropping the ones already in the burndown ready
+    // set (nothing for the human to do). Preserve store order. trace:STORY-563
+    let lines: Vec<burndown::UnblockLine> = facts
+        .iter()
+        .filter_map(|f| {
+            burndown::classify_unblock(f).map(|class| burndown::UnblockLine {
+                id: f.id.clone(),
+                class,
+                reason: burndown::unblock_reason(class).to_string(),
+            })
+        })
+        .collect();
+
+    // --json: the classification, for machine consumers / the TUI.
+    if json {
+        let payload = lines
+            .iter()
+            .map(|l| {
+                let action = match l.class.action() {
+                    burndown::UnblockAction::Queue => "queue",
+                    burndown::UnblockAction::Clarify => "clarify",
+                    burndown::UnblockAction::Leave => "leave",
+                };
+                serde_json::json!({
+                    "spec": l.id,
+                    "class": l.class.key(),
+                    "action": action,
+                    "reason": l.reason,
+                })
+            })
+            .collect::<Vec<_>>();
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    let prompt = burndown::assemble_unblock_prompt(&lines);
+
+    // --stdout: the bare prompt only, for piping / command substitution.
+    if stdout {
+        print!("{prompt}");
+        return Ok(());
+    }
+
+    // --copy: prompt to the clipboard, falling back to stdout.
+    if copy {
+        if copy_to_clipboard(&prompt) {
+            println!(
+                "{} copied the grooming prompt to the clipboard — paste it to the advisor",
+                "✓".green()
+            );
+        } else {
+            println!(
+                "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
+                "⚠".yellow()
+            );
+            println!();
+            print!("{prompt}");
+        }
+        return Ok(());
+    }
+
+    // Default: framed terminal output. Headline the count + the three actions,
+    // then the assembled prompt set apart so the operator knows exactly what to
+    // paste. trace:STORY-563
+    let counts = |want: burndown::UnblockAction| -> usize {
+        lines.iter().filter(|l| l.class.action() == want).count()
+    };
+    let n_queue = counts(burndown::UnblockAction::Queue);
+    let n_clarify = counts(burndown::UnblockAction::Clarify);
+    let n_leave = counts(burndown::UnblockAction::Leave);
+
+    println!("{} grooming prompt for the advisor", "▸".cyan().bold());
+    if lines.is_empty() {
+        println!(
+            "  {}",
+            "Nothing to groom — every open spec is either already in the burndown \
+             or self-resolving."
+                .dimmed()
+        );
+        return Ok(());
+    }
+    println!(
+        "  {} {} to queue · {} to clarify first · {} to leave parked",
+        "→".green(),
+        n_queue,
+        n_clarify,
+        n_leave
+    );
+    println!(
+        "  {}",
+        "Paste the block below to the advisor (or --copy it / --stdout to pipe):".dimmed()
+    );
+    println!();
+    for line in prompt.lines() {
+        println!("  {}", line.dimmed());
+    }
     Ok(())
 }
 

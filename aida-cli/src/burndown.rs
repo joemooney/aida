@@ -392,6 +392,273 @@ pub(crate) fn explain_reasons(f: &OpenFacts) -> (OpenBucket, Vec<Reason>) {
     (bucket, reasons)
 }
 
+/// STORY-563: the classification of an open spec by WHAT keeps it out of the
+/// burndown ready set — the lens `aida human unblock` groups by. Where
+/// [`explain_open`] answers "why is this still open?" for every open spec,
+/// `classify_unblock` answers the narrower operator question "what do I, the
+/// human, have to DO to move this into the burndown?". The buckets map onto
+/// three actions: queue it, clarify it first, or leave it parked. trace:STORY-563
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnblockClass {
+    /// Draft — needs advisor approval before it can be queued.
+    NeedsApproval,
+    /// Approved + bounded + unblocked + decision-free, but not yet queued —
+    /// the advisor can queue it straight into the burndown.
+    ApprovedUnqueued,
+    /// Implementable but missing acceptance criteria — clarify FIRST.
+    UnderSpecified,
+    /// Built/in-progress work that wants the at-keyboard `--zen` lane, not an
+    /// unattended drain — leave parked.
+    BuildSupervised,
+    /// Parked on a human decision (pending DecisionRequest / design-signoff /
+    /// operator-action / NeedsAttention triage) — leave parked.
+    DecisionPending,
+    /// Deliberately deferred (`deferred:<why>`) — leave parked.
+    Deferred,
+    /// Blocked by an unsatisfied dependency — leave parked until it clears.
+    BlockedBy,
+}
+
+impl UnblockClass {
+    /// Stable kebab-case key for JSON / grouping.
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            UnblockClass::NeedsApproval => "needs-approval",
+            UnblockClass::ApprovedUnqueued => "approved-unqueued",
+            UnblockClass::UnderSpecified => "under-specified",
+            UnblockClass::BuildSupervised => "build-supervised",
+            UnblockClass::DecisionPending => "decision-pending",
+            UnblockClass::Deferred => "deferred",
+            UnblockClass::BlockedBy => "blocked-by",
+        }
+    }
+
+    /// The grooming action the paste-ready prompt asks the advisor to take.
+    pub(crate) fn action(self) -> UnblockAction {
+        match self {
+            // Both of these can move into the burndown now.
+            UnblockClass::NeedsApproval | UnblockClass::ApprovedUnqueued => UnblockAction::Queue,
+            // Author acceptance criteria first, THEN it becomes queueable.
+            UnblockClass::UnderSpecified => UnblockAction::Clarify,
+            // Everything else stays parked — a human keyboard, a decision, a
+            // dependency, or a deliberate deferral has to happen first.
+            UnblockClass::BuildSupervised
+            | UnblockClass::DecisionPending
+            | UnblockClass::Deferred
+            | UnblockClass::BlockedBy => UnblockAction::Leave,
+        }
+    }
+}
+
+/// STORY-563: the three grooming actions the prompt routes each spec to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnblockAction {
+    /// Queue it straight into the burndown.
+    Queue,
+    /// Clarify (author acceptance criteria) first.
+    Clarify,
+    /// Leave parked.
+    Leave,
+}
+
+/// STORY-563: already-probed facts about one open spec, for the unblock lens.
+/// Pure inputs so [`classify_unblock`] is exhaustively unit-testable. The caller
+/// (`main.rs`) probes the store/queue/graph to build these. trace:STORY-563
+#[derive(Debug, Clone)]
+pub(crate) struct UnblockFacts {
+    /// Display SPEC-ID.
+    pub id: String,
+    /// Lowercased requirement type (`task`, `story`, `epic`, …).
+    pub req_type: String,
+    /// Normalized status key (`draft`, `approved`, `inprogress`, `done`, …).
+    pub status: String,
+    /// The spec's tags.
+    pub tags: Vec<String>,
+    /// A `BlockedBy` edge points at a not-yet-Completed spec.
+    pub has_unsatisfied_blocker: bool,
+    /// Carries a pending `DecisionRequest`.
+    pub has_pending_decision: bool,
+    /// A live session lease's scope matches this spec.
+    pub in_flight: bool,
+    /// The spec is already in some user's queue (advisor sign-off, ADR-3).
+    pub queued: bool,
+    /// The spec text carries acceptance criteria (only meaningful for
+    /// implementable, not-yet-built types).
+    pub has_acceptance: bool,
+    /// Implementable type (not vision/folder/meta/principle/term) for which a
+    /// missing-acceptance gap is real signal, not noise (BUG-495).
+    pub implementable: bool,
+}
+
+impl UnblockFacts {
+    /// True for the items already inside the burndown ready set — queued AND
+    /// actionable (approved, bounded, unblocked, decision-free, has acceptance).
+    /// These are EXCLUDED from `aida human unblock`: the human has nothing left
+    /// to do for them. trace:STORY-563
+    pub(crate) fn in_burndown_ready_set(&self) -> bool {
+        self.queued
+            && self.status == "approved"
+            && !self.has_unsatisfied_blocker
+            && !self.has_pending_decision
+            && !self.in_flight
+            && !self.req_type.eq_ignore_ascii_case("epic")
+            && self.has_acceptance
+            && parking_tag(&self.tags).is_none()
+    }
+}
+
+/// STORY-563: classify one open spec by what keeps it out of the burndown
+/// ready set, or `None` if it's already in the ready set (nothing for the human
+/// to do). Precedence runs the "leave parked" hard blockers first (decision /
+/// blocker / deferral / in-flight) so the most fundamental reason wins, then the
+/// human-actionable buckets (clarify, approve, queue). Pure + testable.
+/// trace:STORY-563 | ai:claude
+pub(crate) fn classify_unblock(f: &UnblockFacts) -> Option<UnblockClass> {
+    if f.in_burndown_ready_set() {
+        return None;
+    }
+    let has_tag =
+        |name: &str| -> bool { f.tags.iter().any(|t| t.trim().eq_ignore_ascii_case(name)) };
+
+    // --- LEAVE-PARKED blockers, most-fundamental first. ---
+    // A pending human decision (request, design-signoff, operator-action,
+    // needs-human, or NeedsAttention triage) parks the spec.
+    if f.has_pending_decision || f.status == "needsattention" {
+        return Some(UnblockClass::DecisionPending);
+    }
+    for t in &f.tags {
+        let lo = t.trim().to_ascii_lowercase();
+        if lo == "needs-design-signoff"
+            || lo == "needs-design"
+            || lo == "operator-action"
+            || lo == "needs-human"
+            || lo == "needs-human-input"
+        {
+            return Some(UnblockClass::DecisionPending);
+        }
+    }
+    // Deliberately deferred.
+    if f.tags
+        .iter()
+        .any(|t| t.trim().to_ascii_lowercase().starts_with("deferred:"))
+    {
+        return Some(UnblockClass::Deferred);
+    }
+    // Blocked by an unsatisfied dependency.
+    if f.has_unsatisfied_blocker || has_tag("blocked") {
+        return Some(UnblockClass::BlockedBy);
+    }
+    // In-flight or built-and-in-progress work belongs to the at-keyboard
+    // `--zen` lane, not an unattended drain — leave it for the human.
+    if f.in_flight || f.status == "inprogress" || f.status == "done" {
+        return Some(UnblockClass::BuildSupervised);
+    }
+    // Epics are umbrellas — they get decomposed, not queued; treat that as a
+    // decision the human owns.
+    if f.req_type.eq_ignore_ascii_case("epic") {
+        return Some(UnblockClass::DecisionPending);
+    }
+
+    // --- HUMAN-ACTIONABLE buckets. ---
+    // Implementable but under-specified — clarify BEFORE it can be queued.
+    if f.implementable && !f.has_acceptance {
+        return Some(UnblockClass::UnderSpecified);
+    }
+    // Draft — needs advisor approval before queuing.
+    if f.status == "draft" {
+        return Some(UnblockClass::NeedsApproval);
+    }
+    // Approved, bounded, unblocked, decision-free, has acceptance — but not yet
+    // queued. The advisor can queue it straight into the burndown.
+    Some(UnblockClass::ApprovedUnqueued)
+}
+
+/// STORY-563: one classified line for the prompt — the spec id, its class, and
+/// a one-line reason. Built by the caller from [`classify_unblock`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UnblockLine {
+    pub id: String,
+    pub class: UnblockClass,
+    pub reason: String,
+}
+
+/// STORY-563: a one-line human-readable reason for each unblock class — the
+/// `WHAT keeps it out` text the prompt and the human view both print. Pure.
+/// trace:STORY-563 | ai:claude
+pub(crate) fn unblock_reason(class: UnblockClass) -> &'static str {
+    match class {
+        UnblockClass::NeedsApproval => "draft — needs advisor approval before it can be queued",
+        UnblockClass::ApprovedUnqueued => {
+            "approved, bounded & unblocked — queueable straight into the burndown"
+        }
+        UnblockClass::UnderSpecified => "missing acceptance criteria — clarify before queuing",
+        UnblockClass::BuildSupervised => {
+            "in progress / in flight — wants the at-keyboard `--zen` lane, not an unattended drain"
+        }
+        UnblockClass::DecisionPending => {
+            "awaiting a human decision — answer via `aida questions` / decompose / triage"
+        }
+        UnblockClass::Deferred => "deliberately deferred",
+        UnblockClass::BlockedBy => "blocked by an unsatisfied dependency (BlockedBy)",
+    }
+}
+
+/// STORY-563: assemble the PASTE-READY advisor prompt from the classified set.
+/// DETERMINISTIC + side-effect-free — this is the SPIKE-55 prompt-assembler
+/// pattern (like `aida ultraplan` / `aida goal`): no LLM in the CLI, just turn
+/// store state into an instruction the advisor (the grooming skill / live
+/// session) executes. The prompt tells the advisor to QUEUE the autonomous-able,
+/// CLARIFY the under-specified first, and LEAVE parked the rest, with one line +
+/// spec-id + reason each. trace:STORY-563 | ai:claude
+pub(crate) fn assemble_unblock_prompt(lines: &[UnblockLine]) -> String {
+    let by_action = |want: UnblockAction| -> Vec<&UnblockLine> {
+        lines.iter().filter(|l| l.class.action() == want).collect()
+    };
+    let queue = by_action(UnblockAction::Queue);
+    let clarify = by_action(UnblockAction::Clarify);
+    let leave = by_action(UnblockAction::Leave);
+
+    let mut out = String::new();
+    out.push_str(
+        "Groom these open specs into the burndown. For each, take exactly the action below — \
+         queue the autonomous-able, clarify the under-specified FIRST (author acceptance criteria \
+         before queuing), and LEAVE the rest parked (they need a human keyboard, a decision, a \
+         dependency, or a deliberate deferral first).\n",
+    );
+
+    let section = |out: &mut String, title: &str, verb: &str, rows: &[&UnblockLine]| {
+        out.push('\n');
+        if rows.is_empty() {
+            out.push_str(&format!("{title}: (none)\n"));
+            return;
+        }
+        out.push_str(&format!("{title} ({verb}):\n"));
+        for l in rows {
+            out.push_str(&format!("  - {} — {}\n", l.id, l.reason));
+        }
+    };
+
+    section(
+        &mut out,
+        "QUEUE",
+        "aida queue add <id> — moves it into the burndown ready set",
+        &queue,
+    );
+    section(
+        &mut out,
+        "CLARIFY FIRST",
+        "add a ## Acceptance section (or run /aida-clarify), THEN queue",
+        &clarify,
+    );
+    section(
+        &mut out,
+        "LEAVE PARKED",
+        "do not queue — resolve the blocker / decision / deferral first",
+        &leave,
+    );
+    out
+}
+
 /// BUG-493: the observed forge state of a `review:draft-only` spec's PR, as
 /// probed by the caller (cheap for a single-spec `aida why`, too expensive for
 /// the bulk `burndown explain`). Lets [`reconcile_held_for_review`] tell the
@@ -852,5 +1119,311 @@ mod tests {
         assert_eq!(ReasonSource::Derived.key(), "derived");
         assert_eq!(ReasonSource::Finding.key(), "finding");
         assert_eq!(ReasonSource::Residual.key(), "residual");
+    }
+
+    // ---- STORY-563: `aida human unblock` classifier + prompt assembler. ----
+
+    #[allow(clippy::too_many_arguments)]
+    fn ufacts(
+        id: &str,
+        req_type: &str,
+        status: &str,
+        tags: &[&str],
+        blocked: bool,
+        decision: bool,
+        in_flight: bool,
+        queued: bool,
+        has_acceptance: bool,
+        implementable: bool,
+    ) -> UnblockFacts {
+        UnblockFacts {
+            id: id.to_string(),
+            req_type: req_type.to_string(),
+            status: status.to_string(),
+            tags: tags.iter().map(|s| s.to_string()).collect(),
+            has_unsatisfied_blocker: blocked,
+            has_pending_decision: decision,
+            in_flight,
+            queued,
+            has_acceptance,
+            implementable,
+        }
+    }
+
+    #[test]
+    fn unblock_ready_set_item_is_excluded() {
+        // Queued, approved, unblocked, decision-free, has acceptance, bounded.
+        let f = ufacts(
+            "TASK-1",
+            "task",
+            "approved",
+            &[],
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+        );
+        assert!(f.in_burndown_ready_set());
+        assert_eq!(classify_unblock(&f), None);
+    }
+
+    #[test]
+    fn unblock_draft_needs_approval() {
+        // Draft with acceptance — needs approval, not under-specified.
+        let f = ufacts(
+            "STORY-1",
+            "story",
+            "draft",
+            &[],
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(classify_unblock(&f), Some(UnblockClass::NeedsApproval));
+    }
+
+    #[test]
+    fn unblock_approved_unqueued_is_queueable() {
+        let f = ufacts(
+            "TASK-2",
+            "task",
+            "approved",
+            &[],
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(classify_unblock(&f), Some(UnblockClass::ApprovedUnqueued));
+        assert_eq!(
+            UnblockClass::ApprovedUnqueued.action(),
+            UnblockAction::Queue
+        );
+    }
+
+    #[test]
+    fn unblock_missing_acceptance_is_under_specified() {
+        // Approved but no acceptance + implementable → clarify first.
+        let f = ufacts(
+            "TASK-3",
+            "task",
+            "approved",
+            &[],
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+        );
+        assert_eq!(classify_unblock(&f), Some(UnblockClass::UnderSpecified));
+        assert_eq!(
+            UnblockClass::UnderSpecified.action(),
+            UnblockAction::Clarify
+        );
+    }
+
+    #[test]
+    fn unblock_non_implementable_missing_acceptance_is_not_under_specified() {
+        // A vision has no acceptance and is non-implementable — not flagged
+        // under-specified; falls through to approved-unqueued.
+        let f = ufacts(
+            "VIS-1",
+            "vision",
+            "approved",
+            &[],
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert_eq!(classify_unblock(&f), Some(UnblockClass::ApprovedUnqueued));
+    }
+
+    #[test]
+    fn unblock_decision_blocker_deferral_leave_parked() {
+        let decision = ufacts(
+            "S-1",
+            "story",
+            "approved",
+            &["needs-design-signoff"],
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(
+            classify_unblock(&decision),
+            Some(UnblockClass::DecisionPending)
+        );
+
+        let pending = ufacts(
+            "S-2",
+            "story",
+            "approved",
+            &[],
+            false,
+            true,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(
+            classify_unblock(&pending),
+            Some(UnblockClass::DecisionPending)
+        );
+
+        let blocked = ufacts(
+            "T-1",
+            "task",
+            "approved",
+            &[],
+            true,
+            false,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(classify_unblock(&blocked), Some(UnblockClass::BlockedBy));
+
+        let deferred = ufacts(
+            "T-2",
+            "task",
+            "approved",
+            &["deferred:post-stability"],
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(classify_unblock(&deferred), Some(UnblockClass::Deferred));
+
+        for cls in [
+            UnblockClass::DecisionPending,
+            UnblockClass::BlockedBy,
+            UnblockClass::Deferred,
+            UnblockClass::BuildSupervised,
+        ] {
+            assert_eq!(cls.action(), UnblockAction::Leave);
+        }
+    }
+
+    #[test]
+    fn unblock_in_flight_and_in_progress_are_build_supervised() {
+        let in_flight = ufacts(
+            "T-3",
+            "task",
+            "approved",
+            &[],
+            false,
+            false,
+            true,
+            true,
+            true,
+            true,
+        );
+        assert_eq!(
+            classify_unblock(&in_flight),
+            Some(UnblockClass::BuildSupervised)
+        );
+
+        let in_progress = ufacts(
+            "T-4",
+            "task",
+            "inprogress",
+            &[],
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(
+            classify_unblock(&in_progress),
+            Some(UnblockClass::BuildSupervised)
+        );
+    }
+
+    #[test]
+    fn unblock_epic_is_decision_pending() {
+        let f = ufacts(
+            "EPIC-1",
+            "epic",
+            "approved",
+            &[],
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+        );
+        assert_eq!(classify_unblock(&f), Some(UnblockClass::DecisionPending));
+    }
+
+    #[test]
+    fn unblock_class_keys_are_stable() {
+        assert_eq!(UnblockClass::NeedsApproval.key(), "needs-approval");
+        assert_eq!(UnblockClass::ApprovedUnqueued.key(), "approved-unqueued");
+        assert_eq!(UnblockClass::UnderSpecified.key(), "under-specified");
+        assert_eq!(UnblockClass::BuildSupervised.key(), "build-supervised");
+        assert_eq!(UnblockClass::DecisionPending.key(), "decision-pending");
+        assert_eq!(UnblockClass::Deferred.key(), "deferred");
+        assert_eq!(UnblockClass::BlockedBy.key(), "blocked-by");
+    }
+
+    #[test]
+    fn assemble_unblock_prompt_groups_by_action() {
+        let lines = vec![
+            UnblockLine {
+                id: "TASK-2".to_string(),
+                class: UnblockClass::ApprovedUnqueued,
+                reason: unblock_reason(UnblockClass::ApprovedUnqueued).to_string(),
+            },
+            UnblockLine {
+                id: "TASK-3".to_string(),
+                class: UnblockClass::UnderSpecified,
+                reason: unblock_reason(UnblockClass::UnderSpecified).to_string(),
+            },
+            UnblockLine {
+                id: "T-1".to_string(),
+                class: UnblockClass::BlockedBy,
+                reason: unblock_reason(UnblockClass::BlockedBy).to_string(),
+            },
+        ];
+        let prompt = assemble_unblock_prompt(&lines);
+        assert!(prompt.contains("QUEUE"));
+        assert!(prompt.contains("CLARIFY FIRST"));
+        assert!(prompt.contains("LEAVE PARKED"));
+        // Each spec lands under its action heading, with its reason.
+        assert!(prompt.contains("TASK-2 — approved"));
+        assert!(prompt.contains("TASK-3 — missing acceptance"));
+        assert!(prompt.contains("T-1 — blocked"));
+        // The leading instruction names the three actions.
+        assert!(prompt.contains("queue the autonomous-able"));
+    }
+
+    #[test]
+    fn assemble_unblock_prompt_renders_empty_sections() {
+        let prompt = assemble_unblock_prompt(&[]);
+        assert!(prompt.contains("QUEUE: (none)"));
+        assert!(prompt.contains("CLARIFY FIRST: (none)"));
+        assert!(prompt.contains("LEAVE PARKED: (none)"));
     }
 }

@@ -7318,6 +7318,13 @@ pub enum Command {
         as_deep_link: bool,
     },
 
+    /// The human-attention role-vector: the "what needs me?" surfaces.
+    /// `aida human unblock` emits a paste-ready advisor prompt that grooms
+    /// the open items keeping themselves out of the burndown.
+    // trace:STORY-563 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(subcommand)]
+    Human(HumanCommand),
+
     /// List the full command surface grouped by topic (same output as
     /// `aida help --all`). Bare `aida` / `aida help` show the curated
     /// Getting-started view instead.
@@ -7326,6 +7333,44 @@ pub enum Command {
     /// Stock and local skill tooling.
     #[clap(subcommand)]
     Skill(SkillCommand),
+}
+
+/// The `aida human` role-vector: the human-tier attention verbs. `unblock` is
+/// the deterministic prompt-assembler that ends the recurring "how do I get
+/// open items into the burndown?" question by GENERATING the grooming question
+/// for the advisor.
+// trace:STORY-563 | ai:claude — the role-vector design is SPIKE-57.
+#[derive(Subcommand, Debug)]
+pub enum HumanCommand {
+    /// Emit a paste-ready advisor prompt to groom the open items that are
+    /// keeping themselves out of the burndown ready set. Read-only +
+    /// deterministic — no LLM, no writes; it classifies each open spec by
+    /// WHAT keeps it out (needs-approval, approved-unqueued, under-specified,
+    /// build-supervised, decision-pending, deferred, blocked-by) and assembles
+    /// the prompt that tells the advisor to queue the autonomous-able, clarify
+    /// the under-specified first, and leave the rest parked. The advisor (the
+    /// grooming skill / live session) is the actor the prompt drives.
+    // trace:STORY-563 | ai:claude
+    Unblock {
+        /// Copy the assembled prompt to the system clipboard (like
+        /// `aida goal --copy` / `aida ultraplan`). Default prints framed
+        /// output to the terminal.
+        // trace:STORY-563 | ai:claude
+        #[clap(long, conflicts_with_all = ["stdout", "json"])]
+        copy: bool,
+
+        /// Print ONLY the bare assembled prompt to stdout, no framing — for
+        /// piping / command substitution.
+        // trace:STORY-563 | ai:claude
+        #[clap(long, conflicts_with = "json")]
+        stdout: bool,
+
+        /// Emit the classification as JSON (`[{spec,class,action,reason}]`)
+        /// instead of the prompt — for machine consumers / the TUI.
+        // trace:STORY-563 | ai:claude
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Opt-in statusline bootstrap actions. AIDA's bootstrap goal is to make
