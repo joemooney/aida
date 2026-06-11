@@ -1,0 +1,12 @@
+id: 019eb57f-9b68-7842-a73c-53060869d7e0
+spec_id: TASK-738
+agreed_id: TASK-738
+title: 'Phase 2a: introduce `aida-core/src/lifecycle.rs` with `LIFECYCLE` + `validate_transition`, migrate `forbidden_attention_transition` behind it with a parity test'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T07:04:59.496224863Z
+modified_at: 2026-06-11T07:04:59.496224863Z
+req_type: Task
