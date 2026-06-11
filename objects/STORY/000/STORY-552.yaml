@@ -34,12 +34,12 @@ description: |-
   ## Rationale
 
   Closes the front of the onboarding funnel STORY-537 closed the back of. Small, bounded; pure first-run ergonomics. SPEC-IDs/internals stay out of user-facing text; the prompt is plain language.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T02:02:54.081477799Z
-modified_at: 2026-06-11T04:35:21.402907348Z
+modified_at: 2026-06-11T05:44:48.930804974Z
 req_type: Story
 tags:
 - aida:init
@@ -47,3 +47,15 @@ tags:
 - from-user-friction
 - onboarding-flow
 - papercut
+history:
+- id: 019eb536-34a9-7022-884c-6bf1fed9217e
+  author: aida-auto-bump
+  timestamp: 2026-06-11T05:44:49.065819169Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T05:44:48.930804974Z
+  completion_sha: 70a83b2d2ee5888c32fe0c29180be2f703885c81

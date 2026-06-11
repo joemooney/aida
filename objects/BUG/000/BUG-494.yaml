@@ -3,12 +3,12 @@ spec_id: BUG-494
 agreed_id: BUG-494
 title: aida burndown plan footer falsely claims 'There is no aida burndown run' — but the run subcommand exists (STORY-545)
 description: 'The footer printed by ''aida burndown plan'' says: ''Next step: invoke /aida-burndown in Claude Code... There is no aida burndown run/start — the runner is the /aida-burndown skill, not a CLI subcommand.'' This is stale: STORY-545 shipped ''aida burndown run'' (kick-off-and-walk-away headless drain; full --status/--tag/--batch/--max/--concurrency/--permission-mode surface). The footer actively tells the operator a working command doesn''t exist — directly confusing (operator hit it 2026-06-10 asking ''what''s the drain command?''). Fix: update the footer to point at ''aida burndown run'' (and note /aida-burndown as the in-Claude alternative). Same misleading-output class as BUG-418/BUG-493.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T05:03:35.434937957Z
-modified_at: 2026-06-11T05:03:35.434937957Z
+modified_at: 2026-06-11T05:44:48.930804974Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -16,3 +16,15 @@ tags:
 - misleading-output
 - papercut
 - severity:minor
+history:
+- id: 019eb536-34a9-7022-884c-6bd4344c9ac3
+  author: aida-auto-bump
+  timestamp: 2026-06-11T05:44:49.065794527Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T05:44:48.930804974Z
+  completion_sha: c06cbdb33721c8b7b382b15fd34f246bcba4bd43
