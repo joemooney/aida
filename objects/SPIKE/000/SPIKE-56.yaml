@@ -13,12 +13,12 @@ description: |-
   5. Recommendation + risk + a PHASED enactment path (generate-diagram-only first, then migrate guards) as candidate follow-up specs for operator approval. Do NOT enact in this spike.
 
   The aida schema (STORY-538) analog for the lifecycle. Composes with: TASK-733 (manual draft of the generated diagram), STORY-538 (reflection-derived catalog pattern), TASK-121 (history-as-source-of-truth), SPIKE-55 (skill/CLI surface audit — adjacent 'declare-once' theme).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:19:20.621280998Z
-modified_at: 2026-06-11T06:48:21.836717925Z
+modified_at: 2026-06-11T07:04:51.540960336Z
 req_type: Spike
 tags:
 - aida:lifecycle
