@@ -1,0 +1,27 @@
+id: 019eb560-f7cf-7522-afd5-c52afcf11b3d
+spec_id: STORY-557
+agreed_id: STORY-557
+title: '/aida-clarify <spec>: advisor interrogates the human to author acceptance criteria for an under-specified spec (agentic complement to questions sweep)'
+description: |-
+  Operator-surfaced (2026-06-10): 'aida questions sweep' DETECTS specs with missing/thin acceptance criteria, but there's no agentic flow to RESOLVE them — the human must hand-author acceptance or the spec punts. Propose '/aida-clarify <SPEC>': the advisor-assisted acceptance-authoring loop — the human-decision PRODUCER that turns 'parked: missing acceptance' into 'burndown-ready'. Pairs with the autonomous executor (aida burndown) as its human-side complement.
+
+  ## Acceptance
+
+  1. /aida-clarify <SPEC> reads the spec + graph context (parent, siblings, trace markers, the sweep's flag reason).
+  2. Interrogates the human with a SMALL, targeted question set — lead with: definition-of-done, PRIMARY CALLER/environment (TTY vs headless, which agent/role, MCP vs CLI — cf the verify-acceptance-against-primary-caller discipline), output/shape, explicit out-of-scope. Structured choices where the fork is enumerable; free-text where it's authoring.
+  3. Drafts a ## Acceptance section from the answers, shows it for approval/edit, then binds it via aida edit (acceptance criteria are binding, not comments).
+  4. Re-runs the sweep / pickability check after binding and reports whether the spec is now autonomous-ready — and what still blocks it if not.
+  5. Pure-agentic skill; its deterministic slices are 'aida questions sweep' (detect) + 'aida edit' (bind). Composes with the burndown pickability gate, STORY-555 (decision loop), SPIKE-55 (skill/CLI symmetry — this is a textbook agentic skill with a deterministic slice underneath).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T06:31:31.535193797Z
+modified_at: 2026-06-11T06:31:31.535193797Z
+req_type: Story
+tags:
+- advisor-tooling
+- aida:clarify
+- aida:questions
+- core
+- novice-first
