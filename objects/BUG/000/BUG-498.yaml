@@ -1,0 +1,19 @@
+id: 019eb6d0-f7b4-75d2-ba63-90fef66eaecf
+spec_id: BUG-498
+agreed_id: BUG-498
+title: Operator acting as advisor still seated as 'implementer' by default — statusline misleads; suggest 'role enter advisor' on advisor-style activity
+description: '2026-06-11: operator doing clear advisor work (grooming/triage/approve/queue all session) saw the statusline role ''implementer'' and was confused (''I thought you are my advisor?''). The seat is implementer because AIDA_SESSION_ROLE is unset and ADR-2 defaults to implementer (right for the novice picking up their first task; wrong for the person DIRECTING work). The seat-vs-work mismatch is invisible. Options: (a) when a session performs N advisor-style acts (approve/queue/groom via AIDA_SESSION_ROLE=advisor prefix), surface a one-time hint ''you''re operating as advisor — run `aida role enter advisor` to seat it''; (b) make the statusline show when work is being done under a different role than the seat; (c) reconsider whether an operator (vs a spawned implementer agent) should default to advisor. Relates to ADR-2 (undefined/default state is confusion).'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T13:13:28.756695992Z
+modified_at: 2026-06-11T13:13:28.756695992Z
+req_type: Bug
+tags:
+- aida:role
+- core
+- from-user-friction
+- onboarding-flow
+- statusline
+- ux
