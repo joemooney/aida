@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:04:29.337213838Z
-modified_at: 2026-06-11T13:50:50.037255212Z
+modified_at: 2026-06-11T13:50:53.125271322Z
 req_type: Task
 tags:
 - needs-human
@@ -16,3 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 019eb551-5e12-7e70-aa87-84e93cd38410
   created_at: 2026-06-11T07:04:34.304920307Z
+comments:
+- id: 019eb6f3-36c5-70c3-85c2-b5998543b82e
+  author: joe
+  content: 'Resolved: the P1–P7 candidate TASKs it gated (TASK-737..742) are filed. Satisfied — rejecting as done.'
+  created_at: 2026-06-11T13:50:53.125271322Z
+  modified_at: 2026-06-11T13:50:53.125271322Z
