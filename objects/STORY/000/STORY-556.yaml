@@ -14,12 +14,12 @@ description: |-
   5. The default help must READ as small and approachable (the simple-surface principle); the grouped depth is the reward for digging, not the first impression. No SPEC-IDs in any help text (user-facing-text convention).
 
   Composes with: the novice-first greeting work (TASK-725/728/732), OVERVIEW.md 'TUI is the product' framing.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:11:17.057691781Z
-modified_at: 2026-06-11T06:59:03.371102006Z
+modified_at: 2026-06-11T07:06:23.916580420Z
 req_type: Story
 tags:
 - aida:help
@@ -33,3 +33,15 @@ comments:
   content: Commit aaba04ec2 references this requirement
   created_at: 2026-06-11T06:59:03.371102006Z
   modified_at: 2026-06-11T06:59:03.371102006Z
+history:
+- id: 019eb580-e5b4-71f0-bd1a-7eb888e76942
+  author: aida-reconcile
+  timestamp: 2026-06-11T07:06:24.052631116Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T07:06:23.916580420Z
+  completion_sha: 93e87653084aedf5a5a4747ea80bf151db01c819
