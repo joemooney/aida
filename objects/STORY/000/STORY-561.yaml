@@ -1,0 +1,33 @@
+id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
+spec_id: STORY-561
+agreed_id: STORY-561
+title: 'aida home / aida away: operator-presence state the autonomy ladder keys on (not per-command flags)'
+description: |-
+  Operator idea (2026-06-11): /aida-home and /aida-away to flag whether the operator is at the keyboard. Bigger than a flag — it's the missing PRESENCE axis the whole autonomy ladder should key on. Today autonomy is picked PER-COMMAND (--no-human, --zen, --escalate-defaults, hand-parking needs-human — done repeatedly by hand this session); a presence STATE lets the system pick automatically + consistently. The value is the CONSUMERS, not the flag. Refinement: deterministic CLI verb (aida away / aida home), NOT an LLM skill (SPIKE-55 — a /aida-away slash command is just a thin wrapper).
+
+  ## Acceptance (MVP: flag + TTL + the highest-value consumers; broader wiring = followups)
+  1. 'aida away' / 'aida home' set a presence state (timestamped file under .aida/ or ~/.aida/). 'aida status' + statusline show it.
+  2. ROBUSTNESS — not a daemon: away carries a TTL (config, default e.g. 8h) AND any interactive TTY aida command auto-flips to home, so a stale 'away' cannot leave the system acting unsupervised when the operator is actually back. A timestamped file, no process.
+  3. CONSUMERS (wire at least these): (a) 'aida burndown run' defaults headless/walk-away when away, prompts/pauses when home; (b) punt/escalation defaults to escalate-via-defaults when away, surfaces interactively when home; (c) decision-required specs accumulate quietly in 'aida questions' when away, surface when home; (d) needs-human / keystone work is NOT offered for autonomous pickup when away.
+  4. Presence is ADVISORY input to mode selection — NEVER overrides integrity gates (CI, merge-on-green, the authority gate still apply).
+  5. Turns the three-mode autonomy taxonomy (default / --zen / --no-human) into an explicit settable state; explicit per-command flags still win.
+
+  ## Out of scope (followups)
+  - Auto-detecting presence beyond the auto-flip (TTY-idle / command-heartbeat).
+  - Calendar/Slack presence integration.
+
+  Composes with: the three-mode autonomy taxonomy, aida burndown run, the escalation cascade (--escalate-defaults/--escalate-blocks), aida questions (decision inbox), STORY-560 (headless advisor — a natural 'away' consumer), BUG-498 (statusline role surfacing).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T13:20:15.770546344Z
+modified_at: 2026-06-11T13:20:15.770546344Z
+req_type: Story
+tags:
+- aida:presence
+- autonomy
+- core
+- needs-human
+- operator-tooling
+- ux
