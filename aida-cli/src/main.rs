@@ -1244,6 +1244,20 @@ fn run() -> Result<()> {
         return handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
     }
 
+    // `aida lifecycle` (Phase 1, generate-only) is self-contained: it renders a
+    // Mermaid diagram from the declared transition model in aida-core and
+    // optionally pins it against `docs/lifecycle.md`. No storage handle, no LLM,
+    // no behavior change to any other command. trace:TASK-737 | ai:claude
+    if let Command::Lifecycle {
+        diagram,
+        check,
+        write,
+        doc,
+    } = &cli.command
+    {
+        return handle_lifecycle_command(*diagram, *check, *write, doc.as_deref());
+    }
+
     // STORY-498: `aida trace gate` is self-contained — it reads git for the
     // commit range and self-loads the store via `load_store_for_lookup` to
     // resolve each `(SPEC-ID)` trailer. Dispatch it early (the other `trace`
@@ -1962,6 +1976,9 @@ fn run() -> Result<()> {
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Lifecycle { .. } => {
+            unreachable!("lifecycle is dispatched before storage init")
+        }
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
@@ -9336,6 +9353,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Lifecycle { .. } => {
+            unreachable!("lifecycle is dispatched before storage init")
+        }
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
@@ -59821,6 +59841,156 @@ fn handle_deps_command(cmd: &DepsCommand) -> Result<()> {
     match cmd {
         DepsCommand::Sweep { for_spec, json } => deps_sweep(for_spec.as_deref(), *json),
     }
+}
+
+/// `aida lifecycle --diagram [--check [--write]] [--doc <FILE>]` — Phase 1 of
+/// SPIKE-56 (TASK-737), generate-only. The spec-state transition model lives in
+/// `aida_core::lifecycle` as the single declared source; this renders it to a
+/// Mermaid `stateDiagram-v2`. `--check` pins the committed mermaid block in
+/// `docs/lifecycle.md` against the generated one and exits non-zero on drift
+/// (pre-commit-hook-able); `--write` inserts/refreshes that block. No guard
+/// enforcement, no empirical diffing — those are sibling phases. Zero behavior
+/// change to any other command.
+// trace:TASK-737 | ai:claude
+fn handle_lifecycle_command(
+    diagram: bool,
+    check: bool,
+    write: bool,
+    doc: Option<&str>,
+) -> Result<()> {
+    use aida_core::lifecycle::{fenced_mermaid, first_mermaid_block, LifecycleModel};
+
+    let model = LifecycleModel::declared();
+    let generated_body = model.to_mermaid();
+
+    // Resolve the pinned doc path: explicit --doc, else docs/lifecycle.md under
+    // the project root, else relative to cwd.
+    let doc_path = if let Some(d) = doc {
+        std::path::PathBuf::from(d)
+    } else {
+        let root = find_project_root().unwrap_or_else(|_| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        });
+        root.join("docs").join("lifecycle.md")
+    };
+
+    // --check (optionally with --write) pins the committed diagram.
+    if check {
+        let exists = doc_path.exists();
+        let markdown = if exists {
+            std::fs::read_to_string(&doc_path)
+                .with_context(|| format!("reading {}", doc_path.display()))?
+        } else {
+            String::new()
+        };
+        let committed = first_mermaid_block(&markdown);
+
+        let matches = committed.as_deref() == Some(generated_body.as_str());
+        if matches {
+            println!(
+                "lifecycle diagram pin: OK — committed diagram in {} matches the declared model.",
+                doc_path.display()
+            );
+            return Ok(());
+        }
+
+        if write {
+            let updated = if let Some(existing) = committed {
+                // Replace the first mermaid block body in place.
+                replace_first_mermaid_block(&markdown, &existing, &generated_body)
+            } else if exists {
+                // No mermaid block yet — append a fenced one.
+                let mut s = markdown;
+                if !s.ends_with('\n') {
+                    s.push('\n');
+                }
+                s.push('\n');
+                s.push_str(&fenced_mermaid(&model));
+                s
+            } else {
+                // Doc doesn't exist — create it with just the fenced block.
+                if let Some(parent) = doc_path.parent() {
+                    std::fs::create_dir_all(parent)
+                        .with_context(|| format!("creating {}", parent.display()))?;
+                }
+                fenced_mermaid(&model)
+            };
+            std::fs::write(&doc_path, updated)
+                .with_context(|| format!("writing {}", doc_path.display()))?;
+            println!(
+                "lifecycle diagram pin: updated committed diagram in {} to match the declared model.",
+                doc_path.display()
+            );
+            return Ok(());
+        }
+
+        // Drift, no --write: report and exit non-zero so a pre-commit hook fails.
+        eprintln!(
+            "lifecycle diagram pin: DRIFT — the committed diagram in {} does not match the declared model.",
+            doc_path.display()
+        );
+        if committed.is_none() {
+            eprintln!("  (no mermaid block found in the doc)");
+        }
+        eprintln!("  Run `aida lifecycle --check --write` to refresh it, or `aida lifecycle --diagram` to inspect the generated diagram.");
+        std::process::exit(1);
+    }
+
+    // --diagram (default action): print the generated diagram. If neither
+    // --diagram nor --check is given, still print it (the only useful default).
+    let _ = diagram;
+    print!("{generated_body}");
+    Ok(())
+}
+
+/// Replace the body of the first ```mermaid fenced block in `markdown` with
+/// `new_body`, leaving everything else byte-identical. `old_body` is the exact
+/// body returned by [`first_mermaid_block`] (used to locate the block).
+// trace:TASK-737 | ai:claude
+fn replace_first_mermaid_block(markdown: &str, old_body: &str, new_body: &str) -> String {
+    // Reconstruct the fenced form of the old body (the extractor strips fences),
+    // then swap. We locate the opening fence and the matching close by walking
+    // lines, the same way first_mermaid_block does.
+    let lines: Vec<&str> = markdown.lines().collect();
+    let mut open_idx = None;
+    for (i, line) in lines.iter().enumerate() {
+        if line.trim_start().starts_with("```mermaid") {
+            open_idx = Some(i);
+            break;
+        }
+    }
+    let Some(open) = open_idx else {
+        return markdown.to_string();
+    };
+    // Find the close fence after `open`.
+    let mut close_idx = None;
+    for (offset, line) in lines.iter().enumerate().skip(open + 1) {
+        if line.trim_start().starts_with("```") {
+            close_idx = Some(offset);
+            break;
+        }
+    }
+    let Some(close) = close_idx else {
+        return markdown.to_string();
+    };
+    let _ = old_body; // located positionally; old_body kept for clarity/API symmetry
+
+    // Rebuild: lines[..=open], new_body lines, lines[close..].
+    let mut out = String::new();
+    for line in &lines[..=open] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.push_str(new_body); // new_body already ends with '\n'
+    for line in &lines[close..] {
+        out.push_str(line);
+        out.push('\n');
+    }
+    // Preserve a trailing newline iff the original had one.
+    if !markdown.ends_with('\n') && out.ends_with('\n') {
+        out.pop();
+    }
+    out
 }
 
 /// `aida lint [<SPEC>|--scope feature|task|story] [--json]` — opt-in EARS-style
