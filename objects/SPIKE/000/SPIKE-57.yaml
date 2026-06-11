@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:46:04.401220442Z
-modified_at: 2026-06-11T14:27:02.432897994Z
+modified_at: 2026-06-11T14:27:51.188810487Z
 req_type: Spike
 tags:
 - aida:human
@@ -57,4 +57,11 @@ comments:
   content: 'Refinement (operator, 2026-06-11): PRESENCE folds INTO the ''aida human'' role-vector as a subcommand. ''aida human home'' / ''aida human away'' set the operator''s availability — so the human role is the home for BOTH the bottleneck view (what needs a human) AND presence (is the human here), exactly symmetric with how agent roles carry session state. This ABSORBS STORY-561 (presence) under the human namespace. Keep ''aida home''/''aida away'' as optional short aliases. SPIKE-57''s design must include the presence surface, not just the read-only view.'
   created_at: 2026-06-11T14:06:48.572399746Z
   modified_at: 2026-06-11T14:06:48.572399746Z
+- id: 019eb715-0fba-7720-b92a-eb4a4997b45c
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-11-human-as-first-class-role.md
+    filed 7 task(s): TASK-745, TASK-746, TASK-747, TASK-748, TASK-749, TASK-750, TASK-751
+  created_at: 2026-06-11T14:27:51.354088470Z
+  modified_at: 2026-06-11T14:27:51.354088470Z
 human_only: true
