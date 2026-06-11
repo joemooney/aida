@@ -1,0 +1,52 @@
+id: 019eb6b8-ddf1-7671-b280-f53da0a3cddf
+spec_id: STORY-558
+agreed_id: STORY-558
+title: 'Advisor burndown-prep: one guided pass from drafts → approved → queued (sign-off preserved, NOT auto-approve)'
+description: |-
+  ## Idea (operator, 2026-06-11)
+
+  Operator wants an advisor convenience that 'identifies open specs the advisor can approve if needs be, and moves them to the queue in preparation for autonomous burndown' — asked if it's an alias for `aida backlog groom`.
+
+  ## It is NOT an alias for backlog groom
+
+  `aida backlog groom` is approved→queue ONLY (operates on already-Approved, not-queued items). The proposed flow is a COMPOSITE that adds the approval step:
+    [triage: draft → approved]  +  [groom: approved → queue]
+  backlog groom is just the second half.
+
+  ## Constraint: must NOT auto-approve (ADR-3 / STORY-546)
+
+  Approval is the advisor judgment gate the operator explicitly insisted not to bypass ('I want the advisor to sign off'). So this is a GUIDED pass (skill), not a blind one-shot CLI verb that approves+queues. The human/advisor judgment stays on the approve step.
+
+  ## Shape — sharpen the existing /aida-backlog-groom skill to start one step earlier
+
+  One advisor sitting:
+  1. SURFACE candidates in two buckets: (a) DRAFTS the advisor could approve (the triage inbox), (b) APPROVED-but-not-queued (`aida backlog list` / `aida burndown plan --candidates`).
+  2. Advisor APPROVES/selects per item (judgment — drafts that need a human decision stay parked, surfaced via `aida questions`).
+  3. GROOM the chosen approved set onto the queue (`aida backlog groom`, optionally `--batch NAME`).
+  4. Result: a blessed queue ready for `aida queue work --auto-complete` / `/aida-burndown`.
+
+  ## Acceptance
+
+  - [ ] `/aida-backlog-groom` (or a named burndown-prep mode) presents BOTH approvable-drafts and approved-not-queued candidates in one pass.
+  - [ ] Approval is explicit per-item (or explicit multi-select) — NEVER auto-approved. Drafts needing a human decision are routed to `aida questions`, not approved.
+  - [ ] Chosen items are groomed to the queue via the existing `aida backlog groom` (reuse, don't reimplement); optional `--batch` so the prep set drains as one cluster.
+  - [ ] Ends by naming the exact drain command for the freshly-blessed set.
+  - [ ] Pure composition of triage + backlog groom + burndown plan --candidates; no new approval path, no new queue path.
+
+  ## Rationale
+
+  Captures the operator's burndown-prep convenience WITHOUT collapsing the sign-off gate. The deterministic queue step stays `backlog groom`; the judgment step stays human/advisor; the skill orchestrates the pass.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T12:47:09.297828614Z
+modified_at: 2026-06-11T12:47:09.297828614Z
+req_type: Story
+tags:
+- advisor
+- aida:backlog
+- aida:burndown
+- from-product
+- from-user-friction
+- onboarding-flow
