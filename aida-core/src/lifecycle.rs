@@ -149,8 +149,13 @@ pub fn is_declared(from: State, to: State) -> bool {
 /// A named guard on a transition — the authority/condition it must satisfy.
 /// Gates migrated behind the model ask for this instead of hand-encoding the
 /// same predicate, so a gate and the rendered diagram can never drift. Phase 2b
-/// (TASK-739) introduces the advisor-authority guard; later phases add the
-/// merge-evidence and terminal-and-unqueued guards.
+/// (TASK-739) introduces the advisor-authority guard here. The later
+/// merge-evidence (Phase 2c / TASK-740 → [`git_merge_completes`]) and
+/// terminal-and-unqueued (Phase 2d / TASK-741 → [`INVARIANTS`]) constraints
+/// landed as their own typed predicates rather than `GuardKind` arms: they
+/// answer different questions than the manual-edit authority gate (one is "does
+/// a git merge-event complete this spec", the other a cross-axis invariant), so
+/// folding them into the single `transition_guard` return would conflate gates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuardKind {
     /// No special authority — an implementer-legitimate flip.
@@ -184,6 +189,33 @@ pub fn transition_guard(from: State, to: State) -> GuardKind {
     } else {
         GuardKind::None
     }
+}
+
+/// Phase 2c (TASK-740): the merge auto-bump expressed as the model's GitEvent
+/// guard. A commit referencing the spec landing on the default branch is
+/// authoritative evidence the work shipped — the 🟢 [`TriggerKind::Git`]
+/// `→ Completed` transition (the declared mainline `Done → Completed` edge, verb
+/// "merge auto-bump (aida pull)"). This is the single source for which SOURCE
+/// states that git-event promotes straight to `Completed`, so the `aida pull`
+/// scanner and the `aida db reconcile-status` replay ask the model instead of
+/// re-encoding the set:
+/// - the in-pipeline states `Approved` / `Planned` / `InProgress` / `Done` — a
+///   commit is authoritative that approved/planned/in-flight/done work shipped
+///   (BUG-328);
+/// - a shelved `NeedsAttention` whose PR a later session/sibling-agent fixed and
+///   merged — otherwise stranded, since a direct `NeedsAttention → Completed`
+///   manual flip is blocked but the merge is the same "it shipped" signal
+///   (BUG-405).
+///
+/// `Draft` is excluded — a commit does not override un-triaged intent, the
+/// approval signal is preserved (BUG-328) — and the terminal states
+/// (`Completed` / `Rejected`) and `Released` stay put. Defined over the full
+/// state domain; total. trace:TASK-740 | ai:claude
+pub fn git_merge_completes(from: State) -> bool {
+    matches!(
+        from,
+        State::Approved | State::Planned | State::InProgress | State::Done | State::NeedsAttention
+    )
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -739,6 +771,23 @@ mod tests {
         let body = first_mermaid_block(md).unwrap();
         assert!(body.contains("A --> B"));
         assert!(!body.contains("OTHER"));
+    }
+
+    // ── Phase 2c (TASK-740): merge auto-bump GitEvent guard ──
+
+    #[test]
+    fn git_merge_completes_covers_the_in_pipeline_and_shelved_states() {
+        use State::*;
+        // The in-pipeline states a commit-on-default-branch ships (BUG-328) plus
+        // a shelved NeedsAttention whose PR a later session merged (BUG-405).
+        for s in [Approved, Planned, InProgress, Done, NeedsAttention] {
+            assert!(git_merge_completes(s), "{s:?} must be merge-eligible");
+        }
+        // Draft preserves un-triaged intent; the terminal states + the
+        // declared-only pseudo/Released states stay put.
+        for s in [Start, Draft, Completed, Released, Rejected] {
+            assert!(!git_merge_completes(s), "{s:?} must not be merge-eligible");
+        }
     }
 
     // ── Phase 2d (TASK-741): cross-axis invariants ──
