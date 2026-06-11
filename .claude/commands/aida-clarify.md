@@ -1,0 +1,1 @@
+../../aida-core/templates/commands/aida-clarify.md

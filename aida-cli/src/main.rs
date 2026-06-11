@@ -3374,6 +3374,9 @@ fn handle_questions_command(
             questions_sweep(backend, scope.as_deref(), *apply)?;
             Ok(())
         }
+        Some(QuestionsCommand::Clarify { specs, dry_run }) => {
+            questions_clarify(backend, store_path, specs, *dry_run)
+        }
         Some(QuestionsCommand::Ask {
             spec,
             question,
@@ -3512,6 +3515,165 @@ fn questions_sweep(
         );
     }
     Ok(affected)
+}
+
+/// True when a spec must NOT be offered to the clarify loop, honouring the
+/// BUG-495 exclusions: non-implementable types (vision/folder/meta/principle/
+/// term), already-built/terminal status (Done/Completed/Rejected), and
+/// held-for-review specs (`review:draft-only`). The active-lease exclusion is
+/// applied separately by the caller (it needs the live lease set).
+// trace:STORY-557 | ai:claude
+fn is_clarify_excluded(req: &Requirement) -> bool {
+    if matches!(
+        req.req_type,
+        RequirementType::Vision
+            | RequirementType::Folder
+            | RequirementType::Meta
+            | RequirementType::Principle
+            | RequirementType::Term
+    ) {
+        return true;
+    }
+    if matches!(
+        req.status,
+        RequirementStatus::Done | RequirementStatus::Completed | RequirementStatus::Rejected
+    ) {
+        return true;
+    }
+    if req.tags.iter().any(|t| t == "review:draft-only") {
+        return true;
+    }
+    false
+}
+
+/// Resolve the default clarify set: specs the sweep would flag as
+/// under-specified, minus the BUG-495 exclusions and any spec held by a live
+/// lease. Returns display IDs in stable order. trace:STORY-557 | ai:claude
+fn clarify_default_specs(backend: &aida_core::CachedGitBackend) -> Result<Vec<String>> {
+    let all = backend.list_requirements(false)?;
+    let project_root = find_project_root().ok();
+    let in_flight: HashSet<String> = project_root
+        .as_deref()
+        .map(in_flight_lease_scopes)
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    for req in &all {
+        if is_clarify_excluded(req) {
+            continue;
+        }
+        // Active-lease exclusion: an implementer is mid-flight on this scope.
+        let live = !in_flight.is_empty()
+            && [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| in_flight.contains(&s.to_ascii_lowercase()));
+        if live {
+            continue;
+        }
+        // Reuse the sweep's under-specification detector across every workable
+        // scope so clarify resolves exactly what sweep flags.
+        if question_sweep_candidate(req, &all, QuestionSweepScope::All).is_some() {
+            out.push(req.display_id());
+        }
+    }
+    Ok(out)
+}
+
+/// `aida questions clarify [<spec>...]` — fire up an INTERACTIVE advisor
+/// (`claude "/aida-clarify <specs>"`, never headless `claude -p`) that walks
+/// the human through authoring acceptance criteria for under-specified specs.
+/// The interactive counterpart to `aida burndown run` (headless): sweep
+/// detects, clarify resolves. With no specs it defaults to the swept set.
+// trace:STORY-557 | ai:claude
+fn questions_clarify(
+    backend: &aida_core::CachedGitBackend,
+    _store_path: &std::path::Path,
+    specs: &[String],
+    dry_run: bool,
+) -> Result<()> {
+    // Resolve the target set: explicit args, or the default swept set.
+    let targets: Vec<String> = if specs.is_empty() {
+        let resolved = clarify_default_specs(backend)?;
+        if resolved.is_empty() {
+            println!(
+                "{}",
+                "No under-specified specs to clarify — the sweep is clean.".dimmed()
+            );
+            return Ok(());
+        }
+        resolved
+    } else {
+        // Explicit specs: drop any that are non-clarifiable, warn loudly.
+        let mut kept = Vec::new();
+        for raw in specs {
+            match backend.get_requirement_by_spec_id(raw)? {
+                Some(req) if is_clarify_excluded(&req) => {
+                    println!(
+                        "  {} {} skipped — not clarifiable (built/held/non-implementable type)",
+                        "·".dimmed(),
+                        req.display_id().yellow()
+                    );
+                }
+                Some(req) => kept.push(req.display_id()),
+                None => println!("  {} {} not found — skipped", "·".dimmed(), raw.yellow()),
+            }
+        }
+        if kept.is_empty() {
+            anyhow::bail!("no clarifiable specs in the given set");
+        }
+        kept
+    };
+
+    println!("{} clarify", "▸".cyan().bold());
+    println!(
+        "  {} {} spec(s): {}",
+        "→".green(),
+        targets.len(),
+        targets.join(", ").cyan()
+    );
+
+    // Build the interactive invocation. Unlike the headless drain, clarify
+    // needs a human at the keyboard, so it launches plain interactive
+    // `claude "<prompt>"` — NOT `claude -p`.
+    let prompt = format!("/aida-clarify {}", targets.join(" "));
+
+    if dry_run {
+        println!("\n{} dry run — not launching. Would run:", "·".dimmed());
+        println!("  claude {prompt:?}");
+        return Ok(());
+    }
+
+    println!(
+        "  {} launching interactive `claude` — answer its questions to author acceptance",
+        "→".green()
+    );
+    println!(
+        "  {} {}",
+        "→".green(),
+        format!("claude {prompt:?}").dimmed()
+    );
+    println!();
+
+    // Interactive: inherit the terminal so the human can converse. `claude` is
+    // resolved off PATH (matching every other launch site); a missing binary
+    // surfaces as a guided error, not a raw ENOENT.
+    let status_code = std::process::Command::new("claude")
+        .arg(&prompt)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .status()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "failed to launch `claude` ({e}) — the acceptance-authoring loop needs the \
+                 Claude Code CLI on PATH. Install it, then re-run."
+            )
+        })?;
+
+    if status_code.success() {
+        Ok(())
+    } else {
+        let code = status_code.code().unwrap_or(1);
+        std::process::exit(code);
+    }
 }
 
 /// List the decision inbox. Returns the count of pending requests so the
@@ -3970,6 +4132,54 @@ mod questions_tests {
         assert_eq!(request.choices.len(), 2);
         assert_eq!(request.recommended, Some(1));
         assert!(request.question.contains("STORY-FORM"));
+    }
+
+    // trace:STORY-557 | ai:claude
+    #[test]
+    fn clarify_excludes_non_implementable_types() {
+        for t in [
+            RequirementType::Vision,
+            RequirementType::Folder,
+            RequirementType::Meta,
+            RequirementType::Principle,
+            RequirementType::Term,
+        ] {
+            let label = format!("{t:?}");
+            let mut req = sample_requirement("VIS-1", "no acceptance here");
+            req.req_type = t;
+            assert!(is_clarify_excluded(&req), "{label} should be excluded");
+        }
+    }
+
+    // trace:STORY-557 | ai:claude
+    #[test]
+    fn clarify_excludes_built_and_terminal_status() {
+        for s in [
+            RequirementStatus::Done,
+            RequirementStatus::Completed,
+            RequirementStatus::Rejected,
+        ] {
+            let label = format!("{s:?}");
+            let mut req = sample_requirement("STORY-DONE", "no acceptance here");
+            req.status = s;
+            assert!(is_clarify_excluded(&req), "{label} should be excluded");
+        }
+    }
+
+    // trace:STORY-557 | ai:claude
+    #[test]
+    fn clarify_excludes_held_for_review() {
+        let mut req = sample_requirement("STORY-HELD", "no acceptance here");
+        req.tags.insert("review:draft-only".to_string());
+        assert!(is_clarify_excluded(&req));
+    }
+
+    // trace:STORY-557 | ai:claude
+    #[test]
+    fn clarify_includes_a_plain_underspecified_story() {
+        // A workable story with no acceptance is NOT type/status/tag-excluded.
+        let req = sample_requirement("STORY-THIN", "Implement the thing. No criteria yet.");
+        assert!(!is_clarify_excluded(&req));
     }
 
     #[test]
