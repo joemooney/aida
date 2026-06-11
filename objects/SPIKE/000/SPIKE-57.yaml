@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:46:04.401220442Z
-modified_at: 2026-06-11T13:46:04.401220442Z
+modified_at: 2026-06-11T14:06:48.572399746Z
 req_type: Spike
 tags:
 - aida:human
@@ -29,4 +29,10 @@ tags:
 - autonomy
 - core
 - escalation
+comments:
+- id: 019eb701-cafc-75b2-aa23-38892a79543c
+  author: joe
+  content: 'Refinement (operator, 2026-06-11): PRESENCE folds INTO the ''aida human'' role-vector as a subcommand. ''aida human home'' / ''aida human away'' set the operator''s availability — so the human role is the home for BOTH the bottleneck view (what needs a human) AND presence (is the human here), exactly symmetric with how agent roles carry session state. This ABSORBS STORY-561 (presence) under the human namespace. Keep ''aida home''/''aida away'' as optional short aliases. SPIKE-57''s design must include the presence surface, not just the read-only view.'
+  created_at: 2026-06-11T14:06:48.572399746Z
+  modified_at: 2026-06-11T14:06:48.572399746Z
 human_only: true
