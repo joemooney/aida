@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T06:23:46.143970443Z
-modified_at: 2026-06-11T05:14:35.410842615Z
+modified_at: 2026-06-11T05:15:16.374407229Z
 req_type: Task
 tags:
 - aida:burndown
@@ -27,8 +27,3 @@ comments:
   content: Commit 9542f74b7 references this requirement
   created_at: 2026-06-10T06:37:42.543589237Z
   modified_at: 2026-06-10T06:37:42.543589237Z
-- id: 019eb51a-8812-7543-85df-ab2f41b59dc5
-  author: joe
-  content: 'why-open: TEMP verification of residual-note fold-in'
-  created_at: 2026-06-11T05:14:35.410842615Z
-  modified_at: 2026-06-11T05:14:35.410842615Z
