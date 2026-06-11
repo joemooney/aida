@@ -1,0 +1,12 @@
+id: 019eb714-5652-7510-bbef-6508b8091fea
+spec_id: TASK-745
+agreed_id: TASK-745
+title: '**Phase 1 (DONE): view-first.** `aida list human` — shipped via STORY-562 (PR #767). The MVP view over the predicate. Nothing to do; absorbed'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T14:27:03.890156220Z
+modified_at: 2026-06-11T14:27:03.890156220Z
+req_type: Task
