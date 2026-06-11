@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T12:44:24.819108316Z
-modified_at: 2026-06-11T12:44:24.819108316Z
+modified_at: 2026-06-11T14:33:45.593158627Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -17,3 +17,9 @@ tags:
 - needs-human
 - reliability
 - severity:high
+comments:
+- id: 019eb71a-7779-7c83-a895-163684094968
+  author: joe
+  content: 'Implementing option (a) — per-wave integrated-main verify in the /aida-burndown skill (HALT on red main). Options (b) GitHub branch-protection ''require branches up to date before merge'' (forces re-CI on base move) and (c) serialize+rebase-then-CI remain COMPLEMENTARY follow-ups: (b) is a repo-admin config (belt-and-suspenders, no code) worth enabling once there are external contributors; (c) trades parallel speed for safety, not needed if (a) holds. (a) is the structural fix that makes the runner itself never leave main broken.'
+  created_at: 2026-06-11T14:33:45.593158627Z
+  modified_at: 2026-06-11T14:33:45.593158627Z
