@@ -1,0 +1,43 @@
+id: 019eb47f-ea56-71f1-bf91-7647060c9cad
+spec_id: BUG-492
+agreed_id: BUG-492
+title: aida archive has no guard against archiving non-terminal/queued specs — agent loop archived 128 Approved + active queued work
+description: |-
+  ## Symptom (operator, 2026-06-10)
+
+  `aida list open` showed only 2 items; queued Approved specs (TASK-715, STORY-543, TASK-723, TASK-724) were absent. Cause: they are ARCHIVED. `aida list` hides archived by default; `aida queue list` ignores the archive flag → the two surfaces disagree (archived + queued = contradictory state).
+
+  ## Root cause (telemetry-confirmed)
+
+  NOT auto-archive (no [archive] block in .aida/config.toml). An ADVISOR-role agent ran a LOOP of individual `aida archive <ID>` commands at 06:40:33–06:40:44 today (sub-second apart, ~14+ in the usage.jsonl window, role=advisor). It over-swept: 128 APPROVED specs archived (vs 901 completed) including all 4 active queued items. TASK-715: archived_at 2026-06-10T06:40:36, author joe.
+
+  ## Defects
+
+  1. `aida archive <ID>` archives a NON-TERMINAL spec (Draft/Approved/Planned/InProgress) — and even a QUEUED one — with no warning/guard. Archive is for the completed/rejected long-tail.
+  2. A spec can be archived AND remain in the queue (contradictory). Archiving a queued item should at least warn / offer to dequeue.
+  3. `list`/`queue list` disagree on archived items with no signal to the user that queued items are hidden from list.
+
+  ## Acceptance
+
+  - [ ] `aida archive <ID>` on a non-terminal spec warns and requires confirmation (or --force); archiving a QUEUED spec warns louder (names the queue) — guard the active-work case.
+  - [ ] Bulk/scripted archive (loop or --older-than) excludes non-terminal statuses by default; including them requires an explicit opt-in flag.
+  - [ ] Archiving a queued spec either dequeues it or surfaces the contradiction; `queue list` flags any member that is archived.
+  - [ ] Decide whether archived+non-terminal is ever legitimate (STORY-441 says archive is orthogonal to status) — if so, keep it possible but gated, not silent.
+
+  ## Remediation (separate)
+
+  128 Approved specs are currently wrongly archived; the 4 queued ones are unambiguously wrong. Unarchive scope is an operator decision (some archived-approved may have been intentional shelving).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T02:25:42.486512931Z
+modified_at: 2026-06-11T02:25:42.486512931Z
+req_type: Bug
+tags:
+- aida:archive
+- aida:queue
+- data-integrity
+- from-self-test
+- from-user-friction
+- severity:major
