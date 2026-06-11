@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T04:52:28.045992791Z
-modified_at: 2026-06-11T05:02:25.238098722Z
+modified_at: 2026-06-11T05:02:25.752366749Z
 req_type: Story
 tags:
 - advisor-tooling
@@ -31,3 +31,9 @@ tags:
 - autonomy
 - core
 - needs-human
+comments:
+- id: 019eb50f-65d8-7572-b685-e9aca3902cc3
+  author: joe
+  content: 'Tagged needs-human to PARK it from the unsupervised ''aida burndown run'' headless drain — NOT because input is missing (the design is complete in the acceptance criteria), but because this touches the queue/burndown grooming machinery (autonomy-keystone-adjacent). Per the keyboard-not-drain discipline: don''t let the headless drain build the thing that improves the drain — a drain failure mid-build could corrupt it. Build it via ''aida queue work STORY-554'' AT THE KEYBOARD with the advisor watching. The needs-human tag only affects burndown-run pickability; direct queue pickup is unaffected.'
+  created_at: 2026-06-11T05:02:25.752366749Z
+  modified_at: 2026-06-11T05:02:25.752366749Z
