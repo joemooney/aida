@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:46:04.401220442Z
-modified_at: 2026-06-11T14:27:51.188810487Z
+modified_at: 2026-06-11T15:28:13.833628261Z
 req_type: Spike
 tags:
 - aida:human
@@ -64,4 +64,9 @@ comments:
     filed 7 task(s): TASK-745, TASK-746, TASK-747, TASK-748, TASK-749, TASK-750, TASK-751
   created_at: 2026-06-11T14:27:51.354088470Z
   modified_at: 2026-06-11T14:27:51.354088470Z
+- id: 019eb74c-5609-7fb2-a7af-eba5de84fbf7
+  author: joe
+  content: Commit c76abb970 references this requirement
+  created_at: 2026-06-11T15:28:13.833628261Z
+  modified_at: 2026-06-11T15:28:13.833628261Z
 human_only: true
