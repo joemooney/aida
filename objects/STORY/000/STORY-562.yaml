@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:37:31.313359086Z
-modified_at: 2026-06-11T13:37:31.313359086Z
+modified_at: 2026-06-11T14:05:31.985157392Z
 req_type: Story
 tags:
 - aida:burndown
@@ -27,3 +27,9 @@ tags:
 - discoverability
 - operator-tooling
 - ux
+comments:
+- id: 019eb700-9fd1-74e3-9ebf-72760c3fe778
+  author: joe
+  content: Commit de80c22a6 references this requirement
+  created_at: 2026-06-11T14:05:31.985157392Z
+  modified_at: 2026-06-11T14:05:31.985157392Z
