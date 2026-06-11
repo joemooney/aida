@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:31:31.535193797Z
-modified_at: 2026-06-11T06:38:21.579659703Z
+modified_at: 2026-06-11T06:58:30.102798786Z
 req_type: Story
 tags:
 - advisor-tooling
@@ -29,3 +29,9 @@ tags:
 - aida:questions
 - core
 - novice-first
+comments:
+- id: 019eb579-aa56-73d0-bdae-0e59598581f7
+  author: joe
+  content: Commit 2dbad6602 references this requirement
+  created_at: 2026-06-11T06:58:30.102798786Z
+  modified_at: 2026-06-11T06:58:30.102798786Z
