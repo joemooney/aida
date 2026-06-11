@@ -5424,6 +5424,16 @@ pub enum Command {
         // trace:TASK-670 | ai:claude
         #[clap(long)]
         no_glyph: bool,
+
+        /// Emit one bare canonical spec ID per line — no header, no count
+        /// footer, no color. Directly usable in `$(...)` / xargs:
+        /// `aida edit $(aida list open --short --type bug) ...`. Composes
+        /// with every filter (`--status` / shortcut / `--type` / `--tags`
+        /// / `--parent`) and honors the same archive default as plain
+        /// `list`. Mutually exclusive with --json / --tree.
+        // trace:TASK-743 | ai:claude
+        #[clap(long, visible_alias = "ids-only", visible_alias = "quiet", short = 'q', conflicts_with_all = ["json", "tree"])]
+        short: bool,
     },
 
     /// Show details for a specific requirement
