@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:55:04.115427061Z
-modified_at: 2026-05-31T15:01:16.902825285Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - aida-core
@@ -22,6 +22,8 @@ comments:
   content: Commit 42f08bb84 references this requirement
   created_at: 2026-05-31T14:56:27.272796561Z
   modified_at: 2026-05-31T14:56:27.272796561Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T15:01:16.902825285Z

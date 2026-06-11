@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:19:16.149343346Z
-modified_at: 2026-05-31T14:52:48.225532565Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Spike
 tags:
 - competitive
@@ -51,6 +51,8 @@ comments:
   content: "Weighted graph-walk — FIRST EXTERNAL DRIVER captured (quizdom, 2026-05-31). A separate AIDA-using project (~/ai/quizdom) uses the relationship graph as a quiz-progression substrate. Its advisor correctly chose weight:N (0-100) TAGS for v1 — selection (max/weighted-sample over a node's begets successors) computed in-app over a small in-memory set; no AIDA numeric field requested (textbook application of the annotation-vs-operation discriminator + the no-speculative-score caution). \n\nPROMOTION TRIGGER (documented in quizdom ADR-22 / TASK-JM-002, left open as recurrence-bait): the day quizdom needs 'aida graph' to rank / weighted-sample 'begets' successors DURING the walk, or cross-bank numeric queries. Shape then (per the guidance): a SCOPED node field (e.g. selection_weight: u8 0-100) and possibly per-EDGE weights, wired into graph_walk as a weighted-sample/rank MODE — never a general score:f64.\n\nAIDA-SIDE NOTE: graph_walk (STORY-489, shipped) edges are currently typed but UNWEIGHTED. Weighted traversal/sampling is a genuine feature extension (a STORY on the graph-query feature), driver-gated. PROMOTE when quizdom recurs the trigger OR a 2nd project asks (recurrence>=2 — it's concrete + externally documented, so a low bar). Also notable: first validation of AIDA-as-graph-substrate for a NON-software domain (quiz progression) — a round-2 'amenable to many use cases' data point."
   created_at: 2026-05-31T14:52:48.225532565Z
   modified_at: 2026-05-31T14:52:48.225532565Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T06:27:18.329728306Z

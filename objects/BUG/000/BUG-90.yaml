@@ -32,8 +32,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T01:51:16.972365413Z
-modified_at: 2026-05-31T05:26:55.778086856Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T05:26:55.778086856Z

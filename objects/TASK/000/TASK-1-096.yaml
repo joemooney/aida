@@ -33,7 +33,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:17:01.132919755Z
-modified_at: 2026-05-31T03:13:39.966556808Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - agent-discipline
@@ -65,4 +65,6 @@ comments:
     AGY is NOT paused (it has delivered: SPIKE-35 v2, TASK-574). AGY's self-report on its own reliability is treated as a hypothesis, not a finding — the diagnosis/decision stays with the master. Captured as memory feedback_agy_dispatch_policy; composes with the one-master-advisor + substrate-as-bouncer principles. Sibling agent-discipline items: TASK-115, TASK-116.
   created_at: 2026-05-31T03:13:38.104763428Z
   modified_at: 2026-05-31T03:13:38.104763428Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 human_only: true

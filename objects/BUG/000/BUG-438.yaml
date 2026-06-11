@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:07:33.355449802Z
-modified_at: 2026-06-04T05:10:40.518503585Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - drain
@@ -55,6 +55,8 @@ comments:
   content: Commit 00b432a6d references this requirement
   created_at: 2026-06-04T05:10:40.518503585Z
   modified_at: 2026-06-04T05:10:40.518503585Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-04T04:33:10.960980757Z

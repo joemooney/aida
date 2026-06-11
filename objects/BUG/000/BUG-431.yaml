@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:39:05.836892426Z
-modified_at: 2026-06-02T03:03:55.817307128Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - autonomous
@@ -85,6 +85,8 @@ comments:
     So the refined moat statement: AIDA's defensible value is AUTOMATIC, native substrate integration — the drain populates leases/traces/status/review-items/graph by construction, not because someone remembered to prompt for it. A harness workflow can only fake it by hand-wiring every agent, and even then misses the coordination layer (leases). Compete on substrate-native automation; concede orchestration mechanics. (For EPIC-33 / moat docs.)
   created_at: 2026-06-02T03:03:55.817307128Z
   modified_at: 2026-06-02T03:03:55.817307128Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-01T16:13:39.481419330Z

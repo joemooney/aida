@@ -18,7 +18,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-29T03:53:16.162269855Z
-modified_at: 2026-06-01T14:07:20.250502687Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -41,3 +41,5 @@ comments:
   content: 'RESOLVED — already fixed (verify-before-building, advisor 2026-06-01). The production reviewer run_reviewer (main.rs ~74896) is now fully PR-anchored: it opens with ''let pr = self.pr_number.ok_or_else(...)'', uses scope=format!("PR-{pr}") for the reviewer session + verdict path PR-{pr}.json, and has ZERO self.spec references — there is no ''aida queue work <spec>'' launch in phase 3. This is the BUG-245 PR-anchoring (phases 2-6 run on the open PR, not the dispatched spec), which postdates the 2026-05-28 observation here (when phase 3 ran ''aida queue work TASK-573'' and failed). The recovery hint is also PR-anchored (''aida queue work PR-{pr}'', auto_complete.rs:870). Closing Completed; would re-open as a regression if a spec-anchored phase-3 launch ever reappears. EPIC-33 invariant 2.'
   created_at: 2026-06-01T14:07:18.944626175Z
   modified_at: 2026-06-01T14:07:18.944626175Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z

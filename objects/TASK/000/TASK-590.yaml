@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:07:41.445107237Z
-modified_at: 2026-05-31T17:30:19.264972380Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - for-agy
@@ -22,6 +22,8 @@ comments:
   content: Commit fa6bbab28 references this requirement
   created_at: 2026-05-31T17:25:43.724362441Z
   modified_at: 2026-05-31T17:25:43.724362441Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T17:30:19.264972380Z

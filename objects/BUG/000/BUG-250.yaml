@@ -60,7 +60,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-20T03:03:27.895703170Z
-modified_at: 2026-06-01T16:13:39.481419330Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - bug-241-extension
@@ -104,6 +104,8 @@ comments:
   content: Commit e4e973234 references this requirement
   created_at: 2026-06-01T15:03:32.158087884Z
   modified_at: 2026-06-01T15:03:32.158087884Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-01T16:13:39.481419330Z

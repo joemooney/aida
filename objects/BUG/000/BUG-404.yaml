@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-30T18:38:15.154048169Z
-modified_at: 2026-05-31T00:43:47.956745093Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -93,6 +93,8 @@ comments:
   content: Commit eaa74af0 references this requirement
   created_at: 2026-05-31T00:38:48.229987503Z
   modified_at: 2026-05-31T00:38:48.229987503Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T00:43:47.956745093Z

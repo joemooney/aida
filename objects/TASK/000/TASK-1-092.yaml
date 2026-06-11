@@ -25,7 +25,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T16:06:17.132616417Z
-modified_at: 2026-05-31T19:33:01.675926991Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - agent-discipline
@@ -49,3 +49,5 @@ comments:
   content: 'Dismissed by joe 2026-05-31: Folded into STORY-469 as Guard-4 input: ''doc-PR spec-references must resolve in substrate AND match the referenced spec''s key fields''. Not a standalone build — it''s a guard-design input. Linked to STORY-469. Triage 2026-05-31.'
   created_at: 2026-05-31T19:33:01.675926991Z
   modified_at: 2026-05-31T19:33:01.675926991Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z

@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T08:51:05.020112469Z
-modified_at: 2026-05-31T17:20:19.897164889Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - aida:pr:ship
@@ -26,3 +26,5 @@ comments:
   content: 'VERDICT (live-verified 2026-05-31, PR-407): shipped TASK-589 with ''git push'' immediately followed by ''aida pr ship'' — NO sleep workaround. Result: exit 0, PR merged, step 2 gated on CI green with no ''no checks reported'' bail. The wait_for_pr_checks_to_register poll (BUG-344, PR-213) holds the post-push registration window as designed. The reported PR-386 failure does not reproduce on the current binary — most likely a dev-binary that predated the BUG-344 build at that moment. Closing as already-fixed-by-BUG-344 (no new commit needed). Operational note: the post-push sleep workaround is REDUNDANT — drop it from future ship sequences. — master/advisor'
   created_at: 2026-05-31T17:20:18.301805193Z
   modified_at: 2026-05-31T17:20:18.301805193Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z

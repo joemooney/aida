@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T10:24:19.562555466Z
-modified_at: 2026-05-31T11:19:31.965400502Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Story
 tags:
 - competitive-parity
@@ -29,6 +29,8 @@ comments:
   content: 'Marking accepted-as-Completed: this story = P1 plan + slice-1 (pure decision logic, TASK-598, shipped). It keeps auto-re-completing anyway because the plan commit (a62866a) trailers (STORY-491 ...) and the pull-scan re-bumps it whenever it''s at an eligible status — manual --force re-open doesn''t stick. Remaining P1 implementation (slice 2: probing + live --resume wiring, sign-off-gated) is tracked fresh by STORY-492. Auto-bump re-bump filed as a bug.'
   created_at: 2026-05-31T11:19:31.965400502Z
   modified_at: 2026-05-31T11:19:31.965400502Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T10:33:44.609203062Z

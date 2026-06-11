@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T13:56:41.222806392Z
-modified_at: 2026-05-31T14:01:38.806971442Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - auto-bump
@@ -16,6 +16,8 @@ tags:
 - findings
 - from-review
 - kind:bug-spotted
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T14:01:38.806971442Z

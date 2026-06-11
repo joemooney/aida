@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T07:25:37.854381279Z
-modified_at: 2026-05-31T03:16:20.938273813Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - agent-discipline
@@ -33,4 +33,6 @@ comments:
   content: 'Triaged 2026-05-30 (blocked-queue sweep): this observation''s class — ''agent claims success without commit/push/PR'' — is now substantially blocked by SHIPPED substrate gates: BUG-269/BUG-360/BUG-285 (queue-done refuses with commits but no open PR), TASK-401 (push+PR before exit), BUG-376 + BUG-378 (ceiling/scratchpad-drift, Completed). The residual structural guard (Guard 3: local-vs-substrate reality check at status time) is tracked in STORY-469. The observation has served its purpose (fed STORY-469); closing as promoted-into-STORY-469. The real remaining work is STORY-469 itself.'
   created_at: 2026-05-31T03:16:18.761154205Z
   modified_at: 2026-05-31T03:16:18.761154205Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 human_only: true

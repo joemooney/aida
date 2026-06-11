@@ -17,13 +17,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T04:32:18.477666741Z
-modified_at: 2026-06-04T04:43:25.267712447Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - bug-438-revalidation
 - from-validation
 - resume-drain-test
 - throwaway
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-04T04:34:11.697671003Z

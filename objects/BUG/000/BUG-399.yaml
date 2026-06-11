@@ -37,7 +37,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-29T04:05:58.194959155Z
-modified_at: 2026-05-31T01:13:48.846552551Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,5 @@ comments:
   content: 'Bulk-triaged 2026-05-30 (operator-approved): reviewer session exited 1 on TASK-577 (Done, PR-348 open). Reviewer-phase reliability is tracked by TASK-137. Stale failure-event telemetry — rejecting per the 2026-05-30 triage.'
   created_at: 2026-05-31T01:13:47.651870829Z
   modified_at: 2026-05-31T01:13:47.651870829Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z

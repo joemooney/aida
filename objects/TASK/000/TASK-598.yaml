@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T11:11:32.018620954Z
-modified_at: 2026-05-31T11:16:56.566291391Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - aida-cli
@@ -17,6 +17,8 @@ tags:
 - pure-logic
 - resumable-drain
 - slice-1-of-2
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T11:16:56.566291391Z

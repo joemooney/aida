@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T05:25:37.982713944Z
-modified_at: 2026-06-04T07:11:40.598142915Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - from-validation
@@ -32,6 +32,8 @@ comments:
   content: Commit 7a5cb27ac references this requirement
   created_at: 2026-06-04T07:02:17.507996078Z
   modified_at: 2026-06-04T07:02:17.507996078Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-04T07:02:47.327914649Z

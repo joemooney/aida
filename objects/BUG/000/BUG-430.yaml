@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T05:10:49.123567989Z
-modified_at: 2026-06-01T05:23:58.351530634Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:node
@@ -28,3 +28,5 @@ tags:
 - from-self-test
 - kind:bug
 - onboarding-flow
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z

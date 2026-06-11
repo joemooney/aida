@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-25T07:27:16.720637894Z
-modified_at: 2026-05-31T03:16:25.838313556Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - batch:queue-work-reliability
@@ -37,4 +37,6 @@ comments:
   content: 'Triaged 2026-05-30 (blocked-queue sweep): the substrate worked AS DESIGNED here (EPIC-28 shelved the errored session; BUG-379 now refuses re-pickup without --force-claim). The residual upstream gap — prevent unauthorized pickup at session-start during an active drain — is now folded into STORY-469 as the Guard-5 idea (see STORY-469 comment). Observation promoted into STORY-469; closing.'
   created_at: 2026-05-31T03:16:23.799607832Z
   modified_at: 2026-05-31T03:16:23.799607832Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 human_only: true

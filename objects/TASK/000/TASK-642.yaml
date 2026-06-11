@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T05:19:02.117398658Z
-modified_at: 2026-06-04T05:24:38.947209994Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - from-validation
@@ -29,6 +29,8 @@ relationships:
   target_id: 019e9114-21ef-7ca2-a094-7bde64a5645b
   created_at: 2026-06-04T05:21:24.244072374Z
   created_by: joe
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-04T05:20:45.907284542Z
