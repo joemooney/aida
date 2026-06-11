@@ -339,23 +339,39 @@ pub fn forbidden_attention_transition(
     to: &RequirementStatus,
 ) -> Option<String> {
     use RequirementStatus::*;
-    match (from, to) {
-        // No-op stays allowed.
-        (NeedsAttention, NeedsAttention) => None,
-        // Entering NeedsAttention.
-        (_, NeedsAttention) if !matches!(from, InProgress) => Some(
+    // No-op stays allowed.
+    if from == to {
+        return None;
+    }
+    // This gate governs ONLY edges that touch Needs Attention; every other edge
+    // is some other gate's concern, kept `None` so free-form status edits aren't
+    // regressed.
+    if !matches!(from, NeedsAttention) && !matches!(to, NeedsAttention) {
+        return None;
+    }
+    // Phase 2a (TASK-738): the lifecycle model is the single source of truth for
+    // which Needs Attention edges are legal — ask it instead of re-encoding the
+    // same set here, so this gate and the declared diagram can never drift.
+    // Behaviour is identical to the prior hand-coded match (exhaustive parity
+    // test below). trace:TASK-738 | ai:claude
+    use crate::lifecycle::{is_declared, State};
+    if is_declared(State::from_status(from), State::from_status(to)) {
+        return None;
+    }
+    // Not a declared Needs Attention edge → the precise guidance (unchanged).
+    if matches!(to, NeedsAttention) {
+        Some(
             "a spec can only enter Needs Attention from In Progress \
              (an autonomous agent hits a design-fork mid-work) — \
              use `aida punt` to do this"
                 .to_string(),
-        ),
-        // Leaving NeedsAttention.
-        (NeedsAttention, to) if !matches!(to, Approved | InProgress | Rejected) => Some(
+        )
+    } else {
+        Some(
             "a Needs Attention spec can only be triaged to Approved, \
              In Progress, or Rejected"
                 .to_string(),
-        ),
-        _ => None,
+        )
     }
 }
 
@@ -7058,6 +7074,53 @@ mod tests {
                 assert!(
                     forbidden_attention_transition(from, to).is_none(),
                     "{from} → {to} touches no NeedsAttention edge — must stay allowed"
+                );
+            }
+        }
+    }
+
+    /// TASK-738: exhaustive parity — the model-backed
+    /// `forbidden_attention_transition` (Phase 2a) must return byte-identical
+    /// results to the pre-migration hand-coded oracle over every (from, to)
+    /// status pair. This is the migrate-behind-the-model contract: source
+    /// unified, behaviour unchanged. trace:TASK-738 | ai:claude
+    #[test]
+    fn forbidden_attention_transition_parity_with_pre_migration_oracle() {
+        use RequirementStatus::*;
+        // The exact pre-TASK-738 hand-coded logic, kept here as the oracle.
+        fn oracle(from: &RequirementStatus, to: &RequirementStatus) -> Option<String> {
+            match (from, to) {
+                (NeedsAttention, NeedsAttention) => None,
+                (_, NeedsAttention) if !matches!(from, InProgress) => Some(
+                    "a spec can only enter Needs Attention from In Progress \
+                     (an autonomous agent hits a design-fork mid-work) — \
+                     use `aida punt` to do this"
+                        .to_string(),
+                ),
+                (NeedsAttention, to) if !matches!(to, Approved | InProgress | Rejected) => Some(
+                    "a Needs Attention spec can only be triaged to Approved, \
+                     In Progress, or Rejected"
+                        .to_string(),
+                ),
+                _ => None,
+            }
+        }
+        let states = [
+            Draft,
+            Approved,
+            Planned,
+            InProgress,
+            Done,
+            Completed,
+            Rejected,
+            NeedsAttention,
+        ];
+        for from in &states {
+            for to in &states {
+                assert_eq!(
+                    forbidden_attention_transition(from, to),
+                    oracle(from, to),
+                    "parity mismatch at {from} → {to}",
                 );
             }
         }
