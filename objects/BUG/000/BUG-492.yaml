@@ -27,12 +27,12 @@ description: |-
   ## Remediation (separate)
 
   128 Approved specs are currently wrongly archived; the 4 queued ones are unambiguously wrong. Unarchive scope is an operator decision (some archived-approved may have been intentional shelving).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T02:25:42.486512931Z
-modified_at: 2026-06-11T04:35:15.260685354Z
+modified_at: 2026-06-11T05:44:48.930804974Z
 req_type: Bug
 tags:
 - aida:archive
@@ -47,3 +47,15 @@ comments:
   content: 'Provenance correction (from the session that ran the sweep): the 06:40 archive loop was NOT a rogue agent — it was the operator''s deliberate Session-63 backlog reset (''clear the backlog and queue… archive the rest''). The telemetry (role:advisor loop of individual ''aida archive <ID>'' calls) is correct; the ''accidental over-sweep'' intent label is not. The real, keep-worthy defects this exposed, independent of intent: (1) ''aida archive'' doesn''t reconcile queue membership — it archives a QUEUED spec and leaves it queued, producing the contradictory archived+queued state; (2) ''aida list'' hides archived rows but ''aida queue list'' ignores the flag, so the two surfaces disagree; (3) ''aida show'' doesn''t surface the archived flag at all (shows ''Approved'' with no hint). Immediate contradiction resolved: TASK-715 + STORY-543 unarchived (operator-confirmed) — they were the 2 live archived+queued items. The broader 126 stay archived (the clean slate the operator wanted).'
   created_at: 2026-06-11T02:30:56.445464472Z
   modified_at: 2026-06-11T02:30:56.445464472Z
+history:
+- id: 019eb536-34a9-7022-884c-6bc578ecdf52
+  author: aida-auto-bump
+  timestamp: 2026-06-11T05:44:49.065787007Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T05:44:48.930804974Z
+  completion_sha: 909f42b69ea1317dde00a83665b27809275a7aa6

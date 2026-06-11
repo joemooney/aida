@@ -9,12 +9,12 @@ description: |-
   3. Multiple reasons per spec, most-fundamental-first.
   EXCLUDED (deferred to parent / keyboard): the post-drain summary emission from the /aida-burndown skill (touches the runner).
   Acceptance: explain/why show derived + finding-linked + residual-note reasons; --json includes them; `why-open:` is the residual vehicle; derivable state is NEVER written to the comment (staleness trap).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T06:23:46.143970443Z
-modified_at: 2026-06-11T05:15:16.374407229Z
+modified_at: 2026-06-11T05:44:48.930804974Z
 req_type: Task
 tags:
 - aida:burndown
@@ -27,3 +27,15 @@ comments:
   content: Commit 9542f74b7 references this requirement
   created_at: 2026-06-10T06:37:42.543589237Z
   modified_at: 2026-06-10T06:37:42.543589237Z
+history:
+- id: 019eb536-34a9-7022-884c-6c24c0c38e8a
+  author: aida-auto-bump
+  timestamp: 2026-06-11T05:44:49.065850024Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T05:44:48.930804974Z
+  completion_sha: 7b1a73bd06e1425618d90a9c877ed8f3a3e5703b

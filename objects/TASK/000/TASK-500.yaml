@@ -84,12 +84,12 @@ description: |-
   ## Estimated time
 
   ~2-3h. Refactor + tests + verify no regression.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T16:55:23.818121291Z
-modified_at: 2026-06-11T02:36:16.663800857Z
+modified_at: 2026-06-11T05:44:48.930804974Z
 req_type: Task
 tags:
 - bug-360-followup
@@ -97,3 +97,15 @@ tags:
 - substrate-as-bouncer
 - testability
 - workflow-hints
+history:
+- id: 019eb536-34a9-7022-884c-6c135acb5d92
+  author: aida-auto-bump
+  timestamp: 2026-06-11T05:44:49.065844489Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T05:44:48.930804974Z
+  completion_sha: cc40151b3bd615439b28f725de2dbaba9096d099

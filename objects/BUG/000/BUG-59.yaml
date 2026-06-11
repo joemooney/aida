@@ -15,10 +15,22 @@ description: |
   2. Claude Code's Stop hook itself should detect "cwd doesn't exist" before spawning sh — orthogonal, file upstream if it persists.
 
   The user observation 2026-05-09 is just the post-end shell error — harmless but noisy. Most notable as a "first impression" bug for new users.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:29:58.220437208Z
-modified_at: 2026-06-11T02:36:17.458792864Z
+modified_at: 2026-06-11T05:44:48.930804974Z
 req_type: Bug
+history:
+- id: 019eb536-34a9-7022-884c-6bee98c1aa21
+  author: aida-auto-bump
+  timestamp: 2026-06-11T05:44:49.065798675Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T05:44:48.930804974Z
+  completion_sha: e33b5336f67105fdad330741bf13e8fcde8060a0
