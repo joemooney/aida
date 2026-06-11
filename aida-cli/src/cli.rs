@@ -1318,6 +1318,18 @@ pub enum RoleCommand {
     // trace:TASK-42 | ai:claude
     Active,
 
+    /// Print the active role's name on stdout (empty line when no role is
+    /// active) and exit 0 either way. With `--check`, exit 1 instead when
+    /// no role is active (still printing the name when one is). A pure read
+    /// of `$AIDA_SESSION_ROLE` — no project-store load. Scripting-friendly
+    /// surface for agents without direct env access.
+    // trace:STORY-64 | ai:claude
+    Current {
+        /// Exit 1 (instead of 0) when no role is active.
+        #[clap(long)]
+        check: bool,
+    },
+
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`
     End,
