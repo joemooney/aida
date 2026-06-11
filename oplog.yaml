@@ -16626,5 +16626,13 @@ operations:
       ## Rationale
 
       Makes the one advisor-status command worth running (it was too thin to use), orients a possibly-confused advisor in one glance, and routes to the real verbs — WITHOUT adding surface. Registration detail stays reachable via a flag. Complements STORY-558 (burndown-prep acts on the readiness this surfaces).
-clock: 1650
+- id: 019eb6f3-2adf-7120-b736-f551db679568
+  target_id: 019eb57f-2599-7260-9eca-298fd384646c
+  author: aida
+  node_id: '1'
+  lamport: 1651
+  timestamp: 2026-06-11T13:50:50.079460243Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1651
 node_id: '1'
