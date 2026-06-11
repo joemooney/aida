@@ -1,0 +1,12 @@
+id: 019eb714-768d-7d90-b5e9-0005dcaf520e
+spec_id: TASK-746
+agreed_id: TASK-746
+title: '**Phase 2: name the predicate + the `aida human` vector.** Add `burndown::human_required`, `Command::Human`, `handle_human_command` (bare → delegate to `handle_list_human`). The `aida human` front door + canonical predicate'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T14:27:12.141926456Z
+modified_at: 2026-06-11T14:27:12.141926456Z
+req_type: Task
