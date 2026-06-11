@@ -1,0 +1,12 @@
+id: 019eb57f-d268-7da1-8f73-550e10dc6584
+spec_id: TASK-740
+agreed_id: TASK-740
+title: 'Phase 2c: migrate the merge auto-bump eligibility (`auto_bump_eligible_status`) behind the model''s GitEvent guards'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T07:05:13.576459719Z
+modified_at: 2026-06-11T07:05:13.576459719Z
+req_type: Task
