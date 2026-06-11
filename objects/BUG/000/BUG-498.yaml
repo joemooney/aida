@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:13:28.756695992Z
-modified_at: 2026-06-11T13:13:28.756695992Z
+modified_at: 2026-06-11T14:03:59.799519395Z
 req_type: Bug
 tags:
 - aida:role
@@ -17,3 +17,9 @@ tags:
 - onboarding-flow
 - statusline
 - ux
+comments:
+- id: 019eb6ff-37b7-7203-8c9b-e9a7417b71bc
+  author: joe
+  content: Commit c55905dbf references this requirement
+  created_at: 2026-06-11T14:03:59.799519395Z
+  modified_at: 2026-06-11T14:03:59.799519395Z
