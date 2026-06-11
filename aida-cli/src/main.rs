@@ -38119,8 +38119,35 @@ fn session_end(
                 project_root.display().to_string().cyan()
             );
         }
+    } else if cwd_was_inside_worktree && shared_peer.is_none() {
+        // BUG-59: direct (non-wrapped) invocation can't `eval` a `cd` into
+        // the parent shell, so the caller's cwd is left dangling on the
+        // now-deleted worktree inode. Any subsequent process spawn from that
+        // shell — notably Claude Code's Stop hook firing `/bin/sh` — then
+        // fails with a noisy `ENOENT ... posix_spawn '/bin/sh'`. We can't
+        // mutate the parent shell from here, so surface a clear `cd` hint
+        // and let the caller move out before their next command.
+        // trace:BUG-59 | ai:claude
+        for line in session_end_stale_cwd_hint_lines(&project_root) {
+            eprintln!("{}", line);
+        }
     }
     Ok(())
+}
+
+/// BUG-59: ready-to-print hint lines telling the caller to leave the deleted
+/// worktree cwd before running anything else (so a follow-on `/bin/sh` spawn —
+/// e.g. Claude Code's Stop hook — doesn't ENOENT on the dangling inode). The
+/// emitted `cd` targets the parent project root that survived the removal.
+fn session_end_stale_cwd_hint_lines(project_root: &std::path::Path) -> Vec<String> {
+    let escaped = project_root.display().to_string().replace('\'', "'\\''");
+    vec![
+        format!(
+            "  {} your shell is still inside the removed worktree — run this before your next command:",
+            "↩".dimmed()
+        ),
+        format!("      cd '{}'", escaped),
+    ]
 }
 
 /// Open-PR metadata captured by `gh pr list` for a session's branch. Just
@@ -52680,6 +52707,38 @@ mod session_end_resolution_tests {
             Some("UNSHIPPED-SESSION-END")
         );
         assert!(records[0].detail.contains("3 commits ahead"),);
+    }
+
+    /// BUG-59: on a direct (TTY) `session end` that removes the worktree the
+    /// caller's cwd is sitting in, we can't `eval` a `cd` into the parent
+    /// shell — so we must surface a copy-pasteable `cd '<parent>'` hint so the
+    /// caller can leave the deleted inode before their next `/bin/sh` spawn
+    /// (e.g. Claude Code's Stop hook) ENOENTs on it.
+    #[test]
+    fn session_end_stale_cwd_hint_offers_cd_to_parent() {
+        let lines = session_end_stale_cwd_hint_lines(std::path::Path::new("/home/me/project"));
+        let joined = lines.join("\n");
+        assert!(
+            joined.contains("cd '/home/me/project'"),
+            "hint must offer a cd back to the surviving parent project: {joined}"
+        );
+        assert!(
+            joined.contains("removed worktree"),
+            "hint must explain why the cwd is stale: {joined}"
+        );
+    }
+
+    /// BUG-59: paths with a single-quote must be shell-escaped so the emitted
+    /// `cd` is safe to paste verbatim.
+    #[test]
+    fn session_end_stale_cwd_hint_escapes_single_quotes() {
+        let lines =
+            session_end_stale_cwd_hint_lines(std::path::Path::new("/home/me/it's a project"));
+        let joined = lines.join("\n");
+        assert!(
+            joined.contains(r#"cd '/home/me/it'\''s a project'"#),
+            "single-quote in the path must be escaped: {joined}"
+        );
     }
 
     /// BUG-367: session end suppresses the unshipped work warning if the spec
