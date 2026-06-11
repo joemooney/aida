@@ -4182,6 +4182,25 @@ pub enum QuestionsCommand {
         force: bool,
     },
 
+    /// Fire up an INTERACTIVE advisor that interrogates you to author
+    /// acceptance criteria for under-specified specs — the human-side
+    /// complement to `sweep` (sweep detects, clarify resolves). Launches
+    /// `claude "/aida-clarify <specs>"` (interactive, not headless) seeded
+    /// with the flagged specs and walks you through each until pickable.
+    ///
+    /// With no specs it defaults to the swept set (the same detection `sweep`
+    /// uses), honouring the same exclusions: visions/folders/meta/principles/
+    /// terms, already-built/held specs, and specs with an active lease.
+    Clarify {
+        /// The spec(s) to clarify. Omit to clarify the swept set.
+        specs: Vec<String>,
+
+        /// Show which specs would be clarified + the exact `claude` command,
+        /// then exit without launching.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Answer pending decisions — a pure data op, no agent.
     ///
     /// `answer <spec> <choice>` records one answer non-interactively (choice
