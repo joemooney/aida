@@ -1405,7 +1405,21 @@ fn run() -> Result<()> {
     // store-less registration subcommands run early.
     // trace:STORY-262 | ai:claude
     if let Command::Advisor(advisor_cmd) = &cli.command {
-        if !matches!(advisor_cmd, AdvisorCommand::Schedule(_)) {
+        // STORY-559: `advisor status` (default = dashboard) aggregates the
+        // requirement store (burndown / backlog / queue / leases), so it must
+        // fall through to the post-storage dispatch. The narrow
+        // `--registration` view reads only `~/.aida/advisor.toml` and stays in
+        // this store-less early handler so it still works outside a project.
+        // trace:STORY-559 | ai:claude
+        let needs_store = matches!(advisor_cmd, AdvisorCommand::Schedule(_))
+            || matches!(
+                advisor_cmd,
+                AdvisorCommand::Status {
+                    registration: false,
+                    ..
+                }
+            );
+        if !needs_store {
             return handle_advisor_command(advisor_cmd);
         }
     }
@@ -4728,7 +4742,10 @@ fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
             println!("Advisor registration cleared.");
             Ok(())
         }
-        AdvisorCommand::Status { json } => handle_advisor_status(*json),
+        // STORY-559: only the narrow `--registration` view reaches this
+        // store-less early handler; the default dashboard dispatches after
+        // storage init. trace:STORY-559 | ai:claude
+        AdvisorCommand::Status { json, .. } => handle_advisor_registration_status(*json),
         // STORY-262: `schedule` needs the requirement store, so it's routed
         // through the post-storage-init dispatch instead of this store-less
         // early handler. trace:STORY-262 | ai:claude
@@ -5304,7 +5321,11 @@ fn handle_advisor_register(uuid: Option<&str>, project_slug: Option<&str>) -> Re
     Ok(())
 }
 
-fn handle_advisor_status(json: bool) -> Result<()> {
+/// STORY-559: the narrow live-advisor registration block — the pre-dashboard
+/// `aida advisor status` output, now reachable via `--registration` (and the
+/// dashboard's "Live advisor" section). Reads only `~/.aida/advisor.toml` +
+/// `.aida/config.toml [advisor]`; no requirement store. trace:STORY-559 | ai:claude
+fn handle_advisor_registration_status(json: bool) -> Result<()> {
     let reg = advisor::read_registration();
     let cfg_root = find_project_root().ok();
     let cfg = match cfg_root.as_deref() {
@@ -5408,6 +5429,285 @@ fn handle_advisor_status(json: bool) -> Result<()> {
             advisor::ForkMode::Never => "never",
         }
     );
+    Ok(())
+}
+
+/// STORY-559: the advisor's read-only situational dashboard — the default
+/// `aida advisor status`. PURE AGGREGATION of existing surfaces: every count
+/// reuses the same query the dedicated command runs (no reimplemented counts),
+/// and every row points at the canonical command to act on it. Read-only — no
+/// writes, no auto-queue, no auto-approve. The narrow registration view (the
+/// pre-dashboard output) lives behind `--registration`.
+// trace:STORY-559 | ai:claude
+fn handle_advisor_dashboard(
+    json: bool,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // --- Live advisor (the former narrow output, now one section) ----------
+    let reg = advisor::read_registration();
+    let cfg = advisor::AdvisorConfig::load(&project_root);
+    let fork_mode_label = match cfg.fork_mode {
+        advisor::ForkMode::Auto => "auto",
+        advisor::ForkMode::Always => "always",
+        advisor::ForkMode::Never => "never",
+    };
+    let live = reg.as_ref().and_then(|r| {
+        let a = locate_for_status(r)?;
+        let alive = advisor::is_alive(&a, r.claude_pid);
+        let cost = advisor::estimated_fork_cost_usd(a.jsonl_size_bytes);
+        Some((a, alive, cost))
+    });
+
+    // --- Intake: drafts to triage (same status filter /aida-triage uses) ---
+    // Reuses the cache-backed status-filter query — no reimplemented count.
+    // The cache excludes archived rows by default.
+    let drafts = backend
+        .list_summaries(&aida_core::ListFilter {
+            status: Some("draft".to_string()),
+            ..Default::default()
+        })
+        .map(|s| s.len())
+        .unwrap_or(0);
+
+    // --- Decisions: pending questions (reuses `aida questions` query) ------
+    let pending_decisions = collect_decision_requests(backend)
+        .map(|(pending, _)| pending.len())
+        .unwrap_or(0);
+
+    // --- Findings awaiting triage (reuses `aida findings list` query) ------
+    // findings = draft requirements carrying a finding tag; plus the
+    // NeedsAttention cohort (punts + shelvings), exactly as findings list sums.
+    let findings_filter = aida_core::ListFilter {
+        status: Some("draft".to_string()),
+        ..Default::default()
+    };
+    let findings_total = backend
+        .list_summaries(&findings_filter)
+        .map(|s| {
+            let sections = findings::build_findings_view(&s, &findings::FindingsFilter::default());
+            findings::count_findings(&sections)
+        })
+        .unwrap_or(0);
+    let needs_attention = backend
+        .list_summaries(&aida_core::ListFilter {
+            status: Some("needs-attention".to_string()),
+            ..Default::default()
+        })
+        .map(|s| s.len())
+        .unwrap_or(0);
+    let findings_awaiting = findings_total + needs_attention;
+
+    // --- Backlog: approved/planned/draft not queued (reuses `aida backlog`)
+    let storage = Storage::new(store_path.to_path_buf());
+    let user_id = current_user_id(None);
+    let queued = queued_requirement_ids(&storage, &user_id).unwrap_or_default();
+    let store = storage.load()?;
+    let backlog = store
+        .requirements
+        .iter()
+        .filter(|r| {
+            !r.archived && r.status == RequirementStatus::Approved && !queued.contains(&r.id)
+        })
+        .count();
+
+    // --- Burndown readiness (reuses the exact `aida burndown plan` resolver)
+    let (ready, awaiting_signoff, parked) = resolve_burndown_sets("approved", None, None)
+        .unwrap_or_else(|_| (Vec::new(), Vec::new(), Vec::new()));
+
+    // --- Queue depth + in-flight (Done-awaiting-merge) ---------------------
+    let queue_depth = backend
+        .queue_list(&user_id, false)
+        .map(|q| q.len())
+        .unwrap_or(0);
+    let in_flight_specs = store
+        .requirements
+        .iter()
+        .filter(|r| matches!(r.status, RequirementStatus::Done))
+        .count();
+
+    // --- Live sessions: leases, flagging any held on a closed spec --------
+    let leases = list_leases(&project_root);
+    // Map each lease scope to a requirement status (best-effort: scope is a
+    // raw string, often a SPEC-ID). Flag leases on archived/rejected/completed
+    // specs — catches BUG-492-style states where work is held on dead specs.
+    let stale_lease = |scope: &str| -> Option<String> {
+        let scope = scope.trim();
+        let r = store.requirements.iter().find(|r| {
+            r.spec_id.as_deref() == Some(scope)
+                || r.agreed_id.as_deref() == Some(scope)
+                || r.display_id() == scope
+        })?;
+        if r.archived {
+            return Some("archived".to_string());
+        }
+        match r.status {
+            RequirementStatus::Rejected => Some("rejected".to_string()),
+            RequirementStatus::Completed => Some("completed".to_string()),
+            _ => None,
+        }
+    };
+
+    if json {
+        let leases_json: Vec<serde_json::Value> = leases
+            .iter()
+            .map(|l| {
+                serde_json::json!({
+                    "id": l.id,
+                    "scope": l.scope,
+                    "owner": l.owner,
+                    "branch": l.branch,
+                    "stale_spec_state": stale_lease(&l.scope),
+                })
+            })
+            .collect();
+        let live_json = match &live {
+            Some((a, alive, cost)) => serde_json::json!({
+                "registered": true,
+                "alive": alive,
+                "jsonl_size_bytes": a.jsonl_size_bytes,
+                "estimated_fork_cost_usd": cost,
+            }),
+            None => serde_json::json!({
+                "registered": reg.is_some(),
+                "alive": false,
+            }),
+        };
+        let value = serde_json::json!({
+            "live_advisor": live_json,
+            "fork_mode": fork_mode_label,
+            "intake_drafts": drafts,
+            "pending_decisions": pending_decisions,
+            "findings_awaiting_triage": findings_awaiting,
+            "backlog_not_queued": backlog,
+            "burndown": {
+                "ready": ready.len(),
+                "awaiting_signoff": awaiting_signoff.len(),
+                "parked": parked.len(),
+            },
+            "queue_depth": queue_depth,
+            "in_flight": in_flight_specs,
+            "live_sessions": leases_json,
+        });
+        println!("{}", serde_json::to_string_pretty(&value)?);
+        return Ok(());
+    }
+
+    println!("{}", "Advisor dashboard".bold());
+    println!();
+
+    // Live advisor
+    println!("{}", "Live advisor".cyan().bold());
+    match (&reg, &live) {
+        (Some(_), Some((a, alive, cost))) => {
+            let mb = a.jsonl_size_bytes as f64 / (1024.0 * 1024.0);
+            println!(
+                "  registered, {} — {} ({:.2} MB, ~${:.2}/fork)",
+                if *alive {
+                    "alive (fork-ready)".green().to_string()
+                } else {
+                    "not alive (cold-boot fallback)".yellow().to_string()
+                },
+                a.source_jsonl.display(),
+                mb,
+                cost
+            );
+        }
+        (Some(_), None) => {
+            println!(
+                "  registered, but {} — source JSONL not found on disk",
+                "cold-boot fallback".yellow()
+            );
+        }
+        (None, _) => {
+            println!(
+                "  {} — orchestrator cold-boots every punt. Enable forking: {}",
+                "no live advisor registered".dimmed(),
+                "aida advisor register".cyan()
+            );
+        }
+    }
+    println!("  fork_mode: {fork_mode_label} (set in .aida/config.toml [advisor])");
+    println!(
+        "  Registration detail: {}",
+        "aida advisor status --registration".dimmed()
+    );
+    println!();
+
+    // Each remaining row: count + the command to act.
+    println!("{}", "Intake".cyan().bold());
+    println!(
+        "  {drafts} draft(s) to triage → {}",
+        "/aida-triage".dimmed()
+    );
+    println!();
+
+    println!("{}", "Decisions".cyan().bold());
+    println!(
+        "  {pending_decisions} pending question(s) → {}",
+        "aida questions".dimmed()
+    );
+    println!();
+
+    println!("{}", "Findings".cyan().bold());
+    println!(
+        "  {findings_awaiting} awaiting triage (incl. shelved / needs-attention) → {}",
+        "aida findings list".dimmed()
+    );
+    println!();
+
+    println!("{}", "Backlog".cyan().bold());
+    println!(
+        "  {backlog} approved-not-queued → {} / {}",
+        "aida backlog list".dimmed(),
+        "groom".dimmed()
+    );
+    println!();
+
+    println!("{}", "Burndown readiness".cyan().bold());
+    println!(
+        "  {} ready · {} awaiting sign-off · {} parked → {}",
+        ready.len(),
+        awaiting_signoff.len(),
+        parked.len(),
+        "aida burndown plan".dimmed()
+    );
+    println!();
+
+    println!("{}", "Queue".cyan().bold());
+    println!(
+        "  depth {queue_depth} · {in_flight_specs} in-flight (Done — awaiting merge) → {}",
+        "aida queue list".dimmed()
+    );
+    println!();
+
+    println!("{}", "Live sessions".cyan().bold());
+    if leases.is_empty() {
+        println!(
+            "  (no active sessions) → {}",
+            "aida session leases".dimmed()
+        );
+    } else {
+        for l in &leases {
+            match stale_lease(&l.scope) {
+                Some(state) => println!(
+                    "  {} {} ({}) — {}",
+                    l.scope,
+                    l.owner.dimmed(),
+                    l.branch.dimmed(),
+                    format!("⚠ spec {state}").yellow()
+                ),
+                None => println!("  {} {} ({})", l.scope, l.owner.dimmed(), l.branch.dimmed()),
+            }
+        }
+        println!("  → {}", "aida session leases".dimmed());
+    }
+
     Ok(())
 }
 
@@ -9134,11 +9434,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             return handle_agent_command(agent_cmd);
         }
         Command::Advisor(advisor_cmd) => {
-            // STORY-262: `aida advisor schedule` is the only advisor subcommand
-            // that reaches storage init — it files TASKs into the queue. The
-            // store-less registration subcommands (register/unregister/status)
-            // dispatch before storage init and never reach here.
-            // trace:STORY-262 | ai:claude
+            // STORY-262 / STORY-559: two advisor subcommands reach storage init
+            // — `schedule` (files TASKs) and the default `advisor status`
+            // dashboard (aggregates the store). The narrow `advisor status
+            // --registration` view and register/unregister dispatch before
+            // storage init and never reach here.
+            // trace:STORY-262 trace:STORY-559 | ai:claude
             match advisor_cmd {
                 AdvisorCommand::Schedule(sched_cmd) => {
                     let project_root = store_path
@@ -9147,7 +9448,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
                     return handle_schedule_command(sched_cmd, &project_root, store_path);
                 }
-                _ => unreachable!("non-schedule advisor subcommands dispatch before storage init"),
+                AdvisorCommand::Status {
+                    json,
+                    registration: false,
+                } => {
+                    return handle_advisor_dashboard(*json, &backend, store_path);
+                }
+                _ => unreachable!("non-dashboard/schedule advisor subcommands dispatch early"),
             }
         }
         Command::Brief {
