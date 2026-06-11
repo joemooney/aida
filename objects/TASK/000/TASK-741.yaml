@@ -3,18 +3,28 @@ spec_id: TASK-741
 agreed_id: TASK-741
 title: 'Phase 2d: express the BUG-492 / BUG-493 cross-axis invariants as `INVARIANTS` rows consulted by the archive + held-for-review paths'
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:05:20.294682777Z
-modified_at: 2026-06-11T22:32:29.881062412Z
+modified_at: 2026-06-11T22:37:35.419827622Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb555-d0ad-7c93-ba44-0946264e944f
   created_at: 2026-06-11T07:05:24.479288903Z
+history:
+- id: 019eb8d5-6dca-7fb0-8904-d552ec26065a
+  author: aida-auto-bump
+  timestamp: 2026-06-11T22:37:35.562503346Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 implementation_info:
   implemented: true
   implemented_at: 2026-06-11T22:32:29.881062412Z
   implemented_by: joe
+  completed_at: 2026-06-11T22:37:35.419827622Z
+  completion_sha: 6bcea65d9287402890fec1e7901e1323ab99e94e
