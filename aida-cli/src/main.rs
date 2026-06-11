@@ -51897,9 +51897,17 @@ mod lease_enforcement_tests {
         let solo_wt_str = solo_wt.to_str().unwrap();
 
         let write_lease = |id: &str, scope: &str, wt: &str| {
+            // worktree_path goes in a TOML *literal* (single-quoted) string: on
+            // Windows `wt` is a backslash path (C:\...\shared-worktree), and a
+            // double-quoted basic string would read each `\` as an escape
+            // sequence → invalid TOML → the lease silently fails to parse and is
+            // dropped from list_leases. Production serializes via
+            // toml::to_string_pretty (which escapes the backslashes); the test
+            // mirrors that round-trip safely with a literal string.
+            // trace:BUG-483 | ai:claude
             let toml = format!(
                 "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"{slug}\"\nowner = \"t\"\n\
-                 worktree_path = \"{wt}\"\nbranch = \"br\"\nstarted_at = \"2026-05-14T00:00:00Z\"\n\
+                 worktree_path = '{wt}'\nbranch = \"br\"\nstarted_at = \"2026-05-14T00:00:00Z\"\n\
                  hostname = \"h\"\n",
                 id = id,
                 scope = scope,
