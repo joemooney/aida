@@ -2,13 +2,28 @@ id: 019eb4e0-52b3-74e3-81e4-ecd99fb629f0
 spec_id: STORY-553
 agreed_id: STORY-553
 title: 'aida review <spec>: single verb to drive human review of a held spec (dual of queue work)'
-description: 'Operator-surfaced gap (2026-06-10, via TASK-715): a spec tagged review:draft-only / ''held for review'' has no single verb to actually perform the review. Today the human must manually find the PR, then reach for ''gh pr view'' / ''aida session start --owns PR-N'' / ''/aida-review'' / ''aida review prompt --specs <id>''. Propose ''aida review <SPEC>'' as the human-review counterpart to ''aida queue work'': resolve the spec -> locate its draft PR (or branch+commits if no PR) -> surface the review surface (diff + ## Acceptance criteria + the generated ''aida review prompt'' output) -> route the verdict to approve-and-merge OR request-changes (''aida queue rework <SPEC>''). MUST degrade honestly: if the held draft PR was closed/never-opened (the TASK-715 case), report the real state and offer to (re)open a PR from the branch — never assert a PR that isn''t there. Core usability per the keep-and-fix litmus. Composes with: aida review prompt (STORY existing), aida session start --owns PR-N (STORY-71), aida queue rework, the reviewer role.'
+description: |-
+  Operator-surfaced gap (2026-06-10, via TASK-715): a spec tagged review:draft-only / 'held for review' has no single verb to actually perform the review. Today the human must manually find the PR, then reach for 'gh pr view' / 'aida session start --owns PR-N' / '/aida-review' / 'aida review prompt --specs <id>'. 'aida review <SPEC>' is the human-review counterpart to 'aida queue work'.
+
+  ## Acceptance
+
+  1. Resolve <SPEC> -> locate its review surface: an OPEN draft PR if one exists; else the branch+commits; else report 'built locally, never pushed'. NEVER assert a PR that is closed/absent (the TASK-715 / BUG-493 failure mode).
+  2. ANALYST SEAT = reviewer, NOT advisor. Spawn a REVIEWER agent (headless 'claude -p', reusing the existing /aida-review tier) that reads the actual DIFF against the spec's ## Acceptance criteria. Rationale: reviewer reads code, advisor reads commit messages/strategy — for a merge-readiness verdict the code-reader is authoritative (cf. feedback_trust_reviewer_over_dialog_intuition).
+  3. AGENT ANALYZES + RECOMMENDS; HUMAN DECIDES + ACTS. Present the reviewer's findings + a recommended verdict, then prompt the human to choose: approve -> merge | request changes -> 'aida queue rework <SPEC>' | open the diff myself | defer. The verb MUST NOT auto-merge — that defeats the entire purpose of the review:draft-only gate (cf. STORY-529 self-merge bug-class).
+  4. REUSE, don't rebuild: the analysis path is the existing headless reviewer tier (/aida-review via claude -p) + 'aida review prompt'; this verb wires that analysis to a human decision prompt instead of auto-acting. No new orchestrator machinery.
+  5. Degrade honestly with no PR: if the held draft PR was closed/never-opened, report the real state and OFFER to (re)open a PR from the branch before review.
+
+  ## Out of scope (follow-up)
+
+  - Optional advisor strategic lens ('does this still fit the direction?') as '--with-advisor-lens' — a second, opt-in overlay separate from the code verdict. File as a child TASK once the core verb lands.
+
+  Composes with: aida review prompt, aida session start --owns PR-N (STORY-71), aida queue rework, the reviewer role. trace:BUG-493 (the misleading 'held as a draft PR' state this verb must read correctly).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T04:11:00.659134661Z
-modified_at: 2026-06-11T04:11:00.659134661Z
+modified_at: 2026-06-11T04:38:20.037987196Z
 req_type: Story
 tags:
 - aida:review
