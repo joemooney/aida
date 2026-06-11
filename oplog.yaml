@@ -16577,5 +16577,54 @@ operations:
   timestamp: 2026-06-11T13:01:04.064145915Z
   kind: !SetStatus
     status: Approved
-clock: 1648
+- id: 019eb6cb-8e2b-7e40-859c-81ebcb98b5af
+  target_id: 019eb6c1-d4f3-7fb3-ba90-94be19cbd9e2
+  author: aida
+  node_id: '1'
+  lamport: 1649
+  timestamp: 2026-06-11T13:07:34.059575662Z
+  kind: !SetTitle
+    title: 'aida advisor status: expand into the advisor situational dashboard (fold registration in; flag for narrow output)'
+- id: 019eb6cb-8f27-7961-bced-a0f2ddc836c7
+  target_id: 019eb6c1-d4f3-7fb3-ba90-94be19cbd9e2
+  author: aida
+  node_id: '1'
+  lamport: 1650
+  timestamp: 2026-06-11T13:07:34.311453101Z
+  kind: !SetDescription
+    description: |-
+      ## Decision (operator, 2026-06-11)
+
+      Operator never uses the current thin `aida advisor status` (just shows registration + $/fork). Rather than add a new `overview` verb (avoid cluttering verbs), EXPAND `aida advisor status` into the full advisor situational dashboard. The current narrow registration output becomes ONE SECTION; a flag drills back to registration-only.
+
+      No new verb. The orchestrator reads registration from `~/.aida/advisor.toml` (NOT this command's stdout), so expanding the human-facing output is cosmetic — zero functional risk to fork-vs-coldboot.
+
+      ## Shape — `aida advisor status` becomes a read-only LAUNCHPAD
+
+      One screen: each row = a count + the canonical command to act. Pure AGGREGATION of existing surfaces (reuse their queries; do NOT reimplement counts). Sections:
+
+      - **Live advisor**: registered? alive? fork-vs-coldboot readiness + $/fork (the CURRENT `status` output, now one section).
+      - **Intake**: N drafts to triage → `/aida-triage`.
+      - **Decisions**: N pending questions → `aida questions`.
+      - **Findings**: N awaiting triage (incl shelved / needs-attention) → `aida findings list`.
+      - **Backlog**: N approved-not-queued → `aida backlog list` / `groom`.
+      - **Burndown readiness**: N ready (queued+pickable) / M awaiting sign-off / K parked → `aida burndown plan`.
+      - **Queue**: depth + in-flight (Done-awaiting-merge).
+      - **Live sessions** (operator explicitly asked): active leases — who holds what scope right now → `aida session leases`. Flag any lease whose spec is in a contradictory state (archived / rejected / completed) — catches BUG-492-style states.
+
+      ## Acceptance
+
+      - [ ] `aida advisor status` (no flags) prints the full dashboard above — registration is ONE section, not the whole output.
+      - [ ] A flag (e.g. `--registration` / `--fork`) reproduces the CURRENT narrow registration-only output for anyone who wants just that; the current text is preserved behind the flag (back-compat for muscle memory / scripts).
+      - [ ] Aggregates EXISTING surfaces (advisor registration / questions / findings / backlog / burndown plan / queue / session leases) — reuse their data sources, no reimplemented counts.
+      - [ ] Each section shows a count + the command to act on it (launchpad, NOT a parallel command tree; no new advisor verbs).
+      - [ ] **Live sessions** section surfaces `aida session leases`; flags a lease whose spec is archived/rejected/completed.
+      - [ ] `--json` for machine consumers.
+      - [ ] Scope-aware: a subsystem advisor sees their scope (forward-looking for SPIKE-10); whole-project by default.
+      - [ ] Read-only — no writes, no auto-queue, no auto-approve.
+
+      ## Rationale
+
+      Makes the one advisor-status command worth running (it was too thin to use), orients a possibly-confused advisor in one glance, and routes to the real verbs — WITHOUT adding surface. Registration detail stays reachable via a flag. Complements STORY-558 (burndown-prep acts on the readiness this surfaces).
+clock: 1650
 node_id: '1'
