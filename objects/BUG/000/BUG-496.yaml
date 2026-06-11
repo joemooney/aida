@@ -1,0 +1,19 @@
+id: 019eb6b6-5b73-7a41-80d5-77d83d60245e
+spec_id: BUG-496
+agreed_id: BUG-496
+title: Parallel burndown can merge two PRs that each pass CI alone but break main together — no integrated-main re-verify
+description: '2026-06-11: ''aida burndown run'' drained a wave including STORY-557 (#757, added clarify_default_specs calling question_sweep_candidate with 3 args) and BUG-495 (#756, gave question_sweep_candidate a 4th param in_flight_scopes). Each PR branched from the same old base and was GREEN in isolation; merged together, origin/main (58f2b556) did not compile (E0061 at main.rs:3575). Neither PR''s CI re-tested against the other''s merge — the classic squash-merge parallel-integration hazard. The burndown declared ''complete / 6 shipped'' while main was red. Fixed forward by hand (6ecc7b6f7). The autonomy keystone must not leave main broken. Options to evaluate: (a) after a parallel wave, run a final build/test on the integrated main before declaring success; (b) require PR branches up-to-date with main before auto-merge (GitHub branch-protection ''require branches to be up to date'', which forces re-CI on base move); (c) serialize merges + rebase-then-CI each. Keyboard-supervised: it''s the drain''s own merge machinery.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T12:44:24.819108316Z
+modified_at: 2026-06-11T12:44:24.819108316Z
+req_type: Bug
+tags:
+- aida:burndown
+- ci
+- integration
+- needs-human
+- reliability
+- severity:high
