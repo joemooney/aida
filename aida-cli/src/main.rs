@@ -10468,6 +10468,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     req.status = RequirementStatus::Draft;
                     Some(from)
                 } else {
+                    // BUG-498: a non-downgraded approved+ intake exercised
+                    // advisor authority — nudge the operator to seat the
+                    // advisor role if it came from an env prefix.
+                    if status_requires_advisor_authority(&req.status) {
+                        maybe_hint_advisor_seat();
+                    }
                     None
                 };
             if let Some(p) = &effective_priority {
@@ -11538,16 +11544,20 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // (or the orchestrator) just punted — bypassing the human/advisor
                 // triage the punt exists to request. trace:BUG-482 | ai:claude
                 let new_status = parse_status(canonical)?;
-                if status_advance_requires_advisor_authority(&req.status, &new_status)
-                    && !has_advisor_authority()
-                {
-                    anyhow::bail!(
-                        "promoting a {} spec to {} needs advisor authority (advisor role or an \
-                         interactive session). Leave it for advisor triage, or run as \
-                         the advisor.",
-                        req.status,
-                        canonical
-                    );
+                if status_advance_requires_advisor_authority(&req.status, &new_status) {
+                    if !has_advisor_authority() {
+                        anyhow::bail!(
+                            "promoting a {} spec to {} needs advisor authority (advisor role or \
+                             an interactive session). Leave it for advisor triage, or run as \
+                             the advisor.",
+                            req.status,
+                            canonical
+                        );
+                    }
+                    // BUG-498: a gated promotion that went through is advisor
+                    // work — nudge the operator to seat the advisor role if
+                    // they're acting via an env prefix. trace:BUG-498 | ai:claude
+                    maybe_hint_advisor_seat();
                 }
                 let was_needs_attention = matches!(req.status, RequirementStatus::NeedsAttention);
                 req.set_status_from_str(canonical);
@@ -17544,6 +17554,13 @@ fn add_requirement_cli(
             requirement.status = RequirementStatus::Draft;
             Some(from)
         } else {
+            // BUG-498: an approved+ status that was NOT downgraded means the
+            // caller exercised advisor authority — if that authority came from
+            // an `AIDA_SESSION_ROLE=advisor` prefix rather than a seated role,
+            // nudge them to seat it. trace:BUG-498 | ai:claude
+            if status_requires_advisor_authority(&requirement.status) {
+                maybe_hint_advisor_seat();
+            }
             None
         };
 
@@ -48147,6 +48164,23 @@ mod statusline_tests {
         assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
     }
 
+    /// BUG-498: the advisor-seat hint fires only when the resolved role is
+    /// advisor (advisor work) AND the persistent seat was never established
+    /// (`AIDA_SESSION_PROJECT` unset — i.e. advisor came from a one-off
+    /// `AIDA_SESSION_ROLE=advisor` prefix, not `aida role enter advisor`).
+    #[test]
+    fn advisor_seat_hint_fires_only_for_unseated_advisor() {
+        use super::advisor_seat_hint_warranted;
+        // advisor via prefix, no seat → hint
+        assert!(advisor_seat_hint_warranted("advisor", false));
+        // advisor seated (role enter exported AIDA_SESSION_PROJECT) → no hint
+        assert!(!advisor_seat_hint_warranted("advisor", true));
+        // non-advisor roles never warrant the advisor-seat hint
+        assert!(!advisor_seat_hint_warranted("implementer", false));
+        assert!(!advisor_seat_hint_warranted("reviewer", false));
+        assert!(!advisor_seat_hint_warranted("implementer", true));
+    }
+
     /// TASK-130: a Spike is born human-only (research is human-driven) unless
     /// `--no-human-only` opts it back into auto-pickup; every other type
     /// defaults to NOT human-only; `--human-only` flips any type on. The flags
@@ -59392,6 +59426,61 @@ fn has_advisor_authority() -> bool {
         std::io::stdin().is_terminal(),
         orchestrated,
     )
+}
+
+// BUG-498: An operator doing advisor work (groom / approve / queue) by
+// prefixing individual commands with `AIDA_SESSION_ROLE=advisor` is acting
+// as the advisor, but their persistent shell seat is unset — so the
+// statusline (which renders `$AIDA_SESSION_ROLE`, defaulting to `implementer`)
+// shows `implementer`, and the seat-vs-work mismatch is invisible. This is the
+// pure predicate behind the one-time hint suggesting they actually seat the
+// role via `aida role enter advisor`.
+//
+// Discriminator: `aida role enter advisor` exports BOTH `AIDA_SESSION_ROLE`
+// AND `AIDA_SESSION_PROJECT` (see `emit_role_enter_eval`), and persists them in
+// the shell — so a *seated* advisor's every command carries both. A one-off
+// `AIDA_SESSION_ROLE=advisor aida …` prefix sets only `AIDA_SESSION_ROLE` for
+// that single process and leaves `AIDA_SESSION_PROJECT` unset. So: role resolves
+// to advisor via the env var, but the seat (`AIDA_SESSION_PROJECT`) was never
+// established → the operator is advisor-via-prefix, not advisor-seated.
+// trace:BUG-498 | ai:claude
+fn advisor_seat_hint_warranted(role: &str, session_project_set: bool) -> bool {
+    role == "advisor" && !session_project_set
+}
+
+/// BUG-498: print a one-time stderr hint when an advisor-gated command is run
+/// advisor-style via an `AIDA_SESSION_ROLE=advisor` prefix while the persistent
+/// seat was never established (no `aida role enter advisor`). Never blocks the
+/// command, never changes the role. Gated on a per-clone marker file under
+/// `.aida/` so it fires at most once (the `.aida/*` deny-by-default gitignore
+/// convention means the marker needs no allow-list entry). trace:BUG-498
+fn maybe_hint_advisor_seat() {
+    let role = effective_role();
+    let session_project_set = std::env::var("AIDA_SESSION_PROJECT")
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false);
+    if !advisor_seat_hint_warranted(&role, session_project_set) {
+        return;
+    }
+    let Ok(project_root) = find_project_root() else {
+        return;
+    };
+    let marker = project_root.join(".aida/.advisor-seat-hint-shown");
+    if marker.exists() {
+        return;
+    }
+    // Best-effort: ensure `.aida/` exists, then drop the marker. Failure to
+    // write is non-fatal — at worst the hint shows again next time.
+    if let Some(parent) = marker.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&marker, "shown\n");
+    eprintln!(
+        "{} You're operating as {} — run {} to seat it (your statusline still shows the default role).",
+        "ℹ".cyan(),
+        "advisor".yellow(),
+        "aida role enter advisor".cyan()
+    );
 }
 
 /// they disagree — and the warning is enabled — both are shown with a
@@ -89042,6 +89131,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                      as the advisor."
                 );
             }
+            // BUG-498: queuing work is advisor-style — nudge the operator to
+            // seat the advisor role if they're acting via an env prefix.
+            maybe_hint_advisor_seat();
             let user_id = get_user(user);
             let store = storage.load()?;
 
