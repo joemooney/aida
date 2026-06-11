@@ -1,0 +1,28 @@
+id: 019eb6f4-06e9-7fe2-9723-66fb8e4648f2
+spec_id: TASK-744
+agreed_id: TASK-744
+title: Split overloaded 'needs-human' into 'needs-decision' (answer-to-unblock) vs 'needs-supervised-build' (keyboard build, not a question)
+description: |-
+  Operator-exposed 2026-06-11 ('is there a command to answer these?'): the 'needs-human' tag — and the 'burndown explain' awaiting-decision bucket — conflates TWO distinct human-required states: (a) NEEDS-DECISION: a human must answer/choose before it can be built (e.g. STORY-548 design-signoff) → resolved via the decision/clarify flow (aida questions / aida-clarify); (b) NEEDS-SUPERVISED-BUILD: the work is CLEAR to build but must be done at the keyboard, NOT the unsupervised drain (keystone/authority code, blast-radius — e.g. the lifecycle-migration phases TASK-738..741, STORY-554/555/560/561, BUG-496, TASK-721) → resolved via 'aida queue work --zen'. Calling both 'awaiting-decision' misleads: most aren't decisions, they're work. Split so the human-attention surfaces route them correctly.
+
+  ## Acceptance
+  1. Two distinct markers — 'needs-decision' and 'needs-supervised-build' — BOTH recognized by the burndown parking_tag predicate (both still park from the UNSUPERVISED drain). 'needs-human' stays as a deprecated umbrella alias = either.
+  2. 'burndown explain' + STORY-562 ('aida list human') + SPIKE-57 ('aida human') show them as SEPARATE buckets, each with its resolution path printed: needs-decision → 'answer via aida questions / aida-clarify'; needs-supervised-build → 'build via aida queue work <id> --zen'.
+  3. MIGRATE this session's mis-tagged set ONLY AFTER (1) lands (so they stay parked throughout): needs-supervised-build ← TASK-738/739/740/741, TASK-721, BUG-496, STORY-554/555/560/561; needs-decision ← STORY-548.
+  4. Do NOT re-tag before the gate recognizes the new tags (un-parking them would leak keystone work to the unsupervised drain).
+
+  Feeds SPIKE-57 (human-as-role) — this is the sub-classification of the human-required signal by RESOLUTION PATH.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T13:51:46.409459717Z
+modified_at: 2026-06-11T13:51:46.409459717Z
+req_type: Task
+tags:
+- aida:burndown
+- aida:human
+- core
+- needs-human
+- taxonomy
+- ux
