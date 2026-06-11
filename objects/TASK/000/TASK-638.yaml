@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-03T05:48:47.576602659Z
-modified_at: 2026-06-03T06:36:36.632064269Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - aida:init
@@ -49,6 +49,8 @@ comments:
   content: Commit bc4063ce2 references this requirement
   created_at: 2026-06-03T06:32:30.375056453Z
   modified_at: 2026-06-03T06:32:30.375056453Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-03T06:36:36.632064269Z

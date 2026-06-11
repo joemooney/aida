@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T22:03:52.208648036Z
-modified_at: 2026-06-01T06:49:41.039711826Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:archive
@@ -39,6 +39,8 @@ comments:
   content: Commit c6453d389 references this requirement
   created_at: 2026-06-01T06:44:41.032242740Z
   modified_at: 2026-06-01T06:44:41.032242740Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-01T06:49:41.039711826Z

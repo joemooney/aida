@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:09:51.971767710Z
-modified_at: 2026-05-31T17:05:25.656284888Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:agent:new
@@ -25,6 +25,8 @@ comments:
   content: Commit efe94b43e references this requirement
   created_at: 2026-05-31T17:00:31.278932843Z
   modified_at: 2026-05-31T17:00:31.278932843Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T17:05:25.656284888Z

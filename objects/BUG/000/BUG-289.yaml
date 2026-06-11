@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T01:08:59.175805586Z
-modified_at: 2026-05-31T05:46:58.349580789Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:pr:rebase
@@ -55,6 +55,8 @@ tags:
 - from-user-friction
 - task-308-followup
 - worktree
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T05:46:58.349580789Z

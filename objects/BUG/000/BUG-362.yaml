@@ -42,7 +42,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-23T18:12:10.930679221Z
-modified_at: 2026-06-01T05:31:10.572670795Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:pr:ship
@@ -70,3 +70,5 @@ comments:
   content: 'RESOLVED — already implemented (verify-before-building; supersedes my earlier ''implementing Option B'' comment). aida pr ship Step 5 (aida-cli/src/main.rs ~29742, pr_ship.rs ShipStep::EndLease) already implements Option B: after merge+pull it finds list_leases().find(|l| l.branch == branch) and runs ''aida session end <lease> --yes --skip-ci'', with guards for shell-inside-worktree (skip + instruct) and no-matching-lease (''nothing to clean up''). 71 pr_ship tests pass. The 2026-05-23 repro predates this step. The ''1 stale lease hidden'' in the current session is unrelated — main-repo branch ships (no session worktree) have no lease to end. Closing as Completed.'
   created_at: 2026-06-01T05:31:03.105070050Z
   modified_at: 2026-06-01T05:31:03.105070050Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z

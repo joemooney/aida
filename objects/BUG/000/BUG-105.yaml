@@ -44,7 +44,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-15T06:15:53.972861010Z
-modified_at: 2026-05-31T05:39:13.736994336Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - DP-2
@@ -58,6 +58,8 @@ relationships:
 - rel_type: Child
   target_id: 019e1f98-72d0-7d02-9c08-7b3d52001a22
   created_at: 2026-05-15T06:15:56.007537358Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T05:39:13.736994336Z

@@ -8,8 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T04:35:53.758129896Z
-modified_at: 2026-05-31T05:15:59.510582682Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T05:15:59.510582682Z

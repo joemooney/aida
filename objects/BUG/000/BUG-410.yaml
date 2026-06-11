@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T11:19:33.059539895Z
-modified_at: 2026-05-31T16:42:08.154845515Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:pull
@@ -28,6 +28,8 @@ comments:
   content: Commit d65296d4d references this requirement
   created_at: 2026-05-31T16:37:09.980767048Z
   modified_at: 2026-05-31T16:37:09.980767048Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T16:42:08.154845515Z

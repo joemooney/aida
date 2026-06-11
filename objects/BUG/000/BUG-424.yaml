@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T21:28:44.530662861Z
-modified_at: 2026-05-31T21:38:11.336237407Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:archive
@@ -23,6 +23,8 @@ comments:
   content: Commit cee7e1c9a references this requirement
   created_at: 2026-05-31T21:32:54.703940954Z
   modified_at: 2026-05-31T21:32:54.703940954Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T21:38:11.336237407Z

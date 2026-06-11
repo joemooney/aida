@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T03:06:13.112401686Z
-modified_at: 2026-05-31T05:02:03.625405632Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:doctor
@@ -24,6 +24,8 @@ tags:
 - heal
 - interactive-prompt
 - kind:bug-spotted
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T05:02:03.625405632Z

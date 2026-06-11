@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T18:52:56.788625463Z
-modified_at: 2026-05-31T05:39:13.736994336Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - design-decision
@@ -16,6 +16,8 @@ tags:
 - from-story-407
 - mcp
 - punt-channel
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T05:39:13.736994336Z

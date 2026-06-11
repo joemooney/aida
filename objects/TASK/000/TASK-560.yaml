@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-25T07:41:28.457375483Z
-modified_at: 2026-05-31T18:19:02.355867608Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - aida:queue
@@ -22,6 +22,8 @@ comments:
   content: Commit c263969d8 references this requirement
   created_at: 2026-05-31T18:13:49.360434967Z
   modified_at: 2026-05-31T18:13:49.360434967Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T18:19:02.355867608Z

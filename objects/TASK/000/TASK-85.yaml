@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:03:46.569495464Z
-modified_at: 2026-05-30T18:31:52.272300985Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -87,6 +87,8 @@ comments:
   content: Commit 423b2c81 references this requirement
   created_at: 2026-05-30T18:31:52.272300985Z
   modified_at: 2026-05-30T18:31:52.272300985Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T15:32:12.330278918Z

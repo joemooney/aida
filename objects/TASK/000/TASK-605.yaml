@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T16:15:01.987263999Z
-modified_at: 2026-05-31T16:20:07.662650837Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - digest
@@ -16,6 +16,8 @@ tags:
 - inter-agent-mailbox
 - parent:STORY-493
 - slice-4
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T16:20:07.662650837Z

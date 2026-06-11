@@ -17,7 +17,7 @@ priority: Low
 owner: joe
 feature: Uncategorized
 created_at: 2026-05-28T16:36:20.546911728Z
-modified_at: 2026-05-31T20:42:07.663080044Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - batch:demo-drain
@@ -41,6 +41,8 @@ comments:
   content: 'Promoted by joe 2026-05-31: Recurrence-3 trace-marker /// leak. NOTE: CI tests already block the leak from merging (the bouncer exists); this is shift-left convenience (pre-commit hook/lint), so LOW priority. Triage 2026-05-31.'
   created_at: 2026-05-31T19:32:50.178152811Z
   modified_at: 2026-05-31T19:32:50.178152811Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-31T20:01:48.839725595Z

@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T13:28:35.260944929Z
-modified_at: 2026-05-31T13:45:53.265120925Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - aida:graph
@@ -18,6 +18,8 @@ tags:
 - kind:bug-spotted
 - mcp
 - parent:STORY-489
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T13:45:53.265120925Z

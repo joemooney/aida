@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T14:08:40.071520214Z
-modified_at: 2026-05-31T14:13:15.599965821Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Bug
 tags:
 - auto-complete
@@ -17,6 +17,8 @@ tags:
 - lifecycle
 - orchestrator
 - story-442
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T14:13:15.599965821Z

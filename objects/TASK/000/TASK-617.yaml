@@ -8,13 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-01T01:47:13.148375303Z
-modified_at: 2026-06-01T01:52:16.047453345Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Task
 tags:
 - advisor-model
 - coordination
 - docs
 - from-operator
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-06-01T01:52:16.047453345Z

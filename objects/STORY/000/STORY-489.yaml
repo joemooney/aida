@@ -14,7 +14,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T06:22:20.110613503Z
-modified_at: 2026-05-31T10:24:34.005387457Z
+modified_at: 2026-06-11T12:48:31.383831391Z
 req_type: Story
 tags:
 - competitive-parity
@@ -40,6 +40,8 @@ comments:
   content: Commit d442b6c57 references this requirement
   created_at: 2026-05-31T10:24:34.005387457Z
   modified_at: 2026-05-31T10:24:34.005387457Z
+archived: true
+archived_at: 2026-06-11T12:48:31.383831391Z
 implementation_info:
   implemented: false
   completed_at: 2026-05-31T10:19:23.690611872Z
