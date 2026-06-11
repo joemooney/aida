@@ -4,6 +4,123 @@ All notable changes to this project are documented here. Generated
 mechanically from the spec graph (`aida changelog refresh`) — do not edit
 by hand; regenerate after merging.
 
+## [v0.13.0] — 2026-06-11
+
+Specs merged since v0.12.0 (98):
+
+### Features
+
+- **TASK-732** — Init greeting: teach the code-to-spec link bridge between 'aida list' and 'aida done' (#742)
+- **TASK-730** — aida list: when finished work clutters the default view, point to 'aida list open' (what's left) (#737)
+- **TASK-728** — Novice-first: aida add type-picker leads with relatable types; init greeting shows the full loop (incl. aida done) (#731)
+- **TASK-726** — Novice-first: aida show tells you HOW to link code when there's no linkage yet (#729)
+- **TASK-725** — Novice-first: declutter the aida init greeting (the loop + role, jargon to --verbose) (#728)
+- **TASK-0417** — Add optional EARS-style requirement linting (#725)
+- **TASK-0418** — Add context-grounded pre-plan scan for spec imports and generation (#724)
+- **STORY-545** — aida burndown run: headless PARALLEL overnight drain over the gated ready set (#718)
+- **STORY-547** — aida burndown plan: derived 'why still open' reason for EVERY open spec (+ aida why <ID>) (#715)
+- **STORY-542** — Capture interface_changes at spec close (cli/mcp/tui) → the deterministic source for the operator digest (#713)
+- **TASK-0415** — Add list status shortcuts and open/closed aliases (#712)
+- **STORY-528** — Agent registry paused-availability state + brief-time budget warning (#711)
+- **TASK-714** — aida schema: full per-object field detail (Finding/Brief/Punt/Directive/Lease/QueueItem) (#710)
+- **STORY-544** — burndown plan: next-step footer + plain-language selector (new-user dead-end) (#708)
+- **TASK-0414** — Add opt-in AIDA-aware statusline bootstrap path (#706)
+- **FR-98** — Drag a requirement to make child (#703)
+- **STORY-539** — Mailbox UX: operator overview (list + inbox --all), originator/time display, light urgency flag + surfacing (#701)
+- **STORY-537** — aida remote create: guided origin bootstrap (gh / GitLab push-to-create / glab / attach-existing) when a project has no remote (#700)
+- **STORY-541** — aida digest --audience operator (capabilities lens): new USER-FACING CLI/UX changes + how to try them, since a window (#699)
+- **TASK-717** — aida doctor: verify-and-prune stale REMOTE branches (doctor --heal is local-only) (#698)
+- **TASK-713** — Role picker should stay scannable in narrow terminals (#695)
+- **STORY-538** — aida schema: introspect the storable substrate (object catalog + per-object field/enum detail) (#691)
+- **TASK-707** — File the active-loop specs (`aida-integrate` skill, `aida queue integrate`) (#684)
+- **STORY-531** — EPIC-36 Tier-2: threshold-triggered LLM health fact-finding (extend /aida-insights) (#683)
+- **STORY-536** — EPIC-27: remaining MCP tools (db/cache/plan/goal/ultraplan/status/usage) (#682)
+- **STORY-535** — EPIC-27: MCP resources for live state (queue/in-flight, session/leases, pr/N, batch/N) (#680)
+- **STORY-534** — EPIC-27: role MCP tools (role_enter/end/show/list) (#679)
+- **STORY-460** — Integrator role — delegate merge-cascade conflict resolution off the advisor (#664, #677)
+- **STORY-533** — EPIC-27: session MCP tools (session_start/end/leases/status/manifest) (#676)
+- **TASK-705** — burndown: skip specs that already have an open PR / in-flight work (#675)
+- **STORY-493** — P3 hybrid inter-agent mailbox: fast .aida/ local layer + git-canonical durable digest (#674)
+- **STORY-530** — EPIC-36 Tier-1: remaining deterministic health metrics catalog (#673)
+- **STORY-532** — EPIC-27: queue MCP tools (queue_list/add/work/done/next/progress/rework/move/remove) (#672)
+- **TASK-706** — EPIC-36 MVP: session-vs-drain misclassification-gap metric (deterministic) (#671)
+- **STORY-527** — /aida-burndown skill: selector → ready/bounded fan-out → integrate (punt-and-continue) — the encoded autonomous-drain path (#666, #669)
+- **TASK-699** — aida doctor external-import-bleed: opt-in heal (remove stray ancestor instruction files) (#667)
+- **TASK-702** — Wire SubagentStart/Stop -> AIDA lease register/release (TASK-694 passive-observe, gated on the probe) (#663)
+- **STORY-529** — Enforce draft-for-review for handed-off agents — briefed 'draft PR' isn't honored (3x self-merge) (#662)
+- **TASK-697** — ultraplan suggested-threshold should key on spec thinness, not acceptance-bullet count (#661)
+- **TASK-698** — aida init: prompt for agent permission posture + populate ~/.aida/agents.toml (surface the STORY-495 bypass knob) (#660)
+- **TASK-696** — aida doctor: flag an ancestor CLAUDE.md whose @-imports resolve outside the project (external-import bleed) (#657)
+- **STORY-523** — Decision-question PRODUCER: sweep the scoped backlog, detect human-decision-needed specs, formulate + attach DecisionRequests (feeds aida questions) (#655)
+- **TASK-686** — aida init: guard against scaffolding into a parent-of-projects directory (CLAUDE.md bleeds into all children) (#652)
+- **TASK-691** — STORY-335 follow-up: .aida/config.toml [integrate] strategy project default (flag overrides) (#650)
+- **TASK-562** — scripts/release.sh ecosystem-watch prompt: auto-decide by age threshold + actionable refresh hint (#649)
+- **TASK-634** — SPIKE-41 slice: WorktreeCreate/WorktreeRemove hooks → register/release an AIDA lease (substrate-capture for harness-orchestrated worktrees) (#648)
+- **TASK-693** — STORY-472 follow-up: aida release --after-pr <N> (watch PR CI + merge before releasing) (#647)
+- **TASK-692** — STORY-472 slice 1: top-level 'aida release' verb (--patch/--minor/--major, --check, --skip-xplat-check) (#644)
+- **TASK-690** — STORY-335 slice 3: --strategy {per-item|one-branch|stacked} selector on aida queue integrate (#643)
+- **TASK-689** — STORY-335 slice 2: rebase step in aida queue integrate (--rebase, opt-in) (#642)
+- **TASK-688** — STORY-335 slice 1: read-only rebase-conflict forecast in aida queue integrate --dry-run (#641)
+- **STORY-546** — burndown gate requires QUEUED (advisor sign-off): set = approved + queued + pickable
+
+### Fixes
+
+- **BUG-491** — Windows cross-platform CI red: bug483 lease test hand-rolls TOML with unescaped backslash worktree_path (#741)
+- **TASK-731** — Skill-command audit: 'aida list --format X' + 'aida feature list' + 'requirements.yaml' drift across docs/sprint/release skills (#740)
+- **BUG-490** — /aida-req skill: broken context commands (--format brief, feature list) + legacy requirements.yaml/aida-desktop refs (#739)
+- **BUG-489** — /aida-onboard skill uses 'aida list --format summary' (doesn't exist) → falsely reports 'No AIDA database found' (#738)
+- **BUG-488** — aida search leaks seeded META AI-prompt specs; aida list hides them — inconsistent (#733, #734)
+- **BUG-487** — Commit hook nags a hand-coding novice to add [AI:tool] for a plain trace: comment (no ai: marker) (#730)
+- **BUG-485** — Cache FTS schema drift: 'requirements_fts has no column named external_refs' on db sync, not auto-rebuilt (#707)
+- **BUG-484** — Fresh aida init project shows confusing '⚠ 1 setup issue: MCP' on every Claude launch — scaffolded .mcp.json server is never pre-approved (#702)
+- **TASK-712** — Quality-sweep: batch of low-severity robustness findings (7) (#697)
+- **BUG-477** — Merge-driven done→completed auto-bump + reconcile write NO history entry (history-as-source-of-truth contract broken) (#694)
+- **BUG-483** — aida session end force-removes a worktree without checking other leases/agents share it (#693)
+- **BUG-480** — MCP tool_queue_add bypasses the advisor-authority gate the CLI enforces (TASK-647) — MCP agent can self-queue work for execution (#690)
+- **BUG-481** — MCP update_requirement lets a non-advisor self-advance Draft→InProgress/Done (status gate checks only target, not source) (#690)
+- **BUG-482** — CLI 'aida edit' advisor gate misses NeedsAttention→Approved (only Draft source is gated) (#690)
+- **BUG-478** — Failed --resume-drain is misclassified as 'deliberately shelved' → cannot be re-resumed (BUG-438 defeated) (#689)
+- **BUG-479** — Implementer that commits then exits non-zero is treated as 'no work happened' → status restored, lease/worktree/commits stranded (#689)
+- **BUG-474** — Concurrent 'aida add' can dispense duplicate agreed-IDs (BlockRegistry load→dispense→save has no lock) (#688)
+- **BUG-476** — aida pull exits 0 over a stale code tree when code leg fails + store has no worktree/origin (BUG-254 contract bypassed) (#687)
+- **BUG-475** — conflict.rs truncate() panics on non-ASCII descriptions (byte-slice after byte-length check) (#686)
+- **BUG-473** — 3 clippy correctness errors on main (dead boolean guard + 2 loops-never-loop), hidden by CI's -W mode (#678)
+- **TASK-704** — burndown gate: park needs-design-signoff + operator-action tags (found dogfooding STORY-527) (#670)
+- **TASK-700** — aida questions sweep: add --dry-run (default preview) before it writes DecisionRequests (#658)
+- **BUG-471** — aida doctor --heal aborts on first error instead of continuing (idempotency: 'lease X no longer exists') (#646)
+- **BUG-472** — aida status 'Awaiting you' findings count includes non-draft specs (overcounts vs aida findings list) (#645)
+
+### Documentation
+
+- **TASK-729** — Align getting-started.md to the new simple flow (aida add "X" / aida done / TASK ids) (#732, #735)
+- **CR-1-116** — Reposition the 'missing index' headline (intent/lifecycle) — operator decision (#723)
+- **STORY-551** — Positioning: reclaim 'intent/spec traceability + lifecycle truth' — 'missing index' collides with free auto-code-graph tools (#723)
+- **STORY-107** — Positioning + ecosystem comparison doc: 'why AIDA, how it fits' kept current as the AI/dev-tools landscape evolves (#720)
+- **TASK-722** — Seed positioning decision-aids: when-not-to-use-aida + composition (+ index→lifecycle recommendation) (#720)
+- **TASK-720** — Positioning doc: AIDA vs Claude Code Agent Teams (vs-agent-teams.md) (#719)
+- **STORY-540** — Single-writer scope-lane (docs lane): scope-owned agent fed by needs-docs flag + periodic sweep — SPIKE-10 MVP (#705)
+- **TASK-0413** — Document and scaffold Codex status-line support (#704)
+- **TASK-716** — Doc-sync: CLAUDE.md lists 13 requirement types but the model has 19 (change-request/principle/vision/constraint/decision/term undocumented) (#696)
+- **STORY-475** — Remote/auth-capable AIDA MCP transport (#665)
+- **SPIKE-13** — SPIKE: multi-agent budget-aware dispatching surface (per-agent headroom in aida status; brief-time budget check) (#659)
+- **SPIKE-8** — SPIKE: /ultraplan output quality — local vs web vs no-plan empirical comparison (#654)
+- **TASK-695** — STORY-527 slice 1: autonomous-burndown discipline-pack doc (companion to /aida-burndown) (#653)
+- **STORY-549** — Weekly multi-agent competitive deep-dive ritual (brief-driven) → adversarial deep-research via ultraplan
+
+### Infrastructure
+
+- **TASK-710** — Finish the clippy -D warnings cleanup (clear ~255 style/pedantic warnings, then flip CI) (#685)
+- **TASK-709** — CI gate: deny clippy correctness lints so logic bugs can't merge (the substrate bouncer for BUG-473's class) (#681)
+- **TASK-687** — Surface nightly cross-platform failures sooner (it was red ~3 days unnoticed, blocked v0.12.0) (#639)
+
+### Other
+
+- [AI:claude] docs: front-door discoverability — nearest competitors, decision-aids, docs/ index (#721)
+- [AI:claude] feat(burndown): aida burndown plan — selector + pickability gate (TASK-703, STORY-527 slice 1) (#668)
+- docs(history): close Session 63 novice-first loop (R10-15, TASK-731 + honest stop)
+- docs(history): session 62 — autonomy keystone validated + newcomer-adoption docs push (#722)
+- docs(history): session 63 — backlog reset + the novice-first friction loop (#736)
+
 ## [v0.12.0] — 2026-06-07
 
 Specs merged since v0.11.0 (198):
