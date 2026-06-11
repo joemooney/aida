@@ -1,0 +1,30 @@
+id: 019eb513-eacf-7930-8481-d5aeddfb05f7
+spec_id: STORY-555
+agreed_id: STORY-555
+title: 'Close the aida questions -> burndown loop: answering a decision APPLIES the resolution + unparks the spec into the ready set (the human-decision complement of aida burndown run)'
+description: |-
+  Operator-surfaced architecture gap (2026-06-10): AIDA has a two-queue model — 'aida burndown' drains the decision-FREE ready set with autonomous agents; 'aida questions' is meant to be the complement where a HUMAN drains the decision-REQUIRED parked set. Today the complement is only half-wired: 'aida questions sweep/list/ask/answer' exist, but the overview states 'answer' is slice-1 (records the answer; a later pass applies the resolution). So answering does NOT yet unpark the spec into the burndown-ready set — the bridge between the two queues is missing. Separately, the two park mechanisms are unconnected: specs parked by a pending DecisionRequest vs specs parked by a TAG (needs-design-signoff/needs-human/deferred) don't share one inbox, so the tag-parked ones never surface in 'aida questions'.
+
+  ## Acceptance
+
+  1. 'aida questions answer <spec> <choice>' (and the interactive no-arg loop) APPLIES the chosen resolution: close/resolve the DecisionRequest AND effect its resolution token — bind the chosen option into the spec's ## Acceptance and/or clear the gating parking tag — so 'aida burndown plan' moves the spec Parked -> Ready in the same step.
+  2. Round-trip verified: a spec parked SOLELY by a pending DecisionRequest is burndown-ready immediately after its question is answered, with no manual edit.
+  3. Tag<->question bridge: 'aida questions sweep' detects tag-parked specs (needs-design-signoff / needs-design / needs-human / operator-action) that lack a DecisionRequest and attaches one; answering it clears the gating tag. The two park-reasons converge on one inbox.
+  4. Honest partial-unpark: if answering can't FULLY unpark (spec still epic / BlockedBy / other parking tag), report the remaining blocker instead of claiming Ready.
+  5. Symmetry: document 'aida questions answer' (interactive loop) as the human-decision-drain complement of 'aida burndown run' in both --help texts.
+
+  Composes with: aida burndown plan/run (the autonomous complement), aida questions sweep/ask/answer (slice-1 base), STORY-523 (DecisionRequest producer), STORY-554 (auto-groom — both feed the ready set), the parking_tag predicate in burndown.rs.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T05:07:21.935626208Z
+modified_at: 2026-06-11T05:07:21.935626208Z
+req_type: Story
+tags:
+- advisor-tooling
+- aida:burndown
+- aida:questions
+- autonomy
+- core
+- needs-human
