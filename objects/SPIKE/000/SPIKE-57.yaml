@@ -1,0 +1,32 @@
+id: 019eb6ee-cef1-7981-842d-446133741b93
+spec_id: SPIKE-57
+agreed_id: SPIKE-57
+title: 'SPIKE: formalize ''human'' as a first-class role — the escalation terminus — with an ''aida human'' vector (classification, NOT assignment)'
+description: |-
+  Operator framing (2026-06-11): 'aida human' as a vector into a role, like the agent roles — a fast classifier for 'where are the bottlenecks that need a person?'. Grounding: AIDA's AGENT roles (advisor/implementer/reviewer/integrator/product) are first-class — routable via 'queue add --for <role>', enterable via 'aida role', queryable. But 'human' — the TERMINUS of the escalation cascade (implementer → advisor → human) — is NOT first-class: it is scattered across (1) the human_only marker (TASK-130), (2) the needs-human / needs-design-signoff / operator-action tags, (3) review:draft-only (built-awaiting-review), (4) --escalate-blocks parking, (5) the 'burndown explain' 'needs a human nudge' bucket. Five expressions of one idea; no '--for human' route, no 'aida human' vector. NOTE: 'aida advisor' is NOT a role-vector verb today (it's advisor-registration) — there is no general 'aida <role>' pattern, so this establishes one (or a dedicated 'aida human').
+
+  KEY PRINCIPLE (operator): separate CLASSIFICATION — 'a human is required', universal + newsworthy to ALL, the bottleneck signal — from ASSIGNMENT — 'which human (A vs B, permissions)', a multi-human RBAC concern, EXPLICITLY OUT OF SCOPE. Formalizing the former needs none of the latter.
+
+  ## Acceptance (design doc, not code — touches the role + escalation model)
+  1. docs/plans/<date>-human-as-first-class-role.md: design 'human' as the escalation-terminus role. Inventory the five scattered human-required signals above and map them onto ONE 'human-required' classification (single predicate).
+  2. Specify the 'aida human' vector: the unified bottleneck view (everything classified human-required, grouped by WHY — held-for-review / awaiting-decision / needs-triage / shelved), and how it relates to '--for human' queue routing + the human_only marker.
+  3. HOLD the classification/assignment line: design ONLY 'a human is required' + the view. Which-human assignment / RBAC / hierarchy is a named followup, NOT this spike.
+  4. Relate to STORY-562 (aida list human): that is the MVP VIEW under this role surface — confirm whether 562 ships as-is then gets absorbed, or is restated.
+  5. Recommendation + phased path (view-first via STORY-562 → '--for human' routing → role formalization) as candidate followups for operator approval; do not enact in this spike.
+
+  Composes with: TASK-130 (human_only), the escalation cascade (docs/architecture/autonomy-and-escalation.md), STORY-562 (the view), STORY-561 (presence — 'aida human' is what you check when home), STORY-559 (advisor dashboard), the role model (aida role / --for).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T13:46:04.401220442Z
+modified_at: 2026-06-11T13:46:04.401220442Z
+req_type: Spike
+tags:
+- aida:human
+- aida:role
+- architecture
+- autonomy
+- core
+- escalation
+human_only: true
