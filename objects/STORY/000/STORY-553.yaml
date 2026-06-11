@@ -18,12 +18,12 @@ description: |-
   - Optional advisor strategic lens ('does this still fit the direction?') as '--with-advisor-lens' — a second, opt-in overlay separate from the code verdict. File as a child TASK once the core verb lands.
 
   Composes with: aida review prompt, aida session start --owns PR-N (STORY-71), aida queue rework, the reviewer role. trace:BUG-493 (the misleading 'held as a draft PR' state this verb must read correctly).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T04:11:00.659134661Z
-modified_at: 2026-06-11T04:38:20.037987196Z
+modified_at: 2026-06-11T05:57:51.249526180Z
 req_type: Story
 tags:
 - aida:review
@@ -31,3 +31,15 @@ tags:
 - novice-first
 - reviewer
 - usability
+history:
+- id: 019eb542-2497-7682-b469-0de09ff9453d
+  author: aida-auto-bump
+  timestamp: 2026-06-11T05:57:51.383402788Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T05:57:51.249526180Z
+  completion_sha: a10c906efa56d330a7ac36412d3f673281c4b886
