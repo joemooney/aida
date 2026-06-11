@@ -3148,7 +3148,10 @@ pub enum QueueCommand {
         note: Option<String>,
         /// Route this item to a specific role queue (e.g., "implementer",
         /// "architect"). The other role wearer can then `aida queue list`
-        /// while in that role to see incoming work.
+        /// while in that role to see incoming work. Routing `--for human`
+        /// files the item into the human-attention set — it then surfaces in
+        /// `aida list human` alongside specs that need a person by status/tag.
+        // trace:TASK-747 | ai:claude
         #[clap(long)]
         r#for: Option<String>,
         /// Restrict routing to sessions whose lease scope matches this
