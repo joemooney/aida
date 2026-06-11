@@ -1,0 +1,30 @@
+id: 019eb6ca-001b-7270-a518-5c35e141a4df
+spec_id: STORY-560
+agreed_id: STORY-560
+title: 'Headless advisor INTAKE pass: an advisor AGENT reads all open specs, proposes approve/reject/queue, and grooms the autonomous-able set (autonomous sibling of STORY-558)'
+description: |-
+  Operator ask (2026-06-11): a CLI command that fires up (or talks to) an ADVISOR AGENT which reads ALL open specs, applies advisor JUDGMENT (approve/reject/park), and queues what it deems autonomous-able — the advisor-side analog of 'aida burndown run' (which fires IMPLEMENTER agents). Third launcher: burndown run (headless implementer execution) + questions clarify (interactive advisor for under-spec, STORY-557) + THIS (headless advisor intake). Distinct from STORY-558 (HUMAN-guided approve+queue): this delegates the APPROVE/value judgment to an advisor AGENT.
+
+  CAVEAT — the real trade-off, design around it, do not hide it: the headless advisor is a COLD-BOOT 'claude -p', NOT the operator's live session — same model, LESS context (lacks the operator's strategic frame: current pivot, priorities, budget). A cold-boot advisor approving everything 'completable' can quietly UNDO the operator's curation (bless low-value / wrong-direction specs that are merely mechanically autonomous-able). Autonomy-eligible != worth-doing; an AGENT making the worth-doing call is a real authority escalation (the ADR-3/STORY-546 sign-off gate, now held by an agent). See feedback_headless_advisor_is_cold_boot.
+
+  ## Acceptance
+  1. PROPOSE-MODE BY DEFAULT: the advisor agent reads all open specs and OUTPUTS a proposed disposition per spec (approve / reject / park-for-human / queue) WITH one-line reasoning — writes NOTHING until --apply. The value judgment stays reviewable.
+  2. --apply executes the proposed approvals + queue groom. Even with --apply, NEVER auto-approve specs the agent itself flags as needing human strategic input — route those to 'aida questions' / leave draft.
+  3. Guardrails: --max-approvals N, --only-tag/--exclude-tag, --risk <max>, and a standing do-not-approve class filter (vision/epic/strategic) so the agent cannot bless the wrong classes.
+  4. Reuse, not new gate logic: the agent IS the headless advisor tier (/aida-advise or a new /aida-intake skill); the queue step IS 'aida backlog groom --pickable' (STORY-554). Launcher + intake-judgment skill.
+  5. Post-run integrity (BUG-496 lesson): report what it approved/queued; if it chains into a burndown, verify the integrated main after.
+
+  Composes with STORY-558 (human-guided sibling), STORY-554 (groom half), STORY-557 (interactive-advisor launcher), STORY-306 (/aida-advise headless tier), the three-mode autonomy ladder.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T13:05:52.155404135Z
+modified_at: 2026-06-11T13:05:52.155404135Z
+req_type: Story
+tags:
+- aida:advisor
+- aida:backlog
+- authority
+- autonomy
+- needs-human
