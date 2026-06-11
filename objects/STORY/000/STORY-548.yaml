@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T14:00:23.901748591Z
-modified_at: 2026-06-11T02:36:11.560625310Z
+modified_at: 2026-06-11T13:55:20.046639616Z
 req_type: Story
 tags:
 - aida:burndown
@@ -69,3 +69,8 @@ comments:
     Naming question RESOLVED by 547: `aida burndown explain` (all-open) + `aida why <ID>` (single). Build on burndown::explain_open / OpenBucket rather than re-deriving. Keep the three-source PRINCIPLE as the spec's spine.
   created_at: 2026-06-09T14:08:01.743194759Z
   modified_at: 2026-06-09T14:08:01.743194759Z
+- id: 019eb6f7-496e-7d02-9f43-e816fc491817
+  author: joe
+  content: 'Resolved via /aida-clarify (advisor, 2026-06-11): REDUNDANT — all three components shipped. (1) per-spec why-open derive → STORY-547 (aida why / burndown explain, Completed); (2) findings-link + residual-note + multi-reason → TASK-723 (Completed, its own ''safe slice''); (3) burndown post-drain report → the /aida-burndown step-6 Report + ''aida burndown explain'' run post-drain. No distinct slice remains. Rejecting as satisfied — this was the last item in the ''awaiting-decision'' bucket and it was not a real open decision.'
+  created_at: 2026-06-11T13:55:20.046639616Z
+  modified_at: 2026-06-11T13:55:20.046639616Z
