@@ -1253,9 +1253,18 @@ fn run() -> Result<()> {
         check,
         write,
         doc,
+        empirical,
+        diff,
     } = &cli.command
     {
-        return handle_lifecycle_command(*diagram, *check, *write, doc.as_deref());
+        return handle_lifecycle_command(
+            *diagram,
+            *check,
+            *write,
+            doc.as_deref(),
+            *empirical,
+            *diff,
+        );
     }
 
     // STORY-498: `aida trace gate` is self-contained — it reads git for the
@@ -60206,10 +60215,20 @@ fn handle_lifecycle_command(
     check: bool,
     write: bool,
     doc: Option<&str>,
+    empirical: bool,
+    diff: bool,
 ) -> Result<()> {
     use aida_core::lifecycle::{fenced_mermaid, first_mermaid_block, LifecycleModel};
 
     let model = LifecycleModel::declared();
+
+    // Phase 3 (TASK-742): empirical reconstruction + declared-vs-observed diff.
+    // `--diff` implies `--empirical`. These read the spec store's `history:`
+    // arrays and do not touch the diagram/pin path. trace:TASK-742 | ai:claude
+    if empirical || diff {
+        return handle_lifecycle_empirical(&model, diff);
+    }
+
     let generated_body = model.to_mermaid();
 
     // Resolve the pinned doc path: explicit --doc, else docs/lifecycle.md under
@@ -60289,6 +60308,144 @@ fn handle_lifecycle_command(
     // --diagram nor --check is given, still print it (the only useful default).
     let _ = diagram;
     print!("{generated_body}");
+    Ok(())
+}
+
+/// Phase 3 (TASK-742): reconstruct the observed state machine from the spec
+/// store's `history:` arrays and either print it (`--empirical`) or diff it
+/// against the declared model (`--diff`, which implies `--empirical`).
+///
+/// Reads the same per-spec `history:` arrays that `aida history --events`
+/// walks: each spec's `HistoryEntry` carries a `changes:` list, and we keep the
+/// `{field_name == "status"}` triples as observed `old_value → new_value`
+/// flips. Exits non-zero from `--diff` when any undocumented flip is found, so
+/// it is CI-gate-able. trace:TASK-742 | ai:claude
+fn handle_lifecycle_empirical(
+    declared: &aida_core::lifecycle::LifecycleModel,
+    diff: bool,
+) -> Result<()> {
+    use aida_core::lifecycle::{self, EmpiricalModel};
+
+    let project_root = find_project_root().unwrap_or_else(|_| {
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+    });
+    let store = load_store_for_lookup(&project_root)
+        .context("could not load the requirement store to walk history")?;
+
+    // For each spec, project its history array down to status flips. The store
+    // is the source of truth for the per-spec `history:` arrays (CLAUDE.md:
+    // \"This is the source-of-truth for spec-state time series\").
+    let per_spec: Vec<Vec<(String, String)>> = store
+        .requirements
+        .iter()
+        .map(|req| {
+            req.history
+                .iter()
+                .flat_map(|entry| entry.changes.iter())
+                .filter(|chg| chg.field_name == "status")
+                .map(|chg| (chg.old_value.clone(), chg.new_value.clone()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let empirical = EmpiricalModel::from_status_changes(per_spec);
+
+    if !diff {
+        // --empirical: print the reconstructed observed machine.
+        println!(
+            "Observed spec-state transitions (from {} status flips across {} specs):",
+            empirical.total_flips, empirical.specs_with_history
+        );
+        if empirical.transitions.is_empty() {
+            println!("  (no status transitions recorded in any spec's history)");
+            return Ok(());
+        }
+        println!();
+        for t in &empirical.transitions {
+            let from_lbl = t.from.map(|s| s.label()).unwrap_or(t.from_raw.as_str());
+            let to_lbl = t.to.map(|s| s.label()).unwrap_or(t.to_raw.as_str());
+            let unknown = if t.from.is_none() || t.to.is_none() {
+                "  (unrecognized status)"
+            } else {
+                ""
+            };
+            println!(
+                "  {} → {}  ×{}{}",
+                from_lbl.cyan(),
+                to_lbl.green(),
+                t.count,
+                unknown.red()
+            );
+        }
+        return Ok(());
+    }
+
+    // --diff: declared-vs-observed.
+    let d = lifecycle::diff(declared, &empirical);
+
+    println!(
+        "Lifecycle diff — declared model vs {} observed status flips across {} specs.\n",
+        empirical.total_flips, empirical.specs_with_history
+    );
+
+    if d.undocumented.is_empty() {
+        println!(
+            "{} No undocumented observed transitions — every observed flip is in the declared model.",
+            "OK:".green()
+        );
+    } else {
+        println!(
+            "{} Observed transitions NOT in the declared model (undocumented / illegal flips):",
+            "DIVERGENCE:".red()
+        );
+        for t in &d.undocumented {
+            let from_lbl = t.from.map(|s| s.label()).unwrap_or(t.from_raw.as_str());
+            let to_lbl = t.to.map(|s| s.label()).unwrap_or(t.to_raw.as_str());
+            let unknown = if t.from.is_none() || t.to.is_none() {
+                "  (unrecognized status value)"
+            } else {
+                ""
+            };
+            println!(
+                "  {} → {}  ×{}{}",
+                from_lbl.yellow(),
+                to_lbl.yellow(),
+                t.count,
+                unknown.red()
+            );
+        }
+    }
+
+    println!();
+    if d.unobserved.is_empty() {
+        println!(
+            "{} Every declared transition has been observed at least once.",
+            "OK:".green()
+        );
+    } else {
+        println!(
+            "{} Declared transitions never observed (dead edges):",
+            "NOTE:".dimmed()
+        );
+        for t in &d.unobserved {
+            println!(
+                "  {} → {}  ({})",
+                t.from.label().dimmed(),
+                t.to.label().dimmed(),
+                t.verb.dimmed()
+            );
+        }
+        println!(
+            "  {}",
+            "(the `[*] → Draft` entry edge and `Completed → Released` are status-less by design — \
+             release is a git tag, not a status flip — so they show here normally.)"
+                .dimmed()
+        );
+    }
+
+    if d.has_undocumented() {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
