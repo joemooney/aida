@@ -7091,6 +7091,38 @@ pub enum Command {
         json: bool,
     },
 
+    /// Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle
+    /// --diagram` prints a Mermaid state diagram generated from the single
+    /// declared transition model in `aida-core`, so the picture can't drift
+    /// from the code. `--check` pins the committed diagram in
+    /// `docs/lifecycle.md` against the generated one and exits non-zero on
+    /// drift (pre-commit-hook-able); with `--write` it inserts/refreshes the
+    /// committed block instead. Phase 1 is purely additive — no guard
+    /// enforcement, no empirical diffing.
+    // trace:TASK-737 | ai:claude
+    Lifecycle {
+        /// Emit the Mermaid `stateDiagram-v2` generated from the declared
+        /// transition model.
+        #[clap(long)]
+        diagram: bool,
+
+        /// Compare the generated diagram against the committed mermaid block
+        /// in `docs/lifecycle.md` (or `--doc <FILE>`). Exits non-zero on
+        /// drift. Pair with `--write` to fix drift in place.
+        #[clap(long)]
+        check: bool,
+
+        /// Insert or refresh the committed mermaid block in the doc with the
+        /// generated diagram. Use with `--check` to auto-fix drift.
+        #[clap(long)]
+        write: bool,
+
+        /// The doc whose first mermaid block is the pinned diagram. Defaults
+        /// to `docs/lifecycle.md` under the project root.
+        #[clap(long, value_name = "FILE")]
+        doc: Option<String>,
+    },
+
     /// Work with implementation plans archived under `docs/plans/`.
     /// Today: `aida plan verify <file>` lints a plan against the
     /// structured template — drifted line refs, missing files, absent
