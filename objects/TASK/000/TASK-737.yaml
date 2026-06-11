@@ -1,0 +1,12 @@
+id: 019eb57f-82b2-7082-9167-ddf57804ed54
+spec_id: TASK-737
+agreed_id: TASK-737
+title: 'Phase 1: `aida lifecycle --diagram` + the committed-vs-generated doc pin (generate-only, zero behavior change)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T07:04:53.170682154Z
+modified_at: 2026-06-11T07:04:53.170682154Z
+req_type: Task
