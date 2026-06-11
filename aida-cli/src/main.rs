@@ -23635,9 +23635,100 @@ fn handle_role_end() -> Result<()> {
 fn canonical_role_name(raw: &str) -> String {
     if raw.eq_ignore_ascii_case("dialog") {
         "advisor".to_string()
+    } else if is_human_route(raw) {
+        // SPIKE-57 / TASK-747: `human` is a first-class route target, the
+        // escalation-cascade terminus, symmetric with the agent roles. Normalize
+        // any casing to the lowercase canonical form so `--for Human` /
+        // `--for HUMAN` route identically and surface together in the view.
+        HUMAN_ROUTE.to_string()
     } else {
         raw.to_string()
     }
+}
+
+/// The canonical first-class route target for "a human is required" — the
+/// escalation-cascade terminus (implementer → advisor → human). `aida queue add
+/// --for human` files a spec explicitly into the human-attention set, and
+/// `aida list human` unions those explicitly-routed specs with the
+/// status/tag-derived membership. trace:TASK-747 | ai:claude
+const HUMAN_ROUTE: &str = "human";
+
+/// Is this `--for <role>` value the `human` route target? Case-insensitive so
+/// `--for Human` and `--for HUMAN` are accepted as the same first-class route.
+/// trace:TASK-747 | ai:claude
+fn is_human_route(raw: &str) -> bool {
+    raw.eq_ignore_ascii_case(HUMAN_ROUTE)
+}
+
+/// Collect the spec IDs (uppercased, stable order) of every OPEN requirement
+/// explicitly routed `--for human` across all per-user queues. Work-routing is
+/// a project-global axis, so we union across all queue YAML files directly
+/// (mirrors [`all_queued_requirement_ids`]). Terminal (Completed/Rejected) and
+/// archived specs are skipped — a routed item that already shipped is no longer
+/// a human bottleneck. Returns an empty set when the queue dir is absent.
+/// trace:TASK-747 | ai:claude
+fn human_routed_spec_ids(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let dir = project_root.join(".aida-store/registry/queues");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let Ok(items) = serde_yaml::from_str::<Vec<aida_core::QueueEntry>>(&content) else {
+            continue;
+        };
+        for item in items {
+            // Route match is case-insensitive (canonical_role_name lowercases on
+            // add, but legacy/hand-edited entries may carry mixed casing).
+            if !item
+                .for_role
+                .as_deref()
+                .map(is_human_route)
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let Some(req) = store
+                .requirements
+                .iter()
+                .find(|r| r.id == item.requirement_id)
+            else {
+                continue;
+            };
+            if !human_route_is_open(req.archived, &req.status) {
+                continue;
+            }
+            let id = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| req.id.to_string());
+            out.insert(id.to_ascii_uppercase());
+        }
+    }
+    out
+}
+
+/// A `--for human` routed spec counts toward the human-attention view only
+/// while it is OPEN — an archived or terminal (Completed/Rejected) spec that
+/// once carried the route is no longer a bottleneck. Pure over its inputs so
+/// the open-test is directly unit-testable. trace:TASK-747 | ai:claude
+fn human_route_is_open(archived: bool, status: &aida_core::RequirementStatus) -> bool {
+    !archived
+        && !matches!(
+            status,
+            aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+        )
 }
 
 fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
@@ -24143,7 +24234,46 @@ mod role_repair_tests {
 // trace:TASK-586 | ai:claude
 #[cfg(test)]
 mod role_identity_tests {
-    use super::{canonical_role_name, STARTER_ROLES};
+    use super::{canonical_role_name, is_human_route, STARTER_ROLES};
+
+    // TASK-747: `human` is a first-class route target (the escalation-cascade
+    // terminus), canonicalized to the lowercase form regardless of input
+    // casing so `--for Human` / `--for HUMAN` route identically.
+    // trace:TASK-747 | ai:claude
+    #[test]
+    fn human_route_recognized_case_insensitively() {
+        assert!(is_human_route("human"));
+        assert!(is_human_route("Human"));
+        assert!(is_human_route("HUMAN"));
+        assert!(!is_human_route("implementer"));
+        assert!(!is_human_route("advisor"));
+    }
+
+    #[test]
+    fn human_canonicalizes_to_lowercase() {
+        assert_eq!(canonical_role_name("human"), "human");
+        assert_eq!(canonical_role_name("Human"), "human");
+        assert_eq!(canonical_role_name("HUMAN"), "human");
+    }
+
+    // TASK-747: a `--for human` routed spec counts toward the view only while
+    // open; archived or terminal specs that once carried the route drop out.
+    // trace:TASK-747 | ai:claude
+    #[test]
+    fn human_route_open_predicate() {
+        use super::human_route_is_open;
+        use aida_core::RequirementStatus::*;
+        // Open statuses → routed spec is a live bottleneck.
+        assert!(human_route_is_open(false, &Draft));
+        assert!(human_route_is_open(false, &Approved));
+        assert!(human_route_is_open(false, &InProgress));
+        assert!(human_route_is_open(false, &Done));
+        // Terminal statuses → no longer a bottleneck.
+        assert!(!human_route_is_open(false, &Completed));
+        assert!(!human_route_is_open(false, &Rejected));
+        // Archived drops out regardless of status.
+        assert!(!human_route_is_open(true, &Approved));
+    }
 
     // TASK-586: `advisor` is canonical; `dialog` is a deprecated alias that
     // still resolves (case-insensitively). Other role names pass through.
@@ -52668,6 +52798,30 @@ mod bug_87_queue_filter_tests {
             .collect();
         assert_eq!(kept, vec![Some("implementer"), Some("implementer")]);
     }
+
+    /// TASK-747: `human` is a first-class route target. `--role Human`
+    /// canonicalizes to lowercase `human` and matches `--for human` entries
+    /// (written canonical on add), symmetric with `dialog`→`advisor`.
+    /// trace:TASK-747 | ai:claude
+    #[test]
+    fn human_route_filter_matches_canonical_entries() {
+        let entries: Vec<Option<&str>> = vec![
+            Some("human"),
+            Some("implementer"),
+            Some("human"),
+            None,
+            Some("advisor"),
+        ];
+        // `aida queue list --role Human` (mixed casing) → canonical `human`.
+        let (role_filter, only_unrouted) = resolve_queue_role_filter(Some("Human"), true, None);
+        assert_eq!(role_filter.as_deref(), Some("human"));
+        let kept: Vec<Option<&str>> = entries
+            .iter()
+            .copied()
+            .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
+            .collect();
+        assert_eq!(kept, vec![Some("human"), Some("human")]);
+    }
 }
 
 /// BUG-231: `aida findings promote` flipped status to Approved and printed
@@ -67768,6 +67922,13 @@ fn handle_list_human(short: bool) -> Result<()> {
     let in_flight_scopes = in_flight_lease_scopes(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
 
+    // TASK-747: specs explicitly routed `--for human` are part of the
+    // human-attention set even when the status/tag classifier wouldn't derive
+    // them. We UNION the explicitly-routed members with the derived membership
+    // (the route is additive, never subtractive — Risk #6 in the SPIKE-57
+    // design doc). trace:TASK-747 | ai:claude
+    let routed_ids = human_routed_spec_ids(&project_root, &store);
+
     // Classify with the SAME classifier as `burndown explain`, then keep only
     // the specs the canonical `human_required` predicate (SPIKE-57/TASK-746)
     // classifies as needing a human — the rest self-resolve. Routing the filter
@@ -67789,17 +67950,36 @@ fn handle_list_human(short: bool) -> Result<()> {
         .filter(|(f, _, _)| burndown::human_required(f, false))
         .collect();
 
+    // TASK-747: the explicitly-routed members the derived classification did
+    // NOT already surface — shown as their own "routed to you" group so the
+    // operator sees push-routed work alongside the derived bottleneck. De-dupe
+    // by SPEC-ID against the derived set (Risk #5). trace:TASK-747 | ai:claude
+    let derived_ids: std::collections::HashSet<String> = classified
+        .iter()
+        .map(|(f, _, _)| f.id.to_ascii_uppercase())
+        .collect();
+    let mut routed_only: Vec<String> = routed_ids
+        .iter()
+        .filter(|id| !derived_ids.contains(*id))
+        .cloned()
+        .collect();
+    routed_only.sort();
+
     // `--short`: bare IDs, one per line — usable in `$(...)` / xargs. No
     // header, footer, color, or grouping (mirrors `aida list --short`).
+    // Derived members first, then the explicitly-routed-only tail (TASK-747).
     if short {
         for (f, _, _) in &classified {
             println!("{}", f.id);
+        }
+        for id in &routed_only {
+            println!("{id}");
         }
         return Ok(());
     }
 
     println!("{} what needs a human", "▸".cyan().bold());
-    if classified.is_empty() {
+    if classified.is_empty() && routed_only.is_empty() {
         println!(
             "  {}",
             "Nothing needs you right now — everything open is in flight, deferred, \
@@ -67808,15 +67988,12 @@ fn handle_list_human(short: bool) -> Result<()> {
         );
         return Ok(());
     }
+    let total = classified.len() + routed_only.len();
     println!(
         "  {} {} open {} need a decision, review, or triage from you",
         "→".green(),
-        classified.len(),
-        if classified.len() == 1 {
-            "item"
-        } else {
-            "items"
-        },
+        total,
+        if total == 1 { "item" } else { "items" },
     );
 
     // Group by bucket, ordered most-actionable-first (matches the precedence in
@@ -67865,6 +68042,23 @@ fn handle_list_human(short: bool) -> Result<()> {
                 };
                 println!("      {} {}", tag, r.text.dimmed());
             }
+        }
+    }
+
+    // TASK-747: the explicitly-routed-only group — specs pushed `--for human`
+    // that the derived classifier didn't already surface. Listed last because
+    // the derived buckets are most-actionable-first; an explicit route is a
+    // deliberate "this needs you" the operator filed, shown so push-routed work
+    // never gets lost behind derived membership. trace:TASK-747 | ai:claude
+    if !routed_only.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "●".yellow(),
+            "routed-to-human".bold(),
+            "explicitly routed to you (`queue add --for human`)".dimmed()
+        );
+        for id in &routed_only {
+            println!("    {}", id.cyan());
         }
     }
 
@@ -88408,10 +88602,13 @@ pub(crate) fn resolve_queue_role_filter(
 ) -> (Option<String>, bool) {
     match role {
         Some(r) if r.eq_ignore_ascii_case("any") => (None, true),
-        Some(r) => (Some(r.to_string()), false),
+        // TASK-586 / TASK-747: canonicalize the requested role so
+        // `--role dialog`→`advisor` and `--role Human`→`human` match the
+        // canonical entries written on add. trace:TASK-747 | ai:claude
+        Some(r) => (Some(canonical_role_name(r)), false),
         None if all => (None, false),
         None => match session_role {
-            Some(s) if !s.is_empty() => (Some(s.to_string()), false),
+            Some(s) if !s.is_empty() => (Some(canonical_role_name(s)), false),
             _ => (None, false),
         },
     }
@@ -89758,7 +89955,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // trace:BUG-18 | ai:claude
             let r#for: Option<String> = match r#for.as_deref() {
                 Some("any") => None,
-                Some(role) => Some(role.to_string()),
+                // TASK-586 / TASK-747: canonicalize the route target on add so
+                // `dialog`→`advisor` and `Human`/`HUMAN`→`human` route
+                // consistently and surface together downstream.
+                Some(role) => Some(canonical_role_name(role)),
                 None => std::env::var("AIDA_SESSION_ROLE")
                     .ok()
                     .filter(|s| !s.is_empty()),
