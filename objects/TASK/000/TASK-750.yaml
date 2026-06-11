@@ -1,0 +1,12 @@
+id: 019eb714-d6aa-7e63-a7b8-5d385910e105
+spec_id: TASK-750
+agreed_id: TASK-750
+title: '**Housekeeping: restate or re-parent STORY-561** as the presence subcommand of SPIKE-57''s `aida human` vector (operator''s call: restate-and-retag vs close-and-re-file as a child of the human-role work)'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T14:27:36.746544230Z
+modified_at: 2026-06-11T14:27:36.746544230Z
+req_type: Task
