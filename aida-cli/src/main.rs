@@ -2314,6 +2314,16 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Human { .. } => {
+            // The `aida human` bottleneck view reads the git-canonical store
+            // (the burndown classifier needs the relationship graph + tags);
+            // the deprecated --centralized backend can't back it. trace:TASK-746
+            anyhow::bail!(
+                "aida human requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
         Command::Skill(_) => {
             unreachable!("Command::Skill dispatched before storage init");
         }
@@ -11905,6 +11915,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Questions { cmd } => {
             handle_questions_command(cmd.as_ref(), &backend, store_path)?;
+        }
+        Command::Human { short } => {
+            handle_human_command(*short)?;
         }
         Command::Punt {
             id,
@@ -67648,6 +67661,22 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
 /// [`burndown::explain_reasons`] classifier verbatim — no re-derived buckets.
 /// `short` prints just the IDs (composes with `aida list --short`).
 /// trace:STORY-562 | ai:claude
+/// `aida human` — the 'human' role-vector front door (SPIKE-57, Phase 2).
+///
+/// Bare `aida human` surfaces the bottleneck view: every spec classified
+/// human-required (the canonical `burndown::human_required` predicate),
+/// grouped by WHY. It is the role-vector entry point that converges with the
+/// STORY-562 `aida list human` view rather than competing with it — both
+/// delegate to the single `handle_list_human` implementation, so the two front
+/// doors can never drift.
+///
+/// Presence (`home`/`away`/`status`) and `--for human` routing are later phases
+/// of SPIKE-57; this verb is just the front door + the named predicate today.
+/// trace:TASK-746 | ai:claude
+fn handle_human_command(short: bool) -> Result<()> {
+    handle_list_human(short)
+}
+
 fn handle_list_human(short: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -67662,8 +67691,13 @@ fn handle_list_human(short: bool) -> Result<()> {
     let facts = collect_open_facts(&store, &in_flight_scopes);
 
     // Classify with the SAME classifier as `burndown explain`, then keep only
-    // the buckets that genuinely need a human nudge (the rest self-resolve).
-    // trace:STORY-562
+    // the specs the canonical `human_required` predicate (SPIKE-57/TASK-746)
+    // classifies as needing a human — the rest self-resolve. Routing the filter
+    // through the named predicate keeps this view and the predicate from
+    // drifting. The orthogonal `human_only` marker is not yet folded in at the
+    // view layer (a later SPIKE-57 phase enriches the facts with it), so the
+    // predicate is fed `false` here — equivalent to the prior bucket check.
+    // trace:STORY-562 trace:TASK-746
     let classified: Vec<(
         burndown::OpenFacts,
         burndown::OpenBucket,
@@ -67674,7 +67708,7 @@ fn handle_list_human(short: bool) -> Result<()> {
             let (bucket, reasons) = burndown::explain_reasons(&f);
             (f, bucket, reasons)
         })
-        .filter(|(_, bucket, _)| bucket.needs_human())
+        .filter(|(f, _, _)| burndown::human_required(f, false))
         .collect();
 
     // `--short`: bare IDs, one per line — usable in `$(...)` / xargs. No

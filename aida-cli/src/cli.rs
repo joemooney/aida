@@ -5720,6 +5720,20 @@ pub enum Command {
         cmd: Option<QuestionsCommand>,
     },
 
+    /// The 'human' role vector — the front door to "what needs a person?".
+    /// Bare `aida human` shows the bottleneck view (every spec a human must
+    /// decide, review, or triage), the same set as `aida list human`, grouped
+    /// by WHY. The human is the permanent terminus of the escalation cascade
+    /// (implementer → advisor → human); this gives that role a first-class
+    /// home symmetric with the agent roles.
+    // trace:TASK-746 | ai:claude
+    Human {
+        /// Bare spec-ids, one per line — usable in `$(...)` / xargs (mirrors
+        /// `aida list human --short`).
+        #[clap(long)]
+        short: bool,
+    },
+
     /// Manage the live-advisor registration the `--no-human=both` orchestrator
     /// reads to decide whether to fork the live advisor (full in-flight
     /// context) or cold-boot a fresh headless advisor.

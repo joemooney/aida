@@ -358,6 +358,27 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
     }
 }
 
+/// The canonical "a human is required" classification predicate (SPIKE-57).
+///
+/// This is the single, intention-revealing name for the bottleneck signal the
+/// codebase previously expressed five different ways (the `human_only` marker,
+/// the `needs-human` / `needs-design-signoff` / `operator-action` tags, the
+/// `review:draft-only` gate, `--escalate-blocks` parking, and the burndown
+/// "needs a human nudge" bucket). It re-derives NOTHING: four of those signals
+/// already converge on [`OpenBucket::needs_human`] via [`explain_open`], so the
+/// predicate delegates to it; the fifth, the permanent `human_only` marker, is
+/// orthogonal to status (a pickability flag, not an open-bucket) and folds in as
+/// an explicit OR clause.
+///
+/// `human_only` is passed separately because it lives on the [`crate`]-level
+/// `Requirement`, not on the pure [`OpenFacts`] this module classifies — keeping
+/// `OpenFacts` free of the marker preserves its exhaustive testability.
+/// trace:TASK-746 | ai:claude
+pub(crate) fn human_required(f: &OpenFacts, human_only: bool) -> bool {
+    let (bucket, _) = explain_open(f);
+    bucket.needs_human() || human_only
+}
+
 /// TASK-723: the FULL reason set for one open spec, most-fundamental-first.
 /// Unions the three sources from STORY-548's design:
 ///   1. DERIVED (the [`explain_open`] graph reason) — always first; it's the
@@ -750,6 +771,46 @@ mod tests {
         assert!(!OpenBucket::InProgress.needs_human());
         assert!(!OpenBucket::AwaitingMerge.needs_human());
         assert!(!OpenBucket::Deferred.needs_human());
+    }
+
+    // SPIKE-57 / TASK-746: the canonical predicate must agree with
+    // `OpenBucket::needs_human()` for every open-bucket signal, and must OR in
+    // the orthogonal `human_only` marker.
+    #[test]
+    fn human_required_matches_needs_human_for_open_buckets() {
+        // Buckets that need a human → predicate true (human_only = false).
+        let held = open(
+            "task",
+            "approved",
+            &["review:draft-only"],
+            false,
+            false,
+            false,
+        );
+        assert!(human_required(&held, false));
+        let decision = open("task", "approved", &[], false, true, false);
+        assert!(human_required(&decision, false));
+        let ungroomed = open("task", "draft", &[], false, false, false);
+        assert!(human_required(&ungroomed, false));
+        let umbrella = open("epic", "planned", &[], false, false, false);
+        assert!(human_required(&umbrella, false));
+
+        // Self-resolving / flow buckets → predicate false (no marker).
+        let in_flight = open("task", "approved", &[], false, false, true);
+        assert!(!human_required(&in_flight, false));
+        let in_progress = open("task", "inprogress", &[], false, false, false);
+        assert!(!human_required(&in_progress, false));
+        let awaiting_merge = open("task", "done", &[], false, false, false);
+        assert!(!human_required(&awaiting_merge, false));
+    }
+
+    #[test]
+    fn human_required_ors_in_human_only_marker() {
+        // A spec whose bucket would self-resolve is STILL human-required when
+        // the orthogonal `human_only` marker is set.
+        let in_progress = open("task", "inprogress", &[], false, false, false);
+        assert!(!human_required(&in_progress, false));
+        assert!(human_required(&in_progress, true));
     }
 
     // BUG-493: the HeldForReview reason must reconcile against real forge state
