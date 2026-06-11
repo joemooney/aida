@@ -1,0 +1,18 @@
+id: 019eb464-a567-7381-8193-7c00a0f6a83a
+spec_id: BUG-491
+agreed_id: BUG-491
+title: 'Windows cross-platform CI red: bug483 lease test hand-rolls TOML with unescaped backslash worktree_path'
+description: 'The fixture in lease_enforcement_tests::bug483_peer_lease_sharing_worktree_blocks_removal interpolates a real tmp.path() worktree_path into a double-quoted TOML basic string. On Windows the backslash path forms invalid TOML escape sequences, so the two shared-worktree lease files fail to parse and are dropped from list_leases — the leases.len()==3 assertion fails. macOS/Linux pass (forward-slash paths). Fix: use a TOML literal (single-quoted) string for worktree_path, mirroring how production''s toml::to_string_pretty round-trips backslash paths. Blocks the v0.12.1 release gate (cross-platform green within 24h). Last green nightly 2026-06-08; red 06-09 and 06-10.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T01:55:55.367056478Z
+modified_at: 2026-06-11T01:55:55.367056478Z
+req_type: Bug
+tags:
+- ci
+- cross-platform
+- severity:major
+- test-fixture
+- windows
