@@ -1,0 +1,30 @@
+id: 019eb55d-76a3-7392-a2b9-41e601091198
+spec_id: BUG-495
+agreed_id: BUG-495
+title: 'aida questions sweep output refinements: skip non-implementable/built specs + clarify the misleading ''--apply to write'' message'
+description: |-
+  Two small output-quality issues in 'aida questions sweep' (operator-surfaced 2026-06-10).
+
+  A) FALSE POSITIVES — the 'missing acceptance criteria' heuristic flags specs that will never be autonomous-implementation candidates: VISIONS (VIS-1 — strategic, not implemented by an agent) and ALREADY-BUILT/HELD specs (TASK-715 — review:draft-only, work done, awaiting review). These are noise, not signal.
+
+  B) MISLEADING MESSAGE — the footer '[dry-run] would attach <SPEC> - missing acceptance criteria ... re-run with --apply to write' reads as '--apply will WRITE/generate the missing acceptance criteria (fix it)'. It does the opposite: --apply attaches a DecisionRequest that PARKS the spec from the burndown — it records the gap, doesn't fix it. The operator must author the acceptance themselves (or answer once STORY-555 closes the loop). Same misleading-output class as BUG-418/BUG-493/BUG-494.
+
+  ## Acceptance
+
+  1. Sweep EXCLUDES non-implementable RequirementTypes from the missing-acceptance flag (vision, folder, meta, principle, term — types an agent doesn't 'implement').
+  2. Sweep EXCLUDES specs already at/past Done, carrying review:draft-only, or holding an active lease (work built/in-flight — acceptance is moot). After (1)+(2) the flag fires only on genuinely-implementable, not-yet-built specs.
+  3. The footer names WHAT --apply writes and its effect: e.g. 'attach a DecisionRequest (parks the spec from the burndown until answered) — re-run with --apply'. No implication that it generates or fixes acceptance.
+  4. The output points at the ACTUAL resolution for missing acceptance ('add a ## Acceptance section to the spec'), distinct from --apply.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T06:27:41.859376916Z
+modified_at: 2026-06-11T06:27:41.859376916Z
+req_type: Bug
+tags:
+- aida:questions
+- core
+- misleading-output
+- papercut
+- severity:minor
