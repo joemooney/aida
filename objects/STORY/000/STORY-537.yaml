@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:09:34.791313142Z
-modified_at: 2026-06-09T05:03:15.787227805Z
+modified_at: 2026-06-11T02:03:04.434522820Z
 req_type: Story
 tags:
 - aida:remote
@@ -54,6 +54,11 @@ tags:
 - gitlab
 - onboarding-flow
 - parent:EPIC-35
+relationships:
+- rel_type: !Custom related-to
+  target_id: 019eb46b-0901-7e80-b2de-bd35fa907f36
+  created_at: 2026-06-11T02:03:04.434515859Z
+  created_by: joe
 history:
 - id: 019eaac3-72cc-7c40-913c-303755b8d0c4
   author: aida-auto-bump
