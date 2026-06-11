@@ -186,6 +186,119 @@ pub fn transition_guard(from: State, to: State) -> GuardKind {
     }
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Phase 2d (TASK-741): cross-axis orthogonal invariants.
+//
+// The transition table above governs ONE axis — status. But the spec lifecycle
+// is several orthogonal regions (status × visibility × queue × forge/park), and
+// the bugs that hurt most were cross-axis contradictions: a combination that no
+// single-axis predicate could forbid because the two axes it related were
+// checked by two unrelated predicates. `archived ∧ queued` (BUG-492) and a
+// `review:draft-only` hold whose draft PR is closed (BUG-493) are exactly that.
+//
+// Those constraints live here, as `INVARIANTS` — the one place every cross-axis
+// rule is declared, so any path that mutates one axis (flips `archived`, asserts
+// a held-for-review claim) consults the row it must not violate instead of
+// re-deriving the rule. Same "declare-once, consult-everywhere" discipline
+// STORY-538 brought to the schema. trace:TASK-741 | ai:claude
+// ────────────────────────────────────────────────────────────────────
+
+impl State {
+    /// A *terminal* status — the closed long-tail (`Completed` / `Rejected`)
+    /// past which no further pipeline transition fires. The single source for
+    /// "is this work closed?"; the CLI's `is_terminal_status` routes through
+    /// this so the archive invariant (`archived ⇒ terminal ∧ ¬queued`) and the
+    /// diagram read the same definition. trace:TASK-741 | ai:claude
+    pub fn is_terminal(self) -> bool {
+        matches!(self, State::Completed | State::Rejected)
+    }
+}
+
+/// A cross-axis lifecycle invariant: a constraint BETWEEN two orthogonal
+/// regions (status × visibility × queue × forge) that no single-axis check can
+/// enforce. Declared as data so the rule has one name, one statement, and a
+/// pointer to the bug whose root cause was this constraint going unexpressed —
+/// the same discipline STORY-538 brought to the schema. trace:TASK-741 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OrthogonalInvariant {
+    /// Stable kebab-case identifier the enforcing call site pins itself to.
+    pub name: &'static str,
+    /// The constraint, stated as an implication between axes.
+    pub statement: &'static str,
+    /// Spec id of the bug whose root cause was this invariant being implicit
+    /// (two axes checked by two unrelated predicates).
+    pub origin: &'static str,
+}
+
+/// The cross-axis illegal-combination list — the one place every constraint that
+/// spans two orthogonal regions is declared. Any axis-mutating path consults the
+/// row it must not violate rather than re-deriving the rule, so the illegal
+/// combination becomes unconstructable instead of merely untested-against.
+/// trace:TASK-741 | ai:claude
+pub const INVARIANTS: &[OrthogonalInvariant] = &[
+    OrthogonalInvariant {
+        name: "archived-implies-terminal-and-unqueued",
+        statement: "archived ⇒ (Completed ∨ Rejected) ∧ ¬queued",
+        origin: "BUG-492",
+    },
+    OrthogonalInvariant {
+        name: "held-for-review-implies-open-draft-pr",
+        statement: "review:draft-only ⇒ an open draft PR exists",
+        origin: "BUG-493",
+    },
+];
+
+/// Look up a declared cross-axis invariant by `name`. The enforcing call sites
+/// pin themselves to the row they uphold (via a test against this) so a renamed
+/// or deleted invariant surfaces at its consumer rather than drifting silently.
+/// trace:TASK-741 | ai:claude
+pub fn invariant(name: &str) -> Option<&'static OrthogonalInvariant> {
+    INVARIANTS.iter().find(|i| i.name == name)
+}
+
+/// Which axis of the `archived ⇒ terminal ∧ ¬queued` invariant (BUG-492) a
+/// candidate archive would violate. `Queued` is reported in preference to
+/// `NonTerminal`: a queued spec is the louder contradiction (`aida list` hides
+/// it while `queue list` still points at it), matching the pre-migration
+/// message precedence. trace:TASK-741 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArchiveBlock {
+    /// The spec is in the queue — archiving leaves the queue pointing at a
+    /// hidden spec.
+    Queued,
+    /// The spec is non-terminal (not Completed/Rejected) — archive is for the
+    /// closed long-tail.
+    NonTerminal,
+}
+
+/// Evaluate the BUG-492 archive invariant: `Some(block)` names the axis that
+/// forbids archiving this `(status, queued)` spec; `None` means the archive is
+/// invariant-legal. The single source the archive path consults — the `--force`
+/// override and the user-facing warning wording stay at the call site (CLI
+/// concerns), but *whether the combination is legal* is decided here.
+/// trace:TASK-741 | ai:claude
+pub fn archive_invariant_block(status: State, queued: bool) -> Option<ArchiveBlock> {
+    if queued {
+        return Some(ArchiveBlock::Queued);
+    }
+    if !status.is_terminal() {
+        return Some(ArchiveBlock::NonTerminal);
+    }
+    None
+}
+
+/// Evaluate the BUG-493 held-for-review invariant: a `review:draft-only` hold
+/// CLAIMS an open draft PR exists for human review. Given whether the forge
+/// confirms an open PR, return whether the claim HOLDS. The reconcile path
+/// (`reconcile_held_for_review`, which owns the forge-specific three-way probe)
+/// consults this so the *rule* lives with the other cross-axis invariants even
+/// though the *probe* is forge-specific. The predicate is intentionally simple —
+/// the value is that there is ONE named home for the rule the held-for-review
+/// reason must not contradict, not its arithmetic. trace:TASK-741 | ai:claude
+pub fn held_for_review_claim_holds(open_draft_pr_exists: bool) -> bool {
+    open_draft_pr_exists
+}
+
 /// One legal transition in the declared status chain.
 // trace:TASK-737 | ai:claude
 #[derive(Debug, Clone, Copy)]
@@ -626,6 +739,72 @@ mod tests {
         let body = first_mermaid_block(md).unwrap();
         assert!(body.contains("A --> B"));
         assert!(!body.contains("OTHER"));
+    }
+
+    // ── Phase 2d (TASK-741): cross-axis invariants ──
+
+    #[test]
+    fn invariants_declare_both_cross_axis_rows() {
+        // The two cross-axis rules this phase homes must be present and
+        // discoverable by name, each pointing at the bug it prevents.
+        let archive = invariant("archived-implies-terminal-and-unqueued")
+            .expect("archive invariant declared");
+        assert_eq!(archive.origin, "BUG-492");
+        let held = invariant("held-for-review-implies-open-draft-pr")
+            .expect("held-for-review invariant declared");
+        assert_eq!(held.origin, "BUG-493");
+        // Unknown names don't resolve.
+        assert!(invariant("nonexistent-invariant").is_none());
+    }
+
+    #[test]
+    fn is_terminal_is_completed_or_rejected_only() {
+        assert!(State::Completed.is_terminal());
+        assert!(State::Rejected.is_terminal());
+        for s in [
+            State::Start,
+            State::Draft,
+            State::Approved,
+            State::Planned,
+            State::InProgress,
+            State::Done,
+            State::Released,
+            State::NeedsAttention,
+        ] {
+            assert!(!s.is_terminal(), "{s:?} must not be terminal");
+        }
+    }
+
+    #[test]
+    fn archive_invariant_block_enforces_terminal_and_unqueued() {
+        use State::*;
+        // Terminal + unqueued is the only legal archive.
+        assert_eq!(archive_invariant_block(Completed, false), None);
+        assert_eq!(archive_invariant_block(Rejected, false), None);
+        // Queued is the louder contradiction — reported in preference to
+        // NonTerminal even when both axes are wrong.
+        assert_eq!(
+            archive_invariant_block(Approved, true),
+            Some(ArchiveBlock::Queued)
+        );
+        assert_eq!(
+            archive_invariant_block(Completed, true),
+            Some(ArchiveBlock::Queued)
+        );
+        // Non-terminal + unqueued blocks on the status axis.
+        for s in [Draft, Approved, Planned, InProgress, Done, NeedsAttention] {
+            assert_eq!(
+                archive_invariant_block(s, false),
+                Some(ArchiveBlock::NonTerminal),
+                "{s:?} unqueued must block as NonTerminal"
+            );
+        }
+    }
+
+    #[test]
+    fn held_for_review_claim_holds_iff_open_pr() {
+        assert!(held_for_review_claim_holds(true));
+        assert!(!held_for_review_claim_holds(false));
     }
 
     // ── Phase 3 (TASK-742): empirical + diff ──
