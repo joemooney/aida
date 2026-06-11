@@ -1,0 +1,32 @@
+id: 019eb506-470e-7c70-a663-e2ceec45fe2d
+spec_id: STORY-554
+agreed_id: STORY-554
+title: 'aida backlog groom --pickable: auto-select decision-free backlog into the queue via the burndown pickability gate'
+description: |-
+  Operator-surfaced gap (2026-06-10): there is no single verb to 'groom the backlog into the queue, auto-selecting items that don't require human intervention'. Today the advisor does it by hand: 'aida backlog list' (candidates + risk chips) -> human judgment of which are decision-free -> 'aida backlog groom --specs <ids>'. The 'no-human-needed' logic already exists as the burndown PICKABILITY GATE (bounded/not-epic, unblocked/no-unsatisfied-BlockedBy, decision-free/no-pending-question, not parking-tagged) but it lives in 'aida burndown plan', runs over the already-QUEUED set, and is read-only — it can't reach back into the backlog to select-and-groom.
+
+  ## Acceptance
+
+  1. 'aida backlog groom --pickable' (alias --auto): apply the burndown pickability gate over the BACKLOG (Approved-but-not-queued), and groom every survivor into the queue. Reuse the exact gate predicate from 'burndown plan' — do not re-implement it (single source of truth).
+  2. DRY-RUN BY DEFAULT. Print the would-groom set + the would-park set (with the gate reason each was parked: epic / blocked-by / pending-question / parking-tag). Require an explicit --apply (or --yes) to write. Rationale: queueing = advisor sign-off (STORY-546); auto-groom must keep the advisor in the loop, not bypass the checkpoint — it removes the tedium, not the judgment.
+  3. Optional --risk <max> (default: medium) to also exclude high-risk candidates from auto-selection (the backlog-list risk chip).
+  4. Compose with existing flags: --batch NAME (tag the groomed cluster), --note, --user.
+
+  ## Known limitation (document, don't hide)
+
+  'decision-free' in the gate = 'no ATTACHED DecisionRequest', which is coarser than true design-latitude: a design-heavy spec with no formal question (e.g. STORY-405 absent its deferred tag) would pass the gate and be auto-groomed. The gate is only as trustworthy as the decision-question PRODUCER (STORY-523) that flags such specs first. State this in --help and recommend running 'aida questions' before '--pickable --apply'. Until STORY-523's producer is reliable, --dry-run review remains load-bearing.
+
+  Composes with: aida backlog list/groom (exist), aida burndown plan (gate source), STORY-523 (decision producer), STORY-546 (advisor-sign-off principle). Related archived: TASK-531 (interactive groom variant).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T04:52:28.045992791Z
+modified_at: 2026-06-11T04:52:28.045992791Z
+req_type: Story
+tags:
+- advisor-tooling
+- aida:backlog
+- aida:burndown
+- autonomy
+- core
