@@ -9374,6 +9374,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             blocked,
             no_flow,
             no_glyph,
+            short,
             ..
         } => {
             // TASK-0415: resolve the optional positional status shortcut.
@@ -9512,6 +9513,23 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 .unwrap_or(false);
             if !*include_meta && !user_asked_for_meta {
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
+            }
+
+            // TASK-743: --short emits one bare canonical spec ID per line —
+            // no header, no count footer, no color, no routing glyphs — so
+            // the output is directly pipeable into `$(...)` / xargs. Runs
+            // AFTER the shared filter + parent + meta passes (same row set
+            // the human table would show) and returns early, before any of
+            // the routing-probe / table / tree / json rendering below.
+            // trace:TASK-743 | ai:claude
+            if *short {
+                for r in &reqs {
+                    let id = r.agreed_id.as_deref().or(r.spec_id.as_deref());
+                    if let Some(id) = id {
+                        println!("{id}");
+                    }
+                }
+                return Ok(());
             }
 
             // TASK-670: compute the leading work-routing overlay (↑ queued /
