@@ -1,0 +1,27 @@
+id: 019eb73c-ab2e-7c51-9e6e-944a14dac02b
+spec_id: STORY-563
+agreed_id: STORY-563
+title: 'aida human unblock: deterministic CLI that emits a paste-ready advisor prompt to groom blocked items into the burndown'
+description: |-
+  Operator recurring confusion (2026-06-11): 'how do I get open items into the burndown list? Is there a CLI command?' — asked repeatedly because there ISN'T one yet. The agentic groomers (STORY-558 human-guided, STORY-560 advisor-agent) aren't built, and 'aida list human' (STORY-562) only SHOWS the blocked set. Operator's proposal: 'aida human unblock' generates a PROMPT to cut-n-paste into the advisor. This is the DETERMINISTIC prompt-assembler pattern — exactly like 'aida ultraplan' / 'aida goal' / 'aida brief' (SPIKE-55 deterministic-slice): NO LLM in the CLI, just assemble a paste-ready advisor instruction from store state. It is the BRIDGE that works NOW, before the heavier agentic launchers — and it directly ends the 'I keep having to ask the same question' loop because the command generates the question.
+
+  ## Acceptance
+  1. 'aida human unblock' reads every open item NOT in the burndown ready set and classifies each by WHAT keeps it out: needs-approval (draft), approved-unqueued-but-autonomous-able, under-specified (missing acceptance), build-supervised (needs --zen), decision-pending, deferred, blocked-by.
+  2. Emits a PASTE-READY advisor prompt: 'Groom these into the burndown — queue [the autonomous-able], clarify [the under-specified] first, and LEAVE parked [build-supervised / decisions / deferred].' One line + spec-id + reason each. '--copy' to clipboard like aida goal/ultraplan; '--stdout' to print.
+  3. DETERMINISTIC + READ-ONLY: no writes, no LLM — a prompt-assembler. The advisor (the grooming skill / the live session) is the actor the prompt drives.
+  4. Lives under the 'aida human' role-vector (SPIKE-57): the 'here's the prompt to clear the human-tier bottlenecks' verb, sibling to 'aida human' (view) + 'aida human home/away' (presence).
+  5. Composes with: aida list human (STORY-562 view), aida backlog groom / questions sweep / aida-clarify (the actions the prompt invokes), STORY-558/560 (the eventual agentic versions — this is the deterministic bridge toward them).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T15:11:07.054062245Z
+modified_at: 2026-06-11T15:11:07.054062245Z
+req_type: Story
+tags:
+- aida:backlog
+- aida:human
+- core
+- discoverability
+- operator-tooling
+- ux
