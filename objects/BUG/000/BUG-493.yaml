@@ -1,0 +1,18 @@
+id: 019eb4e0-80f3-7303-bfba-16109680564e
+spec_id: BUG-493
+agreed_id: BUG-493
+title: aida why over-claims 'held as a draft PR' from the review:draft-only TAG when the actual draft PR is closed/absent
+description: 'aida why TASK-715 printed: ''held-for-review — built — held as a draft PR for human review (review:draft-only)''. But TASK-715''s draft PR (#709) was CLOSED in the Session-63 reset, and ''aida show TASK-715'' reports ''no PR opened yet''. The why-reason is derived purely from the review:draft-only TAG, not reconciled against actual forge state — so it asserts a draft PR exists for human review when none is open. Fix: when deriving the held-for-review reason, check the real PR state (open draft PR? branch only? closed PR?) and report the true state (''built on branch task-715-schema-mcp; its draft PR #709 was closed — reopen to review''). Same misleading-output class as BUG-418 (reconcile-status). Quality input to STORY-548 (aida why-open).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T04:11:12.499418196Z
+modified_at: 2026-06-11T04:11:12.499418196Z
+req_type: Bug
+tags:
+- aida:why
+- core
+- misleading-output
+- reviewer
+- severity:minor
