@@ -1990,8 +1990,28 @@ fn run() -> Result<()> {
         Command::Trace(trace_cmd) => {
             handle_trace_command(trace_cmd, &storage)?;
         }
-        Command::Review(review_cmd) => {
-            handle_review_command(review_cmd, &storage)?;
+        Command::Review {
+            spec,
+            no_agent,
+            cmd,
+        } => {
+            // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives the
+            // human-decision review; `prompt` / `assemble` stay the helper
+            // subcommands. The legacy (SQLite) path supports the prompt
+            // helpers only; the spec-review verb needs the git-canonical
+            // backend's surface resolution, so guide the user there.
+            match (spec, cmd) {
+                (Some(_), _) => anyhow::bail!(
+                    "`aida review <SPEC>` requires the default git-canonical \
+                     backend; the deprecated --centralized SQLite mode does \
+                     not support it."
+                ),
+                (None, Some(review_cmd)) => handle_review_command(review_cmd, &storage)?,
+                (None, None) => {
+                    let _ = no_agent;
+                    anyhow::bail!("pass a spec id (`aida review <SPEC>`) or a subcommand (`prompt` / `assemble`)");
+                }
+            }
         }
         Command::Report(report_cmd) => {
             let db_path_str = requirements_path.display().to_string();
@@ -11964,12 +11984,27 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 user.as_deref(),
             )?;
         }
-        Command::Review(review_cmd) => {
-            // STORY-67: review-prompt generation reads requirements via the
-            // same Storage façade as Queue above. Pure read path — no
-            // mutation of the store.
-            let storage = Storage::new(store_path);
-            handle_review_command(review_cmd, &storage)?;
+        Command::Review {
+            spec,
+            no_agent,
+            cmd,
+        } => {
+            // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives a
+            // human-decision review of a held spec (the dual of `aida queue
+            // work`). The `prompt` / `assemble` subcommands stay the
+            // review-prompt helpers, read via the same Storage façade.
+            match (spec, cmd) {
+                (Some(spec_id), _) => {
+                    handle_review_spec(&backend, store_path, spec_id, *no_agent)?;
+                }
+                (None, Some(review_cmd)) => {
+                    let storage = Storage::new(store_path);
+                    handle_review_command(review_cmd, &storage)?;
+                }
+                (None, None) => {
+                    anyhow::bail!("pass a spec id (`aida review <SPEC>`) or a subcommand (`prompt` / `assemble`)");
+                }
+            }
         }
         // STORY-44: `aida config user` is a global op against
         // ~/.aida/preferences.toml — no store needed. Route it through the
@@ -56429,6 +56464,81 @@ mod in_flight_linkage_integration_tests {
         assert!(b.stuck.is_empty() && b.awaiting.is_empty() && b.no_commit.is_empty());
     }
 
+    // STORY-553: `aida review <SPEC>` surface classification. Pure — drives
+    // off a constructed GitLinkage + ChangeLookup, no repo needed.
+    fn linkage(
+        shipped: bool,
+        shipped_pr: Option<u64>,
+        branch: Option<&str>,
+        commits: usize,
+    ) -> GitLinkage {
+        GitLinkage {
+            commits: (0..commits)
+                .map(|i| (format!("sha{i}"), format!("s{i}"), format!("subj {i}")))
+                .collect(),
+            files: Vec::new(),
+            shipped,
+            branch: branch.map(|b| b.to_string()),
+            worktree: None,
+            shipped_pr,
+        }
+    }
+
+    #[test]
+    fn review_surface_open_change_only_on_found() {
+        let l = linkage(false, None, Some("story-553"), 2);
+        let found = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 42,
+            url: "https://example/pr/42".to_string(),
+            branch: "story-553".to_string(),
+            base: "main".to_string(),
+            title: None,
+        });
+        match classify_review_surface(&l, Some(found)) {
+            ReviewSurface::OpenChange { number, .. } => assert_eq!(number, 42),
+            other => panic!("expected OpenChange, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn review_surface_closed_pr_is_not_asserted_open() {
+        // BUG-493: a closed/absent PR must degrade to BranchNoChange, never
+        // be reported as an open change.
+        for lookup in [
+            crate::forge::ChangeLookup::NoChange,
+            crate::forge::ChangeLookup::CliMissing,
+            crate::forge::ChangeLookup::CliFailed("boom".into()),
+            crate::forge::ChangeLookup::Unreachable("offline".into()),
+        ] {
+            let l = linkage(false, None, Some("story-553"), 3);
+            match classify_review_surface(&l, Some(lookup)) {
+                ReviewSurface::BranchNoChange { branch, commits } => {
+                    assert_eq!(branch, "story-553");
+                    assert_eq!(commits, 3);
+                }
+                other => panic!("expected BranchNoChange, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn review_surface_shipped_wins_over_branch() {
+        let l = linkage(true, Some(7), Some("story-553"), 1);
+        match classify_review_surface(&l, None) {
+            ReviewSurface::Shipped { number } => assert_eq!(number, Some(7)),
+            other => panic!("expected Shipped, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn review_surface_local_when_no_branch() {
+        let l = linkage(false, None, None, 0);
+        assert!(matches!(
+            classify_review_surface(&l, None),
+            ReviewSurface::Local
+        ));
+    }
+
     /// TASK-241: a spec nothing references — no commits, no trace files.
     #[test]
     fn linkage_for_never_touched_spec_is_empty() {
@@ -83763,6 +83873,378 @@ mod task_518_pr_to_spec_tests {
 }
 
 /// trace:STORY-67 | ai:claude
+/// The review surface a held spec is sitting on — what `aida review <SPEC>`
+/// resolves the spec to before reviewing. NEVER asserts a closed/absent PR
+/// (the TASK-715 / BUG-493 failure mode); each variant is a verified state.
+/// trace:STORY-553 | ai:claude
+#[derive(Debug)]
+enum ReviewSurface {
+    /// An OPEN change (PR/MR) exists for the spec's branch.
+    OpenChange {
+        branch: String,
+        number: u64,
+        url: String,
+    },
+    /// Work is on a feature branch with commits, but no open change.
+    /// (Either never pushed a PR, or the held draft PR was closed.)
+    BranchNoChange { branch: String, commits: usize },
+    /// Commits reference the spec but already landed on the default branch.
+    Shipped { number: Option<u64> },
+    /// No commits and no trace comments reference the spec — built locally
+    /// and never pushed, or not started.
+    Local,
+}
+
+/// Classify a spec's review surface from its git linkage + (optional) forge
+/// change-lookup. Pure: the side-effecting `collect_git_linkage` /
+/// `change_lookup_for_branch` run at the call site; this is the decision so
+/// it's unit-testable. Order matters — shipped wins over branch, and only a
+/// `ChangeLookup::Found` becomes `OpenChange` (a closed/absent/unreachable
+/// PR must NOT be asserted as open — the TASK-715 / BUG-493 failure mode).
+/// trace:STORY-553 trace:BUG-493 | ai:claude
+fn classify_review_surface(
+    linkage: &GitLinkage,
+    change: Option<crate::forge::ChangeLookup>,
+) -> ReviewSurface {
+    if linkage.shipped {
+        return ReviewSurface::Shipped {
+            number: linkage.shipped_pr,
+        };
+    }
+    match (linkage.branch.clone(), change) {
+        (Some(branch), Some(crate::forge::ChangeLookup::Found(c))) => ReviewSurface::OpenChange {
+            branch,
+            number: c.id,
+            url: c.url,
+        },
+        (Some(branch), _) => ReviewSurface::BranchNoChange {
+            branch,
+            commits: linkage.commits.len(),
+        },
+        (None, _) => ReviewSurface::Local,
+    }
+}
+
+/// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
+/// counterpart to `aida queue work`. Resolves the spec's review surface,
+/// runs the existing headless reviewer tier (`/aida-review`) over the diff
+/// against the spec's `## Acceptance` criteria, then presents the verdict
+/// and lets the human decide (approve / request changes / open the diff /
+/// defer). NEVER auto-merges — that would defeat the review:draft-only gate
+/// (cf. STORY-529 self-merge bug-class).
+fn handle_review_spec(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    spec: &str,
+    no_agent: bool,
+) -> Result<()> {
+    let project_root = store_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+
+    // ---- Resolve the spec ----
+    let req = backend
+        .get_requirement_by_spec_id(spec)
+        .with_context(|| format!("failed to load {spec}"))?
+        .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
+    let spec_id = req.spec_id.clone().unwrap_or_else(|| spec.to_string());
+    record_role_activity(&spec_id, "review");
+
+    println!(
+        "{} {} — {}",
+        "Reviewing".green().bold(),
+        spec_id.cyan(),
+        req.title
+    );
+
+    // ---- Locate the review surface (gh-free linkage, then forge lookup) ----
+    let ids = vec![spec_id.clone()];
+    let linkage = collect_git_linkage(project_root, &ids);
+    let forge = crate::forge::resolve_forge_kind(project_root);
+
+    // Resolve the change lookup only when there's an in-flight branch — the
+    // shipped / local cases never touch the forge.
+    let change = linkage
+        .branch
+        .as_deref()
+        .map(|b| change_lookup_for_branch(project_root, b));
+    let surface = classify_review_surface(&linkage, change);
+
+    let change_noun = forge.change_noun();
+
+    // Report the surface honestly, then either review or guide.
+    match &surface {
+        ReviewSurface::OpenChange {
+            branch,
+            number,
+            url,
+        } => {
+            println!(
+                "  {} open {}-{} on branch {} {}",
+                "Surface".bold(),
+                change_noun,
+                number,
+                branch.cyan(),
+                url.dimmed()
+            );
+        }
+        ReviewSurface::BranchNoChange {
+            branch, commits, ..
+        } => {
+            println!(
+                "  {} branch {} ({} commit{}) — {}",
+                "Surface".bold(),
+                branch.cyan(),
+                commits,
+                if *commits == 1 { "" } else { "s" },
+                format!("no open {change_noun}").yellow(),
+            );
+            println!(
+                "  {} the held draft {change_noun} is closed or was never opened.",
+                "↳".dimmed()
+            );
+            // AC-5: offer to (re)open a PR before review.
+            if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
+                let reopen =
+                    inquire::Confirm::new(&format!("Open a {change_noun} from `{branch}` first?"))
+                        .with_default(false)
+                        .prompt()
+                        .unwrap_or(false);
+                if reopen {
+                    println!(
+                        "  {} run: {}",
+                        "→".green(),
+                        format!("git push -u origin {branch} && gh pr create --fill").cyan()
+                    );
+                    println!(
+                        "  {} then re-run {} once the {change_noun} is open.",
+                        "↳".dimmed(),
+                        format!("aida review {spec_id}").cyan()
+                    );
+                    return Ok(());
+                }
+            } else {
+                println!(
+                    "  {} to open one: {}",
+                    "↳".dimmed(),
+                    format!("git push -u origin {branch} && gh pr create --fill").cyan()
+                );
+            }
+        }
+        ReviewSurface::Shipped { number } => {
+            match number {
+                Some(n) => println!(
+                    "  {} already merged to the default branch (via {}-{}).",
+                    "Surface".bold(),
+                    change_noun,
+                    n
+                ),
+                None => println!(
+                    "  {} already merged to the default branch.",
+                    "Surface".bold()
+                ),
+            }
+            println!(
+                "  {} nothing to review — the work has landed. \
+                 If it needs another look, {}.",
+                "↳".dimmed(),
+                format!("aida queue rework {spec_id}").cyan()
+            );
+            return Ok(());
+        }
+        ReviewSurface::Local => {
+            println!(
+                "  {} {}",
+                "Surface".bold(),
+                "built locally, never pushed (no commits reference this spec)".yellow()
+            );
+            println!(
+                "  {} commit your work with a {} trailer, push, and open a {change_noun}; \
+                 then re-run {}.",
+                "↳".dimmed(),
+                format!("({spec_id})").cyan(),
+                format!("aida review {spec_id}").cyan()
+            );
+            return Ok(());
+        }
+    }
+
+    // ---- Run the reviewer over the diff (AC-2 / AC-4: reuse /aida-review) ----
+    let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let (pr_number, _branch) = match &surface {
+        ReviewSurface::OpenChange { branch, number, .. } => (Some(*number), branch.clone()),
+        ReviewSurface::BranchNoChange { branch, .. } => (None, branch.clone()),
+        _ => unreachable!("shipped/local surfaces returned above"),
+    };
+
+    if no_agent {
+        // AC: degrade-honest path — surface + recommended command, no agent.
+        match pr_number {
+            Some(n) => println!(
+                "\n  {} review the diff yourself: {}",
+                "→".green(),
+                format!("gh pr diff {n}").cyan()
+            ),
+            None => println!("\n  {} no open {change_noun} to diff.", "ℹ".cyan()),
+        }
+        return Ok(());
+    }
+
+    // The verdict file the `/aida-review` skill writes (it keys off this env
+    // var — same handshake the standalone reviewer uses). trace:BUG-226
+    let verdict_path = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(format!("{}.json", spec_id));
+    if let Some(dir) = verdict_path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::remove_file(&verdict_path);
+    std::env::set_var("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
+
+    // The reviewer reads the actual DIFF against `## Acceptance` (AC-2).
+    let prompt = match pr_number {
+        Some(n) => format!("/aida-review --pr {n}"),
+        None => "/aida-review".to_string(),
+    };
+    let session_id = uuid::Uuid::new_v4().to_string();
+
+    println!(
+        "\n  {} running reviewer over the diff against {}'s acceptance criteria…",
+        "▶".green().bold(),
+        spec_id.cyan()
+    );
+
+    let status: std::process::ExitStatus = if interactive {
+        // Interactive reviewer: let the human watch; native permission posture.
+        let name = format!("review-{}", spec_id.to_ascii_lowercase());
+        session::spawn_claude_session(None, Some(&name), &prompt, &session_id)
+            .context("failed to launch the reviewer")?
+    } else {
+        // Non-interactive: headless reviewer, AskUserQuestion structurally denied.
+        let log_path = project_root
+            .join(".aida")
+            .join("headless-logs")
+            .join(format!("review-{}-{}.jsonl", spec_id, session_id));
+        let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
+        session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee_opts)
+            .context("failed to launch the headless reviewer")?
+    };
+    if !status.success() {
+        eprintln!(
+            "  {} the reviewer exited non-zero ({})",
+            "⚠".yellow(),
+            status
+        );
+    }
+
+    // ---- Read + present the verdict (AGENT ANALYZES + RECOMMENDS) ----
+    let verdict = std::fs::read_to_string(&verdict_path)
+        .ok()
+        .and_then(|body| reviewer_summary::parse_verdict_file(&body));
+
+    println!();
+    let recommended = match &verdict {
+        Some(v) => {
+            let label = match v.verdict.trim().to_ascii_lowercase().as_str() {
+                "approved" | "approve" | "lgtm" | "pass" => "APPROVE".green().bold().to_string(),
+                "requestchanges" | "request_changes" | "request-changes" | "changes"
+                | "partial" => "REQUEST CHANGES".yellow().bold().to_string(),
+                "rejected" | "reject" | "fail" => "REJECT".red().bold().to_string(),
+                _ => v.verdict.clone(),
+            };
+            println!("  {} {}", "Reviewer verdict:".bold(), label);
+            if let Some(s) = v.summary.as_deref().filter(|s| !s.trim().is_empty()) {
+                println!("  {} {}", "Summary:".bold(), s);
+            }
+            if let Some(url) = v.comment_url.as_deref().filter(|s| !s.is_empty()) {
+                println!("  {} {}", "Review comment:".bold(), url.dimmed());
+            }
+            v.verdict.trim().to_ascii_lowercase()
+        }
+        None => {
+            println!(
+                "  {} the reviewer produced no verdict file — review against {} yourself.",
+                "⚠".yellow(),
+                spec_id.cyan()
+            );
+            String::new()
+        }
+    };
+
+    // ---- HUMAN DECIDES + ACTS (AC-3). NEVER auto-merge (AC-3 / STORY-529) ----
+    if !interactive {
+        // No human to prompt — surface the recommended next command honestly.
+        let recommend = match recommended.as_str() {
+            "approved" | "approve" | "lgtm" | "pass" => match pr_number {
+                Some(n) => format!("gh pr merge {n} --squash --delete-branch"),
+                None => format!("open a {change_noun}, then merge"),
+            },
+            _ => format!("aida queue rework {spec_id}"),
+        };
+        println!("\n  {} recommended next: {}", "→".green(), recommend.cyan());
+        return Ok(());
+    }
+
+    let merge_label = "Approve → print the merge command";
+    let rework_label = "Request changes → aida queue rework";
+    let diff_label = "Open the diff myself";
+    let defer_label = "Defer (leave it held)";
+    let options = vec![merge_label, rework_label, diff_label, defer_label];
+    let choice = match inquire::Select::new("What now?", options).prompt() {
+        Ok(c) => c,
+        Err(_) => {
+            println!("  {} deferred — the spec stays held.", "↳".dimmed());
+            return Ok(());
+        }
+    };
+
+    if choice == merge_label {
+        // NEVER auto-merge — print the paste-ready command for the human to
+        // run. The review:draft-only gate exists precisely so a person, not
+        // this verb, performs the merge. trace:STORY-553 | ai:claude
+        match pr_number {
+            Some(n) => {
+                println!(
+                    "\n  {} run to merge: {}",
+                    "→".green(),
+                    format!("gh pr merge {n} --squash --delete-branch").cyan()
+                );
+                println!(
+                    "  {} the spec auto-bumps Done → Completed when the merge lands on the default branch.",
+                    "↳".dimmed()
+                );
+            }
+            None => println!(
+                "\n  {} open a {change_noun} first, then merge it.",
+                "ℹ".cyan()
+            ),
+        }
+    } else if choice == rework_label {
+        // Route to rework in-process (reuse the existing handler).
+        let storage = Storage::new(store_path);
+        handle_queue_rework(
+            &storage, &spec_id, false, None, None, None, false, false, false, None, false, None,
+        )?;
+    } else if choice == diff_label {
+        match pr_number {
+            Some(n) => {
+                println!("  {} {}", "→".green(), format!("gh pr diff {n}").cyan());
+                let _ = std::process::Command::new("gh")
+                    .arg("-C")
+                    .arg(project_root)
+                    .args(["pr", "diff", &n.to_string()])
+                    .status();
+            }
+            None => println!("  {} no open {change_noun} to diff.", "ℹ".cyan()),
+        }
+    } else {
+        println!("  {} deferred — the spec stays held.", "↳".dimmed());
+    }
+
+    Ok(())
+}
+
 fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
     match cmd {
         ReviewCommand::Prompt {

@@ -6569,10 +6569,33 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Trace(TraceCommand),
 
-    /// Review-workflow helpers (review-prompt generation, etc.)
+    /// Drive human review of a held spec, or generate review prompts.
+    ///
+    /// `aida review <SPEC>` is the human-review counterpart to `aida queue
+    /// work`: it locates the spec's review surface (an open draft PR, else
+    /// the branch + commits, else "built locally, never pushed"), runs a
+    /// reviewer over the diff against the spec's `## Acceptance` criteria,
+    /// then presents the verdict and lets you decide — approve, request
+    /// changes, open the diff, or defer. It never auto-merges.
+    ///
+    /// The `prompt` / `assemble` subcommands are the review-prompt helpers.
     // trace:STORY-67 | ai:claude
-    #[clap(subcommand)]
-    Review(ReviewCommand),
+    // trace:STORY-553 | ai:claude
+    Review {
+        /// Spec to review (e.g. `STORY-553`). Resolves its review surface,
+        /// runs a reviewer over the diff, and prompts you to decide. Omit
+        /// when using a `prompt` / `assemble` subcommand.
+        spec: Option<String>,
+
+        /// Skip the reviewer-agent analysis: just locate + report the
+        /// review surface and the recommended next command. Useful in
+        /// non-interactive contexts or when you only want the diff pointer.
+        #[clap(long)]
+        no_agent: bool,
+
+        #[clap(subcommand)]
+        cmd: Option<ReviewCommand>,
+    },
 
     /// Report generation commands
     #[clap(subcommand, hide = true)]
