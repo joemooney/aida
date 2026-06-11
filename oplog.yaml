@@ -16475,5 +16475,21 @@ operations:
       - Optional advisor strategic lens ('does this still fit the direction?') as '--with-advisor-lens' — a second, opt-in overlay separate from the code verdict. File as a child TASK once the core verb lands.
 
       Composes with: aida review prompt, aida session start --owns PR-N (STORY-71), aida queue rework, the reviewer role. trace:BUG-493 (the misleading 'held as a draft PR' state this verb must read correctly).
-clock: 1640
+- id: 019eb55a-9550-7923-b234-039a7272bbc8
+  target_id: d8fbfd6f-47a7-4f93-94d2-1dc3009e79b0
+  author: aida
+  node_id: '1'
+  lamport: 1641
+  timestamp: 2026-06-11T06:24:33.104489682Z
+  kind: !SetDescription
+    description: |-
+      The user guide should explain what each requirement type is intended for and best practices for how to write such requirements.
+
+      ## Acceptance
+
+      1. A user-facing guide section (docs/requirement-types.md, or a section in the user guide / getting-started) lists each of the RequirementType variants (canonical source: the enum in aida-core/src/models.rs — 19 today) with: its id prefix (FR/BUG/STORY/TASK/SPIKE/…), what it's for in one line, and a short 'when to use / how to write it well' best-practice note.
+      2. Dedup check FIRST: TASK-716 already documented the 19 types across CLAUDE.md / template / --help / MCP schema. This spec is the NARRATIVE user-guide version (intent + best-practices), not a second reference list — if TASK-716's output already covers the user-guide need, RESOLVE this as satisfied (close, note the overlap) rather than duplicating.
+      3. Reference the taxonomy as the single source (link the enum / 'aida schema' once it ships) — do not hand-paste a 19-row list that will drift.
+      4. No SPEC-IDs in the user-facing text (user-facing-text convention).
+clock: 1641
 node_id: '1'
