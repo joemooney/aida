@@ -5134,17 +5134,49 @@ fn handle_punt_command(
 /// status is in `status` (default `completed,rejected`) and whose
 /// `modified_at` is older than the cutoff. `--dry-run` prints the plan
 /// and exits. trace:STORY-441 | ai:claude
+/// BUG-492: the single-spec archive guard decision, factored out as a pure
+/// function so the "non-terminal / queued / forced" matrix is unit-testable
+/// without touching the store or a TTY. `Allow` archives silently;
+/// `Confirm` carries the warning reason and demands an interactive y/N (or
+/// `--force`). trace:BUG-492 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum ArchiveGuard {
+    Allow,
+    Confirm { reason: String },
+}
+
+// trace:BUG-492 | ai:claude
+fn archive_guard_decision(status: &RequirementStatus, queued: bool, force: bool) -> ArchiveGuard {
+    let non_terminal = !is_terminal_status(status);
+    if force || !(non_terminal || queued) {
+        return ArchiveGuard::Allow;
+    }
+    let reason = if queued {
+        format!(
+            "is {status} AND in the queue — archiving it leaves the queue pointing at a \
+             hidden spec (`aida list` won't show it)."
+        )
+    } else {
+        format!(
+            "is {status} (not Completed/Rejected). Archive is for the closed long-tail; \
+             archiving live work hides it from `aida list`."
+        )
+    };
+    ArchiveGuard::Confirm { reason }
+}
+
 fn handle_archive_command(
     id: Option<&str>,
     older_than: Option<&str>,
     status_csv: Option<&str>,
     dry_run: bool,
+    force: bool,
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
 ) -> Result<()> {
     match (id, older_than) {
-        (Some(id), None) => archive_single(id, backend, store_path),
-        (None, Some(dur)) => archive_sweep(dur, status_csv, dry_run, backend),
+        (Some(id), None) => archive_single(id, force, backend, store_path),
+        (None, Some(dur)) => archive_sweep(dur, status_csv, dry_run, force, backend),
         (Some(_), Some(_)) => {
             // Clap's `conflicts_with` should catch this — but defend in depth.
             anyhow::bail!("--older-than cannot be used with a positional SPEC-ID");
@@ -5156,8 +5188,16 @@ fn handle_archive_command(
     }
 }
 
+/// BUG-492: archive is for the closed long-tail (Completed/Rejected). A
+/// non-terminal spec — and especially a QUEUED one — being archived is the
+/// active-work footgun that silently swept 128 Approved specs (incl. 4
+/// queued items) in the Session-63 reset. The single-id path now refuses a
+/// non-terminal archive without `--force` (or an interactive confirm), warns
+/// louder + dequeues when the spec is in the queue, and `queue list` flags
+/// any archived member. trace:BUG-492 | ai:claude
 fn archive_single(
     id: &str,
+    force: bool,
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
 ) -> Result<()> {
@@ -5175,6 +5215,55 @@ fn archive_single(
         );
         return Ok(());
     }
+
+    // BUG-492: is this spec sitting in the queue? An archived + queued spec
+    // is contradictory state (`list` hides it, `queue list` keeps showing
+    // it), so we name the queue loudly and dequeue on the way out.
+    // trace:BUG-492 | ai:claude
+    let queue_storage = Storage::new(store_path.to_path_buf());
+    let queue_user_id = current_user_id(None);
+    let queued = queue_storage
+        .queue_list(&queue_user_id, /* include_completed */ true)
+        .map(|entries| entries.iter().any(|e| e.requirement_id == req.id))
+        .unwrap_or(false);
+
+    // BUG-492: guard the active-work case. A non-terminal or queued spec
+    // needs --force (or an interactive y/N confirm). Archive's job is the
+    // closed long-tail; sweeping live work is almost always a mistake.
+    // trace:BUG-492 | ai:claude
+    match archive_guard_decision(&req.status, queued, force) {
+        ArchiveGuard::Allow => {}
+        ArchiveGuard::Confirm { reason } => {
+            eprintln!("{} {display_id} {reason}", "Warning:".yellow().bold());
+            let confirmed = if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
+                prompt_yes_no(&format!("Archive {display_id} anyway?"), false)?
+            } else {
+                false
+            };
+            if !confirmed {
+                anyhow::bail!(
+                    "refused to archive {display_id} ({}{}) — pass --force to override",
+                    req.status,
+                    if queued { ", queued" } else { "" }
+                );
+            }
+        }
+    }
+
+    // BUG-492: resolve the contradiction — dequeue before archiving so we
+    // never leave an archived spec in the queue. trace:BUG-492 | ai:claude
+    if queued {
+        if let Err(e) = queue_storage.queue_remove(&queue_user_id, &req.id) {
+            eprintln!(
+                "{} could not dequeue {display_id} ({e}); archiving anyway, but the \
+                 queue still references it.",
+                "Warning:".yellow(),
+            );
+        } else {
+            println!("{} {display_id} removed from the queue", "Dequeued:".cyan());
+        }
+    }
+
     let now = chrono::Utc::now();
     req.archived = true;
     req.archived_at = Some(now);
@@ -5189,6 +5278,7 @@ fn archive_sweep(
     duration: &str,
     status_csv: Option<&str>,
     dry_run: bool,
+    force: bool,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
     let cutoff = parse_since_arg(duration)
@@ -5201,6 +5291,31 @@ fn archive_sweep(
         .collect();
     if statuses.is_empty() {
         anyhow::bail!("--status must list at least one status (default: completed,rejected)");
+    }
+
+    // BUG-492: a bulk sweep that includes non-terminal statuses
+    // (Draft/Approved/Planned/InProgress) is the scripted form of the same
+    // active-work footgun. The default csv (completed,rejected) is
+    // terminal-only; an explicit `--status approved` must also carry
+    // `--force` so a wide `--older-than … --status approved` can't silently
+    // archive live backlog. trace:BUG-492 | ai:claude
+    if !force {
+        let non_terminal: Vec<&String> = statuses
+            .iter()
+            .filter(|s| !is_terminal_status_str(s))
+            .collect();
+        if !non_terminal.is_empty() {
+            let names = non_terminal
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(",");
+            anyhow::bail!(
+                "--older-than refuses non-terminal status(es) [{names}] by default — \
+                 archive is for closed work (Completed/Rejected). Pass --force to \
+                 include live backlog in the sweep."
+            );
+        }
     }
 
     // Pull all non-archived rows matching any of the requested statuses,
@@ -10986,14 +11101,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             older_than,
             status,
             dry_run,
+            force,
         } => {
             // STORY-441: archive a single spec OR bulk-sweep over closed
             // work matching the duration + status filter. trace:STORY-441
+            // BUG-492: `force` opts past the non-terminal/queued guard.
             handle_archive_command(
                 id.as_deref(),
                 older_than.as_deref(),
                 status.as_deref(),
                 *dry_run,
+                *force,
                 &backend,
                 store_path,
             )?;
@@ -47389,6 +47507,77 @@ mod statusline_tests {
         // auto-bumps to Completed when the referencing commit merges to
         // the default branch. Children are still allowed.
         assert!(!is_terminal_status(&RequirementStatus::Done));
+    }
+
+    /// BUG-492: `aida archive <ID>` must not silently sweep live work. The
+    /// guard fires (demands confirm / --force) for any non-terminal status,
+    /// and louder when the spec is also queued; a terminal spec archives
+    /// freely; `--force` always passes through. This is the regression for
+    /// the Session-63 over-sweep that archived 128 Approved specs (incl. 4
+    /// queued items). trace:BUG-492 | ai:claude
+    #[test]
+    fn archive_guard_blocks_non_terminal_and_queued() {
+        // Terminal, not queued → archive silently.
+        assert_eq!(
+            archive_guard_decision(&RequirementStatus::Completed, false, false),
+            ArchiveGuard::Allow,
+            "closed long-tail archives without a prompt"
+        );
+        assert_eq!(
+            archive_guard_decision(&RequirementStatus::Rejected, false, false),
+            ArchiveGuard::Allow
+        );
+
+        // Non-terminal, not queued → must confirm (the bug: this used to
+        // archive silently).
+        let g = archive_guard_decision(&RequirementStatus::Approved, false, false);
+        match &g {
+            ArchiveGuard::Confirm { reason } => {
+                assert!(
+                    reason.contains("Approved") && reason.contains("aida list"),
+                    "non-terminal warning must name the status + the hidden-from-list risk: {reason}"
+                );
+                assert!(
+                    !reason.contains("queue"),
+                    "un-queued spec should not mention the queue: {reason}"
+                );
+            }
+            ArchiveGuard::Allow => {
+                panic!("Approved must require confirmation, not archive silently")
+            }
+        }
+
+        // Non-terminal AND queued → confirm with the louder, queue-naming
+        // reason (the unambiguously-wrong case from the bug).
+        let g = archive_guard_decision(&RequirementStatus::Approved, true, false);
+        match &g {
+            ArchiveGuard::Confirm { reason } => assert!(
+                reason.contains("queue"),
+                "queued+non-terminal warning must name the queue: {reason}"
+            ),
+            ArchiveGuard::Allow => panic!("queued spec must require confirmation"),
+        }
+
+        // Even a *terminal* spec that is still queued should be flagged so
+        // the contradiction gets reconciled.
+        assert!(
+            matches!(
+                archive_guard_decision(&RequirementStatus::Completed, true, false),
+                ArchiveGuard::Confirm { .. }
+            ),
+            "a queued terminal spec is still contradictory state and must confirm"
+        );
+
+        // --force always passes through, regardless of status / queue.
+        assert_eq!(
+            archive_guard_decision(&RequirementStatus::Approved, true, true),
+            ArchiveGuard::Allow,
+            "--force opts past the guard"
+        );
+        assert_eq!(
+            archive_guard_decision(&RequirementStatus::InProgress, false, true),
+            ArchiveGuard::Allow
+        );
     }
 
     /// STORY-72: position math for `queue move --after`. Three regimes —
@@ -86785,13 +86974,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                                 .and_then(|r| format_tag_chip(&r.tags))
                                 .map(|c| format!("  {}", format!("[{}]", c).dimmed()))
                                 .unwrap_or_default();
+                            // BUG-492: flag archived-but-queued specs here too.
+                            // trace:BUG-492 | ai:claude
+                            let archived_chip = if req.map(|r| r.archived).unwrap_or(false) {
+                                format!("  {}", "[ARCHIVED]".red().bold())
+                            } else {
+                                String::new()
+                            };
                             println!(
-                                "  {} {}{}  {}  [{}]{}",
+                                "  {} {}{}  {}  [{}]{}{}",
                                 glyph.dimmed(),
                                 display_id_owned.bold(),
                                 pad,
                                 title_owned,
                                 status_badge,
+                                archived_chip,
                                 tag_chip,
                             );
                         };
@@ -86923,6 +87120,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         title_owned
                     );
                     print!("  [{}]", status_badge);
+                    // BUG-492: an archived spec that is still queued is
+                    // contradictory state (`aida list` hides it, this view
+                    // keeps showing it). Flag it loudly so the user can
+                    // reconcile (unarchive or dequeue). trace:BUG-492
+                    if req.map(|r| r.archived).unwrap_or(false) {
+                        print!("  {}", "[ARCHIVED]".red().bold());
+                    }
                     if entry.added_by != user_id {
                         print!("  {}", format!("(from @{})", entry.added_by).dimmed());
                     }
