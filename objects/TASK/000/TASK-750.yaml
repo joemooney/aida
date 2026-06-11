@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T14:27:36.746544230Z
-modified_at: 2026-06-11T14:27:36.746544230Z
+modified_at: 2026-06-11T20:20:32.892673972Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb6ee-cef1-7981-842d-446133741b93
   created_at: 2026-06-11T14:27:42.234844632Z
+comments:
+- id: 019eb857-f5fc-7581-a58e-3674b5341371
+  author: joe
+  content: 'Resolved (advisor): STORY-561 restated as the presence subcommand of SPIKE-57''s aida human vector (comment added to STORY-561 + STORY-561 kept as the presence spec). Housekeeping done.'
+  created_at: 2026-06-11T20:20:32.892673972Z
+  modified_at: 2026-06-11T20:20:32.892673972Z
