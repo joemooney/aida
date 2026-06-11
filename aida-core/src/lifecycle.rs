@@ -83,6 +83,24 @@ impl State {
         }
     }
 
+    /// Map a [`RequirementStatus`] directly to its declared [`State`] — the
+    /// in-memory companion to [`State::from_status_str`], no string round-trip.
+    /// Total over `RequirementStatus`; the declared-only `Start`/`Released`
+    /// states are not statuses. trace:TASK-738 | ai:claude
+    pub fn from_status(rs: &crate::models::RequirementStatus) -> State {
+        use crate::models::RequirementStatus as RS;
+        match rs {
+            RS::Draft => State::Draft,
+            RS::Approved => State::Approved,
+            RS::Planned => State::Planned,
+            RS::InProgress => State::InProgress,
+            RS::Done => State::Done,
+            RS::Completed => State::Completed,
+            RS::Rejected => State::Rejected,
+            RS::NeedsAttention => State::NeedsAttention,
+        }
+    }
+
     /// The node label as it appears in the Mermaid diagram.
     pub fn label(self) -> &'static str {
         match self {
@@ -112,6 +130,20 @@ impl State {
             State::Done | State::Completed | State::Released => Some(TriggerKind::Git),
         }
     }
+}
+
+/// True iff `from → to` is a transition the lifecycle model
+/// ([`LifecycleModel::declared`]) declares legal — the single source of truth
+/// for which edges exist, so gates migrated behind it (Phase 2) ask this
+/// instead of re-encoding the same edge set, and a gate can never drift from
+/// the diagram. A self-edge (`from == to`) is a no-op, not a declared
+/// transition; callers that allow no-ops handle that themselves.
+/// trace:TASK-738 | ai:claude
+pub fn is_declared(from: State, to: State) -> bool {
+    LifecycleModel::declared()
+        .transitions
+        .iter()
+        .any(|t| t.from == from && t.to == to)
 }
 
 /// One legal transition in the declared status chain.
