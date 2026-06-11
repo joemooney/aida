@@ -544,20 +544,48 @@ def test_spec_graph_round_trips(client: McpClient, spec: str, aida: Path, root: 
         f"show_requirement did not reflect status update:\n{shown_after}",
     )
 
-    # BUG-449: MCP must not self-advance a spec into an advisor-gated
-    # (Planned/Approved) or merge-driven (Completed) status — the
-    # add-then-update bypass. Use the raw request path since client.tool()
-    # raises on the isError envelope we expect here.
-    for gated_status in ("planned", "completed"):
+    # BUG-449/BUG-486: MCP must not self-advance an UN-TRIAGED spec
+    # (Draft/NeedsAttention source) into an advisor-gated status — the
+    # add-then-update intake bypass. The advisor gate sits at INTAKE: once a
+    # spec is Approved, Approved → Planned is an implementer-legitimate forward
+    # step and is NOT gated (it does not re-cross the advisor gate). So assert
+    # the refusal on a fresh DRAFT spec, not on the already-triaged `spec`
+    # above. Use the raw request path since client.tool() raises on the isError
+    # envelope we expect here.
+    draft = client.tool(
+        "add_requirement",
+        {
+            "title": "MCP intake-gate probe",
+            "description": "Draft spec: advisor-gated intake transitions must be refused via MCP.",
+            "type": "task",
+            "status": "draft",
+            "priority": "low",
+            "tags": ["mcp-stdio-test"],
+        },
+    )
+    draft_spec = parse_spec_id(content_text(draft), "add_requirement")
+    for gated_status in ("approved", "planned"):
         resp = client.request(
             "tools/call",
-            {"name": "update_requirement", "arguments": {"id": spec, "status": gated_status}},
+            {"name": "update_requirement", "arguments": {"id": draft_spec, "status": gated_status}},
         )
         result = resp.get("result")
         require(
             isinstance(result, dict) and result.get("isError") is True,
-            f"update_requirement should refuse {gated_status} via MCP (BUG-449): {resp}",
+            f"update_requirement should refuse Draft→{gated_status} via MCP "
+            f"(advisor-gated intake, BUG-449/BUG-486): {resp}",
         )
+
+    # Completed is merge-driven — always refused via MCP regardless of source/role.
+    resp = client.request(
+        "tools/call",
+        {"name": "update_requirement", "arguments": {"id": spec, "status": "completed"}},
+    )
+    result = resp.get("result")
+    require(
+        isinstance(result, dict) and result.get("isError") is True,
+        f"update_requirement should refuse completed via MCP (merge-driven, BUG-449): {resp}",
+    )
 
 
 def test_coordination_round_trips(client: McpClient, strict: bool) -> None:
