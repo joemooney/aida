@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:22:32.536046891Z
-modified_at: 2026-06-11T06:34:10.848292568Z
+modified_at: 2026-06-11T06:34:13.431501669Z
 req_type: Bug
 tags:
 - authority
@@ -33,7 +33,6 @@ tags:
 - from-bug:BUG-481
 - from-operator
 - mcp
-- needs-design-signoff
 - severity:high
 comments:
 - id: 019eab12-0dbc-79e3-ad93-edab2e6a4801
