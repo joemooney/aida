@@ -146,6 +146,46 @@ pub fn is_declared(from: State, to: State) -> bool {
         .any(|t| t.from == from && t.to == to)
 }
 
+/// A named guard on a transition — the authority/condition it must satisfy.
+/// Gates migrated behind the model ask for this instead of hand-encoding the
+/// same predicate, so a gate and the rendered diagram can never drift. Phase 2b
+/// (TASK-739) introduces the advisor-authority guard; later phases add the
+/// merge-evidence and terminal-and-unqueued guards.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuardKind {
+    /// No special authority — an implementer-legitimate flip.
+    None,
+    /// Lifting an un-triaged (`Draft`) or punted (`NeedsAttention`) spec into
+    /// the approved+ pipeline: the advisor's (or interactive human's) triage
+    /// decision. trace:TASK-739 | ai:claude
+    RequiresAdvisorAuthority,
+}
+
+/// Whether a *target* status is one the advisor gate protects (the approved+
+/// pipeline). The single source for the target half of the authority predicate
+/// (`status_requires_advisor_authority`). trace:TASK-739 | ai:claude
+pub fn target_requires_advisor_authority(to: State) -> bool {
+    matches!(
+        to,
+        State::Approved | State::Planned | State::InProgress | State::Done | State::Completed
+    )
+}
+
+/// The guard on the `from → to` transition. Phase 2b: a transition is an
+/// advisor-authority act iff it lifts an un-triaged (`Draft`) or punted
+/// (`NeedsAttention`) spec into a protected target — the model's single source
+/// for `status_advance_requires_advisor_authority`. Defined over the FULL
+/// (from, to) domain, not only declared edges, because the gate governs direct
+/// edits too (e.g. `Draft → InProgress`). trace:TASK-739 | ai:claude
+pub fn transition_guard(from: State, to: State) -> GuardKind {
+    if matches!(from, State::Draft | State::NeedsAttention) && target_requires_advisor_authority(to)
+    {
+        GuardKind::RequiresAdvisorAuthority
+    } else {
+        GuardKind::None
+    }
+}
+
 /// One legal transition in the declared status chain.
 // trace:TASK-737 | ai:claude
 #[derive(Debug, Clone, Copy)]

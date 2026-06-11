@@ -48335,6 +48335,71 @@ mod statusline_tests {
         assert!(!gate(&S::InProgress, &S::NeedsAttention));
     }
 
+    /// TASK-739: exhaustive parity — `status_requires_advisor_authority` (now
+    /// delegating to `lifecycle::target_requires_advisor_authority`) matches the
+    /// pre-migration hand-coded predicate over every status. trace:TASK-739
+    #[test]
+    fn status_requires_advisor_authority_parity_with_oracle() {
+        use super::status_requires_advisor_authority as f;
+        use aida_core::models::RequirementStatus as S;
+        fn oracle(s: &S) -> bool {
+            matches!(
+                s,
+                S::Approved | S::Planned | S::InProgress | S::Done | S::Completed
+            )
+        }
+        let all = [
+            S::Draft,
+            S::Approved,
+            S::Planned,
+            S::InProgress,
+            S::Done,
+            S::Completed,
+            S::Rejected,
+            S::NeedsAttention,
+        ];
+        for s in &all {
+            assert_eq!(f(s), oracle(s), "parity mismatch at {s}");
+        }
+    }
+
+    /// TASK-739: exhaustive parity — `status_advance_requires_advisor_authority`
+    /// (now delegating to `lifecycle::transition_guard`) matches the
+    /// pre-migration predicate over every (from, to) pair, including direct
+    /// edits the model does not declare (e.g. `Draft → InProgress`).
+    /// trace:TASK-739
+    #[test]
+    fn status_advance_requires_advisor_authority_parity_with_oracle() {
+        use super::status_advance_requires_advisor_authority as gate;
+        use aida_core::models::RequirementStatus as S;
+        fn oracle(from: &S, to: &S) -> bool {
+            matches!(from, S::Draft | S::NeedsAttention)
+                && matches!(
+                    to,
+                    S::Approved | S::Planned | S::InProgress | S::Done | S::Completed
+                )
+        }
+        let all = [
+            S::Draft,
+            S::Approved,
+            S::Planned,
+            S::InProgress,
+            S::Done,
+            S::Completed,
+            S::Rejected,
+            S::NeedsAttention,
+        ];
+        for from in &all {
+            for to in &all {
+                assert_eq!(
+                    gate(from, to),
+                    oracle(from, to),
+                    "parity mismatch at {from} → {to}"
+                );
+            }
+        }
+    }
+
     /// BUG-444: the keystone phase-1 decision. When both PR lookups return
     /// empty-but-successful, ONLY a branch genuinely absent from origin is a
     /// definitive NoPr; an on-origin (or unconfirmable) branch is a retryable
@@ -59358,13 +59423,10 @@ fn effective_role_resolved() -> (String, bool) {
 /// and beyond). Draft / Rejected / NeedsAttention don't gate (they are not
 /// "approved work" a non-advisor could smuggle past triage).
 fn status_requires_advisor_authority(status: &RequirementStatus) -> bool {
-    matches!(
-        status,
-        RequirementStatus::Approved
-            | RequirementStatus::Planned
-            | RequirementStatus::InProgress
-            | RequirementStatus::Done
-            | RequirementStatus::Completed
+    // TASK-739: single-sourced in the lifecycle model — the target half of the
+    // advisor-authority predicate. trace:TASK-739 | ai:claude
+    aida_core::lifecycle::target_requires_advisor_authority(
+        aida_core::lifecycle::State::from_status(status),
     )
 }
 
@@ -59385,10 +59447,13 @@ pub(crate) fn status_advance_requires_advisor_authority(
     from: &RequirementStatus,
     to: &RequirementStatus,
 ) -> bool {
-    matches!(
-        from,
-        RequirementStatus::Draft | RequirementStatus::NeedsAttention
-    ) && status_requires_advisor_authority(to)
+    // TASK-739: delegate to the lifecycle model's transition guard — the single
+    // source for which (from → to) edits are advisor-authority acts. Defined
+    // over the full domain (direct edits too, not only declared edges).
+    // trace:TASK-739 | ai:claude
+    use aida_core::lifecycle::{transition_guard, GuardKind, State};
+    transition_guard(State::from_status(from), State::from_status(to))
+        == GuardKind::RequiresAdvisorAuthority
 }
 
 /// TASK-130: resolve the `human_only` marker for a freshly-added spec from its
