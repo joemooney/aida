@@ -6,8 +6,8 @@ use std::path::PathBuf;
     author,
     version,
     about = "AI-native requirements management — durable, agent-readable specs",
-    after_help = "Less-common commands (db, cache, gitlab, mcp-serve, etc.) are hidden \
-                  by default. Run `aida help-all` for the full inventory grouped by topic."
+    after_help = "Bare `aida` / `aida help` leads with a small Getting-started set. \
+                  Run `aida help --all` for the full command surface grouped by topic."
 )]
 pub struct Cli {
     /// Path to the requirements file (overrides auto-detection)
@@ -7215,8 +7215,9 @@ pub enum Command {
         as_deep_link: bool,
     },
 
-    /// List all commands (including the less-common ones hidden from
-    /// `aida --help`), grouped by topic.
+    /// List the full command surface grouped by topic (same output as
+    /// `aida help --all`). Bare `aida` / `aida help` show the curated
+    /// Getting-started view instead.
     HelpAll,
 
     /// Stock and local skill tooling.
