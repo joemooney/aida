@@ -3572,7 +3572,7 @@ fn clarify_default_specs(backend: &aida_core::CachedGitBackend) -> Result<Vec<St
         }
         // Reuse the sweep's under-specification detector across every workable
         // scope so clarify resolves exactly what sweep flags.
-        if question_sweep_candidate(req, &all, QuestionSweepScope::All).is_some() {
+        if question_sweep_candidate(req, &all, QuestionSweepScope::All, &in_flight).is_some() {
             out.push(req.display_id());
         }
     }
