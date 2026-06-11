@@ -16,12 +16,12 @@ description: |-
   7. Honor BUG-495's exclusions: do NOT offer to clarify non-implementable specs (visions) or already-built/held specs (review:draft-only) — those resolve by exclusion / review, not by authoring acceptance.
 
   Pure-agentic skill; its deterministic slices are 'aida questions sweep' (detect) + 'aida edit' (bind) + the 'aida questions clarify' launcher. Composes with the burndown pickability gate, STORY-555 (decision loop), SPIKE-55 (skill/CLI symmetry — clarify is the textbook agentic skill WITH a deterministic slice AND a launcher), BUG-495 (sweep false-positive exclusions).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:31:31.535193797Z
-modified_at: 2026-06-11T06:58:30.102798786Z
+modified_at: 2026-06-11T07:06:27.184101696Z
 req_type: Story
 tags:
 - advisor-tooling
@@ -35,3 +35,15 @@ comments:
   content: Commit 2dbad6602 references this requirement
   created_at: 2026-06-11T06:58:30.102798786Z
   modified_at: 2026-06-11T06:58:30.102798786Z
+history:
+- id: 019eb580-f27d-7b33-8df7-76415f259ef2
+  author: aida-reconcile
+  timestamp: 2026-06-11T07:06:27.325592659Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T07:06:27.184101696Z
+  completion_sha: 58f2b556855c00bd538651d0ad17252d18be7b64
