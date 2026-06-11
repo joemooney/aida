@@ -7,7 +7,7 @@ priority: Medium
 owner: ''
 feature: 15-DOC
 created_at: 2025-11-26T04:28:47.348005694Z
-modified_at: 2026-02-21T00:20:51.686706307Z
+modified_at: 2026-06-11T02:36:14.568813671Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -41,4 +41,3 @@ history:
   - field_name: archived
     old_value: 'false'
     new_value: 'true'
-archived: true
