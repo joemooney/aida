@@ -7144,6 +7144,24 @@ pub enum Command {
         /// to `docs/lifecycle.md` under the project root.
         #[clap(long, value_name = "FILE")]
         doc: Option<String>,
+
+        /// Reconstruct the OBSERVED state machine by walking the `history:`
+        /// arrays in the spec store — every recorded status flip becomes one
+        /// observed transition, tallied with counts. On its own, prints the
+        /// observed transitions; pair with `--diff` to compare against the
+        /// declared model.
+        // trace:TASK-742 | ai:claude
+        #[clap(long)]
+        empirical: bool,
+
+        /// Diff the declared model against the observed one: report observed
+        /// transitions the declared model never authorized (undocumented
+        /// flips) and declared transitions never observed (dead edges). Exits
+        /// non-zero when any undocumented flip is found, so it is CI-gate-able.
+        /// Implies `--empirical`.
+        // trace:TASK-742 | ai:claude
+        #[clap(long)]
+        diff: bool,
     },
 
     /// Work with implementation plans archived under `docs/plans/`.

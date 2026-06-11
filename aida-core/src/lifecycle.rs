@@ -56,8 +56,35 @@ pub enum State {
 }
 
 impl State {
+    /// Map a status string as recorded inside a `history:` entry's
+    /// `{field_name: "status", old_value, new_value}` triple back to a declared
+    /// [`State`]. Status changes record values via [`RequirementStatus`]'s
+    /// `Display` form (e.g. `"In Progress"`, `"Needs Attention"`), so we route
+    /// through the same tolerant recognizer the CLI uses
+    /// ([`RequirementStatus::from_filter_str`]) — casing / hyphen / space
+    /// variants all collapse. Returns `None` for any string that is not a
+    /// recognized status (so an unparseable history value is surfaced as such by
+    /// the empirical reconstruction rather than silently mapped). Note: the
+    /// declared-only `Start` and `Released` states are never produced here —
+    /// they are not `RequirementStatus` values (entry is `aida add`, release is
+    /// a git tag), so they only appear as dead declared edges in a `--diff`.
+    // trace:TASK-742 | ai:claude
+    pub fn from_status_str(s: &str) -> Option<State> {
+        use crate::models::RequirementStatus as RS;
+        match RS::from_filter_str(s)? {
+            RS::Draft => Some(State::Draft),
+            RS::Approved => Some(State::Approved),
+            RS::Planned => Some(State::Planned),
+            RS::InProgress => Some(State::InProgress),
+            RS::Done => Some(State::Done),
+            RS::Completed => Some(State::Completed),
+            RS::Rejected => Some(State::Rejected),
+            RS::NeedsAttention => Some(State::NeedsAttention),
+        }
+    }
+
     /// The node label as it appears in the Mermaid diagram.
-    fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
             State::Start => "[*]",
             State::Draft => "Draft",
@@ -256,6 +283,186 @@ impl LifecycleModel {
     }
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Phase 3 (TASK-742): empirical reconstruction + declared-vs-observed diff.
+//
+// The DECLARED model above is the single source of truth for the *intended*
+// state machine. The EMPIRICAL model below is reconstructed by walking the
+// `history:` arrays inside the spec YAML — every `{field_name: "status",
+// old_value, new_value}` triple is one OBSERVED status flip. Diffing the two
+// surfaces: (a) observed transitions the declared model never authorized
+// (undocumented / illegal flips that actually happened), and (b) declared
+// transitions never observed in the substrate (dead edges).
+// ────────────────────────────────────────────────────────────────────
+
+/// One observed `from → to` status transition plus how many times it was seen
+/// across all specs' history arrays. `from`/`to` carry the raw recorded status
+/// string alongside the parsed [`State`] so an unrecognized status value can
+/// still be reported. trace:TASK-742 | ai:claude
+#[derive(Debug, Clone)]
+pub struct ObservedTransition {
+    /// Parsed source state; `None` if the recorded `old_value` did not parse to
+    /// a known status.
+    pub from: Option<State>,
+    /// Parsed target state; `None` if the recorded `new_value` did not parse.
+    pub to: Option<State>,
+    /// The raw `old_value` string as stored in history.
+    pub from_raw: String,
+    /// The raw `new_value` string as stored in history.
+    pub to_raw: String,
+    /// How many times this exact `from_raw → to_raw` flip was observed.
+    pub count: usize,
+}
+
+impl ObservedTransition {
+    /// Stable key for grouping identical observed flips (by raw recorded
+    /// strings, so unparseable values still group). trace:TASK-742 | ai:claude
+    fn key(from_raw: &str, to_raw: &str) -> String {
+        format!("{from_raw}\u{1}{to_raw}")
+    }
+}
+
+/// The reconstructed observed state machine: every distinct status transition
+/// seen across the history arrays, with counts, plus a tally of how many specs
+/// contributed and how many status flips were walked. trace:TASK-742 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub struct EmpiricalModel {
+    /// Distinct observed transitions, sorted descending by count then by
+    /// `from_raw`/`to_raw` for a stable presentation.
+    pub transitions: Vec<ObservedTransition>,
+    /// How many specs contributed at least one status flip.
+    pub specs_with_history: usize,
+    /// Total number of status flips walked (sum of all `count`s).
+    pub total_flips: usize,
+}
+
+impl EmpiricalModel {
+    /// Reconstruct the observed machine from an iterator of `(old_value,
+    /// new_value)` status-change pairs grouped per spec. Each inner iterator is
+    /// one spec's ordered status changes (the caller filters the history arrays
+    /// down to `field_name == "status"` triples). Pure / storage-free so it is
+    /// unit-testable without a git backend. trace:TASK-742 | ai:claude
+    pub fn from_status_changes<I, S, A, B>(per_spec: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: IntoIterator<Item = (A, B)>,
+        A: AsRef<str>,
+        B: AsRef<str>,
+    {
+        use std::collections::HashMap;
+        let mut counts: HashMap<String, ObservedTransition> = HashMap::new();
+        let mut specs_with_history = 0usize;
+        let mut total_flips = 0usize;
+
+        for spec_changes in per_spec {
+            let mut spec_contributed = false;
+            for (old_v, new_v) in spec_changes {
+                let from_raw = old_v.as_ref().to_string();
+                let to_raw = new_v.as_ref().to_string();
+                // Skip no-op rows (status recorded but unchanged) — they are
+                // not transitions.
+                if from_raw == to_raw {
+                    continue;
+                }
+                spec_contributed = true;
+                total_flips += 1;
+                let key = ObservedTransition::key(&from_raw, &to_raw);
+                counts
+                    .entry(key)
+                    .and_modify(|t| t.count += 1)
+                    .or_insert_with(|| ObservedTransition {
+                        from: State::from_status_str(&from_raw),
+                        to: State::from_status_str(&to_raw),
+                        from_raw,
+                        to_raw,
+                        count: 1,
+                    });
+            }
+            if spec_contributed {
+                specs_with_history += 1;
+            }
+        }
+
+        let mut transitions: Vec<ObservedTransition> = counts.into_values().collect();
+        transitions.sort_by(|a, b| {
+            b.count
+                .cmp(&a.count)
+                .then_with(|| a.from_raw.cmp(&b.from_raw))
+                .then_with(|| a.to_raw.cmp(&b.to_raw))
+        });
+
+        EmpiricalModel {
+            transitions,
+            specs_with_history,
+            total_flips,
+        }
+    }
+}
+
+/// The result of diffing the declared model against the empirical one.
+/// trace:TASK-742 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub struct LifecycleDiff {
+    /// Observed transitions that are NOT in the declared model — illegal /
+    /// undocumented flips that actually happened. Includes flips whose
+    /// `old_value`/`new_value` did not parse to a known status (those can never
+    /// match a declared edge).
+    pub undocumented: Vec<ObservedTransition>,
+    /// Declared transitions never observed in any spec's history — dead edges.
+    pub unobserved: Vec<Transition>,
+}
+
+impl LifecycleDiff {
+    /// `true` when at least one observed transition is undocumented — the
+    /// CI-gate condition. trace:TASK-742 | ai:claude
+    pub fn has_undocumented(&self) -> bool {
+        !self.undocumented.is_empty()
+    }
+}
+
+/// Diff a declared [`LifecycleModel`] against a reconstructed [`EmpiricalModel`].
+/// A declared edge matches an observed flip when both endpoints parse to the
+/// same declared [`State`]. trace:TASK-742 | ai:claude
+pub fn diff(declared: &LifecycleModel, empirical: &EmpiricalModel) -> LifecycleDiff {
+    // An observed flip is "documented" iff some declared transition has the
+    // same (from, to) parsed states. Unparseable endpoints never match.
+    let undocumented: Vec<ObservedTransition> = empirical
+        .transitions
+        .iter()
+        .filter(|obs| {
+            let (Some(of), Some(ot)) = (obs.from, obs.to) else {
+                return true; // unparseable endpoint can't match a declared edge
+            };
+            !declared
+                .transitions
+                .iter()
+                .any(|d| d.from == of && d.to == ot)
+        })
+        .cloned()
+        .collect();
+
+    // A declared edge is "dead" iff no observed flip parses to the same
+    // (from, to). The Start entry-edge and any edge into Released are inherently
+    // un-observable from status history (no such status value), so they are
+    // expected dead edges — still reported, but that's by design.
+    let unobserved: Vec<Transition> = declared
+        .transitions
+        .iter()
+        .filter(|d| {
+            !empirical
+                .transitions
+                .iter()
+                .any(|obs| obs.from == Some(d.from) && obs.to == Some(d.to))
+        })
+        .cloned()
+        .collect();
+
+    LifecycleDiff {
+        undocumented,
+        unobserved,
+    }
+}
+
 /// Wrap the generated Mermaid body in a fenced ```mermaid code block.
 // trace:TASK-737 | ai:claude
 pub fn fenced_mermaid(model: &LifecycleModel) -> String {
@@ -347,5 +554,112 @@ mod tests {
         let body = first_mermaid_block(md).unwrap();
         assert!(body.contains("A --> B"));
         assert!(!body.contains("OTHER"));
+    }
+
+    // ── Phase 3 (TASK-742): empirical + diff ──
+
+    #[test]
+    fn status_str_parses_display_and_word_break_variants() {
+        assert_eq!(State::from_status_str("Draft"), Some(State::Draft));
+        assert_eq!(
+            State::from_status_str("In Progress"),
+            Some(State::InProgress)
+        );
+        assert_eq!(
+            State::from_status_str("in-progress"),
+            Some(State::InProgress)
+        );
+        assert_eq!(
+            State::from_status_str("Needs Attention"),
+            Some(State::NeedsAttention)
+        );
+        assert_eq!(State::from_status_str("Completed"), Some(State::Completed));
+        assert_eq!(State::from_status_str("nonsense"), None);
+    }
+
+    #[test]
+    fn empirical_counts_and_dedupes_transitions() {
+        let per_spec = vec![
+            vec![("Draft", "Approved"), ("Approved", "In Progress")],
+            vec![("Draft", "Approved"), ("Approved", "In Progress")],
+            // a no-op row (unchanged status) must not count as a transition
+            vec![("In Progress", "In Progress"), ("In Progress", "Done")],
+        ];
+        let m = EmpiricalModel::from_status_changes(per_spec);
+        assert_eq!(m.specs_with_history, 3);
+        // 2 + 2 + 1 real flips (the no-op is skipped) = 5
+        assert_eq!(m.total_flips, 5);
+        let draft_approved = m
+            .transitions
+            .iter()
+            .find(|t| t.from == Some(State::Draft) && t.to == Some(State::Approved))
+            .expect("Draft→Approved observed");
+        assert_eq!(draft_approved.count, 2);
+        // sorted descending by count: the count-2 edges come first
+        assert!(m.transitions[0].count >= m.transitions[m.transitions.len() - 1].count);
+    }
+
+    #[test]
+    fn diff_flags_undocumented_and_dead_edges() {
+        let declared = LifecycleModel::declared();
+        // One legal flip (Draft→Approved) + one illegal flip (Done→Approved,
+        // not in the declared model).
+        let per_spec = vec![vec![("Draft", "Approved"), ("Done", "Approved")]];
+        let empirical = EmpiricalModel::from_status_changes(per_spec);
+        let d = diff(&declared, &empirical);
+
+        assert!(d.has_undocumented());
+        assert!(
+            d.undocumented
+                .iter()
+                .any(|t| t.from == Some(State::Done) && t.to == Some(State::Approved)),
+            "Done→Approved is undocumented"
+        );
+        assert!(
+            !d.undocumented
+                .iter()
+                .any(|t| t.from == Some(State::Draft) && t.to == Some(State::Approved)),
+            "Draft→Approved is declared, not undocumented"
+        );
+
+        // Completed→Released was never observed → it's a dead edge.
+        assert!(
+            d.unobserved
+                .iter()
+                .any(|t| t.from == State::Completed && t.to == State::Released),
+            "Completed→Released is an unobserved declared edge"
+        );
+        // Draft→Approved WAS observed → not dead.
+        assert!(
+            !d.unobserved
+                .iter()
+                .any(|t| t.from == State::Draft && t.to == State::Approved),
+            "Draft→Approved was observed"
+        );
+    }
+
+    #[test]
+    fn diff_clean_when_only_declared_flips_observed() {
+        let declared = LifecycleModel::declared();
+        let per_spec = vec![vec![
+            ("Draft", "Approved"),
+            ("Approved", "In Progress"),
+            ("In Progress", "Done"),
+        ]];
+        let empirical = EmpiricalModel::from_status_changes(per_spec);
+        let d = diff(&declared, &empirical);
+        assert!(!d.has_undocumented(), "all observed flips are declared");
+    }
+
+    #[test]
+    fn unparseable_observed_endpoint_is_undocumented() {
+        let declared = LifecycleModel::declared();
+        let per_spec = vec![vec![("Draft", "Frobnicated")]];
+        let empirical = EmpiricalModel::from_status_changes(per_spec);
+        let d = diff(&declared, &empirical);
+        assert!(d.has_undocumented());
+        assert_eq!(d.undocumented.len(), 1);
+        assert_eq!(d.undocumented[0].to_raw, "Frobnicated");
+        assert_eq!(d.undocumented[0].to, None);
     }
 }
