@@ -199,6 +199,73 @@ pub(crate) struct OpenFacts {
     pub has_pending_decision: bool,
     /// A live session lease's scope matches this spec.
     pub in_flight: bool,
+    /// TASK-723 (source #2): display-ids of FINDINGS filed against this spec
+    /// (attempt outcomes — CI red / RequestChanges / build fail). Linked, not
+    /// recomputed: the finding already exists; the view just folds it in.
+    pub findings: Vec<String>,
+    /// TASK-723 (source #3): non-derivable residual reasons a human recorded as
+    /// `why-open:<reason>` prefixed comments. Folded in verbatim; derivable
+    /// state is NEVER written here (staleness trap).
+    pub residual_notes: Vec<String>,
+}
+
+/// TASK-723: prefix marking a comment as a non-derivable residual openness
+/// reason — the chosen vehicle (resolving STORY-548's open fork). A comment
+/// whose content (trimmed, case-insensitive) starts with `why-open:` records a
+/// reason the graph can't derive ("waiting on upstream X", "deferred pending
+/// budget"). trace:TASK-723 | ai:claude
+pub(crate) const WHY_OPEN_PREFIX: &str = "why-open:";
+
+/// TASK-723: extract the residual reason from a `why-open:<reason>` comment
+/// body, or `None` if the comment isn't a residual note. Case-insensitive on
+/// the prefix; returns the trimmed reason text. trace:TASK-723 | ai:claude
+pub(crate) fn parse_why_open_comment(content: &str) -> Option<String> {
+    let trimmed = content.trim_start();
+    if trimmed.len() < WHY_OPEN_PREFIX.len() {
+        return None;
+    }
+    let (head, rest) = trimmed.split_at(WHY_OPEN_PREFIX.len());
+    if head.eq_ignore_ascii_case(WHY_OPEN_PREFIX) {
+        let reason = rest.trim();
+        if reason.is_empty() {
+            None
+        } else {
+            Some(reason.to_string())
+        }
+    } else {
+        None
+    }
+}
+
+/// TASK-723: where a single openness reason came from — drives grouping,
+/// ordering (most-fundamental-first), and the JSON `source` field. trace:TASK-723
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReasonSource {
+    /// Derived purely from the graph (status / tags / BlockedBy / lease / type).
+    Derived,
+    /// An attempt outcome — links an existing FINDING (source #2).
+    Finding,
+    /// A human-recorded non-derivable residual note (`why-open:`, source #3).
+    Residual,
+}
+
+impl ReasonSource {
+    /// Stable key for JSON.
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            ReasonSource::Derived => "derived",
+            ReasonSource::Finding => "finding",
+            ReasonSource::Residual => "residual",
+        }
+    }
+}
+
+/// TASK-723: one openness reason — its text plus where it came from. The
+/// derived reason carries the [`OpenBucket`]; finding/residual reasons don't.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Reason {
+    pub source: ReasonSource,
+    pub text: String,
 }
 
 /// Classify one open spec into its `(bucket, human-readable reason)`. Precedence
@@ -289,6 +356,40 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
                 .to_string(),
         ),
     }
+}
+
+/// TASK-723: the FULL reason set for one open spec, most-fundamental-first.
+/// Unions the three sources from STORY-548's design:
+///   1. DERIVED (the [`explain_open`] graph reason) — always first; it's the
+///      most fundamental thing keeping the spec open.
+///   2. FINDING links (attempt outcomes already filed by shelved drains) —
+///      reused, never recomputed.
+///   3. RESIDUAL notes (human `why-open:` comments) — the non-derivable tail.
+/// Returns the primary [`OpenBucket`] (from the derived reason — it still drives
+/// grouping + the needs-human signal) alongside the ordered reasons.
+/// trace:TASK-723 | ai:claude
+pub(crate) fn explain_reasons(f: &OpenFacts) -> (OpenBucket, Vec<Reason>) {
+    let (bucket, derived) = explain_open(f);
+    let mut reasons = Vec::with_capacity(1 + f.findings.len() + f.residual_notes.len());
+    reasons.push(Reason {
+        source: ReasonSource::Derived,
+        text: derived,
+    });
+    for finding in &f.findings {
+        reasons.push(Reason {
+            source: ReasonSource::Finding,
+            text: format!(
+                "attempt outcome filed as finding {finding} — triage via `aida findings list`"
+            ),
+        });
+    }
+    for note in &f.residual_notes {
+        reasons.push(Reason {
+            source: ReasonSource::Residual,
+            text: note.clone(),
+        });
+    }
+    (bucket, reasons)
 }
 
 /// Plain-language description of the active selector for the human-facing
@@ -483,6 +584,8 @@ mod tests {
             has_unsatisfied_blocker: blocked,
             has_pending_decision: decision,
             in_flight,
+            findings: Vec::new(),
+            residual_notes: Vec::new(),
         }
     }
 
@@ -616,5 +719,55 @@ mod tests {
         assert!(f.to_lowercase().contains("skill"));
         // No internal trace SPEC-IDs leak into user-facing text.
         assert!(!f.contains("STORY-"));
+    }
+
+    // TASK-723: multi-reason — derived + finding-link + residual note.
+    #[test]
+    fn parse_why_open_comment_extracts_reason_case_insensitively() {
+        assert_eq!(
+            parse_why_open_comment("why-open: waiting on upstream X"),
+            Some("waiting on upstream X".to_string())
+        );
+        // Case-insensitive prefix, leading whitespace tolerated, reason trimmed.
+        assert_eq!(
+            parse_why_open_comment("  WHY-OPEN:   deferred pending budget  "),
+            Some("deferred pending budget".to_string())
+        );
+        // Not a residual note.
+        assert_eq!(parse_why_open_comment("a normal comment"), None);
+        // Empty reason after the prefix is not a note.
+        assert_eq!(parse_why_open_comment("why-open:   "), None);
+    }
+
+    #[test]
+    fn explain_reasons_orders_derived_then_findings_then_residual() {
+        let mut f = open("task", "approved", &[], false, false, false);
+        f.findings = vec!["TASK-900".to_string()];
+        f.residual_notes = vec!["waiting on upstream X".to_string()];
+        let (bucket, reasons) = explain_reasons(&f);
+        // The derived reason still drives the bucket.
+        assert_eq!(bucket, OpenBucket::Actionable);
+        assert_eq!(reasons.len(), 3);
+        // Most-fundamental-first: derived → finding → residual.
+        assert_eq!(reasons[0].source, ReasonSource::Derived);
+        assert_eq!(reasons[1].source, ReasonSource::Finding);
+        assert!(reasons[1].text.contains("TASK-900"));
+        assert_eq!(reasons[2].source, ReasonSource::Residual);
+        assert_eq!(reasons[2].text, "waiting on upstream X");
+    }
+
+    #[test]
+    fn explain_reasons_derived_only_when_no_extras() {
+        let f = open("task", "draft", &[], false, false, false);
+        let (_, reasons) = explain_reasons(&f);
+        assert_eq!(reasons.len(), 1);
+        assert_eq!(reasons[0].source, ReasonSource::Derived);
+    }
+
+    #[test]
+    fn reason_source_keys_are_stable() {
+        assert_eq!(ReasonSource::Derived.key(), "derived");
+        assert_eq!(ReasonSource::Finding.key(), "finding");
+        assert_eq!(ReasonSource::Residual.key(), "residual");
     }
 }
