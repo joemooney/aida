@@ -36,12 +36,12 @@ description: |-
   ## Rationale
 
   Makes the one advisor-status command worth running (it was too thin to use), orients a possibly-confused advisor in one glance, and routes to the real verbs — WITHOUT adding surface. Registration detail stays reachable via a flag. Complements STORY-558 (burndown-prep acts on the readiness this surfaces).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T12:56:56.819515609Z
-modified_at: 2026-06-11T13:07:33.956512358Z
+modified_at: 2026-06-11T13:43:20.487015711Z
 req_type: Story
 tags:
 - advisor
@@ -49,3 +49,15 @@ tags:
 - from-user-friction
 - observability
 - onboarding-flow
+history:
+- id: 019eb6ec-4f34-7ae1-9382-f404b3343840
+  author: aida-auto-bump
+  timestamp: 2026-06-11T13:43:20.628894231Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T13:43:20.487015711Z
+  completion_sha: 029fe8f56247925e38cec5355d14d0149e01eb04

@@ -3,12 +3,12 @@ spec_id: TASK-737
 agreed_id: TASK-737
 title: 'Phase 1: `aida lifecycle --diagram` + the committed-vs-generated doc pin (generate-only, zero behavior change)'
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:04:53.170682154Z
-modified_at: 2026-06-11T13:36:14.214454213Z
+modified_at: 2026-06-11T13:43:20.487015711Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,3 +20,15 @@ comments:
   content: Commit 082bc201b references this requirement
   created_at: 2026-06-11T13:36:14.214454213Z
   modified_at: 2026-06-11T13:36:14.214454213Z
+history:
+- id: 019eb6ec-4f34-7ae1-9382-f4181ee7e759
+  author: aida-auto-bump
+  timestamp: 2026-06-11T13:43:20.628916549Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T13:43:20.487015711Z
+  completion_sha: db3ba52562fc7245a655abc55ed35dc3b06a6ea0
