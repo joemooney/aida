@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:04:59.496224863Z
-modified_at: 2026-06-11T13:14:59.859263262Z
+modified_at: 2026-06-11T14:46:05.191169005Z
 req_type: Task
 tags:
 - needs-human
@@ -16,3 +16,9 @@ relationships:
 - rel_type: Child
   target_id: 019eb555-d0ad-7c93-ba44-0946264e944f
   created_at: 2026-06-11T07:05:04.785517565Z
+comments:
+- id: 019eb725-c087-7323-849f-d6bae06f1209
+  author: joe
+  content: Commit 8ed0efeea references this requirement
+  created_at: 2026-06-11T14:46:05.191169005Z
+  modified_at: 2026-06-11T14:46:05.191169005Z
