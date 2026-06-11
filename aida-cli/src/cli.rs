@@ -5723,20 +5723,6 @@ pub enum Command {
         cmd: Option<QuestionsCommand>,
     },
 
-    /// The 'human' role vector — the front door to "what needs a person?".
-    /// Bare `aida human` shows the bottleneck view (every spec a human must
-    /// decide, review, or triage), the same set as `aida list human`, grouped
-    /// by WHY. The human is the permanent terminus of the escalation cascade
-    /// (implementer → advisor → human); this gives that role a first-class
-    /// home symmetric with the agent roles.
-    // trace:TASK-746 | ai:claude
-    Human {
-        /// Bare spec-ids, one per line — usable in `$(...)` / xargs (mirrors
-        /// `aida list human --short`).
-        #[clap(long)]
-        short: bool,
-    },
-
     /// Manage the live-advisor registration the `--no-human=both` orchestrator
     /// reads to decide whether to fork the live advisor (full in-flight
     /// context) or cold-boot a fresh headless advisor.
@@ -7335,12 +7321,24 @@ pub enum Command {
         as_deep_link: bool,
     },
 
-    /// The human-attention role-vector: the "what needs me?" surfaces.
-    /// `aida human unblock` emits a paste-ready advisor prompt that grooms
-    /// the open items keeping themselves out of the burndown.
-    // trace:STORY-563 | ai:claude — plain `//` keeps the marker out of `--help`.
-    #[clap(subcommand)]
-    Human(HumanCommand),
+    /// The 'human' role vector — the front door to "what needs a person?".
+    /// Bare `aida human [--short]` shows the bottleneck view (every spec a
+    /// human must decide, review, or triage), the same set as `aida list
+    /// human`, grouped by WHY. `aida human unblock` emits a paste-ready advisor
+    /// prompt that grooms the open items keeping themselves out of the
+    /// burndown. The human is the permanent terminus of the escalation cascade
+    /// (implementer → advisor → human); this gives that role a first-class home
+    /// symmetric with the agent roles.
+    // trace:TASK-746 trace:STORY-563 | ai:claude — plain `//` keeps it out of `--help`.
+    Human {
+        /// Bare spec-ids, one per line — usable in `$(...)` / xargs (mirrors
+        /// `aida list human --short`). Ignored when a subcommand is given.
+        // trace:TASK-746 | ai:claude
+        #[clap(long)]
+        short: bool,
+        #[clap(subcommand)]
+        command: Option<HumanCommand>,
+    },
 
     /// List the full command surface grouped by topic (same output as
     /// `aida help --all`). Bare `aida` / `aida help` show the curated
