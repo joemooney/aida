@@ -1,0 +1,12 @@
+id: 019eb714-bc17-7373-853b-525e4870751a
+spec_id: TASK-749
+agreed_id: TASK-749
+title: '**Phase 5 (deferred, NAMED — not designed here): assignment / RBAC.** Which-human assignment, permissions, human hierarchy. Out of scope per the classification/assignment line; only meaningful with >1 human'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T14:27:29.943488798Z
+modified_at: 2026-06-11T14:27:29.943488798Z
+req_type: Task
