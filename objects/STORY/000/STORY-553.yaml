@@ -1,0 +1,18 @@
+id: 019eb4e0-52b3-74e3-81e4-ecd99fb629f0
+spec_id: STORY-553
+agreed_id: STORY-553
+title: 'aida review <spec>: single verb to drive human review of a held spec (dual of queue work)'
+description: 'Operator-surfaced gap (2026-06-10, via TASK-715): a spec tagged review:draft-only / ''held for review'' has no single verb to actually perform the review. Today the human must manually find the PR, then reach for ''gh pr view'' / ''aida session start --owns PR-N'' / ''/aida-review'' / ''aida review prompt --specs <id>''. Propose ''aida review <SPEC>'' as the human-review counterpart to ''aida queue work'': resolve the spec -> locate its draft PR (or branch+commits if no PR) -> surface the review surface (diff + ## Acceptance criteria + the generated ''aida review prompt'' output) -> route the verdict to approve-and-merge OR request-changes (''aida queue rework <SPEC>''). MUST degrade honestly: if the held draft PR was closed/never-opened (the TASK-715 case), report the real state and offer to (re)open a PR from the branch — never assert a PR that isn''t there. Core usability per the keep-and-fix litmus. Composes with: aida review prompt (STORY existing), aida session start --owns PR-N (STORY-71), aida queue rework, the reviewer role.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T04:11:00.659134661Z
+modified_at: 2026-06-11T04:11:00.659134661Z
+req_type: Story
+tags:
+- aida:review
+- core
+- novice-first
+- reviewer
+- usability
