@@ -1,0 +1,28 @@
+id: 019eb555-d0ad-7c93-ba44-0946264e944f
+spec_id: SPIKE-56
+agreed_id: SPIKE-56
+title: 'SPIKE: aida lifecycle — one declared spec-state transition model that generates the diagram, enforces the guards, and diffs declared-vs-empirical from history'
+description: |-
+  Operator vision (2026-06-10): a UML-style state machine of the spec lifecycle where transitions are driven by CLI commands, LLM decisions, and git events, and commands are valid only in certain states. Today that state machine EXISTS but is scattered: status_advance_requires_advisor_authority (authority gate), the parking_tag predicate (burndown.rs), the pickability gate, the done->completed auto-bump (aida pull), the queue-add gates. Investigate consolidating into ONE declared transition model and what it can drive.
+
+  ## Acceptance (deliverable = design doc; enactment needs master sign-off — CLI/lifecycle = architecture)
+  1. docs/plans/<date>-aida-lifecycle-model.md: design a single transition-model representation — states (incl. ORTHOGONAL regions: status × visibility × queue × lease × park), transitions, per-transition guard, and trigger-kind (CLI-command | LLM-decision | git-event). Where it lives, its shape.
+  2. Inventory the currently-SCATTERED transition logic (authority gate, parking_tag, pickability gate, auto-bump, queue gates) and map each onto the proposed model — proving one source can replace them without losing today's behavior.
+  3. Specify what's GENERATED/ENFORCED from the single source: (a) the state diagram (the un-driftable version of the hand-drawn TASK-733); (b) guard enforcement (substrate-as-bouncer — replace the ad-hoc checks); (c) STRETCH: render the EMPIRICAL state machine from per-spec history arrays (TASK-121) and diff declared-vs-actual (which transitions fire, which illegal combos occurred).
+  4. Enumerate the illegal orthogonal-state combinations the model makes unreachable (archived AND queued; held-for-review AND PR-closed) — the bug-class it prevents.
+  5. Recommendation + risk + a PHASED enactment path (generate-diagram-only first, then migrate guards) as candidate follow-up specs for operator approval. Do NOT enact in this spike.
+
+  The aida schema (STORY-538) analog for the lifecycle. Composes with: TASK-733 (manual draft of the generated diagram), STORY-538 (reflection-derived catalog pattern), TASK-121 (history-as-source-of-truth), SPIKE-55 (skill/CLI surface audit — adjacent 'declare-once' theme).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T06:19:20.621280998Z
+modified_at: 2026-06-11T06:19:20.621280998Z
+req_type: Spike
+tags:
+- aida:lifecycle
+- architecture
+- core
+- substrate-as-bouncer
+human_only: true
