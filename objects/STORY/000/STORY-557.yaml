@@ -3,21 +3,25 @@ spec_id: STORY-557
 agreed_id: STORY-557
 title: '/aida-clarify <spec>: advisor interrogates the human to author acceptance criteria for an under-specified spec (agentic complement to questions sweep)'
 description: |-
-  Operator-surfaced (2026-06-10): 'aida questions sweep' DETECTS specs with missing/thin acceptance criteria, but there's no agentic flow to RESOLVE them — the human must hand-author acceptance or the spec punts. Propose '/aida-clarify <SPEC>': the advisor-assisted acceptance-authoring loop — the human-decision PRODUCER that turns 'parked: missing acceptance' into 'burndown-ready'. Pairs with the autonomous executor (aida burndown) as its human-side complement.
+  Operator-surfaced (2026-06-10): 'aida questions sweep' DETECTS specs with missing/thin acceptance criteria, but there's no agentic flow to RESOLVE them — the human must hand-author acceptance or the spec punts. '/aida-clarify <SPEC>' is the advisor-assisted acceptance-authoring loop — the human-decision PRODUCER that turns 'parked: missing acceptance' into 'burndown-ready'. Pairs with the autonomous executor (aida burndown) as its human-side complement. Validated by hand on BUG-486 (2026-06-10): interrogate -> reconcile -> author -> bind -> unpark worked end-to-end.
 
   ## Acceptance
 
   1. /aida-clarify <SPEC> reads the spec + graph context (parent, siblings, trace markers, the sweep's flag reason).
-  2. Interrogates the human with a SMALL, targeted question set — lead with: definition-of-done, PRIMARY CALLER/environment (TTY vs headless, which agent/role, MCP vs CLI — cf the verify-acceptance-against-primary-caller discipline), output/shape, explicit out-of-scope. Structured choices where the fork is enumerable; free-text where it's authoring.
-  3. Drafts a ## Acceptance section from the answers, shows it for approval/edit, then binds it via aida edit (acceptance criteria are binding, not comments).
-  4. Re-runs the sweep / pickability check after binding and reports whether the spec is now autonomous-ready — and what still blocks it if not.
-  5. Pure-agentic skill; its deterministic slices are 'aida questions sweep' (detect) + 'aida edit' (bind). Composes with the burndown pickability gate, STORY-555 (decision loop), SPIKE-55 (skill/CLI symmetry — this is a textbook agentic skill with a deterministic slice underneath).
+  2. Interrogates the human with a SMALL, targeted question set — lead with: definition-of-done, PRIMARY CALLER/environment (TTY vs headless, which agent/role, MCP vs CLI), output/shape, explicit out-of-scope. Structured choices where the fork is enumerable; free-text where it's authoring.
+  3. Surfaces any conflict between the human's answer and the spec's existing body/analysis (as happened on BUG-486: body leaned env-inherit, operator chose role_enter) and RECONCILES rather than silently overriding.
+  4. Drafts a ## Acceptance section from the answers, shows it for approval/edit, binds it via aida edit, and clears the gating parking tag (e.g. needs-design-signoff) when the signoff just happened.
+  5. Re-runs the sweep / pickability check after binding and reports whether the spec is now autonomous-ready — and what still blocks it if not.
+  6. CLI LAUNCHER — 'aida questions clarify [<spec>... | default: the swept set]': fires up an INTERACTIVE advisor agent (claude "/aida-clarify ...", NOT headless claude -p) seeded with the flagged specs and walks the human through each until pickable. This is the interactive counterpart to 'aida burndown run' (headless): burndown run drains the decision-FREE set; questions clarify resolves the decision-REQUIRED set. Lives under the 'aida questions' namespace (sweep detects -> clarify resolves).
+  7. Honor BUG-495's exclusions: do NOT offer to clarify non-implementable specs (visions) or already-built/held specs (review:draft-only) — those resolve by exclusion / review, not by authoring acceptance.
+
+  Pure-agentic skill; its deterministic slices are 'aida questions sweep' (detect) + 'aida edit' (bind) + the 'aida questions clarify' launcher. Composes with the burndown pickability gate, STORY-555 (decision loop), SPIKE-55 (skill/CLI symmetry — clarify is the textbook agentic skill WITH a deterministic slice AND a launcher), BUG-495 (sweep false-positive exclusions).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:31:31.535193797Z
-modified_at: 2026-06-11T06:31:31.535193797Z
+modified_at: 2026-06-11T06:38:21.579659703Z
 req_type: Story
 tags:
 - advisor-tooling
