@@ -5745,6 +5745,14 @@ pub enum Command {
         // trace:STORY-441 | ai:claude
         #[clap(long)]
         dry_run: bool,
+
+        /// Skip the confirmation guard when archiving a non-terminal
+        /// (Draft/Approved/Planned/InProgress) or queued spec, and allow
+        /// the --older-than sweep to include non-terminal statuses. Archive
+        /// is for the closed long-tail; this opts past that safety rail.
+        // trace:BUG-492 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
 
     /// Inverse of `aida archive` — clears the archive flag on a spec so
