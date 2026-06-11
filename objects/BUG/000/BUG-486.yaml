@@ -5,19 +5,27 @@ title: 'MCP status gate is role-blind: refuses advisor-seat approve/plan despite
 description: |-
   The MCP status gate refuses Approved/Planned (and Completed/the Draft→InProgress|Done cases) UNCONDITIONALLY, ignoring the caller's role — even when the MCP session is genuinely role:advisor. Operator hit this 2026-06-09: an advisor-seat agent captured reqs via MCP (filed Draft, correct), then `update_requirement --status approved` over MCP was refused, forcing a fallback to the CLI.
 
-  Root: `mcp_status_gate_message(from, to)` (mcp.rs:4896) takes only the status pair — no role/authority param — so it can't honor advisor authority. Yet the MCP server DOES read `AIDA_SESSION_ROLE` (mcp.rs:285, used for for_role routing/statusline) — so the role info is present, just not consulted by the gate. The CLI's `has_advisor_authority()` honors the same `AIDA_SESSION_ROLE=advisor`; MCP doesn't → CLI↔MCP inconsistency.
+  Root: `mcp_status_gate_message(from, to)` (mcp.rs:4896) takes only the status pair — no role/authority param — so it can't honor advisor authority. Yet the MCP server DOES read `AIDA_SESSION_ROLE` (mcp.rs:285) — so the role info is present, just not consulted by the gate. The CLI's `has_advisor_authority()` honors the same role; MCP doesn't → CLI↔MCP inconsistency. Relates to the BUG-449/480/481 "MCP is never advisor authority" premise (overshoots: conflates a headless non-advisor MCP client — refuse, correct — with an advisor-seat session driving through MCP — should be allowed).
 
-  This revises the BUG-449/480/481 blanket "MCP is never advisor authority" premise, which overshoots: it conflates a headless non-advisor MCP client (refuse — correct) with an advisor-seat session driving through MCP (should be allowed, same env-var trust basis the CLI accepts).
+  ## Acceptance
 
-  Fix: gate on advisor authority, not a blanket refusal. Make `mcp_status_gate_message` (and the queue_add/queue_rework refusal from BUG-480) consult `has_advisor_authority()` (in MCP context = AIDA_SESSION_ROLE=advisor OR live orchestrator; no TTY). Allow advisor-authority MCP sessions to approve/plan/queue; refuse non-advisor ones with the existing guidance message.
+  Design decision (operator via /aida-clarify, 2026-06-10): role source = the role_enter MCP SESSION role (the explicit path), refining this body's env-inherit lean — role_enter is PRIMARY, AIDA_SESSION_ROLE env is a documented FALLBACK.
 
-  Tradeoff to confirm: the env-role is spoofable, but the CLI already trusts it identically — so this is consistency, not a new weakness. If a stronger-than-env signal is wanted for MCP, that's a separate auth spec. Supersedes/relates-to the keep-as-refuse decision on TASK-718 (queue_add/rework) — same authority-model question; reconcile both.
+  1. The MCP authority gate (`mcp_status_gate_message`, mcp.rs:4896 — plus the queue_add/queue_rework refusals from BUG-480) consults the caller's role instead of refusing unconditionally.
+  2. Role source = the MCP session role set via `role_enter` (STORY-534). When role==advisor: permit the advisor-gated transitions (Draft/NeedsAttention→Approved/Planned and the queue_add/rework cases) exactly as the CLI does under AIDA_SESSION_ROLE=advisor. When no advisor role is entered: refuse with the existing guidance message.
+  3. Fallback (documented): if no role_enter session role is set, the gate MAY consult AIDA_SESSION_ROLE from the MCP server env (mcp.rs:285 already reads it) for CLI parity — role_enter remains primary.
+  4. Single source of truth: route the MCP decision through the SAME predicate as the CLI (`has_advisor_authority` / `status_advance_requires_advisor_authority`) via an MCP-context role resolver — do NOT duplicate/diverge (the bug IS the inconsistency).
+  5. Primary-caller check: an MCP agent that has NOT entered an advisor role is treated non-advisor and refused (matches headless/non-TTY default). Document role_enter as the MCP equivalent of setting AIDA_SESSION_ROLE.
+  6. Reconcile TASK-718 / BUG-480 (the queue_add/rework keep-as-refuse decision) consistently — advisor-authority MCP sessions allowed.
+  7. Regression test: an MCP approve/plan (and queue_add) call SUCCEEDS after role_enter advisor and FAILS without it; assert the test fails before the fix.
+
+  Tradeoff: the fallback env-role is spoofable, but the CLI already trusts it identically — consistency, not a new weakness. A stronger-than-env signal would be a separate auth spec.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:22:32.536046891Z
-modified_at: 2026-06-11T02:36:10.864104832Z
+modified_at: 2026-06-11T06:34:10.848292568Z
 req_type: Bug
 tags:
 - authority
