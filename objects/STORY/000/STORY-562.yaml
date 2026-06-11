@@ -1,0 +1,29 @@
+id: 019eb6e6-fab1-7590-9563-ebca670a931e
+spec_id: STORY-562
+agreed_id: STORY-562
+title: 'aida list human (status-alias sibling to open/closed): the discoverable ''what needs me?'' view over the human-attention set'
+description: |-
+  Operator instinct (2026-06-11): 'aida list human' to show all open items needing human attention. The DATA already exists — 'aida burndown explain' classifies every open spec and reports 'N need a human nudge' (● held-for-review + ● awaiting-decision) vs the self-resolving rest. The gap is DISCOVERABILITY + naming, not logic: that view is buried under a burndown-centric command nobody runs when the question is 'what needs me?'. Surface the same set under the operator's exact instinct, as a status-alias sibling to the existing 'open'/'closed' aliases on 'aida list'.
+
+  ## Acceptance
+  1. 'aida list human' (and/or 'aida list --human') resolves to the HUMAN-ATTENTION set: held-for-review (review:draft-only), awaiting-decision (needs-human / needs-design-signoff / operator-action / blocked), drafts (need an approve decision), NeedsAttention (shelved — need triage). EXCLUDE the self-resolving rest (deferred, vision, in-flight, actionable-autonomous).
+  2. REUSE the 'aida burndown explain' classification as the single source — do not re-derive the buckets.
+  3. Group by reason (bucket label + one-line why), so it reads as a triage list, not a flat dump.
+  4. Optional completeness: fold in / link findings awaiting triage ('aida findings') and the decision inbox ('aida questions list') for the full 'what needs me' picture.
+  5. It is the discoverable front-door to the same data; treat as the MVP slice of STORY-559 (advisor situational dashboard). Pairs with STORY-561 (presence): 'aida list human' is what you check when you come HOME.
+
+  Composes with: aida list open/closed (alias precedent), aida burndown explain (classification source, STORY-547), aida questions list, aida findings, STORY-559, STORY-561.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T13:37:31.313359086Z
+modified_at: 2026-06-11T13:37:31.313359086Z
+req_type: Story
+tags:
+- aida:burndown
+- aida:list
+- core
+- discoverability
+- operator-tooling
+- ux
