@@ -66254,7 +66254,36 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     };
     // TASK-723: the FULL reason set (derived + finding-links + residual notes),
     // most-fundamental-first. trace:TASK-723
-    let (bucket, reasons) = burndown::explain_reasons(f);
+    let (bucket, mut reasons) = burndown::explain_reasons(f);
+
+    // BUG-493: the derived HeldForReview reason is computed purely from the
+    // `review:draft-only` tag — it asserts a draft PR is held for human review
+    // without checking real forge state. For a single-spec drill-down a forge
+    // probe is cheap, so reconcile the derived reason against the actual open-PR
+    // state: a closed/absent draft PR must not be reported as "held as a draft
+    // PR for review".
+    // trace:BUG-493 | ai:claude
+    if bucket == burndown::OpenBucket::HeldForReview {
+        let obs = match detect_open_pr_for_spec(&project_root, &f.id) {
+            PrLookup::Found(pr) => burndown::DraftPrObservation::Open(pr.number),
+            PrLookup::NoOpenPr => burndown::DraftPrObservation::NoOpenPr,
+            // gh missing / failed / unreachable — can't confirm or deny.
+            PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_) => {
+                burndown::DraftPrObservation::Unverifiable
+            }
+        };
+        let reconciled = burndown::reconcile_held_for_review(&obs);
+        // The derived reason is always first (see `explain_reasons`); overwrite
+        // its text with the forge-reconciled story, keeping finding-links and
+        // residual notes intact.
+        if let Some(first) = reasons
+            .iter_mut()
+            .find(|r| r.source == burndown::ReasonSource::Derived)
+        {
+            first.text = reconciled;
+        }
+    }
+    let reasons = reasons;
 
     if json {
         println!(

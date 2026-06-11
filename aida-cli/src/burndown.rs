@@ -392,6 +392,49 @@ pub(crate) fn explain_reasons(f: &OpenFacts) -> (OpenBucket, Vec<Reason>) {
     (bucket, reasons)
 }
 
+/// BUG-493: the observed forge state of a `review:draft-only` spec's PR, as
+/// probed by the caller (cheap for a single-spec `aida why`, too expensive for
+/// the bulk `burndown explain`). Lets [`reconcile_held_for_review`] tell the
+/// real story instead of asserting a draft PR exists purely from the tag.
+// trace:BUG-493 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum DraftPrObservation {
+    /// An open PR was found referencing the spec — the tag's claim holds.
+    Open(u64),
+    /// The forge ran cleanly and reported NO open PR — the draft PR is closed
+    /// or was never opened. The tag over-claims; report the true state.
+    NoOpenPr,
+    /// The forge could not be reached (gh missing/failed/unreachable). Cannot
+    /// confirm or deny the PR's existence — soften the claim, don't assert it.
+    Unverifiable,
+}
+
+/// BUG-493: reconcile the `HeldForReview` reason against the spec's real forge
+/// state. `explain_open` derives "held as a draft PR for human review" purely
+/// from the `review:draft-only` tag; that over-claims when the draft PR was
+/// closed/never-opened (origin: `aida why TASK-715` asserted draft PR #709 was
+/// held for review after #709 was closed in the Session-63 reset, while
+/// `aida show TASK-715` reported "no PR opened yet"). Given the observed PR
+/// state, return the honest reason. Pure + testable.
+// trace:BUG-493 | ai:claude
+pub(crate) fn reconcile_held_for_review(obs: &DraftPrObservation) -> String {
+    match obs {
+        DraftPrObservation::Open(num) => {
+            format!("built — held as draft PR #{num} for human review (`review:draft-only`)")
+        }
+        DraftPrObservation::NoOpenPr => "built & tagged for draft review (`review:draft-only`), \
+             but no open PR exists — its draft PR was closed or never opened. \
+             Reopen/re-push the PR to review, or drop the tag if it's superseded \
+             (`aida show <ID>` shows the branch / PR state)."
+            .to_string(),
+        DraftPrObservation::Unverifiable => {
+            "tagged for draft review (`review:draft-only`) — could not reach the forge to \
+             confirm the draft PR is open; verify with `aida show <ID>`."
+                .to_string()
+        }
+    }
+}
+
 /// Plain-language description of the active selector for the human-facing
 /// header — glosses the bare word "selector" so a new user understands what is
 /// being shown and how to narrow it. Pure (no color), so it's unit-testable;
@@ -707,6 +750,42 @@ mod tests {
         assert!(!OpenBucket::InProgress.needs_human());
         assert!(!OpenBucket::AwaitingMerge.needs_human());
         assert!(!OpenBucket::Deferred.needs_human());
+    }
+
+    // BUG-493: the HeldForReview reason must reconcile against real forge state
+    // rather than asserting a draft PR exists purely from the `review:draft-only`
+    // tag. Origin: `aida why TASK-715` claimed "held as a draft PR for human
+    // review" after draft PR #709 was CLOSED in the Session-63 reset, while
+    // `aida show TASK-715` correctly reported "no PR opened yet".
+    #[test]
+    fn reconcile_held_for_review_honest_about_pr_state() {
+        // Open PR found — the tag's claim holds; name the PR number.
+        let open_reason = reconcile_held_for_review(&DraftPrObservation::Open(709));
+        assert!(open_reason.contains("#709"));
+        assert!(open_reason.to_lowercase().contains("held"));
+
+        // No open PR — the BUG-493 case. The reason must NOT over-claim that a
+        // draft PR is held for review; it must say no open PR exists and point
+        // the user at the recovery (reopen / `aida show`).
+        let closed_reason = reconcile_held_for_review(&DraftPrObservation::NoOpenPr);
+        let lc = closed_reason.to_lowercase();
+        assert!(
+            lc.contains("no open pr"),
+            "closed/absent PR must be reported as no open PR, got: {closed_reason}"
+        );
+        // The exact over-claim BUG-493 is about must be gone: never assert the
+        // draft PR IS held for review when none is open.
+        assert!(
+            !lc.contains("held as a draft pr for human review") && !lc.contains("held as draft pr"),
+            "must not assert a held draft PR when none is open, got: {closed_reason}"
+        );
+        assert!(lc.contains("reopen") || lc.contains("aida show"));
+
+        // Forge unreachable — soften, don't assert.
+        let unknown_reason = reconcile_held_for_review(&DraftPrObservation::Unverifiable);
+        let ulc = unknown_reason.to_lowercase();
+        assert!(!ulc.contains("held as a draft pr for human review"));
+        assert!(ulc.contains("could not reach") || ulc.contains("verify"));
     }
 
     #[test]
