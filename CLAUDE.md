@@ -43,6 +43,7 @@ aida init --centralized        # Legacy SQLite mode (deprecated, prints warning)
 aida init --no-skills          # Skip .claude/skills/ and .claude/commands/
 aida init --no-hooks           # Skip .claude/hooks/ and git hooks
 aida init --no-agent-config    # Skip the first-machine agent permission-posture prompt (~/.aida/agents.toml)
+aida init --git-init           # Auto-run `git init` in a non-git folder (TTY offers it; flag opts in for scripts)
 aida init --with-memories      # Also write the starter memory pack (opt-in)
 aida init --with-memories --refresh   # Overlay updated pack files, keep your edits
 aida init --with-memories --focus <subsystem>  # Scope the pack to a subsystem (untagged memories = universal, always loaded)
