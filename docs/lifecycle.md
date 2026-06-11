@@ -65,6 +65,154 @@ branch." You rarely set `completed` by hand — `aida pull` and
 the spec lands on `main`. If the auto-bump ever misses, replay it with
 `aida db reconcile-status`.
 
+## The state diagram
+
+<!-- trace:TASK-733 -->
+
+> **Frozen snapshot — 2026-06-10.** This diagram is a point-in-time
+> hand-drawn map, deliberately *not* elaborately hand-maintained. When the
+> machinery drifts from it, trust the prose above and the `RequirementType` /
+> transition code over the picture. The un-driftable, generated-from-source
+> version is the goal of the `aida lifecycle` SPIKE (SPIKE-56) — once that
+> ships, this block becomes a generated artifact and the date stops mattering.
+
+The prose above describes the lifecycle as a chain, but a spec's *real* state
+is not one value — it is **five orthogonal coordinates** that move
+independently. The status chain is only the first. The diagram below shows the
+status chain as a state machine, then the four other regions as separate
+tracks, with a note that they are orthogonal (a spec is one row from each
+region simultaneously — e.g. `InProgress` × `active` × `queued` × `leased` ×
+`pickable`).
+
+### Region 1 — `status` chain (the mainline)
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Draft: aida add (LLM/human)
+
+    Draft --> Approved: aida edit --status approved
+    Approved --> Planned: aida edit --status planned
+    Approved --> InProgress: aida queue work
+    Planned --> InProgress: aida queue work
+    InProgress --> Done: aida queue done / aida-pr
+    Done --> Completed: merge auto-bump (aida pull)
+    Completed --> Released: release tag (scripts/release.sh)
+
+    InProgress --> NeedsAttention: punt (design-fork)
+    NeedsAttention --> InProgress: aida edit --status in-progress
+    NeedsAttention --> Approved: aida edit --status approved
+    NeedsAttention --> Rejected: aida edit --status rejected
+
+    Draft --> Rejected: aida edit --status rejected
+    Approved --> Rejected: aida edit --status rejected
+    Done --> InProgress: reviewer RequestChanges
+
+    Released --> [*]
+    Rejected --> [*]
+    Completed --> [*]
+
+    classDef cli fill:#1f6feb,stroke:#0d3b8a,color:#fff
+    classDef llm fill:#8957e5,stroke:#5a2ca0,color:#fff
+    classDef git fill:#2da44e,stroke:#176b2e,color:#fff
+
+    class Draft,Approved,Planned,Rejected cli
+    class InProgress,NeedsAttention llm
+    class Done,Completed,Released git
+```
+
+A state's fill marks **which trigger kind most often drives entry into it** —
+see the legend below. (Most transitions out of a state are also labelled with
+their driving command.) Because Mermaid colours nodes, not edges, the fill is a
+coarse hint; the edge labels carry the precise driver.
+
+### Regions 2–5 — the orthogonal coordinates
+
+These four tracks are **not** part of the status chain. Each is an independent
+flag that moves on its own trigger, at any point in the status chain. A spec
+holds exactly one value from *each* region at once.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    state "Region 2 · visibility" as Visibility {
+        [*] --> active
+        active --> archived: aida archive / auto-sweep on pull
+        archived --> active: aida unarchive
+    }
+
+    state "Region 3 · queue membership" as Queue {
+        [*] --> unqueued
+        unqueued --> queued: aida queue add / queue work
+        queued --> unqueued: aida queue remove / queue done
+    }
+
+    state "Region 4 · lease (in-flight)" as Lease {
+        [*] --> idle
+        idle --> leased: queue work spawns session (worktree lease)
+        leased --> idle: session end / crash-recovery sweep
+    }
+
+    state "Region 5 · park-reason" as Park {
+        [*] --> pickable
+        pickable --> review_draftonly: aida-pr queues reviewer (draft-only)
+        pickable --> needs_design_signoff: punt — design-fork
+        pickable --> needs_human: punt — escalate-blocks
+        pickable --> deferred: blocked-by dependency
+        pickable --> decision_pending: punt — ambiguous-spec
+        review_draftonly --> pickable: reviewer verdict
+        needs_design_signoff --> pickable: advisor resolves
+        needs_human --> pickable: human triage
+        deferred --> pickable: dependency clears
+        decision_pending --> pickable: advisor resolves
+    }
+
+    classDef cli fill:#1f6feb,stroke:#0d3b8a,color:#fff
+    classDef llm fill:#8957e5,stroke:#5a2ca0,color:#fff
+    classDef git fill:#2da44e,stroke:#176b2e,color:#fff
+
+    class active,archived,unqueued,queued cli
+    class review_draftonly,needs_design_signoff,needs_human,decision_pending,pickable llm
+    class idle,leased,deferred git
+```
+
+**Orthogonal, not sequential.** A `Completed` spec can still be `active` (not
+yet archived); an `InProgress` spec can be `queued` + `leased` + `pickable`
+all at once; an archived spec keeps its frozen status. Read the five regions as
+five dials, each turned by its own trigger.
+
+### Legend — the three trigger kinds
+
+| Colour | Trigger kind | Who pulls it | Examples |
+|--------|--------------|--------------|----------|
+| 🔵 **blue** | **CLI / human command** | A person (or script) runs an `aida` verb | `aida edit --status approved`, `aida queue add`, `aida archive`, `aida unarchive` |
+| 🟣 **purple** | **LLM decision** | A Claude session decides and acts | `aida queue work` starts implementing, `punt` on a design-fork, reviewer verdict, advisor resolves a punt |
+| 🟢 **green** | **system / git-event** | A git event or background sweep fires it, no human in the loop | merge auto-bump (`done → completed` on `aida pull`), release tag, crash-recovery lease sweep, blocked-by dependency clearing |
+
+The boundary between blue and purple is *who decides*: a human typing
+`aida edit --status approved` is blue; a Claude session deciding to `punt`
+rather than guess is purple. Green is the substrate moving a spec with **no
+decision at all** — the merge commit lands and the auto-bump just happens.
+
+### Don't let this happen — illegal orthogonal combinations
+
+The regions are independent, but not *every* combination is legal. Two have
+bitten us and are now guarded:
+
+- **`archived` AND `queued`** — an archived spec must never sit in a work
+  queue. Archiving is "hidden from default views"; a queued archived spec is
+  invisible-but-pickable, so a drain picks up work the human thinks is gone.
+  `aida archive` now refuses (or de-queues) a queued spec. (BUG-492)
+- **`review:draft-only` (held-for-review) AND PR-closed** — a spec parked
+  "held for review" whose PR has already been closed/merged is a contradiction:
+  the review gate is waiting on a PR that no longer needs it. The held-reason is
+  now reconciled against real PR state so the spec doesn't wedge. (BUG-493)
+
+The rule of thumb: a park-reason or visibility flag must always be *consistent
+with* the spec's queue/lease/PR reality. When they diverge, the spec silently
+falls out of the flow — which is exactly the failure both bugs describe.
+
 ## What "shipped" means — the verbs
 
 "Ship" collapses six distinct steps into one fuzzy word. Across a long
@@ -202,3 +350,6 @@ lives in [`autonomous-drain.md`](autonomous-drain.md).
 - The `lifecycle-vocabulary.md` discipline guide scaffolded by `aida init`
   into `docs/aida/discipline/` — the same verb vocabulary, as a habit for any
   AIDA-using project
+- **SPIKE-56** (`aida lifecycle`) — the future generated-from-source diagram
+  that will replace [the frozen state diagram](#the-state-diagram) above, so
+  the picture can't drift from the transition code
