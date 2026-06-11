@@ -3,12 +3,12 @@ spec_id: TASK-740
 agreed_id: TASK-740
 title: 'Phase 2c: migrate the merge auto-bump eligibility (`auto_bump_eligible_status`) behind the model''s GitEvent guards'
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:05:13.576459719Z
-modified_at: 2026-06-11T22:51:02.405229262Z
+modified_at: 2026-06-11T22:57:27.184288158Z
 req_type: Task
 tags:
 - needs-human
@@ -16,7 +16,17 @@ relationships:
 - rel_type: Child
   target_id: 019eb555-d0ad-7c93-ba44-0946264e944f
   created_at: 2026-06-11T07:05:16.945979084Z
+history:
+- id: 019eb8e7-9d1e-7282-8fa5-ac017afb61f1
+  author: aida-auto-bump
+  timestamp: 2026-06-11T22:57:27.326140544Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 implementation_info:
   implemented: true
   implemented_at: 2026-06-11T22:51:02.405229262Z
   implemented_by: joe
+  completed_at: 2026-06-11T22:57:27.184288158Z
+  completion_sha: a994195253ba567ee59072e0257ded85eb24b9f9
