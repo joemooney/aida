@@ -10,12 +10,12 @@ description: |-
   2. A legend distinguishes CLI-command vs LLM-decision vs git-event transitions.
   3. Each transition is labelled with what drives it (aida edit --status, queue done, reviewer verdict, merge auto-bump, release tag, ...).
   4. Dated + marked a FROZEN snapshot (don't elaborately hand-maintain — cf dated-artifacts-immutable); a note points at the aida-lifecycle SPIKE as the future un-driftable generated source.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:19:09.634928205Z
-modified_at: 2026-06-11T06:19:09.634928205Z
+modified_at: 2026-06-11T07:03:51.761994254Z
 req_type: Task
 tags:
 - aida:lifecycle
@@ -23,3 +23,15 @@ tags:
 - docs
 - novice-first
 - onboarding
+history:
+- id: 019eb57e-9357-74f0-afcd-395e834b35d3
+  author: aida-reconcile
+  timestamp: 2026-06-11T07:03:51.895739629Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T07:03:51.761994254Z
+  completion_sha: d04b85fd17911ab4c424eb3d878bdbafdd1ad372
