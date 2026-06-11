@@ -36,12 +36,12 @@ description: |-
   ## Rationale
 
   Captures the operator's burndown-prep convenience WITHOUT collapsing the sign-off gate. The deterministic queue step stays `backlog groom`; the judgment step stays human/advisor; the skill orchestrates the pass.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T12:47:09.297828614Z
-modified_at: 2026-06-11T13:00:51.354142614Z
+modified_at: 2026-06-11T13:37:15.603863106Z
 req_type: Story
 tags:
 - advisor
@@ -55,3 +55,15 @@ relationships:
   target_id: 019eb6c1-d4f3-7fb3-ba90-94be19cbd9e2
   created_at: 2026-06-11T12:57:16.623977696Z
   created_by: joe
+history:
+- id: 019eb6e6-bde2-7663-b274-604109199fc7
+  author: aida-auto-bump
+  timestamp: 2026-06-11T13:37:15.746602404Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T13:37:15.603863106Z
+  completion_sha: 7bbe8255a084e49aa266fed4adfd029ad07295d3
