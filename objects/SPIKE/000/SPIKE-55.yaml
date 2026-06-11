@@ -1,0 +1,30 @@
+id: 019eb551-5e12-7e70-aa87-84e93cd38410
+spec_id: SPIKE-55
+agreed_id: SPIKE-55
+title: 'SPIKE: audit skills for missing deterministic-CLI slices + formalize the slice/launcher/pure-agentic convention (NOT 1:1 CLI-clone every skill)'
+description: |-
+  Operator design question (2026-06-10): should every slash command (skill) have a CLI equivalent? Conclusion: blanket 1:1 symmetry is WRONG — skills are LLM workflows, CLI commands are deterministic substrate ops. Many skills are irreducibly agentic (/aida-implement, /aida-advise, /aida-capture) and a CLI 'equivalent' would be a hollow 'claude -p /skill' launcher that bloats the surface (cf STORY-556) for no determinism gain. But a SPECIFIC symmetry IS valuable and already exists inconsistently: the deterministic SLICE underneath an agentic skill should be a CLI verb (exemplars already shipped: aida ultraplan <- /ultraplan; aida review prompt <- /aida-review; aida burndown plan <- /aida-burndown; aida goal <- /goal; aida digest <- /aida-digest). Plus a narrower 'launcher' symmetry (aida burndown run -> claude -p /aida-burndown) ONLY for skills worth running unattended (cron/CI/headless). The pattern is emergent + unnamed; this spike makes it deliberate.
+
+  ## Acceptance (deliverable = an ANALYSIS DOC, not code)
+
+  1. Produce docs/plans/<date>-skill-cli-symmetry-audit.md. DO NOT add CLI verbs or change code in this spike — enacting any gap is a follow-up spec requiring master sign-off (CLI surface = architecture).
+  2. Enumerate all ~40 skills (.claude/skills/ + commands/) and classify each into exactly one bucket: (A) pure-agentic — no deterministic slice, no CLI verb wanted; (B) has-deterministic-slice — a context-assembly / data / derivation op that should be a CLI verb; (C) launcher-worthy — agentic but worth a thin 'aida X run' -> claude -p for unattended use.
+  3. For bucket B, mark which ALREADY have their CLI verb (ultraplan/review-prompt/burndown-plan/goal/digest/…) vs which are GAPS (slice exists conceptually but no CLI verb). The gap list is the spike's payoff.
+  4. Propose the formal convention in 3-5 lines: 'a skill exposes a CLI verb iff it has a deterministic slice; agentic skills get a launcher iff they're run unattended; never a hollow CLI clone.' Reference STORY-556 (don't bloat the surface) and the CLI<->MCP mirror (STORY-82) as the adjacent established symmetry.
+  5. Output a prioritized gap list (the missing-CLI-verb bucket-B skills) as candidate follow-up TASKs for the operator to approve — do not file them automatically.
+
+  Composes with: STORY-556 (help grouping / surface restraint), STORY-82 (CLI<->MCP mirror), SPIKE-34 (claude-wrapper launcher pattern), the existing aida ultraplan/review-prompt/burndown-plan/goal/digest slices.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T06:14:29.138108056Z
+modified_at: 2026-06-11T06:14:29.138108056Z
+req_type: Spike
+tags:
+- aida:cli
+- aida:skills
+- architecture
+- core
+- discoverability
+human_only: true
