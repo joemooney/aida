@@ -153,6 +153,26 @@ for each field.
 
 ## Step 4: Work With Requirements
 
+**The loop: capture → build → link → done.** AIDA doesn't build the task for
+you — you do that in your editor, the way you always have. AIDA's job is the
+*link*: when you reference the spec id in your work, the code and the spec stay
+wired together.
+
+```bash
+aida add "Build login page"      # → TASK-1
+aida list                        # see what's on your plate
+# ...now build it in your editor. In the commit that does the work,
+#    put the id in the message:  git commit -m "feat: login page (TASK-1)"
+#    (or drop a // trace:TASK-1 comment where you implement it)
+aida done TASK-1                 # mark it finished
+aida show TASK-1                 # ...and now you see your commit linked to the task
+```
+
+That last step is the point: `aida show` reveals the code that fulfilled the
+spec, automatically, because you named the id. No manual bookkeeping.
+
+### Full command reference
+
 ```bash
 # List your tasks
 aida list

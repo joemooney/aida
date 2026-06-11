@@ -7408,27 +7408,43 @@ fn complete_init_scaffolding(
     }
 
     println!();
+    // TASK-732: teach the link bridge, not just the four verbs. The novice's
+    // confusion sits between `aida list` and `aida done` — AIDA doesn't build
+    // for them; the value is that referencing the id in a commit (or a
+    // // trace: comment) makes `aida show` reveal the code wired to the spec.
+    // The dim signpost line names that bridge; `aida show` is reframed from
+    // "recall why" to the payoff. trace:TASK-732 | ai:claude
     println!(
-        "  {} The loop is simple — {} a task, build it, mark it {}:",
+        "  {} The loop: {} → build → {} → done.",
         "▶".green().bold(),
         "capture".bold(),
-        "done".bold()
+        "link".bold()
     );
     println!(
-        "    {}{}capture a task",
-        "aida add \"Add a task from the CLI\"".cyan(),
-        " ".repeat(3)
-    );
-    println!("    {}{}see your tasks", "aida list".cyan(), " ".repeat(27));
-    println!(
-        "    {}{}mark one finished (after you've built it)",
-        "aida done <id>".cyan(),
-        " ".repeat(22)
+        "    {}{}capture a task{}",
+        "aida add \"Build login page\"".cyan(),
+        " ".repeat(3),
+        "   → TASK-1".dimmed()
     );
     println!(
-        "    {}{}recall why a task exists, anytime",
-        "aida show <id>".cyan(),
-        " ".repeat(22)
+        "    {}{}see what's on your plate",
+        "aida list".cyan(),
+        " ".repeat(21)
+    );
+    println!(
+        "    {}",
+        "… now build it in your editor, and put (TASK-1) in your commit message …".dimmed()
+    );
+    println!(
+        "    {}{}mark it finished",
+        "aida done TASK-1".cyan(),
+        " ".repeat(14)
+    );
+    println!(
+        "    {}{}see your commit linked to the task — {}",
+        "aida show TASK-1".cyan(),
+        " ".repeat(14),
+        "that's the point".bold()
     );
 
     // TASK-645: surface the role model at the onboarding moment so there is
