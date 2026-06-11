@@ -314,14 +314,14 @@ pub(crate) fn selector_summary(status: &str, tag: Option<&str>, batch: Option<&s
     format!("{scope} Narrow with --batch NAME, --tag X, or --status <s>.")
 }
 
-/// The next-step footer printed after a non-empty ready set. Tells the user the
-/// run itself is the `/aida-burndown` Claude Code skill — there is deliberately
-/// no `aida burndown run`/`start` CLI verb — so they stop hunting for one.
+/// The next-step footer printed after a non-empty ready set. Points the user at
+/// `aida burndown run` (the kick-off-and-walk-away headless drain) as the primary
+/// command, and notes `/aida-burndown` as the in-Claude alternative.
 /// Pure text (no color); the caller colorizes. trace:STORY-544 | ai:claude
+// trace:BUG-494 | ai:claude
 pub(crate) fn next_step_footer() -> String {
-    "Next step: invoke /aida-burndown in Claude Code to fan out the ready set above.\n\
-     There is no `aida burndown run`/`start` — the runner is the /aida-burndown skill, \
-     not a CLI subcommand."
+    "Next step: run `aida burndown run` to drain the ready set above (kick off and walk away).\n\
+     Or invoke /aida-burndown in Claude Code to fan it out from your session."
         .to_string()
 }
 
@@ -607,14 +607,18 @@ mod tests {
     }
 
     #[test]
-    fn next_step_footer_points_at_skill_and_denies_cli_verb() {
+    fn next_step_footer_points_at_run_command_and_skill() {
         let f = next_step_footer();
-        // (a) tells the user to invoke the skill.
+        // (a) points at the real `aida burndown run` CLI command (BUG-494:
+        // the footer used to falsely claim this command didn't exist).
+        assert!(f.contains("aida burndown run"));
+        // (b) still notes /aida-burndown as the in-Claude alternative.
         assert!(f.contains("/aida-burndown"));
-        // (b) explicitly states there is no `aida burndown run`/`start`.
-        assert!(f.contains("no `aida burndown run`/`start`"));
-        assert!(f.to_lowercase().contains("skill"));
+        // (c) no longer denies the run command exists.
+        assert!(!f.to_lowercase().contains("there is no"));
+        assert!(!f.to_lowercase().contains("not a cli subcommand"));
         // No internal trace SPEC-IDs leak into user-facing text.
         assert!(!f.contains("STORY-"));
+        assert!(!f.contains("BUG-"));
     }
 }

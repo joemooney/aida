@@ -65980,11 +65980,11 @@ fn handle_burndown_plan(
         }
     }
 
-    // Next-step footer (AIDA house style): point the user at the runner. The
-    // run itself is the /aida-burndown skill — there is deliberately no
-    // `aida burndown run`/`start` CLI verb, so new users stop hunting for one.
-    // Suppressed under --json (handled above) and when nothing is ready.
-    // trace:STORY-544
+    // Next-step footer (AIDA house style): point the user at the runner —
+    // `aida burndown run` (STORY-545), with /aida-burndown as the in-Claude
+    // alternative. Suppressed under --json (handled above) and when nothing is
+    // ready.
+    // trace:STORY-544 trace:BUG-494
     if ready.is_empty() {
         if awaiting_signoff.is_empty() {
             println!(
