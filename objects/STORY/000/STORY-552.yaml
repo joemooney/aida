@@ -1,0 +1,49 @@
+id: 019eb46b-0901-7e80-b2de-bd35fa907f36
+spec_id: STORY-552
+agreed_id: STORY-552
+title: 'aida init: offer to ''git init'' when not in a git repo (complete the onboarding funnel, don''t just bail)'
+description: |-
+  ## Friction (operator, 2026-06-10)
+
+  A new user in a fresh folder runs `aida init` without `git init` first. Today it bails (main.rs:15433): 'Not a git repository. Run git init first, or use --sibling.' They must know to run `git init`, then re-run `aida init`. Avoidable onboarding stumble — the blocked first state is confusing (cf. undefined-state-is-confusion). Operator expected `aida init` might create the repo.
+
+  ## Context — completes the STORY-537 funnel
+
+  STORY-537 (Completed) offers `aida remote create` at END of init when there's no ORIGIN. But it assumes a local git repo already exists. The funnel has a hole at the FRONT: no-local-repo. Fill it so the flow is: `aida init` → (offer git init) → (offer remote create, STORY-537) → done.
+
+  | State | Today |
+  |---|---|
+  | Folder, no git repo | BAILS ← this spec |
+  | Local repo, no remote | STORY-537 (done) |
+  | Local + remote | normal |
+
+  ## Proposal
+
+  At START of `aida init`, when `!is_git_repo(cwd)`:
+  - TTY: prompt 'No git repo here — initialize one? [Y/n]' → run `git init` (+ initial commit if the orphan-store machinery needs HEAD) → continue init.
+  - Non-interactive: keep the current clean bail with the recipe, OR honor an explicit `--git-init` flag (do NOT silently git-init in scripts — surprising side effect).
+
+  ## Acceptance
+
+  - [ ] `aida init` in a non-git folder at a TTY offers to `git init`; on yes, initializes the repo and proceeds to the normal init flow without a re-run.
+  - [ ] Non-interactive `aida init` in a non-git folder keeps the current bail+recipe; `--git-init` opts into auto-init for scripted/non-TTY use.
+  - [ ] The BUG-446 workspace-of-nested-repos guard still fires AFTER any git init (don't root an orphan store over a workspace).
+  - [ ] If the orphan-branch/auto-attach machinery needs an initial commit/HEAD, the offered git-init path creates one (verify against a truly empty dir — no commits yet).
+  - [ ] Chains cleanly into the STORY-537 remote-create offer at end of init (git init → remote create → pushed), so a fresh folder reaches a fully-wired project in one `aida init`.
+
+  ## Rationale
+
+  Closes the front of the onboarding funnel STORY-537 closed the back of. Small, bounded; pure first-run ergonomics. SPEC-IDs/internals stay out of user-facing text; the prompt is plain language.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T02:02:54.081477799Z
+modified_at: 2026-06-11T02:02:54.081477799Z
+req_type: Story
+tags:
+- aida:init
+- from-product
+- from-user-friction
+- onboarding-flow
+- papercut
