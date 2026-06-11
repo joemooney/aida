@@ -22,12 +22,12 @@ description: |-
   ## Rationale
 
   Removes the `--json | jq`/awk dance for the most common scripting need (iterate spec IDs). Small, bounded; serves every loop-over-specs workflow. Same family as the scripting-friction-is-a-missing-surface-signal lesson.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T12:36:00.559157970Z
-modified_at: 2026-06-11T13:34:37.819686570Z
+modified_at: 2026-06-11T13:43:52.549373030Z
 req_type: Task
 tags:
 - aida:list
@@ -42,3 +42,15 @@ comments:
   content: Commit 461947037 references this requirement
   created_at: 2026-06-11T13:34:37.819686570Z
   modified_at: 2026-06-11T13:34:37.819686570Z
+history:
+- id: 019eb6ec-cc76-7242-bed0-a3853715af70
+  author: aida-auto-bump
+  timestamp: 2026-06-11T13:43:52.694751194Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T13:43:52.549373030Z
+  completion_sha: ce5b0f3edcc0e119e62aef0d3f1a161af072cb4d
