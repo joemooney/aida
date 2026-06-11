@@ -1,0 +1,29 @@
+id: 019eb54e-6fc1-70a0-be34-75d13eee1ac9
+spec_id: STORY-556
+agreed_id: STORY-556
+title: 'aida help: group commands by function + lead with the novice daily-drivers (tier the full surface)'
+description: |-
+  Operator-surfaced (2026-06-10): bare 'aida' / 'aida help' prints a flat clap list of ~40+ subcommands — hard to navigate, and the wall-of-commands fights the simple-surface impression the novice-first arc just built. Group by function AND tier so the newcomer sees a small curated path, with the full grouped depth on demand (Trojan-horse: looks simple, depth surfaces through use — see OVERVIEW.md).
+
+  ## Acceptance
+
+  1. Group subcommands by function via clap help_heading (or equivalent): Getting started · Specs · Work & autonomy · Git & lifecycle · Planning · Roles & sessions · Project setup · Reporting.
+  2. Bare 'aida' and 'aida help' LEAD with a short 'Getting started' set (init, add, list, done, show — the loop) so a newcomer sees a small approachable path, not 40 commands.
+  3. Full grouped surface available on demand (e.g. 'aida help --all') — depth one step away, not in the novice's face.
+  4. Dev-only / internal commands (dev, orchestrator-internal) stay out of the default novice view.
+  5. The default help must READ as small and approachable (the simple-surface principle); the grouped depth is the reward for digging, not the first impression. No SPEC-IDs in any help text (user-facing-text convention).
+
+  Composes with: the novice-first greeting work (TASK-725/728/732), OVERVIEW.md 'TUI is the product' framing.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T06:11:17.057691781Z
+modified_at: 2026-06-11T06:11:17.057691781Z
+req_type: Story
+tags:
+- aida:help
+- core
+- discoverability
+- novice-first
+- usability
