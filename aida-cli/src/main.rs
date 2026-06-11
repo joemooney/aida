@@ -54935,6 +54935,73 @@ mod auto_bump_done_tests {
         assert!(info.completion_sha.is_some());
     }
 
+    /// BUG-418: when a spec's referencing commit IS on the default branch but
+    /// the spec is already `Completed` (a prior reconcile/pull graduated it),
+    /// the no-flip message must say "already Completed — nothing to do", NOT
+    /// the misleading "no commit references it" text that reads as a failed
+    /// recovery. The store state is correctly untouched either way; this
+    /// guards the OUTPUT, which is the whole of the bug. trace:BUG-418
+    #[test]
+    fn reconcile_status_already_completed_says_so_not_no_match() {
+        // --spec form: a referencing commit landed, spec already Completed.
+        let terminal = vec![("SPIKE-46".to_string(), RequirementStatus::Completed)];
+        let msg = reconcile_no_flip_message(Some("SPIKE-46"), &terminal);
+        assert!(
+            msg.contains("already Completed"),
+            "should name the already-Completed state, got: {msg}"
+        );
+        assert!(
+            !msg.contains("no commit"),
+            "must NOT claim no commit references it — that's the misleading \
+             BUG-418 output. got: {msg}"
+        );
+
+        // Full-scan form (no --spec): same disambiguation.
+        let msg_all = reconcile_no_flip_message(None, &terminal);
+        assert!(
+            msg_all.contains("already Completed"),
+            "full-scan no-flip should still surface already-Completed, got: {msg_all}"
+        );
+
+        // Genuine no-match (nothing terminal, nothing flipped): keep the old
+        // guidance so we don't paper over a real "nothing referenced it" case.
+        let msg_none = reconcile_no_flip_message(Some("STORY-9999"), &[]);
+        assert!(
+            msg_none.contains("No eligible flips"),
+            "true no-match must keep the no-eligible-flips guidance, got: {msg_none}"
+        );
+    }
+
+    /// BUG-418 (end-to-end): drive `handle_db_reconcile_status` against a spec
+    /// already `Completed` whose merge commit references it; the run must
+    /// succeed (no error, no state change) — the regression is in the message
+    /// path, exercised by the unit test above. trace:BUG-418
+    #[test]
+    fn reconcile_status_completed_spec_with_ref_is_noop_ok() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        seed_spec_at(&store_path, "SPIKE-9646", "Completed");
+
+        std::fs::write(project_root.join("done.txt"), "x\n").unwrap();
+        run_git(&project_root, &["add", "done.txt"]);
+        run_git(&project_root, &["commit", "-m", "feat: ship (SPIKE-9646)"]);
+
+        let r = handle_db_reconcile_status(&store_path, None, Some("SPIKE-9646"), false);
+        assert!(
+            r.is_ok(),
+            "reconcile of already-Completed spec failed: {:?}",
+            r.err()
+        );
+
+        let storage = Storage::new(store_path.clone());
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id("SPIKE-9646").unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "spec should stay Completed, was {:?}",
+            req.status
+        );
+    }
+
     /// BUG-328: `aida db reconcile-status` uses the same expanded direct
     /// candidate rules as pull-time auto-bump.
     /// trace:BUG-328 | ai:codex
@@ -70723,6 +70790,63 @@ fn auto_bump_done_to_completed(
 ///   `--spec SPEC-ID` narrows the candidate set to a single requirement.
 ///   `--dry-run` previews without writing.
 ///   trace:TASK-226 | ai:claude
+/// BUG-418: pick the message `reconcile-status` prints when nothing flipped.
+/// The misleading case it fixes: a referencing commit IS on the default branch
+/// but the spec is already `Completed` (a prior reconcile/pull graduated it).
+/// The old generic "no commit references it" text read as "recovery failed" to
+/// an operator who had in fact already succeeded. When `already_terminal` is
+/// non-empty we say "already Completed — nothing to do"; otherwise we fall back
+/// to the genuine no-match guidance. `already_terminal` carries `(spec_id,
+/// status)` for each candidate whose referencing commit landed but is past an
+/// eligible status. trace:BUG-418 | ai:claude
+fn reconcile_no_flip_message(
+    spec: Option<&str>,
+    already_terminal: &[(String, RequirementStatus)],
+) -> String {
+    if !already_terminal.is_empty() {
+        return match spec {
+            Some(s) => {
+                let status = already_terminal
+                    .iter()
+                    .find(|(id, _)| id.eq_ignore_ascii_case(s))
+                    .map(|(_, st)| st.clone())
+                    .unwrap_or(RequirementStatus::Completed);
+                format!(
+                    "Nothing to reconcile for {}: it is already {} (a \
+                     referencing commit is on the default branch — a prior \
+                     reconcile or pull already graduated it).",
+                    s, status
+                )
+            }
+            None => {
+                let n = already_terminal.len();
+                format!(
+                    "Nothing to reconcile: {} spec{} referenced by commits in \
+                     the scan range {} already Completed (a prior reconcile or \
+                     pull graduated them); no other eligible spec had a \
+                     referencing commit.",
+                    n,
+                    if n == 1 { "" } else { "s" },
+                    if n == 1 { "is" } else { "are" },
+                )
+            }
+        };
+    }
+    match spec {
+        Some(s) => format!(
+            "No eligible flips for {}. Either it's not at a status the replay \
+             can graduate (Approved, Planned, In Progress, Done, or an \
+             Approved/In-Progress review story), or no commit in the scan \
+             range references it.",
+            s
+        ),
+        None => "No eligible flips. All eligible specs in the store either have \
+                 no referencing commit in the scan range, or are already \
+                 Completed/Rejected/Draft."
+            .to_string(),
+    }
+}
+
 fn handle_db_reconcile_status(
     store_path: &std::path::Path,
     since: Option<&str>,
@@ -70822,6 +70946,14 @@ fn handle_db_reconcile_status(
     // Build the planned-flip list. For --spec, we narrow to that one
     // candidate (matched against either spec_id or review-story title).
     let mut flips: Vec<AutoBumpFlip> = Vec::new();
+    // BUG-418: track specs whose referencing commit IS in the scan range but
+    // that are already terminal (Completed/Released) — they're correctly
+    // skipped, but the generic "no eligible flips" message reads to an
+    // operator as "recovery failed" when the spec was in fact already
+    // recovered (a prior run / pull / dry-run-then-pull bumped it). Remember
+    // them so we can print an explicit "already Completed — nothing to do"
+    // message instead of the misleading no-op text. trace:BUG-418 | ai:claude
+    let mut already_terminal: Vec<(String, RequirementStatus)> = Vec::new();
     for (spec_id, sha) in &candidates {
         if let Some(target) = spec {
             if !spec_id.eq_ignore_ascii_case(target) {
@@ -70832,6 +70964,9 @@ fn handle_db_reconcile_status(
             continue;
         };
         if !auto_bump_eligible_status(&req.status) {
+            if matches!(req.status, RequirementStatus::Completed) {
+                already_terminal.push((spec_id.clone(), req.status.clone()));
+            }
             continue;
         }
         flips.push(AutoBumpFlip::new(
@@ -70898,20 +71033,12 @@ fn handle_db_reconcile_status(
     }
 
     if flips.is_empty() && stale_review_flips.is_empty() {
-        match spec {
-            Some(s) => println!(
-                "No eligible flips for {}. Either it's not at a status the \
-                 replay can graduate (Approved, Planned, In Progress, Done, \
-                 or an Approved/In-Progress review story), or no commit in \
-                 the scan range references it.",
-                s
-            ),
-            None => println!(
-                "No eligible flips. All eligible specs in the store either have \
-                 no referencing commit in the scan range, or are already \
-                 Completed/Rejected/Draft."
-            ),
-        }
+        // BUG-418: disambiguate "already recovered" from "nothing matched".
+        // If a referencing commit was found but the spec is already terminal,
+        // say so plainly — the operator who just ran a recovery needs to read
+        // "it's done" as success, not "no commit references it" as failure.
+        // trace:BUG-418 | ai:claude
+        println!("{}", reconcile_no_flip_message(spec, &already_terminal));
         return Ok(());
     }
 
