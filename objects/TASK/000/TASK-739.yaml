@@ -1,0 +1,12 @@
+id: 019eb57f-bc6b-7032-b843-ffee4a1e0e29
+spec_id: TASK-739
+agreed_id: TASK-739
+title: 'Phase 2b: migrate the advisor-authority gate (`status_requires_advisor_authority`) behind `validate_transition`'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T07:05:07.947649135Z
+modified_at: 2026-06-11T07:05:07.947649135Z
+req_type: Task
