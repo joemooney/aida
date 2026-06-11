@@ -5801,6 +5801,12 @@ pub enum Command {
         // trace:BUG-492 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// List each archived id during an --older-than sweep (instead of
+        /// just the throttled progress tick + completion line).
+        // trace:BUG-497 | ai:claude
+        #[clap(long, requires = "older_than")]
+        verbose: bool,
     },
 
     /// Inverse of `aida archive` — clears the archive flag on a spec so
