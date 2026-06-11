@@ -27,4 +27,8 @@ tags:
 - architecture
 - core
 - discoverability
+relationships:
+- rel_type: Parent
+  target_id: 019eb57f-2599-7260-9eca-298fd384646c
+  created_at: 2026-06-11T07:04:34.304920307Z
 human_only: true
