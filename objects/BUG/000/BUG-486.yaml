@@ -25,15 +25,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:22:32.536046891Z
-modified_at: 2026-06-11T07:09:16.736896962Z
+modified_at: 2026-06-11T07:09:17.578705230Z
 req_type: Bug
 tags:
-- authority
-- cli-mcp-parity
-- from-bug:BUG-481
-- from-operator
-- mcp
-- severity:high
+- needs-human
 comments:
 - id: 019eab12-0dbc-79e3-ad93-edab2e6a4801
   author: joe
