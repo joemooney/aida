@@ -1,0 +1,27 @@
+id: 019eb6bd-8211-70d1-b484-310f6a035a5d
+spec_id: BUG-497
+agreed_id: BUG-497
+title: 'aida archive --older-than: silent multi-second window for large sweeps — the BUG-425 ''one fast commit'' premise breaks at scale'
+description: |-
+  Operator friction 2026-06-11: ran 'aida archive --older-than 7d' over 217 completed/rejected specs; saw only 'Archiving: 217 spec(s)…' and no further sign of life. Verified: the heading + a final 'Archived: N spec(s) in 1 commit' line both exist (BUG-425/TASK-616), and the sweep is batched into one commit. BUT BUG-425 REMOVED the per-spec [k/N] ticks on the comment-documented assumption 'now it's a single fast commit, so the throttled per-spec progress [isn't needed]' (main.rs ~line 5799). For a LARGE sweep that premise is false: the build loop (N get_requirement reads, ~line 5808) plus bulk_update (N YAML writes + commit) is a multi-second SILENT window between the two println lines — it looks hung, the exact symptom BUG-425 fixed, at a scale it didn't cover. Restore a lightweight progress signal for large N only.
+
+  ## Acceptance
+  1. For a bulk --older-than sweep over N specs above a small threshold (e.g. N > 50), emit a THROTTLED progress signal during the build/write (e.g. [k/N] every ~250ms or every ~K specs) so the operator sees it advancing.
+  2. Small sweeps (N below threshold) stay quiet — heading + completion line only (don't regress the clean fast path).
+  3. Keep the existing 'Archived: N in 1 commit' completion line.
+  4. Optional: a --verbose flag to list each archived id (the operator's literal ask) — secondary to the throttled tick.
+
+  Companion/follow-on to BUG-425 + TASK-616 (both Completed) — same command, the scale case their 'fast commit' assumption skipped.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T12:52:13.457555636Z
+modified_at: 2026-06-11T12:52:13.457555636Z
+req_type: Bug
+tags:
+- aida:archive
+- core
+- from-user-friction
+- papercut
+- ux
