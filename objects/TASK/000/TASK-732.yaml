@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T02:07:37.074535864Z
-modified_at: 2026-06-11T02:07:37.074535864Z
+modified_at: 2026-06-11T02:12:44.500952875Z
 req_type: Task
 tags:
 - aida:init
 - novice-first
 - onboarding-flow
 - severity:major
+comments:
+- id: 019eb474-0b54-7e51-b1db-9f819b51a6d6
+  author: joe
+  content: Commit 23a3993dc references this requirement
+  created_at: 2026-06-11T02:12:44.500952875Z
+  modified_at: 2026-06-11T02:12:44.500952875Z
