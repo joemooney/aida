@@ -1158,8 +1158,12 @@ fn run() -> Result<()> {
     // STORY-563: `aida human unblock` self-loads the store like `aida why` /
     // `burndown explain` — dispatch early, no shared storage handle needed.
     // trace:STORY-563 | ai:claude
-    if let Command::Human(human_cmd) = &cli.command {
-        return handle_human_command(human_cmd);
+    if let Command::Human {
+        command: Some(human_cmd),
+        ..
+    } = &cli.command
+    {
+        return handle_human_subcommand(human_cmd);
     }
 
     // Doctor commands run before storage init — they may need to operate
@@ -1998,7 +2002,6 @@ fn run() -> Result<()> {
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
-        Command::Human(_) => unreachable!("human is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -9701,7 +9704,6 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
-        Command::Human(_) => unreachable!("human is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -11925,7 +11927,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Questions { cmd } => {
             handle_questions_command(cmd.as_ref(), &backend, store_path)?;
         }
-        Command::Human { short } => {
+        // Bare `aida human [--short]` — the `Some(subcommand)` case already
+        // returned via the early dispatch above. trace:TASK-746 trace:STORY-563
+        Command::Human { short, .. } => {
             handle_human_command(*short)?;
         }
         Command::Punt {
@@ -68141,7 +68145,7 @@ fn collect_unblock_facts(
 /// a paste-ready advisor prompt that routes each to queue / clarify-first /
 /// leave-parked. The advisor (the grooming skill / live session) is the actor
 /// the prompt drives. trace:STORY-563 | ai:claude
-fn handle_human_command(cmd: &cli::HumanCommand) -> Result<()> {
+fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
     match cmd {
         cli::HumanCommand::Unblock { copy, stdout, json } => {
             handle_human_unblock(*copy, *stdout, *json)
