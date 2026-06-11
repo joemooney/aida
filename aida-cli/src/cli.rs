@@ -6663,6 +6663,14 @@ pub enum Command {
         // trace:STORY-362 | ai:claude
         #[clap(long, value_name = "SUBSYSTEM")]
         focus: Option<String>,
+
+        /// Run `git init` automatically when the current directory is not yet
+        /// a git repository, instead of bailing. At a TTY this is offered
+        /// interactively; in scripts pass this flag to opt into creating the
+        /// repo (otherwise non-interactive init keeps the safe bail).
+        // trace:STORY-552 | ai:claude
+        #[clap(long)]
+        git_init: bool,
     },
 
     /// Starter-memory-pack drift discovery (`aida memories check`)

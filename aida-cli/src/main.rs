@@ -907,6 +907,7 @@ fn run() -> Result<()> {
         with_memories,
         refresh,
         focus,
+        git_init,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -940,6 +941,7 @@ fn run() -> Result<()> {
                 *no_hooks,
                 *verbose,
                 name.as_deref(),
+                *git_init,
             )?;
         }
         // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
@@ -15430,6 +15432,32 @@ fn gitmodule_child_paths(cwd: &std::path::Path) -> std::collections::HashSet<Str
     paths
 }
 
+/// What to do when `aida init` runs in a directory that isn't a git repo yet.
+/// trace:STORY-552 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum GitInitDecision {
+    /// Run `git init` without asking (explicit `--git-init`).
+    Yes,
+    /// Offer interactively (TTY, no flag).
+    Prompt,
+    /// Keep the safe bail+recipe (non-interactive, no flag — don't
+    /// silently git-init in scripts).
+    Bail,
+}
+
+/// Decide how to handle a non-git folder at the front of init. `--git-init`
+/// always wins; otherwise prompt at a TTY and bail elsewhere. Pure so it can be
+/// unit-tested without a terminal. trace:STORY-552 | ai:claude
+fn git_init_decision(git_init_flag: bool, at_tty: bool) -> GitInitDecision {
+    if git_init_flag {
+        GitInitDecision::Yes
+    } else if at_tty {
+        GitInitDecision::Prompt
+    } else {
+        GitInitDecision::Bail
+    }
+}
+
 fn handle_init_distributed_worktree(
     force: bool,
     no_skills: bool,
@@ -15437,6 +15465,7 @@ fn handle_init_distributed_worktree(
     no_hooks: bool,
     verbose: bool,
     name: Option<&str>,
+    git_init: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -15445,11 +15474,34 @@ fn handle_init_distributed_worktree(
     let worktree_dir = ".aida-store";
     let branch_name = "aida-store";
 
-    // Must be inside a git repo
+    // STORY-552: complete the onboarding funnel at the FRONT. A new user in a
+    // fresh folder who hasn't run `git init` shouldn't have to learn the recipe
+    // and re-run init — that blocked first state is confusing. At a TTY, offer
+    // to `git init` here; with --git-init, do it non-interactively. Otherwise
+    // keep the clean bail+recipe (don't silently git-init in scripts — that's a
+    // surprising side effect). The orphan-store machinery's "ensure at least one
+    // commit" step below then creates HEAD if the freshly-init'd repo is empty,
+    // and the BUG-446 workspace guard still runs AFTER this. trace:STORY-552 | ai:claude
     if !git_ops::is_git_repo(&cwd) {
-        anyhow::bail!(
-            "Not a git repository. Run 'git init' first, or use --sibling for a separate repo."
-        );
+        let at_tty = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+        let do_init = match git_init_decision(git_init, at_tty) {
+            GitInitDecision::Yes => true,
+            GitInitDecision::Bail => false,
+            GitInitDecision::Prompt => prompt_yes_no(
+                "No git repository here — initialize one with `git init`? [Y/n] ",
+                true,
+            )
+            .unwrap_or(false),
+        };
+
+        if do_init {
+            git_ops::init(&cwd)?;
+            println!("  {} initialized a git repository here", "Created".green());
+        } else {
+            anyhow::bail!(
+                "Not a git repository. Run 'git init' first (or pass --git-init), or use --sibling for a separate repo."
+            );
+        }
     }
 
     // BUG-446: refuse to initialize over a workspace-of-projects. A fresh
@@ -51248,6 +51300,23 @@ mod bug_354_text_question_classifier_tests {
             unmanaged_nested_projects(root),
             vec!["proj-a".to_string(), "proj-b".to_string()]
         );
+    }
+
+    #[test]
+    fn git_init_decision_flag_wins_everywhere() {
+        // STORY-552: explicit --git-init opts into auto-init regardless of TTY,
+        // so scripted/non-TTY use can complete the onboarding funnel.
+        assert_eq!(git_init_decision(true, false), GitInitDecision::Yes);
+        assert_eq!(git_init_decision(true, true), GitInitDecision::Yes);
+    }
+
+    #[test]
+    fn git_init_decision_prompts_at_tty_bails_otherwise() {
+        // STORY-552: at a TTY (no flag) we offer interactively; without a TTY
+        // and without the flag we keep the safe bail — no surprising side
+        // effect in scripts.
+        assert_eq!(git_init_decision(false, true), GitInitDecision::Prompt);
+        assert_eq!(git_init_decision(false, false), GitInitDecision::Bail);
     }
 
     #[test]
