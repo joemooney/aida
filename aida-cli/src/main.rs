@@ -21699,6 +21699,7 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
         RoleCommand::Repair { name } => handle_role_repair(&project_root, name.as_deref()),
         RoleCommand::Active => handle_role_active(),
+        RoleCommand::Current { check } => handle_role_current(*check),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
@@ -22538,6 +22539,22 @@ fn handle_role_active() -> Result<()> {
         }
         _ => std::process::exit(1),
     }
+}
+
+// `aida role current` — print the active role's name (empty line when no
+// role is active) and exit 0 either way. `--check` exits 1 instead when no
+// role is active. Pure read of `$AIDA_SESSION_ROLE`, no project-store load.
+// Distinct from `role active` (TASK-42), which exits 1 on no-role with no
+// trailing newline — `current` always prints a line so a scripting caller
+// can capture the value and branch on exit code separately.
+// trace:STORY-64 | ai:claude
+fn handle_role_current(check: bool) -> Result<()> {
+    let role = std::env::var("AIDA_SESSION_ROLE").unwrap_or_default();
+    println!("{}", role);
+    if check && role.is_empty() {
+        std::process::exit(1);
+    }
+    Ok(())
 }
 
 fn handle_role_end() -> Result<()> {
