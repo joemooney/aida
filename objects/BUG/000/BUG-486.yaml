@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T06:22:32.536046891Z
-modified_at: 2026-06-11T12:53:10.382384670Z
+modified_at: 2026-06-11T15:09:21.722241660Z
 req_type: Bug
 tags:
 - needs-human
@@ -40,6 +40,11 @@ comments:
   content: 'PARKED from burndown (autonomous drain, 2026-06-11). PR #759 implements the role-honoring gate but CI is RED: tests/test_mcp_stdio.py ''update_requirement should refuse planned via MCP (BUG-449)'' fails — Approved→Planned SUCCEEDED via MCP with NO advisor role present (the stdio harness launches ''aida mcp-serve'' inheriting ambient env, which has no AIDA_SESSION_ROLE, and never calls role_enter). That VIOLATES this spec''s own acceptance #5 (a non-advisor MCP caller must still be refused). So the implementation is over-permissive — it grants advisor-gated transitions without an entered advisor role. The test expectation is CORRECT; the code needs the fix. This is the authority gate → keyboard-supervised per the original parking note + feedback_reliability_fixes_use_keyboard_not_drain, not an unsupervised auto-patch. Next step at the keyboard: tighten the MCP role resolver so it defaults non-advisor when neither role_enter nor AIDA_SESSION_ROLE is set, then confirm the stdio test goes green. PR #759 left open on branch bug-486-mcp-advisor-authority (also behind main — needs a merge/rebase).'
   created_at: 2026-06-11T07:09:16.736896962Z
   modified_at: 2026-06-11T07:09:16.736896962Z
+- id: 019eb73b-0fba-7cb0-a82b-113d6a443c9d
+  author: joe
+  content: Commit c064467f4 references this requirement
+  created_at: 2026-06-11T15:09:21.722241660Z
+  modified_at: 2026-06-11T15:09:21.722241660Z
 history:
 - id: 019eb6be-6390-7132-9555-4357aaccd2f6
   author: aida-auto-bump
