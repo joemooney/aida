@@ -1,0 +1,25 @@
+id: 019eb555-a5c2-7612-95d5-627d280b9dd9
+spec_id: TASK-733
+agreed_id: TASK-733
+title: 'docs/lifecycle.md: Mermaid spec-lifecycle state diagram — orthogonal regions (status × archived × queued × lease × park) + 3 trigger-colors (CLI / LLM / git-event)'
+description: |-
+  Quick-win companion to the aida-lifecycle SPIKE. Hand-drawn Mermaid (or PlantUML) state diagram for the spec lifecycle, added to docs/lifecycle.md alongside the existing prose. Capture what the prose misses: (1) status chain Draft->Approved->Planned->InProgress->Done->Completed->Released (+ Rejected, NeedsAttention); (2) ORTHOGONAL regions, not one chain — visibility (active|archived), queue membership (unqueued|queued), lease/in-flight (idle|leased), park-reason (pickable|review:draft-only|needs-design-signoff|needs-human|deferred|decision-pending); (3) color/style transitions by TRIGGER-KIND: CLI/human command, LLM decision, system/git-event; (4) call out the illegal orthogonal combinations as 'don't let this happen' (archived AND queued = BUG-492; held-for-review AND PR-closed = BUG-493).
+
+  ## Acceptance
+  1. docs/lifecycle.md gains a Mermaid state diagram: status chain + orthogonal regions + 3 trigger-colors.
+  2. A legend distinguishes CLI-command vs LLM-decision vs git-event transitions.
+  3. Each transition is labelled with what drives it (aida edit --status, queue done, reviewer verdict, merge auto-bump, release tag, ...).
+  4. Dated + marked a FROZEN snapshot (don't elaborately hand-maintain — cf dated-artifacts-immutable); a note points at the aida-lifecycle SPIKE as the future un-driftable generated source.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T06:19:09.634928205Z
+modified_at: 2026-06-11T06:19:09.634928205Z
+req_type: Task
+tags:
+- aida:lifecycle
+- core
+- docs
+- novice-first
+- onboarding
