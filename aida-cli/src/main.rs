@@ -5906,23 +5906,32 @@ enum ArchiveGuard {
 }
 
 // trace:BUG-492 | ai:claude
+// TASK-741: the legality of an archive — the `archived ⇒ terminal ∧ ¬queued`
+// cross-axis invariant — is single-sourced in the lifecycle model
+// (`lifecycle::archive_invariant_block`, declared as the `BUG-492` row of
+// `lifecycle::INVARIANTS`). This function maps the model's verdict onto the
+// CLI's `--force` override and user-facing warning wording (both CLI concerns
+// that stay at the call site). trace:TASK-741 | ai:claude
 fn archive_guard_decision(status: &RequirementStatus, queued: bool, force: bool) -> ArchiveGuard {
-    let non_terminal = !is_terminal_status(status);
-    if force || !(non_terminal || queued) {
+    use aida_core::lifecycle::{archive_invariant_block, ArchiveBlock, State};
+    if force {
         return ArchiveGuard::Allow;
     }
-    let reason = if queued {
-        format!(
-            "is {status} AND in the queue — archiving it leaves the queue pointing at a \
-             hidden spec (`aida list` won't show it)."
-        )
-    } else {
-        format!(
-            "is {status} (not Completed/Rejected). Archive is for the closed long-tail; \
-             archiving live work hides it from `aida list`."
-        )
-    };
-    ArchiveGuard::Confirm { reason }
+    match archive_invariant_block(State::from_status(status), queued) {
+        None => ArchiveGuard::Allow,
+        Some(ArchiveBlock::Queued) => ArchiveGuard::Confirm {
+            reason: format!(
+                "is {status} AND in the queue — archiving it leaves the queue pointing at a \
+                 hidden spec (`aida list` won't show it)."
+            ),
+        },
+        Some(ArchiveBlock::NonTerminal) => ArchiveGuard::Confirm {
+            reason: format!(
+                "is {status} (not Completed/Rejected). Archive is for the closed long-tail; \
+                 archiving live work hides it from `aida list`."
+            ),
+        },
+    }
 }
 
 fn handle_archive_command(
@@ -18914,10 +18923,10 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
 /// --tree` / `aida list --parent` views from accumulating mixed-status
 /// trees. trace:BUG-64 | ai:claude
 pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
-    matches!(
-        status,
-        RequirementStatus::Completed | RequirementStatus::Rejected
-    )
+    // TASK-741: "terminal" is single-sourced in the lifecycle model so the
+    // archive invariant, the BUG-64 parent guard, and the diagram all read the
+    // same definition. trace:TASK-741 | ai:claude
+    aida_core::lifecycle::State::from_status(status).is_terminal()
 }
 
 /// BUG-249: validate that a `queue move` target is actually movable —
@@ -48552,6 +48561,57 @@ mod statusline_tests {
                     oracle(from, to),
                     "parity mismatch at {from} → {to}"
                 );
+            }
+        }
+    }
+
+    /// TASK-741: exhaustive parity — `archive_guard_decision` (now delegating
+    /// to `lifecycle::archive_invariant_block`) yields the same verdict as the
+    /// pre-migration predicate over every `(status, queued, force)` triple. The
+    /// `--force` override and the two reason wordings (queued-louder vs
+    /// non-terminal) must be byte-identical. trace:TASK-741
+    #[test]
+    fn archive_guard_decision_parity_with_oracle() {
+        use super::{archive_guard_decision, is_terminal_status, ArchiveGuard};
+        use aida_core::models::RequirementStatus as S;
+        // The pre-migration body, verbatim.
+        fn oracle(status: &S, queued: bool, force: bool) -> ArchiveGuard {
+            let non_terminal = !is_terminal_status(status);
+            if force || !(non_terminal || queued) {
+                return ArchiveGuard::Allow;
+            }
+            let reason = if queued {
+                format!(
+                    "is {status} AND in the queue — archiving it leaves the queue pointing at a \
+                     hidden spec (`aida list` won't show it)."
+                )
+            } else {
+                format!(
+                    "is {status} (not Completed/Rejected). Archive is for the closed long-tail; \
+                     archiving live work hides it from `aida list`."
+                )
+            };
+            ArchiveGuard::Confirm { reason }
+        }
+        let all = [
+            S::Draft,
+            S::Approved,
+            S::Planned,
+            S::InProgress,
+            S::Done,
+            S::Completed,
+            S::Rejected,
+            S::NeedsAttention,
+        ];
+        for s in &all {
+            for queued in [false, true] {
+                for force in [false, true] {
+                    assert_eq!(
+                        archive_guard_decision(s, queued, force),
+                        oracle(s, queued, force),
+                        "parity mismatch at status={s} queued={queued} force={force}"
+                    );
+                }
             }
         }
     }

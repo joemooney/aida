@@ -705,16 +705,35 @@ pub(crate) enum DraftPrObservation {
 /// `aida show TASK-715` reported "no PR opened yet"). Given the observed PR
 /// state, return the honest reason. Pure + testable.
 // trace:BUG-493 | ai:claude
+// TASK-741: the held-for-review hold IS the `review:draft-only ⇒ an open draft
+// PR exists` cross-axis invariant, declared as the `BUG-493` row of
+// `aida_core::lifecycle::INVARIANTS`. The forge-specific three-way probe
+// (`DraftPrObservation`) lives here, but whether an observed state SATISFIES the
+// invariant is decided by the model — the `debug_assert`s below pin each
+// determinable arm to `lifecycle::held_for_review_claim_holds`, so the reason
+// wording can never drift away from the rule it claims to enforce.
+// trace:TASK-741 | ai:claude
 pub(crate) fn reconcile_held_for_review(obs: &DraftPrObservation) -> String {
+    use aida_core::lifecycle::held_for_review_claim_holds;
     match obs {
         DraftPrObservation::Open(num) => {
+            debug_assert!(
+                held_for_review_claim_holds(true),
+                "an open draft PR must satisfy the held-for-review invariant"
+            );
             format!("built — held as draft PR #{num} for human review (`review:draft-only`)")
         }
-        DraftPrObservation::NoOpenPr => "built & tagged for draft review (`review:draft-only`), \
+        DraftPrObservation::NoOpenPr => {
+            debug_assert!(
+                !held_for_review_claim_holds(false),
+                "no open PR must violate the held-for-review invariant"
+            );
+            "built & tagged for draft review (`review:draft-only`), \
              but no open PR exists — its draft PR was closed or never opened. \
              Reopen/re-push the PR to review, or drop the tag if it's superseded \
              (`aida show <ID>` shows the branch / PR state)."
-            .to_string(),
+                .to_string()
+        }
         DraftPrObservation::Unverifiable => {
             "tagged for draft review (`review:draft-only`) — could not reach the forge to \
              confirm the draft PR is open; verify with `aida show <ID>`."
@@ -1114,6 +1133,22 @@ mod tests {
         let ulc = unknown_reason.to_lowercase();
         assert!(!ulc.contains("held as a draft pr for human review"));
         assert!(ulc.contains("could not reach") || ulc.contains("verify"));
+    }
+
+    /// TASK-741: the held-for-review reconcile enforces a NAMED cross-axis
+    /// invariant declared in the lifecycle model. Pin that the row exists (so a
+    /// rename/removal in `lifecycle.rs` breaks here, at the consumer) and that
+    /// the model's predicate agrees with each determinable reconcile arm.
+    #[test]
+    fn reconcile_held_for_review_enforces_declared_invariant() {
+        use aida_core::lifecycle::{held_for_review_claim_holds, invariant};
+        let row = invariant("held-for-review-implies-open-draft-pr")
+            .expect("held-for-review invariant is declared in lifecycle::INVARIANTS");
+        assert_eq!(row.origin, "BUG-493");
+        // The Open arm asserts the claim holds; the NoOpenPr arm asserts it is
+        // violated — exactly what the model predicate says.
+        assert!(held_for_review_claim_holds(true));
+        assert!(!held_for_review_claim_holds(false));
     }
 
     #[test]
