@@ -12,12 +12,12 @@ description: |-
   4. Optional: a --verbose flag to list each archived id (the operator's literal ask) — secondary to the throttled tick.
 
   Companion/follow-on to BUG-425 + TASK-616 (both Completed) — same command, the scale case their 'fast commit' assumption skipped.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T12:52:13.457555636Z
-modified_at: 2026-06-11T12:52:13.457555636Z
+modified_at: 2026-06-11T13:43:52.549373030Z
 req_type: Bug
 tags:
 - aida:archive
@@ -25,3 +25,15 @@ tags:
 - from-user-friction
 - papercut
 - ux
+history:
+- id: 019eb6ec-cc76-7242-bed0-a37e5df9a99b
+  author: aida-auto-bump
+  timestamp: 2026-06-11T13:43:52.694728345Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T13:43:52.549373030Z
+  completion_sha: c3929cece6ca569300fbbff81804c94b9bcae5c8
