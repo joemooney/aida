@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:14:29.138108056Z
-modified_at: 2026-06-11T07:04:28.223845185Z
+modified_at: 2026-06-11T07:04:48.370164074Z
 req_type: Spike
 tags:
 - aida:cli
@@ -37,4 +37,12 @@ relationships:
 - rel_type: Parent
   target_id: 019eb57f-58b4-70d3-be4f-76737abb4c6f
   created_at: 2026-06-11T07:04:45.489940600Z
+comments:
+- id: 019eb57f-707c-7772-8d6d-e85a115d3d5b
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-10-skill-cli-symmetry-audit.md
+    filed 3 task(s): TASK-734, TASK-735, TASK-736
+  created_at: 2026-06-11T07:04:48.508467713Z
+  modified_at: 2026-06-11T07:04:48.508467713Z
 human_only: true
