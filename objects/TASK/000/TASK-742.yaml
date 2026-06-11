@@ -1,0 +1,12 @@
+id: 019eb580-0822-7441-909f-c3b72efa5be7
+spec_id: TASK-742
+agreed_id: TASK-742
+title: 'Phase 3: `aida lifecycle --empirical --diff` — reconstruct the observed machine from `history:` arrays (TASK-121) and diff against the declared table'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-11T07:05:27.330199411Z
+modified_at: 2026-06-11T07:05:27.330199411Z
+req_type: Task
