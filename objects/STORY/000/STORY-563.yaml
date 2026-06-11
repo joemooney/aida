@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T15:11:07.054062245Z
-modified_at: 2026-06-11T15:11:07.054062245Z
+modified_at: 2026-06-11T15:28:15.162221518Z
 req_type: Story
 tags:
 - aida:backlog
@@ -25,3 +25,9 @@ tags:
 - discoverability
 - operator-tooling
 - ux
+comments:
+- id: 019eb74c-5b3a-7300-9ed3-22b185983aff
+  author: joe
+  content: Commit c76abb970 references this requirement
+  created_at: 2026-06-11T15:28:15.162221518Z
+  modified_at: 2026-06-11T15:28:15.162221518Z
