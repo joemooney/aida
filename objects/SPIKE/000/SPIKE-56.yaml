@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:19:20.621280998Z
-modified_at: 2026-06-11T07:04:51.540960336Z
+modified_at: 2026-06-11T07:05:34.348210877Z
 req_type: Spike
 tags:
 - aida:lifecycle
@@ -50,4 +50,11 @@ comments:
   content: Commit d0193a29d references this requirement
   created_at: 2026-06-11T06:48:21.836717925Z
   modified_at: 2026-06-11T06:48:21.836717925Z
+- id: 019eb580-242f-7062-9e32-686de56fbf43
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-10-aida-lifecycle-model.md
+    filed 6 task(s): TASK-737, TASK-738, TASK-739, TASK-740, TASK-741, TASK-742
+  created_at: 2026-06-11T07:05:34.511901750Z
+  modified_at: 2026-06-11T07:05:34.511901750Z
 human_only: true
