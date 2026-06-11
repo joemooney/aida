@@ -20,7 +20,7 @@
 //! trace:STORY-106 | ai:claude
 
 use colored::Colorize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Resolve whether workflow hints should print. Order of precedence:
 ///   1. `AIDA_HINTS=false` (or `0`, `no`, `off`) → disabled
@@ -329,6 +329,148 @@ pub fn queue_done_precheck_error(
         display_id
     );
     Some(vec![summary, action, bypass])
+}
+
+/// TASK-500: the resolved outcome of the `aida queue done` PR-check gate.
+/// Extracted from the inline match-tree in `QueueCommand::Done`'s handler
+/// so the whole decision can be exercised in isolation — every skip path,
+/// the refusal, and the proceed — without a real git/gh environment.
+///
+/// The caller maps each variant to its I/O: `Refuse` → print lines + exit 1,
+/// `SilentSkip` → print the warning line, `Proceed` → do nothing.
+/// trace:TASK-500 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueueDoneGateDiagnose {
+    /// All conditions resolved; the gate decided to refuse with these error lines.
+    Refuse(Vec<String>),
+    /// All conditions resolved; the gate decided to proceed (no commits ahead,
+    /// PR already open, or PR state unknown so we never assert "no PR").
+    Proceed,
+    /// A condition could not be resolved; the gate skipped with a warning reason.
+    /// The caller prints `warning_line` to stderr and proceeds.
+    SilentSkip {
+        reason: SkipReason,
+        warning_line: String,
+    },
+}
+
+/// TASK-500: which precondition could not be resolved, so the gate skipped.
+/// One variant per `if let`/`match` arm in the original inline tree, so a
+/// test can assert the right warning fires for each failure mode.
+/// trace:TASK-500 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkipReason {
+    /// `find_project_root` failed — no `.aida/` anchor to resolve git from.
+    ProjectRootNotFound,
+    /// The current branch couldn't be read at the project root.
+    BranchUndetectable,
+    /// `rev-list` against `origin/main` failed (and the branch wasn't the
+    /// intentional `main`/`HEAD` no-op skip), so commits-ahead is unknown.
+    CommitsAheadFailed,
+    /// The forge change-lookup couldn't confirm PR state (`gh` missing /
+    /// unauthenticated / unreachable). The gate proceeds, but warns first.
+    GhUnknown,
+}
+
+/// TASK-500: pure decision for the `aida queue done` PR-check gate. Mirrors
+/// the inline tree that used to live in `QueueCommand::Done`'s handler but
+/// with the I/O dependencies injected as closures, so every branch is unit-
+/// testable without a real git/gh environment.
+///
+/// Resolution order (each step can short-circuit to a `SilentSkip`):
+///   1. `project_root` — `Err` → `SilentSkip { ProjectRootNotFound }`.
+///   2. `branch_at_root` — `None` → `SilentSkip { BranchUndetectable }`.
+///   3. `commits_ahead_of_main` — `None` for a non-`main`/`HEAD` branch →
+///      `SilentSkip { CommitsAheadFailed }`. `None` for `main`/`HEAD` is the
+///      intentional no-op skip and yields `Proceed` silently.
+///   4. commits-ahead `== 0` → `Proceed` (nothing to ship).
+///   5. otherwise look up the PR via `pr_lookup_for_branch`:
+///      - `PrState::Unknown` → `SilentSkip { GhUnknown }` (warn, then the
+///        caller proceeds — we never assert "no PR" on guesswork);
+///      - else delegate to [`queue_done_precheck_error`]: `Some(lines)` →
+///        `Refuse(lines)`, `None` → `Proceed`.
+///
+/// No behavior change vs the inline tree (PR-242): same warnings, same
+/// refusals. The closures let the caller keep using the real
+/// `find_project_root` / `current_branch_at` / `branch_commits_ahead_main` /
+/// `change_lookup_for_branch` helpers while tests inject fakes.
+/// trace:TASK-500 | ai:claude
+pub fn queue_done_precheck_diagnose(
+    display_id: &str,
+    project_root: anyhow::Result<PathBuf>,
+    branch_at_root: impl FnOnce(&Path) -> Option<String>,
+    commits_ahead_of_main: impl FnOnce(&Path, &str) -> Option<u32>,
+    pr_lookup_for_branch: impl FnOnce(&Path, &str) -> PrState,
+) -> QueueDoneGateDiagnose {
+    let project_root = match project_root {
+        Err(e) => {
+            return QueueDoneGateDiagnose::SilentSkip {
+                reason: SkipReason::ProjectRootNotFound,
+                warning_line: format!(
+                    "{} queue-done PR-check skipped: find_project_root failed ({}). \
+                     Gate did not fire; recovery responsibility is on the operator.",
+                    "warning:".yellow().bold(),
+                    e
+                ),
+            };
+        }
+        Ok(root) => root,
+    };
+
+    let branch = match branch_at_root(&project_root) {
+        None => {
+            return QueueDoneGateDiagnose::SilentSkip {
+                reason: SkipReason::BranchUndetectable,
+                warning_line: format!(
+                    "{} queue-done PR-check skipped: current_branch_at returned None \
+                     in {}. Gate did not fire.",
+                    "warning:".yellow().bold(),
+                    project_root.display()
+                ),
+            };
+        }
+        Some(branch) => branch,
+    };
+
+    let commits_ahead = commits_ahead_of_main(&project_root, &branch);
+    // `commits_ahead` is None when the branch is `main`/`HEAD` (intentional
+    // skip — proceed silently) OR when rev-list itself failed (warn).
+    if commits_ahead.is_none() {
+        if branch != "main" && branch != "HEAD" {
+            return QueueDoneGateDiagnose::SilentSkip {
+                reason: SkipReason::CommitsAheadFailed,
+                warning_line: format!(
+                    "{} queue-done PR-check skipped: branch_commits_ahead_main \
+                     returned None for branch `{}` (rev-list failed or origin/main \
+                     unresolved). Gate did not fire.",
+                    "warning:".yellow().bold(),
+                    branch
+                ),
+            };
+        }
+        return QueueDoneGateDiagnose::Proceed;
+    }
+
+    if commits_ahead.unwrap_or(0) == 0 {
+        return QueueDoneGateDiagnose::Proceed;
+    }
+
+    let pr_state = pr_lookup_for_branch(&project_root, &branch);
+    if matches!(pr_state, PrState::Unknown) {
+        return QueueDoneGateDiagnose::SilentSkip {
+            reason: SkipReason::GhUnknown,
+            warning_line: format!(
+                "{} queue-done PR-check proceeding without `gh` confirmation \
+                 (lookup unknown). Gate may not fire if PR actually missing.",
+                "warning:".yellow().bold()
+            ),
+        };
+    }
+
+    match queue_done_precheck_error(display_id, commits_ahead, pr_state) {
+        Some(lines) => QueueDoneGateDiagnose::Refuse(lines),
+        None => QueueDoneGateDiagnose::Proceed,
+    }
 }
 
 /// Hint after `queue done` (or any other op that just emptied the queue
@@ -844,5 +986,175 @@ mod tests {
         // duplicate, never a contradiction. Verify they compose cleanly.
         assert!(queue_done_should_bypass_pr_check(false, true, true));
         assert!(queue_done_should_bypass_pr_check(true, true, true));
+    }
+
+    // TASK-500: the diagnose function resolves the whole gate tree from
+    // injected closures, so each skip path / refusal / proceed is exercised
+    // here with no real git/gh. Helpers fabricate the closure inputs.
+
+    fn root_ok() -> anyhow::Result<PathBuf> {
+        Ok(PathBuf::from("/tmp/fake-project"))
+    }
+
+    // SkipReason::ProjectRootNotFound — find_project_root failed.
+    #[test]
+    fn diagnose_skips_when_project_root_not_found() {
+        let result = queue_done_precheck_diagnose(
+            "BUG-249",
+            Err(anyhow::anyhow!("no .aida anchor")),
+            |_| panic!("branch lookup must not run when root resolution failed"),
+            |_, _| panic!("commits-ahead must not run"),
+            |_, _| panic!("pr lookup must not run"),
+        );
+        match result {
+            QueueDoneGateDiagnose::SilentSkip {
+                reason,
+                warning_line,
+            } => {
+                assert_eq!(reason, SkipReason::ProjectRootNotFound);
+                assert!(warning_line.contains("find_project_root failed"));
+                assert!(warning_line.contains("no .aida anchor"));
+            }
+            other => panic!("expected SilentSkip(ProjectRootNotFound), got {other:?}"),
+        }
+    }
+
+    // SkipReason::BranchUndetectable — current branch couldn't be read.
+    #[test]
+    fn diagnose_skips_when_branch_undetectable() {
+        let result = queue_done_precheck_diagnose(
+            "BUG-249",
+            root_ok(),
+            |_| None,
+            |_, _| panic!("commits-ahead must not run when branch is undetectable"),
+            |_, _| panic!("pr lookup must not run"),
+        );
+        match result {
+            QueueDoneGateDiagnose::SilentSkip {
+                reason,
+                warning_line,
+            } => {
+                assert_eq!(reason, SkipReason::BranchUndetectable);
+                assert!(warning_line.contains("current_branch_at returned None"));
+            }
+            other => panic!("expected SilentSkip(BranchUndetectable), got {other:?}"),
+        }
+    }
+
+    // SkipReason::CommitsAheadFailed — rev-list failed on a real branch.
+    #[test]
+    fn diagnose_skips_when_commits_ahead_failed() {
+        let result = queue_done_precheck_diagnose(
+            "BUG-249",
+            root_ok(),
+            |_| Some("feature-x".to_string()),
+            |_, _| None,
+            |_, _| panic!("pr lookup must not run when commits-ahead is unknown"),
+        );
+        match result {
+            QueueDoneGateDiagnose::SilentSkip {
+                reason,
+                warning_line,
+            } => {
+                assert_eq!(reason, SkipReason::CommitsAheadFailed);
+                assert!(warning_line.contains("branch_commits_ahead_main"));
+                assert!(warning_line.contains("feature-x"));
+            }
+            other => panic!("expected SilentSkip(CommitsAheadFailed), got {other:?}"),
+        }
+    }
+
+    // commits-ahead None on `main`/`HEAD` is the intentional no-op skip:
+    // proceed silently, NOT a CommitsAheadFailed warning.
+    #[test]
+    fn diagnose_proceeds_silently_on_main_branch() {
+        for branch in ["main", "HEAD"] {
+            let result = queue_done_precheck_diagnose(
+                "BUG-249",
+                root_ok(),
+                |_| Some(branch.to_string()),
+                |_, _| None,
+                |_, _| panic!("pr lookup must not run on main/HEAD"),
+            );
+            assert_eq!(
+                result,
+                QueueDoneGateDiagnose::Proceed,
+                "branch {branch} should proceed silently"
+            );
+        }
+    }
+
+    // SkipReason::GhUnknown — forge lookup couldn't confirm PR state; warn,
+    // then the caller proceeds (we never assert "no PR" on guesswork).
+    #[test]
+    fn diagnose_skips_when_gh_unknown() {
+        let result = queue_done_precheck_diagnose(
+            "BUG-249",
+            root_ok(),
+            |_| Some("feature-x".to_string()),
+            |_, _| Some(2),
+            |_, _| PrState::Unknown,
+        );
+        match result {
+            QueueDoneGateDiagnose::SilentSkip {
+                reason,
+                warning_line,
+            } => {
+                assert_eq!(reason, SkipReason::GhUnknown);
+                assert!(warning_line.contains("without `gh` confirmation"));
+            }
+            other => panic!("expected SilentSkip(GhUnknown), got {other:?}"),
+        }
+    }
+
+    // Refuse — commits ahead AND forge confirmed no open PR. The lines are
+    // exactly queue_done_precheck_error's, so they compose with its tests.
+    #[test]
+    fn diagnose_refuses_when_commits_ahead_and_no_pr() {
+        let result = queue_done_precheck_diagnose(
+            "BUG-249",
+            root_ok(),
+            |_| Some("feature-x".to_string()),
+            |_, _| Some(1),
+            |_, _| PrState::Absent,
+        );
+        match result {
+            QueueDoneGateDiagnose::Refuse(lines) => {
+                assert_eq!(
+                    lines,
+                    queue_done_precheck_error("BUG-249", Some(1), PrState::Absent).unwrap(),
+                    "Refuse lines must match queue_done_precheck_error verbatim"
+                );
+                assert!(lines[0].contains("BUG-249 has 1 local commit but no open PR"));
+            }
+            other => panic!("expected Refuse, got {other:?}"),
+        }
+    }
+
+    // Proceed — commits ahead but a PR is already open.
+    #[test]
+    fn diagnose_proceeds_when_pr_open() {
+        let result = queue_done_precheck_diagnose(
+            "BUG-249",
+            root_ok(),
+            |_| Some("feature-x".to_string()),
+            |_, _| Some(3),
+            |_, _| PrState::Open(42),
+        );
+        assert_eq!(result, QueueDoneGateDiagnose::Proceed);
+    }
+
+    // Proceed — branch is level with main (zero commits ahead), so there's
+    // nothing to ship; the PR lookup is never consulted.
+    #[test]
+    fn diagnose_proceeds_when_no_commits_ahead() {
+        let result = queue_done_precheck_diagnose(
+            "BUG-249",
+            root_ok(),
+            |_| Some("feature-x".to_string()),
+            |_, _| Some(0),
+            |_, _| panic!("pr lookup must not run when nothing is ahead"),
+        );
+        assert_eq!(result, QueueDoneGateDiagnose::Proceed);
     }
 }

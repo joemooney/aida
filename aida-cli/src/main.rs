@@ -88126,81 +88126,42 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let bypass_pr_check =
                 workflow_hints::queue_done_should_bypass_pr_check(*yes, *force, *skip_pr_check);
             if !bypass_pr_check {
-                // BUG-360: each `if let` below is a silent-skip path that
-                // could mask the BUG-269 gate's failure to fire (TASK-489
-                // empirical case 2026-05-23). Emit diagnostic warnings on
-                // every skip path so future bypasses leave a trace in the
-                // headless log / cast / stderr — operator can identify
-                // WHICH condition failed without re-instrumenting.
-                // trace:BUG-360 | ai:claude
-                match find_project_root() {
-                    Err(e) => {
-                        eprintln!(
-                            "{} queue-done PR-check skipped: find_project_root failed ({}). \
-                             Gate did not fire; recovery responsibility is on the operator.",
-                            "warning:".yellow().bold(),
-                            e
-                        );
-                    }
-                    Ok(project_root) => match current_branch_at(&project_root) {
-                        None => {
-                            eprintln!(
-                                "{} queue-done PR-check skipped: current_branch_at returned None \
-                                 in {}. Gate did not fire.",
-                                "warning:".yellow().bold(),
-                                project_root.display()
-                            );
-                        }
-                        Some(branch) => {
-                            let commits_ahead = branch_commits_ahead_main(&project_root, &branch);
-                            // commits_ahead is None when branch is "main" / "HEAD" (intentional
-                            // skip) OR when rev-list itself failed. The intentional case is
-                            // silent; the failure case warns.
-                            if commits_ahead.is_none() && branch != "main" && branch != "HEAD" {
-                                eprintln!(
-                                    "{} queue-done PR-check skipped: branch_commits_ahead_main \
-                                     returned None for branch `{}` (rev-list failed or origin/main \
-                                     unresolved). Gate did not fire.",
-                                    "warning:".yellow().bold(),
-                                    branch
-                                );
-                            }
-                            if commits_ahead.unwrap_or(0) > 0 {
-                                // STORY-516: forge-routed. trace:STORY-516 | ai:claude
-                                let pr_state = match change_lookup_for_branch(
-                                    &project_root,
-                                    &branch,
-                                ) {
-                                    crate::forge::ChangeLookup::Found(c) => {
-                                        workflow_hints::PrState::Open(c.id)
-                                    }
-                                    crate::forge::ChangeLookup::NoChange => {
-                                        workflow_hints::PrState::Absent
-                                    }
-                                    crate::forge::ChangeLookup::CliMissing
-                                    | crate::forge::ChangeLookup::CliFailed(_)
-                                    | crate::forge::ChangeLookup::Unreachable(_) => {
-                                        eprintln!(
-                                            "{} queue-done PR-check proceeding without `gh` confirmation \
-                                             (lookup unknown). Gate may not fire if PR actually missing.",
-                                            "warning:".yellow().bold()
-                                        );
-                                        workflow_hints::PrState::Unknown
-                                    }
-                                };
-                                if let Some(lines) = workflow_hints::queue_done_precheck_error(
-                                    display_id,
-                                    commits_ahead,
-                                    pr_state,
-                                ) {
-                                    for line in &lines {
-                                        eprintln!("{}", line);
-                                    }
-                                    std::process::exit(1);
-                                }
-                            }
+                // BUG-360 / TASK-500: the gate's decision tree is now a pure
+                // `queue_done_precheck_diagnose` (workflow_hints) with the
+                // git/gh lookups injected as closures, so every skip path,
+                // the refusal, and the proceed are unit-testable in isolation.
+                // Each silent-skip path still emits a diagnostic warning so a
+                // future bypass leaves a trace in the headless log / cast /
+                // stderr — the operator can identify WHICH condition failed
+                // without re-instrumenting. The closure mapping ChangeLookup →
+                // PrState keeps the gate forge-routed (STORY-516).
+                // trace:TASK-500 BUG-360 STORY-516 | ai:claude
+                let diagnose = workflow_hints::queue_done_precheck_diagnose(
+                    display_id,
+                    find_project_root(),
+                    |root| current_branch_at(root),
+                    |root, branch| branch_commits_ahead_main(root, branch),
+                    |root, branch| match change_lookup_for_branch(root, branch) {
+                        crate::forge::ChangeLookup::Found(c) => workflow_hints::PrState::Open(c.id),
+                        crate::forge::ChangeLookup::NoChange => workflow_hints::PrState::Absent,
+                        crate::forge::ChangeLookup::CliMissing
+                        | crate::forge::ChangeLookup::CliFailed(_)
+                        | crate::forge::ChangeLookup::Unreachable(_) => {
+                            workflow_hints::PrState::Unknown
                         }
                     },
+                );
+                match diagnose {
+                    workflow_hints::QueueDoneGateDiagnose::Refuse(lines) => {
+                        for line in &lines {
+                            eprintln!("{}", line);
+                        }
+                        std::process::exit(1);
+                    }
+                    workflow_hints::QueueDoneGateDiagnose::SilentSkip { warning_line, .. } => {
+                        eprintln!("{}", warning_line);
+                    }
+                    workflow_hints::QueueDoneGateDiagnose::Proceed => {}
                 }
             } else {
                 // BUG-285: an opt-in bypass should NEVER be silent — the
