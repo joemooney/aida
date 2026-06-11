@@ -15,12 +15,12 @@ description: |-
   2. Sweep EXCLUDES specs already at/past Done, carrying review:draft-only, or holding an active lease (work built/in-flight — acceptance is moot). After (1)+(2) the flag fires only on genuinely-implementable, not-yet-built specs.
   3. The footer names WHAT --apply writes and its effect: e.g. 'attach a DecisionRequest (parks the spec from the burndown until answered) — re-run with --apply'. No implication that it generates or fixes acceptance.
   4. The output points at the ACTUAL resolution for missing acceptance ('add a ## Acceptance section to the spec'), distinct from --apply.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T06:27:41.859376916Z
-modified_at: 2026-06-11T06:27:41.859376916Z
+modified_at: 2026-06-11T07:03:55.124170767Z
 req_type: Bug
 tags:
 - aida:questions
@@ -28,3 +28,15 @@ tags:
 - misleading-output
 - papercut
 - severity:minor
+history:
+- id: 019eb57e-a07d-77b0-9e8a-a764d1c6d4b1
+  author: aida-reconcile
+  timestamp: 2026-06-11T07:03:55.261265457Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-11T07:03:55.124170767Z
+  completion_sha: 39d3503a8a43bc7988240142e06543bf9bd9e510
