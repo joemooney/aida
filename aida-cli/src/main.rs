@@ -871,6 +871,33 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
+    // Tiered help: bare `aida` and `aida help` LEAD with a small curated
+    // "Getting started" set + a teaser of the grouped surface, so a newcomer
+    // sees an approachable path instead of a flat 40-command clap dump. The
+    // full grouped inventory is one step away via `aida help --all` (or the
+    // legacy `aida help-all`). Intercepting here is required because bare
+    // `aida` otherwise fails clap parsing (subcommand required → exit 2).
+    // trace:STORY-556
+    {
+        let first = raw_args.get(1).map(String::as_str);
+        // Args after the `help` verb (empty for bare `aida`).
+        let rest = raw_args.get(2..).unwrap_or(&[]);
+        // `aida help` (clap's builtin help verb) with no further positional —
+        // optionally `--all`. `aida --help` / `aida -h` keep clap's own flag
+        // help (a deliberate escape hatch to the raw flag-level usage).
+        let is_help_verb = first == Some("help") && rest.iter().all(|a| a == "--all" || a == "-a");
+        let is_bare = raw_args.len() == 1;
+        if is_help_verb || is_bare {
+            let want_all = rest.iter().any(|a| a == "--all" || a == "-a");
+            if want_all {
+                print_help_all();
+            } else {
+                print_tiered_help();
+            }
+            return Ok(());
+        }
+    }
+
     let mut cli = Cli::parse();
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
@@ -64338,77 +64365,123 @@ fn handle_ultraplan_command(
     Ok(())
 }
 
-fn print_help_all() {
-    let groups: &[(&str, &[(&str, &str)])] = &[
+/// The curated "Getting started" set — the core spec loop a newcomer needs to
+/// be productive on day one. Kept deliberately short so the default help reads
+/// as approachable, not as a 40-command wall. trace:STORY-556
+const GETTING_STARTED: &[(&str, &str)] = &[
+    ("init", "Set up AIDA in the current project"),
+    ("add", "Add a new requirement"),
+    ("list", "List requirements"),
+    ("show", "Show details for one requirement"),
+    ("done", "Mark a spec done — the simple \"I finished it\""),
+];
+
+/// The full grouped command surface, organized by function. Used by both the
+/// tiered help (group headings only, no command rows) and `aida help --all`
+/// (every row). Dev-only / orchestrator-internal commands live in their own
+/// trailing section so they stay out of the novice's eyeline. trace:STORY-556
+fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'static str)])] {
+    &[
         (
-            "Daily use",
+            "Getting started",
             &[
+                ("init", "Set up AIDA in the current project"),
                 ("add", "Add a new requirement"),
-                ("list", "List all requirements"),
-                ("show", "Show details for a specific requirement"),
+                ("list", "List requirements"),
+                ("show", "Show details for one requirement"),
+                ("done", "Mark a spec done — the simple \"I finished it\""),
+            ],
+        ),
+        (
+            "Specs",
+            &[
                 ("edit", "Edit an existing requirement"),
                 ("del", "Delete a requirement"),
-                (
-                    "search",
-                    "Simple search for requirements (case-insensitive)",
-                ),
+                ("search", "Search requirements (case-insensitive)"),
+                ("grep", "Advanced regex search across requirements"),
                 ("comment", "Manage comments on requirements"),
-                (
-                    "status",
-                    "Show this project's status (storage, counts, sync, recent activity)",
-                ),
-            ],
-        ),
-        (
-            "Project lifecycle",
-            &[
-                ("init", "Initialize AIDA in the current project"),
-                ("upgrade", "Upgrade aida to the latest release"),
-                ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
-                ("plan", "Verify plans + derive reusable-helper sections"),
-                (
-                    "ultraplan",
-                    "Assemble a rich /ultraplan prompt from a spec's context",
-                ),
-            ],
-        ),
-        (
-            "Requirements graph",
-            &[
-                ("rel", "Relationship management commands"),
-                ("rel-def", "Relationship-type definitions"),
+                ("graph", "Query the cross-spec relationship graph"),
+                ("rel", "Relationship management"),
                 ("trace", "Code-to-requirement traceability"),
-                ("queue", "Personal work queue"),
+                ("archive", "Hide a requirement from default views"),
+                ("unarchive", "Restore an archived requirement"),
+                ("lint", "EARS-style requirement quality lens"),
             ],
         ),
         (
-            "Configuration & metadata",
+            "Work & autonomy",
             &[
+                ("queue", "Personal work queue"),
+                ("backlog", "Backlog grooming views"),
+                ("rework", "Send a spec back for rework"),
+                ("burndown", "Autonomous backlog burn-down"),
+                ("findings", "Triage findings filed by drain phases"),
+                ("punt", "Pause a spec at a design-fork"),
+                ("questions", "The async decision inbox"),
+                ("brief", "Route work to an agent via a pickup brief"),
+                ("agent", "Supervised agent launcher"),
+                ("triage", "Triage incoming work"),
+            ],
+        ),
+        (
+            "Git & lifecycle",
+            &[
+                ("fetch", "Refresh remote refs (read-only)"),
+                ("pull", "Pull code + store; auto-bump done → completed"),
+                ("push", "Push code + store"),
+                ("rebase", "Rebase code + store"),
+                ("pr", "Pull-request helpers"),
+                ("review", "Send a held spec for human review"),
+                ("release", "Manage a release"),
+                ("changelog", "Refresh / generate CHANGELOG.md"),
+                ("upgrade", "Upgrade aida to the latest release"),
+            ],
+        ),
+        (
+            "Planning",
+            &[
+                ("plan", "Verify plans + derive reusable-helper sections"),
+                ("ultraplan", "Assemble a rich /ultraplan prompt from a spec"),
+                ("import-plan", "Import a saved plan under docs/plans/"),
+                ("goal", "Derive a machine-checkable /goal condition"),
+                ("deps", "Dependency views + trace sweep"),
+            ],
+        ),
+        (
+            "Roles & sessions",
+            &[
+                ("role", "Per-shell role identity (advisor / implementer)"),
+                ("session", "Work sessions + worktree leases"),
+                ("mailbox", "Inter-agent peer↔peer messaging"),
+                ("node", "Per-clone node identity"),
+                ("advisor", "Live-advisor registration"),
+            ],
+        ),
+        (
+            "Project setup",
+            &[
+                ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
                 ("config", "ID configuration (prefixes, formats, etc.)"),
                 ("type", "Requirement-type management"),
                 ("feature", "Feature management"),
-            ],
-        ),
-        (
-            "Storage management",
-            &[
-                (
-                    "db",
-                    "Database management commands (migrate, sync, merge-gate, etc.)",
-                ),
-                (
-                    "cache",
-                    "SQLite cache view (rebuild, status) — git-canonical mode only",
-                ),
-            ],
-        ),
-        (
-            "Data exchange",
-            &[
-                ("export", "Export requirements to different formats"),
+                ("memories", "Starter memory-pack drift check"),
+                ("docs", "Project documentation management"),
+                ("statusline", "AIDA-aware statusline setup"),
+                ("export", "Export requirements"),
                 ("import", "Import requirements from a tree JSON file"),
-                ("grep", "Advanced regex search across requirements"),
+            ],
+        ),
+        (
+            "Reporting",
+            &[
+                ("status", "Where am I right now — unified project view"),
+                ("history", "Recent activity"),
                 ("report", "Report generation"),
+                ("digest", "Narrative advisor report"),
+                ("usage", "Inspect locally-recorded CLI usage"),
+                ("metrics", "Agent-lift metrics over telemetry"),
+                ("why", "Explain a spec's current state"),
+                ("user-guide", "Open the user guide in the default browser"),
             ],
         ),
         (
@@ -64422,20 +64495,69 @@ fn print_help_all() {
             ],
         ),
         (
-            "AIDA development (working on aida itself)",
+            "Storage & data",
+            &[
+                ("db", "Database management (migrate, sync, merge-gate)"),
+                ("cache", "SQLite cache view (rebuild, status)"),
+            ],
+        ),
+        (
+            "Working on aida itself",
             &[
                 (
                     "dev",
                     "Activate dev binary, run dev servers, install shell helpers",
                 ),
-                ("help-all", "This command — full inventory grouped by topic"),
+                (
+                    "help-all",
+                    "Full inventory grouped by topic (same as `help --all`)",
+                ),
             ],
         ),
-        (
-            "Misc",
-            &[("user-guide", "Open the user guide in the default browser")],
-        ),
-    ];
+    ]
+}
+
+/// Bare `aida` and `aida help`: lead with the small "Getting started" set, then
+/// list the group headings so the depth is visible but not in the newcomer's
+/// face. Full rows are one step away via `aida help --all`. trace:STORY-556
+fn print_tiered_help() {
+    println!(
+        "{}",
+        "AIDA — AI-native requirements management for agent-readable specs".bold()
+    );
+    println!();
+    println!("{}", "Usage: aida <command> [options]".dimmed());
+    println!();
+
+    println!("{}", "Getting started".cyan().bold());
+    for (name, desc) in GETTING_STARTED {
+        println!("  {:<10} {}", name.green(), desc);
+    }
+    println!();
+
+    println!("{}", "More, grouped by topic".cyan().bold());
+    // Skip "Getting started" (already shown above) and the dev-only group.
+    for (group, _cmds) in command_groups()
+        .iter()
+        .filter(|(g, _)| *g != "Getting started" && *g != "Working on aida itself")
+    {
+        println!("  {}", group.green());
+    }
+    println!();
+
+    println!(
+        "Run {} for the full command list, or {} for one command's options.",
+        "`aida help --all`".bold(),
+        "`aida <command> --help`".bold()
+    );
+    println!(
+        "{} is the best entry point for \"what's going on here?\"",
+        "`aida status`".bold()
+    );
+}
+
+fn print_help_all() {
+    let groups = command_groups();
 
     println!(
         "{}",
@@ -64450,12 +64572,73 @@ fn print_help_all() {
         println!();
     }
     println!(
-        "Default `aida --help` shows only the daily-use subset. {}",
+        "Bare `aida` / `aida help` shows the curated Getting-started view. {}",
         "Tip:".bold()
     );
     println!("  - `aida <topic> --help` works for any command, even hidden ones");
     println!("  - `aida status` is the best entry point for \"what's going on here?\"");
     println!("  - `aida dev shell-init --install` to wire up the `aida` shell wrapper");
+}
+
+#[cfg(test)]
+mod help_grouping_tests {
+    use super::*;
+
+    // trace:STORY-556 | ai:claude
+    #[test]
+    fn getting_started_is_the_curated_core_loop() {
+        let names: Vec<&str> = GETTING_STARTED.iter().map(|(n, _)| *n).collect();
+        assert_eq!(names, ["init", "add", "list", "show", "done"]);
+    }
+
+    // trace:STORY-556 | ai:claude
+    #[test]
+    fn command_groups_cover_the_acceptance_headings() {
+        let headings: Vec<&str> = command_groups().iter().map(|(g, _)| *g).collect();
+        for required in [
+            "Getting started",
+            "Specs",
+            "Work & autonomy",
+            "Git & lifecycle",
+            "Planning",
+            "Roles & sessions",
+            "Project setup",
+            "Reporting",
+        ] {
+            assert!(
+                headings.contains(&required),
+                "missing required help heading: {required}"
+            );
+        }
+    }
+
+    // trace:STORY-556 | ai:claude — dev/internal stays out of the novice view.
+    #[test]
+    fn dev_commands_are_not_in_getting_started() {
+        let names: Vec<&str> = GETTING_STARTED.iter().map(|(n, _)| *n).collect();
+        assert!(!names.contains(&"dev"));
+        assert!(!names.contains(&"help-all"));
+        assert!(!names.contains(&"orchestrator"));
+    }
+
+    // trace:STORY-556 | ai:claude — no SPEC-IDs leak into any help row text.
+    #[test]
+    fn no_spec_ids_in_help_text() {
+        let leak = |s: &str| {
+            ["STORY-", "TASK-", "BUG-", "SPIKE-", "EPIC-", "FR-"]
+                .iter()
+                .any(|p| s.contains(p))
+        };
+        for (group, cmds) in command_groups() {
+            assert!(!leak(group), "spec-id in group heading: {group}");
+            for (name, desc) in *cmds {
+                assert!(!leak(name) && !leak(desc), "spec-id in help row: {name}");
+            }
+        }
+        for (name, desc) in GETTING_STARTED {
+            assert!(!leak(name) && !leak(desc));
+        }
+    }
 }
 
 fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
