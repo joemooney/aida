@@ -5434,6 +5434,17 @@ pub enum Command {
         // trace:TASK-743 | ai:claude
         #[clap(long, visible_alias = "ids-only", visible_alias = "quiet", short = 'q', conflicts_with_all = ["json", "tree"])]
         short: bool,
+
+        /// The "what needs me?" view: every OPEN spec needing a human nudge,
+        /// grouped by reason — held-for-review, awaiting-decision, drafts to
+        /// approve, NeedsAttention to triage. Excludes the self-resolving rest
+        /// (in-flight, deferred, awaiting-merge, long-lived, actionable). Reuses
+        /// the `aida burndown explain` classifier as the single source of truth.
+        /// Also reachable as the positional alias `aida list human`. Composes
+        /// with `--short` (prints just the IDs).
+        // trace:STORY-562 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, conflicts_with_all = ["json", "tree", "status"])]
+        human: bool,
     },
 
     /// Show details for a specific requirement
@@ -7954,5 +7965,52 @@ mod tests {
             }
             other => panic!("expected List, got {other:?}"),
         }
+    }
+
+    // trace:STORY-562 — `aida list human` parses as the positional shortcut and
+    // `aida list --human` sets the flag; both route to the human-attention view.
+    #[test]
+    fn list_human_positional_and_flag_parse() {
+        let cli = Cli::try_parse_from(["aida", "list", "human"]).unwrap();
+        match cli.command {
+            Command::List {
+                shortcut, human, ..
+            } => {
+                assert_eq!(shortcut.as_deref(), Some("human"));
+                assert!(!human);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        let cli = Cli::try_parse_from(["aida", "list", "--human"]).unwrap();
+        match cli.command {
+            Command::List {
+                shortcut, human, ..
+            } => {
+                assert_eq!(shortcut, None);
+                assert!(human);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // Composes with `--short`.
+        let cli = Cli::try_parse_from(["aida", "list", "human", "--short"]).unwrap();
+        match cli.command {
+            Command::List {
+                shortcut,
+                human,
+                short,
+                ..
+            } => {
+                assert_eq!(shortcut.as_deref(), Some("human"));
+                assert!(!human);
+                assert!(short);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // `--human` conflicts with `--status` / `--json` / `--tree` at the clap layer.
+        assert!(Cli::try_parse_from(["aida", "list", "--human", "--json"]).is_err());
+        assert!(Cli::try_parse_from(["aida", "list", "--human", "--status", "draft"]).is_err());
     }
 }

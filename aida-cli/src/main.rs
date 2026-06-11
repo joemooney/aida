@@ -9724,8 +9724,33 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_flow,
             no_glyph,
             short,
+            human,
             ..
         } => {
+            // STORY-562: `aida list human` (positional alias) and `aida list
+            // --human` both resolve to the "what needs me?" view — every open
+            // spec the `burndown explain` classifier flags as needing a human
+            // nudge, grouped by reason. Detect it BEFORE the status-shortcut
+            // expansion so the positional `human` token isn't rejected as an
+            // unknown status. Composes with `--short` (ids-only). trace:STORY-562
+            let want_human = *human
+                || shortcut
+                    .as_deref()
+                    .map(|s| s.eq_ignore_ascii_case("human"))
+                    .unwrap_or(false);
+            if want_human {
+                if let Some(s) = status.as_deref() {
+                    anyhow::bail!(
+                        "`aida list human` is the human-attention view, not a status \
+                         filter — drop `--status {s}`. (Use plain `aida list --status \
+                         {s}` for a status listing.)"
+                    );
+                }
+                if *sync {
+                    maybe_sync_pull(store_path)?;
+                }
+                return handle_list_human(*short);
+            }
             // TASK-0415: resolve the optional positional status shortcut.
             // `aida list approved` == `aida list --status approved`; the
             // positional and `--status` are two spellings of the same axis,
@@ -67365,6 +67390,132 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// STORY-562: `aida list human` (and `aida list --human`) — the discoverable
+/// "what needs me?" view. The DATA already exists: `burndown explain`
+/// classifies every open spec into a bucket and flags which `needs_human()`.
+/// This surfaces exactly that human-attention subset under the operator's
+/// instinct (`list human`, sibling to the `open`/`closed` status aliases),
+/// grouped by reason so it reads as a triage list. We REUSE the
+/// [`burndown::explain_reasons`] classifier verbatim — no re-derived buckets.
+/// `short` prints just the IDs (composes with `aida list --short`).
+/// trace:STORY-562 | ai:claude
+fn handle_list_human(short: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let facts = collect_open_facts(&store, &in_flight_scopes);
+
+    // Classify with the SAME classifier as `burndown explain`, then keep only
+    // the buckets that genuinely need a human nudge (the rest self-resolve).
+    // trace:STORY-562
+    let classified: Vec<(
+        burndown::OpenFacts,
+        burndown::OpenBucket,
+        Vec<burndown::Reason>,
+    )> = facts
+        .into_iter()
+        .map(|f| {
+            let (bucket, reasons) = burndown::explain_reasons(&f);
+            (f, bucket, reasons)
+        })
+        .filter(|(_, bucket, _)| bucket.needs_human())
+        .collect();
+
+    // `--short`: bare IDs, one per line — usable in `$(...)` / xargs. No
+    // header, footer, color, or grouping (mirrors `aida list --short`).
+    if short {
+        for (f, _, _) in &classified {
+            println!("{}", f.id);
+        }
+        return Ok(());
+    }
+
+    println!("{} what needs a human", "▸".cyan().bold());
+    if classified.is_empty() {
+        println!(
+            "  {}",
+            "Nothing needs you right now — everything open is in flight, deferred, \
+             or self-resolving."
+                .dimmed()
+        );
+        return Ok(());
+    }
+    println!(
+        "  {} {} open {} need a decision, review, or triage from you",
+        "→".green(),
+        classified.len(),
+        if classified.len() == 1 {
+            "item"
+        } else {
+            "items"
+        },
+    );
+
+    // Group by bucket, ordered most-actionable-first (matches the precedence in
+    // `explain_open` / the explain view). trace:STORY-562
+    use burndown::OpenBucket::*;
+    let order = [HeldForReview, AwaitingDecision, Ungroomed, Umbrella];
+    for bucket in order {
+        let rows: Vec<&(
+            burndown::OpenFacts,
+            burndown::OpenBucket,
+            Vec<burndown::Reason>,
+        )> = classified.iter().filter(|(_, b, _)| *b == bucket).collect();
+        if rows.is_empty() {
+            continue;
+        }
+        // The bucket header glosses the derived reason — shared by every row in
+        // the bucket (the first reason of the first row).
+        let sample_reason = rows[0]
+            .2
+            .first()
+            .map(|r| r.text.clone())
+            .unwrap_or_default();
+        println!(
+            "\n{} {} — {}",
+            "●".yellow(),
+            bucket.key().bold(),
+            sample_reason.dimmed()
+        );
+        for (f, _, reasons) in rows {
+            // Repeat the derived reason only when it differs from the header
+            // (e.g. per-spec decision tags); otherwise just the ID stays scannable.
+            let derived = reasons.first().map(|r| r.text.clone()).unwrap_or_default();
+            if derived == sample_reason {
+                println!("    {}", f.id.cyan());
+            } else {
+                println!("    {} {}", f.id.cyan(), format!("({derived})").dimmed());
+            }
+            // Fold in the additional reasons (finding-links + residual notes)
+            // so the operator sees every reason it's still open — same as
+            // `burndown explain`. trace:STORY-562
+            for r in reasons.iter().skip(1) {
+                let tag = match r.source {
+                    burndown::ReasonSource::Finding => "finding".magenta(),
+                    burndown::ReasonSource::Residual => "note".yellow(),
+                    burndown::ReasonSource::Derived => continue,
+                };
+                println!("      {} {}", tag, r.text.dimmed());
+            }
+        }
+    }
+
+    // Acceptance #4 (optional completeness): point at the two adjacent inboxes
+    // a human also drains. Cheap pointer text, not a recompute. trace:STORY-562
+    println!(
+        "\n  {} findings awaiting triage: `aida findings list` · decision inbox: `aida questions list`",
+        "↳".dimmed()
+    );
     Ok(())
 }
 
