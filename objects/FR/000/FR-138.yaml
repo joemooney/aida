@@ -7,11 +7,17 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T05:38:12.026793995Z
-modified_at: 2026-06-11T02:36:12.847804110Z
+modified_at: 2026-06-11T04:35:10.445004532Z
 req_type: Functional
 relationships:
 - rel_type: Parent
   target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+comments:
+- id: 019eb4f6-71ed-7a62-b0a3-c8672ffe1e3a
+  author: joe
+  content: 'Triage 2026-06-10: rejecting as moot. Body self-reports ''Fixed!'' (navigation keybindings now gated on in_form_view/in_settings), and this is a stale draft from the early dashboard era (old-format UUID, parent FOLDER-4 ''Appearance/Behavior'') — not a current aida-cli edit-mode bug. I had unarchived it earlier on the title alone (''arrow keys in edit mode'') — that was a misread; the title carries leftover repro junk. If the form-view arrow behavior recurs in aida-tui (EPIC-26), re-file fresh against that surface.'
+  created_at: 2026-06-11T04:35:10.445004532Z
+  modified_at: 2026-06-11T04:35:10.445004532Z
 history:
 - id: 6e5ecb12-fd1d-4d84-a08b-6d94c8b592a7
   author: '@joe'
