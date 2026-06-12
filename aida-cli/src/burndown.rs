@@ -216,6 +216,11 @@ pub(crate) struct OpenFacts {
     pub has_pending_decision: bool,
     /// A live session lease's scope matches this spec.
     pub in_flight: bool,
+    /// BUG-511: the role recorded on the live lease (`reviewer`,
+    /// `implementer`, …), when known — lets the in-flight reason say WHAT
+    /// kind of work holds the spec ("being reviewed"). `None` when not in
+    /// flight or the lease carries no role.
+    pub in_flight_role: Option<String>,
     /// TASK-723 (source #2): display-ids of FINDINGS filed against this spec
     /// (attempt outcomes — CI red / RequestChanges / build fail). Linked, not
     /// recomputed: the finding already exists; the view just folds it in.
@@ -294,10 +299,19 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
         |name: &str| -> bool { f.tags.iter().any(|t| t.trim().eq_ignore_ascii_case(name)) };
 
     if f.in_flight {
-        return (
-            OpenBucket::InFlight,
-            "in flight — a live session lease is working this now".to_string(),
-        );
+        // BUG-511: name the work when the lease says what it is — a live
+        // review (the `aida review` verb or a reviewer session) reads
+        // "being reviewed", not the generic working line.
+        let reason = if f
+            .in_flight_role
+            .as_deref()
+            .is_some_and(|r| r.eq_ignore_ascii_case("reviewer"))
+        {
+            "in flight — being reviewed by a live review session".to_string()
+        } else {
+            "in flight — a live session lease is working this now".to_string()
+        };
+        return (OpenBucket::InFlight, reason);
     }
     if has_tag("review:draft-only") {
         return (
@@ -1176,9 +1190,32 @@ mod tests {
             has_unsatisfied_blocker: blocked,
             has_pending_decision: decision,
             in_flight,
+            in_flight_role: None,
             findings: Vec::new(),
             residual_notes: Vec::new(),
         }
+    }
+
+    /// BUG-511: a live reviewer lease reads "being reviewed", any other
+    /// (or unknown) role keeps the generic in-flight line — and both stay
+    /// in the InFlight bucket so the footer says "nothing to do".
+    #[test]
+    fn explain_open_in_flight_names_review_when_role_is_reviewer() {
+        let mut f = open("task", "approved", &[], false, false, true);
+        f.in_flight_role = Some("reviewer".to_string());
+        let (bucket, reason) = explain_open(&f);
+        assert_eq!(bucket, OpenBucket::InFlight);
+        assert!(reason.contains("being reviewed"), "{reason}");
+
+        f.in_flight_role = Some("implementer".to_string());
+        let (bucket, reason) = explain_open(&f);
+        assert_eq!(bucket, OpenBucket::InFlight);
+        assert!(!reason.contains("being reviewed"), "{reason}");
+
+        f.in_flight_role = None;
+        let (bucket, reason) = explain_open(&f);
+        assert_eq!(bucket, OpenBucket::InFlight);
+        assert!(reason.contains("in flight"), "{reason}");
     }
 
     #[test]
