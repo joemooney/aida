@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:31:26.484685467Z
-modified_at: 2026-06-12T04:31:26.484685467Z
+modified_at: 2026-06-12T05:00:05.094580869Z
 req_type: Task
 tags:
 - aida:doctor
@@ -28,3 +28,9 @@ tags:
 - core
 - papercut
 - ux
+comments:
+- id: 019eba33-9c66-7350-8ecd-20ac03a1e332
+  author: joe
+  content: Commit d5702580b references this requirement
+  created_at: 2026-06-12T05:00:05.094580869Z
+  modified_at: 2026-06-12T05:00:05.094580869Z
