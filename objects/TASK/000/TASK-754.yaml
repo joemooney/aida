@@ -1,0 +1,29 @@
+id: 019eba20-41eb-7b72-9229-cd9a351dc87f
+spec_id: TASK-754
+agreed_id: TASK-754
+title: 'aida add --queue: file + approve + enqueue in one shot (record the advisor''s filing-time autonomy judgment, skip backlog limbo)'
+description: |-
+  Advisor workflow gap (operator-identified 2026-06-11): when the advisor files a spec it has ALREADY judged straightforward + autonomous-safe, there's no single command to file-approve-and-queue. Today it's two steps (aida add --status approved, THEN aida backlog groom / aida queue add), so autonomous-ready filings land in 'backlog limbo' (Approved-but-not-queued) by default and need a second touch. Worse, the re-touch (backlog groom) surfaces a freshly-DERIVED risk chip (low/med/high heuristic), not the advisor's recorded judgment — the two can diverge (e.g. STORY-564 chips 'high' but is correctly keyboard-supervised; TASK-752/753 chip 'med' but were judged autonomous-fine). The filing-time decision should be capturable atomically so neither the advisor nor a later groom pass re-analyzes.
+
+  ## Approach
+  Add a --queue flag to 'aida add' that, after creating the spec, enqueues it (the aida backlog groom code path) in the same invocation. Composes with the existing advisor-authority gate on queue add (TASK-647). Optionally --batch <NAME> to land it in a drain cluster immediately.
+
+  ## Acceptance
+  1. 'aida add --queue ...' creates the spec AND places it on the queue in one command (equivalent to 'aida add' then 'aida backlog groom --specs <new-id>'). Respects the advisor-authority gate.
+  2. --queue composes with --batch <NAME> (groom-with-batch in one shot) and with --status (only Approved/queue-eligible statuses enqueue; refuse + explain otherwise).
+  3. A spec filed WITHOUT --queue behaves exactly as today (lands in backlog list, not queued) — no behavior change to the default path.
+  4. The new queue entry carries a note marking it advisor-cleared at filing (so 'backlog groom' / risk-chip re-derivation can be skipped for it). Out of scope but NAMED: a positive 'autonomy-cleared' marker that the backlog risk-chip reads instead of re-deriving — separate follow-up if the note proves insufficient.
+  5. Help text + user-facing output carry no SPEC-IDs (user-facing-text convention).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T04:38:56.747568360Z
+modified_at: 2026-06-12T04:38:56.747568360Z
+req_type: Task
+tags:
+- advisor-workflow
+- aida:add
+- aida:backlog
+- core
+- ergonomics
