@@ -40,7 +40,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T04:30:23.898104612Z
-modified_at: 2026-06-11T02:30:34.716559732Z
+modified_at: 2026-06-12T23:53:52.655109637Z
 req_type: Story
 tags:
 - review:draft-only
+comments:
+- id: 019ebe41-a10f-70f2-ab60-69d27ff19ada
+  author: joe
+  content: 'REJECTED after careful review (2026-06-12, advisor-led): the core mechanism (busy_timeout=1000ms, let SQLite''s busy handler wait) is SUPERSEDED + CONTRADICTED by TASK-712''s evolution of the cache — current cache deliberately uses busy_timeout=0 + an AIDA-owned retry/backoff ladder + lock-holder visibility. A textual rebase of #714 (99 commits behind, 8 conflicting files) would leave two competing lock strategies fighting in cache.rs (invisible concurrency bug). SALVAGEABLE orthogonal pieces re-filed fresh against the current cache: WAL mode (still novel — not enabled today) and optional fail-soft staleness. Closing PR #714.'
+  created_at: 2026-06-12T23:53:52.655109637Z
+  modified_at: 2026-06-12T23:53:52.655109637Z
