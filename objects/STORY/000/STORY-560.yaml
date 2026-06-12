@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:05:52.155404135Z
-modified_at: 2026-06-12T18:30:18.747002197Z
+modified_at: 2026-06-12T18:30:21.972094855Z
 req_type: Story
 tags:
 - aida:advisor
@@ -57,6 +57,16 @@ comments:
   content: Commit 8bd4fed7f references this requirement
   created_at: 2026-06-12T18:28:34.601387604Z
   modified_at: 2026-06-12T18:28:34.601387604Z
+- id: 019ebd19-754f-71a0-acda-5dc963025132
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-12-story-560-headless-advisor-intake.md
+    filed 0 task(s)
+    declined 2:
+      - Optional `[intake]` example block in the `aida init` config template (defaults already work)
+      - Substrate-grade gate on `aida edit --status approved` by type (broader than this story)
+  created_at: 2026-06-12T18:30:22.799630054Z
+  modified_at: 2026-06-12T18:30:22.799630054Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-12T18:30:18.747002197Z
