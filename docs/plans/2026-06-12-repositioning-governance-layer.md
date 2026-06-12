@@ -83,22 +83,22 @@ All docs work lands on branch `repositioning` (worktree `~/ai/aida-repositioning
 7. `CLAUDE.md` — strategic-positioning paragraph (the 2026-05-14 Trojan-horse note) updated to point at ADR-4.
 
 **WS2 — positioning corpus (STORY-573)**
-8. `docs/positioning/vs-beads.md` — NEW lead paper (verified parity table + surviving edges + funnel framing).
-9. `docs/positioning/vs-gastown.md` — NEW (orchestrator comparison; Agent-Teams boundary cross-ref).
+8. **docs/positioning/vs-beads.md** *(to create)* — NEW lead paper (verified parity table + surviving edges + funnel framing).
+9. **docs/positioning/vs-gastown.md** *(to create)* — NEW (orchestrator comparison; Agent-Teams boundary cross-ref).
 10. `docs/positioning/README.md` — reorder: lead pair becomes vs-beads + vs-gastown.
 11. `docs/competitive-analysis/positioning.md` — rewrite around the five governance pillars.
-12. `docs/competitive-analysis/2026-06-12-keystone-governance-era.md` — NEW dated synthesis superseding 2026-05-31-round2 on specifics; tripwires: Beads adds trace-linking / approval gates / CI-coupling; Gas City consolidation.
+12. **docs/competitive-analysis/2026-06-12-keystone-governance-era.md** *(to create)* — NEW dated synthesis superseding 2026-05-31-round2 on specifics; tripwires: Beads adds trace-linking / approval gates / CI-coupling; Gas City consolidation.
 13. `docs/competitive-analysis/README.md` — index row + "current synthesis" pointer.
 
 **WS3 — Beads interop (SPIKE-58 → STORY-574)**
-14. Spike report → `docs/competitive-analysis/2026-06-12-beads-schema-mapping.md` (or spike comment) — field map, lossiness, stability verdict.
-15. `aida-cli/src/import_beads.rs` (new) + wiring in `cli.rs`/`main.rs` — `aida import --from-beads <path>`; bd hash-IDs kept as external refs; idempotent re-import keyed on bd ID.
+14. Spike report → **docs/competitive-analysis/2026-06-12-beads-schema-mapping.md** *(to create)* (or spike comment) — field map, lossiness, stability verdict.
+15. **aida-cli/src/import_beads.rs** *(to create)* (new) + wiring in `cli.rs`/`main.rs` — `aida import --from-beads <path>`; bd hash-IDs kept as external refs; idempotent re-import keyed on bd ID.
 16. Tests alongside (see §7).
 
 **WS4 — governance legibility (STORY-575)**
-17. `aida audit <spec>` (likely `aida-cli/src/audit.rs` reading the YAML `history:` arrays + role activity) — the who/what/when/why view; the regulated-segment demo.
+17. `aida audit <spec>` (likely **aida-cli/src/audit.rs** *(to create)* reading the YAML `history:` arrays + role activity) — the who/what/when/why view; the regulated-segment demo.
 18. Gate-refusal messages (the TASK-647 refusal sites, MCP status-gate messages) — one-line governance explanations.
-19. `docs/governance.md` (or discipline-pack chapter) — the ladder as ONE story: intake → approval → sign-off-by-queueing → gated autonomy → trace-enforced merge → audit.
+19. **docs/governance.md** *(to create)* (or discipline-pack chapter) — the ladder as ONE story: intake → approval → sign-off-by-queueing → gated autonomy → trace-enforced merge → audit.
 
 **WS5 — messaging rollout (STORY-576)**
 20. `docs/presentation/2026-06-management-demo.md` — repositioned moat slide + governance demo beat.
@@ -109,8 +109,8 @@ All docs work lands on branch `repositioning` (worktree `~/ai/aida-repositioning
 ## 4. Critical files
 
 - `README.md` + `OVERVIEW.md` — the story every evaluator reads first; WS1's language locks everything downstream (WS2/WS5 quote it).
-- `docs/positioning/vs-beads.md` — the single doc that must survive a skeptical Beads user's reading; claims discipline (D5) bites hardest here.
-- `aida-cli/src/import_beads.rs` — the only substantial new code; the funnel. Must be idempotent and honest about lossiness.
+- **docs/positioning/vs-beads.md** *(to create)* — the single doc that must survive a skeptical Beads user's reading; claims discipline (D5) bites hardest here.
+- **aida-cli/src/import_beads.rs** *(to create)* — the only substantial new code; the funnel. Must be idempotent and honest about lossiness.
 - VIS-1 + ADR-4 + new PRIN (store) — what future sessions and the roadmap triage cite as the why.
 
 ## 5. Reusable helpers (don't reimplement)
