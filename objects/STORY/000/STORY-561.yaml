@@ -17,12 +17,37 @@ description: |-
   - Calendar/Slack presence integration.
 
   Composes with: the three-mode autonomy taxonomy, aida burndown run, the escalation cascade (--escalate-defaults/--escalate-blocks), aida questions (decision inbox), STORY-560 (headless advisor — a natural 'away' consumer), BUG-498 (statusline role surfacing).
+
+  ## Resolved design decisions (operator-resolved 2026-06-12 — BINDING): POLICY-DRIVEN presence consumers
+
+  D0 (scope): acceptance #1/#2 (the presence PRIMITIVE) already shipped as TASK-756 — REUSE `presence::current_presence()` and the `~/.aida/presence.toml` state; do NOT rebuild the primitive. This build wires ONLY the consumers (#3) + the advisory framing (#4/#5).
+
+  Framing (all consumers): presence is ADVISORY — it sets DEFAULTS for mode selection; explicit per-command flags ALWAYS win, and integrity gates (CI, merge-on-green, the authority gate) ALWAYS apply (acceptance #4/#5). The consumer behaviors live under a new tunable `[presence]` block in `.aida/config.toml`, with safe defaults so they work the moment you `aida away`/`aida home` with zero config.
+
+  P0 — `presence.consumers` = `on` (DEFAULT) | `off`: master switch. ON by default — setting away/home immediately shifts the defaults below. `off` reduces presence to a displayed-state-only (the primitive still works; consumers don't fire). Configurable.
+
+  P1 — `presence.away_drain` (consumer a — `burndown run` default when away):
+    - `headless-both` (DEFAULT): away defaults `burndown run` to FULLY headless (equivalent to --no-human=both — orchestrator AND implementer headless). Max unattended throughput (nobody is there to supervise).
+    - `headless-escalate-defaults`: headless orchestrator, interactive implementer; on a punt, ship the defensible default and keep going.
+    - `headless-park`: headless but punts PARK for triage (escalate-blocks).
+    Home → interactive / pause default. Explicit --no-human / --zen flags override. NOTE: presence sets the DEFAULT MODE of a drain that is started — it never AUTO-STARTS a drain.
+
+  P2 — `presence.home_offer` (consumer d — home-side):
+    - `surface` (DEFAULT): when home, keystone / needs-supervised-build specs are SURFACED as 'ready for you to --zen' (a line in `aida status`). Presence is useful in BOTH directions.
+    - `dont-block`: home merely lifts the away-block; specs stay parked, operator pulls manually.
+    Consumer d AWAY-side (always, NOT configurable — the safety floor): needs-human / keystone work is NEVER offered for autonomous pickup when away.
+
+  Consumers b + c (wired per the spec's away-mappings, under the advisory framing; tunable later if needed):
+    - (b) escalation: away → default to escalate-via-defaults (ship the defensible default on a punt — composes with P1 `headless-both`); home → surface interactively / escalate-blocks default. --escalate-defaults/--escalate-blocks flags override.
+    - (c) questions: away → decision-required specs accumulate quietly in `aida questions` (no prompt/notification); home → surface them (in `aida status` / on the next interactive command). Composes with STORY-555's questions inbox — BUILD STORY-555 FIRST (this consumer wires into it).
+
+  Implementation: defaults (consumers on, away_drain=headless-both, home_offer=surface) make presence-driven mode-selection work with zero config; the `[presence]` block is opt-out/tuning. Document the knobs + defaults in the away/home/presence --help and the consumers' --help. Honor every integrity gate (acceptance #4) — presence can make a drain headless, but CI/merge-on-green/authority still gate.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:20:15.770546344Z
-modified_at: 2026-06-12T07:20:25.956733297Z
+modified_at: 2026-06-12T15:15:40.382441230Z
 req_type: Story
 tags:
 - aida:presence

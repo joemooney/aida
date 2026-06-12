@@ -16736,5 +16736,52 @@ operations:
         - `--then-drain` flag overrides the config to `drain` for a single run.
 
       Implementation note: the DEFAULTS (approve-eligible bias + tight do-not-approve classes + stop-at-queue + propose-mode) must make `aida intake` safe AND useful with zero config. The `[intake]` block is opt-in tuning, not required. Document the policy knobs + defaults in `--help` and the /aida-intake skill. Guardrail flags from acceptance #3 (--max-approvals, --only-tag/--exclude-tag, --risk) compose with the config policy (flags override config for a run).
-clock: 1657
+- id: 019ebc67-32f4-7fc3-b4d7-c714395ba220
+  target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
+  author: aida
+  node_id: '1'
+  lamport: 1658
+  timestamp: 2026-06-12T15:15:40.404284145Z
+  kind: !SetDescription
+    description: |-
+      Operator idea (2026-06-11): /aida-home and /aida-away to flag whether the operator is at the keyboard. Bigger than a flag — it's the missing PRESENCE axis the whole autonomy ladder should key on. Today autonomy is picked PER-COMMAND (--no-human, --zen, --escalate-defaults, hand-parking needs-human — done repeatedly by hand this session); a presence STATE lets the system pick automatically + consistently. The value is the CONSUMERS, not the flag. Refinement: deterministic CLI verb (aida away / aida home), NOT an LLM skill (SPIKE-55 — a /aida-away slash command is just a thin wrapper).
+
+      ## Acceptance (MVP: flag + TTL + the highest-value consumers; broader wiring = followups)
+      1. 'aida away' / 'aida home' set a presence state (timestamped file under .aida/ or ~/.aida/). 'aida status' + statusline show it.
+      2. ROBUSTNESS — not a daemon: away carries a TTL (config, default e.g. 8h) AND any interactive TTY aida command auto-flips to home, so a stale 'away' cannot leave the system acting unsupervised when the operator is actually back. A timestamped file, no process.
+      3. CONSUMERS (wire at least these): (a) 'aida burndown run' defaults headless/walk-away when away, prompts/pauses when home; (b) punt/escalation defaults to escalate-via-defaults when away, surfaces interactively when home; (c) decision-required specs accumulate quietly in 'aida questions' when away, surface when home; (d) needs-human / keystone work is NOT offered for autonomous pickup when away.
+      4. Presence is ADVISORY input to mode selection — NEVER overrides integrity gates (CI, merge-on-green, the authority gate still apply).
+      5. Turns the three-mode autonomy taxonomy (default / --zen / --no-human) into an explicit settable state; explicit per-command flags still win.
+
+      ## Out of scope (followups)
+      - Auto-detecting presence beyond the auto-flip (TTY-idle / command-heartbeat).
+      - Calendar/Slack presence integration.
+
+      Composes with: the three-mode autonomy taxonomy, aida burndown run, the escalation cascade (--escalate-defaults/--escalate-blocks), aida questions (decision inbox), STORY-560 (headless advisor — a natural 'away' consumer), BUG-498 (statusline role surfacing).
+
+      ## Resolved design decisions (operator-resolved 2026-06-12 — BINDING): POLICY-DRIVEN presence consumers
+
+      D0 (scope): acceptance #1/#2 (the presence PRIMITIVE) already shipped as TASK-756 — REUSE `presence::current_presence()` and the `~/.aida/presence.toml` state; do NOT rebuild the primitive. This build wires ONLY the consumers (#3) + the advisory framing (#4/#5).
+
+      Framing (all consumers): presence is ADVISORY — it sets DEFAULTS for mode selection; explicit per-command flags ALWAYS win, and integrity gates (CI, merge-on-green, the authority gate) ALWAYS apply (acceptance #4/#5). The consumer behaviors live under a new tunable `[presence]` block in `.aida/config.toml`, with safe defaults so they work the moment you `aida away`/`aida home` with zero config.
+
+      P0 — `presence.consumers` = `on` (DEFAULT) | `off`: master switch. ON by default — setting away/home immediately shifts the defaults below. `off` reduces presence to a displayed-state-only (the primitive still works; consumers don't fire). Configurable.
+
+      P1 — `presence.away_drain` (consumer a — `burndown run` default when away):
+        - `headless-both` (DEFAULT): away defaults `burndown run` to FULLY headless (equivalent to --no-human=both — orchestrator AND implementer headless). Max unattended throughput (nobody is there to supervise).
+        - `headless-escalate-defaults`: headless orchestrator, interactive implementer; on a punt, ship the defensible default and keep going.
+        - `headless-park`: headless but punts PARK for triage (escalate-blocks).
+        Home → interactive / pause default. Explicit --no-human / --zen flags override. NOTE: presence sets the DEFAULT MODE of a drain that is started — it never AUTO-STARTS a drain.
+
+      P2 — `presence.home_offer` (consumer d — home-side):
+        - `surface` (DEFAULT): when home, keystone / needs-supervised-build specs are SURFACED as 'ready for you to --zen' (a line in `aida status`). Presence is useful in BOTH directions.
+        - `dont-block`: home merely lifts the away-block; specs stay parked, operator pulls manually.
+        Consumer d AWAY-side (always, NOT configurable — the safety floor): needs-human / keystone work is NEVER offered for autonomous pickup when away.
+
+      Consumers b + c (wired per the spec's away-mappings, under the advisory framing; tunable later if needed):
+        - (b) escalation: away → default to escalate-via-defaults (ship the defensible default on a punt — composes with P1 `headless-both`); home → surface interactively / escalate-blocks default. --escalate-defaults/--escalate-blocks flags override.
+        - (c) questions: away → decision-required specs accumulate quietly in `aida questions` (no prompt/notification); home → surface them (in `aida status` / on the next interactive command). Composes with STORY-555's questions inbox — BUILD STORY-555 FIRST (this consumer wires into it).
+
+      Implementation: defaults (consumers on, away_drain=headless-both, home_offer=surface) make presence-driven mode-selection work with zero config; the `[presence]` block is opt-out/tuning. Document the knobs + defaults in the away/home/presence --help and the consumers' --help. Honor every integrity gate (acceptance #4) — presence can make a drain headless, but CI/merge-on-green/authority still gate.
+clock: 1658
 node_id: '1'
