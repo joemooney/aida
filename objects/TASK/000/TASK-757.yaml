@@ -1,0 +1,17 @@
+id: 019ebcc7-1ff2-74d3-9a66-c6a1568018c2
+spec_id: TASK-757
+agreed_id: TASK-757
+title: Apply the SPIKE-53 moat-framing edit to the positioning papers (incentive-anchored; drop stale 'typed graph unique'; correct plain-git claim)
+description: 'From SPIKE-53 (operator decision 2026-06-12): edit the keystone/positioning docs to (1) frame the Beads moat INCENTIVE-anchored — Beads'' author explicitly abdicates requirements/planning (his words), so the space is durably AIDA''s by his incentive, not just features (ages better than a capability claim); back it with the 3 verified edges (trace enforcement, lifecycle+history, requirements category). (2) DROP the now-stale ''typed/durable/multi-vendor graph is AIDA-unique/absent-from-agents'' headline — Beads is a typed git-backed graph. (3) Correct ''plain-git zero-infra'' to the precise ''plain-git/YAML source of truth vs a SQL-DB (Dolt) substrate'' — NOT ''they need a server'' (Beads'' embedded Dolt needs none). Source: docs/competitive-analysis/2026-06-12-beads-gastown-vs-aida.md. Marketing-phase (defer until bugs clear).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T17:00:26.994307434Z
+modified_at: 2026-06-12T17:00:26.994307434Z
+req_type: Task
+tags:
+- competitive
+- deferred:post-stability
+- from:SPIKE-53
+- positioning
