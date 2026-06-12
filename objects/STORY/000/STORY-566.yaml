@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T05:12:12.592734612Z
-modified_at: 2026-06-12T05:12:12.592734612Z
+modified_at: 2026-06-12T05:32:34.441814156Z
 req_type: Story
 tags:
 - aida:queue
@@ -37,3 +37,9 @@ tags:
 - legibility
 - operator-tooling
 - ux
+comments:
+- id: 019eba51-5b09-7100-b767-07c5d15be723
+  author: joe
+  content: Commit 0daf515f7 references this requirement
+  created_at: 2026-06-12T05:32:34.441814156Z
+  modified_at: 2026-06-12T05:32:34.441814156Z
