@@ -12,12 +12,12 @@ description: |-
   4. Do NOT re-tag before the gate recognizes the new tags (un-parking them would leak keystone work to the unsupervised drain).
 
   Feeds SPIKE-57 (human-as-role) — this is the sub-classification of the human-required signal by RESOLUTION PATH.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:51:46.409459717Z
-modified_at: 2026-06-12T02:22:51.170664095Z
+modified_at: 2026-06-12T02:28:48.635951643Z
 req_type: Task
 tags:
 - aida:burndown
@@ -32,3 +32,15 @@ comments:
   content: Commit a99419525 references this requirement
   created_at: 2026-06-12T02:22:51.170664095Z
   modified_at: 2026-06-12T02:22:51.170664095Z
+history:
+- id: 019eb9a9-1e07-7483-8c61-c2890370be74
+  author: aida-auto-bump
+  timestamp: 2026-06-12T02:28:48.775757355Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T02:28:48.635951643Z
+  completion_sha: e6aa971f3d5940ef3e6c84d4b6a3f1964c0ea346
