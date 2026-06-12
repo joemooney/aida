@@ -10,12 +10,12 @@ description: |-
   2. Dedup check FIRST: TASK-716 already documented the 19 types across CLAUDE.md / template / --help / MCP schema. This spec is the NARRATIVE user-guide version (intent + best-practices), not a second reference list — if TASK-716's output already covers the user-guide need, RESOLVE this as satisfied (close, note the overlap) rather than duplicating.
   3. Reference the taxonomy as the single source (link the enum / 'aida schema' once it ships) — do not hand-paste a 19-row list that will drift.
   4. No SPEC-IDs in the user-facing text (user-facing-text convention).
-status: Planned
+status: Completed
 priority: Medium
 owner: ''
 feature: 15-DOC
 created_at: 2025-11-26T04:28:47.348005694Z
-modified_at: 2026-06-12T07:19:24.832287846Z
+modified_at: 2026-06-12T07:30:19.086489933Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -55,3 +55,14 @@ history:
   - field_name: archived
     old_value: 'false'
     new_value: 'true'
+- id: 019ebabd-27da-7281-891f-b27afab83105
+  author: aida-auto-bump
+  timestamp: 2026-06-12T07:30:19.226191657Z
+  changes:
+  - field_name: status
+    old_value: Planned
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T07:30:19.086489933Z
+  completion_sha: cf888618cabf4a98cfcded30ff55f00610818ac5
