@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T17:21:56.724830144Z
-modified_at: 2026-06-12T17:41:41.780459072Z
+modified_at: 2026-06-12T17:41:42.372604648Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -21,4 +21,8 @@ relationships:
 - rel_type: Child
   target_id: 019eb9ff-8508-7e50-8285-81980687aa3c
   created_at: 2026-06-12T17:22:12.358258380Z
+  created_by: joe
+- rel_type: BlockedBy
+  target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
+  created_at: 2026-06-12T17:41:42.372594503Z
   created_by: joe
