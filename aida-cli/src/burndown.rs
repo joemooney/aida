@@ -870,6 +870,82 @@ pub(crate) fn next_step_footer() -> String {
         .to_string()
 }
 
+/// STORY-566: the primary next ACTION `aida queue advance` offers for a queued
+/// spec in each bucket — a ROUTER over the existing flows, not a new flow. The
+/// kind drives the interactive menu's first option and the `--yes` auto-take
+/// gate. Pure + exhaustively testable; the handler maps the chosen kind back to
+/// the existing `aida review` / `aida queue work [--zen]` / approve / reject
+/// dispatch. trace:STORY-566 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AdvanceAction {
+    /// Run the human review pass (`aida review <id>`); on approval, offer to
+    /// drop the `review:draft-only` tag so it drains.
+    Review,
+    /// Drain it now at the keyboard — supervised build (`aida queue work <id>
+    /// --zen`).
+    SupervisedBuild,
+    /// Answer the open decision (`aida questions`).
+    Decision,
+    /// Drain it now (`aida queue work <id>`, no --zen) — it's in the ready set.
+    Drain,
+    /// Promote draft/planned → Approved so it becomes drainable.
+    Approve,
+    /// Resolve it out — set status → Rejected (or leave parked).
+    Reject,
+    /// Nothing to do here — the bucket resolves itself through normal flow
+    /// (in-flight, awaiting-merge, in-progress).
+    None,
+}
+
+impl AdvanceAction {
+    /// True for the ONE unambiguous autonomous step `--yes` may auto-take
+    /// without a human in the loop (drain a ready spec / approve a groomed
+    /// draft). Everything else (review, supervised build, decision, reject) is
+    /// a human call and is SKIPPED under `--yes`. trace:STORY-566 | ai:claude
+    pub(crate) fn is_autonomous(self) -> bool {
+        matches!(self, AdvanceAction::Drain | AdvanceAction::Approve)
+    }
+}
+
+/// STORY-566: the primary action `aida queue advance` routes each open-bucket
+/// to. PURE map (bucket → action) — the side-effecting dispatch lives in
+/// `main.rs`; keeping the routing here makes it exhaustively unit-testable and
+/// keeps the menu + the `--yes` gate agreeing on what each bucket needs.
+/// trace:STORY-566 | ai:claude
+pub(crate) fn advance_action(bucket: OpenBucket) -> AdvanceAction {
+    match bucket {
+        OpenBucket::HeldForReview => AdvanceAction::Review,
+        OpenBucket::BuildSupervised => AdvanceAction::SupervisedBuild,
+        OpenBucket::AwaitingDecision => AdvanceAction::Decision,
+        OpenBucket::Actionable => AdvanceAction::Drain,
+        OpenBucket::Ungroomed => AdvanceAction::Approve,
+        OpenBucket::Deferred | OpenBucket::Blocked => AdvanceAction::Reject,
+        // Vision/principle have no terminal state by design, and an epic is
+        // driven by its children — neither is rejectable/processable directly
+        // here. In-flight / awaiting-merge / in-progress resolve through normal
+        // flow. Nothing for the operator to do on these directly.
+        OpenBucket::LongLived
+        | OpenBucket::Umbrella
+        | OpenBucket::InFlight
+        | OpenBucket::AwaitingMerge
+        | OpenBucket::InProgress => AdvanceAction::None,
+    }
+}
+
+/// STORY-566: the menu/label text for each bucket's primary action — the first
+/// `inquire::Select` option `aida queue advance` shows. Pure. trace:STORY-566
+pub(crate) fn advance_action_label(bucket: OpenBucket) -> &'static str {
+    match advance_action(bucket) {
+        AdvanceAction::Review => "Review it (aida review)",
+        AdvanceAction::SupervisedBuild => "Build it now at the keyboard (queue work --zen)",
+        AdvanceAction::Decision => "Answer the open decision (aida questions)",
+        AdvanceAction::Drain => "Drain it now (queue work)",
+        AdvanceAction::Approve => "Approve it (makes it drainable)",
+        AdvanceAction::Reject => "Reject (resolve it out)",
+        AdvanceAction::None => "Nothing to do — resolves through normal flow",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1796,5 +1872,54 @@ mod tests {
         assert!(prompt.contains("CLARIFY FIRST: (none)"));
         assert!(prompt.contains("REVIEW: (none)"));
         assert!(prompt.contains("LEAVE PARKED: (none)"));
+    }
+
+    // STORY-566: the pure bucket → advance-action routing the
+    // `aida queue advance` router dispatches on. Every variant must map.
+    #[test]
+    fn advance_action_maps_every_bucket() {
+        use OpenBucket::*;
+        let cases = [
+            (HeldForReview, AdvanceAction::Review),
+            (BuildSupervised, AdvanceAction::SupervisedBuild),
+            (AwaitingDecision, AdvanceAction::Decision),
+            (Actionable, AdvanceAction::Drain),
+            (Ungroomed, AdvanceAction::Approve),
+            (Deferred, AdvanceAction::Reject),
+            (Blocked, AdvanceAction::Reject),
+            (LongLived, AdvanceAction::None),
+            (Umbrella, AdvanceAction::None),
+            (InFlight, AdvanceAction::None),
+            (AwaitingMerge, AdvanceAction::None),
+            (InProgress, AdvanceAction::None),
+        ];
+        for (bucket, want) in cases {
+            assert_eq!(advance_action(bucket), want, "bucket {bucket:?}");
+            // The label is non-empty for every bucket (menu safety).
+            assert!(
+                !advance_action_label(bucket).is_empty(),
+                "bucket {bucket:?}"
+            );
+        }
+    }
+
+    // STORY-566: only the two unambiguous autonomous steps may be auto-taken
+    // under `--yes`; everything human-required is skipped.
+    #[test]
+    fn advance_only_drain_and_approve_are_autonomous() {
+        assert!(AdvanceAction::Drain.is_autonomous());
+        assert!(AdvanceAction::Approve.is_autonomous());
+        for a in [
+            AdvanceAction::Review,
+            AdvanceAction::SupervisedBuild,
+            AdvanceAction::Decision,
+            AdvanceAction::Reject,
+            AdvanceAction::None,
+        ] {
+            assert!(
+                !a.is_autonomous(),
+                "{a:?} must NOT be auto-taken under --yes"
+            );
+        }
     }
 }
