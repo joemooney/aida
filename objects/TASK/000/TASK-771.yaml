@@ -1,0 +1,12 @@
+id: 019ebd89-0a74-7083-9430-a60f1a943e8e
+spec_id: TASK-771
+agreed_id: TASK-771
+title: Promote "needs-triage" to its own `OpenBucket` label if the shelf grows (SPIKE-57 followup)
+description: ''
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:32:15.476834344Z
+modified_at: 2026-06-12T20:32:15.476834344Z
+req_type: Task
