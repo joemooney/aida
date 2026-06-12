@@ -3357,6 +3357,21 @@ pub enum QueueCommand {
         #[clap(long)]
         local: bool,
     },
+    /// Walk the queue and advance each item to its next step — drain the
+    /// autonomous, dispatch the human-required (review / --zen / decision)
+    /// interactively. Processes to a resolution, never hides work.
+    // trace:STORY-566 | ai:claude
+    Advance {
+        /// Advance just this queued spec; omit to walk the whole queue.
+        id: Option<String>,
+        /// Non-interactive: take only the unambiguous autonomous step per
+        /// item, skip anything needing a human.
+        #[clap(long, short = 'y')]
+        yes: bool,
+        /// Override the queue user (defaults to AIDA_USER / system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
     /// Mark a requirement as completed AND remove it from your queue in one
     /// atomic step. Convenience for the implementer's done-then-pickup-next
     /// loop. Equivalent to: `aida edit <id> --status completed && aida queue remove <id>`.
