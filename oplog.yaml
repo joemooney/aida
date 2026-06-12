@@ -17005,5 +17005,45 @@ operations:
       PANEL AMENDMENT (2026-06-12, forced-reproduction findings): ALSO refresh vs-spec-kit.md — it was stale at birth: Spec Kit's GitHub Issues integration SHIPPED (/speckit.taskstoissues since ~Nov 2025 + two Issues extensions merged Apr 2026, all pre-dating the doc's own 2026-05-30 stamp), and Spec Kit now ships a YAML workflow engine (specify workflow run: gates, if/switch/loop, sequential fan-out, resumable run state, per-step agent dispatch) that stales the 'one feature one agent' table row. Keep the distinctions that SURVIVED reproduction (per-feature restarting IDs, no cross-feature graph, no own MCP server, single-feature analyze scope, no code-to-spec traces); fix the stale rows; star count ~112k; bump the date stamp on every edit.
 
       Acceptance: (1) vs-beads.md uses the verified parity table + incentive-divergence wedge from the 2026-06-12 rescope; (2) every claim provenance-tagged verified-vs-inferred; trace/audit/multi-vendor claims use the SCOPED honest formulations until STORY-578/579 land (no laundering); (3) the new keystone names the surviving edges + tripwires (Beads adds trace-linking / governance / CI-coupling; Spec Kit workflow-engine evolution); (4) vs-spec-kit.md refreshed per the panel findings, date stamp bumped; (5) competitive-analysis README index updated.
-clock: 1675
+- id: 019ebde3-e0ce-7130-b462-01992eae0edf
+  target_id: 019ebd8f-470b-73a2-9549-8988c1ee56c9
+  author: aida
+  node_id: '1'
+  lamport: 1676
+  timestamp: 2026-06-12T22:11:28.590663809Z
+  kind: !SetDescription
+    description: |-
+      ## Decision (operator-commissioned 2026-06-12, from SPIKE-53's escalation; D8/D9 resolved by operator; corrected by same-day red-team — see plan §13 + rescope ERRATUM)
+
+      Beads (24.5k stars live, v1.0.5) + Gas Town (15.9k stars, v1.0) shipped AIDA's substrate thesis — typed dependency graph + stable IDs + ready-gate + MCP + parallel MULTI-VENDOR orchestrator — with accelerating distribution AIDA does not have. The substrate is no longer the moat. Operator selected: **A (move up the stack) + B (interoperate with Beads — sidecar-first per red-team), framed by D (regulated/enterprise as sharpest segment)**. Option C (feature-race) rejected.
+
+      ## The position (operator's own words, 2026-06-12 — canonical source language for WS1)
+
+      AIDA is an **AI Developer Assistant**: *'make it easier to develop when you have many agents from different vendors and want to coordinate work and feature development as the system grows in complexity — capturing the intent, the why, that can get lost during implementation.'*
+
+      RED-TEAM SHARPENING (binding on copy): Gas Town already ships multi-vendor *dispatch* (Claude Code, Copilot, Codex, Gemini) AND escalation-to-human AND a gated merge queue. The defensible lead is therefore **cross-vendor INTENT GOVERNANCE** — gates BEFORE work (approval/disposition), decision-audit semantics (who approved what, under which role), and the code-to-spec trace loop — not bare 'multi-vendor coordination.' Until STORY-578 lands (AIDA's own autonomous lifecycle is Claude-hardcoded today), all multi-vendor copy is scoped to the coordination layer in the same sentence. GOVERNANCE remains the mechanism + enterprise depth, not the lead word (D9).
+
+      ## Resolved sub-decisions
+
+      - **D8 — NO rename.** Acronym re-expands: 'AI Design Assistant' → **'AI Developer Assistant'** (WS1 sweeps every site incl. crate descriptions, report.rs, Makefile, docs/agents/).
+      - **D9 — README leads with the operator's statement** + the red-team sharpening above. TUI stays the face; this is the named depth.
+      - **D2 (the contrast line, lives in positioning papers ONLY)**: *'Beads remembers what your agents did. AIDA records what your team decided — approved specs, traced code, role-gated autonomy — and holds the line between the two.'* Decisions-vs-changes framing; the earlier 'audit trail Beads doesn't keep' clause is WITHDRAWN (factually false — bd show prints an audit trail; Dolt is versioned).
+
+      ## Grounding (post-erratum, hedges explicit)
+
+      - Narrowed durable wedge: human PRE-approval of intent + decision-audit semantics + trace loop + truly-git-canonical (plain YAML in the code repo — proof point: Beads v1.0.5 shipped a sync-corrupting migration; plain git IS the regulated-segment audit substrate). The 'they won't chase governance' claim is INCENTIVE ANALYSIS, not fact — tagged as such in all copy; tripwires watch it (Gas Town Overseer deepening, Beads adding trace/approval semantics).
+      - Yegge's own positioning ('Beads isn't a planning tool, a PRD generator, or Jira — planning happens in specs, PRDs, design docs' — blog, cite THIS not the README) confirms the requirements/intent altitude is the open slot.
+      - Evidence: docs/competitive-analysis/2026-06-12-beads-gastown-moat-rescope.md INCLUDING its dated ERRATUM (D5 binds to the corrected table).
+
+      ## Consequences
+
+      - Story-telling artifacts re-lead with the operator's statement + sharpened wedge; 'missing index' retired; acronym re-expanded; scoped honest formulations until STORY-578/579 land, un-scoping sweep rides their landing.
+      - Interop: sidecar governance over live bd data first (single-ownership rule); importer = migration/eval ramp. 'Funnel' never appears in public copy.
+      - Roadmap items re-justify under the coordination+intent+governance lens or are cut (STORY-577, incl. advisor-memory audit).
+      - Engine NOT rewritten — re-aimed; WS8 (vendor-param orchestrator) + WS9 (gate default-on, history scoping) make the claims true.
+
+      ## Status
+
+      Accepted-in-substance by operator (direction + D8 + D9); formal flip is the master/operator's disposition. Supersedes the 2026-05-31 keystone's framing on positioning specifics; that snapshot stays frozen.
+clock: 1676
 node_id: '1'
