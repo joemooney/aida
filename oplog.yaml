@@ -16693,5 +16693,48 @@ operations:
       R2 (refines #3 — tag-parked specs with no explicit question): `aida questions sweep` attaches a synthesized DecisionRequest offering a DISPOSITION choice — `approve-to-ready` / `reject` / `keep-parked-with-reason`. Answering `approve-to-ready` clears the gating parking tag (needs-design-signoff/needs-design/needs-human/operator-action); `reject` sets the spec status to Rejected; `keep-parked-with-reason` records the reason (as a why-open: comment or equivalent) and leaves it parked.
 
       R3 (refines #1/#2 — auto-queue on answer): an answer that unparks a spec ALSO auto-queues it via the existing backlog-groom enqueue path (backlog::enqueue_groomed) — the human's answer IS the advisor sign-off (STORY-546), so this honors rather than bypasses the checkpoint. Honor the existing advisor-authority gate (has_advisor_authority / status_advance_requires_advisor_authority). Net: an answered decision-parked spec becomes genuinely burndown-Ready (queued + decision-free) — the human-decision complement of `aida burndown run`. EXCEPTION: if #4's partial-unpark applies (still epic / BlockedBy / another parking tag), do NOT queue — report the remaining blocker instead.
-clock: 1656
+- id: 019ebc61-9377-7d22-b789-3b23f934e0e3
+  target_id: 019eb6ca-001b-7270-a518-5c35e141a4df
+  author: aida
+  node_id: '1'
+  lamport: 1657
+  timestamp: 2026-06-12T15:09:31.896022311Z
+  kind: !SetDescription
+    description: |-
+      Operator ask (2026-06-11): a CLI command that fires up (or talks to) an ADVISOR AGENT which reads ALL open specs, applies advisor JUDGMENT (approve/reject/park), and queues what it deems autonomous-able — the advisor-side analog of 'aida burndown run' (which fires IMPLEMENTER agents). Third launcher: burndown run (headless implementer execution) + questions clarify (interactive advisor for under-spec, STORY-557) + THIS (headless advisor intake). Distinct from STORY-558 (HUMAN-guided approve+queue): this delegates the APPROVE/value judgment to an advisor AGENT.
+
+      CAVEAT — the real trade-off, design around it, do not hide it: the headless advisor is a COLD-BOOT 'claude -p', NOT the operator's live session — same model, LESS context (lacks the operator's strategic frame: current pivot, priorities, budget). A cold-boot advisor approving everything 'completable' can quietly UNDO the operator's curation (bless low-value / wrong-direction specs that are merely mechanically autonomous-able). Autonomy-eligible != worth-doing; an AGENT making the worth-doing call is a real authority escalation (the ADR-3/STORY-546 sign-off gate, now held by an agent). See feedback_headless_advisor_is_cold_boot.
+
+      ## Acceptance
+      1. PROPOSE-MODE BY DEFAULT: the advisor agent reads all open specs and OUTPUTS a proposed disposition per spec (approve / reject / park-for-human / queue) WITH one-line reasoning — writes NOTHING until --apply. The value judgment stays reviewable.
+      2. --apply executes the proposed approvals + queue groom. Even with --apply, NEVER auto-approve specs the agent itself flags as needing human strategic input — route those to 'aida questions' / leave draft.
+      3. Guardrails: --max-approvals N, --only-tag/--exclude-tag, --risk <max>, and a standing do-not-approve class filter (vision/epic/strategic) so the agent cannot bless the wrong classes. (See policy P2 below — the class filter is config-driven.)
+      4. Reuse, not new gate logic: the agent IS the headless advisor tier (/aida-advise or a new /aida-intake skill); the queue step IS 'aida backlog groom --pickable' (STORY-554). Launcher + intake-judgment skill.
+      5. Post-run integrity (BUG-496 lesson): report what it approved/queued; if it chains into a burndown, verify the integrated main after.
+
+      Composes with STORY-558 (human-guided sibling), STORY-554 (groom half), STORY-557 (interactive-advisor launcher), STORY-306 (/aida-advise headless tier), the three-mode autonomy ladder.
+
+      ## Resolved design decisions (operator-resolved 2026-06-12 — BINDING): POLICY-DRIVEN intake
+
+      D0 (skill, advisor decision): a NEW `/aida-intake` skill (batch-read-all-open-specs-and-propose-dispositions), NOT an extension of /aida-advise (which is per-punt, resolves one decision). Reuse the headless `claude -p` launcher mechanism + 'aida backlog groom --pickable' (STORY-554) for the queue step. The CLI launcher is `aida intake` (proposes by default; --apply executes).
+
+      The three behavior forks are NOT hardcoded — each is a tunable knob under a new `[intake]` block in `.aida/config.toml`, with SAFE DEFAULTS so `aida intake` works out-of-the-box with no config (propose-mode is always the gate). All options are implemented; the agent forks on config.
+
+      P1 — `intake.disposition_bias` (the cold-boot worth-doing posture):
+        - `approve-eligible` (DEFAULT): propose approve for every autonomy-eligible spec; the propose-mode review (acceptance #1) is the worth-doing filter.
+        - `park-aligned`: feed the agent a strategic-frame input (project phase / priorities — e.g. from project memory) and propose approve only when a spec is BOTH autonomy-eligible AND clearly aligned, else park-for-human.
+        - `park-conservative`: park-when-unsure bias, no strategic-frame input fed.
+        Propose-mode-by-default (acceptance #1) remains the ultimate gate regardless of bias.
+
+      P2 — `intake.do_not_approve_classes` (HARD authority bound — classes the agent can NEVER propose approve for, even with --apply; refines acceptance #3):
+        - DEFAULT: ["vision","epic","principle","constraint","decision","term"] (strategic + knowledge-graph types — advisor-authored, not implementer work), PLUS an always-on filter excluding any spec tagged `needs-human` or `strategic`.
+        - Configurable: the operator may add/remove classes. The default is the tight, authority-preserving bound.
+
+      P3 — `intake.on_apply` (what --apply does after queuing; refines acceptance #5):
+        - `queue` (DEFAULT): stop at queuing; draining is a separate explicit `aida burndown run`. Bounds the compounding unattended authority (cold-boot approve + implementer drain in one shot).
+        - `drain`: chain straight into a burndown drain after queuing.
+        - `--then-drain` flag overrides the config to `drain` for a single run.
+
+      Implementation note: the DEFAULTS (approve-eligible bias + tight do-not-approve classes + stop-at-queue + propose-mode) must make `aida intake` safe AND useful with zero config. The `[intake]` block is opt-in tuning, not required. Document the policy knobs + defaults in `--help` and the /aida-intake skill. Guardrail flags from acceptance #3 (--max-approvals, --only-tag/--exclude-tag, --risk) compose with the config policy (flags override config for a run).
+clock: 1657
 node_id: '1'
