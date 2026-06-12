@@ -16,6 +16,7 @@ use aida_core::{
     RequirementStatus, RequirementType, Storage,
 };
 
+use crate::burndown::{self, BurndownCandidate, Pickability};
 use crate::cli::BacklogCommand;
 use crate::{
     apply_tag_deltas, batch_tag_of, current_user_id, find_plan_files_for_spec, find_project_root,
@@ -61,6 +62,25 @@ impl RiskLevel {
                 "unknown risk level `{other}` — expected one of: low, medium, high, unknown"
             )),
         }
+    }
+
+    /// Ordering for the `--risk <max>` ceiling. Higher = riskier / less safe to
+    /// auto-select. `Unknown` ranks above `Medium` (we don't know its blast
+    /// radius, so admit it only when the operator explicitly allows `high`).
+    /// trace:STORY-554 | ai:claude
+    fn rank(self) -> u8 {
+        match self {
+            RiskLevel::Low => 0,
+            RiskLevel::Medium => 1,
+            RiskLevel::Unknown => 2,
+            RiskLevel::High => 3,
+        }
+    }
+
+    /// True when a candidate at `self` risk is admitted under a `--risk max`
+    /// ceiling. `--risk high` admits everything; `--risk low` only low.
+    fn within_ceiling(self, max: RiskLevel) -> bool {
+        self.rank() <= max.rank()
     }
 }
 
@@ -252,20 +272,35 @@ pub(crate) fn handle_backlog_command(cmd: &BacklogCommand, storage: &Storage) ->
         BacklogCommand::Groom {
             specs,
             from_stdin,
+            pickable,
+            risk,
+            apply,
             batch,
             dry_run,
             note,
             user,
         } => {
-            let ids = resolve_groom_ids(specs.as_deref(), *from_stdin)?;
-            handle_groom(
-                storage,
-                &ids,
-                batch.as_deref().map(normalize_batch_name),
-                *dry_run,
-                note.as_deref(),
-                user.as_deref(),
-            )
+            if *pickable {
+                let max_risk = RiskLevel::parse(risk)?;
+                handle_groom_pickable(
+                    storage,
+                    max_risk,
+                    *apply,
+                    batch.as_deref().map(normalize_batch_name),
+                    note.as_deref(),
+                    user.as_deref(),
+                )
+            } else {
+                let ids = resolve_groom_ids(specs.as_deref(), *from_stdin)?;
+                handle_groom(
+                    storage,
+                    &ids,
+                    batch.as_deref().map(normalize_batch_name),
+                    *dry_run,
+                    note.as_deref(),
+                    user.as_deref(),
+                )
+            }
         }
         BacklogCommand::Load => {
             anyhow::bail!("`aida backlog load` is handled by the load-report dispatcher")
@@ -750,6 +785,236 @@ fn print_groom_line(req: &Requirement, batch: Option<&str>) {
     );
 }
 
+/// One backlog item paired with its advisory risk chip and the already-probed
+/// burndown gate facts. The pure [`select_pickable`] consumes a slice of these
+/// so the auto-selection logic is filesystem-free and unit-testable.
+/// trace:STORY-554 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct PickableItem {
+    pub id: String,
+    pub risk: RiskLevel,
+    pub candidate: BurndownCandidate,
+}
+
+/// Why an item was held back from auto-selection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ParkReason {
+    /// Failed the burndown pickability gate (epic / blocked / pending decision
+    /// / parking-tag). Carries the gate's own human-readable reason — single
+    /// source of truth with the burndown.
+    Gate(String),
+    /// Passed the gate but is riskier than the `--risk <max>` ceiling.
+    RiskCeiling(RiskLevel),
+}
+
+impl ParkReason {
+    fn label(&self) -> String {
+        match self {
+            ParkReason::Gate(r) => r.clone(),
+            ParkReason::RiskCeiling(level) => {
+                format!("risk {} exceeds ceiling", level.chip())
+            }
+        }
+    }
+}
+
+/// Pure auto-selection: apply the burndown pickability gate (reused verbatim via
+/// [`burndown::classify`]) then the `--risk <max>` ceiling, partitioning the
+/// backlog into the would-groom ids and the would-park items with reasons.
+/// Order-preserving so output mirrors the input ranking. trace:STORY-554
+pub(crate) fn select_pickable(
+    items: &[PickableItem],
+    max_risk: RiskLevel,
+) -> (Vec<String>, Vec<(String, ParkReason)>) {
+    let mut groom: Vec<String> = Vec::new();
+    let mut park: Vec<(String, ParkReason)> = Vec::new();
+    for item in items {
+        // Gate first — a parked spec is parked regardless of its risk chip, and
+        // the gate reason is the more fundamental signal.
+        match burndown::classify(&item.candidate) {
+            Pickability::Parked(reason) => {
+                park.push((item.id.clone(), ParkReason::Gate(reason)));
+                continue;
+            }
+            Pickability::Ready => {}
+        }
+        if item.risk.within_ceiling(max_risk) {
+            groom.push(item.id.clone());
+        } else {
+            park.push((item.id.clone(), ParkReason::RiskCeiling(item.risk)));
+        }
+    }
+    (groom, park)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_groom_pickable(
+    storage: &Storage,
+    max_risk: RiskLevel,
+    apply: bool,
+    batch: Option<&str>,
+    note: Option<&str>,
+    user: Option<&str>,
+) -> Result<()> {
+    let store = storage.load()?;
+    let user_id = current_user_id(user);
+    let queued_ids = collect_queued_ids(storage, &user_id)?;
+    let project_root = find_project_root().unwrap_or_else(|_| PathBuf::from("."));
+
+    // The backlog set = Approved-but-not-queued, ranked exactly as
+    // `aida backlog list` ranks it (priority then age). Build a PickableItem per
+    // member: its advisory risk chip (reused `classify_risk`) + the burndown
+    // gate facts (reused `BurndownCandidate` construction). trace:STORY-554
+    let candidates = collect_backlog_candidates(&store, &queued_ids);
+    let mut items: Vec<PickableItem> = Vec::with_capacity(candidates.len());
+    // id → req, so we can resolve the would-groom set back to requirements for
+    // the enqueue write without re-scanning the store.
+    let mut by_id: std::collections::HashMap<String, Requirement> =
+        std::collections::HashMap::new();
+    for req in &candidates {
+        let spec_id = display_id(req).to_string();
+        let has_plan = !find_plan_files_for_spec(&project_root, &spec_id).is_empty();
+        let risk = classify_risk(req, has_plan);
+        let has_unsatisfied_blocker = aida_core::pickability::blocked_by_incomplete(req, &store);
+        let has_pending_decision = req
+            .decision_request
+            .as_ref()
+            .map(|d| d.is_pending())
+            .unwrap_or(false);
+        let candidate = BurndownCandidate {
+            id: spec_id.clone(),
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+            tags: req.tags.iter().cloned().collect(),
+            has_unsatisfied_blocker,
+            has_pending_decision,
+        };
+        items.push(PickableItem {
+            id: spec_id.clone(),
+            risk,
+            candidate,
+        });
+        by_id.insert(spec_id, req.clone());
+    }
+
+    let (groom_ids, parked) = select_pickable(&items, max_risk);
+
+    // ---- DRY-RUN BY DEFAULT ----
+    if !apply {
+        render_pickable_dry_run(&groom_ids, &parked, &by_id, max_risk, batch);
+        return Ok(());
+    }
+
+    // ---- APPLY: write the survivors via the same enqueue path normal groom uses.
+    if groom_ids.is_empty() {
+        println!(
+            "{} No pickable backlog items at risk ≤ {} — nothing to groom.",
+            "•".dimmed(),
+            max_risk.chip()
+        );
+        return Ok(());
+    }
+    let mut updated = 0usize;
+    for id in &groom_ids {
+        let req = by_id
+            .get(id)
+            .ok_or_else(|| anyhow!("internal: pickable id `{id}` lost between select and apply"))?;
+        enqueue_groomed(storage, req, batch, note, &user_id)
+            .with_context(|| format!("queueing {}", id))?;
+        updated += 1;
+        print_groom_line(req, batch);
+    }
+    println!();
+    if let Some(name) = batch {
+        println!(
+            "{} Auto-groomed {} pickable item(s) into the queue, tagged `batch:{}`.",
+            "✓".green(),
+            updated.to_string().bold(),
+            name.bold()
+        );
+        println!(
+            "  Drain with: {}",
+            format!("aida queue work --batch {}", name).bold()
+        );
+    } else {
+        println!(
+            "{} Auto-groomed {} pickable item(s) into the queue.",
+            "✓".green(),
+            updated.to_string().bold()
+        );
+    }
+    if !parked.is_empty() {
+        println!(
+            "  {} {} item(s) parked (gate / risk ceiling) — see `aida backlog groom --pickable` (dry run) for reasons.",
+            "•".dimmed(),
+            parked.len().to_string().bold()
+        );
+    }
+    Ok(())
+}
+
+fn render_pickable_dry_run(
+    groom_ids: &[String],
+    parked: &[(String, ParkReason)],
+    by_id: &std::collections::HashMap<String, Requirement>,
+    max_risk: RiskLevel,
+    batch: Option<&str>,
+) {
+    println!(
+        "{} (no writes — pass {} to queue these)",
+        "aida backlog groom --pickable".bold(),
+        "--apply".bold()
+    );
+    println!(
+        "{}",
+        format!("risk ceiling: ≤ {}", max_risk.chip()).dimmed()
+    );
+    println!();
+
+    println!("{}", "Would groom (pickable + within risk):".bold());
+    if groom_ids.is_empty() {
+        println!("  {}", "(none)".dimmed());
+    } else {
+        for id in groom_ids {
+            let title = by_id.get(id).map(|r| r.title.as_str()).unwrap_or("");
+            println!("  {} {}  —  {}", "→".green(), id.bold(), title);
+        }
+    }
+
+    println!();
+    println!("{}", "Would park (held back):".bold());
+    if parked.is_empty() {
+        println!("  {}", "(none)".dimmed());
+    } else {
+        for (id, reason) in parked {
+            let title = by_id.get(id).map(|r| r.title.as_str()).unwrap_or("");
+            println!(
+                "  {} {}  —  {}  {}",
+                "⊘".dimmed(),
+                id.bold(),
+                title,
+                format!("[{}]", reason.label()).dimmed()
+            );
+        }
+    }
+
+    println!();
+    let suffix = batch
+        .map(|n| format!(", each tagged `batch:{}`", n))
+        .unwrap_or_default();
+    println!(
+        "Would queue {} item(s){}; {} parked.",
+        groom_ids.len().to_string().bold(),
+        suffix,
+        parked.len().to_string().bold()
+    );
+    println!(
+        "{}",
+        "Tip: run `aida questions` first — the gate's \"decision-free\" check only catches \
+         attached DecisionRequests, not every design-latitude spec. Keep this dry-run review."
+            .dimmed()
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1023,5 +1288,176 @@ mod tests {
             msg.contains("at least two"),
             "error should mention the minimum count, got: {msg}"
         );
+    }
+
+    fn pickable(id: &str, risk: RiskLevel, candidate: BurndownCandidate) -> PickableItem {
+        PickableItem {
+            id: id.to_string(),
+            risk,
+            candidate,
+        }
+    }
+
+    fn cand(
+        id: &str,
+        req_type: &str,
+        tags: &[&str],
+        blocked: bool,
+        decision: bool,
+    ) -> BurndownCandidate {
+        BurndownCandidate {
+            id: id.to_string(),
+            req_type: req_type.to_string(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            has_unsatisfied_blocker: blocked,
+            has_pending_decision: decision,
+        }
+    }
+
+    #[test]
+    fn select_pickable_grooms_clean_low_risk_task() {
+        let items = vec![pickable(
+            "TASK-1",
+            RiskLevel::Low,
+            cand("TASK-1", "task", &["papercut"], false, false),
+        )];
+        let (groom, park) = select_pickable(&items, RiskLevel::Medium);
+        assert_eq!(groom, vec!["TASK-1".to_string()]);
+        assert!(park.is_empty());
+    }
+
+    #[test]
+    fn select_pickable_parks_epic_via_gate_reusing_burndown() {
+        let items = vec![pickable(
+            "EPIC-1",
+            RiskLevel::Low,
+            cand("EPIC-1", "epic", &[], false, false),
+        )];
+        let (groom, park) = select_pickable(&items, RiskLevel::High);
+        assert!(groom.is_empty());
+        assert_eq!(park.len(), 1);
+        match &park[0].1 {
+            ParkReason::Gate(r) => assert!(r.contains("decompose"), "gate reason: {r}"),
+            other => panic!("expected gate park, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn select_pickable_parks_pending_decision_and_blocked_via_gate() {
+        let items = vec![
+            pickable(
+                "TASK-2",
+                RiskLevel::Low,
+                cand("TASK-2", "task", &[], false, true),
+            ),
+            pickable(
+                "TASK-3",
+                RiskLevel::Low,
+                cand("TASK-3", "task", &[], true, false),
+            ),
+        ];
+        let (groom, park) = select_pickable(&items, RiskLevel::High);
+        assert!(groom.is_empty());
+        assert_eq!(park.len(), 2);
+        assert!(park.iter().all(|(_, r)| matches!(r, ParkReason::Gate(_))));
+    }
+
+    #[test]
+    fn select_pickable_parks_parking_tagged_via_gate() {
+        let items = vec![pickable(
+            "TASK-4",
+            RiskLevel::Low,
+            cand("TASK-4", "task", &["needs-decision"], false, false),
+        )];
+        let (groom, park) = select_pickable(&items, RiskLevel::High);
+        assert!(groom.is_empty());
+        match &park[0].1 {
+            ParkReason::Gate(r) => assert!(r.to_lowercase().contains("needs-decision")),
+            other => panic!("expected gate park, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn select_pickable_risk_ceiling_excludes_higher_risk() {
+        // Gate-clean (task, no blockers/decision) but high risk.
+        let items = vec![pickable(
+            "TASK-5",
+            RiskLevel::High,
+            cand("TASK-5", "task", &[], false, false),
+        )];
+        // Default-medium ceiling: parked on risk.
+        let (groom, park) = select_pickable(&items, RiskLevel::Medium);
+        assert!(groom.is_empty());
+        assert_eq!(park[0].1, ParkReason::RiskCeiling(RiskLevel::High));
+        // --risk high admits it.
+        let (groom_hi, park_hi) = select_pickable(&items, RiskLevel::High);
+        assert_eq!(groom_hi, vec!["TASK-5".to_string()]);
+        assert!(park_hi.is_empty());
+    }
+
+    #[test]
+    fn select_pickable_low_ceiling_admits_only_low() {
+        let items = vec![
+            pickable(
+                "TASK-6",
+                RiskLevel::Low,
+                cand("TASK-6", "task", &[], false, false),
+            ),
+            pickable(
+                "TASK-7",
+                RiskLevel::Medium,
+                cand("TASK-7", "task", &[], false, false),
+            ),
+        ];
+        let (groom, park) = select_pickable(&items, RiskLevel::Low);
+        assert_eq!(groom, vec!["TASK-6".to_string()]);
+        assert_eq!(park.len(), 1);
+        assert_eq!(park[0].0, "TASK-7");
+        assert_eq!(park[0].1, ParkReason::RiskCeiling(RiskLevel::Medium));
+    }
+
+    #[test]
+    fn select_pickable_unknown_risk_admitted_only_at_high_ceiling() {
+        let items = vec![pickable(
+            "TASK-8",
+            RiskLevel::Unknown,
+            cand("TASK-8", "task", &[], false, false),
+        )];
+        // Unknown ranks above Medium — excluded at medium ceiling.
+        let (groom, _) = select_pickable(&items, RiskLevel::Medium);
+        assert!(groom.is_empty());
+        // Admitted at high.
+        let (groom_hi, _) = select_pickable(&items, RiskLevel::High);
+        assert_eq!(groom_hi, vec!["TASK-8".to_string()]);
+    }
+
+    #[test]
+    fn select_pickable_gate_takes_precedence_over_risk() {
+        // High-risk AND gate-parked (epic): the gate reason wins, not risk.
+        let items = vec![pickable(
+            "EPIC-2",
+            RiskLevel::High,
+            cand("EPIC-2", "epic", &[], false, false),
+        )];
+        let (_, park) = select_pickable(&items, RiskLevel::High);
+        assert!(matches!(park[0].1, ParkReason::Gate(_)));
+    }
+
+    #[test]
+    fn select_pickable_preserves_input_order() {
+        let items = vec![
+            pickable(
+                "TASK-A",
+                RiskLevel::Low,
+                cand("TASK-A", "task", &[], false, false),
+            ),
+            pickable(
+                "TASK-B",
+                RiskLevel::Low,
+                cand("TASK-B", "task", &[], false, false),
+            ),
+        ];
+        let (groom, _) = select_pickable(&items, RiskLevel::Medium);
+        assert_eq!(groom, vec!["TASK-A".to_string(), "TASK-B".to_string()]);
     }
 }

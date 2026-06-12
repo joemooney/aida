@@ -2989,6 +2989,33 @@ pub enum BacklogCommand {
         /// with --specs).
         #[clap(long, conflicts_with = "specs")]
         from_stdin: bool,
+        /// Auto-select every decision-free backlog item using the same
+        /// pickability gate the burndown uses (bounded/not-epic, unblocked,
+        /// decision-free, not parking-tagged), then groom the survivors.
+        /// Mutually exclusive with --specs / --from-stdin. DRY-RUN BY DEFAULT:
+        /// prints the would-groom and would-park sets; pass --apply to write.
+        ///
+        /// Caveat: "decision-free" here means "no attached DecisionRequest",
+        /// which is coarser than true design-latitude — a design-heavy spec
+        /// with no formal question still passes. Run `aida questions` before
+        /// `--pickable --apply`, and keep the dry-run review load-bearing.
+        #[clap(
+            long,
+            visible_alias = "auto",
+            conflicts_with = "specs",
+            conflicts_with = "from_stdin"
+        )]
+        pickable: bool,
+        /// With --pickable, exclude candidates riskier than this level from
+        /// auto-selection (low / medium / high / unknown). Uses the same risk
+        /// chip `aida backlog list` shows. `--risk high` allows all;
+        /// `--risk low` admits only low-risk. Default: medium.
+        #[clap(long, value_name = "MAX", default_value = "medium")]
+        risk: String,
+        /// With --pickable, actually write the survivors to the queue.
+        /// Without it, --pickable is a dry run (queueing = advisor sign-off).
+        #[clap(long, visible_alias = "yes")]
+        apply: bool,
         /// Tag every groomed item with `batch:NAME` (composes with
         /// `aida queue work --batch NAME`).
         #[clap(long, value_name = "NAME")]
