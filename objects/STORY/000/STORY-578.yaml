@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T21:57:28.334576297Z
-modified_at: 2026-06-12T21:57:28.334576297Z
+modified_at: 2026-06-12T21:58:10.747151732Z
 req_type: Story
 tags:
 - multi-vendor
@@ -16,3 +16,8 @@ tags:
 - parent:EPIC-39
 - repositioning
 - ws8-claims-true
+relationships:
+- rel_type: Parent
+  target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
+  created_at: 2026-06-12T21:58:10.747147021Z
+  created_by: joe
