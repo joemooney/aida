@@ -1,0 +1,32 @@
+id: 019ebde9-b9be-7e52-ac60-94a05183b90a
+spec_id: BUG-510
+agreed_id: BUG-510
+title: aida review <spec> should pre-flight a behind-main/stale-base check + warn before reviewing (parity with the reviewer-role STORY-281 pre-flight)
+description: |-
+  Operator friction (2026-06-12): ran 'aida review TASK-715' (the STORY-553 human-review verb) on PR #709 without rebasing; the PR was ~14 merges behind main. The review ran with NO warning that the base is stale. ASYMMETRY: the reviewer-ROLE drain path already has the STORY-281 pre-flight stale-base check (preflight_stale_base_check + branch_behind_main + pr_rebase::classify_stale_base), but the 'aida review <spec>' HUMAN verb does not. All the machinery exists — 'aida rebase --dry-run' (classify-only, the operator's wanted '--check'), 'aida rebase --auto' (execute safe), branch_behind_main, classify_stale_base — it's just not wired into the human-review verb.
+
+  ## Acceptance
+  1. 'aida review <spec>', BEFORE running the reviewer over a PR, pre-flights whether the PR's branch is behind main — REUSE branch_behind_main / pr_rebase::classify_stale_base (the SAME machinery the reviewer-role path uses; do not reimplement).
+  2. If behind → print a clear warning naming the gap + the exact fix: 'PR #N is N commits behind main — rebase before merging: run Rebase: main vs origin/main
+    state      0 ahead · 0 behind
+    class      clean
+    worktree   dirty (4 dirty path(s)) on the branch.' The review still proceeds (the verdict on the code is valid); the warning is informational + actionable, not a hard block.
+  3. Parity opt-out: a --allow-stale-base flag mirrors the reviewer-role path so a deliberate stale review isn't nagged.
+  4. Bonus: offer to run the rebase inline (the operator's 'warn before review' ask) when interactive.
+
+  Single source of truth: same stale-base predicate everywhere (reviewer-role path + human verb).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T22:17:51.806172998Z
+modified_at: 2026-06-12T22:17:51.806172998Z
+req_type: Bug
+tags:
+- aida:rebase
+- aida:review
+- core
+- from-user-friction
+- papercut
+- parity
+- ux
