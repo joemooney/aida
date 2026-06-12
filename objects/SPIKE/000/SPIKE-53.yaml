@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:18:18.102994866Z
-modified_at: 2026-06-12T15:56:10.714562178Z
+modified_at: 2026-06-12T15:57:03.582201258Z
 req_type: Spike
 tags:
 - beads
@@ -22,4 +22,19 @@ tags:
 - moat
 - spike
 - substrate
+comments:
+- id: 019ebc8d-16de-7b92-8c0e-8d1111ad3378
+  author: joe
+  content: |-
+    RESEARCH DELIVERABLE (advisor-run, 2026-06-12) → docs/competitive-analysis/2026-06-12-beads-gastown-moat-rescope.md
+
+    HEADLINE: Beads (Yegge, ~18.7k stars, v1.0) + Gas Town (Yegge, v1.0) = AIDA's exact thesis, SHIPPED with distribution. The 2026-05-31 keystone anchored on Spec Kit (wrong competitor) and called the moat open; Beads has 4 of the 5 claimed differentiators (typed graph, stable IDs, dependency-ready gate, MCP) PLUS a parallel orchestrator (Gas Town) PLUS distribution. The 'git-canonical typed graph drained by an orchestrator over MCP' is NO LONGER a differentiator.
+
+    VERIFIED [README] surviving AIDA edges: (1) code↔spec trace ENFORCEMENT — Beads has no code-to-issue linking; (2) requirements/product-intent + HUMAN GOVERNANCE — Beads is explicitly 'not a requirements specification system', it's agent memory; (3) truly git-canonical (YAML in same repo) vs Beads' Dolt-store + git-export; (4) PR/CI lifecycle coupling (uncertain).
+
+    DURABLE WEDGE = incentive divergence: Beads/Gas Town = agent AUTONOMY ('unleash the agents'); AIDA = human GOVERNANCE of agents. Beads won't pursue governance — it cuts against its thesis.
+
+    DECISION ESCALATED TO OPERATOR (the moat re-scope): A) move up-stack to governance/requirements, concede substrate; B) interoperate with Beads (import/export, ride the wave); C) differentiate-and-race (NOT recommended); D) niche to regulated/enterprise where governance is mandatory. Recommendation: A+B framed by D. This is the operator's strategic call — research done, decision pending.
+  created_at: 2026-06-12T15:57:03.582201258Z
+  modified_at: 2026-06-12T15:57:03.582201258Z
 human_only: true
