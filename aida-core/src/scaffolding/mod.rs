@@ -2049,6 +2049,14 @@ impl Scaffolder {
             // is the exact clone-attack vector Claude Code guards against, and
             // `aida init` runs per-clone so each user grants their own local
             // trust to the server they just installed. trace:BUG-484
+            //
+            // BUG-501: the COMMITTED settings.json now also carries
+            // enabledMcpjsonServers: ["aida"] (template), because this local
+            // copy is gitignored and so does NOT propagate into the per-pickup
+            // worktrees AIDA's session machinery creates — each fresh worktree
+            // path re-showed the warning. Claude Code unions both files, so
+            // keeping this local copy is harmless and still covers a downstream
+            // project that pins approval per-user only. trace:BUG-501
             let path = PathBuf::from(".claude/settings.local.json");
             let artifact = self.create_artifact(
                 path.clone(),

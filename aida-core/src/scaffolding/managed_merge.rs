@@ -52,6 +52,12 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
             "/hooks/PostToolUse",
             "/hooks/SessionStart",
             "/statusLine",
+            // AIDA owns the MCP pre-approval slot in the committed settings.json
+            // so every checked-out worktree (a fresh project path) trusts the
+            // scaffolded .mcp.json `aida` server and stops warning "1 setup
+            // issue: MCP". The gitignored settings.local.json (BUG-484) doesn't
+            // propagate into worktrees; the committed slot does. trace:BUG-501
+            "/enabledMcpjsonServers",
         ],
         "mcp.json" | ".mcp.json" => &["/mcpServers/aida"],
         // settings.local.json — per-user, gitignored Claude Code overrides.
@@ -168,6 +174,9 @@ mod tests {
         let slots = slots_for_file(Path::new(".claude/settings.json"));
         assert!(slots.contains(&"/statusLine"));
         assert!(slots.contains(&"/hooks/PreToolUse"));
+        // trace:BUG-501 — committed MCP pre-approval slot so every worktree
+        // (a fresh project path) trusts the scaffolded aida server.
+        assert!(slots.contains(&"/enabledMcpjsonServers"));
     }
 
     #[test]
