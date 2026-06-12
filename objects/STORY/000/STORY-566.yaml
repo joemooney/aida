@@ -1,0 +1,39 @@
+id: 019eba3e-b630-7d63-91ab-b457904c98fd
+spec_id: STORY-566
+agreed_id: STORY-566
+title: 'aida queue advance: one command that walks each queued item to its next step — drain the autonomous, dispatch the human-required interactively'
+description: |-
+  The single 'move the rest forward' command the operator has repeatedly, emphatically asked for (2026-06-11). A ROUTER over EXISTING verbs — reuses burndown::explain_open to classify each queued spec, then dispatches to the handler that already exists, so the operator processes the queue ONE ITEM AT A TIME, interactively, to a RESOLUTION (Completed / Rejected / queued-and-draining) — never silently parked or hidden. Closes the gap behind STORY-565 (which surfaces the path); this WALKS it.
+
+  Dispatch table (OpenBucket -> action):
+  - Actionable/ready -> drain (note burndown run / queue work handles it)
+  - HeldForReview (review:draft-only) -> aida review <id> (reopen the PR first if closed); on approve, remove the hold tag so it drains
+  - BuildSupervised (needs-supervised-build) -> aida queue work <id> --zen
+  - AwaitingDecision (needs-decision) -> surface + apply the decision (aida questions)
+  - Deferred / Blocked / human-only -> report why; offer Reject (a real resolution) or Skip
+  - Planned-but-ready -> offer Approve -> drains
+
+  ## Acceptance
+  1. 'aida queue advance' (no id) walks every queued item in order; 'aida queue advance <id>' advances just that one.
+  2. Per item: print item + its bucket + reason (from explain_open), then an interactive inquire::Select whose options are the bucket-appropriate next action(s) + Skip + Quit.
+  3. The chosen action DISPATCHES to the existing in-process handler — review->handle_review_spec, supervised-build->handle_queue_work(zen=true), approve/untag->edit mutators, decision->questions. No reimplementation of those flows.
+  4. review:draft-only with a closed PR: advance offers to reopen the PR (gh pr reopen / push+create) before running the review.
+  5. --yes / non-interactive: auto-takes ONLY the unambiguous autonomous step (drain-ready, approve-planned-ready) and SKIPS anything needing a human, printing what each needs. No silent human-bypass.
+  6. Empty queue -> 'Queue empty — nothing to advance.'
+  7. Unit tests in burndown.rs::tests for the bucket->action mapping (pure: given OpenBucket, expected dispatch label).
+  8. No SPEC-IDs in user-facing output (user-facing-text convention).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T05:12:12.592734612Z
+modified_at: 2026-06-12T05:12:12.592734612Z
+req_type: Story
+tags:
+- aida:queue
+- aida:queue:advance
+- autonomy
+- core
+- legibility
+- operator-tooling
+- ux
