@@ -418,12 +418,15 @@ status`) — BUG-232:
   table, then auto-take its `⇒` row (exit so the orchestrator continues),
   touching `$AIDA_EXIT_SENTINEL` as its absolute last action (see below).
 - **plain `--zen`** (`interactive`) — the PR is now open, which was the
-  mechanical step `--zen` auto-resolved on the way here. What is left —
-  end the implementer session, and whether to grab the next queued item
-  or stop — is a genuine `kind:design-fork` only the standby advisor can
-  act on: a skill cannot synthesize the Ctrl+D, and there is no
-  orchestrator or `$AIDA_EXIT_SENTINEL` under plain `--zen`. Render the
-  *plain zen mode* template below and **pause** — do not auto-take a row.
+  mechanical step `--zen` auto-resolved on the way here. The genuine
+  `kind:design-fork` left — *grab the next queued item or stop* — only the
+  standby advisor can answer, and a skill cannot synthesize the final
+  Ctrl+D, so render the *plain zen mode* template below and **pause** — do
+  not auto-take a row. (Once *stop* is the answer, though, the session-end
+  cleanup it implies is mechanical: this session runs `aida session end`
+  itself to tear down its worktree + lease before exiting — BUG-500 —
+  rather than leaving them for the operator.) There is no orchestrator or
+  `$AIDA_EXIT_SENTINEL` under plain `--zen`.
 - **default** (no zen) — render the matching table, the user picks.
 
 Never auto-take a `⏏` abort row. Print the one-line `↳ zen:` note only
@@ -642,12 +645,41 @@ PR-<N> opened: <url>. Review story filed (step 11).
 | Path | What happens | Why |
 |------|--------------|-----|
 | ▶ Grab the next queued item | End this session (Ctrl+D), then `aida queue work <NEXT-SPEC>` from the parent shell | PR-<N> now owns this branch — the next spec needs its own branch + worktree, so the implementer lease must be released first |
-| ⏸ Stop here | End this session (Ctrl+D), then `aida session end <session-id>` from the parent shell | PR-<N> is open and the review story filed — a clean stopping point; resume the queue later from the parent shell |
+| ⏸ Stop here | This session runs `aida session end <session-id>` itself (removes the worktree, clears the implementer lease), then you press Ctrl+D | PR-<N> is open and the review story filed — a clean stopping point. `--zen` has no orchestrator to reap the session, so *stopping* means cleaning up now rather than leaving a dangling worktree (`~/ai/aida-<spec>`) + lease for the operator to `aida session end` by hand later (BUG-500) |
+
+**On the ⏸ Stop choice, run the cleanup yourself.** Unlike grab-next
+(which hands the parent shell a fresh `aida queue work` that releases this
+lease by claiming the new scope), *stop* has no follow-on command — so the
+right move is for this session to do the teardown before it exits, exactly
+as the orchestrator does for free in `--auto-complete` mode. `--zen` has no
+orchestrator, so without this the worktree + lease dangle until the
+operator ends the session by hand (BUG-500). Resolve the session id
+(`aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'`, or
+omit the arg entirely and let `aida session end` resolve the sole active
+lease) and run: trace:BUG-500
+
+```bash
+aida session end <session-id>   # removes the worktree + clears the lease; no-ops gracefully if already gone
+```
+
+`aida session end` is CI-aware (TASK-111) — under `--zen` the PR is open
+but not yet merged, so it auto-probes CI; pass `--skip-ci` to release the
+lease without waiting, or `--wait-ci` to block until green. It self-removes
+its own worktree even when run from inside it (BUG-108 / BUG-416), and is
+idempotent: if the lease/worktree is already gone it prints
+`(no active sessions)` and exits clean. After it returns, tell the user the
+worktree + lease are released, then press Ctrl+D. Ending before the PR
+merges also sidesteps the TASK-721 merged-worktree-can't-delete papercut.
+Do **NOT** run `aida session end` on the ▶ grab-next row — that lease is
+released by the *next* `aida queue work` claiming the new scope, not torn
+down here.
 
 Do **not** touch `$AIDA_EXIT_SENTINEL` here — that sentinel is the
 orchestrator-mode handoff only, and there is no orchestrator under plain
-`--zen`. Do **not** auto-take either row: the session-end action needs the
-human, and grab-next-vs-stop is a real choice. trace:BUG-232
+`--zen`. Do **not** auto-take the ▶ grab-next row — grab-next-vs-stop is a
+real choice only the standby advisor answers; but once *stop* is chosen,
+the session-end cleanup is mechanical, so you run it yourself rather than
+deferring it to the operator. trace:BUG-232 trace:BUG-500
 
 *Auto-queue succeeded (✓ filed or ⓘ already exists):*
 
