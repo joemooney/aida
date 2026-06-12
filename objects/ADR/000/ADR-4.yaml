@@ -1,0 +1,42 @@
+id: 019ebd8f-470b-73a2-9549-8988c1ee56c9
+spec_id: ADR-4
+agreed_id: ADR-4
+title: Reposition AIDA as the human-governance layer for agent-driven development (concede the substrate race to Beads/Gas Town; interop, don't compete)
+description: |-
+  ## Decision (operator-commissioned 2026-06-12, from SPIKE-53's escalation)
+
+  Beads (~18.7k stars, v1.0) + Gas Town (v1.0) shipped AIDA's substrate thesis — typed dependency graph + stable IDs + ready-gate + MCP + parallel orchestrator — with distribution AIDA does not have. The substrate is no longer the moat. Operator selected the escalated recommendation: **A (move up the stack) + B (interoperate with Beads), framed by D (regulated/enterprise is the sharpest segment)**. Option C (feature-race Yegge) explicitly rejected.
+
+  ## The new position
+
+  AIDA is the **human-governance layer for agent-driven development**: approved requirements (ADR-3 gates), role-gated autonomy (product/advisor/implementer, autonomy ladder), enforced code↔spec traces (the anti-drift loop), and a git-canonical audit trail of who decided what and why. Candidate line: *'Beads gives your agents memory. AIDA gives your team governance — approved specs, enforced traces, role-gated autonomy, and an audit trail — so you can let agents run AND prove what they did and why.'*
+
+  ## Grounding
+
+  - The durable wedge is an INCENTIVE divergence, not a feature: Yegge's stack is built to UNLEASH agents; AIDA is built to GOVERN them. Beads' docs explicitly disclaim being a requirements system. They won't chase governance — it cuts against their thesis. Incentive-anchored claims age well.
+  - Verified surviving edges: code↔spec trace enforcement (absent in Beads), requirements/intent altitude + human disposition gates, truly git-canonical (specs in the code repo), PR/CI lifecycle coupling.
+  - Evidence: docs/competitive-analysis/2026-06-12-beads-gastown-moat-rescope.md (SPIKE-53 deliverable).
+
+  ## Consequences
+
+  - Every story-telling artifact (README, OVERVIEW, VIS-1, positioning corpus, demo deck, init-scaffolded templates) re-leads with governance; 'missing index' framing retired (STORY-551).
+  - Beads interop (import/export/bridge) becomes a build priority — ride the 18.7k-star wave as the governance layer on top.
+  - Substrate-race roadmap items must re-justify under the governance lens or be cut.
+  - Regulated/enterprise (governance mandatory) is the named beachhead segment to evaluate (ReqIF option).
+  - The ENGINE (graph, store, orchestrator, traces, lifecycle) is NOT rewritten — it is re-aimed; it IS the governance machinery.
+
+  ## Status
+
+  Proposed (this ADR) — operator accepts/amends. Supersedes the 2026-05-31 keystone's 'defend the substrate' framing on positioning specifics; the keystone snapshot itself stays frozen per immutability discipline.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:39:04.203194099Z
+modified_at: 2026-06-12T20:39:04.203194099Z
+req_type: Decision
+tags:
+- from-spike:SPIKE-53
+- governance
+- repositioning
+- strategy
