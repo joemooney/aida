@@ -3,12 +3,12 @@ spec_id: STORY-571
 agreed_id: STORY-571
 title: 'Review PR #793 — STORY-564 --zen auto-exit'
 description: 'Reviewer pass on PR #793 (STORY-564: --zen auto-exits on a clean finish). Check: zen::classify_finish precedence; marker path resolves across sibling worktrees via find_main_worktree_root; punt-ledger spec scoping; SPEC-IDs absent from --help; SKILL.md auto-exit vs pause flow coherent.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T17:24:20.783201592Z
-modified_at: 2026-06-12T17:24:20.783201592Z
+modified_at: 2026-06-12T17:34:10.162678261Z
 req_type: Story
 tags:
 - aida:queue:work
