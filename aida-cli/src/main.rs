@@ -3086,9 +3086,25 @@ impl QuestionSweepScope {
     }
 }
 
+/// What KIND of decision a swept candidate needs — which shape of
+/// DecisionRequest [`formulate_sweep_decision_request`] should attach.
+/// trace:STORY-555 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SweepKind {
+    /// Under-specified / design-fork text: the proceed-as-written vs
+    /// park-for-clarification question (the original slice-1 sweep shape).
+    Clarify,
+    /// A spec held ONLY by a disposition parking tag, with no explicit
+    /// question — synthesize an approve / reject / keep-parked disposition so
+    /// the tag-park inbox converges on the decision inbox. Carries the gating
+    /// tag that triggered it. trace:STORY-555 (R2)
+    Disposition(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct QuestionSweepCandidate {
     reason: String,
+    kind: SweepKind,
 }
 
 fn requirement_text(req: &Requirement) -> String {
@@ -3195,6 +3211,18 @@ fn question_sweep_candidate(
         return None;
     }
 
+    // STORY-555 (R2): a spec held only by a disposition parking tag, with no
+    // explicit question, needs a human DISPOSITION (approve / reject / keep) —
+    // not an authored answer. Detect it first (the most explicit park signal)
+    // so the tag-park and decision-park inboxes converge on `aida questions`.
+    // trace:STORY-555 | ai:claude
+    if let Some(tag) = disposition_gating_tag(&req.tags) {
+        return Some(QuestionSweepCandidate {
+            reason: format!("parked by `{tag}`"),
+            kind: SweepKind::Disposition(tag),
+        });
+    }
+
     let text = requirement_text(req).to_ascii_lowercase();
     let has_acceptance = contains_any(&text, &["acceptance", "acceptance criteria", "acceptance:"]);
     // BUG-495: the missing-acceptance flag only makes sense for specs an agent
@@ -3207,6 +3235,7 @@ fn question_sweep_candidate(
     {
         return Some(QuestionSweepCandidate {
             reason: "missing acceptance criteria".to_string(),
+            kind: SweepKind::Clarify,
         });
     }
 
@@ -3232,6 +3261,7 @@ fn question_sweep_candidate(
     ) {
         return Some(QuestionSweepCandidate {
             reason: "decision-marker text".to_string(),
+            kind: SweepKind::Clarify,
         });
     }
 
@@ -3250,6 +3280,7 @@ fn question_sweep_candidate(
             {
                 return Some(QuestionSweepCandidate {
                     reason: format!("blocked by ambiguous {}", blocker.display_id()),
+                    kind: SweepKind::Clarify,
                 });
             }
         }
@@ -3262,32 +3293,75 @@ fn formulate_sweep_decision_request(
     req: &Requirement,
     candidate: &QuestionSweepCandidate,
 ) -> aida_core::DecisionRequest {
-    aida_core::DecisionRequest {
-        question: format!(
-            "{} appears to need a human decision before implementation ({}) - should it proceed as written or be parked for clarification?",
-            req.display_id(),
-            candidate.reason
-        ),
-        choices: vec![
-            aida_core::DecisionChoice {
-                label: "Proceed as written".to_string(),
-                consequence: "The spec stays in the near-term queue and implementers use the current text.".to_string(),
-                resolution: "noop".to_string(),
-            },
-            aida_core::DecisionChoice {
-                label: "Park for clarification".to_string(),
-                consequence: "The spec is deferred until the ambiguity is clarified outside the drain.".to_string(),
-                resolution: "tag:+needs-human-decision".to_string(),
-            },
-        ],
-        recommended: Some(1),
-        rationale: Some(format!(
-            "The deterministic sweep flagged this as `{}`; parking avoids a mid-drain implementation guess.",
-            candidate.reason
-        )),
-        answered: None,
-        asked_at: Some(chrono::Utc::now()),
-        answered_at: None,
+    let now = chrono::Utc::now();
+    match &candidate.kind {
+        // STORY-555 (R2): a tag-parked spec with no explicit question. Offer a
+        // DISPOSITION — answering `Approve` clears the gating tag and unparks +
+        // queues; `Reject` kills it; `Keep parked` records why and holds. No
+        // recommended default: a disposition must be an explicit human call,
+        // not an Enter-through. trace:STORY-555 | ai:claude
+        SweepKind::Disposition(tag) => aida_core::DecisionRequest {
+            question: format!(
+                "{} is parked by `{tag}` with no recorded question — what's the disposition?",
+                req.display_id(),
+            ),
+            choices: vec![
+                aida_core::DecisionChoice {
+                    label: "Approve → ready".to_string(),
+                    consequence: format!(
+                        "Clears the `{tag}` gate and queues the spec for the burndown ready set."
+                    ),
+                    resolution: "disposition:approve-to-ready".to_string(),
+                },
+                aida_core::DecisionChoice {
+                    label: "Reject".to_string(),
+                    consequence: "Marks the spec Rejected — it will not be implemented.".to_string(),
+                    resolution: "disposition:reject".to_string(),
+                },
+                aida_core::DecisionChoice {
+                    label: "Keep parked".to_string(),
+                    consequence: "Leaves the spec parked and records a why-open note.".to_string(),
+                    resolution: "disposition:keep-parked".to_string(),
+                },
+            ],
+            recommended: None,
+            rationale: Some(format!(
+                "Held by the `{tag}` parking tag with no question attached; a human disposition unparks it (or confirms the hold).",
+            )),
+            answered: None,
+            asked_at: Some(now),
+            answered_at: None,
+        },
+        SweepKind::Clarify => aida_core::DecisionRequest {
+            question: format!(
+                "{} appears to need a human decision before implementation ({}) - should it proceed as written or be parked for clarification?",
+                req.display_id(),
+                candidate.reason
+            ),
+            choices: vec![
+                aida_core::DecisionChoice {
+                    label: "Proceed as written".to_string(),
+                    consequence: "The spec stays in the near-term queue and implementers use the current text.".to_string(),
+                    resolution: "noop".to_string(),
+                },
+                aida_core::DecisionChoice {
+                    label: "Park for clarification".to_string(),
+                    consequence: "The spec is deferred until the ambiguity is clarified outside the drain.".to_string(),
+                    // A recognized parking tag (matches burndown::parking_tag),
+                    // so applying this answer actually keeps the spec parked.
+                    // trace:STORY-555 | ai:claude
+                    resolution: "tag:+needs-decision".to_string(),
+                },
+            ],
+            recommended: Some(1),
+            rationale: Some(format!(
+                "The deterministic sweep flagged this as `{}`; parking avoids a mid-drain implementation guess.",
+                candidate.reason
+            )),
+            answered: None,
+            asked_at: Some(now),
+            answered_at: None,
+        },
     }
 }
 
@@ -3377,6 +3451,437 @@ fn confirm_default(request: &mut aida_core::DecisionRequest) -> Option<usize> {
     request.answered = Some(idx);
     request.answered_at = Some(chrono::Utc::now());
     Some(idx)
+}
+
+// ===================================================================
+// STORY-555: the slice-2 auto-applier. The slice-1 `record_answer`
+// only recorded the chosen index; here, answering a decision APPLIES
+// the chosen resolution token (clears a gate / binds a decision /
+// rejects), re-checks pickability, and — when the spec is now genuinely
+// decision-free + unblocked — auto-queues it onto the burndown ready
+// set. This closes the `aida questions` -> `aida burndown` loop: the
+// human-decision drain is the symmetric complement of the autonomous
+// drain. trace:STORY-555 | ai:claude
+// ===================================================================
+
+/// The parking tags that mark a spec as held for a human DISPOSITION
+/// (approve / reject / keep-parked) rather than for an authored design answer.
+/// A deliberate SUBSET of [`burndown::parking_tag`]'s set — `needs-supervised-
+/// build`, `deferred:*`, and `review:draft-only` carry their own resolution
+/// path and are NOT a yes/no disposition, so the sweep does not synthesize a
+/// disposition for them. trace:STORY-555 | ai:claude
+const DISPOSITION_GATING_TAGS: &[&str] = &[
+    "needs-design-signoff",
+    "needs-design",
+    "needs-human",
+    "operator-action",
+];
+
+/// The first disposition gating tag present on `tags` (case-insensitive),
+/// preserving the spec's own casing in the returned value. trace:STORY-555
+fn disposition_gating_tag(tags: &std::collections::HashSet<String>) -> Option<String> {
+    tags.iter()
+        .find(|t| DISPOSITION_GATING_TAGS.contains(&t.trim().to_ascii_lowercase().as_str()))
+        .map(|t| t.trim().to_string())
+}
+
+/// The effect of applying one answered choice's resolution token to a spec.
+/// `effects` are human-readable lines for the answer printout; `is_disposition`
+/// suppresses the R1(a) `## Acceptance` refinement (a disposition is a
+/// hold/approve/reject, not a design decision that binds the implementer);
+/// `keeps_parked` suppresses the R3 auto-queue (the resolution deliberately
+/// left the spec held — rejected, kept-parked, or newly parking-tagged).
+// trace:STORY-555 | ai:claude
+struct ResolutionApplied {
+    effects: Vec<String>,
+    is_disposition: bool,
+    keeps_parked: bool,
+}
+
+/// Apply a DecisionChoice `resolution` token to `req` in place — the slice-2
+/// auto-applier `record_answer` deferred. The token grammar mirrors what
+/// `aida questions ask --choice label|consequence|<resolution>` and the sweep
+/// emit:
+///   * `noop`                          — no spec change
+///   * `tag:+<tag>` / `tag:-<tag>`     — add / remove a tag
+///   * `status:<status>`               — set status (e.g. `status:rejected`)
+///   * `disposition:approve-to-ready`  — clear every disposition gating tag (R2)
+///   * `disposition:reject`            — set status Rejected (R2)
+///   * `disposition:keep-parked`       — record a why-open note, leave parked (R2)
+///
+/// An unrecognized token is recorded-only (no mutation) so a typo never
+/// silently mangles a spec. trace:STORY-555 | ai:claude
+fn apply_resolution_token(
+    req: &mut Requirement,
+    token: &str,
+    label: &str,
+    consequence: &str,
+) -> ResolutionApplied {
+    let t = token.trim();
+
+    // R2: synthesized-disposition tokens — a yes/no/keep disposition on a
+    // tag-parked spec, NOT a design refinement.
+    if let Some(rest) = t.strip_prefix("disposition:") {
+        return match rest {
+            "approve-to-ready" => {
+                let cleared: Vec<String> = req
+                    .tags
+                    .iter()
+                    .filter(|tag| {
+                        DISPOSITION_GATING_TAGS.contains(&tag.trim().to_ascii_lowercase().as_str())
+                    })
+                    .cloned()
+                    .collect();
+                for tag in &cleared {
+                    req.tags.remove(tag);
+                }
+                let effects = if cleared.is_empty() {
+                    vec!["no disposition gating tag to clear".to_string()]
+                } else {
+                    vec![format!("cleared gating tag(s): {}", cleared.join(", "))]
+                };
+                ResolutionApplied {
+                    effects,
+                    is_disposition: true,
+                    keeps_parked: false,
+                }
+            }
+            "reject" => {
+                req.status = RequirementStatus::Rejected;
+                ResolutionApplied {
+                    effects: vec!["set status → Rejected".to_string()],
+                    is_disposition: true,
+                    keeps_parked: true,
+                }
+            }
+            "keep-parked" => {
+                push_why_open(req, label, consequence);
+                ResolutionApplied {
+                    effects: vec!["recorded why-open; left parked".to_string()],
+                    is_disposition: true,
+                    keeps_parked: true,
+                }
+            }
+            other => ResolutionApplied {
+                effects: vec![format!(
+                    "unrecognized disposition `{other}` — recorded only"
+                )],
+                is_disposition: true,
+                keeps_parked: true,
+            },
+        };
+    }
+
+    // tag:+X / tag:-X
+    if let Some(rest) = t.strip_prefix("tag:") {
+        if let Some(tag) = rest.strip_prefix('+') {
+            let tag = tag.trim();
+            if tag.is_empty() {
+                return ResolutionApplied {
+                    effects: vec!["empty tag in resolution — recorded only".to_string()],
+                    is_disposition: false,
+                    keeps_parked: false,
+                };
+            }
+            let existed = req.tags.iter().any(|x| x.eq_ignore_ascii_case(tag));
+            if !existed {
+                req.tags.insert(tag.to_string());
+            }
+            // Does the tag we just added still park the spec? Ask the same
+            // burndown predicate the gate uses so the two never disagree.
+            let parks = burndown::parking_tag(&[tag.to_string()]).is_some();
+            return ResolutionApplied {
+                effects: vec![format!("added tag `{tag}`")],
+                is_disposition: false,
+                keeps_parked: parks,
+            };
+        }
+        if let Some(tag) = rest.strip_prefix('-') {
+            let needle = tag.trim().to_ascii_lowercase();
+            let removed: Vec<String> = req
+                .tags
+                .iter()
+                .filter(|x| x.trim().to_ascii_lowercase() == needle)
+                .cloned()
+                .collect();
+            for tag in &removed {
+                req.tags.remove(tag);
+            }
+            return ResolutionApplied {
+                effects: vec![if removed.is_empty() {
+                    format!("tag `{needle}` not present")
+                } else {
+                    format!("removed tag `{needle}`")
+                }],
+                is_disposition: false,
+                keeps_parked: false,
+            };
+        }
+    }
+
+    // status:<status>
+    if let Some(rest) = t.strip_prefix("status:") {
+        return match parse_status(rest) {
+            Ok(st) => {
+                // A terminal Rejected is not queue-worthy; any other status
+                // change does not, by itself, keep the spec parked.
+                let keeps = matches!(st, RequirementStatus::Rejected);
+                req.status = st.clone();
+                ResolutionApplied {
+                    effects: vec![format!("set status → {st}")],
+                    is_disposition: false,
+                    keeps_parked: keeps,
+                }
+            }
+            Err(_) => ResolutionApplied {
+                effects: vec![format!("unrecognized status `{rest}` — recorded only")],
+                is_disposition: false,
+                keeps_parked: false,
+            },
+        };
+    }
+
+    if t.eq_ignore_ascii_case("noop") {
+        return ResolutionApplied {
+            effects: vec!["no spec change (noop)".to_string()],
+            is_disposition: false,
+            keeps_parked: false,
+        };
+    }
+
+    ResolutionApplied {
+        effects: vec![format!("unrecognized resolution `{t}` — recorded only")],
+        is_disposition: false,
+        keeps_parked: false,
+    }
+}
+
+/// Record a `why-open:` note (the keep-parked disposition's audit trail) as a
+/// comment on the spec. trace:STORY-555 | ai:claude
+fn push_why_open(req: &mut Requirement, label: &str, consequence: &str) {
+    let now = chrono::Utc::now();
+    req.comments.push(Comment {
+        id: uuid::Uuid::now_v7(),
+        author: current_user_id(None),
+        content: format!(
+            "why-open: kept parked by operator decision ({}) — {label}: {consequence}",
+            now.format("%Y-%m-%d")
+        ),
+        created_at: now,
+        modified_at: now,
+        parent_id: None,
+        replies: Vec::new(),
+        reactions: Vec::new(),
+    });
+}
+
+/// The `## Acceptance` refinement line that BINDS a chosen design decision into
+/// the spec (R1(a) — a decision recorded only as a comment does not bind the
+/// next implementer; an acceptance refinement does, per the
+/// refinements-must-be-acceptance-criteria discipline). trace:STORY-555
+fn resolved_acceptance_line(label: &str, consequence: &str) -> String {
+    let date = chrono::Utc::now().format("%Y-%m-%d");
+    format!(
+        "- Resolved ({date}, operator decision via `aida questions answer`): {label} — {consequence}"
+    )
+}
+
+/// Append `line` to the spec body's `## Acceptance` section, creating the
+/// section if absent. Inserts after the section's last non-blank content line
+/// (before the next heading) so the refinement reads as the newest acceptance
+/// item rather than landing in the blank gap before the following section.
+/// trace:STORY-555 | ai:claude
+fn append_resolved_to_acceptance(description: &str, line: &str) -> String {
+    let lines: Vec<&str> = description.lines().collect();
+    let heading_idx = lines.iter().position(|l| {
+        let t = l.trim();
+        if !t.starts_with('#') {
+            return false;
+        }
+        let h = t.trim_start_matches('#').trim();
+        h.eq_ignore_ascii_case("acceptance") || h.eq_ignore_ascii_case("acceptance criteria")
+    });
+
+    match heading_idx {
+        Some(start) => {
+            // The section runs until the next heading (any level) or EOF.
+            let mut end = lines.len();
+            for (offset, l) in lines.iter().enumerate().skip(start + 1) {
+                if l.trim_start().starts_with('#') {
+                    end = offset;
+                    break;
+                }
+            }
+            let mut insert_at = end;
+            while insert_at > start + 1 && lines[insert_at - 1].trim().is_empty() {
+                insert_at -= 1;
+            }
+            let mut out: Vec<String> = lines[..insert_at].iter().map(|s| s.to_string()).collect();
+            out.push(line.to_string());
+            out.extend(lines[insert_at..].iter().map(|s| s.to_string()));
+            out.join("\n")
+        }
+        None => {
+            let mut out = description.trim_end().to_string();
+            out.push_str("\n\n## Acceptance\n\n");
+            out.push_str(line);
+            out.push('\n');
+            out
+        }
+    }
+}
+
+/// Re-run the burndown pickability gate against a spec AFTER its answer's
+/// resolution has been applied — the honest "is it actually Ready now, or what
+/// still holds it?" check (#2 round-trip + #4 honest partial-unpark). Pure over
+/// the passed store snapshot. trace:STORY-555 | ai:claude
+fn evaluate_unpark(req: &Requirement, all: &[Requirement]) -> burndown::Pickability {
+    let status_by_id: std::collections::HashMap<uuid::Uuid, RequirementStatus> =
+        all.iter().map(|r| (r.id, r.status.clone())).collect();
+    let has_unsatisfied_blocker = req.relationships.iter().any(|rel| {
+        matches!(rel.rel_type, RelationshipType::BlockedBy)
+            && status_by_id
+                .get(&rel.target_id)
+                .map(|s| *s != RequirementStatus::Completed)
+                .unwrap_or(true)
+    });
+    let candidate = burndown::BurndownCandidate {
+        id: req.display_id(),
+        req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+        tags: req.tags.iter().cloned().collect(),
+        has_unsatisfied_blocker,
+        has_pending_decision: req
+            .decision_request
+            .as_ref()
+            .map(|d| d.is_pending())
+            .unwrap_or(false),
+    };
+    burndown::classify(&candidate)
+}
+
+/// Apply a just-recorded answer's resolution and, when it fully unparks the
+/// spec, auto-queue it — the shared tail of every `aida questions answer` path
+/// (single, interactive loop, `--all-defaults`). This is STORY-555's core: the
+/// human's answer APPLIES (not just records) the resolution, binds a design
+/// decision into `## Acceptance` (R1), clears a disposition gate (R2), and
+/// hands the now-decision-free spec to the burndown ready set via the same
+/// advisor-gated enqueue path a groom uses (R3). `req` arrives with the answer
+/// already recorded on its DecisionRequest. trace:STORY-555 | ai:claude
+fn finalize_answer(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    mut req: Requirement,
+    idx: usize,
+) -> Result<()> {
+    let display_id = req.display_id();
+    let title = req.title.clone();
+    let choice = req
+        .decision_request
+        .as_ref()
+        .and_then(|dr| dr.choices.get(idx).cloned())
+        .ok_or_else(|| anyhow::anyhow!("{display_id}: answered choice {idx} is out of range"))?;
+
+    // Apply the resolution token (mutates tags / status / comments in place).
+    let applied = apply_resolution_token(
+        &mut req,
+        &choice.resolution,
+        &choice.label,
+        &choice.consequence,
+    );
+
+    // R1(a): bind a genuine design decision into ## Acceptance. A disposition
+    // (approve/reject/keep) is NOT a design refinement, so it is skipped.
+    if !applied.is_disposition {
+        req.description = append_resolved_to_acceptance(
+            &req.description,
+            &resolved_acceptance_line(&choice.label, &choice.consequence),
+        );
+    }
+
+    req.modified_at = chrono::Utc::now();
+    backend.update_requirement(&req)?;
+
+    println!(
+        "{} {display_id} ({}) → {}",
+        "Answered".green().bold(),
+        title.dimmed(),
+        choice.label.bold()
+    );
+    for effect in &applied.effects {
+        println!("  {} {effect}", "✓".green());
+    }
+    if !applied.is_disposition {
+        println!("  {} bound the decision into ## Acceptance", "✓".green());
+    }
+
+    // R3 + #2 + #4: re-check pickability and, if genuinely Ready, auto-queue.
+    let all = backend.list_requirements(false)?;
+    match evaluate_unpark(&req, &all) {
+        burndown::Pickability::Ready if !applied.keeps_parked => {
+            maybe_autoqueue(store_path, &req)?;
+        }
+        burndown::Pickability::Ready => {
+            // keeps_parked — rejected / kept-parked: deliberately not queued.
+            println!(
+                "  {} not queued (left held by the chosen resolution)",
+                "◐".dimmed()
+            );
+        }
+        burndown::Pickability::Parked(reason) => {
+            // #4 honest partial-unpark: name what still holds it instead of
+            // claiming Ready.
+            println!(
+                "  {} still parked: {} — not queued",
+                "◐".yellow(),
+                reason.dimmed()
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Queue a fully-unparked spec via the same advisor-gated enqueue path a groom
+/// uses (R3). Honors the advisor-authority gate (queueing IS the advisor
+/// sign-off, ADR-3 / TASK-647) and only queues Approved work (the burndown
+/// ready scope); reports honestly when it can't. Idempotent — skips a spec
+/// already queued. trace:STORY-555 | ai:claude
+fn maybe_autoqueue(store_path: &std::path::Path, req: &Requirement) -> Result<()> {
+    if !matches!(req.status, RequirementStatus::Approved) {
+        println!(
+            "  {} unparked, but status is {} (not Approved) — not auto-queued",
+            "◐".dimmed(),
+            req.status
+        );
+        return Ok(());
+    }
+    if !has_advisor_authority() {
+        println!(
+            "  {} unparked, but this session lacks advisor authority — re-run as the advisor to queue",
+            "◐".dimmed()
+        );
+        return Ok(());
+    }
+    let project_root = find_project_root().ok();
+    let already_queued = project_root
+        .as_deref()
+        .map(all_queued_requirement_ids)
+        .map(|ids| ids.contains(&req.id))
+        .unwrap_or(false);
+    if already_queued {
+        println!("  {} already queued — burndown-ready", "→".green());
+        return Ok(());
+    }
+    let storage = Storage::new(store_path);
+    let user_id = current_user_id(None);
+    backlog::enqueue_groomed(
+        &storage,
+        req,
+        None,
+        Some("unparked by `aida questions answer`"),
+        &user_id,
+    )?;
+    println!("  {} queued — now burndown-ready", "→".green().bold());
+    Ok(())
 }
 
 /// Render a single pending DecisionRequest to stdout — question, numbered
@@ -3897,7 +4402,6 @@ fn questions_answer_one(
         .get_requirement_by_spec_id(spec)?
         .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
     let display_id = req.display_id();
-    let title = req.title.clone();
 
     let request = req
         .decision_request
@@ -3907,17 +4411,10 @@ fn questions_answer_one(
         anyhow::bail!("{display_id} is already answered");
     }
     let idx = record_answer(request, choice)?;
-    let label = request.choices[idx].label.clone();
 
-    req.modified_at = chrono::Utc::now();
-    backend.update_requirement(&req)?;
-    println!(
-        "{} {display_id} ({}) → {}",
-        "Answered".green().bold(),
-        title.dimmed(),
-        label.bold()
-    );
-    Ok(())
+    // STORY-555: record was slice 1; now APPLY the resolution + (if it unparks)
+    // auto-queue, so answering closes the questions -> burndown loop.
+    finalize_answer(backend, store_path, req, idx)
 }
 
 /// Interactive answer loop over every pending DecisionRequest. Reads a
@@ -3986,13 +4483,12 @@ fn questions_answer_loop(
 /// default in one shot. trace:STORY-522 | ai:claude
 fn questions_answer_all_defaults(
     backend: &aida_core::CachedGitBackend,
-    _store_path: &std::path::Path,
+    store_path: &std::path::Path,
 ) -> Result<()> {
     let (pending, _) = collect_decision_requests(backend)?;
     let mut answered = 0usize;
     let mut skipped = 0usize;
     for mut req in pending {
-        let display_id = req.display_id();
         let request = match req.decision_request.as_mut() {
             Some(r) if r.is_pending() => r,
             _ => continue,
@@ -4001,11 +4497,10 @@ fn questions_answer_all_defaults(
             skipped += 1;
             continue;
         };
-        let label = request.choices[idx].label.clone();
-        req.modified_at = chrono::Utc::now();
-        backend.update_requirement(&req)?;
+        // STORY-555: apply the resolution + auto-queue, same as the single and
+        // interactive paths.
+        finalize_answer(backend, store_path, req, idx)?;
         answered += 1;
-        println!("  {} {display_id} → {}", "Answered".green(), label.bold());
     }
     if answered == 0 && skipped == 0 {
         println!("{}", "No pending decisions to answer.".dimmed());
@@ -4213,12 +4708,17 @@ mod questions_tests {
         let req = sample_requirement("STORY-FORM", "Acceptance: open question remains.");
         let candidate = QuestionSweepCandidate {
             reason: "decision-marker text".to_string(),
+            kind: SweepKind::Clarify,
         };
         let request = formulate_sweep_decision_request(&req, &candidate);
         assert!(request.is_pending());
         assert_eq!(request.choices.len(), 2);
         assert_eq!(request.recommended, Some(1));
         assert!(request.question.contains("STORY-FORM"));
+        // STORY-555: the park choice must use a tag the burndown gate
+        // recognizes, else applying the answer would not actually park it.
+        assert!(burndown::parking_tag(&["needs-decision".to_string()]).is_some());
+        assert_eq!(request.choices[1].resolution, "tag:+needs-decision");
     }
 
     // trace:STORY-557 | ai:claude
@@ -4365,6 +4865,148 @@ mod questions_tests {
         req.answered = Some(0);
         assert!(confirm_default(&mut req).is_none());
         assert_eq!(req.answered, Some(0), "existing answer untouched");
+    }
+
+    // =============================================================
+    // STORY-555: the slice-2 resolution applier + unpark evaluation.
+    // Pure functions over in-memory Requirements — no backend.
+    // trace:STORY-555 | ai:claude
+    // =============================================================
+
+    #[test]
+    fn apply_token_noop_changes_nothing() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "noop", "Proceed", "stays");
+        assert!(!applied.is_disposition);
+        assert!(!applied.keeps_parked);
+        assert!(req.tags.is_empty());
+        assert_eq!(req.status, RequirementStatus::Approved);
+    }
+
+    #[test]
+    fn apply_token_add_parking_tag_keeps_parked() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "tag:+needs-decision", "Park", "held");
+        assert!(req.tags.contains("needs-decision"));
+        assert!(
+            applied.keeps_parked,
+            "a recognized parking tag keeps it parked"
+        );
+    }
+
+    #[test]
+    fn apply_token_remove_tag_is_case_insensitive() {
+        let mut req = sample_requirement("STORY-N", "body");
+        req.tags.insert("Needs-Design-Signoff".to_string());
+        let applied = apply_resolution_token(&mut req, "tag:-needs-design-signoff", "x", "y");
+        assert!(req.tags.is_empty(), "removed despite casing");
+        assert!(!applied.keeps_parked);
+    }
+
+    #[test]
+    fn apply_token_status_rejected_keeps_parked() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "status:rejected", "x", "y");
+        assert_eq!(req.status, RequirementStatus::Rejected);
+        assert!(applied.keeps_parked, "a rejected spec is not queue-worthy");
+    }
+
+    #[test]
+    fn apply_token_unknown_records_only() {
+        let mut req = sample_requirement("STORY-N", "body");
+        req.status = RequirementStatus::Approved;
+        let applied = apply_resolution_token(&mut req, "garbage-token", "x", "y");
+        assert_eq!(req.status, RequirementStatus::Approved, "no mutation");
+        assert!(req.tags.is_empty());
+        assert!(applied.effects[0].contains("unrecognized"));
+    }
+
+    #[test]
+    fn apply_disposition_approve_clears_all_gates() {
+        let mut req = sample_requirement("STORY-N", "body");
+        req.tags.insert("needs-design-signoff".to_string());
+        req.tags.insert("operator-action".to_string());
+        req.tags.insert("keep-me".to_string());
+        let applied =
+            apply_resolution_token(&mut req, "disposition:approve-to-ready", "Approve", "go");
+        assert!(applied.is_disposition);
+        assert!(!applied.keeps_parked);
+        assert!(!req.tags.contains("needs-design-signoff"));
+        assert!(!req.tags.contains("operator-action"));
+        assert!(req.tags.contains("keep-me"), "non-gating tag survives");
+    }
+
+    #[test]
+    fn apply_disposition_reject_sets_status_and_holds() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "disposition:reject", "Reject", "no");
+        assert_eq!(req.status, RequirementStatus::Rejected);
+        assert!(applied.is_disposition);
+        assert!(applied.keeps_parked);
+    }
+
+    #[test]
+    fn apply_disposition_keep_parked_records_why_open() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let before = req.comments.len();
+        let applied = apply_resolution_token(&mut req, "disposition:keep-parked", "Keep", "later");
+        assert!(applied.keeps_parked);
+        assert_eq!(req.comments.len(), before + 1);
+        assert!(req.comments.last().unwrap().content.contains("why-open"));
+    }
+
+    #[test]
+    fn acceptance_refinement_appends_into_existing_section() {
+        let body = "Intro.\n\n## Acceptance\n\n1. Does a thing.\n\n## Notes\n\ntail";
+        let out = append_resolved_to_acceptance(body, "- Resolved: chose A");
+        // The refinement lands inside Acceptance, before the Notes heading.
+        let accept = out.find("## Acceptance").unwrap();
+        let resolved = out.find("- Resolved: chose A").unwrap();
+        let notes = out.find("## Notes").unwrap();
+        assert!(accept < resolved && resolved < notes, "{out}");
+    }
+
+    #[test]
+    fn acceptance_refinement_creates_section_when_absent() {
+        let out = append_resolved_to_acceptance("Just a description.", "- Resolved: chose B");
+        assert!(out.contains("## Acceptance"));
+        assert!(out.contains("- Resolved: chose B"));
+    }
+
+    #[test]
+    fn unpark_ready_when_decision_answered_and_unblocked() {
+        let mut req = sample_requirement("STORY-N", "body");
+        // No parking tags, not an epic, no blockers, answered decision.
+        let mut dr = sample_request();
+        dr.answered = Some(0);
+        req.decision_request = Some(dr);
+        let all = vec![req.clone()];
+        assert_eq!(evaluate_unpark(&req, &all), burndown::Pickability::Ready);
+    }
+
+    #[test]
+    fn unpark_reports_remaining_parking_tag() {
+        let mut req = sample_requirement("STORY-N", "body");
+        req.tags.insert("deferred:post-stability".to_string());
+        let all = vec![req.clone()];
+        match evaluate_unpark(&req, &all) {
+            burndown::Pickability::Parked(reason) => assert!(reason.contains("deferred")),
+            other => panic!("expected Parked, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn sweep_synthesizes_disposition_for_tag_parked_spec() {
+        let mut req = sample_requirement("STORY-PARK", "Has acceptance criteria, fully specified.");
+        req.tags.insert("needs-design-signoff".to_string());
+        let all = vec![req.clone()];
+        let candidate =
+            question_sweep_candidate(&req, &all, QuestionSweepScope::All, &no_leases()).unwrap();
+        assert!(matches!(candidate.kind, SweepKind::Disposition(_)));
+        let dr = formulate_sweep_decision_request(&req, &candidate);
+        assert_eq!(dr.choices.len(), 3, "approve / reject / keep");
+        assert_eq!(dr.recommended, None, "a disposition needs an explicit call");
+        assert_eq!(dr.choices[0].resolution, "disposition:approve-to-ready");
     }
 }
 

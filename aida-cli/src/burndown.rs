@@ -41,7 +41,12 @@ pub(crate) struct BurndownCandidate {
 /// A tag that marks a spec as not-autonomously-pickable — a human decision, a
 /// deferral, or a draft-review gate. Matched case-insensitively; `deferred:` is
 /// a prefix. Returns the matched tag (for the parked reason). trace:STORY-527
-fn parking_tag(tags: &[String]) -> Option<String> {
+///
+/// `pub(crate)` so the `aida questions answer` unpark path (STORY-555) can ask
+/// "does the tag I just added/cleared still park this spec?" against the SAME
+/// predicate the burndown gate uses — the answer path and the gate can never
+/// disagree on what a parking tag is. trace:STORY-555 | ai:claude
+pub(crate) fn parking_tag(tags: &[String]) -> Option<String> {
     for t in tags {
         let lo = t.trim().to_ascii_lowercase();
         let parks = lo == "blocked"
