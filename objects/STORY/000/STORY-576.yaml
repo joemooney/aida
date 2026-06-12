@@ -1,0 +1,17 @@
+id: 019ebd91-d658-7d61-9db8-1598ae756efa
+spec_id: STORY-576
+agreed_id: STORY-576
+title: 'WS5: Messaging rollout — demo deck, aida init scaffolded templates, AGENTS.md/CLAUDE.md generators re-led with governance'
+description: 'Propagate ADR-4 positioning into every generated/presented artifact: docs/presentation deck (STORY-497 deck gets a repositioned moat slide: substrate=commoditized-by-Beads, governance=the layer above + interop story), aida init''s scaffolded CLAUDE.md/AGENTS.md template language (aida-core/templates — what every NEW downstream project reads about what AIDA is), the init completion banner one-liner, and the README spec-lifecycle section framing. Acceptance: grep for the old substrate-led pitch across templates returns nothing; a fresh aida init project''s CLAUDE.md describes AIDA in governance terms; deck regenerates clean.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:41:51.960195662Z
+modified_at: 2026-06-12T20:41:51.960195662Z
+req_type: Story
+tags:
+- docs
+- parent:EPIC-39
+- repositioning
+- ws5-messaging
