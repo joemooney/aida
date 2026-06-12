@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:52:09.547245681Z
-modified_at: 2026-06-12T04:52:09.547245681Z
+modified_at: 2026-06-12T06:58:36.437070348Z
 req_type: Story
 tags:
 - aida:queue
@@ -39,3 +39,9 @@ tags:
 - legibility
 - operator-frustration
 - ux
+comments:
+- id: 019ebaa0-1f15-7443-8116-1b7374ed976c
+  author: joe
+  content: Commit eba304735 references this requirement
+  created_at: 2026-06-12T06:58:36.437070348Z
+  modified_at: 2026-06-12T06:58:36.437070348Z
