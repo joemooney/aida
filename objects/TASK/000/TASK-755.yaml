@@ -1,0 +1,34 @@
+id: 019eba26-041a-7831-84be-145876eab227
+spec_id: TASK-755
+agreed_id: TASK-755
+title: 'aida doctor completed-without-commit: exclude non-code spec types + bound the historical tail (currently 403 [manual] findings = noise that buries real drift)'
+description: |-
+  Advisor gardening dig (2026-06-11): a full 'aida doctor' sweep on this repo emits 403 completed-without-commit findings (tally: 201 Story, 101 Functional, 53 Task, 21 Bug, 15 Epic, 4 Spike, 3 Decision, 1 each Term/System/Principle/Constraint/ChangeRequest). The check is correct in spirit — flag a Completed spec git can't corroborate via a (SPEC-ID) commit/trace — but unusable at this scale. Two distinct problems:
+
+  (A) FALSE POSITIVES on non-code spec types. It flags types that by definition never carry a code commit/trace: decision (ADR-1/2/3), principle, term, constraint, and broadly vision/doc/meta/folder. 'git cannot corroborate' is meaningless for a decision or glossary term — they complete by acceptance, not by a merge. ~7 today, but every project accrues them. This sub-fix is clean + decision-free.
+
+  (B) UNBOUNDED HISTORICAL TAIL. The remaining ~396 are dominated by (i) pre-convention completions (marked Completed before the (SPEC-ID)-trailer / trace-comment convention was enforced) and (ii) umbrella/parent specs (15 Epic + many Story) whose CHILDREN carried the commits but the parent never gets a direct (PARENT-ID) commit. 403 [manual] lines in default output drown the one genuinely-recent miss the check exists to catch. The bounding POLICY is a judgment call (hence needs-decision).
+
+  ## Approach
+  1. (autonomous) Exclude non-code spec types from completed-without-commit (decision/principle/term/constraint/vision/doc/meta/folder; consider system/change-request). RECOMMENDED, decision-free.
+  2. (needs a call) Bound the historical tail. Options: (a) only flag specs Completed within a rolling window (e.g. 60d); (b) collapse the older set to one summary line ('N older completions uncorroborated — pass --all to list'); (c) exclude epics/parents whose children corroborate. RECOMMENDED default: (a)+(b)+(c) combined — recent individually, older collapsed to a count, parents-with-corroborating-children suppressed. Operator to confirm the policy.
+
+  ## Acceptance
+  1. completed-without-commit no longer flags decision/principle/term/constraint/vision/doc/meta/folder specs. Verify ADR-1/2/3 drop out.
+  2. Default 'aida doctor'/fsck bounds the rest per the chosen policy — recent uncorroborated completions shown individually; historical tail collapsed to a count (--all to expand). Target: a handful of actionable lines, not 400.
+  3. An epic/parent whose children carry corroborating commits is not flagged (or is clearly grouped).
+  4. A genuinely-recent Completed code spec with no corroborating commit STILL surfaces individually — the real signal is preserved (regression-guard this).
+  5. No SPEC-IDs in user-facing output.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T04:45:14.138395370Z
+modified_at: 2026-06-12T04:45:14.138395370Z
+req_type: Task
+tags:
+- aida:doctor
+- core
+- needs-decision
+- noise-reduction
+- papercut
