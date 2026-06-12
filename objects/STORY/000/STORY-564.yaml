@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:03:11.240108659Z
-modified_at: 2026-06-12T17:24:41.445997273Z
+modified_at: 2026-06-12T17:25:01.414252179Z
 req_type: Story
 tags:
 - aida:queue:work
@@ -54,6 +54,14 @@ relationships:
 - rel_type: Parent
   target_id: 019ebcdd-6fb2-7b51-acf7-67ac372ed2ab
   created_at: 2026-06-12T17:24:58.072028304Z
+comments:
+- id: 019ebcdd-a2a4-7322-97a0-f213ea44ac77
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-12-story-564-zen-auto-exit-clean-finish.md
+    filed 1 task(s): TASK-759
+  created_at: 2026-06-12T17:25:02.244124713Z
+  modified_at: 2026-06-12T17:25:02.244124713Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-12T17:24:41.445997273Z
