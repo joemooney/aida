@@ -65,6 +65,94 @@ branch." You rarely set `completed` by hand — `aida pull` and
 the spec lands on `main`. If the auto-bump ever misses, replay it with
 `aida db reconcile-status`.
 
+## Status vs. "workable" — pickability and the queue
+
+<!-- trace:STORY-565 | ai:claude -->
+
+`status` tells you **where a spec is in its life**. It does **not** tell you
+whether an autonomous agent can pick it up and work it *right now*. Those are two
+different questions, and conflating them is the single most common source of
+*"I asked the system to drain the queue and stuff is still sitting there."*
+
+**Pickability** is the second axis. An item is **autonomously workable** —
+`aida burndown run` (the unattended drain) or `aida queue work` will take it —
+only when *all five* of these hold:
+
+| Gate | What it checks |
+|------|----------------|
+| **Queued** | it's in a queue (queue membership = the advisor's sign-off that it's worth doing) |
+| **Approved** | groomed and agreed — not a raw Draft |
+| **Unblocked** | no `BlockedBy` edge pointing at an unfinished spec |
+| **Decision-free** | no open question (`DecisionRequest`) attached |
+| **No parking tag** | not tagged `review:draft-only`, `needs-human`, `needs-supervised-build`, `deferred:*`, `human-only`, or `blocked` |
+
+If all five hold, the spec is **Ready** and an agent will take it. If *any*
+fails, the spec is **Parked**, and **the failing gate is your "what to do
+next."** Ask `aida why <SPEC>` — it names the bucket and the reason — or read the
+"To empty this queue" footer on `aida queue list`.
+
+### The queue is not the drain-list
+
+This is the key reframe. **Your queue holds work in many states at once** —
+review-held drafts, in-progress builds, decisions waiting on you, keyboard-only
+work, research spikes. `aida burndown run` only takes the *Ready* subset (the
+five gates above). **Everything else stays in the queue on purpose**, each
+waiting on a *specific human act*:
+
+| You see | It means | You do |
+|---------|----------|--------|
+| tag `review:draft-only` | built, held for your sign-off | `aida review <SPEC>` |
+| status `In Progress` | an agent is working it right now | wait for its PR |
+| tag `needs-supervised-build` | clear to build, but at your keyboard | `aida queue work <SPEC> --zen` |
+| `needs-decision` / pending question | a call only you can make | `aida questions answer <SPEC>` |
+| tag `deferred:*` | deliberately shelved | nothing, or un-defer when ready |
+| tag `human-only` (often a spike) | research/judgment, not code | do it yourself, then mark it done |
+
+So *"I drained the queue and items remain"* almost always means the remaining
+items were **never autonomously drainable** — they each need you. That's working
+as intended; the historical gap was that nothing *showed* you the per-item next
+action. `aida queue list`'s footer and `aida queue advance` (which walks each
+parked item to its action interactively) now close that gap.
+
+### What runs in parallel
+
+- **Many builds at once.** Each `aida queue work … --zen` (and each agent in a
+  `burndown run`) works in its own isolated copy of the code, and a *lease*
+  ("this spec is taken") stops two agents grabbing the same one. So N different
+  specs build simultaneously.
+- **Review runs alongside builds.** `aida review <SPEC>` on a finished spec
+  doesn't block other builds.
+- **The one serial point is merging to `main`.** Build many in parallel; land
+  them one at a time. A post-merge "does integrated `main` still build?" check
+  guards against two PRs that were each green separately but conflict together.
+
+### Spikes and other non-code specs have a different path
+
+Not every spec is code an agent writes. A **Spike** (research/investigation) or a
+strategic **Decision** is `human-only` because its *deliverable is a finding or a
+judgment*, not a diff. You never `aida queue work` a spike — that launches a
+coder with nothing to code. Its lifecycle is `Approved → [a human, or the
+advisor, does the investigation and records it] → Completed`. No agent, no PR, no
+merge. The same holds for `vision`, `principle`, `decision`, and `term` specs —
+they're authored and agreed, not implemented.
+
+## Plain glossary
+
+AIDA grew its own vocabulary; here it is in plain words.
+
+| Term | Plain meaning |
+|------|---------------|
+| **worktree** | a throwaway *copy of the code in its own folder*, so one agent can work without colliding with another. "Prune the worktree" = delete that temp folder once the work is merged. |
+| **lease** | a *"this spec is taken"* marker, so two agents don't grab the same one. Cleared when the agent finishes. |
+| **`aida session end`** | the cleanup step — delete the temp folder and clear the lease. |
+| **`--zen`** | run **one** coding agent on **one** spec, at your keyboard, so you can watch it. |
+| **burndown** | the unattended version — fan out **many** agents at once to clear the Ready set. |
+| **brief / mailbox** | a note one agent leaves another in a shared folder (`.aida/agent-briefs/`), e.g. "I finished X, here's the PR, please review." |
+| **PR** | GitHub "Pull Request" — a bundle of proposed code changes to review and merge. |
+| **parked** | a queued spec that one of the five gates is blocking — *not* autonomously workable until the gate clears. |
+| **Ready** | a queued spec that passes all five gates — an agent will take it. |
+| **the "open set"** | every spec that isn't Completed, Rejected, or archived — the specs still "in play" (`aida why` and `aida list open` work over this set). |
+
 ## The state diagram
 
 <!-- trace:TASK-733 -->
