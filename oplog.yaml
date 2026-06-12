@@ -17164,5 +17164,13 @@ operations:
   timestamp: 2026-06-12T22:12:44.552154663Z
   kind: !SetDescription
     description: 'Sweep the open backlog + roadmap and re-judge each item against ADR-4 (coordination + intent + governance lens): keep (re-justified) / reframe (edit description) / cut (reject citing ADR-4). Known candidates: P4 semantic-recall, swarm/coordination items vs the Agent-Teams boundary, ''index''-framed items (STORY-551 family). PLUS (red-team addition): **advisor-memory + discipline-doc audit** — memories/guides still teaching the pre-rescope ''defend the substrate'' framing (memory-pack-hygiene trigger: ADR-4 is a keystone shift); retire/revise per the six-question audit. Skills/commands slop-audit vs the new positioning. ADVISOR-seat work (disposition authority) — not implementer-dispatchable. Deliverable: dispositions table comment on EPIC-39 + executed status changes + memory audit outcomes.'
-clock: 1686
+- id: 019ebde5-0d1d-7152-976b-5b0c38931730
+  target_id: 019ebd91-b371-74f1-8259-4324f9c5f4b1
+  author: aida
+  node_id: '1'
+  lamport: 1687
+  timestamp: 2026-06-12T22:12:45.469323476Z
+  kind: !SetDescription
+    description: 'The governance machinery exists (ADR-3 approval gates, roles, triage/disposition leases, autonomy ladder, history arrays, trace loop, contained posture STORY-567) but is scattered — it''s the MECHANISM of the new position, so make it legible: (1) ''aida audit <spec>'' answering WHO approved/decided/changed WHAT and WHEN from history arrays + role activity (the regulated-segment + bd-forensics demo; scope honestly: history coverage ~11% of older objects until STORY-579''s backfill decision); (2) gate-refusal messages explain the governance model in one line; (3) docs/governance.md presenting the ladder as ONE story: intake → approval → sign-off-by-queueing → role-gated autonomy → trace-LINKED merge + auto-bump (gate default-on per STORY-579 — do NOT write ''trace-enforced'' until it lands) → decision audit; (4) relate STORY-559 dashboard + STORY-567 contained posture (don''t duplicate). NOT story-neutral (red-team): docs here use the scoped formulations until STORY-579 lands. Acceptance: a skeptical evaluator goes from README claim to a runnable 10-minute governance demo; no unscoped enforcement claim in any output or doc this slice ships.'
+clock: 1687
 node_id: '1'
