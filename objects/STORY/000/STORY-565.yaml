@@ -24,12 +24,12 @@ description: |-
   5. No SPEC-IDs in the user-facing footer text.
 
   This is the legibility keystone for the whole queue surface — prioritize accordingly.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:52:09.547245681Z
-modified_at: 2026-06-12T06:58:36.437070348Z
+modified_at: 2026-06-12T07:05:24.181222535Z
 req_type: Story
 tags:
 - aida:queue
@@ -45,3 +45,15 @@ comments:
   content: Commit eba304735 references this requirement
   created_at: 2026-06-12T06:58:36.437070348Z
   modified_at: 2026-06-12T06:58:36.437070348Z
+history:
+- id: 019ebaa6-5861-7af1-b083-de1f584ad023
+  author: aida-auto-bump
+  timestamp: 2026-06-12T07:05:24.321084942Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T07:05:24.181222535Z
+  completion_sha: 932b688d7a535598a4f2e0314d7cc133cb1122f3
