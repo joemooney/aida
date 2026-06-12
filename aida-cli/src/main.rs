@@ -68287,6 +68287,8 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
                 let action = match l.class.action() {
                     burndown::UnblockAction::Queue => "queue",
                     burndown::UnblockAction::Clarify => "clarify",
+                    // trace:BUG-502
+                    burndown::UnblockAction::Review => "review",
                     burndown::UnblockAction::Leave => "leave",
                 };
                 serde_json::json!({

@@ -452,6 +452,11 @@ pub(crate) enum UnblockClass {
     /// Approved + bounded + unblocked + decision-free, but not yet queued —
     /// the advisor can queue it straight into the burndown.
     ApprovedUnqueued,
+    /// BUG-502: built work awaiting human REVIEW — a `review:draft-only` spec
+    /// (or one at/past Done) is DONE work, not re-implementation. It belongs in
+    /// a REVIEW bucket ("review it / reopen the draft PR"), never QUEUE or
+    /// CLARIFY — those would re-build done work. trace:BUG-502 | ai:claude
+    HeldForReview,
     /// Implementable but missing acceptance criteria — clarify FIRST.
     UnderSpecified,
     /// Built/in-progress work that wants the at-keyboard `--zen` lane, not an
@@ -472,6 +477,7 @@ impl UnblockClass {
         match self {
             UnblockClass::NeedsApproval => "needs-approval",
             UnblockClass::ApprovedUnqueued => "approved-unqueued",
+            UnblockClass::HeldForReview => "held-for-review",
             UnblockClass::UnderSpecified => "under-specified",
             UnblockClass::BuildSupervised => "build-supervised",
             UnblockClass::DecisionPending => "decision-pending",
@@ -487,6 +493,8 @@ impl UnblockClass {
             UnblockClass::NeedsApproval | UnblockClass::ApprovedUnqueued => UnblockAction::Queue,
             // Author acceptance criteria first, THEN it becomes queueable.
             UnblockClass::UnderSpecified => UnblockAction::Clarify,
+            // BUG-502: built — the human reviews it, never queues/clarifies it.
+            UnblockClass::HeldForReview => UnblockAction::Review,
             // Everything else stays parked — a human keyboard, a decision, a
             // dependency, or a deliberate deferral has to happen first.
             UnblockClass::BuildSupervised
@@ -497,13 +505,17 @@ impl UnblockClass {
     }
 }
 
-/// STORY-563: the three grooming actions the prompt routes each spec to.
+/// STORY-563: the grooming actions the prompt routes each spec to. BUG-502 added
+/// `Review` for built-but-held work that wants a human review pass, not a queue
+/// or clarify. trace:BUG-502 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UnblockAction {
     /// Queue it straight into the burndown.
     Queue,
     /// Clarify (author acceptance criteria) first.
     Clarify,
+    /// BUG-502: built — review it (`aida review` / reopen the draft PR).
+    Review,
     /// Leave parked.
     Leave,
 }
@@ -538,19 +550,42 @@ pub(crate) struct UnblockFacts {
 }
 
 impl UnblockFacts {
-    /// True for the items already inside the burndown ready set — queued AND
-    /// actionable (approved, bounded, unblocked, decision-free, has acceptance).
-    /// These are EXCLUDED from `aida human unblock`: the human has nothing left
-    /// to do for them. trace:STORY-563
-    pub(crate) fn in_burndown_ready_set(&self) -> bool {
-        self.queued
-            && self.status == "approved"
-            && !self.has_unsatisfied_blocker
+    /// BUG-502: built work whose acceptance gap is MOOT — at/past Done, or tagged
+    /// `review:draft-only` (work done, awaiting human review). Mirrors the
+    /// questions-sweep `is_built_or_held` predicate (BUG-495) so the two surfaces
+    /// agree on "this is built, don't treat it as re-implementation." Excludes the
+    /// in-flight case (that's its own BuildSupervised signal). trace:BUG-502
+    pub(crate) fn is_built_or_held(&self) -> bool {
+        let at_or_past_done = self.status == "done" || self.status == "completed";
+        let draft_only = self
+            .tags
+            .iter()
+            .any(|t| t.trim().eq_ignore_ascii_case("review:draft-only"));
+        at_or_past_done || draft_only
+    }
+
+    /// BUG-502: does this spec pass the same pickability gate `aida burndown plan`
+    /// applies (see [`classify`])? Bounded (not epic), decision-free, unblocked,
+    /// not parking-tagged. Crucially the gate does NOT require a `## Acceptance`
+    /// section — so a queued spec that passes the gate is GROOMED and must not be
+    /// flagged "missing acceptance → clarify" by unblock. Reuses [`parking_tag`]
+    /// so the buckets agree with the burndown plan. trace:BUG-502 | ai:claude
+    pub(crate) fn passes_pickability_gate(&self) -> bool {
+        !self.req_type.eq_ignore_ascii_case("epic")
             && !self.has_pending_decision
+            && !self.has_unsatisfied_blocker
             && !self.in_flight
-            && !self.req_type.eq_ignore_ascii_case("epic")
-            && self.has_acceptance
             && parking_tag(&self.tags).is_none()
+    }
+
+    /// True for the items the human has nothing left to do for — the GROOMED set
+    /// that `aida human unblock` excludes. BUG-502 reconciles this with the
+    /// pickability gate: a spec already QUEUED that passes the gate is groomed
+    /// regardless of an `## Acceptance` section (the gate doesn't require one), so
+    /// a queued-ready spec is no longer mis-flagged "missing acceptance". The
+    /// status must be approved+ (queued draft still needs sign-off). trace:BUG-502
+    pub(crate) fn in_burndown_ready_set(&self) -> bool {
+        self.queued && self.status == "approved" && self.passes_pickability_gate()
     }
 }
 
@@ -566,6 +601,20 @@ pub(crate) fn classify_unblock(f: &UnblockFacts) -> Option<UnblockClass> {
     }
     let has_tag =
         |name: &str| -> bool { f.tags.iter().any(|t| t.trim().eq_ignore_ascii_case(name)) };
+
+    // BUG-502: built-and-held work is awaiting a human REVIEW pass, not a queue
+    // or clarify — those would re-build done work. A `review:draft-only` spec (or
+    // one at/past Done) is the most specific "this is built" signal, so it wins
+    // over the clarify/queue buckets below. Mirrors the questions-sweep
+    // `is_built_or_held` exclusion (BUG-495) — but routes to its OWN bucket here
+    // rather than dropping it, so the human still sees "review it". An in-flight
+    // lease (live work now) stays BuildSupervised; a pending decision on a
+    // draft-only spec is a genuine decision — both are handled below, so only
+    // route to HeldForReview when neither of those more-current signals fires.
+    // trace:BUG-502 | ai:claude
+    if f.is_built_or_held() && !f.in_flight && !f.has_pending_decision {
+        return Some(UnblockClass::HeldForReview);
+    }
 
     // --- LEAVE-PARKED blockers, most-fundamental first. ---
     // A pending human decision (request, design-signoff, operator-action,
@@ -644,6 +693,9 @@ pub(crate) fn unblock_reason(class: UnblockClass) -> &'static str {
         UnblockClass::ApprovedUnqueued => {
             "approved, bounded & unblocked — queueable straight into the burndown"
         }
+        UnblockClass::HeldForReview => {
+            "built — review it (`aida review` / reopen the draft PR), not re-queue or clarify"
+        }
         UnblockClass::UnderSpecified => "missing acceptance criteria — clarify before queuing",
         UnblockClass::BuildSupervised => {
             "build-supervised — clear to build, but the at-keyboard `--zen` lane \
@@ -670,13 +722,15 @@ pub(crate) fn assemble_unblock_prompt(lines: &[UnblockLine]) -> String {
     };
     let queue = by_action(UnblockAction::Queue);
     let clarify = by_action(UnblockAction::Clarify);
+    let review = by_action(UnblockAction::Review);
     let leave = by_action(UnblockAction::Leave);
 
     let mut out = String::new();
     out.push_str(
         "Groom these open specs into the burndown. For each, take exactly the action below — \
          queue the autonomous-able, clarify the under-specified FIRST (author acceptance criteria \
-         before queuing), and LEAVE the rest parked (they need a human keyboard, a decision, a \
+         before queuing), REVIEW the built-and-held (it's done work — review it, don't re-queue or \
+         re-clarify), and LEAVE the rest parked (they need a human keyboard, a decision, a \
          dependency, or a deliberate deferral first).\n",
     );
 
@@ -703,6 +757,13 @@ pub(crate) fn assemble_unblock_prompt(lines: &[UnblockLine]) -> String {
         "CLARIFY FIRST",
         "add a ## Acceptance section (or run /aida-clarify), THEN queue",
         &clarify,
+    );
+    // BUG-502: built-and-held work — review it, never re-queue or re-clarify.
+    section(
+        &mut out,
+        "REVIEW",
+        "built — review it via `aida review` / reopen the draft PR, do NOT re-queue or clarify",
+        &review,
     );
     section(
         &mut out,
@@ -1538,6 +1599,127 @@ mod tests {
         );
     }
 
+    // BUG-502: a `review:draft-only` spec is BUILT work awaiting human review —
+    // it must land in the REVIEW bucket, never QUEUE or CLARIFY (which would
+    // re-build done work). Covers the STORY-543/TASK-715 dogfood regression.
+    #[test]
+    fn unblock_review_draft_only_is_held_for_review() {
+        // Queued draft-only (like STORY-543, which was mis-routed to QUEUE).
+        let queued_draft_only = ufacts(
+            "STORY-543",
+            "story",
+            "approved",
+            &["review:draft-only"],
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+        );
+        assert_eq!(
+            classify_unblock(&queued_draft_only),
+            Some(UnblockClass::HeldForReview)
+        );
+        assert_eq!(
+            UnblockClass::HeldForReview.action(),
+            UnblockAction::Review,
+            "built work is reviewed, never re-queued or clarified"
+        );
+
+        // Unqueued draft-only with NO acceptance section (like TASK-715, which
+        // was mis-routed to CLARIFY-FIRST "missing acceptance"). Must NOT be
+        // flagged under-specified — it's built.
+        let unqueued_draft_only_no_acceptance = ufacts(
+            "TASK-715",
+            "task",
+            "approved",
+            &["review:draft-only"],
+            false,
+            false,
+            false,
+            false,
+            false, // no acceptance
+            true,
+        );
+        assert_eq!(
+            classify_unblock(&unqueued_draft_only_no_acceptance),
+            Some(UnblockClass::HeldForReview)
+        );
+
+        // A spec at Done is likewise built — review it, don't re-queue.
+        let done = ufacts(
+            "TASK-9",
+            "task",
+            "done",
+            &[],
+            false,
+            false,
+            false,
+            false,
+            true,
+            true,
+        );
+        assert_eq!(classify_unblock(&done), Some(UnblockClass::HeldForReview));
+    }
+
+    // BUG-502: a queued spec that passes the pickability gate is GROOMED — even
+    // without a `## Acceptance` section, because the gate (`aida burndown plan`)
+    // does NOT require one. It must be excluded from `aida human unblock`, NOT
+    // flagged "missing acceptance → clarify". Reconciles the under-specified
+    // check with the pickability gate.
+    #[test]
+    fn unblock_queued_ready_without_acceptance_is_not_clarify() {
+        let queued_ready_no_acceptance = ufacts(
+            "BUG-499",
+            "bug",
+            "approved",
+            &[],
+            false,
+            false,
+            false,
+            true,  // queued
+            false, // no acceptance section
+            true,  // implementable
+        );
+        assert!(
+            queued_ready_no_acceptance.passes_pickability_gate(),
+            "a bounded, unblocked, decision-free, untagged spec passes the gate"
+        );
+        assert!(
+            queued_ready_no_acceptance.in_burndown_ready_set(),
+            "queued + passes-gate = groomed, regardless of acceptance"
+        );
+        assert_eq!(
+            classify_unblock(&queued_ready_no_acceptance),
+            None,
+            "groomed/ready specs are excluded — not flagged 'missing acceptance'"
+        );
+    }
+
+    // BUG-502: the reconciliation must NOT swallow a genuinely under-specified,
+    // NOT-yet-queued spec — that still needs clarifying before it can be queued.
+    #[test]
+    fn unblock_unqueued_missing_acceptance_still_clarifies() {
+        let unqueued_no_acceptance = ufacts(
+            "TASK-50",
+            "task",
+            "approved",
+            &[],
+            false,
+            false,
+            false,
+            false, // NOT queued
+            false, // no acceptance
+            true,
+        );
+        assert!(!unqueued_no_acceptance.in_burndown_ready_set());
+        assert_eq!(
+            classify_unblock(&unqueued_no_acceptance),
+            Some(UnblockClass::UnderSpecified)
+        );
+    }
+
     #[test]
     fn unblock_epic_is_decision_pending() {
         let f = ufacts(
@@ -1584,17 +1766,27 @@ mod tests {
                 class: UnblockClass::BlockedBy,
                 reason: unblock_reason(UnblockClass::BlockedBy).to_string(),
             },
+            // BUG-502: a built-and-held spec must render under REVIEW.
+            UnblockLine {
+                id: "STORY-543".to_string(),
+                class: UnblockClass::HeldForReview,
+                reason: unblock_reason(UnblockClass::HeldForReview).to_string(),
+            },
         ];
         let prompt = assemble_unblock_prompt(&lines);
         assert!(prompt.contains("QUEUE"));
         assert!(prompt.contains("CLARIFY FIRST"));
+        assert!(prompt.contains("REVIEW"));
         assert!(prompt.contains("LEAVE PARKED"));
         // Each spec lands under its action heading, with its reason.
         assert!(prompt.contains("TASK-2 — approved"));
         assert!(prompt.contains("TASK-3 — missing acceptance"));
         assert!(prompt.contains("T-1 — blocked"));
-        // The leading instruction names the three actions.
+        // BUG-502: the draft-only spec lands under REVIEW, not QUEUE/CLARIFY.
+        assert!(prompt.contains("STORY-543 — built"));
+        // The leading instruction names the actions, including review.
         assert!(prompt.contains("queue the autonomous-able"));
+        assert!(prompt.contains("REVIEW the built-and-held"));
     }
 
     #[test]
@@ -1602,6 +1794,7 @@ mod tests {
         let prompt = assemble_unblock_prompt(&[]);
         assert!(prompt.contains("QUEUE: (none)"));
         assert!(prompt.contains("CLARIFY FIRST: (none)"));
+        assert!(prompt.contains("REVIEW: (none)"));
         assert!(prompt.contains("LEAVE PARKED: (none)"));
     }
 }
