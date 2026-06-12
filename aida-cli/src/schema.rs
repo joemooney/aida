@@ -140,6 +140,80 @@ pub fn is_catalog_object(name: &str) -> bool {
     CATALOG.iter().any(|e| e.name.eq_ignore_ascii_case(name))
 }
 
+/// The storable-object catalog as the JSON value the `aida schema --json`
+/// CLI surface and the `aida://schema` MCP resource / `schema` MCP tool all
+/// emit. Single source so the MCP surface can't drift from the CLI.
+/// trace:TASK-715 | ai:claude
+pub fn catalog_json() -> Value {
+    let objects: Vec<Value> = CATALOG
+        .iter()
+        .map(|e| json!({ "name": e.name, "description": e.description }))
+        .collect();
+    json!({ "objects": objects })
+}
+
+/// The per-object detail as the JSON value the `aida schema <object> --json`
+/// CLI surface and the `aida://schema/{object}` MCP resource / `schema` MCP
+/// tool emit. Every catalog kind renders its reflection-derived field table
+/// (TASK-714's registry); `Requirement` additionally carries the four
+/// controlled-vocabulary enums. An unknown name returns `None` so the caller
+/// can distinguish a typo from a catalog kind. Single source so the MCP
+/// surface can't drift from the CLI. trace:TASK-715 | ai:claude
+pub fn object_json(name: &str) -> Option<Value> {
+    if name.eq_ignore_ascii_case("Requirement") {
+        return Some(requirement_json());
+    }
+    let entry = catalog_entry(name)?;
+    let fields = parse_struct_fields(&(entry.decl)());
+    let field_vals: Vec<Value> = fields
+        .iter()
+        .map(|f| {
+            json!({
+                "name": f.name,
+                "type": f.ts_type,
+                "optional": f.optional,
+            })
+        })
+        .collect();
+    let mut obj = serde_json::Map::new();
+    obj.insert("object".to_string(), json!(entry.name));
+    obj.insert("fields".to_string(), json!(field_vals));
+    if let Some(note) = entry.note {
+        obj.insert("note".to_string(), json!(note));
+    }
+    Some(Value::Object(obj))
+}
+
+/// The reflection-derived `Requirement` field table + the four
+/// controlled-vocabulary enums as a JSON value. Shared by `print_requirement`
+/// (CLI `--json`) and the MCP schema surface. trace:TASK-715 | ai:claude
+fn requirement_json() -> Value {
+    let fields = requirement_fields();
+    let enums = requirement_enums();
+    let field_vals: Vec<Value> = fields
+        .iter()
+        .map(|f| {
+            json!({
+                "name": f.name,
+                "type": f.ts_type,
+                "optional": f.optional,
+            })
+        })
+        .collect();
+    let enum_vals: Value = {
+        let mut map = serde_json::Map::new();
+        for e in &enums {
+            map.insert(e.field.to_string(), json!(e.tokens));
+        }
+        Value::Object(map)
+    };
+    json!({
+        "object": "Requirement",
+        "fields": field_vals,
+        "enums": enum_vals,
+    })
+}
+
 /// A controlled-vocabulary enum the CLI/MCP accept as argument tokens.
 struct EnumSchema {
     /// Field name on the Requirement this enum controls.
@@ -373,12 +447,9 @@ fn type_admits_null(ts_type: &str) -> bool {
 /// `aida schema` (no args) — the storable-object catalog.
 pub fn print_catalog(json_out: bool) {
     if json_out {
-        let objects: Vec<Value> = CATALOG
-            .iter()
-            .map(|e| json!({ "name": e.name, "description": e.description }))
-            .collect();
-        let v = json!({ "objects": objects });
-        println!("{}", serde_json::to_string_pretty(&v).unwrap());
+        // Single source: the same value `aida://schema` / the `schema` MCP
+        // tool emit. trace:TASK-715 | ai:claude
+        println!("{}", serde_json::to_string_pretty(&catalog_json()).unwrap());
         return;
     }
 
@@ -407,31 +478,15 @@ pub fn print_object(name: &str, json_out: bool) {
         // Defensive: the dispatcher only calls this for catalog kinds.
         return;
     };
-    let fields = parse_struct_fields(&(entry.decl)());
-
     if json_out {
-        let field_vals: Vec<Value> = fields
-            .iter()
-            .map(|f| {
-                json!({
-                    "name": f.name,
-                    "type": f.ts_type,
-                    "optional": f.optional,
-                })
-            })
-            .collect();
-        let mut obj = serde_json::Map::new();
-        obj.insert("object".to_string(), json!(entry.name));
-        obj.insert("fields".to_string(), json!(field_vals));
-        if let Some(note) = entry.note {
-            obj.insert("note".to_string(), json!(note));
-        }
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&Value::Object(obj)).unwrap()
-        );
+        // Single source: the same value `aida://schema/<object>` / the
+        // `schema` MCP tool emit. trace:TASK-715 | ai:claude
+        let v = object_json(entry.name).expect("catalog kind has object_json detail");
+        println!("{}", serde_json::to_string_pretty(&v).unwrap());
         return;
     }
+
+    let fields = parse_struct_fields(&(entry.decl)());
 
     println!("{} — fields\n", entry.name);
     let name_w = fields.iter().map(|f| f.name.len()).max().unwrap_or(0);
@@ -453,35 +508,18 @@ pub fn print_object(name: &str, json_out: bool) {
 /// `aida schema requirement` — the reflection-derived field table and the
 /// four controlled-vocabulary enums in on-the-wire token form.
 pub fn print_requirement(json_out: bool) {
-    let fields = requirement_fields();
-    let enums = requirement_enums();
-
     if json_out {
-        let field_vals: Vec<Value> = fields
-            .iter()
-            .map(|f| {
-                json!({
-                    "name": f.name,
-                    "type": f.ts_type,
-                    "optional": f.optional,
-                })
-            })
-            .collect();
-        let enum_vals: Value = {
-            let mut map = serde_json::Map::new();
-            for e in &enums {
-                map.insert(e.field.to_string(), json!(e.tokens));
-            }
-            Value::Object(map)
-        };
-        let v = json!({
-            "object": "Requirement",
-            "fields": field_vals,
-            "enums": enum_vals,
-        });
-        println!("{}", serde_json::to_string_pretty(&v).unwrap());
+        // Single source: the same value `aida://schema/requirement` / the
+        // `schema` MCP tool emit. trace:TASK-715 | ai:claude
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&requirement_json()).unwrap()
+        );
         return;
     }
+
+    let fields = requirement_fields();
+    let enums = requirement_enums();
 
     println!("Requirement — fields\n");
     let name_w = fields.iter().map(|f| f.name.len()).max().unwrap_or(0);
