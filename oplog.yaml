@@ -17208,5 +17208,13 @@ operations:
       2. AGENT EMPIRICAL (the mapping): JSONL schema field-map vs AIDA's model (link types, hash + hierarchical IDs, memory entries); import lossiness; conflict-on-reimport semantics (feeds STORY-574's ownership rule); what bd's optional git hooks actually do (confirm/correct the 'none documented' trace row); sidecar feasibility (validate trace:bd-<id> against .beads/issues.jsonl); Gas Town depth — multi-vendor support real or thin, Overseer loop disposition-or-notify, Refinery gating; upgrade/correct every remaining [W]-grade erratum claim.
 
       EXIT CRITERIA: operator states whether ADR-4's direction survives contact (accept / amend / abandon); mapping doc written; the wish-list of governance moments captured. Only then does WS1 copy lock.
-clock: 1690
+- id: 019ebe16-7259-7ee1-ba03-1312e6204d7b
+  target_id: 019ebdf6-9bdc-7641-91fe-c40daf638148
+  author: aida
+  node_id: '1'
+  lamport: 1691
+  timestamp: 2026-06-12T23:06:42.649331294Z
+  kind: !SetStatus
+    status: In Progress
+clock: 1691
 node_id: '1'
