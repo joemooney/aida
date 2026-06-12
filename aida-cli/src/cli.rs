@@ -6666,11 +6666,22 @@ pub enum Command {
     /// state (a timestamped `~/.aida/presence.toml` file — no daemon) that
     /// stays `away` until its TTL lapses (default 8h) or you return. An
     /// interactive command auto-flips you back to `home`.
-    // trace:TASK-756 | ai:claude
+    ///
+    /// Presence is ADVISORY input to mode selection: while away, an
+    /// `aida queue work --auto-complete` with no explicit `--no-human` /
+    /// `--escalate-*` flag defaults to a headless drain; explicit flags always
+    /// win and integrity gates (the kickoff scope-ack, CI, merge-on-green) always
+    /// apply. Tune under `[presence]` in `.aida/config.toml`:
+    ///   consumers  = "on" | "off"            (master switch; default on)
+    ///   away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
+    ///   home_offer = "surface" | "dont-block" (home-side; default surface)
+    // trace:TASK-756 trace:STORY-561 | ai:claude
     Away,
 
-    /// Mark yourself back at the keyboard (clears any away state).
-    // trace:TASK-756 | ai:claude
+    /// Mark yourself back at the keyboard (clears any away state). While home,
+    /// `aida status` surfaces the decision inbox (`aida questions`) and the
+    /// keystone set as "ready for `--zen`" (tune via `[presence] home_offer`).
+    // trace:TASK-756 trace:STORY-561 | ai:claude
     Home,
 
     /// Show current effective presence: home/away, how long ago it was set,

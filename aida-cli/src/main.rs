@@ -78272,6 +78272,99 @@ fn print_status_presence_line(project_root: &std::path::Path) {
     println!();
 }
 
+/// The keystone parking tag — work that is clear to build but reserved for the
+/// at-keyboard `--zen` lane (the supervised-build cohort). Mirrors the
+/// `needs-supervised-build` parking tag the burndown gate already excludes from
+/// the autonomous ready set. trace:STORY-561 | ai:claude
+const KEYSTONE_TAG: &str = "needs-supervised-build";
+
+/// STORY-561 consumers (c) + (d) home-side: presence-gated surfacing in
+/// `aida status`. When the operator is HOME and `[presence] consumers = on`,
+/// surface (c) the decision inbox depth (`aida questions`) and — when
+/// `home_offer = surface` — (d) the keystone set as "ready for `--zen`"
+/// (presence is useful in BOTH directions). When AWAY these accumulate quietly
+/// (the point of `away` is to NOT nag; the away line above already prints).
+/// Display-only and advisory — changes no execution path. The away-side safety
+/// floor (keystone NOT offered for autonomous pickup) is already structural:
+/// `needs-supervised-build` is a parking tag, so the drain gate never picks it
+/// up regardless of presence. trace:STORY-561 | ai:claude
+fn print_status_presence_consumers(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+) {
+    let cfg = presence::read_presence_config(&config_path_for_project(project_root));
+    if cfg.consumers == presence::ConsumersMode::Off {
+        return;
+    }
+    // Quiet accumulation when away — the away line is the only presence noise.
+    if matches!(
+        presence::current_presence(chrono::Utc::now()),
+        presence::Presence::Away
+    ) {
+        return;
+    }
+
+    // (c) decision inbox — pending DecisionRequests awaiting the operator.
+    if let Ok((pending, _)) = collect_decision_requests(backend) {
+        if !pending.is_empty() {
+            println!(
+                "  {} {} decision{} await your call — {}",
+                "Decisions:".bold().yellow(),
+                pending.len(),
+                if pending.len() == 1 { "" } else { "s" },
+                "aida questions".cyan()
+            );
+            println!();
+        }
+    }
+
+    // (d) home_offer = surface: the keystone cohort, ready for the at-keyboard
+    // `--zen` lane. Open (non-terminal, triaged) specs carrying the keystone
+    // parking tag. `dont-block` keeps home quiet here.
+    if cfg.home_offer == presence::HomeOffer::Surface {
+        if let Ok(rows) = backend.list_summaries(&aida_core::ListFilter {
+            tags: vec![KEYSTONE_TAG.to_string()],
+            ..Default::default()
+        }) {
+            let ready: Vec<String> = rows
+                .iter()
+                .filter(|r| {
+                    matches!(
+                        r.status.to_ascii_lowercase().as_str(),
+                        "approved" | "planned" | "in-progress" | "inprogress"
+                    )
+                })
+                .filter_map(|r| r.agreed_id.clone().or_else(|| r.spec_id.clone()))
+                .collect();
+            if !ready.is_empty() {
+                const SHOW: usize = 5;
+                let shown = ready
+                    .iter()
+                    .take(SHOW)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let overflow = ready.len().saturating_sub(SHOW);
+                let tail = if overflow > 0 {
+                    format!(" (+{overflow} more)")
+                } else {
+                    String::new()
+                };
+                println!(
+                    "  {} {} keystone spec{} ready for {} — {}{}",
+                    "At keyboard:".bold().green(),
+                    ready.len(),
+                    if ready.len() == 1 { "" } else { "s" },
+                    "--zen".cyan(),
+                    shown,
+                    tail
+                );
+                println!();
+            }
+        }
+    }
+}
+
 fn print_status_session_section(ctx: &UserStatusContext) {
     println!("{}", "─── Session ───".bold());
     match &ctx.session {
@@ -80734,6 +80827,7 @@ fn handle_status_command_distributed(
     let _ = awaiting_report.render(verbose, stdout.lock());
 
     print_status_presence_line(&project_root);
+    print_status_presence_consumers(&project_root, backend);
     print_status_session_section(&user_ctx);
     print_status_branch_section(&user_ctx);
     if !no_ci {
@@ -93826,12 +93920,61 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let mode = auto_complete.as_deref().unwrap_or("full");
                 let variant = auto_complete::AutoCompleteVariant::parse(mode)
                     .map_err(|e| anyhow::anyhow!(e))?;
+                // STORY-561: operator-presence advisory default (consumers a+b).
+                // When the operator is AWAY and passes no explicit
+                // --no-human / --escalate-* flag, presence fills the drain-mode
+                // default per `[presence] away_drain` — the autonomy ladder
+                // keying on a presence STATE instead of per-command flags.
+                // Explicit flags ALWAYS win, and the kickoff scope-ack +
+                // escalate validation below still apply (advisory only —
+                // acceptance #4/#5). Presence is only ever `away` here in a
+                // non-TTY context (the interactive-TTY auto-flip preempts to
+                // home, main.rs:~922), so this sets the default for unattended
+                // drains; an interactive operator is already `home`.
+                // trace:STORY-561 | ai:claude
+                let presence_cfg = {
+                    let cfg_path = storage
+                        .path()
+                        .parent()
+                        .map(config_path_for_project)
+                        .unwrap_or_else(|| std::path::PathBuf::from(".aida/config.toml"));
+                    presence::read_presence_config(&cfg_path)
+                };
+                let drain_res = presence::resolve_drain_mode(
+                    no_human.as_deref(),
+                    *escalate_blocks,
+                    *escalate_defaults,
+                    presence::current_presence(chrono::Utc::now()),
+                    &presence_cfg,
+                );
+                if drain_res.presence_applied {
+                    eprintln!(
+                        "  {} operator {} → drain defaulting to {}{} (per [presence] away_drain; override with --no-human / --escalate-*)",
+                        "🚶",
+                        "away".yellow().bold(),
+                        drain_res
+                            .no_human
+                            .as_deref()
+                            .map(|s| format!("--no-human={s}"))
+                            .unwrap_or_else(|| "interactive".to_string()),
+                        if drain_res.no_human.as_deref() == Some("both") {
+                            if drain_res.escalate_defaults {
+                                " --escalate-defaults"
+                            } else {
+                                " --escalate-blocks"
+                            }
+                        } else {
+                            ""
+                        },
+                    );
+                }
                 // STORY-263 / STORY-276: `--no-human[=MODE]` runs the
                 // orchestrator's phases headless (`claude -p`). `reviewer-only`
                 // wires the reviewer (phase 3); `both` additionally runs the
                 // implementer (phase 1) headless, with the `/aida-punt` safety
-                // net for design-forks (STORY-276).
-                let no_human_mode = match no_human.as_deref() {
+                // net for design-forks (STORY-276). The slug is the explicit
+                // flag's value, or the presence-supplied default (STORY-561).
+                let no_human_mode = match drain_res.no_human.as_deref() {
                     Some(v) => {
                         Some(auto_complete::NoHumanMode::parse(v).map_err(|e| anyhow::anyhow!(e))?)
                     }
@@ -93860,7 +94003,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                          fully-headless drain — pair them with `--no-human=both`"
                     );
                 }
-                let escalate_mode = auto_complete::EscalateMode::from_flags(*escalate_defaults);
+                // STORY-561: the escalate default folds in presence — explicit
+                // --escalate-* flags win (validated above), else the
+                // presence-supplied `away_drain` advice (defaults vs park).
+                // `drain_res.escalate_defaults` == `*escalate_defaults` whenever
+                // presence supplied nothing, so the non-away path is unchanged.
+                let escalate_mode =
+                    auto_complete::EscalateMode::from_flags(drain_res.escalate_defaults);
                 // STORY-347: per-drain calibration override propagates via an
                 // env var, so it composes with `--batch` / `nextN` / single-
                 // spec drains without threading through three signatures.
