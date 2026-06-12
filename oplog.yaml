@@ -16666,5 +16666,32 @@ operations:
   timestamp: 2026-06-11T20:20:33.969995294Z
   kind: !SetStatus
     status: Completed
-clock: 1655
+- id: 019ebc57-70b8-7c32-9834-9ae588433be7
+  target_id: 019eb513-eacf-7930-8481-d5aeddfb05f7
+  author: aida
+  node_id: '1'
+  lamport: 1656
+  timestamp: 2026-06-12T14:58:27.640053214Z
+  kind: !SetDescription
+    description: |-
+      Operator-surfaced architecture gap (2026-06-10): AIDA has a two-queue model — 'aida burndown' drains the decision-FREE ready set with autonomous agents; 'aida questions' is meant to be the complement where a HUMAN drains the decision-REQUIRED parked set. Today the complement is only half-wired: 'aida questions sweep/list/ask/answer' exist, but the overview states 'answer' is slice-1 (records the answer; a later pass applies the resolution). So answering does NOT yet unpark the spec into the burndown-ready set — the bridge between the two queues is missing. Separately, the two park mechanisms are unconnected: specs parked by a pending DecisionRequest vs specs parked by a TAG (needs-design-signoff/needs-human/deferred) don't share one inbox, so the tag-parked ones never surface in 'aida questions'.
+
+      ## Acceptance
+
+      1. 'aida questions answer <spec> <choice>' (and the interactive no-arg loop) APPLIES the chosen resolution: close/resolve the DecisionRequest AND effect its resolution token — bind the chosen option into the spec's ## Acceptance and/or clear the gating parking tag — so 'aida burndown plan' moves the spec Parked -> Ready in the same step. (See R1/R3 below for the resolved mechanics.)
+      2. Round-trip verified: a spec parked SOLELY by a pending DecisionRequest is burndown-ready immediately after its question is answered, with no manual edit.
+      3. Tag<->question bridge: 'aida questions sweep' detects tag-parked specs (needs-design-signoff / needs-design / needs-human / operator-action) that lack a DecisionRequest and attaches one; answering it clears the gating tag. The two park-reasons converge on one inbox. (See R2 below for the synthesized-decision shape.)
+      4. Honest partial-unpark: if answering can't FULLY unpark (spec still epic / BlockedBy / other parking tag), report the remaining blocker instead of claiming Ready.
+      5. Symmetry: document 'aida questions answer' (interactive loop) as the human-decision-drain complement of 'aida burndown run' in both --help texts.
+
+      Composes with: aida burndown plan/run (the autonomous complement), aida questions sweep/ask/answer (slice-1 base), STORY-523 (DecisionRequest producer), STORY-554 (auto-groom — both feed the ready set), the parking_tag predicate in burndown.rs.
+
+      ## Resolved design decisions (operator-resolved 2026-06-12 — BINDING; these resolve the AND/OR ambiguities in #1 and #3, implement THESE)
+
+      R1 (refines #1 — where the decision is recorded): "apply the resolution" does BOTH, every time: (a) write the chosen option into the spec's `## Acceptance` as an explicit "Resolved: <decision text>" refinement — NOT just a comment; it must bind the next implementer to the decision (per the refinements-must-be-acceptance-criteria discipline) — AND (b) close/resolve the DecisionRequest so `has_pending_decision` becomes false.
+
+      R2 (refines #3 — tag-parked specs with no explicit question): `aida questions sweep` attaches a synthesized DecisionRequest offering a DISPOSITION choice — `approve-to-ready` / `reject` / `keep-parked-with-reason`. Answering `approve-to-ready` clears the gating parking tag (needs-design-signoff/needs-design/needs-human/operator-action); `reject` sets the spec status to Rejected; `keep-parked-with-reason` records the reason (as a why-open: comment or equivalent) and leaves it parked.
+
+      R3 (refines #1/#2 — auto-queue on answer): an answer that unparks a spec ALSO auto-queues it via the existing backlog-groom enqueue path (backlog::enqueue_groomed) — the human's answer IS the advisor sign-off (STORY-546), so this honors rather than bypasses the checkpoint. Honor the existing advisor-authority gate (has_advisor_authority / status_advance_requires_advisor_authority). Net: an answered decision-parked spec becomes genuinely burndown-Ready (queued + decision-free) — the human-decision complement of `aida burndown run`. EXCEPTION: if #4's partial-unpark applies (still epic / BlockedBy / another parking tag), do NOT queue — report the remaining blocker instead.
+clock: 1656
 node_id: '1'
