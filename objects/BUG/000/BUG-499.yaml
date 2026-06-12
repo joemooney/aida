@@ -3,12 +3,12 @@ spec_id: BUG-499
 agreed_id: BUG-499
 title: burndown plan 'awaiting sign-off' hint should clarify that 'aida queue add' IS the advisor sign-off (role-gated), not a generic human action
 description: 'Operator-surfaced 2026-06-11: ''aida burndown plan'' prints ''Awaiting sign-off (pickable, not queued — aida queue add <id> to bless)''. Reading it, the operator wondered whether running ''aida queue add'' is the HUMAN bypassing the advisor, or whether the advisor has already weighed in. The model: ''pickable'' = mechanical gate passed (no advisor judgment); ''queued'' = advisor sign-off (STORY-546), and ''aida queue add'' is GATED on advisor authority (TASK-647). So queueing IS the advisor sign-off, not a bypass — but the hint doesn''t say so, making a role-gated, meaningful act read like a casual human one. Fix: word the hint to make clear queueing = the advisor sign-off and requires advisor authority, e.g. ''the advisor blesses these into the drain with aida queue add <id> (advisor authority required)''. Pairs with the BUG-498 seat-vs-work clarity work.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T20:20:35.568345502Z
-modified_at: 2026-06-11T20:20:35.568345502Z
+modified_at: 2026-06-12T04:13:44.130632968Z
 req_type: Bug
 tags:
 - advisor
@@ -17,3 +17,15 @@ tags:
 - from-user-friction
 - ux
 - wording
+history:
+- id: 019eba09-2dcd-7fb0-b7a6-fa4744ea5541
+  author: aida-reconcile
+  timestamp: 2026-06-12T04:13:44.269944668Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T04:13:44.130632968Z
+  completion_sha: c1d13ba09a87cdab74b9b41b71070c85b0eba584
