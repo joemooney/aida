@@ -1,0 +1,30 @@
+id: 019eb9ff-8508-7e50-8285-81980687aa3c
+spec_id: STORY-564
+agreed_id: STORY-564
+title: 'aida queue work --zen: auto-exit on a clean finish (no human needed), pause only when a human IS needed'
+description: |-
+  Operator idea (2026-06-11): --zen ALWAYS pauses at grab-next/stop after the PR opens — even on a clean finish with no human needed — so the operator manually 'stop' + 'aida session end' every time (the BUG-500 friction). Proposal: --zen auto-decides its exit by whether a human was ACTUALLY needed, borrowing the orchestrator's auto-end-vs-escalate logic into the --zen lane (today --zen is defined as 'no orchestrator', so it can't auto-end). CLEAN finish (PR opened / spec Done, NO punt, NO design-fork escalation, NO operator-decision left) → AUTO-EXIT: run 'aida session end' (remove worktree + clear lease) and exit, no human round-trip. HUMAN-NEEDED finish (agent punted / hit a fork it couldn't resolve / left an explicit operator decision) → PAUSE at the checkpoint (current behavior) — the operator IS needed.
+
+  ## Acceptance
+  1. On a CLEAN --zen finish, the session auto-runs 'aida session end' and exits — no manual stop/cleanup. SUBSUMES BUG-500 (its cleanup-on-stop is acceptance #1 here).
+  2. On a HUMAN-NEEDED finish (punt / unresolved fork / explicit operator decision left), PAUSE at the finish-checkpoint (current behavior) — do NOT auto-exit.
+  3. The clean-vs-needs-human signal is the SAME one the orchestrator/escalation uses + the one the --zen finish-checkpoint already reports; wire it to the launcher's exit decision.
+  4. Escape hatch: a --pause-always flag forces the old always-pause behavior (when the operator wants to grab-next by hand).
+  5. (If STORY-561 presence lands) bias by presence: away → auto-exit; home → may still pause. Advisory, never overrides integrity gates.
+
+  Composes with: BUG-500 (the cleanup mechanic — subsumed), the orchestrator escalation cascade (the clean-vs-needs-human signal), the three-mode autonomy taxonomy (refines --zen's pause-behavior axis), STORY-561 (presence). Keystone-adjacent (touches the --zen session lifecycle + escalation signal) → keyboard-supervised build.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T04:03:11.240108659Z
+modified_at: 2026-06-12T04:03:11.240108659Z
+req_type: Story
+tags:
+- aida:queue:work
+- autonomy
+- core
+- needs-supervised-build
+- operator-tooling
+- session-lifecycle
+- zen
