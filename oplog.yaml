@@ -17156,5 +17156,13 @@ operations:
       Panel findings: trace 'enforcement' is advisory-by-default (warn-only commit hook AIDA_COMMIT_STRICT=false, repo's own pre-commit hook disabled, no CI trace gate; only merge→auto-bump is programmatic); history: arrays on ~11% of store objects. A governance-mechanism product cannot ship with the gate off by default (substrate-as-bouncer).
 
       Slice: (1) default-ON trace gate for NEW aida init projects (strict commit gate or CI-side check; existing projects opt-in via doctor/init --refresh; explicit opt-out flag — faithful default); (2) wire THIS repo's own gate (dogfood: un-disable pre-commit or add the CI job); (3) history claims scoped ('full transition history since TASK-121') everywhere + evaluate cheap backfill from orphan-branch log (skip if costly); (4) **landing this slice INCLUDES the un-scoping sweep**: upgrade WS1/WS2/WS5 copy from 'trace-linked, gate landing' to 'trace-enforced' in the same PR or an immediate follow-on. Acceptance grep-able: new-project default posture is enforcing; no unscoped 'enforced'/'every spec carries history' before that, none scoped after.
-clock: 1685
+- id: 019ebde5-0988-78f3-9d23-48d9f8bfd996
+  target_id: 019ebd91-fd4d-7960-97d7-ff00b663567d
+  author: aida
+  node_id: '1'
+  lamport: 1686
+  timestamp: 2026-06-12T22:12:44.552154663Z
+  kind: !SetDescription
+    description: 'Sweep the open backlog + roadmap and re-judge each item against ADR-4 (coordination + intent + governance lens): keep (re-justified) / reframe (edit description) / cut (reject citing ADR-4). Known candidates: P4 semantic-recall, swarm/coordination items vs the Agent-Teams boundary, ''index''-framed items (STORY-551 family). PLUS (red-team addition): **advisor-memory + discipline-doc audit** — memories/guides still teaching the pre-rescope ''defend the substrate'' framing (memory-pack-hygiene trigger: ADR-4 is a keystone shift); retire/revise per the six-question audit. Skills/commands slop-audit vs the new positioning. ADVISOR-seat work (disposition authority) — not implementer-dispatchable. Deliverable: dispositions table comment on EPIC-39 + executed status changes + memory audit outcomes.'
+clock: 1686
 node_id: '1'
