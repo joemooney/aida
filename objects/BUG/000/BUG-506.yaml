@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T18:23:20.560897510Z
-modified_at: 2026-06-12T18:23:20.560897510Z
+modified_at: 2026-06-12T23:44:40.966662430Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -17,3 +17,9 @@ tags:
 - core
 - papercut
 - reconcile
+comments:
+- id: 019ebe39-3606-79a3-b69b-1df68230073a
+  author: joe
+  content: 'SECOND occurrence (2026-06-12): the (BUG-510) (BUG-511) squash auto-bumped only BUG-511; BUG-510 needed a manual flip. Recurs on every 2-spec cluster PR (BUG-503/504 earlier, now BUG-510/511). Bumping priority + queuing.'
+  created_at: 2026-06-12T23:44:40.966662430Z
+  modified_at: 2026-06-12T23:44:40.966662430Z
