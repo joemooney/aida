@@ -203,6 +203,192 @@ fn read_away_ttl_from_config(config_path: &Path) -> Option<u64> {
     None
 }
 
+// ---------------------------------------------------------------------------
+// `[presence]` consumer policy (STORY-561).
+//
+// The PRIMITIVE (above) is presence state + display. The CONSUMERS below turn
+// that state into ADVISORY mode-selection: away/home shifts the DEFAULTS the
+// autonomy ladder keys on. Three knobs under `[presence]`, all with safe
+// defaults so they work the moment you `aida away` / `aida home` with zero
+// config. Presence is advisory ONLY — explicit per-command flags always win
+// and integrity gates (CI, merge-on-green, the kickoff scope-ack) always apply
+// (acceptance #4/#5). trace:STORY-561 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// P0 — `presence.consumers`: the master switch. `On` (default) makes setting
+/// away/home shift the mode defaults below; `Off` reduces presence to a
+/// displayed-state-only (the primitive still works; consumers don't fire).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ConsumersMode {
+    #[default]
+    On,
+    Off,
+}
+
+/// P1 — `presence.away_drain`: the default drain mode when away. All three are
+/// fully headless (nobody is supervising); they differ in punt handling. The
+/// mapping onto the code's two axes (`--no-human` mode × escalate mode) is
+/// operator-confirmed "by behavior" (2026-06-12). trace:STORY-561
+// The shared `Headless` prefix is intentional — every away-drain mode is fully
+// headless (nobody is supervising); the suffix names the punt-handling.
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum AwayDrain {
+    /// `--no-human=both` + escalate defaults — both phases headless, punts ship
+    /// the defensible default. Max unattended throughput. The default.
+    #[default]
+    HeadlessBoth,
+    /// `--no-human=both` + escalate defaults — the explicit "ship defaults on a
+    /// punt" spelling of the default.
+    HeadlessEscalateDefaults,
+    /// `--no-human=both` + escalate blocks — both headless, but punts PARK
+    /// (`NeedsAttention`) for triage instead of shipping a default.
+    HeadlessPark,
+}
+
+/// P2 — `presence.home_offer`: the home-side behavior. `Surface` (default)
+/// surfaces keystone / needs-supervised-build specs as "ready for `--zen`" in
+/// `aida status` (presence is useful in BOTH directions). `DontBlock` keeps
+/// home as merely lifting the away-defaults — specs stay quiet, operator pulls
+/// manually.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum HomeOffer {
+    #[default]
+    Surface,
+    DontBlock,
+}
+
+/// The parsed `[presence]` consumer policy. Defaults make presence-driven
+/// mode-selection work with zero config; the block is opt-out / tuning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct PresenceConfig {
+    pub consumers: ConsumersMode,
+    pub away_drain: AwayDrain,
+    pub home_offer: HomeOffer,
+}
+
+impl ConsumersMode {
+    fn from_config_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "on" | "true" | "enabled" => Some(Self::On),
+            "off" | "false" | "disabled" => Some(Self::Off),
+            _ => None,
+        }
+    }
+}
+
+impl AwayDrain {
+    fn from_config_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "headless-both" | "both" => Some(Self::HeadlessBoth),
+            "headless-escalate-defaults" | "escalate-defaults" => {
+                Some(Self::HeadlessEscalateDefaults)
+            }
+            "headless-park" | "park" => Some(Self::HeadlessPark),
+            _ => None,
+        }
+    }
+}
+
+impl HomeOffer {
+    fn from_config_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "surface" => Some(Self::Surface),
+            "dont-block" | "don't-block" | "dontblock" => Some(Self::DontBlock),
+            _ => None,
+        }
+    }
+}
+
+/// Read the `[presence]` consumer policy from a project's `.aida/config.toml`,
+/// falling back to safe defaults for any absent / unparseable key. A missing
+/// file or `[presence]` block → all defaults. trace:STORY-561 | ai:claude
+pub(crate) fn read_presence_config(config_path: &Path) -> PresenceConfig {
+    let mut cfg = PresenceConfig::default();
+    let Ok(body) = std::fs::read_to_string(config_path) else {
+        return cfg;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return cfg;
+    };
+    let Some(table) = value.get("presence") else {
+        return cfg;
+    };
+    if let Some(s) = table.get("consumers").and_then(|v| v.as_str()) {
+        if let Some(m) = ConsumersMode::from_config_str(s) {
+            cfg.consumers = m;
+        }
+    }
+    if let Some(s) = table.get("away_drain").and_then(|v| v.as_str()) {
+        if let Some(m) = AwayDrain::from_config_str(s) {
+            cfg.away_drain = m;
+        }
+    }
+    if let Some(s) = table.get("home_offer").and_then(|v| v.as_str()) {
+        if let Some(m) = HomeOffer::from_config_str(s) {
+            cfg.home_offer = m;
+        }
+    }
+    cfg
+}
+
+/// The effective drain mode after folding presence into the explicit flags.
+/// `presence_applied` is true only when presence supplied a default the
+/// operator did NOT spell explicitly — the trigger for the advisory banner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DrainModeResolution {
+    /// `--no-human` slug (`"both"` / `"reviewer-only"`) or `None` for the
+    /// interactive default. Parsed by `NoHumanMode::parse` at the call site.
+    pub no_human: Option<String>,
+    /// Whether escalation should ship defaults (`true`) or park (`false`).
+    /// Only meaningful when `no_human == Some("both")`.
+    pub escalate_defaults: bool,
+    /// Presence supplied a default the operator didn't pass explicitly.
+    pub presence_applied: bool,
+}
+
+/// PURE: resolve the effective `queue work --auto-complete` drain mode from the
+/// explicit flags + current presence + config. **Explicit flags ALWAYS win**
+/// (acceptance #5): if the operator passed `--no-human` or an escalate flag,
+/// presence is ignored for that axis. Presence only fills an ABSENT default,
+/// and only when away + consumers are on. Home is the interactive default
+/// (presence supplies nothing — today's behavior). This never bypasses the
+/// kickoff scope-ack or any integrity gate; it only chooses a default mode
+/// (acceptance #4). trace:STORY-561 | ai:claude
+pub(crate) fn resolve_drain_mode(
+    explicit_no_human: Option<&str>,
+    explicit_escalate_blocks: bool,
+    explicit_escalate_defaults: bool,
+    presence: Presence,
+    cfg: &PresenceConfig,
+) -> DrainModeResolution {
+    // Any explicit flag on either axis means the operator is steering — leave
+    // their values untouched and don't apply a presence default anywhere.
+    let any_explicit =
+        explicit_no_human.is_some() || explicit_escalate_blocks || explicit_escalate_defaults;
+    let presence_eligible =
+        matches!(presence, Presence::Away) && cfg.consumers == ConsumersMode::On && !any_explicit;
+
+    if !presence_eligible {
+        return DrainModeResolution {
+            no_human: explicit_no_human.map(|s| s.to_string()),
+            escalate_defaults: explicit_escalate_defaults,
+            presence_applied: false,
+        };
+    }
+
+    // Away + consumers on + no explicit steering → apply the away_drain advice.
+    let (no_human, escalate_defaults) = match cfg.away_drain {
+        AwayDrain::HeadlessBoth | AwayDrain::HeadlessEscalateDefaults => (Some("both"), true),
+        AwayDrain::HeadlessPark => (Some("both"), false),
+    };
+    DrainModeResolution {
+        no_human: no_human.map(|s| s.to_string()),
+        escalate_defaults,
+        presence_applied: true,
+    }
+}
+
 /// Parse a small humantime-ish duration string into seconds. Supports a bare
 /// integer (`"3600"` = seconds) and `h`/`m`/`s` suffixed components that may be
 /// concatenated (`"8h"`, `"30m"`, `"2h30m"`, `"1h30m15s"`). Returns `None` on
@@ -430,5 +616,145 @@ mod tests {
             ttl_remaining_label(set_at, DEFAULT_AWAY_TTL_SECS, later),
             "expired"
         );
+    }
+
+    // --- STORY-561: `[presence]` consumer policy + drain-mode resolver ------
+
+    use std::io::Write;
+
+    fn write_config(body: &str) -> tempfile::NamedTempFile {
+        let mut f = tempfile::NamedTempFile::new().unwrap();
+        f.write_all(body.as_bytes()).unwrap();
+        f
+    }
+
+    #[test]
+    fn presence_config_defaults_when_absent() {
+        // No file at all.
+        let cfg = read_presence_config(Path::new("/nonexistent/.aida/config.toml"));
+        assert_eq!(cfg, PresenceConfig::default());
+        assert_eq!(cfg.consumers, ConsumersMode::On);
+        assert_eq!(cfg.away_drain, AwayDrain::HeadlessBoth);
+        assert_eq!(cfg.home_offer, HomeOffer::Surface);
+
+        // File present but no [presence] block → still all defaults.
+        let f = write_config("[other]\nkey = 1\n");
+        assert_eq!(read_presence_config(f.path()), PresenceConfig::default());
+    }
+
+    #[test]
+    fn presence_config_parses_knobs_and_defaults() {
+        let f = write_config(
+            "[presence]\nconsumers = \"off\"\naway_drain = \"headless-park\"\nhome_offer = \"dont-block\"\n",
+        );
+        let cfg = read_presence_config(f.path());
+        assert_eq!(cfg.consumers, ConsumersMode::Off);
+        assert_eq!(cfg.away_drain, AwayDrain::HeadlessPark);
+        assert_eq!(cfg.home_offer, HomeOffer::DontBlock);
+
+        // A garbage value for one key falls back to that key's default without
+        // poisoning the others.
+        let f = write_config("[presence]\naway_drain = \"nonsense\"\nconsumers = \"off\"\n");
+        let cfg = read_presence_config(f.path());
+        assert_eq!(cfg.away_drain, AwayDrain::HeadlessBoth); // default
+        assert_eq!(cfg.consumers, ConsumersMode::Off); // parsed
+    }
+
+    #[test]
+    fn away_drain_advice_maps_three_rungs() {
+        let away = Presence::Away;
+        let on = PresenceConfig {
+            consumers: ConsumersMode::On,
+            home_offer: HomeOffer::Surface,
+            away_drain: AwayDrain::HeadlessBoth,
+        };
+        // headless-both → both + escalate defaults
+        let r = resolve_drain_mode(None, false, false, away, &on);
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert!(r.escalate_defaults);
+        assert!(r.presence_applied);
+        // headless-escalate-defaults → both + escalate defaults
+        let r = resolve_drain_mode(
+            None,
+            false,
+            false,
+            away,
+            &PresenceConfig {
+                away_drain: AwayDrain::HeadlessEscalateDefaults,
+                ..on
+            },
+        );
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert!(r.escalate_defaults);
+        // headless-park → both + escalate blocks (defaults=false)
+        let r = resolve_drain_mode(
+            None,
+            false,
+            false,
+            away,
+            &PresenceConfig {
+                away_drain: AwayDrain::HeadlessPark,
+                ..on
+            },
+        );
+        assert_eq!(r.no_human.as_deref(), Some("both"));
+        assert!(!r.escalate_defaults);
+    }
+
+    #[test]
+    fn resolve_drain_mode_explicit_no_human_wins() {
+        // Explicit --no-human=reviewer-only while away → presence does NOT
+        // override; reviewer-only is preserved, nothing presence-applied.
+        let r = resolve_drain_mode(
+            Some("reviewer-only"),
+            false,
+            false,
+            Presence::Away,
+            &PresenceConfig::default(),
+        );
+        assert_eq!(r.no_human.as_deref(), Some("reviewer-only"));
+        assert!(!r.presence_applied);
+    }
+
+    #[test]
+    fn resolve_drain_mode_explicit_escalate_wins() {
+        // Explicit --escalate-blocks while away → presence does NOT flip it to
+        // defaults, and supplies no no_human default either (operator steering).
+        let r = resolve_drain_mode(
+            None,
+            true, // --escalate-blocks
+            false,
+            Presence::Away,
+            &PresenceConfig::default(),
+        );
+        assert!(!r.escalate_defaults);
+        assert_eq!(r.no_human, None);
+        assert!(!r.presence_applied);
+    }
+
+    #[test]
+    fn resolve_drain_mode_home_is_interactive() {
+        // Home → presence supplies nothing (today's interactive default).
+        let r = resolve_drain_mode(
+            None,
+            false,
+            false,
+            Presence::Home,
+            &PresenceConfig::default(),
+        );
+        assert_eq!(r.no_human, None);
+        assert!(!r.presence_applied);
+    }
+
+    #[test]
+    fn resolve_drain_mode_consumers_off_disables() {
+        // Away but consumers=off → no presence default (display-only mode).
+        let off = PresenceConfig {
+            consumers: ConsumersMode::Off,
+            ..PresenceConfig::default()
+        };
+        let r = resolve_drain_mode(None, false, false, Presence::Away, &off);
+        assert_eq!(r.no_human, None);
+        assert!(!r.presence_applied);
     }
 }
