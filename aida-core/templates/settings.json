@@ -78,6 +78,9 @@
     "type": "command",
     "command": "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\""
   },
+  "enabledMcpjsonServers": [
+    "aida"
+  ],
   "permissions": {
     "allow": [
       "Bash(aida)",
