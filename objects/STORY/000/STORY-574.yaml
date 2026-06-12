@@ -1,0 +1,18 @@
+id: 019ebd91-6bb3-7843-a8d5-821b41c5eb33
+spec_id: STORY-574
+agreed_id: STORY-574
+title: 'WS3b: aida import --from-beads — one-way Beads JSONL import as the interop MVP'
+description: 'Smallest valuable interop slice (per WS3a''s mapping): import a .beads/issues.jsonl export into AIDA specs — Beads issues become typed specs (task/bug/epic by inference), deps become BlockedBy, parent-child becomes parent links, bd-IDs preserved as external refs (searchable). Idempotent re-import (update, don''t duplicate, keyed on bd hash ID). Positioning purpose: an AIDA-curious Beads user (the 18.7k) can adopt the governance layer WITHOUT abandoning their tracker — ride the wave. Export/bridge deferred to WS3c (revisit-trigger: real demand or WS3a showing trivial cost). BlockedBy WS3a.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:41:24.659625510Z
+modified_at: 2026-06-12T20:41:24.659625510Z
+req_type: Story
+tags:
+- beads
+- blocked-by:ws3a
+- parent:EPIC-39
+- repositioning
+- ws3-interop
