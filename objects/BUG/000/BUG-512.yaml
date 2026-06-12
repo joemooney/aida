@@ -3,12 +3,12 @@ spec_id: BUG-512
 agreed_id: BUG-512
 title: Auto-bump + reconcile-status honor only ONE (SPEC-ID) trailer per commit — multi-spec squash commits half-complete
 description: 'Observed 2026-06-12 on PR #797: squash commit titled ''[AI:claude] fix(review): ... (BUG-510) (BUG-511) (#797)'' landed on main; ''aida pull'' auto-bumped only BUG-511 (the last trailer before the PR number) to Completed, and ''aida db reconcile-status --spec BUG-510'' reported ''no commit in the scan range references it'' even though the merge commit names (BUG-510) in its title. The commit-trailer convention explicitly supports multi-spec merges (operator directive: ''Trailer both specs on the commit: (BUG-510) (BUG-511)''), so the trailer scanner should collect ALL (SPEC-ID) tokens in the subject (and arguably body), not just one. Acceptance: (1) a merged commit whose subject carries N spec trailers bumps all N Done->Completed on pull; (2) reconcile-status finds a spec referenced anywhere in the subject''s trailer list; (3) existing single-trailer behavior unchanged.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T23:08:08.035169771Z
-modified_at: 2026-06-12T23:44:38.438385703Z
+modified_at: 2026-06-12T23:44:39.387094073Z
 req_type: Bug
 tags:
 - aida:pull
