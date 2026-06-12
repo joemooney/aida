@@ -3,17 +3,17 @@ spec_id: STORY-572
 agreed_id: STORY-572
 title: 'WS1: Rewrite the decision/vision substrate — VIS-1, OVERVIEW.md, README lead, CLAUDE.md strategic sections re-led with governance (ADR-4)'
 description: |-
-  Re-lead every vision-level artifact with the ADR-4 position USING THE OPERATOR'S CANONICAL LANGUAGE (recorded on ADR-4, 2026-06-12): AIDA is an AI DEVELOPER ASSISTANT — 'make it easier to develop when you have many agents from different vendors and want to coordinate work and feature development as the system grows in complexity — capturing the intent, the why, that can get lost during implementation.' Lead = multi-vendor coordination + intent/why preservation; governance (gates/roles/audit) = the mechanism + enterprise depth, NOT the lead word.
+  Re-lead every vision-level artifact with ADR-4's canonical operator language: AIDA is an AI DEVELOPER ASSISTANT — multi-vendor coordination + intent/why capture lead; governance = mechanism + enterprise depth, NOT the lead word (D9). RED-TEAM SHARPENING (binding): the lead is cross-vendor INTENT GOVERNANCE (gates before work, decision audit, trace loop) — never bare 'multi-vendor coordination' (Gas Town ships multi-vendor dispatch today); ALL multi-vendor copy scoped to the coordination layer in the same sentence until STORY-578 lands; NO 'enforced' in copy until STORY-579 lands (use 'trace-linked + merge auto-bump; commit gate default-on landing'); audit claims use DECISIONS-vs-changes framing only.
 
-  Scope: rewrite VIS-1 (folds in STORY-551's 'missing index' retirement — relate, don't duplicate); OVERVIEW.md vision + 'Public face' section (Trojan-horse retained: TUI = face, coordination+intent+governance = the named depth); README lead + moat content; CLAUDE.md strategic-positioning paragraph; add a PRIN clause (coordinate/govern-vs-unleash). PLUS the D8 acronym re-expansion sweep: 'AI Design Assistant' → 'AI Developer Assistant' at EVERY expansion site (CLAUDE.md line 1, README, OVERVIEW, aida-core/templates/ scaffolded CLAUDE.md/AGENTS.md, deck, crate descriptions if present — grep-verifiable).
+  Scope: VIS-1 rewrite (folds STORY-551); new PRIN clause (gates-before-work vs unleash); OVERVIEW.md vision + Public-face section (TUI stays the face); README lead + moat content; CLAUDE.md strategic paragraph; D8 acronym sweep 'AI Design Assistant' → 'AI Developer Assistant' at ALL sites (CLAUDE.md line 1, README, OVERVIEW, aida-core/templates/, deck, **Cargo.toml crate descriptions (they exist — unconditional), aida-core/src/report.rs, Makefile, docs/agents/cross-agent-onboarding.md + template twin, docs/aida/01-vision.md, docs/aida/README.md**).
 
-  Acceptance: (1) README lead is the operator's statement (or a tight edit of it), with multi-vendor + intent-capture up front; (2) each artifact presents governance as mechanism/depth, substrate as floor — never the pitch; (3) no overclaim — every comparative claim matches the verified table in the 2026-06-12 rescope doc; (4) 'missing index' phrasing gone everywhere (grep-verifiable); (5) 'AI Design Assistant' returns zero grep hits — re-expansion complete; (6) the Beads-contrast line (ADR-4 D2) appears in positioning papers only, not the README lead. On branch repositioning.
+  Acceptance: (1) README lead = operator's statement + sharpening; (2) governance as mechanism/depth everywhere; (3) claims match the rescope table AS CORRECTED BY ITS ERRATUM (D5); (4) 'missing index' and (5) 'AI Design Assistant' return zero grep hits **in LIVING artifacts** (CHANGELOG/PROMPT_HISTORY/docs/archive/dated snapshots are FROZEN per D6 — exclude via -g globs, do not edit); (6) the Beads-contrast line (recorded on ADR-4 as D2) appears in positioning papers only. On branch repositioning.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:40:49.880980182Z
-modified_at: 2026-06-12T21:39:10.791601526Z
+modified_at: 2026-06-12T22:12:39.717640340Z
 req_type: Story
 tags:
 - docs
