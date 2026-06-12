@@ -12,12 +12,12 @@ description: |-
   4. A dead review session's lease is cleaned up (stale-lease handling, same as queue work / aida doctor).
 
   Sibling of BUG-510 (both: 'aida review' lacks the coordination machinery 'queue work' has). Consider fixing them together.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T22:31:56.124255124Z
-modified_at: 2026-06-12T23:06:43.507095620Z
+modified_at: 2026-06-12T23:07:07.583904932Z
 req_type: Bug
 tags:
 - aida:review
@@ -38,3 +38,15 @@ comments:
   content: 'LIVE REPRO (2026-06-12): TASK-715 got TWO concurrent reviews — (1) a rebase+review agent that rebased, fixed a drift, and MERGED PR #709 (commit f9372db01), and (2) the operator''s original ''aida review TASK-715'' session, which finished moments later and — with no knowledge of the first — re-reviewed the same spec and printed ''run to merge: gh pr merge 709'' for an ALREADY-MERGED PR. No review lease meant nothing flagged the double-review; the second session wasted a full review pass + emitted a stale, error-bound merge command. This is precisely the failure acceptance #1-#3 prevent (a spec-scoped review lease → the 2nd session sees in_flight and refuses/warns).'
   created_at: 2026-06-12T22:37:45.934874214Z
   modified_at: 2026-06-12T22:37:45.934874214Z
+history:
+- id: 019ebe16-d44b-7953-bc13-fade310231b1
+  author: aida-auto-bump
+  timestamp: 2026-06-12T23:07:07.723338671Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T23:07:07.583904932Z
+  completion_sha: c536e3c4363b43a97ded5186bd147a4a568f1bca
