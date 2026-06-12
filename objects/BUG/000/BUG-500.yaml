@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T22:36:16.364225845Z
-modified_at: 2026-06-11T22:36:16.364225845Z
+modified_at: 2026-06-12T04:03:19.776443191Z
 req_type: Bug
 tags:
 - aida:queue:work
@@ -17,3 +17,9 @@ tags:
 - papercut
 - session-lifecycle
 - zen
+comments:
+- id: 019eb9ff-a660-7a62-be7f-370d60bfaac6
+  author: joe
+  content: 'Subsumed by STORY-564: the smarter version — auto-end-and-clean on a CLEAN --zen finish, pause only when a human is needed. BUG-500''s ''stop should clean up'' is acceptance #1 of STORY-564. Keep BUG-500 as the mechanical sub-part or close as superseded — operator''s call.'
+  created_at: 2026-06-12T04:03:19.776443191Z
+  modified_at: 2026-06-12T04:03:19.776443191Z
