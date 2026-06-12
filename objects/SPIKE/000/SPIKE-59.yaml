@@ -1,0 +1,19 @@
+id: 019ebd92-29e3-7b00-98b3-ef3b4ad56166
+spec_id: SPIKE-59
+agreed_id: SPIKE-59
+title: 'WS7 SPIKE: Regulated/enterprise beachhead scoping — ReqIF bridge + compliance-audit wedge (Option D)'
+description: 'Option D scoping (WATCH-level investment, not build): where is governance MANDATORY and ''unleash the agents'' a non-starter? Deliverables: (1) the ReqIF question from the 2026-05-31 keystone re-cut for the new positioning — is an agent-native ReqIF import/export the regulated-market door, what''s the minimal slice; (2) what the audit trail must add to satisfy a compliance evaluator (e-sig? immutability proofs? RBAC?) — gap list, not build; (3) one concrete candidate segment (e.g. safety-certified software, DO-178-adjacent, medical) with the evaluator''s checklist; (4) recommendation: pursue-as-feature / watch / drop, with tripwires. Research spike — fits the STORY-568 research lane.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:42:13.347386912Z
+modified_at: 2026-06-12T20:42:13.347386912Z
+req_type: Spike
+tags:
+- parent:EPIC-39
+- repositioning
+- reqif
+- spike
+- ws7-regulated
+human_only: true
