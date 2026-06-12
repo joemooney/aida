@@ -69689,16 +69689,44 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         anyhow::bail!("no spec found matching `{id}` — check the ID with `aida list`.");
     };
 
+    // Display id for the resolved spec (agreed > spec > internal).
+    let disp = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| req.id.to_string());
+
+    // BUG-503: an archived (shelved) spec is excluded from the open set, so it
+    // would otherwise fall through to the jargon "not in the open set" error.
+    // Explain plainly instead — archiving is exactly the kind of "why isn't this
+    // moving?" answer `aida why` exists to give. trace:BUG-503
+    if req.archived {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "spec": disp,
+                    "bucket": "archived",
+                    "reason": "archived (shelved)",
+                    "needs_human": false,
+                }))?
+            );
+        } else {
+            println!(
+                "{} {} is archived (shelved) — run `aida unarchive {}` to reactivate it.",
+                "▸".cyan().bold(),
+                disp.cyan(),
+                disp
+            );
+        }
+        return Ok(());
+    }
+
     // Terminal specs aren't "open" — answer plainly rather than forcing a bucket.
     if matches!(
         req.status,
         aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
     ) {
-        let disp = req
-            .agreed_id
-            .clone()
-            .or_else(|| req.spec_id.clone())
-            .unwrap_or_else(|| req.id.to_string());
         let status = format!("{:?}", req.status);
         if json {
             println!(
@@ -69712,7 +69740,7 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
             );
         } else {
             println!(
-                "{} {} is {} — not open. Nothing keeping it back.",
+                "{} {} is {} — it's done, nothing keeping it open.",
                 "▸".cyan().bold(),
                 disp.cyan(),
                 status.green()
@@ -69724,7 +69752,11 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     let in_flight_scopes = in_flight_lease_scopes(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
     let Some(f) = facts.iter().find(|f| f.id.eq_ignore_ascii_case(&want)) else {
-        anyhow::bail!("`{id}` is not in the open set.");
+        // BUG-503: archived + terminal specs are answered plainly above, so a
+        // resolved spec should always be in the open set here. Keep a plain
+        // fallback rather than leaking the "open set" jargon if that ever
+        // changes. trace:BUG-503
+        anyhow::bail!("{disp} isn't currently open — nothing keeping it back.");
     };
     // TASK-723: the FULL reason set (derived + finding-links + residual notes),
     // most-fundamental-first. trace:TASK-723
@@ -90891,6 +90923,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         return false;
                     }
                     true
+                })
+                .filter(|e| {
+                    // BUG-504: an archived (shelved) spec must never show in
+                    // `queue list` — it looks like pending work though it's been
+                    // shelved. `aida archive <id>` dequeues on the way out
+                    // (BUG-492), so this is a backstop for any archived spec a
+                    // stale queue row still references. trace:BUG-504
+                    store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == e.requirement_id)
+                        .map(|req| !req.archived)
+                        .unwrap_or(true)
                 })
                 .filter(|e| {
                     // TASK-52: --scope filter. Matches explicit
