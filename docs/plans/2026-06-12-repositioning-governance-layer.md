@@ -181,3 +181,19 @@ aida audit <some-spec> && aida graph <some-spec> --blocked-by && aida why <some-
 - Per-slice implementation prompts: `aida ultraplan STORY-572` (etc.) assembles the context-rich prompt when each slice is picked up — the plan above feeds it.
 - Quality gate before merge: run `/panel-review` on the WS1+WS2 docs cluster (adversarial multi-agent review; lenses: overclaim, tone-toward-Beads, internal consistency, does-the-funnel-story-hold).
 - Disposition: ADR-4 + EPIC-39 + children are **draft/proposed** — the operator (or master advisor) accepts ADR-4 and approves/queues slices; this plan does not self-approve anything (ADR-3).
+
+---
+
+## 12. Post-panel amendments (2026-06-12, run wf_dbf6c0f0-a7d)
+
+The `/panel-review` quality gate mis-targeted (BUG-509 — the saved workflow passed analysts a placeholder; **the plan prose above is still unreviewed**) but its forced-reproduction pass audited the claims foundation under ADR-4. Verdict that matters here: **the structural engine survives adversarial reproduction (typed graph, transitive queries, live MCP, git-canonical store, auto-bump — all confirmed running); the adjectives don't.** Three refutations, each resolved as a make-the-claim-true slice rather than softened copy:
+
+| Refuted claim | Reality (reproduced) | Resolution |
+|---|---|---|
+| "Enforced code↔spec traces" | Warn-only commit hook (`AIDA_COMMIT_STRICT=false`), repo's own pre-commit hook disabled, no CI trace gate; only merge→auto-bump is programmatic | **STORY-579**: trace gate ON by default for new inits (explicit opt-out); wire this repo's own gate; honest copy until then |
+| "Every spec carries a history audit array" | ~11% of store objects (223/2,005) have `history:` rows | **STORY-579**: scope the claim ("since TASK-121") + evaluate cheap backfill from orphan-branch log |
+| Multi-vendor lead ("many agents from different vendors") | `auto_complete.rs` hardcodes `claude -p` for both LLM phases — coordination layer is multi-vendor, the autonomous lifecycle is Claude-only today | **STORY-578** (highest strategic priority of the amendments — it is the credibility of the chosen headline): parameterize phase launch per agent; scope the claim in copy until it lands |
+
+Also folded in: vs-spec-kit.md stale-at-birth findings → STORY-573 acceptance. New WS1/WS2 rule: scoped honest formulations in the same sentence until 578/579 land — D5 now has teeth.
+
+**Still owed:** a correctly-targeted panel pass over the plan's strategic logic (questions a/b/e/f) once BUG-509 is fixed — or a leaner manual red-team if the workflow fix lags.
