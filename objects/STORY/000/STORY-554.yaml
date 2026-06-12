@@ -17,12 +17,12 @@ description: |-
   'decision-free' in the gate = 'no ATTACHED DecisionRequest', which is coarser than true design-latitude: a design-heavy spec with no formal question (e.g. STORY-405 absent its deferred tag) would pass the gate and be auto-groomed. The gate is only as trustworthy as the decision-question PRODUCER (STORY-523) that flags such specs first. State this in --help and recommend running 'aida questions' before '--pickable --apply'. Until STORY-523's producer is reliable, --dry-run review remains load-bearing.
 
   Composes with: aida backlog list/groom (exist), aida burndown plan (gate source), STORY-523 (decision producer), STORY-546 (advisor-sign-off principle). Related archived: TASK-531 (interactive groom variant).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T04:52:28.045992791Z
-modified_at: 2026-06-12T07:50:42.465990861Z
+modified_at: 2026-06-12T08:00:13.980854664Z
 req_type: Story
 tags:
 - advisor-tooling
@@ -42,3 +42,15 @@ comments:
   content: Commit f65a745c4 references this requirement
   created_at: 2026-06-12T07:50:42.465990861Z
   modified_at: 2026-06-12T07:50:42.465990861Z
+history:
+- id: 019ebad8-8b28-7ee2-80d7-e09ff74841df
+  author: aida-auto-bump
+  timestamp: 2026-06-12T08:00:14.120921907Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T08:00:13.980854664Z
+  completion_sha: ae90115a1bb6cae64d64a3aec8e3f0d07ed634c9
