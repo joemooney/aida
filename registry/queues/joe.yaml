@@ -807,3 +807,10 @@
   added_at: 2026-06-12T03:59:25.334871473Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019eba16-b010-7571-8fc6-5fdcd62ea7fe
+  position: 422000
+  added_by: joe
+  note: 'advisor-cleared: judged autonomous-safe at filing'
+  added_at: 2026-06-12T04:38:54.361553482Z
+  for_role: advisor
