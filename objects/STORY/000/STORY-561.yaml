@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:20:15.770546344Z
-modified_at: 2026-06-12T20:29:54.757599670Z
+modified_at: 2026-06-12T20:32:25.898864200Z
 req_type: Story
 tags:
 - aida:presence
@@ -107,3 +107,10 @@ comments:
   content: Commit 7cb19c774 references this requirement
   created_at: 2026-06-12T20:29:34.818265321Z
   modified_at: 2026-06-12T20:29:34.818265321Z
+- id: 019ebd89-3689-7973-adf1-b04a05850565
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-11-human-as-first-class-role.md, docs/plans/2026-06-12-story-561-presence-consumers.md
+    filed 10 task(s): TASK-762, TASK-763, TASK-764, TASK-765, TASK-766, TASK-767, TASK-768, TASK-769, TASK-770, TASK-771
+  created_at: 2026-06-12T20:32:26.761501724Z
+  modified_at: 2026-06-12T20:32:26.761501724Z
