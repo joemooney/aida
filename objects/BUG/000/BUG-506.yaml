@@ -1,0 +1,19 @@
+id: 019ebd13-03f0-73b2-9d93-d7bee8474b1a
+spec_id: BUG-506
+agreed_id: BUG-506
+title: aida pull auto-bump catches only ONE (SPEC-ID) trailer when a commit references multiple — BUG-503 stayed Approved after a (BUG-503) (BUG-504) merge
+description: 'Observed 2026-06-12: PR #794 squash-merged with subject ''... (BUG-503) (BUG-504) (#794)''. aida pull auto-bumped BUG-504 -> Completed but left BUG-503 Approved; ''aida db reconcile-status --spec BUG-503'' also reported ''no commit references it'' — so BOTH the auto-bump and the reconcile matcher only recognize ONE (SPEC-ID) per commit (likely the last paren group before (#NNN), or a single-trailer assumption). Two specs legitimately shipping in one PR (a common cluster case) leaves all-but-one stuck at Approved/Done. Fix: the (SPEC-ID) extractor in the auto-bump + reconcile scan must collect ALL (SPEC-ID) groups in the commit message (not just one) and graduate each. Verify: a commit ''(BUG-1) (BUG-2)'' bumps both on pull. Relates to the existing extract_spec_ids_from_commit helper.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T18:23:20.560897510Z
+modified_at: 2026-06-12T18:23:20.560897510Z
+req_type: Bug
+tags:
+- aida:burndown
+- aida:pull
+- auto-bump
+- core
+- papercut
+- reconcile
