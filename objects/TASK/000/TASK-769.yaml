@@ -1,0 +1,12 @@
+id: 019ebd88-7d68-7b71-9a0b-a06eb25f87a9
+spec_id: TASK-769
+agreed_id: TASK-769
+title: Make consumers (b)/(c) per-knob tunable under `[presence]` if the fixed mapping proves too rigid (today they ride the away/home defaults)
+description: ''
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:31:39.368008246Z
+modified_at: 2026-06-12T20:31:39.368008246Z
+req_type: Task
