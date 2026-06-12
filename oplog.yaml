@@ -16979,5 +16979,18 @@ operations:
       ## Status
 
       Accepted-in-substance by operator (direction + D8 + D9, 2026-06-12); formal status flip to accepted is the master/operator's disposition. Supersedes the 2026-05-31 keystone's 'defend the substrate' framing on positioning specifics; that snapshot stays frozen per immutability discipline.
-clock: 1673
+- id: 019ebdc6-4fb0-7a91-9e2b-c425366aa8ef
+  target_id: 019ebd90-e3d8-7d23-be54-3cd804d8ce08
+  author: aida
+  node_id: '1'
+  lamport: 1674
+  timestamp: 2026-06-12T21:39:10.896896300Z
+  kind: !SetDescription
+    description: |-
+      Re-lead every vision-level artifact with the ADR-4 position USING THE OPERATOR'S CANONICAL LANGUAGE (recorded on ADR-4, 2026-06-12): AIDA is an AI DEVELOPER ASSISTANT — 'make it easier to develop when you have many agents from different vendors and want to coordinate work and feature development as the system grows in complexity — capturing the intent, the why, that can get lost during implementation.' Lead = multi-vendor coordination + intent/why preservation; governance (gates/roles/audit) = the mechanism + enterprise depth, NOT the lead word.
+
+      Scope: rewrite VIS-1 (folds in STORY-551's 'missing index' retirement — relate, don't duplicate); OVERVIEW.md vision + 'Public face' section (Trojan-horse retained: TUI = face, coordination+intent+governance = the named depth); README lead + moat content; CLAUDE.md strategic-positioning paragraph; add a PRIN clause (coordinate/govern-vs-unleash). PLUS the D8 acronym re-expansion sweep: 'AI Design Assistant' → 'AI Developer Assistant' at EVERY expansion site (CLAUDE.md line 1, README, OVERVIEW, aida-core/templates/ scaffolded CLAUDE.md/AGENTS.md, deck, crate descriptions if present — grep-verifiable).
+
+      Acceptance: (1) README lead is the operator's statement (or a tight edit of it), with multi-vendor + intent-capture up front; (2) each artifact presents governance as mechanism/depth, substrate as floor — never the pitch; (3) no overclaim — every comparative claim matches the verified table in the 2026-06-12 rescope doc; (4) 'missing index' phrasing gone everywhere (grep-verifiable); (5) 'AI Design Assistant' returns zero grep hits — re-expansion complete; (6) the Beads-contrast line (ADR-4 D2) appears in positioning papers only, not the README lead. On branch repositioning.
+clock: 1674
 node_id: '1'
