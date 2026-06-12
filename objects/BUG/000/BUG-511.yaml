@@ -1,0 +1,29 @@
+id: 019ebdf6-9bdc-7641-91fe-c40daf638148
+spec_id: BUG-511
+agreed_id: BUG-511
+title: aida review <spec> takes no lease / in-flight marker — queue footer + aida why still say 'review it' while a review is running
+description: |-
+  Operator observed (2026-06-12): with 'aida review TASK-715' actively running, 'aida queue list's To-empty footer still prints 'TASK-715 needs you: review it (aida review TASK-715)'. Contrast BUG-510 (picked up via 'aida queue work') — it flips to In Progress + a session lease, so the footer correctly says 'resolves through normal flow — nothing to do'. The 'aida review <spec>' (STORY-553) verb acquires NO lease and sets NO in-flight marker, so the classifier (burndown::explain_open treats in_flight = a live lease scope matching the spec) never sees the spec as in-flight. Result: the footer / 'aida why' / burndown-explain all show 'review it' as if no review were running, and a second 'aida review' (or queue work) would double-start on the same spec. Same family as BUG-510 — the 'aida review' verb is under-integrated with the session/lease/coordination machinery 'aida queue work' already has.
+
+  ## Acceptance
+  1. 'aida review <spec>' acquires a session lease scoped to the spec for the duration of the review (reuse the EXISTING lease machinery 'aida queue work' uses) and releases it on exit.
+  2. While a review lease is live, the classifier marks the spec in_flight, so 'aida queue list' footer + 'aida why' + burndown-explain show 'in flight — being reviewed', NOT 'review it'.
+  3. A second 'aida review <spec>' (or 'queue work') on the same spec detects the live review lease and refuses/warns — no double-review.
+  4. A dead review session's lease is cleaned up (stale-lease handling, same as queue work / aida doctor).
+
+  Sibling of BUG-510 (both: 'aida review' lacks the coordination machinery 'queue work' has). Consider fixing them together.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T22:31:56.124255124Z
+modified_at: 2026-06-12T22:31:56.124255124Z
+req_type: Bug
+tags:
+- aida:review
+- aida:session
+- core
+- from-user-friction
+- lease
+- parity
+- ux
