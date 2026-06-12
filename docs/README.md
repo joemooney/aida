@@ -25,6 +25,7 @@ you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
 | Doc | What it gives you |
 |-----|-------------------|
 | [user-guide.md](user-guide.md) | Daily-use reference for the CLI and the dashboard. |
+| [requirement-types.md](requirement-types.md) | What each of the 19 requirement types is *for* and how to write one well — the intent + best-practice layer over the enum's reference list. |
 | [lifecycle.md](lifecycle.md) | The Draft → Approved → Planned → In Progress → Done → Completed → Released state machine, the verb for each transition, and the edge cases. |
 | [autonomous-drain.md](autonomous-drain.md) | The hands-off backlog drain + the three autonomy modes (interactive / `--zen` / `--no-human`), escalation, and calibration. |
 | [git-workflow.md](git-workflow.md) | Commit/branch conventions, the `(SPEC-ID)` trailer, and the two-leg code+store sync. |
