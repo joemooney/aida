@@ -15,12 +15,12 @@ description: |-
   4. Bonus: offer to run the rebase inline (the operator's 'warn before review' ask) when interactive.
 
   Single source of truth: same stale-base predicate everywhere (reviewer-role path + human verb).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T22:17:51.806172998Z
-modified_at: 2026-06-12T22:35:59.946885041Z
+modified_at: 2026-06-12T23:07:50.007499898Z
 req_type: Bug
 tags:
 - aida:rebase
