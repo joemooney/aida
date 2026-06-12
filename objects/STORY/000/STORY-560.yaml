@@ -38,12 +38,12 @@ description: |-
     - `--then-drain` flag overrides the config to `drain` for a single run.
 
   Implementation note: the DEFAULTS (approve-eligible bias + tight do-not-approve classes + stop-at-queue + propose-mode) must make `aida intake` safe AND useful with zero config. The `[intake]` block is opt-in tuning, not required. Document the policy knobs + defaults in `--help` and the /aida-intake skill. Guardrail flags from acceptance #3 (--max-approvals, --only-tag/--exclude-tag, --risk) compose with the config policy (flags override config for a run).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:05:52.155404135Z
-modified_at: 2026-06-12T18:28:34.601387604Z
+modified_at: 2026-06-12T18:30:18.747002197Z
 req_type: Story
 tags:
 - aida:advisor
@@ -57,3 +57,7 @@ comments:
   content: Commit 8bd4fed7f references this requirement
   created_at: 2026-06-12T18:28:34.601387604Z
   modified_at: 2026-06-12T18:28:34.601387604Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-12T18:30:18.747002197Z
+  implemented_by: joe
