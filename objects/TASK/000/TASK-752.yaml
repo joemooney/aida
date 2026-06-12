@@ -1,0 +1,28 @@
+id: 019eba16-b010-7571-8fc6-5fdcd62ea7fe
+spec_id: TASK-752
+agreed_id: TASK-752
+title: 'aida doctor: detect + heal tracked legacy-store cruft (requirements*.yaml / scaffold-report.html) in a git-canonical project'
+description: |-
+  When a project DECLARES distributed/git-canonical storage (.aida/config.toml) but the git tree still TRACKS legacy centralized-backend artifacts — requirements.yaml, dated requirements_*.yaml snapshots, scaffold-report.html — that's storage-model drift (config says git-canonical; tree carries the centralized model's files). PR-651 swept ~2.3MB of this by hand on the AIDA repo itself. aida doctor's charter is exactly 'diagnose and heal state drift,' but no current category catches it, so it lingers until someone notices and files a manual chore PR. Generic: every project migrated from 'aida init --centralized', or carrying old snapshots, hits it — a first-user/migrated-project papercut.
+
+  ## Approach
+  Add a doctor check/heal category 'legacy-store-cruft' alongside the existing categories (orphan-worktree, stale-lock, orphan-branch, etc.) in collect_doctor_findings / heal_doctor_findings (aida-cli/src/main.rs).
+
+  ## Acceptance
+  1. `aida doctor check` (and `fsck`) flag tracked requirements*.yaml / scaffold-report.html when the project is git-canonical (config backend = distributed AND orphan aida-store branch exists). Read-only by default.
+  2. `aida doctor heal` (with the standard confirm) git-rm's those files + appends the gitignore block (requirements*.yaml, scaffold-report.html) — exactly PR-651's resolution.
+  3. GUARD: no-op on a legacy --centralized project that legitimately still USES requirements.yaml as its active store. Gate strictly on git-canonical/distributed mode — never nuke an active centralized backend.
+  4. Clean/no-op report when no such tracked files exist; surfaced in fsck's unified report; exits non-zero from fsck if found.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T04:28:29.584590904Z
+modified_at: 2026-06-12T04:28:29.584590904Z
+req_type: Task
+tags:
+- aida:doctor
+- core
+- first-user-papercut
+- migration-cruft
+- papercut
