@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:20:31.380845587Z
-modified_at: 2026-06-12T15:20:31.380845587Z
+modified_at: 2026-06-12T17:41:30.510810966Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -38,3 +38,9 @@ tags:
 - from-self-test
 - from-user-friction
 - papercut
+comments:
+- id: 019ebcec-b70e-71f1-8ccb-b0af385d40d0
+  author: joe
+  content: 'Root-cause correction + absorbs BUG-505 (dup, rejected): the REAL trigger for ''aida why SPIKE-53'' erroring was that SPIKE-53 was ARCHIVED (the open set = non-archived + non-terminal), NOT that it''s human-only. A non-archived parked/human-only Approved spec is already in the open set and ''aida why'' explains it. So the fix has TWO parts: (1) a non-archived parked spec must explain its parked/human-only reason (verify it already does); (2) for an ARCHIVED or terminal spec, give a clear plain message (''SPIKE-53 is archived — aida unarchive to reactivate'' / ''is Completed''), NEVER the jargon ''not in the open set''. Case-insensitive id resolution either way. (BUG-505 framed it as the archived case; this absorbs it.)'
+  created_at: 2026-06-12T17:41:30.510810966Z
+  modified_at: 2026-06-12T17:41:30.510810966Z
