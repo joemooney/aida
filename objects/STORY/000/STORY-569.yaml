@@ -1,0 +1,30 @@
+id: 019ebc7a-5702-7663-85fe-5453fe983612
+spec_id: STORY-569
+agreed_id: STORY-569
+title: Wire the --zen build to advisor review handoff through the agent mailbox (brief), not the operator clipboard
+description: |-
+  Operator-surfaced (2026-06-12): when a --zen keystone build finishes and opens a PR, the advisor (the reviewing session) only learns about it if the OPERATOR copy-pastes the implementer's summary. The agent mailbox (.aida/agent-briefs/, the MCP list_briefs/read_brief/ack_brief tools, docs/mailbox.md) is the EXISTING substrate for exactly this agent-to-agent handoff — but --zen does not auto-file a 'PR ready for review' brief to the advisor on finish, so the build-to-review handoff falls back to a human relay. The orchestrator (--auto-complete) already drives implement-CI-review-merge with no relay; --zen is the supervised lane that lacks the notify.
+
+  ## Acceptance
+  1. A --zen session that finishes AND opens a PR auto-files a brief to the advisor agent (target configurable; default the advisor role/agent) carrying the SPEC id, the PR number, and a pointer to the spec's resolved-design block to review against.
+  2. The advisor surfaces it via 'aida brief list --for-agent <advisor>' (and the MCP list_briefs) — zero operator copy-paste. Ack on review-complete.
+  3. Composes with STORY-564 (--zen auto-exit): the review-brief file is part of the clean-finish exit sequence (finish, open PR, file review brief, exit).
+  4. Honors the no-relay goal: the operator never manually relays 'PR ready' between implementer and reviewer sessions.
+
+  Composes with: STORY-564 (--zen auto-exit), aida brief / the mailbox (docs/mailbox.md), aida queue work --auto-complete (the no-relay orchestrator), the escalation cascade.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T15:36:34.818451052Z
+modified_at: 2026-06-12T15:36:34.818451052Z
+req_type: Story
+tags:
+- aida:brief
+- aida:queue:work
+- autonomy
+- core
+- handoff
+- mailbox
+- needs-supervised-build
+- zen
