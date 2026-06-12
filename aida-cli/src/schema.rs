@@ -154,21 +154,34 @@ pub fn catalog_json() -> Value {
 
 /// The per-object detail as the JSON value the `aida schema <object> --json`
 /// CLI surface and the `aida://schema/{object}` MCP resource / `schema` MCP
-/// tool emit. Only `Requirement` has reflection-derived field + enum detail
-/// today; any other catalog kind returns a `detail-pending` stub, and an
-/// unknown name returns `None` so the caller can distinguish typo from
-/// not-built-yet. trace:TASK-715 | ai:claude
+/// tool emit. Every catalog kind renders its reflection-derived field table
+/// (TASK-714's registry); `Requirement` additionally carries the four
+/// controlled-vocabulary enums. An unknown name returns `None` so the caller
+/// can distinguish a typo from a catalog kind. Single source so the MCP
+/// surface can't drift from the CLI. trace:TASK-715 | ai:claude
 pub fn object_json(name: &str) -> Option<Value> {
     if name.eq_ignore_ascii_case("Requirement") {
         return Some(requirement_json());
     }
-    let entry = CATALOG.iter().find(|e| e.name.eq_ignore_ascii_case(name))?;
-    Some(json!({
-        "object": entry.name,
-        "description": entry.description,
-        "detail": "pending",
-        "note": "Full field + enum detail is reflection-derived for Requirement only today; other objects expose the catalog one-liner.",
-    }))
+    let entry = catalog_entry(name)?;
+    let fields = parse_struct_fields(&(entry.decl)());
+    let field_vals: Vec<Value> = fields
+        .iter()
+        .map(|f| {
+            json!({
+                "name": f.name,
+                "type": f.ts_type,
+                "optional": f.optional,
+            })
+        })
+        .collect();
+    let mut obj = serde_json::Map::new();
+    obj.insert("object".to_string(), json!(entry.name));
+    obj.insert("fields".to_string(), json!(field_vals));
+    if let Some(note) = entry.note {
+        obj.insert("note".to_string(), json!(note));
+    }
+    Some(Value::Object(obj))
 }
 
 /// The reflection-derived `Requirement` field table + the four
@@ -465,31 +478,15 @@ pub fn print_object(name: &str, json_out: bool) {
         // Defensive: the dispatcher only calls this for catalog kinds.
         return;
     };
-    let fields = parse_struct_fields(&(entry.decl)());
-
     if json_out {
-        let field_vals: Vec<Value> = fields
-            .iter()
-            .map(|f| {
-                json!({
-                    "name": f.name,
-                    "type": f.ts_type,
-                    "optional": f.optional,
-                })
-            })
-            .collect();
-        let mut obj = serde_json::Map::new();
-        obj.insert("object".to_string(), json!(entry.name));
-        obj.insert("fields".to_string(), json!(field_vals));
-        if let Some(note) = entry.note {
-            obj.insert("note".to_string(), json!(note));
-        }
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&Value::Object(obj)).unwrap()
-        );
+        // Single source: the same value `aida://schema/<object>` / the
+        // `schema` MCP tool emit. trace:TASK-715 | ai:claude
+        let v = object_json(entry.name).expect("catalog kind has object_json detail");
+        println!("{}", serde_json::to_string_pretty(&v).unwrap());
         return;
     }
+
+    let fields = parse_struct_fields(&(entry.decl)());
 
     println!("{} — fields\n", entry.name);
     let name_w = fields.iter().map(|f| f.name.len()).max().unwrap_or(0);

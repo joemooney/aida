@@ -520,6 +520,16 @@ def test_schema_tool(client: McpClient, strict: bool) -> None:
         and {"status", "type", "priority", "relationship"} <= set(req.get("enums", {})),
         f"schema tool requirement detail has unexpected shape: {req}",
     )
+    # A non-Requirement catalog kind -> full reflection-derived field table
+    # (TASK-714 registry; no enums block, that's Requirement-only).
+    comment = json.loads(content_text(client.tool("schema", {"object": "comment"})))
+    require(
+        comment.get("object") == "Comment"
+        and isinstance(comment.get("fields"), list)
+        and comment["fields"]
+        and "enums" not in comment,
+        f"schema tool comment detail has unexpected shape: {comment}",
+    )
     # Unknown object -> error envelope (isError=true), not a silent empty body.
     bad = client.request("tools/call", {"name": "schema", "arguments": {"object": "definitely_not_an_object"}})
     bad_result = bad.get("result")

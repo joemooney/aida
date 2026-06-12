@@ -1164,8 +1164,9 @@ impl<'a> McpServer<'a> {
                     // TASK-715: per-object schema detail. `aida://schema/requirement`
                     // returns the reflection-derived field table + the four
                     // controlled-vocabulary enums (status/type/priority/relationship)
-                    // in on-the-wire token form; other catalog kinds return a
-                    // detail-pending stub. Mirrors `aida schema <object> --json`.
+                    // in on-the-wire token form; every other catalog kind returns
+                    // its reflection-derived field table (TASK-714's registry).
+                    // Mirrors `aida schema <object> --json`.
                     // trace:TASK-715
                     {
                         "uriTemplate": "aida://schema/{object}",
@@ -4623,9 +4624,9 @@ impl<'a> McpServer<'a> {
     /// TASK-715: `schema` tool — read-only introspection of the storable
     /// substrate for MCP clients that consume tools rather than resources. With
     /// no `object`, returns the storable-object catalog; with `object`, returns
-    /// that object's detail (Requirement = reflection-derived field table + the
-    /// four controlled-vocabulary enums; other catalog kinds = detail-pending
-    /// stub). Mirrors `aida schema [<object>] --json` and the
+    /// that object's detail (the reflection-derived field table for every
+    /// catalog kind; Requirement additionally carries the four
+    /// controlled-vocabulary enums). Mirrors `aida schema [<object>] --json` and the
     /// `aida://schema[/{object}]` resources — all back onto
     /// `crate::schema::{catalog_json, object_json}` so the surfaces can't drift.
     /// trace:TASK-715 | ai:claude
@@ -4814,9 +4815,9 @@ impl<'a> McpServer<'a> {
     }
 
     /// `aida://schema/{object}` — per-object schema detail as pretty JSON.
-    /// `requirement` returns the reflection-derived field table + the four
-    /// controlled-vocabulary enums; other catalog kinds return a
-    /// detail-pending stub; an unknown name is a -32602 error. Mirrors
+    /// Every catalog kind returns its reflection-derived field table;
+    /// `requirement` additionally carries the four controlled-vocabulary
+    /// enums; an unknown name is a -32602 error. Mirrors
     /// `aida schema <object> --json`. trace:TASK-715 | ai:claude
     fn resource_schema_object(&self, object: &str) -> Result<String, String> {
         match crate::schema::object_json(object) {
@@ -7003,7 +7004,7 @@ fn workflow_tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON. Catalog form: `{ objects: [{ name, description }] }`. Requirement detail: `{ object: \"Requirement\", fields: [{ name, type, optional }], enums: { status, type, priority, relationship } }`. Other catalog kinds return a `{ object, description, detail: \"pending\", note }` stub."
+                "pretty-printed JSON. Catalog form: `{ objects: [{ name, description }] }`. Requirement detail: `{ object: \"Requirement\", fields: [{ name, type, optional }], enums: { status, type, priority, relationship } }`. Other catalog kinds: `{ object, fields: [{ name, type, optional }], note? }` (reflection-derived, no enums block)."
             )
         }
     ])

@@ -145,7 +145,7 @@ Resources are a **distinct MCP concept from tools**: addressable read-only state
 - `aida://schema` — the catalog of storable object kinds as JSON (mirrors `aida schema --json`); per-object field/enum detail via the `aida://schema/{object}` template. Same data as the `schema` tool above (TASK-715).
 - `aida://pr/{n}` *(template)* — git-canonical, gh-free PR linkage for PR number N: merged specs whose squash-merge subject carries `(#N)`, plus review findings tagged `from-review:PR-N`.
 - `aida://batch/{name}` *(template)* — progress buckets (Shipped / In flight / Working now / Remaining) for the `batch:<name>` tag set (mirrors `aida queue progress --batch`).
-- `aida://schema/{object}` *(template)* — per-object schema detail (mirrors `aida schema <object> --json`); `requirement` is reflection-derived field + enum detail, other catalog kinds return a detail-pending stub (TASK-715).
+- `aida://schema/{object}` *(template)* — per-object schema detail (mirrors `aida schema <object> --json`); every catalog kind is a reflection-derived field table, `requirement` additionally carries the controlled-vocabulary enums (TASK-715).
 
 The `{…}` URIs are **resource templates** (advertised on `resources/templates/list`); the `resources/read` handler matches them by prefix and parses the tail (`aida://pr/<n>`, `aida://batch/<name>`, `aida://schema/<object>`).
 
