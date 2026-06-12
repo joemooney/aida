@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T23:08:08.035169771Z
-modified_at: 2026-06-12T23:08:08.035169771Z
+modified_at: 2026-06-12T23:44:38.438385703Z
 req_type: Bug
 tags:
 - aida:pull
 - from-user-friction
 - lifecycle
 - papercut
+comments:
+- id: 019ebe39-2c26-7bf0-8062-00666ada4da5
+  author: joe
+  content: Duplicate of BUG-506 (filed 2026-06-12 when the same multi-trailer auto-bump miss hit BUG-503's merge). Rejecting in favor of BUG-506.
+  created_at: 2026-06-12T23:44:38.438385703Z
+  modified_at: 2026-06-12T23:44:38.438385703Z
