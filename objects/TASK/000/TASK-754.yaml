@@ -14,12 +14,12 @@ description: |-
   3. A spec filed WITHOUT --queue behaves exactly as today (lands in backlog list, not queued) — no behavior change to the default path.
   4. The new queue entry carries a note marking it advisor-cleared at filing (so 'backlog groom' / risk-chip re-derivation can be skipped for it). Out of scope but NAMED: a positive 'autonomy-cleared' marker that the backlog risk-chip reads instead of re-deriving — separate follow-up if the note proves insufficient.
   5. Help text + user-facing output carry no SPEC-IDs (user-facing-text convention).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:38:56.747568360Z
-modified_at: 2026-06-12T07:13:43.014347900Z
+modified_at: 2026-06-12T07:25:30.530575435Z
 req_type: Task
 tags:
 - advisor-workflow
@@ -33,3 +33,15 @@ comments:
   content: Commit 932b688d7 references this requirement
   created_at: 2026-06-12T07:13:43.014347900Z
   modified_at: 2026-06-12T07:13:43.014347900Z
+history:
+- id: 019ebab8-c0ad-7283-8da0-fb4b2547a33b
+  author: aida-auto-bump
+  timestamp: 2026-06-12T07:25:30.669736190Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T07:25:30.530575435Z
+  completion_sha: d657c76a831d31e9dbb36bc4ef01575be537fb6c
