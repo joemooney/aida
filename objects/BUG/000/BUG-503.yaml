@@ -25,12 +25,12 @@ description: |-
   ## Rationale
 
   The explain command refusing the items most in need of explanation is the inverse of its purpose. Surfaced when the operator tried to self-diagnose a confusing queue. Relates to STORY-547/548 (why-open).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:20:31.380845587Z
-modified_at: 2026-06-12T17:41:30.510810966Z
+modified_at: 2026-06-12T17:41:31.404934212Z
 req_type: Bug
 tags:
 - aida:burndown
