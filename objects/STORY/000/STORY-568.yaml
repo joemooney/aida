@@ -1,0 +1,54 @@
+id: 019ebc79-e57d-7491-9864-657db15b4be2
+spec_id: STORY-568
+agreed_id: STORY-568
+title: 'Autonomous research/spike lane: dispatch SPIKE specs to a research agent (deliverable = analysis + recommendation), escalate only the decision'
+description: |-
+  ## Gap (operator challenge, 2026-06-12)
+
+  Operator: 'why does a human need to do the research [for SPIKE-53]? surely better for an agent.' Correct — and a prior advisor claim that spikes are 'human-only' was wrong. Research IS agent work (this session ran Lane-D competitor deep-dives, the weekly scan, the DARLA analysis — all agent-run). The deep-research + panel-review skills already exist.
+
+  ## Why spikes are wrongly excluded today
+
+  The autonomous drain (`queue work --auto-complete` / `/aida-burndown`) is built for the CODE lifecycle: implement → CI → review → MERGE a PR. A spike's deliverable is an analysis/document/decision, NOT a mergeable PR. So the implementer pipeline has no lane for it and labels it 'human-only' — which actually means 'the code drain can't process this', NOT 'a human is required'. The label conflates three distinct things:
+    (a) needs a RESEARCH agent (most spikes) — automatable;
+    (b) needs a human DECISION the research informs (strategic re-scope) — escalate;
+    (c) genuinely human-only (rare).
+
+  ## Proposal: a research/spike autonomous lane
+
+  Dispatch SPIKE-type specs to a RESEARCH agent (compose the existing `deep-research` / `panel-review` skills + the Lane-D weekly-scan pattern), NOT the implementer drain. The agent:
+  1. Does the research (web + substrate + synthesis), source-grounded with provenance.
+  2. Produces the deliverable: an analysis doc/comment on the spike (+ a dated artifact where appropriate).
+  3. Brings back OPTIONS + a recommendation.
+  4. Marks the spike done-for-decision; ESCALATES the strategic decision (if any) to the advisor/operator via `aida questions` — agent does the legwork, human/advisor makes the call (the escalation cascade).
+
+  ## Reclassify the label
+
+  Split 'human-only' for spikes into: `research-lane` (agent-able) / `needs-decision` (escalate the call) / true `human-only`. The gate currently mislabels (b)+(a) as (c). Relates to BUG-503 (`aida why` should then explain the precise reason).
+
+  ## Acceptance
+
+  - [ ] A spike/research dispatch path (command or burndown lane) sends a SPIKE spec to a research agent (reuse deep-research / panel-review — do NOT reimplement research orchestration).
+  - [ ] The agent produces a source-grounded analysis as a doc/comment on the spike (+ dated artifact where it fits the competitive-analysis corpus), with provenance tags.
+  - [ ] On completion it presents options + recommendation and, if the spike implies a strategic decision, escalates THAT decision to `aida questions` (advisor/operator) — the spike does not auto-merge a direction change.
+  - [ ] Spike 'done' is deliverable-produced, NOT PR-merged (separate done-path from the code lifecycle).
+  - [ ] Reclassify spike gating: research-lane vs needs-decision vs human-only; the burndown/queue stops calling agent-able research 'human-only'.
+  - [ ] Smallest slice: dispatch ONE spike → analysis doc + recommendation + escalated decision. Batch/fan-out is a follow-up.
+
+  ## Rationale
+
+  AIDA invests in autonomous CODE drains but leaves the research half manual, mislabeled 'human-only'. The building blocks (skills + the proven Lane-D pattern) already exist — this is composition. Keeps the human on the DECISION, not the legwork. Surfaced by the operator correctly challenging a wrong 'human must do it' claim.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T15:36:05.757351979Z
+modified_at: 2026-06-12T15:36:05.757351979Z
+req_type: Story
+tags:
+- aida:burndown
+- autonomy
+- from-product
+- from-user-friction
+- research
+- spike
