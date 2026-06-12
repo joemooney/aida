@@ -1,0 +1,16 @@
+id: 019ebd91-b371-74f1-8259-4324f9c5f4b1
+spec_id: STORY-575
+agreed_id: STORY-575
+title: 'WS4: Governance surface sharpening — make the gates legible headline features (audit view, approval visibility, autonomy ladder doc)'
+description: 'The governance machinery exists (ADR-3 approval gates, roles, triage/disposition leases, autonomy ladder, history arrays, trace gate, contained posture STORY-567) but is scattered and under-surfaced — it''s the PRODUCT now, so make it legible: (1) an ''aida audit <spec>'' / audit view answering WHO approved/decided/changed WHAT and WHEN from the history arrays + role activity (the regulated-segment demo); (2) approval-gate visibility — refused actions explain the governance model in one line (not just ''refused''); (3) a docs/governance.md (or discipline-pack chapter) presenting the whole ladder: intake→approval→sign-off-by-queueing→gated-autonomy→trace-enforced-merge→audit, as ONE coherent story; (4) relate (don''t duplicate) STORY-559 advisor dashboard + STORY-567 contained posture as governance features. Acceptance: a skeptical evaluator can go from README claim to a runnable 10-minute governance demo.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:41:43.025734467Z
+modified_at: 2026-06-12T20:41:43.025734467Z
+req_type: Story
+tags:
+- parent:EPIC-39
+- repositioning
+- ws4-governance
