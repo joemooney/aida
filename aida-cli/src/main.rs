@@ -25181,6 +25181,71 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     Ok(())
 }
 
+/// TASK-752: detect tracked legacy centralized-backend artifacts —
+/// `requirements.yaml`, dated `requirements_*.yaml` snapshots, and a stray
+/// `scaffold-report.html` — when the project DECLARES git-canonical/distributed
+/// storage but the git tree still TRACKS those files. This is storage-model
+/// drift: config says git-canonical (the live store is the orphan `aida-store`
+/// branch), but the tree carries the centralized model's files (PR-651 swept
+/// ~2.3MB of exactly this by hand on the AIDA repo itself).
+///
+/// GUARD: gated strictly on git-canonical mode — `.aida/config.toml` declares
+/// `mode = "distributed"` AND the orphan `aida-store` branch exists. On a legacy
+/// `--centralized` project that legitimately USES `requirements.yaml` as its
+/// active store, neither condition holds, so we return nothing and never nuke an
+/// active backend. Returns the repo-relative tracked paths to flag (empty when
+/// clean or when the project is not git-canonical).
+// trace:TASK-752 | ai:claude
+fn detect_legacy_store_cruft(project_root: &std::path::Path) -> Vec<String> {
+    // Gate 1: config declares distributed/git-canonical mode.
+    if distributed_mode_declared_from(project_root).is_none() {
+        return Vec::new();
+    }
+    // Gate 2: the orphan `aida-store` branch (the actual writer of record)
+    // exists — confirms the live store really is git-canonical, not a
+    // half-migrated config.
+    if !branch_exists_anywhere(project_root, "aida-store") {
+        return Vec::new();
+    }
+
+    // `git ls-files` lists only TRACKED paths — an untracked-but-gitignored
+    // `requirements.yaml` (the post-heal state) is correctly NOT flagged.
+    let Ok(output) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-files", "-z"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    let mut hits: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .filter(|p| is_legacy_store_cruft_path(p))
+        .map(|p| p.to_string())
+        .collect();
+    hits.sort();
+    hits.dedup();
+    hits
+}
+
+/// Whether a repo-relative path is a legacy centralized-backend artifact:
+/// a top-level `requirements*.yaml` (the legacy store + dated snapshots like
+/// `requirements_20251206_205840.yaml`) or a top-level `scaffold-report.html`.
+/// Top-level only — never matches nested paths (e.g. a `requirements.yaml`
+/// fixture deep in a test tree).
+// trace:TASK-752 | ai:claude
+fn is_legacy_store_cruft_path(path: &str) -> bool {
+    // Top-level only: no path separator.
+    if path.contains('/') {
+        return false;
+    }
+    path == "scaffold-report.html" || (path.starts_with("requirements") && path.ends_with(".yaml"))
+}
+
 fn collect_doctor_findings(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -25547,6 +25612,26 @@ fn collect_doctor_findings(
         }
     }
 
+    // TASK-752: tracked legacy centralized-backend artifacts on a git-canonical
+    // project (requirements*.yaml / scaffold-report.html still in the tree while
+    // the live store is the orphan aida-store branch). Cheap `git ls-files`
+    // scan; the detector self-gates on distributed mode + orphan branch, so it
+    // is a no-op on a legacy --centralized project that legitimately uses
+    // requirements.yaml as its active store. trace:TASK-752 | ai:claude
+    for path in detect_legacy_store_cruft(project_root) {
+        push(DoctorFinding {
+            category: "legacy-store-cruft".to_string(),
+            id: path.clone(),
+            summary: format!(
+                "tracked legacy-store artifact `{}` on a git-canonical project",
+                path
+            ),
+            action: "git rm the file + gitignore it (live store is the orphan aida-store branch)"
+                .to_string(),
+            safe_heal: true,
+        });
+    }
+
     out.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     Ok(out)
 }
@@ -25594,12 +25679,17 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         | "ancestor-claude"
         | "ancestor-bleed"
         | "bleed" => "external-import-bleed",
+        // TASK-752: tracked legacy centralized-backend artifacts
+        // (requirements*.yaml / scaffold-report.html) on a git-canonical
+        // project. trace:TASK-752 | ai:claude
+        "legacy-store-cruft" | "legacy-store" | "store-cruft" | "legacy-cruft"
+        | "requirements-yaml" => "legacy-store-cruft",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, stale-remote-branches, orphan-queue-entries, \
              stale-reviewer-leases, stale-locks, dead-agents, OBE-briefs, \
-             completed-without-commit)",
+             completed-without-commit, legacy-store-cruft)",
             other
         ),
     };
@@ -26252,6 +26342,11 @@ fn heal_doctor_finding(
         }
         "spec-status-drift" => heal_doctor_spec_status(project_root, finding),
         "orphan-worktrees" => heal_doctor_orphan_worktree(project_root, finding),
+        // TASK-752: git-rm the tracked legacy-store artifact + gitignore it —
+        // exactly PR-651's resolution. safe_heal (the detector self-gates on
+        // git-canonical mode, so this never touches an active centralized
+        // backend). trace:TASK-752 | ai:claude
+        "legacy-store-cruft" => heal_doctor_legacy_store_cruft(project_root, finding),
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
@@ -26553,6 +26648,90 @@ fn heal_doctor_orphan_worktree(
         status: if status.success() { "healed" } else { "failed" }.to_string(),
         detail: salvage.map(|p| format!("salvage patch: {}", p.display())),
     })
+}
+
+/// TASK-752: heal a tracked legacy-store-cruft finding — exactly PR-651's
+/// resolution: `git rm` the file from the tree, then append the gitignore block
+/// (`requirements*.yaml`, `scaffold-report.html`) so the artifacts can't return.
+/// Idempotent: a path already untracked (e.g. a prior heal removed it) reports
+/// `skipped`; the gitignore block is appended only once. trace:TASK-752 | ai:claude
+fn heal_doctor_legacy_store_cruft(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let path = &finding.id;
+
+    // Re-confirm the file is still tracked before removing — between scan and
+    // heal another heal (or a manual `git rm`) may have already dropped it.
+    let still_tracked = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-files", "--error-unmatch", path])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !still_tracked {
+        // Still make sure the gitignore guard is in place (idempotent).
+        let gi = ensure_legacy_store_cruft_gitignore(project_root)?;
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: "already untracked".to_string(),
+            status: "skipped".to_string(),
+            detail: gi.then(|| "appended gitignore guard".to_string()),
+        });
+    }
+
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rm", "--quiet", "--"])
+        .arg(path)
+        .status()
+        .with_context(|| format!("git rm {path}"))?;
+    if !status.success() {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "failed".to_string(),
+            detail: Some(format!("git rm {path} failed")),
+        });
+    }
+
+    let appended = ensure_legacy_store_cruft_gitignore(project_root)?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "git rm + gitignore (live store is the orphan aida-store branch)".to_string(),
+        status: "healed".to_string(),
+        detail: appended.then(|| "appended gitignore guard".to_string()),
+    })
+}
+
+/// TASK-752: append PR-651's exact gitignore guard so the swept legacy-store
+/// artifacts can't return. Idempotent — no-op if the patterns are already
+/// present. Returns whether it wrote anything. trace:TASK-752 | ai:claude
+fn ensure_legacy_store_cruft_gitignore(project_root: &std::path::Path) -> Result<bool> {
+    use std::io::Write;
+    let gitignore_path = project_root.join(".gitignore");
+    let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+    // Already guarded? `requirements*.yaml` is the load-bearing pattern.
+    if existing.lines().any(|l| l.trim() == "requirements*.yaml") {
+        return Ok(false);
+    }
+    let block = "\n# Legacy pre-git-canonical store snapshots (live store is the orphan aida-store branch)\n\
+         requirements*.yaml\n\
+         scaffold-report.html\n";
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&gitignore_path)
+        .with_context(|| format!("opening {}", gitignore_path.display()))?;
+    f.write_all(block.as_bytes())
+        .with_context(|| format!("appending to {}", gitignore_path.display()))?;
+    Ok(true)
 }
 
 // TASK-570: heal an orphan queue entry by routing through the same
@@ -27603,6 +27782,164 @@ mod story_462_doctor_tests {
         assert!(body.contains("# AIDA salvage patch"));
         assert!(body.contains("-before"));
         assert!(body.contains("+after"));
+    }
+
+    // ── TASK-752: legacy-store-cruft detection + guard ──
+
+    #[test]
+    fn normalize_doctor_category_accepts_legacy_store_cruft() {
+        // TASK-752
+        for alias in [
+            "legacy-store-cruft",
+            "legacy-store",
+            "store-cruft",
+            "legacy-cruft",
+            "requirements-yaml",
+        ] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                "legacy-store-cruft"
+            );
+        }
+    }
+
+    #[test]
+    fn is_legacy_store_cruft_path_matches_top_level_only() {
+        // TASK-752: top-level legacy artifacts match.
+        assert!(is_legacy_store_cruft_path("requirements.yaml"));
+        assert!(is_legacy_store_cruft_path(
+            "requirements_20251206_205840.yaml"
+        ));
+        assert!(is_legacy_store_cruft_path("scaffold-report.html"));
+        // Nested paths and unrelated files never match.
+        assert!(!is_legacy_store_cruft_path(
+            "tests/fixtures/requirements.yaml"
+        ));
+        assert!(!is_legacy_store_cruft_path("src/requirements.yaml"));
+        assert!(!is_legacy_store_cruft_path("my-requirements.yaml"));
+        assert!(!is_legacy_store_cruft_path("requirements.json"));
+        assert!(!is_legacy_store_cruft_path("docs/scaffold-report.html"));
+    }
+
+    fn git752(root: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {:?}: {:?}", args, out);
+    }
+
+    /// TASK-752: a distributed/git-canonical project (config declares
+    /// `mode = "distributed"` AND the orphan `aida-store` branch exists) with a
+    /// tracked `requirements.yaml` + `scaffold-report.html` flags both, and the
+    /// heal git-rm's them + appends the gitignore guard.
+    #[test]
+    fn detects_and_heals_legacy_store_cruft_on_git_canonical_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        // git-canonical: config declares distributed mode...
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        // ...and the orphan aida-store branch exists.
+        std::fs::write(root.join("README.md"), "x\n").unwrap();
+        git752(root, &["add", "."]);
+        git752(root, &["commit", "-qm", "init"]);
+        git752(root, &["branch", "aida-store"]);
+        // Tracked legacy-store artifacts.
+        std::fs::write(root.join("requirements.yaml"), "legacy: store\n").unwrap();
+        std::fs::write(root.join("scaffold-report.html"), "<html/>\n").unwrap();
+        git752(root, &["add", "requirements.yaml", "scaffold-report.html"]);
+        git752(root, &["commit", "-qm", "cruft"]);
+
+        // Detect.
+        let store = aida_core::models::RequirementsStore::new();
+        let findings = collect_doctor_findings(root, &store, Some("legacy-store-cruft")).unwrap();
+        assert_eq!(findings.len(), 2, "both cruft files flagged: {findings:?}");
+        assert!(findings.iter().all(|f| f.category == "legacy-store-cruft"));
+        assert!(findings.iter().all(|f| f.safe_heal));
+        let ids: std::collections::HashSet<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert!(ids.contains("requirements.yaml"));
+        assert!(ids.contains("scaffold-report.html"));
+
+        // Heal both.
+        for finding in &findings {
+            let result = heal_doctor_legacy_store_cruft(root, finding).unwrap();
+            assert_eq!(result.status, "healed", "{result:?}");
+        }
+        // git-rm'd → no longer tracked → no longer flagged.
+        let after = collect_doctor_findings(root, &store, Some("legacy-store-cruft")).unwrap();
+        assert!(
+            after.is_empty(),
+            "healed cruft must not reappear: {after:?}"
+        );
+        // gitignore guard appended exactly PR-651's block.
+        let gi = std::fs::read_to_string(root.join(".gitignore")).unwrap();
+        assert!(gi.contains("requirements*.yaml"));
+        assert!(gi.contains("scaffold-report.html"));
+    }
+
+    /// TASK-752 GUARD: a legacy `--centralized` project that legitimately USES
+    /// `requirements.yaml` as its active store (config does NOT declare
+    /// distributed mode, no orphan aida-store branch) is a NO-OP — we must never
+    /// flag/nuke an active centralized backend.
+    #[test]
+    fn legacy_store_cruft_is_noop_on_centralized_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        // Legacy centralized: requirements.yaml is the ACTIVE store, no
+        // distributed-mode config, no orphan aida-store branch.
+        std::fs::write(
+            root.join("requirements.yaml"),
+            "active: centralized store\n",
+        )
+        .unwrap();
+        git752(root, &["add", "."]);
+        git752(root, &["commit", "-qm", "centralized"]);
+
+        // No distributed-mode declaration → no orphan branch → no-op.
+        assert!(
+            detect_legacy_store_cruft(root).is_empty(),
+            "must not flag an active centralized requirements.yaml"
+        );
+        let store = aida_core::models::RequirementsStore::new();
+        let findings = collect_doctor_findings(root, &store, Some("legacy-store-cruft")).unwrap();
+        assert!(findings.is_empty(), "centralized project: no findings");
+    }
+
+    /// TASK-752: even with distributed-mode config, if the orphan aida-store
+    /// branch is MISSING (half-migrated config), stay silent — Gate 2.
+    #[test]
+    fn legacy_store_cruft_is_noop_without_orphan_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("requirements.yaml"), "x\n").unwrap();
+        git752(root, &["add", "."]);
+        git752(root, &["commit", "-qm", "init"]);
+        // No `aida-store` branch created.
+        assert!(
+            detect_legacy_store_cruft(root).is_empty(),
+            "missing orphan branch → no-op"
+        );
     }
 }
 
@@ -28717,6 +29054,35 @@ fn doctor_fsck() -> Result<()> {
                 "✓".green()
             );
         }
+    }
+    println!();
+
+    // --- Check 7: legacy-store cruft on a git-canonical project ---
+    // TASK-752: tracked requirements*.yaml / scaffold-report.html while the live
+    // store is the orphan aida-store branch. The detector self-gates on
+    // distributed mode + orphan branch, so this is silent on a legacy
+    // --centralized project. A finding is a problem (non-zero exit) so fsck can
+    // gate CI; `aida doctor --heal --category legacy-store-cruft` resolves it.
+    // trace:TASK-752 | ai:claude
+    println!("{}", "── legacy-store cruft ──".bold());
+    let cruft = detect_legacy_store_cruft(&project_root);
+    if cruft.is_empty() {
+        println!(
+            "  {} no tracked legacy-store artifacts (or not a git-canonical project).",
+            "✓".green()
+        );
+    } else {
+        had_problem = true;
+        println!(
+            "  {} {} tracked legacy-store artifact(s) on a git-canonical project: {}",
+            "✗".red(),
+            cruft.len(),
+            cruft.join(", ")
+        );
+        println!(
+            "    fix: {}",
+            "aida doctor --heal --category legacy-store-cruft".cyan()
+        );
     }
     println!();
 
