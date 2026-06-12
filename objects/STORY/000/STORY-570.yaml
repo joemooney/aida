@@ -1,0 +1,27 @@
+id: 019ebcc7-334f-7a61-8490-46632399943c
+spec_id: STORY-570
+agreed_id: STORY-570
+title: 'Beads to AIDA import bridge: parse .beads/issues.jsonl into AIDA specs + relationship graph (one-way Trojan horse)'
+description: |-
+  From SPIKE-53 (operator: file-for-marketing-phase). A one-way import that brings a Beads graph into AIDA so users gain trace + lifecycle. Beads' .beads/issues.jsonl is an intentionally-stable git-tracked interchange format (bd export/import) — NO Dolt coupling needed to read it.
+
+  ## Acceptance
+  1. Parse .beads/issues.jsonl -> AIDA: map Beads id/type(bug,feature,task,epic,chore)/status(open,in_progress,closed)/deps(blocks,parent-child,related,discovered-from)/priority(0-4) onto AIDA spec types + the typed relationship graph.
+  2. ID strategy (the main design choice): preserve Beads 'bd-<hash>' IDs as an alias field vs re-allocate AIDA sequential IDs — decide + implement.
+  3. Lossy edges named honestly: Beads has no trace/lifecycle/ADR-knowledge-graph equivalents; AIDA->Beads export (optional, later) collapses AIDA's richer lifecycle.
+  4. PRE-FLIGHT: confirm the LIVE issues.jsonl field schema against a current 'bd export' before committing the mapping (Beads versions churn fast).
+  Marketing-phase distribution play; build when the bug backlog clears.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T17:00:31.951353181Z
+modified_at: 2026-06-12T17:00:31.951353181Z
+req_type: Story
+tags:
+- beads
+- bridge
+- competitive
+- deferred:post-stability
+- from:SPIKE-53
+- interop
