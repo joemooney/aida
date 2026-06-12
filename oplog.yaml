@@ -17132,5 +17132,18 @@ operations:
   timestamp: 2026-06-12T22:12:41.101834313Z
   kind: !SetDescription
     description: 'Propagate ADR-4 positioning into every generated/presented artifact — IN D9 LANGUAGE: multi-vendor coordination + intent-capture lead, governance as mechanism (the prior acceptance ''describes AIDA in governance terms'' violated D9 — corrected). Scope: docs/presentation deck (repositioned moat slide: substrate=commoditized, the layer above + works-with-Beads story) + executive-briefing + aida-demo.html; aida init scaffolded CLAUDE.md/AGENTS.md template language; init completion banner; README lifecycle framing; **scripts/aida-demo.sh narration (old substrate pitch verified in it); GitHub repo description + topics; EXISTING-downstream refresh path — already-init''d projects hold stale scaffolded templates: provide init --with-* --refresh / aida doctor stale-positioning flag + one-line comms note.** Scoped honest formulations until STORY-578/579 land (same rule as WS1/WS2). Acceptance: grep gates green across templates + demo script + deck (living artifacts only); a fresh aida init project''s CLAUDE.md describes AIDA in multi-vendor-coordination + intent-capture terms with governance as mechanism; deck regenerates clean; downstream refresh path documented.'
-clock: 1683
+- id: 019ebde5-00f7-7941-a888-2c13b5600d4f
+  target_id: 019ebdd7-0e8e-75f3-870a-8859d1c2d2a3
+  author: aida
+  node_id: '1'
+  lamport: 1684
+  timestamp: 2026-06-12T22:12:42.359825921Z
+  kind: !SetDescription
+    description: |-
+      ; Panel finding (forced-reproduction): auto_complete.rs HARDCODES 'claude -p' for both LLM phases — non-Claude agents cannot drive the autonomous lifecycle. ADR-4's lead claims multi-vendor; today true at the MCP/coordination layer only. Parameterize implementer/advisor phase launch (claude -p / codex exec / AGY headless) behind per-phase agent config (extends ~/.aida/agents.toml), honoring each tool's native invocation (faithful-launcher).
+
+      RED-TEAM ADDITIONS: (a) Gas Town ships multi-vendor dispatch TODAY (Claude/Copilot/Codex/Gemini) — this slice is the credibility prerequisite for ANY unscoped multi-vendor claim, and the differentiator is intent-governance semantics riding the dispatch, not dispatch itself; (b) orchestrator-core change → KEYBOARD-SUPERVISED lane (reliability-critical, not overnight drain); (c) **landing this slice INCLUDES the un-scoping sweep**: remove the 'coordination layer only' qualifiers from WS1/WS2/WS5 copy in the same PR or an immediate follow-on.
+
+      Acceptance: (1) a drain runs its implementer phase on ≥1 non-Claude agent end-to-end (codex first); (2) agent choice is config/flag — no hardcoded vendor string in the phase-launch path; (3) graceful capability degradation documented; (4) un-scoping sweep executed; (5) keyboard-supervised rollout.
+clock: 1684
 node_id: '1'
