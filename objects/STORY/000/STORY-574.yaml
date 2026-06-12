@@ -1,14 +1,20 @@
 id: 019ebd91-6bb3-7843-a8d5-821b41c5eb33
 spec_id: STORY-574
 agreed_id: STORY-574
-title: 'WS3b: aida import --from-beads — one-way Beads JSONL import as the interop MVP'
-description: 'Smallest valuable interop slice (per WS3a''s mapping): import a .beads/issues.jsonl export into AIDA specs — Beads issues become typed specs (task/bug/epic by inference), deps become BlockedBy, parent-child becomes parent links, bd-IDs preserved as external refs (searchable). Idempotent re-import (update, don''t duplicate, keyed on bd hash ID). Positioning purpose: an AIDA-curious Beads user (the 18.7k) can adopt the governance layer WITHOUT abandoning their tracker — ride the wave. Export/bridge deferred to WS3c (revisit-trigger: real demand or WS3a showing trivial cost). BlockedBy WS3a.'
+title: 'WS3b: Beads interop — sidecar governance over live bd data + import as migration/eval (reshaped per red-team)'
+description: |-
+  RESHAPED by red-team (2026-06-12): the original 'import once, run two trackers, adopt governance without abandoning bd' story FAILED review — governance requires being in the agents' WRITE PATH; a one-way import is observability, not governance (substrate-as-bouncer applied to our own pitch). Two shapes now, in priority order:
+
+  1. SIDECAR (the real 'works with bd'): (a) the trace gate accepts trace:bd-<id> refs validated against .beads/issues.jsonl (documented interchange format); (b) aida audit / decision-ledger keyed on bd IDs — AIDA records approvals/dispositions/role actions while bd stays writer-of-record for issues; (c) continuous --watch-beads refresh under a SINGLE-OWNERSHIP rule: bd owns issue content, AIDA owns decision/governance fields — no field has two writers, so NO bidirectional bridge is needed.
+  2. IMPORT = MIGRATION/EVALUATION (the original MVP, honestly labeled): 'see your bd graph inside AIDA in 60 seconds' — bd issues become typed specs (type inference), deps → BlockedBy, parent-child → parent, bd hash-IDs preserved as searchable external refs. Idempotent re-import keyed on bd ID, WITH DECLARED CONFLICT SEMANTICS: bd-owned fields refresh, AIDA-side decision fields (status/approvals/relations added in AIDA) are NEVER clobbered; collisions reported, not silent.
+
+  Public copy says 'works with Beads' — never 'funnel'. Marketing tip of this work is the FORENSICS demo (aida audit over imported bd history), not the importer. BlockedBy SPIKE-58 (schema + conflict-on-reimport question + bd git-hooks behavior). Acceptance: sidecar trace-gate validates bd refs end-to-end on a real bd repo; import + re-import honors ownership rule with a test per conflict class; no 'without abandoning their tracker' claim anywhere until the sidecar (not the import) delivers it.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:24.659625510Z
-modified_at: 2026-06-12T20:43:14.769703450Z
+modified_at: 2026-06-12T22:12:37.683984853Z
 req_type: Story
 tags:
 - beads

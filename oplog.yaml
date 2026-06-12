@@ -17069,5 +17069,27 @@ operations:
       ## Plan
 
       docs/plans/2026-06-12-repositioning-governance-layer.md (branch 'repositioning'), esp. §13 red-team amendments + the rescope ERRATUM — D5 binds to the corrected table.
-clock: 1677
+- id: 019ebde4-ef1e-7f53-acc4-10d777c84bc1
+  target_id: 019ebd91-6bb3-7843-a8d5-821b41c5eb33
+  author: aida
+  node_id: '1'
+  lamport: 1678
+  timestamp: 2026-06-12T22:12:37.790384739Z
+  kind: !SetTitle
+    title: 'WS3b: Beads interop — sidecar governance over live bd data + import as migration/eval (reshaped per red-team)'
+- id: 019ebde4-f023-7331-a9bb-d95c746a2f94
+  target_id: 019ebd91-6bb3-7843-a8d5-821b41c5eb33
+  author: aida
+  node_id: '1'
+  lamport: 1679
+  timestamp: 2026-06-12T22:12:38.051993875Z
+  kind: !SetDescription
+    description: |-
+      RESHAPED by red-team (2026-06-12): the original 'import once, run two trackers, adopt governance without abandoning bd' story FAILED review — governance requires being in the agents' WRITE PATH; a one-way import is observability, not governance (substrate-as-bouncer applied to our own pitch). Two shapes now, in priority order:
+
+      1. SIDECAR (the real 'works with bd'): (a) the trace gate accepts trace:bd-<id> refs validated against .beads/issues.jsonl (documented interchange format); (b) aida audit / decision-ledger keyed on bd IDs — AIDA records approvals/dispositions/role actions while bd stays writer-of-record for issues; (c) continuous --watch-beads refresh under a SINGLE-OWNERSHIP rule: bd owns issue content, AIDA owns decision/governance fields — no field has two writers, so NO bidirectional bridge is needed.
+      2. IMPORT = MIGRATION/EVALUATION (the original MVP, honestly labeled): 'see your bd graph inside AIDA in 60 seconds' — bd issues become typed specs (type inference), deps → BlockedBy, parent-child → parent, bd hash-IDs preserved as searchable external refs. Idempotent re-import keyed on bd ID, WITH DECLARED CONFLICT SEMANTICS: bd-owned fields refresh, AIDA-side decision fields (status/approvals/relations added in AIDA) are NEVER clobbered; collisions reported, not silent.
+
+      Public copy says 'works with Beads' — never 'funnel'. Marketing tip of this work is the FORENSICS demo (aida audit over imported bd history), not the importer. BlockedBy SPIKE-58 (schema + conflict-on-reimport question + bd git-hooks behavior). Acceptance: sidecar trace-gate validates bd refs end-to-end on a real bd repo; import + re-import honors ownership rule with a test per conflict class; no 'without abandoning their tracker' claim anywhere until the sidecar (not the import) delivers it.
+clock: 1679
 node_id: '1'
