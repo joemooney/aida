@@ -3,12 +3,12 @@ spec_id: BUG-501
 agreed_id: BUG-501
 title: MCP 'setup issue' warning recurs in every AIDA worktree — pre-approve the aida server in scaffolded settings (extend BUG-484 to worktrees)
 description: 'Operator-observed 2026-06-11: every ''--zen'' / ''aida session start'' worktree launches a Claude Code session that warns ''⚠ 1 setup issue: MCP · /doctor''. Cause: .mcp.json registers the ''aida'' server (aida mcp-serve), Claude Code approves MCP servers PER PROJECT PATH, and each fresh worktree is a NEW project path → the server is unapproved there. Non-blocking (sessions work fine via the CLI), but it''s persistent noise in the worktree-heavy supervised-build workflow. BUG-484 (Completed) fixed the fresh-''aida init'' version but NOT worktrees, which AIDA''s session machinery creates on every pickup. Fix: add ''"enabledMcpjsonServers": ["aida"]'' to the scaffolded .claude/settings.json (master: aida-core/templates/settings.json) — pre-approves ONLY the trusted aida server (not a blanket enableAllProjectMcpServers), and worktrees inherit it because they check out the same .claude/ dir. Verify the warning is gone in a fresh ''aida session start'' worktree. Reconcile with whatever BUG-484 did for init (avoid double-approval). If the scaffolded server name differs downstream, key the entry off the actual .mcp.json server name.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T22:44:19.124583373Z
-modified_at: 2026-06-12T04:04:47.093941685Z
+modified_at: 2026-06-12T04:13:47.343388231Z
 req_type: Bug
 tags:
 - aida:init
@@ -23,3 +23,15 @@ comments:
   content: Commit 1d44eb98c references this requirement
   created_at: 2026-06-12T04:04:47.093941685Z
   modified_at: 2026-06-12T04:04:47.093941685Z
+history:
+- id: 019eba09-3a58-7fd3-9c5f-84f4b8b6e4f8
+  author: aida-reconcile
+  timestamp: 2026-06-12T04:13:47.480590721Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T04:13:47.343388231Z
+  completion_sha: 85009968d747c092aa5e794d81f5adf6eb4abfee
