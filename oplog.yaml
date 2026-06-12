@@ -17145,5 +17145,16 @@ operations:
       RED-TEAM ADDITIONS: (a) Gas Town ships multi-vendor dispatch TODAY (Claude/Copilot/Codex/Gemini) — this slice is the credibility prerequisite for ANY unscoped multi-vendor claim, and the differentiator is intent-governance semantics riding the dispatch, not dispatch itself; (b) orchestrator-core change → KEYBOARD-SUPERVISED lane (reliability-critical, not overnight drain); (c) **landing this slice INCLUDES the un-scoping sweep**: remove the 'coordination layer only' qualifiers from WS1/WS2/WS5 copy in the same PR or an immediate follow-on.
 
       Acceptance: (1) a drain runs its implementer phase on ≥1 non-Claude agent end-to-end (codex first); (2) agent choice is config/flag — no hardcoded vendor string in the phase-launch path; (3) graceful capability degradation documented; (4) un-scoping sweep executed; (5) keyboard-supervised rollout.
-clock: 1684
+- id: 019ebde5-04c7-7571-940d-8f38cb437b9d
+  target_id: 019ebdd7-39ba-7300-9fd7-d135092780f7
+  author: aida
+  node_id: '1'
+  lamport: 1685
+  timestamp: 2026-06-12T22:12:43.335838659Z
+  kind: !SetDescription
+    description: |-
+      Panel findings: trace 'enforcement' is advisory-by-default (warn-only commit hook AIDA_COMMIT_STRICT=false, repo's own pre-commit hook disabled, no CI trace gate; only merge→auto-bump is programmatic); history: arrays on ~11% of store objects. A governance-mechanism product cannot ship with the gate off by default (substrate-as-bouncer).
+
+      Slice: (1) default-ON trace gate for NEW aida init projects (strict commit gate or CI-side check; existing projects opt-in via doctor/init --refresh; explicit opt-out flag — faithful default); (2) wire THIS repo's own gate (dogfood: un-disable pre-commit or add the CI job); (3) history claims scoped ('full transition history since TASK-121') everywhere + evaluate cheap backfill from orphan-branch log (skip if costly); (4) **landing this slice INCLUDES the un-scoping sweep**: upgrade WS1/WS2/WS5 copy from 'trace-linked, gate landing' to 'trace-enforced' in the same PR or an immediate follow-on. Acceptance grep-able: new-project default posture is enforcing; no unscoped 'enforced'/'every spec carries history' before that, none scoped after.
+clock: 1685
 node_id: '1'
