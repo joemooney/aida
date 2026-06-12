@@ -17111,5 +17111,18 @@ operations:
       1. BEADS: JSONL export schema field-map vs AIDA's model (link types incl. relates_to/duplicates/supersedes/replies_to/parent-child/blocks; hash + hierarchical IDs; memory entries); what imports cleanly / lossy; export stability (~3-week release cadence noted — maintenance treadmill risk); **conflict-on-reimport semantics** (what must never clobber AIDA-side decision fields — feeds STORY-574's ownership rule); **what bd's optional git hooks actually do** (the 'no code-to-issue linking' row is scoped to 'none documented' — confirm or correct empirically); feasibility of the sidecar trace-gate validating trace:bd-<id> against .beads/issues.jsonl.
       2. GAS TOWN (now load-bearing — it gates vs-gastown.md per plan §13): how deep is multi-vendor support really (Copilot/Codex/Gemini — real or thin scaffolding)? Is the Overseer escalation loop a genuine disposition gate or notify-only? What does the Refinery merge queue actually gate on? These decide how much of the narrowed wedge survives.
       3. Upgrade/correct every remaining [W]-grade claim in the rescope ERRATUM. Output: dated mapping doc + erratum-2 if needed.
-clock: 1681
+- id: 019ebde4-f70f-7682-bc29-12df7220fb7c
+  target_id: 019ebd90-e3d8-7d23-be54-3cd804d8ce08
+  author: aida
+  node_id: '1'
+  lamport: 1682
+  timestamp: 2026-06-12T22:12:39.823528422Z
+  kind: !SetDescription
+    description: |-
+      Re-lead every vision-level artifact with ADR-4's canonical operator language: AIDA is an AI DEVELOPER ASSISTANT — multi-vendor coordination + intent/why capture lead; governance = mechanism + enterprise depth, NOT the lead word (D9). RED-TEAM SHARPENING (binding): the lead is cross-vendor INTENT GOVERNANCE (gates before work, decision audit, trace loop) — never bare 'multi-vendor coordination' (Gas Town ships multi-vendor dispatch today); ALL multi-vendor copy scoped to the coordination layer in the same sentence until STORY-578 lands; NO 'enforced' in copy until STORY-579 lands (use 'trace-linked + merge auto-bump; commit gate default-on landing'); audit claims use DECISIONS-vs-changes framing only.
+
+      Scope: VIS-1 rewrite (folds STORY-551); new PRIN clause (gates-before-work vs unleash); OVERVIEW.md vision + Public-face section (TUI stays the face); README lead + moat content; CLAUDE.md strategic paragraph; D8 acronym sweep 'AI Design Assistant' → 'AI Developer Assistant' at ALL sites (CLAUDE.md line 1, README, OVERVIEW, aida-core/templates/, deck, **Cargo.toml crate descriptions (they exist — unconditional), aida-core/src/report.rs, Makefile, docs/agents/cross-agent-onboarding.md + template twin, docs/aida/01-vision.md, docs/aida/README.md**).
+
+      Acceptance: (1) README lead = operator's statement + sharpening; (2) governance as mechanism/depth everywhere; (3) claims match the rescope table AS CORRECTED BY ITS ERRATUM (D5); (4) 'missing index' and (5) 'AI Design Assistant' return zero grep hits **in LIVING artifacts** (CHANGELOG/PROMPT_HISTORY/docs/archive/dated snapshots are FROZEN per D6 — exclude via -g globs, do not edit); (6) the Beads-contrast line (recorded on ADR-4 as D2) appears in positioning papers only. On branch repositioning.
+clock: 1682
 node_id: '1'
