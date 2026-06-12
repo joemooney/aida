@@ -314,8 +314,8 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
     {
         return (
             OpenBucket::BuildSupervised,
-            "build-supervised — clear to build, but at the keyboard \
-             (`aida queue work <id> --zen`), not the unsupervised drain"
+            "clear to build, but at the keyboard (`aida queue work <id> --zen`), \
+             not the unsupervised drain"
                 .to_string(),
         );
     }
@@ -646,7 +646,8 @@ pub(crate) fn unblock_reason(class: UnblockClass) -> &'static str {
         }
         UnblockClass::UnderSpecified => "missing acceptance criteria — clarify before queuing",
         UnblockClass::BuildSupervised => {
-            "in progress / in flight — wants the at-keyboard `--zen` lane, not an unattended drain"
+            "build-supervised — clear to build, but the at-keyboard `--zen` lane \
+             (in-flight, or tagged `needs-supervised-build`), not an unattended drain"
         }
         UnblockClass::DecisionPending => {
             "awaiting a human decision — answer via `aida questions` / decompose / triage"
