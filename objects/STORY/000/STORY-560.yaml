@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:05:52.155404135Z
-modified_at: 2026-06-12T18:30:21.972094855Z
+modified_at: 2026-06-12T18:31:20.852598333Z
 req_type: Story
 tags:
 - aida:advisor
@@ -51,6 +51,11 @@ tags:
 - authority
 - autonomy
 - needs-supervised-build
+relationships:
+- rel_type: Parent
+  target_id: 019ebd19-e790-7391-a2e0-bc401b8cb994
+  created_at: 2026-06-12T18:31:20.852585387Z
+  created_by: joe
 comments:
 - id: 019ebd17-cea9-73e1-861b-16443fe05786
   author: joe
