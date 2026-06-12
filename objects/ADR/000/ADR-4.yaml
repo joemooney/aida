@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:04.203194099Z
-modified_at: 2026-06-12T22:11:28.480311309Z
+modified_at: 2026-06-12T22:42:25.623814008Z
 req_type: Decision
 tags:
 - from-spike:SPIKE-53
@@ -52,3 +52,9 @@ relationships:
   target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
   created_at: 2026-06-12T20:42:49.524305141Z
   created_by: joe
+comments:
+- id: 019ebe00-36d7-75a0-a0a8-4a28f6ee146b
+  author: joe
+  content: 'OPERATOR GATE (2026-06-12): ADR-4 remains PROPOSED — not accepted — until SPIKE-58''s hands-on evaluation completes. Operator: ''I need to use bd/gt to get a feel before committing prematurely.'' Direction is provisionally endorsed (D8/D9 answered) but final acceptance is gated on direct experience with the competitor stack. WS1/WS2/WS5 copy does NOT lock before then; WS8/WS9 (make-claims-true code) and STORY-575 (audit legibility) are direction-independent and may proceed.'
+  created_at: 2026-06-12T22:42:25.623814008Z
+  modified_at: 2026-06-12T22:42:25.623814008Z
