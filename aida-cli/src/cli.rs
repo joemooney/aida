@@ -6379,6 +6379,53 @@ pub enum Command {
     #[clap(subcommand)]
     Burndown(BurndownCommand),
 
+    // trace:STORY-560 | ai:claude
+    /// Headless advisor INTAKE pass: fire a cold-boot advisor agent that reads
+    /// all open specs, applies worth-doing judgment, and proposes
+    /// approve/reject/park/queue per spec. PROPOSE-MODE BY DEFAULT — writes
+    /// NOTHING until `--apply`. The advisor-side analog of `aida burndown run`
+    /// (which fires implementer agents). Policy knobs live under `[intake]` in
+    /// `.aida/config.toml`; the safe defaults work with zero config.
+    ///
+    /// Caveat: the headless advisor is a COLD-BOOT `claude -p`, not your live
+    /// session — same model, less context. Autonomy-eligible is not the same as
+    /// worth-doing; keep the propose-mode review load-bearing before `--apply`.
+    Intake {
+        /// Execute the proposed approvals + queue groom. Without it, `intake`
+        /// is propose-only (the value judgment stays reviewable). Even with
+        /// `--apply`, the do-not-approve classes and `needs-human`/`strategic`
+        /// specs are fenced out — the agent can never bless them.
+        #[clap(long)]
+        apply: bool,
+        /// Cap the number of drafts the agent may approve this run.
+        #[clap(long, value_name = "N")]
+        max_approvals: Option<usize>,
+        /// Only consider specs carrying this tag.
+        #[clap(long, value_name = "TAG")]
+        only_tag: Option<String>,
+        /// Never consider specs carrying this tag.
+        #[clap(long, value_name = "TAG")]
+        exclude_tag: Option<String>,
+        /// Exclude candidates riskier than this ceiling (low / medium / high /
+        /// unknown). Same risk chip `aida backlog list` shows. Default: medium.
+        #[clap(long, value_name = "MAX", default_value = "medium")]
+        risk: String,
+        /// After queuing, chain straight into a burndown drain (overrides the
+        /// `[intake] on_apply` config to `drain` for this run). Only meaningful
+        /// with `--apply`.
+        #[clap(long)]
+        then_drain: bool,
+        /// Show the candidate fence + the exact `claude -p` command that would
+        /// run, then exit without launching.
+        #[clap(long)]
+        dry_run: bool,
+        /// Claude permission mode for the headless pass. Defaults to
+        /// `bypassPermissions` so the unattended advisor can read/edit without
+        /// stalling on prompts. Override with e.g. `acceptEdits`.
+        #[clap(long)]
+        permission_mode: Option<String>,
+    },
+
     // trace:STORY-547 | ai:claude
     /// Explain why one open spec is still open — a single-spec drill-down using
     /// the same classifier as `burndown explain`. Answers "what's keeping

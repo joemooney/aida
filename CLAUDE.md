@@ -108,6 +108,7 @@ aida lint <SPEC|--scope feature|task|story> [--json]  # Opt-in EARS-style qualit
 aida plan helpers <spec> [--append <file>]  # Derive a 'Reusable helpers' section from the trace graph (TASK-94)
 aida ultraplan <spec> [--stdout|--json]     # Assemble a rich /ultraplan prompt from spec context; copy to clipboard (TASK-113)
 aida goal --batch|--epic|--spec|--pr|--queue-empty ...  # Derive a machine-checkable /goal condition; flags AND-compose; --copy/--invoke (TASK-242)
+aida intake [--apply] [--max-approvals N] [--only-tag/--exclude-tag] [--risk] [--then-drain]  # Headless advisor INTAKE pass: a cold-boot advisor proposes approve/reject/park/queue per open spec; propose-by-default, --apply executes. Policy under `[intake]`. Advisor-side analog of `burndown run`. trace:STORY-560
 aida changelog refresh|generate|preview     # Rewrite/print structured CHANGELOG.md (idempotent) (TASK-299)
 aida brief <agent> <SPEC> --note "..."      # Write/list/ack local pickup briefs under .aida/agent-briefs/ (list --for-agent, ack <path>)
 aida agent new claude --role implementer|advisor --spec <ID>  # Supervised launcher w/ registry + role-context snapshot (--show-context)
