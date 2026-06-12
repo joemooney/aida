@@ -55,6 +55,12 @@ fn parking_tag(tags: &[String]) -> Option<String> {
             || lo == "needs-design-signoff"
             || lo == "needs-design"
             || lo == "operator-action"
+            // TASK-744: the two halves of the split `needs-human` umbrella — a
+            // decision to answer, or clear-to-build keystone work for the
+            // at-keyboard `--zen` lane. Both still park from the unsupervised
+            // drain; they differ only in the resolution a human applies.
+            || lo == "needs-decision"
+            || lo == "needs-supervised-build"
             || lo == "review:draft-only"
             || lo.starts_with("deferred:");
         if parks {
@@ -130,6 +136,10 @@ pub(crate) enum OpenBucket {
     /// Parked on a human decision (pending DecisionRequest, design-signoff,
     /// operator-action, needs-human, or NeedsAttention triage).
     AwaitingDecision,
+    /// Clear to build, but keystone / blast-radius work that ships at the
+    /// keyboard (`aida queue work <id> --zen`), not the unsupervised drain
+    /// (tagged `needs-supervised-build`). trace:TASK-744 | ai:claude
+    BuildSupervised,
     /// Deliberately postponed (`deferred:<why>`).
     Deferred,
     /// Blocked by an unsatisfied dependency.
@@ -155,6 +165,7 @@ impl OpenBucket {
             OpenBucket::HeldForReview => "held-for-review",
             OpenBucket::InFlight => "in-flight",
             OpenBucket::AwaitingDecision => "awaiting-decision",
+            OpenBucket::BuildSupervised => "build-supervised",
             OpenBucket::Deferred => "deferred",
             OpenBucket::Blocked => "blocked",
             OpenBucket::Umbrella => "umbrella",
@@ -174,6 +185,7 @@ impl OpenBucket {
             self,
             OpenBucket::HeldForReview
                 | OpenBucket::AwaitingDecision
+                | OpenBucket::BuildSupervised
                 | OpenBucket::Ungroomed
                 | OpenBucket::Umbrella
         )
@@ -294,11 +306,25 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
             "awaiting a human decision — answer via `aida questions`".to_string(),
         );
     }
+    // TASK-744: build-supervised — clear to build, but keystone / blast-radius
+    // work for the at-keyboard `--zen` lane, not the unsupervised drain.
+    if f.tags
+        .iter()
+        .any(|t| t.trim().eq_ignore_ascii_case("needs-supervised-build"))
+    {
+        return (
+            OpenBucket::BuildSupervised,
+            "build-supervised — clear to build, but at the keyboard \
+             (`aida queue work <id> --zen`), not the unsupervised drain"
+                .to_string(),
+        );
+    }
     for t in &f.tags {
         let lo = t.trim().to_ascii_lowercase();
         if lo == "needs-design-signoff"
             || lo == "needs-design"
             || lo == "operator-action"
+            || lo == "needs-decision"
             || lo == "needs-human"
             || lo == "needs-human-input"
         {
@@ -547,11 +573,17 @@ pub(crate) fn classify_unblock(f: &UnblockFacts) -> Option<UnblockClass> {
     if f.has_pending_decision || f.status == "needsattention" {
         return Some(UnblockClass::DecisionPending);
     }
+    // TASK-744: an explicit `needs-supervised-build` tag is keyboard-build
+    // (`--zen`), not a decision — route it before the `needs-human` umbrella.
+    if has_tag("needs-supervised-build") {
+        return Some(UnblockClass::BuildSupervised);
+    }
     for t in &f.tags {
         let lo = t.trim().to_ascii_lowercase();
         if lo == "needs-design-signoff"
             || lo == "needs-design"
             || lo == "operator-action"
+            || lo == "needs-decision"
             || lo == "needs-human"
             || lo == "needs-human-input"
         {
@@ -836,6 +868,8 @@ mod tests {
             "Needs-Human",
             "needs-design-signoff",
             "operator-action",
+            "needs-decision",
+            "needs-supervised-build",
             "review:draft-only",
             "deferred:post-stability",
         ] {
@@ -1044,6 +1078,53 @@ mod tests {
             false,
         ));
         assert_eq!(bucket, OpenBucket::AwaitingDecision);
+    }
+
+    /// TASK-744: the split `needs-human` umbrella routes to distinct buckets —
+    /// `needs-supervised-build` is keyboard-build (`--zen`), `needs-decision`
+    /// is a decision to answer; bare `needs-human` stays a decision (the
+    /// umbrella) until specs are migrated.
+    #[test]
+    fn split_needs_human_routes_build_supervised_vs_decision() {
+        assert_eq!(
+            explain_open(&open(
+                "task",
+                "approved",
+                &["needs-supervised-build"],
+                false,
+                false,
+                false
+            ))
+            .0,
+            OpenBucket::BuildSupervised
+        );
+        assert_eq!(
+            explain_open(&open(
+                "task",
+                "approved",
+                &["needs-decision"],
+                false,
+                false,
+                false
+            ))
+            .0,
+            OpenBucket::AwaitingDecision
+        );
+        assert_eq!(
+            explain_open(&open(
+                "task",
+                "approved",
+                &["needs-human"],
+                false,
+                false,
+                false
+            ))
+            .0,
+            OpenBucket::AwaitingDecision
+        );
+        // The new bucket has a stable key and still demands a human (at the keyboard).
+        assert_eq!(OpenBucket::BuildSupervised.key(), "build-supervised");
+        assert!(OpenBucket::BuildSupervised.needs_human());
     }
 
     #[test]
