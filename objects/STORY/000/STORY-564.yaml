@@ -31,12 +31,12 @@ description: |-
   S4 (deferred): the presence-bias (acceptance #5) waits for STORY-561's presence consumers — ship STORY-564 WITHOUT it; it becomes a small followup once presence lands (away → bias to auto-exit; home → may still pause). Advisory; never overrides integrity gates.
 
   Implementation reuse: the finish-status + brief plumbing should reuse the existing session-lifecycle code (`aida session end`, the `.aida/agent-briefs/` brief writer, the /aida-pickup finish-checkpoint). New surface = the `aida session finish` subcommand + the `[zen] auto_exit` config + the brief-on-finish wiring. No SPEC-IDs in user-facing output; plain `// trace:STORY-564` / `// trace:STORY-569` comments.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:03:11.240108659Z
-modified_at: 2026-06-12T17:22:13.398844640Z
+modified_at: 2026-06-12T17:24:41.445997273Z
 req_type: Story
 tags:
 - aida:queue:work
@@ -51,3 +51,7 @@ relationships:
   target_id: 019ebcda-cdf4-7401-b2a1-222e2969a992
   created_at: 2026-06-12T17:22:13.398839878Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-12T17:24:41.445997273Z
+  implemented_by: joe
