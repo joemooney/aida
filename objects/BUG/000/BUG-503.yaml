@@ -1,0 +1,40 @@
+id: 019ebc6b-a394-72f0-8c67-0790242c69a7
+spec_id: BUG-503
+agreed_id: BUG-503
+title: aida why <spec> errors 'not in the open set' for human-only/parked specs — refuses the items most needing explanation
+description: |-
+  ## Symptom (operator, 2026-06-12)
+
+  `aida why SPIKE-53` → `Error: SPIKE-53 is not in the open set.` But SPIKE-53 IS open (Status: Approved) and appears in `aida queue list` under Blocked as 'human-only'. The operator ran `aida why` to understand WHY it's blocked/human-only — exactly the question the command exists to answer — and got refused. Not a case bug (uppercase + lowercase both error).
+
+  ## Root cause (hypothesis)
+
+  `aida why` / burndown-explain (STORY-547) defines its 'open set' as the burndown-considered set (pickable / queued / non-human-only), which EXCLUDES human-only/spike/parked specs. So the one category a user most wants explained ('why is this parked / human-only?') is the category the command refuses.
+
+  ## The fix
+
+  `aida why <spec>` should EXPLAIN the parked/human-only/blocked reason for ANY open spec — especially the human-only ones — not error that it's 'not in the open set'. The human-only/parked reason IS the answer the user wants.
+
+  ## Acceptance
+
+  - [ ] `aida why <spec>` returns the openness/parked reason for any non-terminal spec, including human-only / spike / parking-tagged / blocked ones (the cases that currently error).
+  - [ ] For a human-only spec, the output names WHY (e.g. 'human-only: SPIKE — investigative/judgment work, not autonomously implementable').
+  - [ ] Case-insensitive spec-id resolution (SPIKE-53 == spike-53).
+  - [ ] The error 'not in the open set' is reserved for genuinely terminal/nonexistent specs, with a clear message — never for an open-but-parked spec.
+
+  ## Rationale
+
+  The explain command refusing the items most in need of explanation is the inverse of its purpose. Surfaced when the operator tried to self-diagnose a confusing queue. Relates to STORY-547/548 (why-open).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T15:20:31.380845587Z
+modified_at: 2026-06-12T15:20:31.380845587Z
+req_type: Bug
+tags:
+- aida:burndown
+- aida:why
+- from-self-test
+- from-user-friction
+- papercut
