@@ -22,13 +22,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:20:15.770546344Z
-modified_at: 2026-06-11T14:06:50.618639776Z
+modified_at: 2026-06-12T02:31:00.315180113Z
 req_type: Story
 tags:
 - aida:presence
 - autonomy
 - core
-- needs-human
+- needs-supervised-build
 - operator-tooling
 - ux
 comments:
