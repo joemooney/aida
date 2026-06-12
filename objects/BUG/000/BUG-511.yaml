@@ -12,12 +12,12 @@ description: |-
   4. A dead review session's lease is cleaned up (stale-lease handling, same as queue work / aida doctor).
 
   Sibling of BUG-510 (both: 'aida review' lacks the coordination machinery 'queue work' has). Consider fixing them together.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T22:31:56.124255124Z
-modified_at: 2026-06-12T22:37:45.934874214Z
+modified_at: 2026-06-12T23:06:42.627669959Z
 req_type: Bug
 tags:
 - aida:review
