@@ -3,12 +3,12 @@ spec_id: TASK-715
 agreed_id: TASK-715
 title: 'aida schema: expose over MCP (resource or tool) for native agent consumers'
 description: Follow-up to STORY-538. The 'aida schema' / 'aida schema requirement --json' surface is a natural MCP companion — agents discovering the substrate should be able to read it without shelling out. Add either an 'aida://schema/...' MCP resource or a 'schema' MCP tool that mirrors the CLI --json output (catalog + Requirement field/enum detail). Mirror the derivation so it stays drift-guarded against models.rs.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T01:57:38.898670345Z
-modified_at: 2026-06-11T02:30:33.577867485Z
+modified_at: 2026-06-12T22:33:58.093916728Z
 req_type: Task
 tags:
 - review:draft-only
@@ -23,3 +23,15 @@ comments:
   content: Commit aa7201b7e references this requirement
   created_at: 2026-06-09T06:48:52.066046727Z
   modified_at: 2026-06-09T06:48:52.066046727Z
+history:
+- id: 019ebdf8-78d9-7b60-9e26-aa8a784e8d72
+  author: aida-auto-bump
+  timestamp: 2026-06-12T22:33:58.233574629Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T22:33:58.093916728Z
+  completion_sha: f9372db01336c5790c07e36a9e1b78d52a1ff720
