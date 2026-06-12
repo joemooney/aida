@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:18:18.102994866Z
-modified_at: 2026-06-12T15:57:03.582201258Z
+modified_at: 2026-06-12T16:02:04.765214151Z
 req_type: Spike
 tags:
 - beads
@@ -37,4 +37,9 @@ comments:
     DECISION ESCALATED TO OPERATOR (the moat re-scope): A) move up-stack to governance/requirements, concede substrate; B) interoperate with Beads (import/export, ride the wave); C) differentiate-and-race (NOT recommended); D) niche to regulated/enterprise where governance is mandatory. Recommendation: A+B framed by D. This is the operator's strategic call — research done, decision pending.
   created_at: 2026-06-12T15:57:03.582201258Z
   modified_at: 2026-06-12T15:57:03.582201258Z
+- id: 019ebc91-af5d-7422-9c4f-6c2d324e93d1
+  author: joe
+  content: 'Research half DONE (2026-06-12): docs/competitive-analysis/2026-06-12-beads-gastown-vs-aida.md. Key verified finding — Yegge positions Beads as an EXECUTION tool that explicitly defers planning/requirements to external tools (his words), so AIDA''s category is adjacent, not contested. Verified AIDA edges: trace enforcement (Beads: none), lifecycle+history+auto-bump (Beads: 3 unenforced states), requirements-modeling category. Corrections: drop ''typed graph unique'' (stale — Beads has one); ''plain-git'' true but Beads migrated to embedded Dolt (no server). Bridge (JSONL one-way import) viable, small-EPIC. Real gap = distribution not features. PENDING (operator''s call): (1) which edges to headline, (2) the precise moat-line edit, (3) build the bridge?. Spike stays open until the positioning decision lands.'
+  created_at: 2026-06-12T16:02:04.765214151Z
+  modified_at: 2026-06-12T16:02:04.765214151Z
 human_only: true
