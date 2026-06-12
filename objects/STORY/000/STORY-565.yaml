@@ -1,0 +1,41 @@
+id: 019eba2c-5acb-75c0-b561-c579db81b5bf
+spec_id: STORY-565
+agreed_id: STORY-565
+title: Queue 'how do I get to zero?' must be answerable in one glance — disambiguate clear-vs-drain + always show the blocked remainder + the single next action
+description: |-
+  RECURRING operator frustration (emphatic, 2026-06-11): 'how can I empty the queue? I will keep asking this because I am continually baffled by how difficult it is to communicate the steps needed.' This is a top-tier UX signal — the operator cannot get a straight, repeatable answer to the single most basic queue question. Root causes (all real, none the operator's fault):
+
+  1. 'Empty the queue' is AMBIGUOUS and nothing disambiguates at point-of-use: 'aida queue clear' (drop queue-membership, work NOT done) vs 'aida burndown run' / 'aida queue work' (drain by DOING the work, specs leave as they complete). Two meanings, two commands, no signpost.
+  2. There is almost always a BLOCKED/PARKED REMAINDER (today: SPIKE-53 'human-only', plus needs-decision / needs-supervised-build items) that no drain can clear — so the queue rarely reaches literal zero and the operator is left wondering why 'it didn't work'. The remainder + the ONE action each needs is never surfaced as the answer to 'how do I finish emptying this'.
+  3. The queue family has 15 subcommands (add/clear/done/integrate/move/next/progress/prune/recover/remove/rework/work/list/load + burndown). The path to zero is buried in the sprawl.
+
+  ## Approach (operator to weigh in on form)
+  A single legible 'path to empty' surface. Candidate: 'aida queue list' (and/or a new 'aida queue status') ALWAYS ends with a one-glance footer like:
+    To empty this queue:
+      • 2 ready    → run 'aida burndown run' (does the work)   OR 'aida queue clear' (just drops them)
+      • 1 blocked  → SPIKE-53 needs YOU: <the one action> (e.g. 'aida human unblock' / decide / keyboard build)
+  So 'how do I get to zero' is answered every time the operator looks at the queue, without asking. Compose with the existing burndown plan classifier (ready vs parked vs blocked) — this is a rendering/signposting layer over data that already exists.
+
+  ## Acceptance
+  1. 'aida queue list' (default) ends with a 'To empty this queue:' footer whenever the queue is non-empty: N ready + the exact command to drain (and the exact command to merely clear), and each blocked/parked item with the SINGLE next action that unblocks it.
+  2. The footer distinguishes clear (drop membership) from drain (do the work) in one line each — the ambiguity is resolved in-place.
+  3. When the queue is empty, it says so plainly ('Queue empty — nothing to do').
+  4. No new mental model required: reuse the burndown ready/parked/blocked classification; this is signposting, not new state.
+  5. No SPEC-IDs in the user-facing footer text.
+
+  This is the legibility keystone for the whole queue surface — prioritize accordingly.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T04:52:09.547245681Z
+modified_at: 2026-06-12T04:52:09.547245681Z
+req_type: Story
+tags:
+- aida:queue
+- aida:queue:list
+- core
+- first-user-papercut
+- legibility
+- operator-frustration
+- ux
