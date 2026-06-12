@@ -1,0 +1,30 @@
+id: 019eba19-6314-7e53-b25e-cf40cf0695bc
+spec_id: TASK-753
+agreed_id: TASK-753
+title: 'Close the status --cleanup ↔ doctor seam: signpost the read→heal path + clarify --cleanup is read-only'
+description: |-
+  User asked whether 'aida status --cleanup' and 'aida doctor' overlap confusingly (2026-06-11). Verified: they do NOT duplicate detection — collect_doctor_findings (main.rs:25191) CALLS collect_cleanup_report (main.rs:78071), the same detector backing 'status --cleanup'. doctor is a SUPERSET (same cleanup findings + multi-agent drift + store integrity) with HEAL actions; 'status --cleanup' is the read-only dashboard lens. So they can't drift apart on the shared subset — the architecture is sound. The remaining confusion is purely UX/seam-level:
+
+  (1) The flag name '--cleanup' implies an action but the command is READ-ONLY — it surfaces cleanup-needed items, it doesn't clean. The verb over-promises.
+  (2) No signpost across the seam: a user reading the 'Needs attention' section from 'status --cleanup' is never pointed at 'aida doctor heal' as the fix. The read→remediate path is invisible, so the two surfaces read as unrelated siblings instead of glance→fix.
+
+  Keep BOTH (the passive-dashboard vs active-healer split is correct) — just close the seam.
+
+  ## Acceptance
+  1. When 'aida status --cleanup' (and the default status cleanup one-liner) prints a non-empty 'Needs attention' section, it ends with a pointer like '→ run `aida doctor check` to diagnose / `aida doctor heal` to fix the auto-healable ones' (only when ≥1 finding is in a doctor-healable category).
+  2. The '--cleanup' help text states it's a read-only view (no mutation) and names 'aida doctor heal' as the actor. Optionally add a '--cleanup' alias or note disambiguating 'show vs fix'.
+  3. No behavior change to detection (shared collect_cleanup_report) — this is signposting + help-text only; verify the pointer suppresses cleanly when the section is empty or when findings are all non-healable.
+  4. SPEC-IDs / internal fn names stay out of the user-facing pointer text (user-facing-text convention).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T04:31:26.484685467Z
+modified_at: 2026-06-12T04:31:26.484685467Z
+req_type: Task
+tags:
+- aida:doctor
+- aida:status
+- core
+- papercut
+- ux
