@@ -3,12 +3,12 @@ spec_id: BUG-505
 agreed_id: BUG-505
 title: 'aida why <spec>: replace jargon ''not in the open set'' error with a clear reason for archived/terminal specs'
 description: 'Operator hit (2026-06-12): ''aida why spike-53'' (and uppercase SPIKE-53) errors ''Error: `SPIKE-53` is not in the open set.'' SPIKE-53 is archived, so it''s correctly excluded from the open-facts set — but ''not in the open set'' is internal jargon the operator can''t parse (violates the user-facing-text convention). ''aida why'' should resolve the spec and, when it''s not open, say WHY in plain terms: ''SPIKE-53 is archived (shelved) — run aida unarchive to reactivate'' / ''SPIKE-53 is Completed'' / ''SPIKE-53 doesn''t exist''. The whole point of ''aida why'' is to explain a spec''s state; erroring with jargon on a resolvable spec is the opposite. Verify: ''aida why <archived-id>'' prints ''archived'', ''aida why <completed-id>'' prints ''completed'', neither errors with ''open set''.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:22:31.645987382Z
-modified_at: 2026-06-12T17:41:36.625619065Z
+modified_at: 2026-06-12T17:41:37.546891766Z
 req_type: Bug
 tags:
 - aida:why
