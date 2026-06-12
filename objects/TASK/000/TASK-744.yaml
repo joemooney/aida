@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:51:46.409459717Z
-modified_at: 2026-06-11T13:51:46.409459717Z
+modified_at: 2026-06-12T02:22:51.170664095Z
 req_type: Task
 tags:
 - aida:burndown
@@ -26,3 +26,9 @@ tags:
 - needs-human
 - taxonomy
 - ux
+comments:
+- id: 019eb9a3-a922-74d1-92cc-8279e879cbbf
+  author: joe
+  content: Commit a99419525 references this requirement
+  created_at: 2026-06-12T02:22:51.170664095Z
+  modified_at: 2026-06-12T02:22:51.170664095Z
