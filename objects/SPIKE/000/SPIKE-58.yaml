@@ -1,18 +1,21 @@
 id: 019ebd91-330b-77a2-840f-019b6d1aa22a
 spec_id: SPIKE-58
 agreed_id: SPIKE-58
-title: 'WS3a SPIKE: Beads + Gas Town empirical install — schema/ID mapping, conflict-on-reimport, bd git-hooks, Gas Town governance depth (gates vs-gastown.md)'
+title: 'WS3a SPIKE (GATE): hands-on bd/gt evaluation — operator feel + empirical schema/governance-depth mapping; gates ALL repositioning copy'
 description: |-
-  Expanded by red-team. Install and RUN both tools (not docs-only). Deliverables:
-  1. BEADS: JSONL export schema field-map vs AIDA's model (link types incl. relates_to/duplicates/supersedes/replies_to/parent-child/blocks; hash + hierarchical IDs; memory entries); what imports cleanly / lossy; export stability (~3-week release cadence noted — maintenance treadmill risk); **conflict-on-reimport semantics** (what must never clobber AIDA-side decision fields — feeds STORY-574's ownership rule); **what bd's optional git hooks actually do** (the 'no code-to-issue linking' row is scoped to 'none documented' — confirm or correct empirically); feasibility of the sidecar trace-gate validating trace:bd-<id> against .beads/issues.jsonl.
-  2. GAS TOWN (now load-bearing — it gates vs-gastown.md per plan §13): how deep is multi-vendor support really (Copilot/Codex/Gemini — real or thin scaffolding)? Is the Overseer escalation loop a genuine disposition gate or notify-only? What does the Refinery merge queue actually gate on? These decide how much of the narrowed wedge survives.
-  3. Upgrade/correct every remaining [W]-grade claim in the rescope ERRATUM. Output: dated mapping doc + erratum-2 if needed.
+  RE-SEQUENCED (operator, 2026-06-12): this spike now gates the ENTIRE docs cluster (WS1/WS2/WS5 copy lock), not just vs-gastown.md. Operator: 'I need to use bd/gt to get a feel before committing prematurely.' Correct instinct — the red-team's own meta-finding was 'nobody ran the competitor'; ADR-4 stays PROPOSED until this lands.
+
+  TWO MODES, both required:
+  1. OPERATOR HANDS-ON (the feel): run Beads + Gas Town on a real-ish sandbox project for long enough to answer: How much ceremony does bd actually have? Is 'unleash' accurate or a caricature? What does gt's Overseer escalation feel like in practice — a real gate or a notification? Where did you find yourself WISHING for an approval step, an intent record, a why? (Those wishes ARE the repositioning's market evidence — capture each one as a note.) Where is bd simply better than AIDA today?
+  2. AGENT EMPIRICAL (the mapping): JSONL schema field-map vs AIDA's model (link types, hash + hierarchical IDs, memory entries); import lossiness; conflict-on-reimport semantics (feeds STORY-574's ownership rule); what bd's optional git hooks actually do (confirm/correct the 'none documented' trace row); sidecar feasibility (validate trace:bd-<id> against .beads/issues.jsonl); Gas Town depth — multi-vendor support real or thin, Overseer loop disposition-or-notify, Refinery gating; upgrade/correct every remaining [W]-grade erratum claim.
+
+  EXIT CRITERIA: operator states whether ADR-4's direction survives contact (accept / amend / abandon); mapping doc written; the wish-list of governance moments captured. Only then does WS1 copy lock.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:10.155363313Z
-modified_at: 2026-06-12T22:12:38.643268424Z
+modified_at: 2026-06-12T22:42:23.697208765Z
 req_type: Spike
 tags:
 - beads

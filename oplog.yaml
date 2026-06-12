@@ -17185,5 +17185,28 @@ operations:
       RED-TEAM ADDITIONS: (a) Gas Town ships multi-vendor dispatch TODAY (Claude/Copilot/Codex/Gemini) — this slice is the credibility prerequisite for ANY unscoped multi-vendor claim; the differentiator is intent-governance semantics riding the dispatch, not dispatch itself; (b) orchestrator-core change → KEYBOARD-SUPERVISED lane (reliability-critical, not overnight drain); (c) landing this slice INCLUDES the un-scoping sweep: remove the 'coordination layer only' qualifiers from WS1/WS2/WS5 copy in the same PR or an immediate follow-on.
 
       Acceptance: (1) a drain runs its implementer phase on ≥1 non-Claude agent end-to-end (codex first); (2) agent choice is config/flag — no hardcoded vendor string in the phase-launch path; (3) graceful capability degradation documented; (4) un-scoping sweep executed; (5) keyboard-supervised rollout.
-clock: 1688
+- id: 019ebe00-2fbc-7882-a158-f4f79f7c63e7
+  target_id: 019ebd91-330b-77a2-840f-019b6d1aa22a
+  author: aida
+  node_id: '1'
+  lamport: 1689
+  timestamp: 2026-06-12T22:42:23.804800813Z
+  kind: !SetTitle
+    title: 'WS3a SPIKE (GATE): hands-on bd/gt evaluation — operator feel + empirical schema/governance-depth mapping; gates ALL repositioning copy'
+- id: 019ebe00-30cc-7050-ae99-133b962696b9
+  target_id: 019ebd91-330b-77a2-840f-019b6d1aa22a
+  author: aida
+  node_id: '1'
+  lamport: 1690
+  timestamp: 2026-06-12T22:42:24.076346867Z
+  kind: !SetDescription
+    description: |-
+      RE-SEQUENCED (operator, 2026-06-12): this spike now gates the ENTIRE docs cluster (WS1/WS2/WS5 copy lock), not just vs-gastown.md. Operator: 'I need to use bd/gt to get a feel before committing prematurely.' Correct instinct — the red-team's own meta-finding was 'nobody ran the competitor'; ADR-4 stays PROPOSED until this lands.
+
+      TWO MODES, both required:
+      1. OPERATOR HANDS-ON (the feel): run Beads + Gas Town on a real-ish sandbox project for long enough to answer: How much ceremony does bd actually have? Is 'unleash' accurate or a caricature? What does gt's Overseer escalation feel like in practice — a real gate or a notification? Where did you find yourself WISHING for an approval step, an intent record, a why? (Those wishes ARE the repositioning's market evidence — capture each one as a note.) Where is bd simply better than AIDA today?
+      2. AGENT EMPIRICAL (the mapping): JSONL schema field-map vs AIDA's model (link types, hash + hierarchical IDs, memory entries); import lossiness; conflict-on-reimport semantics (feeds STORY-574's ownership rule); what bd's optional git hooks actually do (confirm/correct the 'none documented' trace row); sidecar feasibility (validate trace:bd-<id> against .beads/issues.jsonl); Gas Town depth — multi-vendor support real or thin, Overseer loop disposition-or-notify, Refinery gating; upgrade/correct every remaining [W]-grade erratum claim.
+
+      EXIT CRITERIA: operator states whether ADR-4's direction survives contact (accept / amend / abandon); mapping doc written; the wish-list of governance moments captured. Only then does WS1 copy lock.
+clock: 1690
 node_id: '1'
