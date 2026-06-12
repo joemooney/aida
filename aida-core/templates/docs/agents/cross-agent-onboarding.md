@@ -28,7 +28,7 @@ The strategic positioning: the IDE-embedded coding assistants (Cursor, Cline, Ai
 
 ## What you can do via MCP today
 
-AIDA's MCP server exposes **29 tools** in two clusters:
+AIDA's MCP server exposes **58 tools** in six clusters:
 
 **Important:** the canonical argument names come from `tools/list` over MCP. The list below mirrors what the server actually advertises (verified via `aida-cli/src/mcp.rs` inputSchema descriptors). If a future edit to this doc drifts from the source, **trust `tools/list`**, file a finding, and `aida` will fix the doc.
 
@@ -41,6 +41,9 @@ AIDA's MCP server exposes **29 tools** in two clusters:
 - `search_requirements({query})` → FTS5 search
 - `add_comment({id, text})` → comment on a spec  *(arg is `text`, not `body`)*
 - `add_relationship({spec_id, relationship_type, target_spec_id, bidirectional?, force_parent?})` → add a typed relationship between existing specs. Built-ins include `parent`, `child`, `duplicate`, `verifies`, `verified-by`, `references`, `blocked-by`, and `blocks`; `depends-on` aliases to `blocked-by`, and custom non-empty names are accepted for CLI parity.
+- `query_graph({spec_id, mode?, depth?, follow?})` → query the cross-spec relationship graph from a root spec, equivalent to `aida graph`. `mode` ∈ `tree` (Parent/Child descendants + status rollup, default), `blocked-by` / `blocks` (transitive chains), `impact` (reverse closure — what is blocked by the root). `follow` (array of type names, e.g. `["begets"]`) traverses arbitrary custom/built-in edge types outgoing, overriding `mode` (FR-282). Returns JSON `{root, mode, count, nodes:[{id,title,status,resolved}], rollup}`. The typed-graph query a flat per-feature spec store can't answer.
+- `send_message({body, to?, broadcast?, thread?, in_reply_to?, from?})` → send an inter-agent peer message, equivalent to `aida mailbox send`. Address one agent via `to` or set `broadcast: true`. Distinct from briefs (operator→agent work) and directives (top-down control): agent↔agent conversation.
+- `read_inbox({agent?})` → an agent's inbox (messages to it + broadcasts, excluding own-sent, oldest-first), equivalent to `aida mailbox inbox`. Returns JSON `{agent, count, messages}`.
 - `list_features()` → list project features
 - `history({spec_id?, since?})` → structured event ledger, equivalent to `aida history --events`
 
@@ -59,7 +62,7 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
   - `file_finding({title, description, source?, spec_id?, pr?, kind?, severity?})` — required: `title`, `description`. File a triage-able draft TASK with appropriate `from-*` tags.
   - `list_findings({pr?, source?, kind?})` — list findings.
   - `triage_finding({id, action, reason?})` — required: `id`, `action`. Promote (Approved) or dismiss (Rejected) a finding.
-  - **`file_finding` is for TRIAGEABLE ITEMS only** — a bug or task the project should act on. It is NOT a session journal or a phase-completion checkpoint. Filing "Phase 1 complete" / "Phase 2 outcome: clean" as findings just creates draft TASKs the advisor has to dismiss. For checkpoints / intermediate status / session journals use instead:
+  - **`file_finding` is for TRIAGEABLE ITEMS only** — a bug or task the project should act on. It is NOT a session journal or a phase-completion checkpoint. Filing "Phase 1 verification complete" / "Phase 2 outcome: clean" as findings just creates draft TASKs the advisor has to dismiss (empirical: a 3-phase verification once filed 4 such "findings", 3 dismissed + 1 duplicate). For checkpoints / intermediate status / session journals use instead:
     - `aida session manifest` — the per-session brief,
     - `add_comment` on the spec you're working — progress notes that live with the work,
     - local agent-side notes (`walkthrough.md`, scratch files) — anything not meant for project triage.
@@ -82,7 +85,71 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
 
 These are the **agent-coordination primitives**. They're how multiple agents (you, a human, another agent) coordinate on the same spec graph without stepping on each other.
 
-> **Schemas:** all 29 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
+### Cluster 3 — Queue (9 tools, STORY-532 / EPIC-27)
+
+These mirror the `aida queue <subcommand>` CLI surface so MCP-speaking agents can manage the work queue without shelling out. They call the same `Storage::queue_*` library functions the CLI handlers use (no subprocess to `aida`) and resolve the queue `user_id` through the same `current_user_id` chain as the CLI (`user` → `AIDA_USER` → `USER` → `USERNAME` → `default`, per BUG-89), so MCP and CLI operate on one queue.
+
+- `queue_list({user?, for?, all?, ...})` → list queued work items (optionally filter by role via `for`, or span users via `all`).
+- `queue_next({user?, for?, all?, ...})` → **peek** at the head of the role queue (read-only; resolves what `aida queue next` would surface, does not mutate).
+- `queue_progress({batch?, specs?, ...})` → progress of a `batch:NAME` or an explicit `specs` set. *(The session-manifest default the CLI uses needs cwd + leases, which MCP has no handle on; `batch` / `specs` are the portable axes.)*
+- `queue_work({id?, user?, for?, all?, ...})` → **peek**, not launcher (read-only): resolves the spec `aida queue work` would pick up (named `id` or role-queue head) and instructs you to run the CLI to actually launch the session — the CLI launches a Claude session in a fresh worktree, which an in-process MCP tool must not do.
+- `queue_add({id, user?, top?, note?, for?, scope?, force?, ...})` → enqueue a spec (required: `id`).
+- `queue_done({id, user?, ...})` → mark a queued item done (required: `id`).
+- `queue_rework({id, user?, for?, status?, reason?, force?, ...})` → send a spec back for rework (required: `id`).
+- `queue_move({id, user?, top?, bottom?, before?, after?, ...})` → reorder a queue item (required: `id`).
+- `queue_remove({id, user?, ...})` → remove a queue item (required: `id`).
+
+### Cluster 4 — Session (5 tools, STORY-533 / EPIC-27)
+
+These mirror the `aida session <subcommand>` CLI surface so MCP-speaking agents can inspect scoped session leases + planned-cluster manifests without shelling out. The three inspectors read `.aida/sessions/*.toml` directly (no subprocess to `aida`). The two mutating verbs are **peeks**, not actors: `aida session start` / `aida session end` perform subprocess-driven acts (creating/removing a git worktree, exec'ing or terminating `claude`, probing PR/CI), which an in-process MCP tool must not do — so the MCP tools resolve/describe the work and hand back the exact CLI command to run (the `queue_work` peek precedent).
+
+- `session_leases({all?, ...})` → list active scoped session leases (the "who holds what right now" view). `all` also includes lightweight MCP claim markers.
+- `session_status({id?, ...})` → details for one lease (scope/branch/worktree/role/owner/hostname/started_at, plus inline manifest progress). `id` (8-char prefix) optional when exactly one session is active.
+- `session_manifest({id?, ...})` → a session's planned-cluster manifest with per-item status (✓ done / ◐ started / ○ pending). **Read mirror** — writing/marking the manifest stays CLI-only (it needs the active session's cwd context and happens automatically as `aida edit` / `queue done` run).
+- `session_start({owns, branch?, role?, launch?, ...})` → **peek**, not launcher (read-only): validates the scope/role and returns the `aida session start` command to run; warns when the scope is already held (required: `owns`).
+- `session_end({id?, spec?, ...})` → **peek**, not actor (read-only): resolves the lease `aida session end` would target and returns the CLI command to run.
+
+### Cluster 5 — Role (4 tools, STORY-534 / EPIC-27)
+
+These mirror the `aida role <subcommand>` CLI surface so MCP-speaking agents can inspect the project's personas (hats) without shelling out. The two inspectors read the role TOML directly — `.aida/roles/*.toml` plus `~/.aida/roles/*.toml` (no subprocess to `aida`). The two mutating verbs are **peeks**, not actors: `aida role enter` / `aida role end` set/clear the *shell's* `AIDA_SESSION_ROLE` env var (role identity is shell-keyed, the same way the queue user is — see **BUG-89**), which an in-process MCP tool cannot do for the calling agent — so the MCP tools resolve/describe the role and hand back the exact CLI command to run (the `queue_work` / `session_start` peek precedent).
+
+- `role_list({...})` → list the project's roles (and any global roles), newest-active first; the active shell role is marked `*`.
+- `role_show({name?, ...})` → details for one role (purpose / created / last-active / cwd / notes / scope / prompt addendum). `name` optional when a role is active in the launching shell; the legacy `dialog` name resolves to `advisor`.
+- `role_enter({name, cd?, ...})` → **peek**, not switcher (read-only): validates the role exists and returns the `aida role enter` command to run, plus the resolved role context (required: `name`).
+- `role_end({...})` → **peek**, not actor (read-only): reports the active shell role and returns the `aida role end` command to run.
+
+### Cluster 6 — Workflow (11 tools, STORY-536 / EPIC-27, TASK-715)
+
+The remaining `aida` CLI long tail. Seven are read-only library mirrors — they compute in-process from the same helpers the CLI uses (cache reads, the plan-lint pass, the ultraplan assembler, the goal-clause builder, the usage-log aggregator), with no subprocess to `aida`. Three are git-network / working-tree / store mutations driven by subprocess `git` (`db_sync` / `fetch` / `pull`); surfacing those as in-process MCP mutations would surprise the caller (working-tree changes, remote pushes), so they are **peeks**, not actors — they return the exact `aida …` command to run (the `queue_work` / `session_start` peek precedent).
+
+- `cache_status({...})` → read-cache freshness for the git-canonical store (cached vs store counts, last-built, cache/store HEAD SHAs, FRESH/STALE verdict). Reads `.aida/cache.db` + the orphan store HEAD directly. **Read mirror** — rebuilding stays CLI-only (`aida cache rebuild`).
+- `plan_verify({file, ...})` → lint a plan file (drifted line refs, missing sections, unresolved paths). **Read mirror** of `aida plan verify` — the `--fix` in-place rewrite stays CLI-only (required: `file`).
+- `plan_helpers({spec, ...})` → derive a `## Reusable helpers` section from the trace graph. **Read mirror** of `aida plan helpers` — the `--append` file write stays CLI-only (required: `spec`).
+- `ultraplan_assemble({spec, no_comments?, ...})` → assemble the rich `/ultraplan` prompt for a spec (description + acceptance + graph context + helpers). **Read mirror** of `aida ultraplan --stdout` — clipboard / deep-link stays CLI-only (required: `spec`).
+- `goal_derive({batch?, epic?, spec?, pr?, queue_empty?, ...})` → derive a machine-checkable `/goal` condition (clauses AND-compose, each inlining its verification command). At least one axis is required. Copy / invoke stays CLI-only.
+- `status_unified({user?, ...})` → a lightweight in-process status snapshot (requirement counts by status, active session leases, queue depth). The CI-bearing surface of `aida status` (PR/CI rollup, awaiting-you gates) shells out to `gh` and stays CLI-only — also see `aida://project/summary` / `aida://session/leases`.
+- `usage_query({since?, unused?, errors?, limit?, ...})` → query the local usage telemetry log (top commands, error-rate ranking, or deprecation candidates). **Read mirror** of `aida usage` / `--errors` / `--unused` — the `--auto-complete` / `--health` orchestrator views stay CLI-only.
+- `db_sync({pull?, push?, ...})` → **peek**, not actor (read-only): returns the `aida db sync` command to run (git network I/O against the orphan store branch).
+- `fetch({code_only?, store_only?, quiet?, ...})` → **peek**, not actor (read-only): returns the `aida fetch` command to run (refreshes remote refs via git network I/O).
+- `pull({code_only?, store_only?, ...})` → **peek**, not actor (read-only): returns the `aida pull` command to run (mutates the working tree + local store, auto-bumps merged specs).
+- `schema({object?})` → introspect the storable substrate (mirrors `aida schema [<object>] --json`). With no `object`, returns the catalog of storable object kinds; with `object` (e.g. `requirement`), returns that object's detail — for Requirement, the reflection-derived field table plus the four controlled-vocabulary enums (status / type / priority / relationship) in on-the-wire token form (a paste-ready cheat-sheet for `--status` / `--type` / `--priority` / relationship-type arguments). Reflection-derived, so it can't drift from `models.rs`. **Read mirror** — also addressable as the `aida://schema` / `aida://schema/{object}` resources below (TASK-715).
+
+### MCP resources (live state — STORY-535 / EPIC-27, TASK-715)
+
+Resources are a **distinct MCP concept from tools**: addressable read-only state you fetch via `resources/read` (and discover via `resources/list` / `resources/templates/list`), not verbs you invoke via `tools/call`. They back onto the same library helpers the equivalent CLI surfaces use — no subprocess to `aida`. Seven resources today:
+
+- `aida://project/summary` — project statistics + feature list.
+- `aida://requirements/tree` — requirement hierarchy overview.
+- `aida://queue/in-flight` — specs held by a live session/MCP-claim lease, plus the Done-awaiting-merge bucket (mirrors `aida queue list --in-flight-only`).
+- `aida://session/leases` — active scoped session leases (mirrors `aida session leases`).
+- `aida://schema` — the catalog of storable object kinds as JSON (mirrors `aida schema --json`); per-object field/enum detail via the `aida://schema/{object}` template. Same data as the `schema` tool above (TASK-715).
+- `aida://pr/{n}` *(template)* — git-canonical, gh-free PR linkage for PR number N: merged specs whose squash-merge subject carries `(#N)`, plus review findings tagged `from-review:PR-N`.
+- `aida://batch/{name}` *(template)* — progress buckets (Shipped / In flight / Working now / Remaining) for the `batch:<name>` tag set (mirrors `aida queue progress --batch`).
+- `aida://schema/{object}` *(template)* — per-object schema detail (mirrors `aida schema <object> --json`); every catalog kind is a reflection-derived field table, `requirement` additionally carries the controlled-vocabulary enums (TASK-715).
+
+The `{…}` URIs are **resource templates** (advertised on `resources/templates/list`); the `resources/read` handler matches them by prefix and parses the tail (`aida://pr/<n>`, `aida://batch/<name>`, `aida://schema/<object>`).
+
+> **Schemas:** all 58 tools advertise `inputSchema` and `outputSchema`. Successful responses carry both the MCP text content envelope (back-compat) and `structuredContent` matching the `outputSchema` (Path B, **STORY-399**). Parse either; text remains the back-compat floor.
 
 ## How to connect (minimum viable)
 
@@ -161,7 +228,7 @@ Different agent types have different conventions for invoking AIDA workflows (th
 
 **Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. If you don't know the slash/skill name for your agent type, run the CLI verb directly. It works for every agent type.
 
-**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 29 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph operations; use CLI for orchestration verbs (`aida session start`, `aida pr ship`, `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
+**MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 58 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph and queue operations; use CLI for orchestration verbs that manage live process state (`aida session start`, `aida pr ship`, and the actual launch behind `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
 
 ## What's in flight / known rough edges
 
