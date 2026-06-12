@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:38:56.747568360Z
-modified_at: 2026-06-12T04:38:56.747568360Z
+modified_at: 2026-06-12T07:13:43.014347900Z
 req_type: Task
 tags:
 - advisor-workflow
@@ -27,3 +27,9 @@ tags:
 - aida:backlog
 - core
 - ergonomics
+comments:
+- id: 019ebaad-f466-7df1-a874-5aee3e9d399a
+  author: joe
+  content: Commit 932b688d7 references this requirement
+  created_at: 2026-06-12T07:13:43.014347900Z
+  modified_at: 2026-06-12T07:13:43.014347900Z
