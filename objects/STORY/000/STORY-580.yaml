@@ -1,0 +1,26 @@
+id: 019ebe41-bca9-7151-8e23-f55e5c77783a
+spec_id: STORY-580
+agreed_id: STORY-580
+title: Enable WAL journal_mode on the cache for non-blocking concurrent reads (salvaged from STORY-543, fresh against the current retry-ladder cache)
+description: |-
+  Salvaged WAL piece from the rejected STORY-543, re-scoped against the CURRENT cache (which already has TASK-712's AIDA-owned retry/backoff ladder + busy_timeout=0 + lock-holder-info). Enable PRAGMA journal_mode=WAL on .aida/cache.db at connection open so a reader sees the last-committed snapshot WITHOUT blocking on a writer's EXCLUSIVE lock — complementary to (NOT replacing) the retry ladder. DO NOT touch busy_timeout (keep 0; AIDA owns retry — that was STORY-543's mistake). DO NOT re-introduce STORY-543's 1000ms busy_timeout. Keystone-adjacent (load-bearing cache) → keyboard-supervised build, careful review.
+
+  ## Acceptance
+  1. journal_mode=WAL set at cache-connection open (in open_connection_with_retry or equivalent); verify with a PRAGMA query in a test.
+  2. busy_timeout stays 0; the AIDA-owned retry ladder (DEFAULT_CACHE_RETRY_DELAYS_MS) is untouched — WAL composes with it, doesn't replace it.
+  3. Concurrent-read-during-write test: a reader gets the last-committed snapshot, no block/error, while a writer holds a write txn.
+  4. WAL sidecar files (-wal, -shm) are gitignored (.aida/* already deny-by-default — confirm).
+  5. No behavior change to the write-through model.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T23:53:59.721720918Z
+modified_at: 2026-06-12T23:53:59.721720918Z
+req_type: Story
+tags:
+- aida:cache
+- concurrency
+- core
+- from:STORY-543
+- needs-supervised-build
