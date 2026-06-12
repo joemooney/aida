@@ -822,10 +822,3 @@
   for_role: reviewer
   for_scope: STORY-564
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 019ebc6b-a394-72f0-8c67-0790242c69a7
-  position: 425000
-  added_by: joe
-  added_at: 2026-06-12T17:41:32.368788897Z
-  for_role: advisor
-  added_by_machine: imac
