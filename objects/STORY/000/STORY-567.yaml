@@ -1,0 +1,47 @@
+id: 019ebc5b-0a32-7223-bf80-6e649b9a173b
+spec_id: STORY-567
+agreed_id: STORY-567
+title: 'Contained execution posture: opt-in blast-radius containment for autonomous/headless drains (substrate-as-bouncer for the filesystem)'
+description: |-
+  ## Gap (surfaced by an external comparison, 2026-06-12)
+
+  A comparison with an independent autonomous-agent platform highlighted a category AIDA does NOT cover: TIGHT SANDBOXED EXECUTION. That system constrains its agent to a designated file set so destructive mistakes (deleting data, overwriting files outside scope, corrupting git history) are impossible BY CONSTRUCTION, not by the LLM behaving. AIDA's launched agents run with broad filesystem/shell access (and the common posture is bypass / --dangerously-skip-permissions). Worktree isolation isolates the git working COPY, but not arbitrary shell writes / rm / network / writes outside the worktree.
+
+  The risk is concentrated in UNATTENDED drains (`--no-human=both`, overnight burndown): no human is watching to catch a destructive action. This is the substrate-as-bouncer principle ([[feedback_substrate_as_bouncer_not_rules]]) applied to the filesystem — a programmatic gate, NOT a CLAUDE.md rule the LLM might ignore.
+
+  ## Proposal
+
+  A third launcher posture alongside the STORY-495 axis (native / bypass): **contained**. An opt-in mode (`--sandbox` / `[agents] contained = true`) that constrains an AIDA-launched agent's writes to its declared scope and blocks destructive ops outside it — enforced programmatically.
+
+  Tie it to EXISTING machinery: a session's LEASE already declares scope (EPIC / SPEC-ID / path glob). v1 leases are advisory (not enforced). Contained mode is where the lease becomes ENFORCING — the declared scope is the write-boundary.
+
+  ## Compose, don't reimplement
+
+  Prefer RIDING Claude Code's native sandbox / permission-deny controls over building an OS sandbox. Spike: do Claude Code's settings.json deny-rules + bash sandboxing cover (a) filesystem writes confined to the worktree/scope and (b) a destructive-command denylist? If yes, contained mode is mostly configuration of the native sandbox at launch. OS-level containerization is a REVISIT, not v1 (don't build container/daemon infra now — [[feedback_pushback_on_overengineering]]).
+
+  ## Acceptance
+
+  - [ ] Opt-in `contained` posture (flag + `[agents]` config) constrains an AIDA-launched agent's filesystem WRITES to its session worktree / declared lease scope; writes outside are blocked by construction, not by LLM compliance.
+  - [ ] A destructive-command guard (rm -rf outside scope, history-rewriting git ops, etc.) is denied in contained mode.
+  - [ ] Composes coherently as the third option on the launcher posture axis: native (default) / bypass (STORY-495) / contained. Documented as mutually exclusive postures.
+  - [ ] Spike first: which Claude Code NATIVE controls (settings.json deny, bash sandbox) cover this — ride them; only fill the residual AIDA-side. No OS-container build in v1.
+  - [ ] Decision for master: should contained be the DEFAULT for `--no-human=both` / unattended burndown specifically (highest blast-radius case)? Attended/at-keyboard stays native/bypass.
+  - [ ] Ties the advisory lease scope to an ENFORCED write-boundary in contained mode (the v1-advisory-lease → enforcing path).
+
+  ## Rationale
+
+  Closes a real blast-radius gap most relevant to the unattended autonomous drains AIDA is investing in (burndown, --no-human). Frames safety as the deliberate posture for the unattended case — NOT a change to the operator's at-keyboard bypass default ([[user_permission_posture]]). Substrate-as-bouncer, composing native controls. Smallest valuable slice (write-containment + destructive denylist); containerization deferred.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T15:02:23.538240541Z
+modified_at: 2026-06-12T15:02:23.538240541Z
+req_type: Story
+tags:
+- agent-config
+- autonomous-drain
+- from-competitive
+- from-product
+- safety
+- substrate-as-bouncer
