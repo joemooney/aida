@@ -1700,6 +1700,11 @@ fn run() -> Result<()> {
             human_only: _,
             no_human_only: _,
             effort: _,
+            // TASK-754: --queue/--batch are git-backend-path features (they
+            // reuse the backlog-groom enqueue helper); the deprecated
+            // centralized backend ignores them. trace:TASK-754 | ai:claude
+            queue: _,
+            batch: _,
         } => {
             // TASK-725: positional title (`aida add "do X"`) — --title wins.
             let title = title.clone().or_else(|| title_positional.clone());
@@ -10387,6 +10392,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             effort,
             human_only,
             no_human_only,
+            queue,
+            batch,
             ..
         } => {
             // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
@@ -10890,7 +10897,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // TASK-647 (ADR-3): note that a requested approved+ status was
                 // held for advisor triage. The spec is filed (as draft); this
                 // is informational, not an error. trace:TASK-647 | ai:claude
-                if let Some(from) = intake_downgraded_from {
+                if let Some(from) = &intake_downgraded_from {
                     eprintln!(
                         "{} filed as {} (requested {} needs advisor authority) — queued for advisor triage.",
                         "ℹ".cyan(),
@@ -11035,6 +11042,71 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     // sibling clone that files next pulls the allocation
                     // before dispensing from its own block.
                     push_store_after_id_allocation(store_path, &project_dir, spec_id)?;
+                }
+
+                // TASK-754: `--queue` files + approves + enqueues in one shot,
+                // collapsing the advisor's "file as approved, then groom it"
+                // two-step. It reuses the exact `aida backlog groom` enqueue
+                // helper (user resolution, AIDA_SESSION_ROLE routing, note,
+                // optional batch tag) so the surfaces stay consistent. Two
+                // gates are honored, not invented:
+                //   * AC5 — advisor authority: the intake above already
+                //     downgrades a requested Approved to Draft when the session
+                //     lacks advisor authority (`intake_downgraded_from`), so a
+                //     non-advisor/non-TTY `--queue` lands a draft and is then
+                //     refused by the Approved check below — the same hard gate
+                //     `aida queue add` enforces, with no bypass.
+                //   * AC2 — only Approved is enqueueable, matching
+                //     `aida backlog groom`'s policy; a draft/other status is
+                //     refused with guidance rather than silently queued.
+                // trace:TASK-754 | ai:claude
+                if *queue {
+                    if let Some(reason) =
+                        queue_at_filing_refusal(&last.status, intake_downgraded_from.is_some())
+                    {
+                        let did = last.spec_id.as_deref().unwrap_or("?");
+                        match reason {
+                            QueueAtFilingRefusal::Downgraded => anyhow::bail!(
+                                "{} was filed but NOT queued: queuing work for execution needs \
+                                 advisor authority (advisor role or an interactive session). \
+                                 The spec landed as a draft for advisor triage. Re-run as the \
+                                 advisor, or have the advisor approve + groom it.",
+                                did
+                            ),
+                            QueueAtFilingRefusal::NotApproved => anyhow::bail!(
+                                "{} is `{}`, not Approved — `--queue` only enqueues Approved work \
+                                 (same policy as `aida backlog groom`). Pass `--status approved` \
+                                 when you mean to file-approve-and-queue in one shot.",
+                                did,
+                                last.status
+                            ),
+                        }
+                    }
+                    let storage = Storage::new(store_path);
+                    let user_id = current_user_id(None);
+                    let batch_norm: Option<&str> = batch.as_deref().map(normalize_batch_name);
+                    backlog::enqueue_groomed(
+                        &storage,
+                        last,
+                        batch_norm,
+                        Some("advisor-cleared at filing"),
+                        &user_id,
+                    )?;
+                    let did = last.spec_id.as_deref().unwrap_or("?");
+                    if let Some(name) = batch_norm {
+                        println!(
+                            "{} Queued {} (advisor-cleared at filing), tagged `batch:{}`.",
+                            "✓".green(),
+                            did.bold(),
+                            name.bold()
+                        );
+                    } else {
+                        println!(
+                            "{} Queued {} (advisor-cleared at filing).",
+                            "✓".green(),
+                            did.bold()
+                        );
+                    }
                 }
             }
         }
@@ -53321,6 +53393,49 @@ mod bug_231_findings_promote_tests {
         assert_eq!(current_user_id(Some("alice")), "alice");
     }
 
+    // ---- TASK-754: `aida add --queue` eligibility gate ----
+
+    /// AC1/AC2: an Approved spec (the file-approve-and-queue happy path) is
+    /// allowed onto the queue — no refusal.
+    #[test]
+    fn queue_at_filing_allows_approved() {
+        assert_eq!(
+            queue_at_filing_refusal(&RequirementStatus::Approved, false),
+            None
+        );
+    }
+
+    /// AC5: a requested-Approved intake that the advisor-authority gate
+    /// downgraded to Draft is refused as a downgrade (re-run as advisor), not
+    /// as a plain status problem.
+    #[test]
+    fn queue_at_filing_refuses_downgraded_as_authority() {
+        assert_eq!(
+            queue_at_filing_refusal(&RequirementStatus::Draft, true),
+            Some(QueueAtFilingRefusal::Downgraded)
+        );
+    }
+
+    /// AC2: an explicit non-Approved status (no downgrade) is refused as
+    /// not-enqueueable, matching `aida backlog groom`'s Approved-only policy.
+    #[test]
+    fn queue_at_filing_refuses_explicit_draft() {
+        assert_eq!(
+            queue_at_filing_refusal(&RequirementStatus::Draft, false),
+            Some(QueueAtFilingRefusal::NotApproved)
+        );
+    }
+
+    /// A non-Draft, non-Approved status (e.g. Planned) is likewise refused as
+    /// not-enqueueable — only Approved grooms.
+    #[test]
+    fn queue_at_filing_refuses_non_approved_status() {
+        assert_eq!(
+            queue_at_filing_refusal(&RequirementStatus::Planned, false),
+            Some(QueueAtFilingRefusal::NotApproved)
+        );
+    }
+
     // ---- TASK-618: default-queue cross-machine collision predicate ----
 
     /// Non-"default" user_ids shard cleanly per user, so a foreign
@@ -60162,6 +60277,39 @@ fn has_advisor_authority() -> bool {
         std::io::stdin().is_terminal(),
         orchestrated,
     )
+}
+
+/// TASK-754: why `aida add --queue` would refuse to enqueue the freshly-filed
+/// spec. Pure decision over the new spec's *final* status (post-intake-gate)
+/// plus whether the intake gate downgraded the requested Approved to Draft.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QueueAtFilingRefusal {
+    /// The advisor-authority gate downgraded Approved → Draft (AC5): a
+    /// non-advisor / non-TTY session filed but cannot queue — same hard gate
+    /// `aida queue add` enforces.
+    Downgraded,
+    /// The spec's status is simply not enqueueable (AC2): only Approved is
+    /// groomable, matching `aida backlog groom`'s policy.
+    NotApproved,
+}
+
+/// `None` ⇒ enqueue is allowed. `Some(reason)` ⇒ refuse with the matching
+/// message. AC2 + AC5 collapse to one rule: the new spec must end up Approved,
+/// and a downgrade (the authority gate having fired) is reported distinctly so
+/// the operator knows to re-run as the advisor rather than just fix the status.
+/// trace:TASK-754 | ai:claude
+fn queue_at_filing_refusal(
+    final_status: &RequirementStatus,
+    intake_downgraded: bool,
+) -> Option<QueueAtFilingRefusal> {
+    if matches!(final_status, RequirementStatus::Approved) {
+        return None;
+    }
+    if intake_downgraded {
+        Some(QueueAtFilingRefusal::Downgraded)
+    } else {
+        Some(QueueAtFilingRefusal::NotApproved)
+    }
 }
 
 // BUG-498: An operator doing advisor work (groom / approve / queue) by

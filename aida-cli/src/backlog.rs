@@ -586,6 +586,61 @@ fn pair_verdict_from(p: &AnalyzePair) -> PairVerdict {
     }
 }
 
+/// Place one already-resolved, eligibility-checked requirement onto the
+/// caller's queue, mirroring the `aida backlog groom` enqueue (user resolution
+/// via `current_user_id`, `AIDA_SESSION_ROLE` routing, optional note, optional
+/// `batch:NAME` tag). Shared between `aida backlog groom` and `aida add
+/// --queue` so the two surfaces stay byte-for-byte consistent.
+/// trace:TASK-754 | ai:claude
+pub(crate) fn enqueue_groomed(
+    storage: &Storage,
+    req: &Requirement,
+    batch: Option<&str>,
+    note: Option<&str>,
+    user_id: &str,
+) -> Result<()> {
+    let entry = QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id: req.id,
+        position: i64::MAX,
+        added_by: user_id.to_string(),
+        note: note.map(str::to_string),
+        added_at: Utc::now(),
+        for_role: std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.is_empty()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    storage.queue_add(entry)?;
+
+    if let Some(name) = batch {
+        let tag = format!("batch:{}", name);
+        // Re-load the full store, mutate the spec's tag set, and save
+        // the whole store — same pattern `Command::Edit { add_tag }`
+        // uses (`storage.save(&store)?`).
+        let mut store_now = storage.load()?;
+        if let Some(slot) = store_now.requirements.iter_mut().find(|r| r.id == req.id) {
+            let already = batch_tag_of(&slot.tags)
+                .map(|t| t.eq_ignore_ascii_case(&tag))
+                .unwrap_or(false);
+            if !already {
+                let adds = vec![tag.clone()];
+                let removes: Vec<String> = Vec::new();
+                let changed = apply_tag_deltas(&mut slot.tags, &adds, &removes);
+                if changed {
+                    slot.modified_at = Utc::now();
+                    storage
+                        .save(&store_now)
+                        .with_context(|| format!("tagging {} batch:{}", display_id(req), name))?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn handle_groom(
     storage: &Storage,
     ids: &[String],
@@ -653,49 +708,9 @@ fn handle_groom(
 
     let mut updated = 0usize;
     for req in &to_groom {
-        let entry = QueueEntry {
-            user_id: user_id.clone(),
-            requirement_id: req.id,
-            position: i64::MAX,
-            added_by: user_id.clone(),
-            note: note.map(str::to_string),
-            added_at: Utc::now(),
-            for_role: std::env::var("AIDA_SESSION_ROLE")
-                .ok()
-                .filter(|s| !s.is_empty()),
-            for_scope: None,
-            for_session: None,
-            added_by_machine: None,
-        };
-        storage
-            .queue_add(entry)
+        enqueue_groomed(storage, req, batch, note, &user_id)
             .with_context(|| format!("queueing {}", display_id(req)))?;
         updated += 1;
-
-        if let Some(name) = batch {
-            let tag = format!("batch:{}", name);
-            // Re-load the full store, mutate the spec's tag set, and save
-            // the whole store — same pattern `Command::Edit { add_tag }`
-            // uses (`storage.save(&store)?`).
-            let mut store_now = storage.load()?;
-            if let Some(slot) = store_now.requirements.iter_mut().find(|r| r.id == req.id) {
-                let already = batch_tag_of(&slot.tags)
-                    .map(|t| t.eq_ignore_ascii_case(&tag))
-                    .unwrap_or(false);
-                if !already {
-                    let adds = vec![tag.clone()];
-                    let removes: Vec<String> = Vec::new();
-                    let changed = apply_tag_deltas(&mut slot.tags, &adds, &removes);
-                    if changed {
-                        slot.modified_at = Utc::now();
-                        storage.save(&store_now).with_context(|| {
-                            format!("tagging {} batch:{}", display_id(req), name)
-                        })?;
-                    }
-                }
-            }
-        }
-
         print_groom_line(req, batch);
     }
 
