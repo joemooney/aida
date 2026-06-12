@@ -1,0 +1,18 @@
+id: 019ebdd7-0e8e-75f3-870a-8859d1c2d2a3
+spec_id: STORY-578
+agreed_id: STORY-578
+title: 'WS8: Vendor-parameterized orchestrator — drive the autonomous lifecycle with non-Claude agents (make the multi-vendor lead TRUE)'
+description: 'Panel finding (forced-reproduction, 2026-06-12): auto_complete.rs HARDCODES ''claude -p'' for both LLM phases — non-Claude agents cannot drive the autonomous lifecycle today. ADR-4''s canonical lead is ''many agents from different vendors''; today that''s true at the MCP/coordination layer only. This slice makes the headline true at the orchestrator: parameterize the implementer/advisor LLM phase launch (claude -p / codex exec / AGY headless equivalents) behind a per-phase agent config (extends ~/.aida/agents.toml), honoring each tool''s native invocation (faithful-launcher rule). Acceptance: (1) a drain can run its implementer phase on at least ONE non-Claude agent end-to-end (codex first — known headless surface); (2) agent choice is config/flag, no hardcoded vendor string in the phase-launch path; (3) graceful capability degradation documented where a vendor lacks an equivalent (e.g. skill invocation); (4) until this lands, WS1/WS2 copy scopes the multi-vendor claim to the coordination layer in the same sentence (no laundering). HIGHEST strategic priority of the new slices — it is the credibility of the chosen lead.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T21:57:28.334576297Z
+modified_at: 2026-06-12T21:57:28.334576297Z
+req_type: Story
+tags:
+- multi-vendor
+- orchestrator
+- parent:EPIC-39
+- repositioning
+- ws8-claims-true
