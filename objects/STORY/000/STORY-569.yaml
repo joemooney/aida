@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:36:34.818451052Z
-modified_at: 2026-06-12T15:54:22.948344555Z
+modified_at: 2026-06-12T17:34:11.288644596Z
 req_type: Story
 tags:
 - aida:brief
@@ -34,3 +34,8 @@ comments:
   content: 'Building together with STORY-564 (same --zen finish-sequence code path) — see STORY-564''s Resolved-design block S3: the review-brief is filed as part of the clean-exit sequence. Build via ''aida queue work STORY-564 --zen''; trailer both specs on the PR.'
   created_at: 2026-06-12T15:54:22.948344555Z
   modified_at: 2026-06-12T15:54:22.948344555Z
+- id: 019ebce6-0358-7871-8603-3e2d4ad8ac2b
+  author: joe
+  content: 'NOT implemented in STORY-564''s PR #793 (2026-06-12) despite being baked into STORY-564''s S3 — the implementer queued a review story (STORY-571) instead of filing an agent-mailbox brief. The review-story-queue partly serves the no-relay goal but is NOT the mailbox-brief mechanism. STORY-569 stays open. Reconsider on pickup: is the auto-queued review-story a sufficient substitute (re-scope/close), or do we want the actual brief? Lean: the brief is more general (agent-to-agent, not just review) — keep, but verify whether #793 even auto-queues the review story on EVERY finish or just did it once for #793.'
+  created_at: 2026-06-12T17:34:11.288644596Z
+  modified_at: 2026-06-12T17:34:11.288644596Z
