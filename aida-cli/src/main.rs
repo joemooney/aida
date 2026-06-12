@@ -16604,6 +16604,38 @@ fn read_archive_auto_after_days(project_root: &std::path::Path) -> Option<u64> {
     }
 }
 
+/// STORY-564: read `[zen] auto_exit` from `.aida/config.toml`. Returns the
+/// operator's persistent preference for whether a clean standalone-`--zen`
+/// finish auto-exits (`true`, the default) or always pauses (`false`).
+/// Missing config / key / unparseable TOML → `true` (the new default
+/// behavior). The per-invocation `--pause-always` flag (→ `AIDA_ZEN_PAUSE_ALWAYS`)
+/// overrides this toward pausing; this is the standing preference when the
+/// flag isn't passed. trace:STORY-564 | ai:claude
+fn read_zen_auto_exit(project_root: &std::path::Path) -> bool {
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return true;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return true;
+    };
+    value
+        .get("zen")
+        .and_then(|t| t.get("auto_exit"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
+
+/// STORY-564: should the standalone-`--zen` finish *pause* (vs auto-exit)
+/// because the operator asked it to? True when `--pause-always` was passed
+/// (propagated as `AIDA_ZEN_PAUSE_ALWAYS=1`) OR `[zen] auto_exit = false` is
+/// configured. Either is the operator electing to drive grab-next by hand.
+/// trace:STORY-564 | ai:claude
+fn zen_pause_always_in_force(project_root: &std::path::Path) -> bool {
+    std::env::var(zen::ZEN_PAUSE_ALWAYS_ENV).as_deref() == Ok("1")
+        || !read_zen_auto_exit(project_root)
+}
+
 /// STORY-441: opt-out env var matching the `AIDA_AUTO_BUMP` shape.
 fn auto_archive_enabled() -> bool {
     match std::env::var("AIDA_AUTO_ARCHIVE") {
@@ -40155,6 +40187,12 @@ fn session_end(
             );
         }
     }
+
+    // STORY-564: drop this session's `--zen` needs-human marker, if any, so a
+    // future session that reuses the (time-ordered, effectively-unique) id
+    // never inherits a stale "pause at finish" signal. Best-effort, quiet.
+    // trace:STORY-564 | ai:claude
+    zen::clear_needs_human_marker(&project_root, &target.id);
 
     // BUG-80: drop the planned-cluster manifest for this session, if any.
     // Manifests are runtime per-session state — pinning them around past
@@ -93271,6 +93309,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             escalate_blocks,
             escalate_defaults,
             zen,
+            pause_always,
             quiet,
             no_tee_headless,
             user,
@@ -93347,6 +93386,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             match resolve_autonomy_mode(*zen, no_human.is_some()) {
                 AutonomyMode::Zen => {
                     std::env::set_var(zen::ZEN_ENV, "1");
+                    // STORY-564: propagate `--pause-always` to the launched
+                    // session so `aida zen finish` pauses at the grab-next/stop
+                    // checkpoint instead of auto-exiting on a clean finish. A
+                    // leak only ever adds a pause (the safe direction), so —
+                    // unlike the zen-intent token — this needs no corroboration.
+                    // trace:STORY-564 | ai:claude
+                    if *pause_always {
+                        std::env::set_var(zen::ZEN_PAUSE_ALWAYS_ENV, "1");
+                    }
                     // BUG-237: mint this invocation's zen-intent token. It is
                     // the provenance anchor for `AIDA_ZEN` — the session lease
                     // records it (standalone path), and (under
@@ -93380,6 +93428,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     // scrubbing — is the safety net. trace:BUG-237 | ai:claude
                     std::env::remove_var(zen::ZEN_TOKEN_ENV);
                 }
+            }
+            // STORY-564: `--pause-always` only governs the standalone-`--zen`
+            // finish; flag it as a no-op when `--zen` isn't effective so a
+            // mistyped invocation isn't silently ignored. trace:STORY-564
+            if *pause_always
+                && !matches!(
+                    resolve_autonomy_mode(*zen, no_human.is_some()),
+                    AutonomyMode::Zen
+                )
+            {
+                eprintln!(
+                    "  {} --pause-always has no effect without --zen (it governs the \
+                     standalone --zen finish checkpoint only)",
+                    "⚠".yellow().bold()
+                );
             }
             // TASK-270: accept `batch:NAME` as a positional id (equivalent
             // to `--batch NAME`) and strip a redundant `batch:` prefix off
@@ -97592,6 +97655,78 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
                 eprintln!("  {} {}", "ⓘ".cyan(), note.dimmed());
             }
             Ok(())
+        }
+        // STORY-564: the clean-vs-human-needed finish decision for the
+        // standalone `--zen` lane. The `/aida-pr` checkpoint branches off
+        // the bare decision word: `auto-exit` → run `aida session end` and
+        // exit; `pause` → render the grab-next/stop table. trace:STORY-564
+        ZenCommand::Finish { json } => {
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let cwd = std::env::current_dir().unwrap_or_else(|_| project_root.clone());
+            let is_zen = zen::detect(&project_root, &cwd).is_zen();
+            let lease = active_lease_for_cwd(&project_root, &cwd);
+            // Marker: the session flagged itself human-needed (paused on a
+            // design-fork / raised a punt) via `aida zen needs-human`.
+            let needs_human_marked = lease
+                .as_ref()
+                .map(|l| zen::has_needs_human_marker(&project_root, &l.id))
+                .unwrap_or(false);
+            // Punt: a substrate record of a human-needed fork raised during
+            // this session — scoped to the lease's spec + start time so a
+            // sibling session's punt sharing the ledger doesn't leak in.
+            let has_open_punt = lease
+                .as_ref()
+                .map(|l| {
+                    let spec = l.scope.trim().to_ascii_uppercase();
+                    punt::read_ledger(&project_root)
+                        .iter()
+                        .any(|r| r.timestamp >= l.started_at && r.spec.to_ascii_uppercase() == spec)
+                })
+                .unwrap_or(false);
+            let pause_always = zen_pause_always_in_force(&project_root);
+            let verdict =
+                zen::classify_finish(is_zen, needs_human_marked, has_open_punt, pause_always);
+            if *json {
+                println!(
+                    "{{\"decision\":\"{}\",\"reason\":\"{}\",\"corroborated\":{}}}",
+                    verdict.decision_word(),
+                    verdict.reason_slug(),
+                    is_zen
+                );
+            } else {
+                println!("{}", verdict.decision_word());
+            }
+            Ok(())
+        }
+        // STORY-564: record that this `--zen` session needed a human. Keyed
+        // to the session lease so concurrent zen sessions don't collide.
+        ZenCommand::NeedsHuman { reason } => {
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let cwd = std::env::current_dir().unwrap_or_else(|_| project_root.clone());
+            match active_lease_for_cwd(&project_root, &cwd) {
+                Some(lease) => {
+                    zen::mark_needs_human(&project_root, &lease.id, reason)?;
+                    println!(
+                        "{} marked this --zen session human-needed — the finish checkpoint will pause",
+                        "✓".green()
+                    );
+                    Ok(())
+                }
+                None => {
+                    // No lease over this cwd: nothing to scope the marker to.
+                    // Don't fail — just tell the operator the gate can't see it.
+                    eprintln!(
+                        "  {} no active session lease covers this directory — `aida zen finish` \
+                         keys the needs-human marker off the lease, so there is nothing to mark",
+                        "⚠".yellow().bold()
+                    );
+                    Ok(())
+                }
+            }
         }
     }
 }

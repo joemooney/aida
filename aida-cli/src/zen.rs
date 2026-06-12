@@ -40,13 +40,21 @@
 //!
 //! trace:BUG-237 | ai:claude
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::orchestrator;
 
 /// The env var that *requests* zen mode. Set by the `--zen` flag, inherited by
 /// children — and, being inherited, unverifiable on its own.
 pub(crate) const ZEN_ENV: &str = "AIDA_ZEN";
+
+/// STORY-564: set by `aida queue work --zen --pause-always` (and inherited by
+/// the launched session). Forces the standalone-`--zen` finish checkpoint to
+/// pause at grab-next/stop even on a clean finish, restoring the pre-STORY-564
+/// always-pause behavior for an operator who wants to drive grab-next by hand.
+/// A leak only ever *adds* a pause (the safe direction), so unlike `AIDA_ZEN`
+/// it needs no corroboration token. trace:STORY-564 | ai:claude
+pub(crate) const ZEN_PAUSE_ALWAYS_ENV: &str = "AIDA_ZEN_PAUSE_ALWAYS";
 
 /// The provenance anchor: a per-invocation UUID minted by the `--zen` dispatch
 /// arm and scrubbed by the `Default` / `--no-human` arms. Present iff *this*
@@ -204,6 +212,139 @@ pub(crate) fn detect(project_root: &Path, cwd: &Path) -> ZenContext {
     )
 }
 
+// =========================================================================
+// STORY-564: clean-vs-human-needed finish decision for the standalone
+// `--zen` lane (no orchestrator). `--zen` always opened the PR then *paused*
+// at grab-next/stop, so a clean finish with no human in the loop still forced
+// a manual `stop` + `aida session end` (the BUG-500 friction). This wires a
+// substrate gate the `/aida-pr` finish checkpoint consults: a finish the
+// session never needed a human for AUTO-EXITS (the skill runs `aida session
+// end` itself), and only a genuinely human-needed finish — the session
+// marked itself, an open punt for the spec, or `--pause-always` — pauses.
+// =========================================================================
+
+/// The exit decision for a finished standalone `--zen` session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ZenFinish {
+    /// Clean finish, no human ever needed — the skill runs `aida session end`
+    /// itself and exits without an operator round-trip.
+    AutoExit,
+    /// A human is (or was) in the loop — render the grab-next/stop checkpoint
+    /// and pause, exactly as the pre-STORY-564 behavior.
+    Pause(FinishPause),
+}
+
+/// Why a `--zen` finish pauses instead of auto-exiting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FinishPause {
+    /// Not a corroborated zen session — auto-exit is a zen-only affordance, so
+    /// fail safe to pause. (The skill only reaches the gate in the zen branch;
+    /// this is the defensive floor.)
+    NotZen,
+    /// The session marked itself human-needed during the run (`aida zen
+    /// needs-human`) — it paused on a design-fork or raised a punt.
+    NeedsHuman,
+    /// An open punt for the active spec was raised during this session — the
+    /// substrate record of a human-needed fork, independent of the marker.
+    Punt,
+    /// `--pause-always` / `[zen] auto_exit = false` — the operator wants to
+    /// drive grab-next by hand.
+    PauseAlways,
+}
+
+impl ZenFinish {
+    /// The bare word the gate prints to stdout for the skill to branch on.
+    pub(crate) fn decision_word(self) -> &'static str {
+        match self {
+            ZenFinish::AutoExit => "auto-exit",
+            ZenFinish::Pause(_) => "pause",
+        }
+    }
+
+    /// A stable slug naming *why* the decision landed, for `--json` consumers
+    /// and the human note.
+    pub(crate) fn reason_slug(self) -> &'static str {
+        match self {
+            ZenFinish::AutoExit => "clean",
+            ZenFinish::Pause(FinishPause::NotZen) => "not-zen",
+            ZenFinish::Pause(FinishPause::NeedsHuman) => "needs-human",
+            ZenFinish::Pause(FinishPause::Punt) => "punt",
+            ZenFinish::Pause(FinishPause::PauseAlways) => "pause-always",
+        }
+    }
+}
+
+/// Pure decision: given whether this is a corroborated zen session, whether it
+/// marked itself human-needed, whether an open punt for the spec was raised
+/// this session, and whether pause-always is in force, return the finish
+/// verdict. Split out from [`detect_finish`] so it is unit-testable without
+/// touching the environment or filesystem. Order encodes precedence: a
+/// non-zen session never auto-exits; among the human-needed signals the first
+/// hit names the reason. trace:STORY-564 | ai:claude
+pub(crate) fn classify_finish(
+    is_zen: bool,
+    needs_human_marked: bool,
+    has_open_punt: bool,
+    pause_always: bool,
+) -> ZenFinish {
+    if !is_zen {
+        return ZenFinish::Pause(FinishPause::NotZen);
+    }
+    if needs_human_marked {
+        return ZenFinish::Pause(FinishPause::NeedsHuman);
+    }
+    if has_open_punt {
+        return ZenFinish::Pause(FinishPause::Punt);
+    }
+    if pause_always {
+        return ZenFinish::Pause(FinishPause::PauseAlways);
+    }
+    ZenFinish::AutoExit
+}
+
+/// The directory holding per-session `--zen` needs-human markers. Under the
+/// shared `.aida/` so a child in a sibling worktree and the gate (run in the
+/// same worktree) agree on the path.
+fn needs_human_dir(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("zen-needs-human")
+}
+
+/// The marker file for one session id. Keyed by the session-lease id so two
+/// concurrent `--zen` sessions sharing one `.aida/` never read each other's
+/// markers.
+pub(crate) fn needs_human_marker_path(project_root: &Path, session_id: &str) -> PathBuf {
+    needs_human_dir(project_root).join(format!("{session_id}.marker"))
+}
+
+/// Record that the current `--zen` session needed a human — called by `aida
+/// zen needs-human` when the session pauses on a design-fork or raises a punt.
+/// The body is the human-readable reason (for later triage); only the file's
+/// *presence* drives the gate. Idempotent: re-marking overwrites.
+/// trace:STORY-564 | ai:claude
+pub(crate) fn mark_needs_human(
+    project_root: &Path,
+    session_id: &str,
+    reason: &str,
+) -> std::io::Result<PathBuf> {
+    let dir = needs_human_dir(project_root);
+    std::fs::create_dir_all(&dir)?;
+    let path = needs_human_marker_path(project_root, session_id);
+    let stamp = chrono::Utc::now().to_rfc3339();
+    std::fs::write(&path, format!("{stamp}\n{reason}\n"))?;
+    Ok(path)
+}
+
+/// True when a needs-human marker exists for this session id.
+pub(crate) fn has_needs_human_marker(project_root: &Path, session_id: &str) -> bool {
+    needs_human_marker_path(project_root, session_id).exists()
+}
+
+/// Remove a session's needs-human marker — best-effort, called by `aida
+/// session end` so a reclaimed session id never inherits a stale marker.
+pub(crate) fn clear_needs_human_marker(project_root: &Path, session_id: &str) {
+    let _ = std::fs::remove_file(needs_human_marker_path(project_root, session_id));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,5 +478,81 @@ mod tests {
             ZenContext::Uncorroborated(UncorroboratedReason::NoProvenance).reason_slug(),
             "no-provenance"
         );
+    }
+
+    // --- classify_finish (pure, STORY-564) ----------------------------------
+
+    #[test]
+    fn finish_clean_zen_auto_exits() {
+        // The headline case: a corroborated zen session that never needed a
+        // human, no open punt, no pause-always → AUTO-EXIT. This is what
+        // erases the BUG-500 manual-stop friction.
+        let f = classify_finish(true, false, false, false);
+        assert_eq!(f, ZenFinish::AutoExit);
+        assert_eq!(f.decision_word(), "auto-exit");
+        assert_eq!(f.reason_slug(), "clean");
+    }
+
+    #[test]
+    fn finish_non_zen_never_auto_exits() {
+        // An uncorroborated / interactive session must never be torn down
+        // automatically — auto-exit is a zen-only affordance.
+        let f = classify_finish(false, false, false, false);
+        assert_eq!(f, ZenFinish::Pause(FinishPause::NotZen));
+        assert_eq!(f.decision_word(), "pause");
+        assert_eq!(f.reason_slug(), "not-zen");
+    }
+
+    #[test]
+    fn finish_needs_human_marker_pauses() {
+        let f = classify_finish(true, true, false, false);
+        assert_eq!(f, ZenFinish::Pause(FinishPause::NeedsHuman));
+        assert_eq!(f.reason_slug(), "needs-human");
+    }
+
+    #[test]
+    fn finish_open_punt_pauses() {
+        let f = classify_finish(true, false, true, false);
+        assert_eq!(f, ZenFinish::Pause(FinishPause::Punt));
+        assert_eq!(f.reason_slug(), "punt");
+    }
+
+    #[test]
+    fn finish_pause_always_pauses() {
+        let f = classify_finish(true, false, false, true);
+        assert_eq!(f, ZenFinish::Pause(FinishPause::PauseAlways));
+        assert_eq!(f.reason_slug(), "pause-always");
+    }
+
+    #[test]
+    fn finish_precedence_marker_beats_punt_beats_pause_always() {
+        // When several human-needed signals fire, the reported reason follows
+        // the fixed precedence: marker → punt → pause-always.
+        assert_eq!(
+            classify_finish(true, true, true, true),
+            ZenFinish::Pause(FinishPause::NeedsHuman)
+        );
+        assert_eq!(
+            classify_finish(true, false, true, true),
+            ZenFinish::Pause(FinishPause::Punt)
+        );
+    }
+
+    #[test]
+    fn needs_human_marker_roundtrips() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert!(!has_needs_human_marker(root, "abc123"));
+        mark_needs_human(root, "abc123", "design-fork: storage backend").unwrap();
+        assert!(has_needs_human_marker(root, "abc123"));
+        // Scoped per session id — a sibling session is unaffected.
+        assert!(!has_needs_human_marker(root, "def456"));
+        // The body carries the reason for later triage.
+        let body = std::fs::read_to_string(needs_human_marker_path(root, "abc123")).unwrap();
+        assert!(body.contains("design-fork: storage backend"));
+        clear_needs_human_marker(root, "abc123");
+        assert!(!has_needs_human_marker(root, "abc123"));
+        // Clearing an absent marker is a no-op, not an error.
+        clear_needs_human_marker(root, "abc123");
     }
 }

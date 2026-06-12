@@ -3866,6 +3866,15 @@ pub enum QueueCommand {
         // of `--help` output (TASK-268 user-facing-text convention).
         #[clap(long)]
         zen: bool,
+        /// With `--zen`: always pause at the grab-next/stop checkpoint after
+        /// the PR opens, even on a clean finish — for when you want to drive
+        /// grab-next by hand. By default a clean `--zen` finish (no human ever
+        /// needed) auto-runs `aida session end` and exits. Equivalent to
+        /// `[zen] auto_exit = false` in `.aida/config.toml`, per-invocation.
+        /// No effect without `--zen`.
+        // trace:STORY-564 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        pause_always: bool,
         /// Suppress the end-of-command summary a standalone
         /// `aida queue work <PR-N> --role reviewer` prints (verdict, cost,
         /// artifact paths). For scripted consumers that read the verdict
@@ -4654,6 +4663,30 @@ pub enum ZenCommand {
         /// bare status word.
         #[clap(long)]
         json: bool,
+    },
+    /// The standalone-`--zen` finish decision. Prints `auto-exit` when this
+    /// zen session reached a clean finish — no human ever in the loop, no open
+    /// punt, no `--pause-always` — so the `/aida-pr` checkpoint runs
+    /// `aida session end` itself and exits; prints `pause` otherwise so it
+    /// renders the grab-next/stop table. The gate the skill consults instead
+    /// of always pausing.
+    // trace:STORY-564 | ai:claude — plain `//` keeps the marker out of `--help`.
+    Finish {
+        /// Emit `{"decision","reason","corroborated"}` JSON instead of the
+        /// bare decision word.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Mark the current `--zen` session as having needed a human — call it the
+    /// moment the session pauses on a design-fork for the standby advisor or
+    /// raises a punt. Its presence makes `aida zen finish` pause at the
+    /// grab-next/stop checkpoint rather than auto-exiting.
+    // trace:STORY-564 | ai:claude — plain `//` keeps the marker out of `--help`.
+    NeedsHuman {
+        /// One line on why a human was needed (for later triage). Only the
+        /// marker's presence drives the gate; the reason is recorded alongside.
+        #[clap(long, value_name = "TEXT")]
+        reason: String,
     },
 }
 

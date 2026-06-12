@@ -72,7 +72,16 @@ aida zen status
   Auto-resolve every `kind:confirmation` prompt to option 1 and proceed,
   printing `↳ zen: auto-resolved "<prompt>" → option 1`. Still surface
   every `kind:design-fork` prompt unchanged — implementation approach
-  decisions are exactly what the advisor stays at the keyboard for.
+  decisions are exactly what the advisor stays at the keyboard for. **The
+  moment you surface a `kind:design-fork` prompt to the standby advisor (or
+  raise a punt), record it** so the end-of-session finish checkpoint knows a
+  human was in the loop and pauses instead of auto-ending (STORY-564):
+  ```bash
+  aida zen needs-human --reason "<the fork, one line>"
+  ```
+  A `--zen` session that only auto-resolves `kind:confirmation` prompts
+  never marks itself — and so `aida zen finish` lets it auto-exit cleanly.
+  trace:STORY-564
 - **`interactive`** — default mode: surface every prompt, no change.
   `aida zen status` prints `interactive` whenever zen is off *or*
   `AIDA_ZEN=1` is set but its provenance cannot be corroborated — a
