@@ -42,12 +42,12 @@ description: |-
     - (c) questions: away → decision-required specs accumulate quietly in `aida questions` (no prompt/notification); home → surface them (in `aida status` / on the next interactive command). Composes with STORY-555's questions inbox — BUILD STORY-555 FIRST (this consumer wires into it).
 
   Implementation: defaults (consumers on, away_drain=headless-both, home_offer=surface) make presence-driven mode-selection work with zero config; the `[presence]` block is opt-out/tuning. Document the knobs + defaults in the away/home/presence --help and the consumers' --help. Honor every integrity gate (acceptance #4) — presence can make a drain headless, but CI/merge-on-green/authority still gate.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:20:15.770546344Z
-modified_at: 2026-06-12T20:25:20.685463919Z
+modified_at: 2026-06-12T20:25:53.959512092Z
 req_type: Story
 tags:
 - aida:presence
@@ -72,11 +72,3 @@ comments:
   content: 'Primitive sliced out as a child TASK for autonomous overnight build (presence state + file + TTL + auto-flip + statusline). The 4 consumers (acceptance #3 — burndown-run/escalation/questions/pickup wiring) stay on STORY-561 as the keyboard follow-up: they modify the autonomy ladder, so keyboard-supervised per the reliability-fixes-not-unattended-drain discipline. STORY-561 stays open until the consumers land.'
   created_at: 2026-06-12T07:20:25.956733297Z
   modified_at: 2026-06-12T07:20:25.956733297Z
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: failed
-  detail: the implementer session exited 1 — it was aborted or errored
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-561 --resume`'
-  shelved_by: implementer
-  shelved_at: 2026-06-12T20:25:20.685463919Z
