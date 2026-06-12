@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T22:31:56.124255124Z
-modified_at: 2026-06-12T22:35:55.934161072Z
+modified_at: 2026-06-12T22:37:45.934874214Z
 req_type: Bug
 tags:
 - aida:review
@@ -33,3 +33,8 @@ comments:
   content: Being fixed TOGETHER with BUG-510 in the same PR (same area — wiring 'aida review' to parity with 'queue work'). Removed from the queue to avoid a double-pickup; it will auto-complete when BUG-510's PR merges (trailer both). Operator decision 2026-06-12.
   created_at: 2026-06-12T22:35:55.934161072Z
   modified_at: 2026-06-12T22:35:55.934161072Z
+- id: 019ebdfb-f24e-73d1-8e27-c59224e71801
+  author: joe
+  content: 'LIVE REPRO (2026-06-12): TASK-715 got TWO concurrent reviews — (1) a rebase+review agent that rebased, fixed a drift, and MERGED PR #709 (commit f9372db01), and (2) the operator''s original ''aida review TASK-715'' session, which finished moments later and — with no knowledge of the first — re-reviewed the same spec and printed ''run to merge: gh pr merge 709'' for an ALREADY-MERGED PR. No review lease meant nothing flagged the double-review; the second session wasted a full review pass + emitted a stale, error-bound merge command. This is precisely the failure acceptance #1-#3 prevent (a spec-scoped review lease → the 2nd session sees in_flight and refuses/warns).'
+  created_at: 2026-06-12T22:37:45.934874214Z
+  modified_at: 2026-06-12T22:37:45.934874214Z
