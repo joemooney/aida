@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T22:31:56.124255124Z
-modified_at: 2026-06-12T22:31:56.124255124Z
+modified_at: 2026-06-12T22:35:55.934161072Z
 req_type: Bug
 tags:
 - aida:review
@@ -27,3 +27,9 @@ tags:
 - lease
 - parity
 - ux
+comments:
+- id: 019ebdfa-449e-7023-ab2c-7367c9e78ab0
+  author: joe
+  content: Being fixed TOGETHER with BUG-510 in the same PR (same area — wiring 'aida review' to parity with 'queue work'). Removed from the queue to avoid a double-pickup; it will auto-complete when BUG-510's PR merges (trailer both). Operator decision 2026-06-12.
+  created_at: 2026-06-12T22:35:55.934161072Z
+  modified_at: 2026-06-12T22:35:55.934161072Z
