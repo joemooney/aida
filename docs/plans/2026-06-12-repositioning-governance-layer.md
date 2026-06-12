@@ -1,6 +1,6 @@
 # Repositioning AIDA: the human-governance layer for agent-driven development
 
-**Date:** 2026-06-12 · **Specs:** ADR-4 (decision), EPIC-39 (umbrella), STORY-572/573/574/575/576/577, SPIKE-58/59 · **Status:** Proposed (operator review) · **Complexity:** High (many artifacts, low code risk; one new code surface)
+**Date:** 2026-06-12 · **Specs:** ADR-4 (decision), EPIC-39 (umbrella), STORY-572/573/574/575/576/577/**578/579**, SPIKE-58/59 · **Status:** Proposed (operator review) · **Complexity:** High (many artifacts; **three code surfaces** — WS3b import, WS8 touches the orchestrator [keyboard-supervised lane], WS9 flips an init default)
 
 > Commissioned by the operator from SPIKE-53's escalated decision: Beads (~18.7k stars, v1.0) + Gas Town (v1.0) shipped AIDA's substrate thesis with distribution. Direction chosen: **A (move up the stack) + B (interoperate with Beads), framed by D (regulated/enterprise as sharpest segment)**. Option C (feature-race) rejected.
 > Evidence base: `docs/competitive-analysis/2026-06-12-beads-gastown-moat-rescope.md` (verified Beads parity table + surviving edges + incentive-divergence wedge).
@@ -11,7 +11,7 @@
 
 ### The one-paragraph thesis
 
-Stop pitching the substrate ("git-canonical typed spec graph drained by an orchestrator") — Beads/Gas Town shipped that with 18.7k-star distribution and it is now table stakes. Reposition AIDA one altitude up, where the incentive divergence lives: **Yegge's stack is built to *unleash* agents; AIDA is built to *govern* them.** AIDA's product is the human-governance layer: approved requirements (intake → ADR-3 disposition), role-gated autonomy (product/advisor/implementer + the autonomy ladder), enforced code↔spec traces (the anti-drift loop Beads explicitly lacks), and a git-canonical audit trail of who decided what, when, and why. Beads users are not competitors' customers — they are *our funnel*: the import bridge lets a Beads-running team adopt governance without abandoning their tracker.
+Stop pitching the substrate ("git-canonical typed spec graph drained by an orchestrator") — Beads/Gas Town shipped that with 18.7k-star distribution and it is now table stakes. Reposition AIDA one altitude up, where the incentive divergence lives: **Yegge's stack is built to *unleash* agents; AIDA is built to *govern* them.** AIDA's product is the human-governance layer: approved requirements (intake → ADR-3 disposition), role-gated autonomy (product/advisor/implementer + the autonomy ladder), the code↔spec trace loop (capture + merge-auto-bump today; commit gate default-on via STORY-579 — no trace mechanism is documented in Beads), and a git-canonical audit trail of **human decisions** — who approved what, when, under which role (Beads/Dolt keeps a *change* audit of what agents did; the decision-semantics layer is the open slot). Beads users are reachable prospects, not enemies (internal shorthand only — never "funnel" in public copy): the **sidecar shape** (trace gate + decision-audit over live bd data, single-ownership rule) lets a Beads-running team add governance in the write path, and the importer is the migration/evaluation ramp.
 
 ### What "complete overhaul" means here (scope honesty)
 
@@ -30,8 +30,9 @@ AFTER (governance-led; incentive-divergent)
   ┌─────────────────────────────────────────────────────────────┐
   │  AIDA — the human-governance layer                          │
   │  intake → approval (ADR-3) → sign-off-by-queueing →         │
-  │  role-gated autonomy ladder → trace-enforced merge →        │
-  │  audit trail (who/what/when/why)                            │
+  │  role-gated autonomy ladder → trace-linked merge +          │
+  │  auto-bump (gate default-on per STORY-579) →                │
+  │  decision audit (who approved what/when/why)                │
   ├─────────────────────────────────────────────────────────────┤
   │  mechanism: typed spec graph on git (same repo as code),    │
   │  orchestrator, MCP   ←— the floor, not the pitch            │
@@ -60,10 +61,10 @@ All docs work lands on branch `repositioning` (worktree `~/ai/aida-repositioning
 ## 2. Decisions
 
 - **D1 — Position**: AIDA = human-governance layer for agent-driven development. The substrate is the mechanism, never the pitch. (ADR-4; operator-selected.)
-- **D2 — The line** (draft, WS1 finalizes): *"Beads gives your agents memory. AIDA gives your team governance — approved specs, enforced traces, role-gated autonomy, and an audit trail — so you can let agents run and prove what they did and why."* Anchored on incentive (they won't chase governance; it cuts against their unleash thesis), not capability (which they could copy).
-- **D3 — Interop posture**: Beads is a *funnel*, not an enemy. Import first (one-way MVP, WS3b); export/bridge deferred behind a revisit-trigger (real demand or trivial cost per SPIKE-58). Same compose-don't-fight logic as AGENTS.md-generator and the Agent-Teams boundary (within-vendor-session = ride native; cross-vendor + durable = AIDA owns).
+- **D2 — The line** (draft; **WS2/STORY-573 finalizes** — it lives in the positioning papers per D9): *"Beads remembers what your agents did. AIDA records what your team decided — approved specs, traced code, role-gated autonomy — and holds the line between the two."* Decisions-vs-changes framing (red-team: the earlier "audit trail Beads doesn't keep" clause was factually false — `bd show` prints an audit trail and Dolt is versioned; withdrawn in the rescope erratum). No "enforced" in public copy until STORY-579 lands. Anchored on the *narrowed* incentive wedge: human **pre-approval of intent** + decision-audit semantics + the trace loop (Gas Town ships escalation-to-human and a gated merge queue — the wedge is *gates before work*, not "no human oversight").
+- **D3 — Interop posture (reshaped by red-team)**: lead with **sidecar governance over live bd data** — the trace gate accepts `trace:bd-…` refs validated against `.beads/issues.jsonl`; `aida audit` keyed on bd IDs; continuous refresh under a **single-ownership rule** (bd owns issue content, AIDA owns decision/governance fields — no field has two writers, so no bidirectional bridge is needed). The one-way importer is reframed as **migration/evaluation** ("see your bd graph inside AIDA in 60 seconds"), not "run two trackers." Rationale: governance requires being in the agents' *write path*; a one-way import is observability, not governance (substrate-as-bouncer applied to our own pitch). "Funnel" is internal vocabulary only; public copy says "works with." Compose-don't-fight logic unchanged (AGENTS.md-generator; Agent-Teams boundary: within-vendor-session = ride native; cross-vendor + durable = AIDA owns).
 - **D4 — Engine untouched**: no rewrite of store/graph/orchestrator/lifecycle. WS4 adds *legibility* (audit view, gate explanations), not new machinery.
-- **D5 — Claims discipline**: every comparative claim against Beads/Gas Town must match the verified table in the 2026-06-12 rescope doc; provenance-tagged; no "only/unsolved/nobody" overclaims. Gas Town claims stay [W]-grade until source-verified (SPIKE-58 upgrades them empirically).
+- **D5 — Claims discipline**: every comparative claim against Beads/Gas Town must match the rescope table **as corrected by its dated ERRATUM** (red-team re-verification: Beads 24.5k stars; Gas Town is multi-vendor with escalation + a gated merge queue; the audit-trail clause withdrawn; trace row scoped to "none documented"); provenance-tagged; no "only/unsolved/nobody" overclaims. Remaining [W]-grade Gas Town depth (Overseer loop, Refinery behavior) is upgraded empirically by SPIKE-58.
 - **D6 — Immutability**: dated snapshots (2026-05-31 keystone etc.) stay frozen; WS2 *supersedes* with a new dated synthesis and updates living docs/pointers only.
 - **D7 — Distribution is not fixed by repositioning**: this plan sharpens *what we say*; reach is the separate bugs→stability→marketing sequencing question (Kill-shot 1 of the 2026-06-09 scan). The repositioning makes the eventual marketing tell the defensible story — it is necessary, not sufficient. Out of scope here.
 - **D8 — RESOLVED (operator, 2026-06-12)**: **no rename — but the acronym re-expands**: "AI Design Assistant" → **"AI Developer Assistant"**. Zero-cost; WS1 sweeps every expansion site (CLAUDE.md line 1, README, OVERVIEW, `aida-core/templates/`, deck).
@@ -164,8 +165,7 @@ aida audit <some-spec> && aida graph <some-spec> --blocked-by && aida why <some-
 
 ## 9. Followups (filed or to file at Done)
 
-- Beads **export/bridge** (WS3c) — behind revisit-trigger (D3).
-- Rename/rebrand decision (D8) — operator; file only if taken.
+- Beads **export/bridge** (WS3c) — likely unnecessary under D3's single-ownership sidecar rule; revisit only if a field genuinely needs two writers.
 - Distribution/marketing move once the story is coherent (D7) — pairs with `project_bugs_before_marketing_phase` re-sequencing question the 2026-06-09 scan raised.
 - ReqIF build (if SPIKE-59 says pursue).
 - Website/social/README-badges sweep — after WS5.
@@ -197,3 +197,22 @@ The `/panel-review` quality gate mis-targeted (BUG-509 — the saved workflow pa
 Also folded in: vs-spec-kit.md stale-at-birth findings → STORY-573 acceptance. New WS1/WS2 rule: scoped honest formulations in the same sentence until 578/579 land — D5 now has teeth.
 
 **Still owed:** a correctly-targeted panel pass over the plan's strategic logic (questions a/b/e/f) once BUG-509 is fixed — or a leaner manual red-team if the workflow fix lags.
+
+---
+
+## 13. Red-team amendments (2026-06-12, three adversarial skeptics — the §12 "still owed" review, delivered)
+
+Three independent skeptics (over-rotation / Beads-user-funnel / coherence), targets baked into prompts. Convergent verdict: **PROCEED-WITH-AMENDMENTS — direction confirmed** (Beads momentum *accelerating*: 24.5k stars live; Yegge's own blog confirms the requirements/intent altitude is the open slot), execution corrected as follows. All fixes propagated into §1/§2/§9, the rescope ERRATUM, ADR-4, EPIC-39, and slice specs in the same commit.
+
+**Strategic corrections (the two that matter):**
+1. **Gas Town is already multi-vendor** (Claude Code, Copilot, Codex, Gemini; 15.9k stars) *and* has escalation-to-human (`gt escalate` → Overseer, P0–P2) and a gated merge queue (Refinery). The bare "multi-vendor coordination" headline is a slot the competitor occupies; the defensible lead is **cross-vendor *intent governance*** — gates *before* work (approval/disposition), decision-audit semantics, the trace loop — not multi-vendor *dispatch*. D9 copy must carry this sharpening; STORY-578 remains the credibility prerequisite for any unscoped multi-vendor claim.
+2. **The funnel as stated failed** (one-way import = observability, not governance — gates must sit in the agents' write path) and one public clause was factually false ("audit trail Beads doesn't keep" — withdrawn). D3 reshaped to **sidecar-first** (single-ownership rule dissolves the bidirectional-sync need); importer reframed migration/eval; decisions-vs-changes is the only audit contrast that survives scrutiny.
+
+**Sequencing (supersedes §1 diagram where they differ):**
+- WS8/WS9 run as a parallel **make-it-true code lane**; they do NOT gate the WS1+WS2+WS5 docs cluster (scoped copy decouples), but **landing them includes the un-scoping sweep** of WS1/WS2/WS5 copy (acceptance on STORY-578/579). WS8 is orchestrator-core → keyboard-supervised lane, not overnight drain.
+- **SPIKE-58 gates vs-gastown.md** (empirical Gas Town: multi-vendor depth, Overseer loop, Refinery, bd git-hooks behavior, bd-ID trace-gate feasibility for the sidecar) — i.e. the docs cluster merge depends on SPIKE-58, not just WS3b.
+- WS4's docs use scoped formulations until STORY-579 lands (it is not story-neutral as §1 claimed).
+
+**Acceptance-of-the-epic (success criteria — was missing):** (a) final WS1/WS2 copy passes a fresh adversarial read (one skeptic, Beads-fan persona — the §c tone test) with zero factual refutations; (b) §8 grep gates green, including `rg "AI Design Assistant"` → 0 in living docs and no unscoped "enforced"/"every spec carries history" anywhere public; (c) the 10-minute governance demo (STORY-575) runs end-to-end; (d) grep gates scoped to LIVING artifacts only — CHANGELOG/PROMPT_HISTORY/archives/dated snapshots stay frozen (D6); additional living old-pitch sites folded into STORY-572/576 (docs/aida/01-vision.md, docs/aida/README.md, executive-briefing, aida-demo.html, scripts/aida-demo.sh narration, cross-agent-onboarding + template twin, report.rs, Makefile, crate descriptions, GitHub repo description/topics).
+**Rollback:** operator rejection ⇒ revert the single docs-cluster commit; store specs stay Draft until accepted (ADR-3) — nothing self-approves.
+**Memory hygiene:** STORY-577 (triage) additionally audits advisor memories/discipline docs still teaching the pre-rescope "defend the substrate" framing (memory-pack-hygiene trigger: keystone shift = ADR-4).
