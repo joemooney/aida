@@ -5,26 +5,26 @@ title: 'Repositioning: AIDA as the human-governance layer for agent-driven devel
 description: |-
   ## Mission
 
-  Execute ADR-4: reposition AIDA from 'git-canonical typed spec graph' (substrate — commoditized by Beads/Gas Town with 18.7k-star distribution) to **the human-governance layer for agent-driven development** (approved requirements, role-gated autonomy, enforced code-to-spec traces, audit trail), interoperating with Beads rather than competing, with regulated/enterprise as the sharpest evaluated segment.
+  Execute ADR-4: reposition AIDA as the **AI Developer Assistant** for multi-vendor agent development — coordinate work across vendors and capture the intent/why that gets lost during implementation (operator's canonical statement, on ADR-4), with governance (approval gates, roles, decision audit, trace loop) as the mechanism and enterprise depth, NOT the lead word (D9). Interoperate with Beads (sidecar-first; importer = migration/eval) rather than competing on substrate. Scoped honest formulations everywhere until STORY-578/579 make the multi-vendor + enforcement claims true.
 
   ## Scope boundary (deliberate)
 
-  IN: every story-telling artifact (vision specs, README, OVERVIEW, positioning corpus, demo deck, scaffolded templates); governance surfaces sharpened to headline status; Beads interop (import/export/bridge); substrate-race roadmap triage (re-justify or cut); regulated-segment scoping.
-  OUT: rewriting the engine. The graph/store/orchestrator/trace/lifecycle machinery IS the governance product — it gets re-aimed and surfaced, not rebuilt. No rename/rebrand unless the operator separately decides one (open question on ADR-4).
+  IN: every story-telling artifact (vision specs, README, OVERVIEW, positioning corpus, deck, scaffolded templates, crate descriptions, repo description, demo-script narration); governance surfaces sharpened to legible features; Beads sidecar + import; make-the-claims-true code lane (WS8 vendor-param orchestrator [keyboard-supervised], WS9 trace-gate default + history scoping); roadmap + advisor-memory triage; regulated-segment scoping.
+  OUT: rewriting the engine (it IS the machinery — re-aimed, not rebuilt). D8 RESOLVED: no rename; acronym re-expands to 'AI Developer Assistant'.
 
   ## Slices
 
-  Filed as child stories/spikes tagged parent:EPIC-39. Work proceeds on branch 'repositioning' (worktree at ~/ai/aida-repositioning), merging to main as a coherent cluster once the story holds together.
+  parent:EPIC-39 — STORY-572 (WS1 substrate), 573 (WS2 positioning corpus + vs-spec-kit refresh), SPIKE-58 (Beads/Gas Town empirical — gates vs-gastown.md), 574 (WS3b import, reframed migration/eval), 575 (WS4 governance legibility), 576 (WS5 messaging rollout + downstream refresh), 577 (WS6 triage + memory audit), 578/579 (make-claims-true). Docs cluster (WS1+WS2+WS5) merges as ONE commit (= the rollback unit); code lanes PR independently with scoped language.
 
   ## Plan
 
-  docs/plans/2026-06-12-repositioning-governance-layer.md (on the repositioning branch).
+  docs/plans/2026-06-12-repositioning-governance-layer.md (branch 'repositioning'), esp. §13 red-team amendments + the rescope ERRATUM — D5 binds to the corrected table.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:27.770511448Z
-modified_at: 2026-06-12T21:58:13.072105138Z
+modified_at: 2026-06-12T22:11:29.695565843Z
 req_type: Epic
 tags:
 - from-spike:SPIKE-53
