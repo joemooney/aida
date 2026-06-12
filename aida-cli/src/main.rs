@@ -2125,6 +2125,7 @@ fn run() -> Result<()> {
         Command::Review {
             spec,
             no_agent,
+            allow_stale_base,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives the
@@ -2140,7 +2141,7 @@ fn run() -> Result<()> {
                 ),
                 (None, Some(review_cmd)) => handle_review_command(review_cmd, &storage)?,
                 (None, None) => {
-                    let _ = no_agent;
+                    let _ = (no_agent, allow_stale_base);
                     anyhow::bail!("pass a spec id (`aida review <SPEC>`) or a subcommand (`prompt` / `assemble`)");
                 }
             }
@@ -13595,6 +13596,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Review {
             spec,
             no_agent,
+            allow_stale_base,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives a
@@ -13603,7 +13605,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // review-prompt helpers, read via the same Storage façade.
             match (spec, cmd) {
                 (Some(spec_id), _) => {
-                    handle_review_spec(&backend, store_path, spec_id, *no_agent)?;
+                    handle_review_spec(
+                        &backend,
+                        store_path,
+                        spec_id,
+                        *no_agent,
+                        *allow_stale_base,
+                    )?;
                 }
                 (None, Some(review_cmd)) => {
                     let storage = Storage::new(store_path);
@@ -26167,12 +26175,8 @@ fn collect_doctor_findings(
 
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
-        let live_in_worktree = live_sessions.iter().any(|s| {
-            !s.stale_cwd
-                && (s.cwd == lease.worktree_path || s.cwd.starts_with(&lease.worktree_path))
-        });
-        let age_hours = now.signed_duration_since(lease.started_at).num_hours();
-        let state = classify_lease_state(worktree_exists, live_in_worktree, age_hours);
+        // BUG-511: review-verb leases classify by creator PID, not worktree.
+        let state = lease_state_for(lease, &live_sessions, now);
         let pid_dead = lease
             .creator_pid
             .is_some_and(|pid| !process_probe::pid_is_alive(pid));
@@ -33603,6 +33607,15 @@ pub(crate) struct SessionLease {
     /// trace:STORY-248 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     parent_branch_sha: Option<String>,
+    /// BUG-511: marks a lease minted by the human-review verb
+    /// (`aida review <spec>`). A review lease is an advisory lock with NO
+    /// worktree (`worktree_path` is empty, the TASK-474 convention) — its
+    /// liveness signal is the `aida review` process itself (`creator_pid`):
+    /// alive → the spec is in flight (being reviewed); dead → the lease is
+    /// stale and always safe to reap (no worktree, no uncommitted work).
+    /// trace:BUG-511 | ai:claude
+    #[serde(default)]
+    review_verb: bool,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -33688,6 +33701,7 @@ fn session_harness_worktree_register(
         escalated_to_human: None,
         parent_branch: None,
         parent_branch_sha: None,
+        review_verb: false,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -33826,26 +33840,60 @@ fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
 /// dead session never shows ▶ (cf. STORY-496). Scopes are lowercased for a
 /// case-insensitive match against a row's spec/agreed id. trace:TASK-670 | ai:claude
 fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
+    in_flight_lease_role_map(project_root).into_keys().collect()
+}
+
+/// BUG-511: like [`in_flight_lease_scopes`] but keeps each live lease's
+/// role, so the open-spec explainer can say *what kind* of work holds the
+/// spec ("being reviewed" vs the generic in-flight line). Same liveness
+/// rules: [`lease_state_for`] over every lease, keep the `Live` ones.
+/// trace:BUG-511 | ai:claude
+fn in_flight_lease_role_map(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, Option<String>> {
     let leases = list_leases(project_root);
     if leases.is_empty() {
-        return HashSet::new();
+        return std::collections::HashMap::new();
     }
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
     leases
         .iter()
-        .filter_map(|l| {
-            let worktree_exists = l.worktree_path.exists();
-            let has_live_claude = live.iter().any(|s| {
-                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
-            });
-            let age_hours = now.signed_duration_since(l.started_at).num_hours();
-            match classify_lease_state(worktree_exists, has_live_claude, age_hours) {
-                LeaseState::Live => Some(l.scope.to_ascii_lowercase()),
-                _ => None,
-            }
+        .filter_map(|l| match lease_state_for(l, &live, now) {
+            LeaseState::Live => Some((l.scope.to_ascii_lowercase(), l.role.clone())),
+            _ => None,
         })
         .collect()
+}
+
+/// BUG-511: lease-state classification that understands review-verb
+/// advisory leases. A review lease has no worktree, so the standard
+/// worktree/claude/age matrix would always call it stale; its real
+/// liveness signal is the `aida review` process recorded in
+/// `creator_pid`. Session leases fall through to [`classify_lease_state`]
+/// unchanged. trace:BUG-511 | ai:claude
+fn lease_state_for(
+    l: &SessionLease,
+    live_sessions: &[process_probe::LiveSession],
+    now: chrono::DateTime<chrono::Utc>,
+) -> LeaseState {
+    if l.review_verb {
+        let alive = l
+            .creator_pid
+            .map(process_probe::pid_is_alive)
+            .unwrap_or(false);
+        return if alive {
+            LeaseState::Live
+        } else {
+            LeaseState::Stale
+        };
+    }
+    let worktree_exists = l.worktree_path.exists();
+    let has_live_claude = live_sessions
+        .iter()
+        .any(|s| !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path)));
+    let age_hours = now.signed_duration_since(l.started_at).num_hours();
+    classify_lease_state(worktree_exists, has_live_claude, age_hours)
 }
 
 /// BUG-98: cheap lease count for the `aida session list` footer hint.
@@ -33919,6 +33967,7 @@ mod lease_covers_cwd_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         }
     }
 
@@ -36812,6 +36861,7 @@ fn session_start(
         // origin/main" path. trace:STORY-248 | ai:claude
         parent_branch: stack_parent_branch.clone(),
         parent_branch_sha: stack_parent_sha.clone(),
+        review_verb: false,
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -38072,6 +38122,7 @@ mod story_456_status_worktrees_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         }
     }
 
@@ -45685,14 +45736,17 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
     let classified: Vec<(SessionLease, LeaseState, Option<u32>)> = leases
         .iter()
         .map(|l| {
-            let worktree_exists = l.worktree_path.exists();
             let live_in_worktree = live.iter().find(|s| {
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });
-            let age_hours = now.signed_duration_since(l.started_at).num_hours();
-            let state =
-                classify_lease_state(worktree_exists, live_in_worktree.is_some(), age_hours);
-            (l.clone(), state, live_in_worktree.map(|s| s.pid))
+            // BUG-511: review-verb leases classify by creator PID, not worktree.
+            let state = lease_state_for(l, &live, now);
+            let pid = live_in_worktree.map(|s| s.pid).or(if l.review_verb {
+                l.creator_pid
+            } else {
+                None
+            });
+            (l.clone(), state, pid)
         })
         .collect();
 
@@ -45941,6 +45995,21 @@ fn humanize_age_secs(secs: u64) -> String {
 /// the worktree was removed cleanly.
 /// trace:TASK-358 | ai:claude
 fn force_cleanup_lease(project_root: &std::path::Path, lease: &SessionLease) -> bool {
+    // BUG-511: advisory leases (review-verb / MCP claims that recorded no
+    // worktree) have nothing on disk beyond the lease file itself — and an
+    // empty `worktree_path` would make the symlink-strip and `git worktree
+    // remove` legs below resolve relative to CWD. Remove the lease file
+    // (after the same activity aggregation) and stop.
+    if lease.worktree_path.as_os_str().is_empty() {
+        aggregate_session_activity_into_roles(project_root, &lease.id);
+        let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
+        let activity = session_activity_path(project_root, &lease.id);
+        if activity.exists() {
+            let _ = std::fs::remove_file(&activity);
+        }
+        return true;
+    }
+
     // Snapshot the lease's authoritative on-disk path before we strip the
     // worktree's symlinks (which can break the symlink chain). Mirrors
     // BUG-56's pattern in `session_end`.
@@ -46289,6 +46358,161 @@ fn restore_phase1_status_on_lease_failure(
 ///      and an escalated lease for an unrelated spec is ignored (the triage
 ///      hook is per-spec).
 ///
+/// trace:BUG-511 | ai:claude
+#[cfg(test)]
+mod bug_511_review_lease_tests {
+    use super::*;
+
+    fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "tester".into(),
+            worktree_path: std::path::PathBuf::new(),
+            branch: "feature-x".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("reviewer".into()),
+            creator_pid,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: true,
+        }
+    }
+
+    fn write_lease(project_root: &std::path::Path, lease: &SessionLease) -> std::path::PathBuf {
+        let dir = leases_dir(project_root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{}.toml", lease.id));
+        std::fs::write(&path, toml::to_string_pretty(lease).unwrap()).unwrap();
+        path
+    }
+
+    /// A review lease classifies by creator PID alone — no worktree exists
+    /// (the path is empty), so the standard matrix would always say Stale.
+    #[test]
+    fn lease_state_for_review_lease_tracks_creator_pid() {
+        let now = chrono::Utc::now();
+        let alive = review_lease("rev001", "BUG-511", Some(std::process::id()));
+        assert!(matches!(
+            lease_state_for(&alive, &[], now),
+            LeaseState::Live
+        ));
+
+        // No recorded PID (or a dead one) → stale, never dormant: a review
+        // lease's lifetime is exactly its process's lifetime.
+        let dead = review_lease("rev002", "BUG-511", None);
+        assert!(matches!(
+            lease_state_for(&dead, &[], now),
+            LeaseState::Stale
+        ));
+    }
+
+    /// A live review lease lands in the in-flight scope map with its role,
+    /// so `explain_open` can say "being reviewed" (and the queue footer
+    /// stops suggesting `aida review` for a spec mid-review).
+    #[test]
+    fn in_flight_role_map_includes_live_review_lease() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lease(
+            root,
+            &review_lease("rev003", "BUG-511", Some(std::process::id())),
+        );
+
+        let map = in_flight_lease_role_map(root);
+        assert_eq!(
+            map.get("bug-511"),
+            Some(&Some("reviewer".to_string())),
+            "live review lease must appear with its role: {map:?}"
+        );
+
+        // And a dead one must NOT appear.
+        let tmp2 = tempfile::tempdir().unwrap();
+        write_lease(tmp2.path(), &review_lease("rev004", "BUG-511", None));
+        assert!(in_flight_lease_role_map(tmp2.path()).is_empty());
+    }
+
+    /// AC-4: a dead review lease is always safe to release — decided before
+    /// the config gate and the mtime freshness clock (both of which protect
+    /// worktree sessions, which a review lease is not).
+    #[test]
+    fn auto_release_review_lease_decides_by_pid_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cfg = orchestrator::OrchestratorConfig {
+            auto_release_dormant_leases: false, // gate must not matter
+            stale_lease_threshold_minutes: 10,
+        };
+
+        let alive = review_lease("rev005", "BUG-511", Some(std::process::id()));
+        write_lease(root, &alive);
+        assert_eq!(
+            auto_release_decision_for_lease(root, &alive, &cfg),
+            orchestrator::AutoReleaseDecision::Live
+        );
+
+        // Dead PID + freshly-written lease file: a session lease would be
+        // pinned Live by the mtime gate; the review lease releases.
+        let dead = review_lease("rev006", "BUG-511", None);
+        write_lease(root, &dead);
+        assert!(matches!(
+            auto_release_decision_for_lease(root, &dead, &cfg),
+            orchestrator::AutoReleaseDecision::SafelyDormant {
+                process_dead: true,
+                ..
+            }
+        ));
+    }
+
+    /// The advisory-lease arm of force_cleanup_lease removes the lease file
+    /// and never touches worktree machinery (an empty worktree_path would
+    /// resolve the symlink-strip legs relative to CWD).
+    #[test]
+    fn force_cleanup_advisory_lease_removes_file_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let lease = review_lease("rev007", "BUG-511", None);
+        let path = write_lease(root, &lease);
+
+        assert!(force_cleanup_lease(root, &lease));
+        assert!(!path.exists(), "lease file must be removed");
+    }
+
+    /// The acquire → conflict → release round trip: a held lease refuses a
+    /// second acquire; dropping the guard releases the file and frees the
+    /// scope.
+    #[test]
+    fn acquire_review_lease_refuses_second_then_releases_on_drop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        let guard = acquire_review_lease(root, "BUG-511", "feature-x").unwrap();
+        let err = acquire_review_lease(root, "BUG-511", "feature-x")
+            .expect_err("second acquire must refuse while the first guard is held");
+        assert!(
+            err.to_string().contains("already in flight"),
+            "unexpected refusal text: {err}"
+        );
+
+        drop(guard);
+        assert!(
+            list_leases(root).is_empty(),
+            "dropping the guard must release the lease"
+        );
+        // Scope is free again.
+        let _ = acquire_review_lease(root, "BUG-511", "feature-x").unwrap();
+    }
+}
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 mod task_358_escalation_cleanup_tests {
@@ -46330,6 +46554,7 @@ mod task_358_escalation_cleanup_tests {
             },
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         };
         let path = sessions.join(format!("{id}.toml"));
         std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
@@ -52934,6 +53159,7 @@ reason = "reserved by docs build"
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         };
 
         // No routing tags = visible everywhere.
@@ -53255,6 +53481,7 @@ hostname = "h"
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         };
         std::fs::write(
             leases.join("abcdef123456.toml"),
@@ -54381,6 +54608,7 @@ mod lease_enforcement_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         }
     }
 
@@ -54763,6 +54991,7 @@ mod lease_enforcement_tests {
                 escalated_to_human: None,
                 parent_branch: None,
                 parent_branch_sha: None,
+                review_verb: false,
             }
         }
         let leases = vec![
@@ -54817,6 +55046,7 @@ mod scope_fallback_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         }
     }
 
@@ -55307,6 +55537,7 @@ mod session_end_resolution_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         }
     }
 
@@ -64732,6 +64963,7 @@ mod task_250_review_state_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         };
         std::fs::write(
             dir.join(format!("{}.toml", id)),
@@ -69249,7 +69481,10 @@ fn handle_burndown_run(
 /// `burndown explain` and `aida why`. trace:STORY-547 | ai:claude
 fn collect_open_facts(
     store: &aida_core::RequirementsStore,
-    in_flight_scopes: &std::collections::HashSet<String>,
+    // BUG-511: lowercased live-lease scope → role, so the explainer can say
+    // "being reviewed" when the holder is a reviewer. From
+    // [`in_flight_lease_role_map`].
+    in_flight_scopes: &std::collections::HashMap<String, Option<String>>,
 ) -> Vec<burndown::OpenFacts> {
     let norm = |s: &str| -> String {
         s.chars()
@@ -69281,11 +69516,12 @@ fn collect_open_facts(
             .clone()
             .or_else(|| req.spec_id.clone())
             .unwrap_or_else(|| req.id.to_string());
-        let in_flight = !in_flight_scopes.is_empty()
-            && [req.agreed_id.as_deref(), req.spec_id.as_deref()]
-                .into_iter()
-                .flatten()
-                .any(|s| in_flight_scopes.contains(&s.to_ascii_lowercase()));
+        let in_flight_entry = [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+            .into_iter()
+            .flatten()
+            .find_map(|s| in_flight_scopes.get(&s.to_ascii_lowercase()));
+        let in_flight = in_flight_entry.is_some();
+        let in_flight_role = in_flight_entry.cloned().flatten();
         // TASK-723 (source #2): findings linked to this spec (deduped, stable
         // order). Don't link a finding to itself.
         let mut findings: Vec<String> = findings_by_spec
@@ -69313,6 +69549,7 @@ fn collect_open_facts(
                 .map(|d| d.is_pending())
                 .unwrap_or(false),
             in_flight,
+            in_flight_role,
             findings,
             residual_notes,
         });
@@ -69380,7 +69617,7 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
             project_root.display()
         )
     })?;
-    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let in_flight_scopes = in_flight_lease_role_map(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
 
     // Classify, preserving store order within each bucket. TASK-723: each spec
@@ -69544,7 +69781,7 @@ fn handle_list_human(short: bool) -> Result<()> {
             project_root.display()
         )
     })?;
-    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let in_flight_scopes = in_flight_lease_role_map(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
 
     // TASK-747: specs explicitly routed `--for human` are part of the
@@ -69981,7 +70218,7 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let in_flight_scopes = in_flight_lease_role_map(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
     let Some(f) = facts.iter().find(|f| f.id.eq_ignore_ascii_case(&want)) else {
         // BUG-503: archived + terminal specs are answered plainly above, so a
@@ -73856,6 +74093,7 @@ mod cascade_rebase_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         };
         std::fs::write(
             leases.join(format!("{}.toml", lease.id)),
@@ -76234,6 +76472,7 @@ mod queue_work_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         }
     }
 
@@ -77920,12 +78159,8 @@ fn lease_agent_view(
     ctx: &agent_registry::AgentClassifyContext,
     live_sessions: &[process_probe::LiveSession],
 ) -> agent_registry::AgentRegistryView {
-    let worktree_exists = lease.worktree_path.exists();
-    let live_in_worktree = live_sessions.iter().any(|s| {
-        !s.stale_cwd && (s.cwd == lease.worktree_path || s.cwd.starts_with(&lease.worktree_path))
-    });
-    let age_hours = ctx.now.signed_duration_since(lease.started_at).num_hours();
-    let lease_state = classify_lease_state(worktree_exists, live_in_worktree, age_hours);
+    // BUG-511: review-verb leases classify by creator PID, not worktree.
+    let lease_state = lease_state_for(lease, live_sessions, ctx.now);
     let status = match lease_state {
         LeaseState::Stale => agent_registry::AgentStatus::Stale,
         LeaseState::Live | LeaseState::Dormant => agent_registry::AgentStatus::Busy,
@@ -79761,15 +79996,8 @@ fn collect_cleanup_report(
     // dormant, and stale-reviewer detectors.
     let lease_states: Vec<(SessionLease, LeaseState)> = leases
         .iter()
-        .map(|l| {
-            let worktree_exists = l.worktree_path.exists();
-            let has_live = live_sessions.iter().any(|s| {
-                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
-            });
-            let age_hours = now.signed_duration_since(l.started_at).num_hours();
-            let state = classify_lease_state(worktree_exists, has_live, age_hours);
-            (l.clone(), state)
-        })
+        // BUG-511: review-verb leases classify by creator PID, not worktree.
+        .map(|l| (l.clone(), lease_state_for(l, &live_sessions, now)))
         .collect();
 
     // ── Detector 1: Uncommitted WIP across every worktree ──
@@ -80478,6 +80706,7 @@ mod task_515_status_agent_lease_fallback_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         }
     }
 
@@ -87698,6 +87927,128 @@ fn classify_review_surface(
     }
 }
 
+/// BUG-511: RAII release for the review-verb lease — removing the lease
+/// file on drop covers every exit path of [`handle_review_spec`] (verdict
+/// presented, surface bailed early, reviewer launch failed, `?` errors).
+/// A SIGKILL'd review leaks the file; the dead-PID reaping in
+/// [`acquire_review_lease`] / [`auto_release_decision_for_lease`] cleans
+/// that up on the next coordination touch. trace:BUG-511 | ai:claude
+#[derive(Debug)]
+struct ReviewLeaseGuard {
+    path: std::path::PathBuf,
+}
+
+impl Drop for ReviewLeaseGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// BUG-511: take a session lease scoped to the spec for the duration of an
+/// `aida review <spec>` run — the same coordination substrate `aida queue
+/// work` uses (`.aida/sessions/`, [`find_scope_lease_conflict`], the
+/// BUG-307 auto-release sweep), so the open-spec classifier sees the spec
+/// in flight ("being reviewed") and a second `aida review` / `queue work`
+/// on it refuses instead of double-starting. The lease is an advisory lock
+/// (empty `worktree_path`, the TASK-474 convention); its liveness signal
+/// is this process's PID. trace:BUG-511 | ai:claude
+fn acquire_review_lease(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    branch: &str,
+) -> Result<ReviewLeaseGuard> {
+    let cfg = orchestrator::OrchestratorConfig::load(project_root);
+    let mut remaining = 16usize; // defense-in-depth bound, mirrors queue work's sweep
+    while let Some(conflict) = find_scope_lease_conflict(&list_leases(project_root), spec_id) {
+        match auto_release_decision_for_lease(project_root, &conflict, &cfg) {
+            orchestrator::AutoReleaseDecision::SafelyDormant { process_dead, .. } => {
+                eprintln!(
+                    "  {} released stale lease {} on {} ({})",
+                    "ⓘ".cyan(),
+                    (&conflict.id[..conflict.id.len().min(8)]).yellow(),
+                    spec_id,
+                    if process_dead {
+                        "process dead"
+                    } else {
+                        "dormant"
+                    }
+                );
+                let _ = force_cleanup_lease(project_root, &conflict);
+                remaining -= 1;
+                if remaining == 0 {
+                    anyhow::bail!(
+                        "auto-release sweep gave up after 16 iterations on `{spec_id}` — \
+                         the lease store may be corrupt; inspect `.aida/sessions/`"
+                    );
+                }
+            }
+            orchestrator::AutoReleaseDecision::DormantDirty { dirty_entries } => {
+                anyhow::bail!(
+                    "lease {} on `{spec_id}` looks orphaned but its worktree at {} has \
+                     {dirty_entries} uncommitted change(s) — resolve that session first \
+                     (`aida queue work {spec_id} --resume` keeps the work; \
+                     `aida session end {} --force` discards it).",
+                    &conflict.id[..conflict.id.len().min(8)],
+                    conflict.worktree_path.display(),
+                    &conflict.id[..conflict.id.len().min(8)],
+                );
+            }
+            orchestrator::AutoReleaseDecision::Live => {
+                let holder = if conflict.review_verb {
+                    "another review of it is already running".to_string()
+                } else {
+                    format!(
+                        "a live {} session holds it",
+                        conflict.role.as_deref().unwrap_or("work")
+                    )
+                };
+                anyhow::bail!(
+                    "`{spec_id}` is already in flight — {holder} (lease {}, owner {}, \
+                     since {}). Reviewing it now would double-start; wait for that \
+                     session to finish, or release it with `aida session end {}`.",
+                    &conflict.id[..conflict.id.len().min(8)],
+                    conflict.owner,
+                    conflict.started_at.format("%Y-%m-%d %H:%M UTC"),
+                    &conflict.id[..conflict.id.len().min(8)],
+                );
+            }
+        }
+    }
+
+    let id_long = uuid::Uuid::now_v7().to_string();
+    let id = id_long.replace('-', "")[..12].to_string();
+    let owner = aida_core::git_ops::git_config_get("user.email")
+        .ok()
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "unknown".to_string());
+    let lease = SessionLease {
+        id: id.clone(),
+        scope: spec_id.to_string(),
+        slug: slugify(spec_id),
+        owner,
+        worktree_path: std::path::PathBuf::new(),
+        branch: branch.to_string(),
+        started_at: chrono::Utc::now(),
+        hostname: hostname(),
+        role: Some("reviewer".to_string()),
+        creator_pid: Some(std::process::id()),
+        cargo_target_dir: None,
+        parent_project_root: None,
+        pr_head_sha: None,
+        pr_base_sha: None,
+        pr_base_ref: None,
+        zen_intent_token: None,
+        escalated_to_human: None,
+        parent_branch: None,
+        parent_branch_sha: None,
+        review_verb: true,
+    };
+    std::fs::create_dir_all(leases_dir(project_root))?;
+    let path = lease_path(project_root, &id);
+    std::fs::write(&path, toml::to_string_pretty(&lease)?)?;
+    Ok(ReviewLeaseGuard { path })
+}
+
 /// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
 /// counterpart to `aida queue work`. Resolves the spec's review surface,
 /// runs the existing headless reviewer tier (`/aida-review`) over the diff
@@ -87710,6 +88061,7 @@ fn handle_review_spec(
     store_path: &std::path::Path,
     spec: &str,
     no_agent: bool,
+    allow_stale_base: bool,
 ) -> Result<()> {
     let project_root = store_path
         .parent()
@@ -87844,11 +88196,77 @@ fn handle_review_spec(
 
     // ---- Run the reviewer over the diff (AC-2 / AC-4: reuse /aida-review) ----
     let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
-    let (pr_number, _branch) = match &surface {
+    let (pr_number, surface_branch) = match &surface {
         ReviewSurface::OpenChange { branch, number, .. } => (Some(*number), branch.clone()),
         ReviewSurface::BranchNoChange { branch, .. } => (None, branch.clone()),
         _ => unreachable!("shipped/local surfaces returned above"),
     };
+
+    // BUG-511: hold a session lease scoped to the spec while the review
+    // runs — same substrate as `aida queue work`, so the footer / `aida
+    // why` / burndown-explain see the spec in flight and a concurrent
+    // review or pickup refuses instead of double-starting. Released on
+    // every exit path via the guard's Drop. trace:BUG-511 | ai:claude
+    let _review_lease = acquire_review_lease(project_root, &spec_id, &surface_branch)?;
+
+    // BUG-510: stale-base pre-flight — same predicate as the reviewer-role
+    // path (`aida queue work <PR-N> --for reviewer` / orchestrator phase 3:
+    // preflight_stale_base_check → classify_stale_base), different posture.
+    // A human is driving this verb and the verdict on the code is valid
+    // either way, so even the overlap case warns-and-proceeds instead of
+    // refusing. `--allow-stale-base` mirrors the reviewer-role opt-out so a
+    // deliberate stale review isn't nagged. Fails open on infra errors
+    // (gh missing, fetch failure) like both existing call sites.
+    // trace:BUG-510 | ai:claude
+    if let Some(n) = pr_number {
+        if !allow_stale_base && matches!(forge, crate::forge::ForgeKind::GitHub) {
+            let stale = match preflight_stale_base_check(project_root, n) {
+                Ok(pr_rebase::StaleBaseOutcome::Current) => None,
+                Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
+                    Some((behind, Vec::new()))
+                }
+                Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
+                    behind,
+                    overlap_files,
+                    ..
+                }) => Some((behind, overlap_files)),
+                Err(e) => {
+                    eprintln!(
+                        "  {} stale-base check for {change_noun}-{n} failed ({e}); \
+                         proceeding with review",
+                        "⚠".yellow().bold()
+                    );
+                    None
+                }
+            };
+            if let Some((behind, overlap)) = stale {
+                eprintln!(
+                    "  {} {}",
+                    "⚠".yellow().bold(),
+                    pr_rebase::stale_base_review_warn_message(n, behind, &overlap).yellow()
+                );
+                // Offer the rebase inline while a human is at the prompt —
+                // the review then runs against current code. Defaults to yes
+                // when a file the PR touches has also moved on the base.
+                if interactive {
+                    let rebase_now =
+                        inquire::Confirm::new(&format!("Rebase {change_noun}-{n} now?"))
+                            .with_default(!overlap.is_empty())
+                            .prompt()
+                            .unwrap_or(false);
+                    if rebase_now {
+                        if let Err(e) = pr_rebase_handler(n, false, false, false, None) {
+                            eprintln!(
+                                "  {} rebase did not complete ({e}); the review \
+                                 will run against the stale base",
+                                "⚠".yellow().bold()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     if no_agent {
         // AC: degrade-honest path — surface + recommended command, no agent.
@@ -90727,7 +91145,7 @@ fn handle_queue_advance(
     let project_root = find_project_root().ok();
     let in_flight = project_root
         .as_ref()
-        .map(|r| in_flight_lease_scopes(r))
+        .map(|r| in_flight_lease_role_map(r))
         .unwrap_or_default();
     let facts_by_id: std::collections::HashMap<String, burndown::OpenFacts> =
         collect_open_facts(&store, &in_flight)
@@ -90890,9 +91308,10 @@ fn advance_dispatch(
             // AC-4/AC-5). On the operator's confirmation that it was approved,
             // offer to drop `review:draft-only` so it drains.
             let backend = advance_backend(store_path)?;
-            if let Err(e) =
-                handle_review_spec(&backend, store_path, display, /* no_agent */ false)
-            {
+            if let Err(e) = handle_review_spec(
+                &backend, store_path, display, /* no_agent */ false,
+                /* allow_stale_base */ false,
+            ) {
                 eprintln!(
                     "  {} review of {} did not complete: {}",
                     "⚠".yellow(),
@@ -92120,7 +92539,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     // display id — same construction `handle_queue_advance` uses.
                     let in_flight = find_project_root()
                         .ok()
-                        .map(|r| in_flight_lease_scopes(&r))
+                        .map(|r| in_flight_lease_role_map(&r))
                         .unwrap_or_default();
                     let facts_by_id: std::collections::HashMap<String, burndown::OpenFacts> =
                         collect_open_facts(&store, &in_flight)
@@ -99191,14 +99610,8 @@ fn handle_queue_recover(
     let lease = find_lease_by_spec(&spec, &leases).ok();
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
-    let lease_state = lease.as_ref().map(|l| {
-        let worktree_exists = l.worktree_path.exists();
-        let has_live = live
-            .iter()
-            .any(|s| !s.stale_cwd && s.cwd.starts_with(&l.worktree_path));
-        let age_hours = now.signed_duration_since(l.started_at).num_hours();
-        classify_lease_state(worktree_exists, has_live, age_hours)
-    });
+    // BUG-511: review-verb leases classify by creator PID, not worktree.
+    let lease_state = lease.as_ref().map(|l| lease_state_for(l, &live, now));
 
     // The branch we inspect for commits-ahead / dirty: prefer the lease's
     // branch (where a phase-1 implementer committed), else the PR head branch.
@@ -106263,6 +106676,32 @@ fn auto_release_decision_for_lease(
     lease: &SessionLease,
     config: &orchestrator::OrchestratorConfig,
 ) -> orchestrator::AutoReleaseDecision {
+    // BUG-511: review-verb leases are advisory PID locks — no worktree, no
+    // uncommitted work to lose — so liveness is the creator process, full
+    // stop. Decided BEFORE the config gate and the mtime clock: a dead
+    // review lease is always safe to release, a live one always refuses.
+    if lease.review_verb {
+        let pid_alive = lease
+            .creator_pid
+            .map(process_probe::pid_is_alive)
+            .unwrap_or(false);
+        return if pid_alive {
+            orchestrator::AutoReleaseDecision::Live
+        } else {
+            let mtime_age_secs = std::fs::metadata(lease_path(project_root, &lease.id))
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.elapsed().ok())
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            orchestrator::AutoReleaseDecision::SafelyDormant {
+                process_dead: true,
+                mtime_age_secs,
+                worktree_missing: false,
+            }
+        };
+    }
+
     if !config.auto_release_dormant_leases {
         return orchestrator::AutoReleaseDecision::Live;
     }
@@ -106935,6 +107374,7 @@ mod queue_work_resume_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         };
         std::fs::write(
             sessions.join("019eabcd-1234.toml"),
@@ -107001,6 +107441,7 @@ mod queue_work_resume_tests {
             escalated_to_human: None,
             parent_branch: None,
             parent_branch_sha: None,
+            review_verb: false,
         };
         std::fs::write(
             sessions.join("019eaaaa-bbbb.toml"),
