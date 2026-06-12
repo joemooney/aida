@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:22:31.645987382Z
-modified_at: 2026-06-12T15:22:31.645987382Z
+modified_at: 2026-06-12T17:41:36.625619065Z
 req_type: Bug
 tags:
 - aida:why
 - operator-confusion
 - user-facing-text
 - ux
+comments:
+- id: 019ebcec-cef1-7f61-a914-6cfc0749c302
+  author: joe
+  content: 'Duplicate of BUG-503 (operator-filed, more detailed acceptance) — rejecting in favor of it. BUG-503 absorbs the archived-case this spec named. trace: kept BUG-503.'
+  created_at: 2026-06-12T17:41:36.625619065Z
+  modified_at: 2026-06-12T17:41:36.625619065Z
