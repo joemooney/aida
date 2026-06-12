@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T07:20:12.530884861Z
-modified_at: 2026-06-12T07:20:12.530884861Z
+modified_at: 2026-06-12T07:32:44.372914921Z
 req_type: Task
 tags:
 - aida:presence
@@ -29,3 +29,9 @@ tags:
 - core
 - operator-tooling
 - parent:STORY-561
+comments:
+- id: 019ebabf-5ed4-7232-9fc7-e0c404ec6a2c
+  author: joe
+  content: Commit cf888618c references this requirement
+  created_at: 2026-06-12T07:32:44.372914921Z
+  modified_at: 2026-06-12T07:32:44.372914921Z
