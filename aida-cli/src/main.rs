@@ -28,6 +28,7 @@ mod headless_tail;
 mod headless_tee;
 mod health_metrics;
 mod history;
+mod intake;
 mod integrate;
 mod mailbox_store;
 mod mcp;
@@ -1158,6 +1159,32 @@ fn run() -> Result<()> {
         return handle_burndown_command(cmd);
     }
 
+    // STORY-560: `aida intake` self-loads the store to compute its candidate
+    // fence and then launches a headless `claude -p` — no shared storage handle
+    // needed. Dispatch early, like burndown. trace:STORY-560 | ai:claude
+    if let Command::Intake {
+        apply,
+        max_approvals,
+        only_tag,
+        exclude_tag,
+        risk,
+        then_drain,
+        dry_run,
+        permission_mode,
+    } = &cli.command
+    {
+        return handle_intake_command(
+            *apply,
+            *max_approvals,
+            only_tag.as_deref(),
+            exclude_tag.as_deref(),
+            risk,
+            *then_drain,
+            *dry_run,
+            permission_mode.as_deref(),
+        );
+    }
+
     // STORY-547: `aida why <ID>` reads the requirement graph like burndown —
     // dispatch early, no shared storage handle needed. trace:STORY-547
     if let Command::Why { id, json } = &cli.command {
@@ -2024,6 +2051,7 @@ fn run() -> Result<()> {
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
+        Command::Intake { .. } => unreachable!("intake is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -10380,6 +10408,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
+        Command::Intake { .. } => unreachable!("intake is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -68812,6 +68841,209 @@ fn preview_next_version(current: &str, bump: &str) -> Option<String> {
 /// delegates to `handle_dev_release`, forwarding `--skip-xplat-check` via the
 /// env the release script honors. trace:STORY-472 | ai:claude
 /// STORY-527: `aida burndown` dispatch.
+/// STORY-560: `aida intake` — the headless advisor INTAKE pass. The
+/// advisor-side analog of `handle_burndown_run`: load the `[intake]` policy +
+/// flag overrides, self-load the store, compute the BOUNDED candidate fence
+/// (the do-not-approve classes + `needs-human`/`strategic` specs are excluded
+/// HERE, programmatically — the agent never sees them as actionable), then
+/// launch a headless `claude -p "/aida-intake [--apply]"` that reads the fenced
+/// set, proposes dispositions, and (under `--apply`) approves within the fence
+/// and grooms the queue. Propose-mode is the ultimate gate.
+/// trace:STORY-560 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_intake_command(
+    apply: bool,
+    max_approvals: Option<usize>,
+    only_tag: Option<&str>,
+    exclude_tag: Option<&str>,
+    risk: &str,
+    then_drain: bool,
+    dry_run: bool,
+    permission_mode: Option<&str>,
+) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let cfg = intake::IntakeConfig::load(&project_root);
+    let max_risk = backlog::RiskLevel::parse(risk)?;
+    let filters = intake::IntakeFilters {
+        only_tag: only_tag.map(|s| s.to_string()),
+        exclude_tag: exclude_tag.map(|s| s.to_string()),
+        max_risk,
+    };
+
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+    let queued_ids = all_queued_requirement_ids(&project_root);
+
+    // The intake action set = open specs the agent could move forward: Drafts
+    // (approve/reject/park candidates) + Approved-but-not-queued (queue
+    // candidates). Build the IntakeSpec facts for each. trace:STORY-560
+    let mut specs: Vec<intake::IntakeSpec> = Vec::new();
+    for req in &store.requirements {
+        if req.archived {
+            continue;
+        }
+        let is_draft = matches!(req.status, aida_core::RequirementStatus::Draft);
+        let is_approved_unqueued = matches!(req.status, aida_core::RequirementStatus::Approved)
+            && !queued_ids.contains(&req.id);
+        if !(is_draft || is_approved_unqueued) {
+            continue;
+        }
+        let disp = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+        let has_plan = !find_plan_files_for_spec(&project_root, &disp).is_empty();
+        let risk = backlog::classify_risk(req, has_plan);
+        specs.push(intake::IntakeSpec {
+            id: disp,
+            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
+            tags: req.tags.iter().cloned().collect(),
+            risk,
+        });
+    }
+    // Deterministic output order.
+    specs.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let (eligible, fenced) = intake::select_intake_candidates(&specs, &cfg, &filters);
+
+    let effective_on_apply = if then_drain {
+        intake::OnApply::Drain
+    } else {
+        cfg.on_apply
+    };
+
+    println!("{} intake pass", "▸".cyan().bold());
+    println!(
+        "  {}",
+        format!(
+            "bias={} · do-not-approve=[{}] · on_apply={} · risk≤{}",
+            cfg.disposition_bias.as_str(),
+            cfg.do_not_approve_classes.join(","),
+            effective_on_apply.as_str(),
+            max_risk.token(),
+        )
+        .dimmed()
+    );
+
+    if eligible.is_empty() {
+        println!(
+            "  {} 0 specs in the intake fence ({} fenced out). Nothing for the advisor to weigh.",
+            "→".green(),
+            fenced.len()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "  {} {} spec(s) the advisor will weigh: {}",
+        "→".green(),
+        eligible.len(),
+        eligible.join(", ").cyan()
+    );
+    if !fenced.is_empty() {
+        println!(
+            "  {} {} fenced out (do-not-approve class / needs-human / tag / risk):",
+            "·".dimmed(),
+            fenced.len()
+        );
+        for (id, reason) in &fenced {
+            println!(
+                "    {} {} — {}",
+                "✕".dimmed(),
+                id,
+                reason.describe().dimmed()
+            );
+        }
+    }
+
+    let prompt = intake::intake_skill_prompt(apply);
+    let mode = permission_mode.unwrap_or("bypassPermissions");
+
+    if dry_run {
+        println!("\n{} dry run — not launching. Would run:", "·".dimmed());
+        println!("  claude -p {:?} --permission-mode {}", prompt, mode.cyan());
+        println!(
+            "  {} AIDA_INTAKE_CANDIDATES={}",
+            "env".dimmed(),
+            eligible.join(",")
+        );
+        return Ok(());
+    }
+
+    if permission_mode.is_none() {
+        println!(
+            "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
+            "⚠".yellow(),
+            "BYPASSED".yellow().bold()
+        );
+    }
+    if apply {
+        println!(
+            "  {} {} — the advisor APPROVES within the fence + grooms the queue{}",
+            "→".green(),
+            "--apply".yellow().bold(),
+            if effective_on_apply == intake::OnApply::Drain {
+                ", then DRAINS"
+            } else {
+                ""
+            }
+        );
+    } else {
+        println!(
+            "  {} propose-mode — writes NOTHING; review the proposal, then re-run with --apply",
+            "→".green()
+        );
+    }
+    println!();
+
+    // The skill reads the resolved policy + the bounded fence from env; the
+    // prompt stays the human-facing surface (mirrors the advisor tier's
+    // env-passed payload). trace:STORY-560
+    let mut command = std::process::Command::new("claude");
+    command
+        .arg("-p")
+        .arg(&prompt)
+        .arg("--permission-mode")
+        .arg(mode)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
+        .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
+        .env(
+            "AIDA_INTAKE_DISPOSITION_BIAS",
+            cfg.disposition_bias.as_str(),
+        )
+        .env(
+            "AIDA_INTAKE_DO_NOT_APPROVE_CLASSES",
+            cfg.do_not_approve_classes.join(","),
+        )
+        .env("AIDA_INTAKE_ON_APPLY", effective_on_apply.as_str())
+        .env("AIDA_INTAKE_RISK", max_risk.token());
+    if let Some(n) = max_approvals {
+        command.env("AIDA_INTAKE_MAX_APPROVALS", n.to_string());
+    }
+
+    let status_code = command.status().map_err(|e| {
+        anyhow::anyhow!(
+            "failed to launch `claude -p` ({e}) — the headless intake pass needs the Claude Code \
+             CLI on PATH. Install it, or run `/aida-backlog-groom` interactively instead."
+        )
+    })?;
+
+    if status_code.success() {
+        Ok(())
+    } else {
+        let code = status_code.code().unwrap_or(1);
+        std::process::exit(code);
+    }
+}
+
 fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
     match cmd {
         crate::cli::BurndownCommand::Plan {

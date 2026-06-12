@@ -52,7 +52,7 @@ impl RiskLevel {
         }
     }
 
-    fn parse(s: &str) -> Result<Self> {
+    pub(crate) fn parse(s: &str) -> Result<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
             "low" => Ok(RiskLevel::Low),
             "medium" | "med" => Ok(RiskLevel::Medium),
@@ -61,6 +61,17 @@ impl RiskLevel {
             other => Err(anyhow!(
                 "unknown risk level `{other}` — expected one of: low, medium, high, unknown"
             )),
+        }
+    }
+
+    /// Plain (uncolored) lowercase token — for env passing + machine output,
+    /// where the ANSI-colored [`RiskLevel::chip`] would be noise. trace:STORY-560
+    pub(crate) fn token(self) -> &'static str {
+        match self {
+            RiskLevel::Low => "low",
+            RiskLevel::Medium => "medium",
+            RiskLevel::High => "high",
+            RiskLevel::Unknown => "unknown",
         }
     }
 
@@ -79,7 +90,7 @@ impl RiskLevel {
 
     /// True when a candidate at `self` risk is admitted under a `--risk max`
     /// ceiling. `--risk high` admits everything; `--risk low` only low.
-    fn within_ceiling(self, max: RiskLevel) -> bool {
+    pub(crate) fn within_ceiling(self, max: RiskLevel) -> bool {
         self.rank() <= max.rank()
     }
 }
