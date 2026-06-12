@@ -35,10 +35,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:25:21.174477520Z
-modified_at: 2026-06-12T20:25:21.174477520Z
+modified_at: 2026-06-12T23:56:02.377781184Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-1
 - implementer
+comments:
+- id: 019ebe43-9bc9-70b3-8e3e-48460ec250be
+  author: joe
+  content: Duplicate of BUG-507. Both are auto-filed findings from the STORY-561 --zen build's E2E test (the consumers=off path launched a real drain that failed on its own lease — a test-harness artifact, restored mid-build). STORY-561 Completed. Rejecting as obsolete; re-file if a REAL auto-complete phase-1 failure recurs.
+  created_at: 2026-06-12T23:56:02.377781184Z
+  modified_at: 2026-06-12T23:56:02.377781184Z
