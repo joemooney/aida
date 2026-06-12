@@ -1,0 +1,17 @@
+id: 019ebd91-fd4d-7960-97d7-ff00b663567d
+spec_id: STORY-577
+agreed_id: STORY-577
+title: 'WS6: Roadmap triage under the governance lens — re-justify or cut substrate-race items; slop-audit surfaces against ADR-4'
+description: 'Sweep the open backlog + roadmap items and re-judge each against ADR-4: does it serve governance/interop/regulated, or was it racing Beads on substrate? Outcomes per item: keep (re-justified, note why) / reframe (edit description to the governance rationale) / cut (reject with ADR-4 as reason). Known candidates: P4 semantic-recall (substrate race?), remaining swarm/coordination items vs ride-Agent-Teams boundary (the within-vendor=ride / cross-vendor=own rule), any ''index'' framed items (STORY-551 family). Also a skills/commands slop-audit: surfaces that muddy the governance story. ADVISOR-seat work (disposition authority needed) — not implementer-dispatchable. Deliverable: a dispositions table comment on EPIC-39 + the executed status changes.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:42:01.933795456Z
+modified_at: 2026-06-12T20:42:01.933795456Z
+req_type: Story
+tags:
+- advisor
+- parent:EPIC-39
+- repositioning
+- ws6-triage
