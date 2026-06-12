@@ -1,0 +1,12 @@
+id: 019ebd87-8a10-7d11-9656-072a7218a542
+spec_id: TASK-765
+agreed_id: TASK-765
+title: '**Phase 4: presence (absorbs STORY-561).** `aida human home/away/status` + `aida home/away` aliases; presence file + TTL + TTY auto-flip; wire the STORY-561 consumers (burndown-run / escalation-defaults / questions surfacing). Advisory only; never overrides integrity gates'
+description: ''
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:30:37.072810100Z
+modified_at: 2026-06-12T20:30:37.072810100Z
+req_type: Task
