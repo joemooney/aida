@@ -3,12 +3,12 @@ spec_id: BUG-500
 agreed_id: BUG-500
 title: 'aida queue work --zen: the ''stop'' path should run ''aida session end'' (clean up worktree+lease), not just pause'
 description: 'Operator-surfaced 2026-06-11: after a --zen implementer finishes (PR auto-opened, spec marked Done), the session PAUSES at grab-next/stop but never cleans up — it leaves the worktree (~/ai/aida-<spec>) + the session lease dangling, which the operator must ''aida session end <id>'' by hand every time. --zen = no orchestrator, and the orchestrator (--auto-complete) is exactly what drives session-end — so the cleanup that path gives for free is missing in --zen. Operator''s words: ''ideally it would have done that itself.'' Fix: the ''stop'' choice at the --zen finish checkpoint (PR opened + spec Done) should run ''aida session end'' (remove worktree, clear lease) — only ''grab-next'' keeps the session alive. Bonus: ending before the PR merges also sidesteps the TASK-721 merged-worktree-can''t-delete papercut. Keep the finish-checkpoint''s other info (state / recommendation / decoupled decisions) intact; just wire ''stop'' to clean up.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T22:36:16.364225845Z
-modified_at: 2026-06-12T04:03:19.776443191Z
+modified_at: 2026-06-12T04:13:50.399605054Z
 req_type: Bug
 tags:
 - aida:queue:work
@@ -23,3 +23,15 @@ comments:
   content: 'Subsumed by STORY-564: the smarter version — auto-end-and-clean on a CLEAN --zen finish, pause only when a human is needed. BUG-500''s ''stop should clean up'' is acceptance #1 of STORY-564. Keep BUG-500 as the mechanical sub-part or close as superseded — operator''s call.'
   created_at: 2026-06-12T04:03:19.776443191Z
   modified_at: 2026-06-12T04:03:19.776443191Z
+history:
+- id: 019eba09-464b-7af3-bdcb-99eca8644f4b
+  author: aida-reconcile
+  timestamp: 2026-06-12T04:13:50.539619570Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T04:13:50.399605054Z
+  completion_sha: 33271811cbfec1eae5acecb0c83b6bee6fe9cb02
