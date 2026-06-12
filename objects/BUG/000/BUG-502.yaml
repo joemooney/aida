@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T01:45:58.338704002Z
-modified_at: 2026-06-12T04:00:28.311218759Z
+modified_at: 2026-06-12T04:12:11.779845798Z
 req_type: Bug
 tags:
 - aida:human
@@ -22,3 +22,8 @@ comments:
   content: 'Second accuracy gap found in the same dogfood (2026-06-11): ''aida human unblock'' also does NOT exclude specs already in the burndown ready set — BUG-499/500/501/502 are queued + ready, yet the prompt lists them under ''CLARIFY FIRST (missing acceptance)''. Two fixes belong together: (1) skip specs already queued/in-the-ready-set (they''re groomed — no action); (2) reconcile the ''under-specified'' check with the pickability gate (the gate doesn''t require a ## Acceptance section, so a queued-ready spec shouldn''t be flagged ''missing acceptance → clarify''). Net: aida human unblock should only surface OPEN specs NOT yet groomed, and its buckets should agree with ''aida burndown plan''.'
   created_at: 2026-06-12T04:00:28.311218759Z
   modified_at: 2026-06-12T04:00:28.311218759Z
+- id: 019eba07-c483-7900-921a-e95eb8494f40
+  author: joe
+  content: Commit 47a5baf14 references this requirement
+  created_at: 2026-06-12T04:12:11.779845798Z
+  modified_at: 2026-06-12T04:12:11.779845798Z
