@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:27.770511448Z
-modified_at: 2026-06-12T20:43:11.351184510Z
+modified_at: 2026-06-12T20:43:13.293819651Z
 req_type: Epic
 tags:
 - from-spike:SPIKE-53
@@ -43,4 +43,8 @@ relationships:
 - rel_type: Child
   target_id: 019ebd91-0976-7dd3-8584-f14c35298f1d
   created_at: 2026-06-12T20:43:11.351174863Z
+  created_by: joe
+- rel_type: Child
+  target_id: 019ebd91-330b-77a2-840f-019b6d1aa22a
+  created_at: 2026-06-12T20:43:13.293814018Z
   created_by: joe
