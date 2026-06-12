@@ -814,3 +814,10 @@
   note: 'advisor-cleared: judged autonomous-safe at filing'
   added_at: 2026-06-12T04:38:54.361553482Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 019eba19-6314-7e53-b25e-cf40cf0695bc
+  position: 423000
+  added_by: joe
+  note: 'advisor-cleared: judged autonomous-safe at filing'
+  added_at: 2026-06-12T04:38:54.434254270Z
+  for_role: advisor
