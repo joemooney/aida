@@ -67916,6 +67916,7 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
     let order = [
         HeldForReview,
         AwaitingDecision,
+        BuildSupervised,
         Ungroomed,
         Umbrella,
         Blocked,
@@ -68094,7 +68095,13 @@ fn handle_list_human(short: bool) -> Result<()> {
     // Group by bucket, ordered most-actionable-first (matches the precedence in
     // `explain_open` / the explain view). trace:STORY-562
     use burndown::OpenBucket::*;
-    let order = [HeldForReview, AwaitingDecision, Ungroomed, Umbrella];
+    let order = [
+        HeldForReview,
+        AwaitingDecision,
+        BuildSupervised,
+        Ungroomed,
+        Umbrella,
+    ];
     for bucket in order {
         let rows: Vec<&(
             burndown::OpenFacts,
