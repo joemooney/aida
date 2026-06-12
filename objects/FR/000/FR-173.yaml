@@ -15,11 +15,17 @@ priority: Medium
 owner: ''
 feature: 15-DOC
 created_at: 2025-11-26T04:28:47.348005694Z
-modified_at: 2026-06-11T06:24:33.003179050Z
+modified_at: 2026-06-12T07:19:24.832287846Z
 req_type: Functional
 relationships:
 - rel_type: Parent
   target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+comments:
+- id: 019ebab3-2ba0-7f43-987b-b245dd1066da
+  author: joe
+  content: Commit 932b688d7 references this requirement
+  created_at: 2026-06-12T07:19:24.832287846Z
+  modified_at: 2026-06-12T07:19:24.832287846Z
 history:
 - id: be8846d5-48fe-41fd-a176-0075724fda20
   author: '@joe'
