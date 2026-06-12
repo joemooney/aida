@@ -2,13 +2,16 @@ id: 019ebdd7-39ba-7300-9fd7-d135092780f7
 spec_id: STORY-579
 agreed_id: STORY-579
 title: 'WS9: Governance-truth hardening — trace gate ON by default (init opt-out), history coverage scoped/backfilled (make ''governed + audited'' TRUE)'
-description: 'Panel findings (forced-reproduction, 2026-06-12): (a) trace ''enforcement'' is advisory by default — commit-msg hook warn-only (AIDA_COMMIT_STRICT=false), repo''s own pre-commit hook disabled, no CI trace gate; only merge→Completed auto-bump is programmatic. (b) history: arrays exist on only ~11% of store objects (223/2005) — the audit-trail pitch is hollow for older specs. A governance-led product cannot ship with governance off by default (substrate-as-bouncer). Slice: (1) decide + implement the default-on trace gate for NEW aida init projects (strict commit gate or CI-side trace check; existing projects opt-in via doctor/init --refresh; faithful default with explicit opt-out flag); (2) wire this repo''s own gate (dogfood — un-disable pre-commit or add the CI job); (3) history: scope the claim (''full transition history since TASK-121'') everywhere it appears + evaluate a cheap backfill from orphan-branch git log for older specs (spike-grade; skip if costly); (4) WS1/WS2 copy uses the honest formulation until default-on lands. Acceptance is grep-able: no unscoped ''enforced''/''every spec carries history'' claim survives in living docs; the new-project default posture is enforcing.'
+description: |-
+  Panel findings: trace 'enforcement' is advisory-by-default (warn-only commit hook AIDA_COMMIT_STRICT=false, repo's own pre-commit hook disabled, no CI trace gate; only merge→auto-bump is programmatic); history: arrays on ~11% of store objects. A governance-mechanism product cannot ship with the gate off by default (substrate-as-bouncer).
+
+  Slice: (1) default-ON trace gate for NEW aida init projects (strict commit gate or CI-side check; existing projects opt-in via doctor/init --refresh; explicit opt-out flag — faithful default); (2) wire THIS repo's own gate (dogfood: un-disable pre-commit or add the CI job); (3) history claims scoped ('full transition history since TASK-121') everywhere + evaluate cheap backfill from orphan-branch log (skip if costly); (4) **landing this slice INCLUDES the un-scoping sweep**: upgrade WS1/WS2/WS5 copy from 'trace-linked, gate landing' to 'trace-enforced' in the same PR or an immediate follow-on. Acceptance grep-able: new-project default posture is enforcing; no unscoped 'enforced'/'every spec carries history' before that, none scoped after.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T21:57:39.386119936Z
-modified_at: 2026-06-12T21:58:12.104153290Z
+modified_at: 2026-06-12T22:12:43.229243015Z
 req_type: Story
 tags:
 - governance
