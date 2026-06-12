@@ -68694,10 +68694,12 @@ fn handle_burndown_plan(
     }
     // STORY-546: pickable but not blessed — show them so the advisor knows what
     // they could queue, but they are NOT in the drain set.
+    // trace:BUG-499 — wording: queueing IS the advisor sign-off (role-gated via
+    // TASK-647), not a casual human bypass; the hint must say so explicitly.
     if !awaiting_signoff.is_empty() {
         println!(
             "\n{}",
-            "Awaiting sign-off (pickable, not queued — `aida queue add <id>` to bless):".bold()
+            "Awaiting advisor sign-off (mechanical gate passed; the advisor blesses these into the drain with `aida queue add <id>` — advisor authority required):".bold()
         );
         for id in &awaiting_signoff {
             println!("  {} {}", "+".yellow(), id);
