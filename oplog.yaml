@@ -17045,5 +17045,29 @@ operations:
       ## Status
 
       Accepted-in-substance by operator (direction + D8 + D9); formal flip is the master/operator's disposition. Supersedes the 2026-05-31 keystone's framing on positioning specifics; that snapshot stays frozen.
-clock: 1676
+- id: 019ebde3-e589-7c92-8188-300d6552abc2
+  target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
+  author: aida
+  node_id: '1'
+  lamport: 1677
+  timestamp: 2026-06-12T22:11:29.801302147Z
+  kind: !SetDescription
+    description: |-
+      ## Mission
+
+      Execute ADR-4: reposition AIDA as the **AI Developer Assistant** for multi-vendor agent development — coordinate work across vendors and capture the intent/why that gets lost during implementation (operator's canonical statement, on ADR-4), with governance (approval gates, roles, decision audit, trace loop) as the mechanism and enterprise depth, NOT the lead word (D9). Interoperate with Beads (sidecar-first; importer = migration/eval) rather than competing on substrate. Scoped honest formulations everywhere until STORY-578/579 make the multi-vendor + enforcement claims true.
+
+      ## Scope boundary (deliberate)
+
+      IN: every story-telling artifact (vision specs, README, OVERVIEW, positioning corpus, deck, scaffolded templates, crate descriptions, repo description, demo-script narration); governance surfaces sharpened to legible features; Beads sidecar + import; make-the-claims-true code lane (WS8 vendor-param orchestrator [keyboard-supervised], WS9 trace-gate default + history scoping); roadmap + advisor-memory triage; regulated-segment scoping.
+      OUT: rewriting the engine (it IS the machinery — re-aimed, not rebuilt). D8 RESOLVED: no rename; acronym re-expands to 'AI Developer Assistant'.
+
+      ## Slices
+
+      parent:EPIC-39 — STORY-572 (WS1 substrate), 573 (WS2 positioning corpus + vs-spec-kit refresh), SPIKE-58 (Beads/Gas Town empirical — gates vs-gastown.md), 574 (WS3b import, reframed migration/eval), 575 (WS4 governance legibility), 576 (WS5 messaging rollout + downstream refresh), 577 (WS6 triage + memory audit), 578/579 (make-claims-true). Docs cluster (WS1+WS2+WS5) merges as ONE commit (= the rollback unit); code lanes PR independently with scoped language.
+
+      ## Plan
+
+      docs/plans/2026-06-12-repositioning-governance-layer.md (branch 'repositioning'), esp. §13 red-team amendments + the rescope ERRATUM — D5 binds to the corrected table.
+clock: 1677
 node_id: '1'
