@@ -339,6 +339,44 @@ pub fn stale_base_block_message(n: u64, behind: u32, overlap: &[String]) -> Stri
     msg
 }
 
+/// Format the stale-base warning for the human-review verb
+/// (`aida review <SPEC>`). Unlike the reviewer-role pre-flight, the
+/// human verb NEVER refuses — the verdict on the code is valid either
+/// way — so even the overlap case is informational: name the gap, name
+/// the overlapping files, and give the exact recovery command. Pinned
+/// by unit tests like its siblings. trace:BUG-510 | ai:claude
+pub fn stale_base_review_warn_message(n: u64, behind: u32, overlap: &[String]) -> String {
+    let mut msg = format!(
+        "PR-{n} is {behind} commit{plural} behind its base — this review will run \
+         against stale code.\n",
+        plural = if behind == 1 { "" } else { "s" },
+    );
+    if overlap.is_empty() {
+        msg.push_str(
+            "No file the PR touches has moved on the base, so a textual rebase \
+             should land clean.\n",
+        );
+    } else {
+        msg.push_str(&format!(
+            "{count} file{file_plural} the PR touches also changed on the base \
+             since it forked:\n",
+            count = overlap.len(),
+            file_plural = if overlap.len() == 1 { "" } else { "s" },
+        ));
+        for f in overlap.iter().take(10) {
+            msg.push_str(&format!("  {f}\n"));
+        }
+        if overlap.len() > 10 {
+            msg.push_str(&format!("  … and {} more\n", overlap.len() - 10));
+        }
+    }
+    msg.push_str(&format!(
+        "Rebase before merging: `aida pr rebase {n}` \
+         (or pass `--allow-stale-base` to skip this check)."
+    ));
+    msg
+}
+
 /// Format the warning printed for [`StaleBaseOutcome::StaleNoOverlap`].
 /// Same pinning rationale as [`stale_base_block_message`].
 /// trace:STORY-281 | ai:claude
@@ -1043,6 +1081,39 @@ enforcement = "warn"
         assert!(msg.contains("3 commits behind"), "{msg}");
         assert!(msg.contains("proceeding with reviewer"), "{msg}");
         assert!(msg.contains("aida pr rebase 42"), "{msg}");
+    }
+
+    // trace:BUG-510 | ai:claude — pin the human-review-verb warning text.
+    #[test]
+    fn stale_base_review_warn_message_no_overlap() {
+        let msg = stale_base_review_warn_message(709, 14, &[]);
+        assert!(msg.contains("PR-709"), "{msg}");
+        assert!(msg.contains("14 commits behind"), "{msg}");
+        assert!(msg.contains("stale code"), "{msg}");
+        assert!(msg.contains("aida pr rebase 709"), "{msg}");
+        assert!(msg.contains("--allow-stale-base"), "{msg}");
+        // Informational, never a refusal.
+        assert!(!msg.contains("refusing"), "{msg}");
+    }
+
+    #[test]
+    fn stale_base_review_warn_message_names_overlap_files() {
+        let msg = stale_base_review_warn_message(7, 1, &s(&["src/lib.rs", "src/main.rs"]));
+        assert!(msg.contains("1 commit behind"), "{msg}");
+        assert!(!msg.contains("1 commits behind"), "{msg}");
+        assert!(msg.contains("2 files"), "{msg}");
+        assert!(msg.contains("src/lib.rs"), "{msg}");
+        assert!(msg.contains("src/main.rs"), "{msg}");
+        assert!(msg.contains("aida pr rebase 7"), "{msg}");
+    }
+
+    #[test]
+    fn stale_base_review_warn_message_truncates_long_overlap() {
+        let many: Vec<String> = (0..15).map(|i| format!("file-{i}.rs")).collect();
+        let msg = stale_base_review_warn_message(1, 2, &many);
+        assert!(msg.contains("file-9.rs"), "{msg}");
+        assert!(!msg.contains("file-10.rs"), "{msg}");
+        assert!(msg.contains("and 5 more"), "{msg}");
     }
 
     /// Integration test: a clean rebase scenario — same temp-repo

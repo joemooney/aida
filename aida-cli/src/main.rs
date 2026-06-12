@@ -2125,6 +2125,7 @@ fn run() -> Result<()> {
         Command::Review {
             spec,
             no_agent,
+            allow_stale_base,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives the
@@ -2140,7 +2141,7 @@ fn run() -> Result<()> {
                 ),
                 (None, Some(review_cmd)) => handle_review_command(review_cmd, &storage)?,
                 (None, None) => {
-                    let _ = no_agent;
+                    let _ = (no_agent, allow_stale_base);
                     anyhow::bail!("pass a spec id (`aida review <SPEC>`) or a subcommand (`prompt` / `assemble`)");
                 }
             }
@@ -13595,6 +13596,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Review {
             spec,
             no_agent,
+            allow_stale_base,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives a
@@ -13603,7 +13605,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // review-prompt helpers, read via the same Storage façade.
             match (spec, cmd) {
                 (Some(spec_id), _) => {
-                    handle_review_spec(&backend, store_path, spec_id, *no_agent)?;
+                    handle_review_spec(
+                        &backend,
+                        store_path,
+                        spec_id,
+                        *no_agent,
+                        *allow_stale_base,
+                    )?;
                 }
                 (None, Some(review_cmd)) => {
                     let storage = Storage::new(store_path);
@@ -87710,6 +87718,7 @@ fn handle_review_spec(
     store_path: &std::path::Path,
     spec: &str,
     no_agent: bool,
+    allow_stale_base: bool,
 ) -> Result<()> {
     let project_root = store_path
         .parent()
@@ -87849,6 +87858,65 @@ fn handle_review_spec(
         ReviewSurface::BranchNoChange { branch, .. } => (None, branch.clone()),
         _ => unreachable!("shipped/local surfaces returned above"),
     };
+
+    // BUG-510: stale-base pre-flight — same predicate as the reviewer-role
+    // path (`aida queue work <PR-N> --for reviewer` / orchestrator phase 3:
+    // preflight_stale_base_check → classify_stale_base), different posture.
+    // A human is driving this verb and the verdict on the code is valid
+    // either way, so even the overlap case warns-and-proceeds instead of
+    // refusing. `--allow-stale-base` mirrors the reviewer-role opt-out so a
+    // deliberate stale review isn't nagged. Fails open on infra errors
+    // (gh missing, fetch failure) like both existing call sites.
+    // trace:BUG-510 | ai:claude
+    if let Some(n) = pr_number {
+        if !allow_stale_base && matches!(forge, crate::forge::ForgeKind::GitHub) {
+            let stale = match preflight_stale_base_check(project_root, n) {
+                Ok(pr_rebase::StaleBaseOutcome::Current) => None,
+                Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
+                    Some((behind, Vec::new()))
+                }
+                Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
+                    behind,
+                    overlap_files,
+                    ..
+                }) => Some((behind, overlap_files)),
+                Err(e) => {
+                    eprintln!(
+                        "  {} stale-base check for {change_noun}-{n} failed ({e}); \
+                         proceeding with review",
+                        "⚠".yellow().bold()
+                    );
+                    None
+                }
+            };
+            if let Some((behind, overlap)) = stale {
+                eprintln!(
+                    "  {} {}",
+                    "⚠".yellow().bold(),
+                    pr_rebase::stale_base_review_warn_message(n, behind, &overlap).yellow()
+                );
+                // Offer the rebase inline while a human is at the prompt —
+                // the review then runs against current code. Defaults to yes
+                // when a file the PR touches has also moved on the base.
+                if interactive {
+                    let rebase_now =
+                        inquire::Confirm::new(&format!("Rebase {change_noun}-{n} now?"))
+                            .with_default(!overlap.is_empty())
+                            .prompt()
+                            .unwrap_or(false);
+                    if rebase_now {
+                        if let Err(e) = pr_rebase_handler(n, false, false, false, None) {
+                            eprintln!(
+                                "  {} rebase did not complete ({e}); the review \
+                                 will run against the stale base",
+                                "⚠".yellow().bold()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     if no_agent {
         // AC: degrade-honest path — surface + recommended command, no agent.
@@ -90890,9 +90958,10 @@ fn advance_dispatch(
             // AC-4/AC-5). On the operator's confirmation that it was approved,
             // offer to drop `review:draft-only` so it drains.
             let backend = advance_backend(store_path)?;
-            if let Err(e) =
-                handle_review_spec(&backend, store_path, display, /* no_agent */ false)
-            {
+            if let Err(e) = handle_review_spec(
+                &backend, store_path, display, /* no_agent */ false,
+                /* allow_stale_base */ false,
+            ) {
                 eprintln!(
                     "  {} review of {} did not complete: {}",
                     "⚠".yellow(),
