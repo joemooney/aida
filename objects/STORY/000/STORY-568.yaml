@@ -38,17 +38,18 @@ description: |-
   ## Rationale
 
   AIDA invests in autonomous CODE drains but leaves the research half manual, mislabeled 'human-only'. The building blocks (skills + the proven Lane-D pattern) already exist — this is composition. Keeps the human on the DECISION, not the legwork. Surfaced by the operator correctly challenging a wrong 'human must do it' claim.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:36:05.757351979Z
-modified_at: 2026-06-12T15:36:05.757351979Z
+modified_at: 2026-06-12T17:41:38.558553406Z
 req_type: Story
 tags:
 - aida:burndown
 - autonomy
 - from-product
 - from-user-friction
+- needs-supervised-build
 - research
 - spike
