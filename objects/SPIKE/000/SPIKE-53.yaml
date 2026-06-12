@@ -6,12 +6,12 @@ description: |-
   Lane B scan finding B2 (the most important delta): gastownhall/beads (~24.4k stars, Steve Yegge) is the first SUBSTRATE-AXIS competitor — a git-backed, vendor-neutral, dependency-aware task graph with a TYPED relationship model (relates_to/duplicates/supersedes/replies_to/blocks/parent-child) and hash-based stable IDs, drained by the Gas Town orchestrator. This DENTS the 2026-05-31 keystone's headline that the typed, multi-vendor durable graph is AIDA-unique ('absent from agents' is now stale).
 
   Deliverable: (1) verified AIDA-vs-Beads feature matrix — confirm what Beads lacks: code<->spec trace enforcement (absent), rich lifecycle state machine + auto-bump + history (minimal), plain-git-zero-infra (Beads requires Dolt), requirements-modeling-vs-issue-tracking framing; (2) decide which surviving edges to HEADLINE in the next positioning paper (recommend: enforcement + lifecycle + requirements-framing + plain-git); (3) evaluate a Beads import/export bridge as a Trojan-horse (meet their 24k-star distribution where it is); (4) propose the precise positioning-line edit (the keystone 'only … portable across every vendor' line needs correcting). Incentive anchor: Beads' center of gravity is agent task-memory, not enforced requirement traceability — but the incentive moat is THINNER than the provider case (Beads is already cross-vendor + typed). Sources: https://github.com/gastownhall/beads https://github.com/gastownhall/gastown
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T15:18:18.102994866Z
-modified_at: 2026-06-12T17:00:37.906571030Z
+modified_at: 2026-06-12T17:00:38.878811919Z
 req_type: Spike
 tags:
 - beads
