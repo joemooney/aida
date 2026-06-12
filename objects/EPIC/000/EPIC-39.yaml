@@ -5,16 +5,16 @@ title: 'Repositioning: AIDA as the human-governance layer for agent-driven devel
 description: |-
   ## Mission
 
-  Execute ADR-4: reposition AIDA from 'git-canonical typed spec graph' (substrate — commoditized by Beads/Gas Town with 18.7k-star distribution) to **the human-governance layer for agent-driven development** (approved requirements, role-gated autonomy, enforced code↔spec traces, audit trail), interoperating with Beads rather than competing, with regulated/enterprise as the sharpest evaluated segment.
+  Execute ADR-4: reposition AIDA from 'git-canonical typed spec graph' (substrate — commoditized by Beads/Gas Town with 18.7k-star distribution) to **the human-governance layer for agent-driven development** (approved requirements, role-gated autonomy, enforced code-to-spec traces, audit trail), interoperating with Beads rather than competing, with regulated/enterprise as the sharpest evaluated segment.
 
   ## Scope boundary (deliberate)
 
   IN: every story-telling artifact (vision specs, README, OVERVIEW, positioning corpus, demo deck, scaffolded templates); governance surfaces sharpened to headline status; Beads interop (import/export/bridge); substrate-race roadmap triage (re-justify or cut); regulated-segment scoping.
   OUT: rewriting the engine. The graph/store/orchestrator/trace/lifecycle machinery IS the governance product — it gets re-aimed and surfaced, not rebuilt. No rename/rebrand unless the operator separately decides one (open question on ADR-4).
 
-  ## Slices (children)
+  ## Slices
 
-  Filed as child stories/spikes — see parent:EPIC tag. Work proceeds on branch  (worktree), merging to main as a coherent cluster once the story holds together.
+  Filed as child stories/spikes tagged parent:EPIC-39. Work proceeds on branch 'repositioning' (worktree at ~/ai/aida-repositioning), merging to main as a coherent cluster once the story holds together.
 
   ## Plan
 
@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:27.770511448Z
-modified_at: 2026-06-12T20:39:27.770511448Z
+modified_at: 2026-06-12T20:39:58.479024129Z
 req_type: Epic
 tags:
 - from-spike:SPIKE-53
