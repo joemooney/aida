@@ -16,12 +16,12 @@ description: |-
   The 4 consumers (burndown-run headless-when-away, escalation-defaults-when-away, questions-accumulate-when-away, no-keystone-pickup-when-away). Those modify the autonomy ladder — keyboard-supervised.
 
   Parent: STORY-561. trace target for the primitive PR (STORY-561 stays open for consumers).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T07:20:12.530884861Z
-modified_at: 2026-06-12T07:32:44.372914921Z
+modified_at: 2026-06-12T07:41:22.808952289Z
 req_type: Task
 tags:
 - aida:presence
@@ -35,3 +35,15 @@ comments:
   content: Commit cf888618c references this requirement
   created_at: 2026-06-12T07:32:44.372914921Z
   modified_at: 2026-06-12T07:32:44.372914921Z
+history:
+- id: 019ebac7-4884-7183-bf30-8005ecefda11
+  author: aida-auto-bump
+  timestamp: 2026-06-12T07:41:22.948135897Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T07:41:22.808952289Z
+  completion_sha: acfa4da3f5e40dbee9cab39eb3911c69e552451e
