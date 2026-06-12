@@ -13,12 +13,12 @@ description: |-
   2. `aida doctor heal` (with the standard confirm) git-rm's those files + appends the gitignore block (requirements*.yaml, scaffold-report.html) — exactly PR-651's resolution.
   3. GUARD: no-op on a legacy --centralized project that legitimately still USES requirements.yaml as its active store. Gate strictly on git-canonical/distributed mode — never nuke an active centralized backend.
   4. Clean/no-op report when no such tracked files exist; surfaced in fsck's unified report; exits non-zero from fsck if found.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:28:29.584590904Z
-modified_at: 2026-06-12T04:28:29.584590904Z
+modified_at: 2026-06-12T05:08:39.210266168Z
 req_type: Task
 tags:
 - aida:doctor
@@ -26,3 +26,15 @@ tags:
 - first-user-papercut
 - migration-cruft
 - papercut
+history:
+- id: 019eba3b-753a-7ac3-9264-9ad805ff0d0c
+  author: aida-auto-bump
+  timestamp: 2026-06-12T05:08:39.354989848Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T05:08:39.210266168Z
+  completion_sha: 0daf515f77971d217c419b747d3b346373e39fab

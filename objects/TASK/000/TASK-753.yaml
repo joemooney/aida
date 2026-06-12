@@ -15,12 +15,12 @@ description: |-
   2. The '--cleanup' help text states it's a read-only view (no mutation) and names 'aida doctor heal' as the actor. Optionally add a '--cleanup' alias or note disambiguating 'show vs fix'.
   3. No behavior change to detection (shared collect_cleanup_report) — this is signposting + help-text only; verify the pointer suppresses cleanly when the section is empty or when findings are all non-healable.
   4. SPEC-IDs / internal fn names stay out of the user-facing pointer text (user-facing-text convention).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:31:26.484685467Z
-modified_at: 2026-06-12T05:00:05.094580869Z
+modified_at: 2026-06-12T05:08:39.210266168Z
 req_type: Task
 tags:
 - aida:doctor
@@ -34,3 +34,15 @@ comments:
   content: Commit d5702580b references this requirement
   created_at: 2026-06-12T05:00:05.094580869Z
   modified_at: 2026-06-12T05:00:05.094580869Z
+history:
+- id: 019eba3b-753b-7a32-aac3-8caf214c9642
+  author: aida-auto-bump
+  timestamp: 2026-06-12T05:08:39.355008957Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T05:08:39.210266168Z
+  completion_sha: 93955c0540197343f3b6bf534f4b30216bbf1d5d
