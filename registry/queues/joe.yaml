@@ -829,3 +829,10 @@
   added_at: 2026-06-12T17:42:45.016643992Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019ebde9-b9be-7e52-ac60-94a05183b90a
+  position: 427000
+  added_by: joe
+  added_at: 2026-06-12T22:18:00.334690720Z
+  for_role: implementer
+  added_by_machine: imac
