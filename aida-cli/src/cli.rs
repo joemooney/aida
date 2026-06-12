@@ -1505,6 +1505,12 @@ pub enum BurndownCommand {
     /// which fans out worktree-isolated implementers in parallel, integrates
     /// their PRs, and loops until drained. Drains ONLY the queued + pickable set
     /// (advisor sign-off = queue membership) — never an unqueued spec.
+    ///
+    /// This is the autonomous, decision-FREE half of the drain. Its symmetric
+    /// complement is `aida questions answer` (the interactive loop) — the
+    /// HUMAN-decision drain that answers the parked, decision-REQUIRED specs and
+    /// unparks them back into this ready set.
+    // trace:STORY-555 | ai:claude
     // trace:STORY-545 | ai:claude
     Run {
         /// Which specs to consider (the "selector"). Default: approved.
@@ -4246,13 +4252,20 @@ pub enum QuestionsCommand {
         dry_run: bool,
     },
 
-    /// Answer pending decisions — a pure data op, no agent.
+    /// Answer pending decisions — the HUMAN-decision drain, the symmetric
+    /// complement of `aida burndown run` (which drains the decision-FREE ready
+    /// set with autonomous agents). Answering APPLIES the chosen resolution:
+    /// it binds a design decision into the spec's `## Acceptance`, clears a
+    /// disposition gate, or rejects — then auto-queues the now decision-free
+    /// spec onto the burndown ready set (advisor-gated; honest about any
+    /// remaining blocker). No agent, no LLM session — a pure operator data op.
     ///
     /// `answer <spec> <choice>` records one answer non-interactively (choice
     /// is a 1-based number, or the word `default`/`recommended`).
     /// `answer` with no args enters the interactive loop over all pending
-    /// (TTY). `answer --all-defaults` confirms every recommended default at
-    /// once.
+    /// (TTY) — the human-decision drain. `answer --all-defaults` confirms
+    /// every recommended default at once.
+    // trace:STORY-555 | ai:claude
     Answer {
         /// The spec (UUID or SPEC-ID) to answer. Omit for the interactive loop.
         spec: Option<String>,
