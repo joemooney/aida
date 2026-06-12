@@ -3,12 +3,12 @@ spec_id: BUG-504
 agreed_id: BUG-504
 title: aida queue list shows ARCHIVED specs (SPIKE-53 lingers in the queue after archive) — archive should prune queue entries / queue view should hide archived
 description: 'Operator confusion (2026-06-12): SPIKE-53 is ARCHIVED (appears in ''aida list --archived'', excluded from ''aida list open'' + ''aida why'') yet STILL shows in ''aida queue list'' (Blocked section, human-only). An archived spec lingering in the queue looks like actionable pending work when it has been deliberately shelved — a core legibility failure feeding the operator''s ''I don''t understand what''s in my queue'' confusion. Either: (a) ''aida archive <id>'' should also remove the spec''s queue entries, OR (b) ''aida queue list'' should filter out archived specs by default (with --include-archived to show). Recommend BOTH: archive prunes queue membership AND the queue view filters archived as a backstop. Verify: archive a queued spec -> it leaves ''aida queue list''. Relates to the queue-legibility work (STORY-565 footer, aida queue advance).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:22:26.919621948Z
-modified_at: 2026-06-12T15:22:26.919621948Z
+modified_at: 2026-06-12T18:22:21.758179190Z
 req_type: Bug
 tags:
 - aida:archive
@@ -17,3 +17,15 @@ tags:
 - legibility
 - operator-confusion
 - ux
+history:
+- id: 019ebd12-1ece-7c50-946e-3f51895db048
+  author: aida-auto-bump
+  timestamp: 2026-06-12T18:22:21.902542510Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T18:22:21.758179190Z
+  completion_sha: 88f3ce157ce235c49bc943543023e4c5d2c2aeb8
