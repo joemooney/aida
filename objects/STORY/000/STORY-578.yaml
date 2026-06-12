@@ -2,13 +2,18 @@ id: 019ebdd7-0e8e-75f3-870a-8859d1c2d2a3
 spec_id: STORY-578
 agreed_id: STORY-578
 title: 'WS8: Vendor-parameterized orchestrator — drive the autonomous lifecycle with non-Claude agents (make the multi-vendor lead TRUE)'
-description: 'Panel finding (forced-reproduction, 2026-06-12): auto_complete.rs HARDCODES ''claude -p'' for both LLM phases — non-Claude agents cannot drive the autonomous lifecycle today. ADR-4''s canonical lead is ''many agents from different vendors''; today that''s true at the MCP/coordination layer only. This slice makes the headline true at the orchestrator: parameterize the implementer/advisor LLM phase launch (claude -p / codex exec / AGY headless equivalents) behind a per-phase agent config (extends ~/.aida/agents.toml), honoring each tool''s native invocation (faithful-launcher rule). Acceptance: (1) a drain can run its implementer phase on at least ONE non-Claude agent end-to-end (codex first — known headless surface); (2) agent choice is config/flag, no hardcoded vendor string in the phase-launch path; (3) graceful capability degradation documented where a vendor lacks an equivalent (e.g. skill invocation); (4) until this lands, WS1/WS2 copy scopes the multi-vendor claim to the coordination layer in the same sentence (no laundering). HIGHEST strategic priority of the new slices — it is the credibility of the chosen lead.'
+description: |-
+  ; Panel finding (forced-reproduction): auto_complete.rs HARDCODES 'claude -p' for both LLM phases — non-Claude agents cannot drive the autonomous lifecycle. ADR-4's lead claims multi-vendor; today true at the MCP/coordination layer only. Parameterize implementer/advisor phase launch (claude -p / codex exec / AGY headless) behind per-phase agent config (extends ~/.aida/agents.toml), honoring each tool's native invocation (faithful-launcher).
+
+  RED-TEAM ADDITIONS: (a) Gas Town ships multi-vendor dispatch TODAY (Claude/Copilot/Codex/Gemini) — this slice is the credibility prerequisite for ANY unscoped multi-vendor claim, and the differentiator is intent-governance semantics riding the dispatch, not dispatch itself; (b) orchestrator-core change → KEYBOARD-SUPERVISED lane (reliability-critical, not overnight drain); (c) **landing this slice INCLUDES the un-scoping sweep**: remove the 'coordination layer only' qualifiers from WS1/WS2/WS5 copy in the same PR or an immediate follow-on.
+
+  Acceptance: (1) a drain runs its implementer phase on ≥1 non-Claude agent end-to-end (codex first); (2) agent choice is config/flag — no hardcoded vendor string in the phase-launch path; (3) graceful capability degradation documented; (4) un-scoping sweep executed; (5) keyboard-supervised rollout.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T21:57:28.334576297Z
-modified_at: 2026-06-12T21:58:10.747151732Z
+modified_at: 2026-06-12T22:12:42.253767337Z
 req_type: Story
 tags:
 - multi-vendor
