@@ -5298,6 +5298,23 @@ pub enum Command {
         // trace:STORY-451 | ai:codex
         #[clap(long, value_enum, value_name = "BUCKET")]
         effort: Option<crate::effort_calibration::EffortBucket>,
+
+        /// File, approve, AND enqueue in one shot — places the new spec on the
+        /// queue right after creating it, equivalent to a follow-up `aida
+        /// backlog groom`. Only an Approved spec is enqueueable: pass with
+        /// `--status approved` (the new spec must end up Approved, not draft).
+        /// Refused the same way `aida queue add` is when the session lacks
+        /// authority to commit work to the pipeline.
+        // trace:TASK-754 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        queue: bool,
+
+        /// When enqueuing with `--queue`, tag the queued spec `batch:NAME` so
+        /// it composes with `aida queue work --batch NAME`. No effect without
+        /// `--queue`.
+        // trace:TASK-754 | ai:claude
+        #[clap(long, value_name = "NAME")]
+        batch: Option<String>,
     },
 
     /// List all requirements
