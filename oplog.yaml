@@ -17091,5 +17091,25 @@ operations:
       2. IMPORT = MIGRATION/EVALUATION (the original MVP, honestly labeled): 'see your bd graph inside AIDA in 60 seconds' — bd issues become typed specs (type inference), deps → BlockedBy, parent-child → parent, bd hash-IDs preserved as searchable external refs. Idempotent re-import keyed on bd ID, WITH DECLARED CONFLICT SEMANTICS: bd-owned fields refresh, AIDA-side decision fields (status/approvals/relations added in AIDA) are NEVER clobbered; collisions reported, not silent.
 
       Public copy says 'works with Beads' — never 'funnel'. Marketing tip of this work is the FORENSICS demo (aida audit over imported bd history), not the importer. BlockedBy SPIKE-58 (schema + conflict-on-reimport question + bd git-hooks behavior). Acceptance: sidecar trace-gate validates bd refs end-to-end on a real bd repo; import + re-import honors ownership rule with a test per conflict class; no 'without abandoning their tracker' claim anywhere until the sidecar (not the import) delivers it.
-clock: 1679
+- id: 019ebde4-f2dd-7e63-97fc-71eb7f01ab38
+  target_id: 019ebd91-330b-77a2-840f-019b6d1aa22a
+  author: aida
+  node_id: '1'
+  lamport: 1680
+  timestamp: 2026-06-12T22:12:38.749119366Z
+  kind: !SetTitle
+    title: 'WS3a SPIKE: Beads + Gas Town empirical install — schema/ID mapping, conflict-on-reimport, bd git-hooks, Gas Town governance depth (gates vs-gastown.md)'
+- id: 019ebde4-f3e2-7ed0-9050-91a46eb952b9
+  target_id: 019ebd91-330b-77a2-840f-019b6d1aa22a
+  author: aida
+  node_id: '1'
+  lamport: 1681
+  timestamp: 2026-06-12T22:12:39.010168912Z
+  kind: !SetDescription
+    description: |-
+      Expanded by red-team. Install and RUN both tools (not docs-only). Deliverables:
+      1. BEADS: JSONL export schema field-map vs AIDA's model (link types incl. relates_to/duplicates/supersedes/replies_to/parent-child/blocks; hash + hierarchical IDs; memory entries); what imports cleanly / lossy; export stability (~3-week release cadence noted — maintenance treadmill risk); **conflict-on-reimport semantics** (what must never clobber AIDA-side decision fields — feeds STORY-574's ownership rule); **what bd's optional git hooks actually do** (the 'no code-to-issue linking' row is scoped to 'none documented' — confirm or correct empirically); feasibility of the sidecar trace-gate validating trace:bd-<id> against .beads/issues.jsonl.
+      2. GAS TOWN (now load-bearing — it gates vs-gastown.md per plan §13): how deep is multi-vendor support really (Copilot/Codex/Gemini — real or thin scaffolding)? Is the Overseer escalation loop a genuine disposition gate or notify-only? What does the Refinery merge queue actually gate on? These decide how much of the narrowed wedge survives.
+      3. Upgrade/correct every remaining [W]-grade claim in the rescope ERRATUM. Output: dated mapping doc + erratum-2 if needed.
+clock: 1681
 node_id: '1'

@@ -1,14 +1,18 @@
 id: 019ebd91-330b-77a2-840f-019b6d1aa22a
 spec_id: SPIKE-58
 agreed_id: SPIKE-58
-title: 'WS3a SPIKE: Beads interop feasibility — JSONL schema, ID mapping, what round-trips losslessly'
-description: 'Before building import/export: install bd locally, generate a real .beads project, and map its JSONL export schema (fields, link types: relates_to/duplicates/supersedes/replies_to/parent-child/blocks, hash IDs bd-a1b2 + hierarchical bd-a3f8.1.1, memory entries) against AIDA''s spec model (typed reqs, semantic IDs, relationships, history). Deliverable: a field-mapping table; what imports cleanly (issues→tasks, deps→BlockedBy, parent-child→parent); what''s lossy (Beads memory-decay summaries, replies_to); what AIDA adds on import (lifecycle status mapping, type inference); whether bd''s export is stable enough to target (v1.0 claim). Decides WS3b/c shape. Empirical, not docs-only — run the actual tool.'
+title: 'WS3a SPIKE: Beads + Gas Town empirical install — schema/ID mapping, conflict-on-reimport, bd git-hooks, Gas Town governance depth (gates vs-gastown.md)'
+description: |-
+  Expanded by red-team. Install and RUN both tools (not docs-only). Deliverables:
+  1. BEADS: JSONL export schema field-map vs AIDA's model (link types incl. relates_to/duplicates/supersedes/replies_to/parent-child/blocks; hash + hierarchical IDs; memory entries); what imports cleanly / lossy; export stability (~3-week release cadence noted — maintenance treadmill risk); **conflict-on-reimport semantics** (what must never clobber AIDA-side decision fields — feeds STORY-574's ownership rule); **what bd's optional git hooks actually do** (the 'no code-to-issue linking' row is scoped to 'none documented' — confirm or correct empirically); feasibility of the sidecar trace-gate validating trace:bd-<id> against .beads/issues.jsonl.
+  2. GAS TOWN (now load-bearing — it gates vs-gastown.md per plan §13): how deep is multi-vendor support really (Copilot/Codex/Gemini — real or thin scaffolding)? Is the Overseer escalation loop a genuine disposition gate or notify-only? What does the Refinery merge queue actually gate on? These decide how much of the narrowed wedge survives.
+  3. Upgrade/correct every remaining [W]-grade claim in the rescope ERRATUM. Output: dated mapping doc + erratum-2 if needed.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:10.155363313Z
-modified_at: 2026-06-12T20:43:13.664139797Z
+modified_at: 2026-06-12T22:12:38.643268424Z
 req_type: Spike
 tags:
 - beads
