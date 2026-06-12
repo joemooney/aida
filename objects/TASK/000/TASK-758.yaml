@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T17:21:56.724830144Z
-modified_at: 2026-06-12T17:21:56.724830144Z
+modified_at: 2026-06-12T17:22:12.358266475Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -16,3 +16,8 @@ tags:
 - parent:STORY-564
 - presence
 - zen
+relationships:
+- rel_type: Child
+  target_id: 019eb9ff-8508-7e50-8285-81980687aa3c
+  created_at: 2026-06-12T17:22:12.358258380Z
+  created_by: joe
