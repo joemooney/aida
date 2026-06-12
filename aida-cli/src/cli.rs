@@ -5917,7 +5917,14 @@ pub enum Command {
         /// worktrees with uncommitted work, orphan project dirs, open PRs
         /// awaiting merge). Default `aida status` adds a one-line summary
         /// at the bottom when the section is non-empty.
+        ///
+        /// This is a READ-ONLY view — it surfaces what needs cleanup, it
+        /// does not change anything. To actually fix the auto-healable
+        /// items, run `aida doctor heal` (or `aida doctor check` to
+        /// diagnose first). Think of it as glance (status --cleanup) → fix
+        /// (doctor heal).
         // trace:STORY-385 | ai:claude
+        // trace:TASK-753 | ai:claude
         #[clap(long, conflicts_with_all = ["queue", "ci", "short", "awaiting"])]
         cleanup: bool,
         /// Focus on the "Awaiting you" section only — every human-gate item

@@ -215,6 +215,29 @@ impl CleanupReport {
         self.total() == 0
     }
 
+    /// Whether at least one rendered finding belongs to a category that
+    /// `aida doctor heal` can actually auto-fix. Drives the read→heal
+    /// signpost at the foot of the "Needs attention" report: the pointer
+    /// only earns its place when there's something `doctor heal` will act
+    /// on, so an all-non-healable report (e.g. nothing but open PRs or
+    /// missed auto-bumps) doesn't promise a fix that won't happen.
+    ///
+    /// The mapping mirrors `collect_doctor_findings` (the doctor's detector
+    /// CALLS this same report): `sticky_in_progress` surfaces as a
+    /// `spec-status-drift` finding and `stale_reviewer_leases` as a
+    /// `stale-reviewer-leases` finding — both `safe_heal: true`, so they're
+    /// healed in the default (non-`--force`) sweep. The remaining categories
+    /// either have no doctor heal action (open PRs, missed auto-bumps,
+    /// dormant leases, orphan project dirs, claimed-Done divergences) or are
+    /// destructive and force-gated rather than auto-healable
+    /// (`branches_ahead_no_pr` → `orphan-branches`), so they don't light the
+    /// pointer on their own. Keep this in sync with `heal_doctor_finding`'s
+    /// match arms when a cleanup category gains a heal action.
+    /// trace:TASK-753 | ai:claude
+    pub fn is_doctor_healable(&self) -> bool {
+        !self.sticky_in_progress.is_empty() || !self.stale_reviewer_leases.is_empty()
+    }
+
     /// Multi-line summary suitable for appending to the default
     /// `aida status` output when the report is non-empty. Inlines
     /// per-category counts + a single representative item per non-empty
@@ -477,6 +500,22 @@ impl CleanupReport {
             self.total(),
             if self.total() == 1 { "" } else { "s" }
         )?;
+
+        // Read→heal signpost: this is a read-only dashboard, so point the
+        // operator across the seam to the active healer. Only shown when at
+        // least one finding is in a category `aida doctor heal` can actually
+        // auto-fix — otherwise the pointer would promise a remediation that
+        // won't fire. trace:TASK-753 | ai:claude
+        if self.is_doctor_healable() {
+            writeln!(w)?;
+            writeln!(
+                w,
+                "  {} run `{}` to diagnose / `{}` to fix the auto-healable ones",
+                "→".dimmed(),
+                "aida doctor check".cyan(),
+                "aida doctor heal".cyan(),
+            )?;
+        }
         Ok(())
     }
 }
@@ -1466,6 +1505,118 @@ mod tests {
         assert!(
             rendered.contains("3 modified files"),
             "render shows the modified count: {rendered}"
+        );
+    }
+
+    // TASK-753: read→heal signpost. The pointer to `aida doctor heal`
+    // appears at the foot of the "Needs attention" report only when at
+    // least one finding is in a doctor auto-healable category, and is
+    // suppressed cleanly otherwise.
+    fn sticky_item(spec: &str) -> StickyInProgressItem {
+        StickyInProgressItem {
+            spec_id: spec.to_string(),
+            title: "t".to_string(),
+            branch: Some("b".to_string()),
+            unpushed_commits: 0,
+            pushed_commits: 0,
+            age_hours: Some(1),
+        }
+    }
+
+    #[test]
+    fn healable_finding_lights_doctor_pointer() {
+        colored::control::set_override(false);
+        let report = CleanupReport {
+            sticky_in_progress: vec![sticky_item("TASK-1")],
+            ..Default::default()
+        };
+        assert!(report.is_doctor_healable());
+        let rendered = render_to_string(&report, false);
+        colored::control::unset_override();
+        assert!(
+            rendered.contains("aida doctor heal"),
+            "pointer should name the healer: {rendered}"
+        );
+        assert!(
+            rendered.contains("aida doctor check"),
+            "pointer should name the diagnostic: {rendered}"
+        );
+        // SPEC-IDs / internal fn names must NOT leak into user-facing text.
+        assert!(
+            !rendered.contains("TASK-753"),
+            "pointer text must not leak the SPEC-ID: {rendered}"
+        );
+        assert!(
+            !rendered.contains("collect_cleanup_report") && !rendered.contains("heal_doctor"),
+            "pointer text must not leak internal fn names: {rendered}"
+        );
+    }
+
+    #[test]
+    fn stale_reviewer_lease_also_lights_pointer() {
+        colored::control::set_override(false);
+        let report = CleanupReport {
+            stale_reviewer_leases: vec![StaleReviewerLeaseItem {
+                lease_id: "lease-1".to_string(),
+                pr_number: 7,
+                worktree_path: "/x".into(),
+                age_hours: 3,
+            }],
+            ..Default::default()
+        };
+        assert!(report.is_doctor_healable());
+        let rendered = render_to_string(&report, false);
+        colored::control::unset_override();
+        assert!(rendered.contains("aida doctor heal"), "render: {rendered}");
+    }
+
+    #[test]
+    fn empty_report_has_no_doctor_pointer() {
+        colored::control::set_override(false);
+        let report = CleanupReport::default();
+        assert!(!report.is_doctor_healable());
+        let rendered = render_to_string(&report, false);
+        colored::control::unset_override();
+        assert!(
+            !rendered.contains("aida doctor heal"),
+            "empty report must not signpost a heal: {rendered}"
+        );
+    }
+
+    #[test]
+    fn all_non_healable_findings_suppress_pointer() {
+        // Open PRs + missed auto-bumps + branches-ahead-no-PR are all
+        // non-auto-healable (no heal action, or destructive/force-gated),
+        // so the section is non-empty yet the pointer stays suppressed.
+        colored::control::set_override(false);
+        let report = CleanupReport {
+            open_prs: vec![OpenPrItem {
+                number: 9,
+                title: "pr".to_string(),
+                head_branch: "feat".to_string(),
+                ci_rollup: None,
+                mergeable: None,
+                review_decision: None,
+            }],
+            missed_auto_bump: vec![MissedAutoBumpItem {
+                spec_id: "TASK-2".to_string(),
+                title: "t".to_string(),
+                landing_sha: "deadbeef".to_string(),
+            }],
+            branches_ahead_no_pr: vec![BranchAheadItem {
+                branch: "b3".to_string(),
+                commits_ahead: 2,
+                has_upstream: false,
+            }],
+            ..Default::default()
+        };
+        assert!(!report.is_empty());
+        assert!(!report.is_doctor_healable());
+        let rendered = render_to_string(&report, false);
+        colored::control::unset_override();
+        assert!(
+            !rendered.contains("aida doctor heal"),
+            "all-non-healable report must not signpost a heal: {rendered}"
         );
     }
 }
