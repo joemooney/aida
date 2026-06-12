@@ -17124,5 +17124,13 @@ operations:
       Scope: VIS-1 rewrite (folds STORY-551); new PRIN clause (gates-before-work vs unleash); OVERVIEW.md vision + Public-face section (TUI stays the face); README lead + moat content; CLAUDE.md strategic paragraph; D8 acronym sweep 'AI Design Assistant' → 'AI Developer Assistant' at ALL sites (CLAUDE.md line 1, README, OVERVIEW, aida-core/templates/, deck, **Cargo.toml crate descriptions (they exist — unconditional), aida-core/src/report.rs, Makefile, docs/agents/cross-agent-onboarding.md + template twin, docs/aida/01-vision.md, docs/aida/README.md**).
 
       Acceptance: (1) README lead = operator's statement + sharpening; (2) governance as mechanism/depth everywhere; (3) claims match the rescope table AS CORRECTED BY ITS ERRATUM (D5); (4) 'missing index' and (5) 'AI Design Assistant' return zero grep hits **in LIVING artifacts** (CHANGELOG/PROMPT_HISTORY/docs/archive/dated snapshots are FROZEN per D6 — exclude via -g globs, do not edit); (6) the Beads-contrast line (recorded on ADR-4 as D2) appears in positioning papers only. On branch repositioning.
-clock: 1682
+- id: 019ebde4-fc0d-7733-aad5-3cfb68fbcd6b
+  target_id: 019ebd91-d658-7d61-9db8-1598ae756efa
+  author: aida
+  node_id: '1'
+  lamport: 1683
+  timestamp: 2026-06-12T22:12:41.101834313Z
+  kind: !SetDescription
+    description: 'Propagate ADR-4 positioning into every generated/presented artifact — IN D9 LANGUAGE: multi-vendor coordination + intent-capture lead, governance as mechanism (the prior acceptance ''describes AIDA in governance terms'' violated D9 — corrected). Scope: docs/presentation deck (repositioned moat slide: substrate=commoditized, the layer above + works-with-Beads story) + executive-briefing + aida-demo.html; aida init scaffolded CLAUDE.md/AGENTS.md template language; init completion banner; README lifecycle framing; **scripts/aida-demo.sh narration (old substrate pitch verified in it); GitHub repo description + topics; EXISTING-downstream refresh path — already-init''d projects hold stale scaffolded templates: provide init --with-* --refresh / aida doctor stale-positioning flag + one-line comms note.** Scoped honest formulations until STORY-578/579 land (same rule as WS1/WS2). Acceptance: grep gates green across templates + demo script + deck (living artifacts only); a fresh aida init project''s CLAUDE.md describes AIDA in multi-vendor-coordination + intent-capture terms with governance as mechanism; deck regenerates clean; downstream refresh path documented.'
+clock: 1683
 node_id: '1'
