@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:36:34.818451052Z
-modified_at: 2026-06-12T15:36:34.818451052Z
+modified_at: 2026-06-12T15:54:22.948344555Z
 req_type: Story
 tags:
 - aida:brief
@@ -28,3 +28,9 @@ tags:
 - mailbox
 - needs-supervised-build
 - zen
+comments:
+- id: 019ebc8a-a364-7ca1-b42a-005e526e4397
+  author: joe
+  content: 'Building together with STORY-564 (same --zen finish-sequence code path) — see STORY-564''s Resolved-design block S3: the review-brief is filed as part of the clean-exit sequence. Build via ''aida queue work STORY-564 --zen''; trailer both specs on the PR.'
+  created_at: 2026-06-12T15:54:22.948344555Z
+  modified_at: 2026-06-12T15:54:22.948344555Z
