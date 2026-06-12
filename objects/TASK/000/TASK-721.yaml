@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T16:00:31.355691491Z
-modified_at: 2026-06-12T02:30:55.309504471Z
+modified_at: 2026-06-12T07:36:10.938897953Z
 req_type: Task
 tags:
 - aida:burndown
@@ -29,3 +29,8 @@ comments:
   content: 'Unarchived + queued from the 2026-06-10 burndown leftover-cruft incident (10 merged worktrees stranded under .claude/worktrees/ because squash-merge hides the merge from git branch -d, and the branch was checked out). Tagged needs-human: the auto-prune MUST correctly distinguish merged-PR worktrees (safe) from held-for-review (task-715/story-543) and sibling/other-session worktrees (never touch) — a wrong delete has nasty blast radius, so build this keyboard-supervised, not via the headless drain it would modify.'
   created_at: 2026-06-11T06:10:04.425501837Z
   modified_at: 2026-06-11T06:10:04.425501837Z
+- id: 019ebac2-85ba-7d30-a07c-20465818f697
+  author: joe
+  content: Commit cf888618c references this requirement
+  created_at: 2026-06-12T07:36:10.938897953Z
+  modified_at: 2026-06-12T07:36:10.938897953Z
