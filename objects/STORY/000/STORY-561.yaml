@@ -42,12 +42,12 @@ description: |-
     - (c) questions: away → decision-required specs accumulate quietly in `aida questions` (no prompt/notification); home → surface them (in `aida status` / on the next interactive command). Composes with STORY-555's questions inbox — BUILD STORY-555 FIRST (this consumer wires into it).
 
   Implementation: defaults (consumers on, away_drain=headless-both, home_offer=surface) make presence-driven mode-selection work with zero config; the `[presence]` block is opt-out/tuning. Document the knobs + defaults in the away/home/presence --help and the consumers' --help. Honor every integrity gate (acceptance #4) — presence can make a drain headless, but CI/merge-on-green/authority still gate.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:20:15.770546344Z
-modified_at: 2026-06-12T20:32:25.898864200Z
+modified_at: 2026-06-12T20:41:17.724730075Z
 req_type: Story
 tags:
 - aida:presence
@@ -114,3 +114,15 @@ comments:
     filed 10 task(s): TASK-762, TASK-763, TASK-764, TASK-765, TASK-766, TASK-767, TASK-768, TASK-769, TASK-770, TASK-771
   created_at: 2026-06-12T20:32:26.761501724Z
   modified_at: 2026-06-12T20:32:26.761501724Z
+history:
+- id: 019ebd91-512b-7ae1-89d1-dc1ab77c6a6d
+  author: aida-auto-bump
+  timestamp: 2026-06-12T20:41:17.867366242Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T20:41:17.724730075Z
+  completion_sha: 8d72d9f25745e226d49c28fed7dc1519913b5d3c
