@@ -3,12 +3,12 @@ spec_id: BUG-502
 agreed_id: BUG-502
 title: aida human unblock misclassifies review:draft-only specs as QUEUE/CLARIFY instead of a REVIEW bucket
 description: 'Dogfood 2026-06-11: ''aida human unblock'' put STORY-543 in QUEUE and TASK-715 in CLARIFY-FIRST, but BOTH are ''review:draft-only'' — built work awaiting human REVIEW, not re-implementation. Queueing/clarifying them would re-build done work. The unblock prompt-assembler doesn''t recognize review:draft-only as held-for-review (the exclusion BUG-495 added to ''questions sweep'' isn''t applied here). Fix: aida human unblock must classify review:draft-only specs into a distinct REVIEW bucket (''built — review it via aida review / reopen the draft PR''), never QUEUE or CLARIFY. Reuse the held-or-built predicate from BUG-495. Also: it labels build-supervised needs-human specs as ''awaiting a human decision'' — that''s the needs-human conflation TASK-744 fixes; once TASK-744 lands, unblock should say ''build-supervised: aida queue work --zen'' vs ''decision: answer''.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T01:45:58.338704002Z
-modified_at: 2026-06-12T04:12:11.779845798Z
+modified_at: 2026-06-12T04:27:28.040579354Z
 req_type: Bug
 tags:
 - aida:human
@@ -27,3 +27,15 @@ comments:
   content: Commit 47a5baf14 references this requirement
   created_at: 2026-06-12T04:12:11.779845798Z
   modified_at: 2026-06-12T04:12:11.779845798Z
+history:
+- id: 019eba15-c031-7522-98d2-84a171376af7
+  author: aida-auto-bump
+  timestamp: 2026-06-12T04:27:28.177865841Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T04:27:28.040579354Z
+  completion_sha: d3cc5c48cb4da54695285b79288139116d0b5114
