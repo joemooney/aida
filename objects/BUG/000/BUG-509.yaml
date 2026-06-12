@@ -1,0 +1,17 @@
+id: 019ebdd7-5ca1-7a71-b628-6d6834c4877d
+spec_id: BUG-509
+agreed_id: BUG-509
+title: 'panel-review workflow: args/{target} not interpolated — analysts get a placeholder and silently fork onto different subjects'
+description: 'Empirical (2026-06-12 run wf_dbf6c0f0-a7d, 17 agents, ~852k tokens): invoked Workflow({name:''panel-review'', args:{target:..., question:..., lenses:[...]}}) with a fully-specified target (the EPIC-39 repositioning plan). The saved workflow script passed a PLACEHOLDER (''the subject under review'') to analysts instead of the args target. Three analysts self-resolved to AIDA-vs-Spec-Kit, one to an unrelated doc — silent subject fork; the commissioned review never happened (the output was accidentally valuable but wrong-target). The reconciler itself flagged it. Fix: (1) the script must interpolate args.target/question/lenses into every analyst prompt; (2) FAIL FAST if target is empty/placeholder — refuse to spawn 17 agents against an unresolved subject; (3) echo the resolved target in the first log line so the invoker can abort early. Repro: read the run''s script + agent prompts under the session workflows dir.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T21:57:48.321950294Z
+modified_at: 2026-06-12T21:57:48.321950294Z
+req_type: Bug
+tags:
+- from-self-test
+- panel-review
+- severity:major
+- workflow
