@@ -51,6 +51,9 @@ relationships:
   target_id: 019ebcda-cdf4-7401-b2a1-222e2969a992
   created_at: 2026-06-12T17:22:13.398839878Z
   created_by: joe
+- rel_type: Parent
+  target_id: 019ebcdd-6fb2-7b51-acf7-67ac372ed2ab
+  created_at: 2026-06-12T17:24:58.072028304Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-12T17:24:41.445997273Z
