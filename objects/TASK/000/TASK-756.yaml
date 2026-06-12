@@ -1,0 +1,31 @@
+id: 019ebab3-e5f2-7cc0-9d1d-748d8dc95a7d
+spec_id: TASK-756
+agreed_id: TASK-756
+title: 'STORY-561 slice: presence PRIMITIVE — aida home/away/status + timestamped file + TTL + TTY auto-flip + statusline (consumers deferred)'
+description: |-
+  Bounded, autonomous-safe slice of STORY-561 (the keystone consumer-wiring stays a keyboard follow-up). Implements ONLY the presence PRIMITIVE — the state + its surfaces — not the autonomy-ladder consumers (burndown-run default / escalation default / questions accumulation / pickup gating), which modify autonomous execution and ship at the keyboard.
+
+  ## Acceptance (primitive only)
+  1. 'aida away' / 'aida home' set a presence state: a TIMESTAMPED file (no daemon) under ~/.aida/ (machine-global presence, like node.toml) — home|away + timestamp + TTL.
+  2. 'aida presence' (or 'aida away/home --status') prints current presence (state, since-when, TTL-remaining). 'aida status' + the statusline surface it.
+  3. ROBUSTNESS: away carries a TTL (config [presence] away_ttl, default 8h); a stale 'away' past TTL reads as home. AND any interactive-TTY aida command auto-flips away→home (the operator is demonstrably back). Timestamped file, no process.
+  4. Presence is READ-ONLY state here — NO consumer behavior change yet (that's the deferred wiring). Just set/read/display. Explicit per-command flags are unaffected.
+  5. NO SPEC-IDs in user-facing text; plain // trace markers.
+
+  ## Out of scope (the STORY-561 keyboard follow-up)
+  The 4 consumers (burndown-run headless-when-away, escalation-defaults-when-away, questions-accumulate-when-away, no-keystone-pickup-when-away). Those modify the autonomy ladder — keyboard-supervised.
+
+  Parent: STORY-561. trace target for the primitive PR (STORY-561 stays open for consumers).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T07:20:12.530884861Z
+modified_at: 2026-06-12T07:20:12.530884861Z
+req_type: Task
+tags:
+- aida:presence
+- autonomy
+- core
+- operator-tooling
+- parent:STORY-561
