@@ -6542,6 +6542,22 @@ pub enum Command {
         action: Option<StatuslineAction>,
     },
 
+    /// Mark yourself away from the keyboard. Sets a machine-global presence
+    /// state (a timestamped `~/.aida/presence.toml` file — no daemon) that
+    /// stays `away` until its TTL lapses (default 8h) or you return. An
+    /// interactive command auto-flips you back to `home`.
+    // trace:TASK-756 | ai:claude
+    Away,
+
+    /// Mark yourself back at the keyboard (clears any away state).
+    // trace:TASK-756 | ai:claude
+    Home,
+
+    /// Show current effective presence: home/away, how long ago it was set,
+    /// and TTL-remaining when away.
+    // trace:TASK-756 | ai:claude
+    Presence,
+
     /// (internal) Background fetch worker spawned by `aida statusline`.
     /// Fetches `origin/<branch>` for the orphan store at <store-path>,
     /// updates `~/.aida/cache/last-fetch.toml`, and removes the

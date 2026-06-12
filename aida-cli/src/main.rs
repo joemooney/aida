@@ -37,6 +37,7 @@ mod not_found;
 mod orchestrator;
 mod pr_rebase;
 mod pr_ship;
+mod presence;
 mod process_probe;
 mod prompts;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
@@ -911,6 +912,14 @@ fn run() -> Result<()> {
         cli.server = std::env::var("AIDA_SERVER").ok();
     }
 
+    // TASK-756: operator-presence TTY auto-flip. Any interactive aida
+    // command (stdout+stdin are a TTY) means the operator is demonstrably
+    // back — flip a stored `away` to `home`. Cheap (only writes when a flip
+    // is needed) and non-fatal (a presence-file error never breaks the
+    // actual command). This is the one consumer-free hook for the primitive;
+    // it does NOT change any command's behavior. trace:TASK-756 | ai:claude
+    presence::auto_flip_if_interactive();
+
     // BUG-108: a shell whose worktree was removed by `aida session end`
     // (in this or another terminal) has a dangling cwd — flag it before
     // any project-root lookup silently degrades to empty state and makes
@@ -1372,6 +1381,15 @@ fn run() -> Result<()> {
     // that owns its own git/toml side effects. trace:STORY-79 | ai:claude
     if let Command::BgFetch { store_path } = &cli.command {
         return handle_bg_fetch_command(store_path);
+    }
+    // TASK-756: operator-presence primitive. Dispatched before storage init —
+    // these only touch the machine-global `~/.aida/presence.toml` file; no
+    // requirement-store handle needed. trace:TASK-756 | ai:claude
+    match &cli.command {
+        Command::Away => return handle_away_command(),
+        Command::Home => return handle_home_command(),
+        Command::Presence => return handle_presence_command(),
+        _ => {}
     }
     // trace:FR-1-043 | ai:claude
     if let Command::Session(session_cmd) = &cli.command {
@@ -2025,6 +2043,9 @@ fn run() -> Result<()> {
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
+        Command::Away | Command::Home | Command::Presence => {
+            unreachable!("presence commands are dispatched before storage init")
+        }
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
@@ -9736,6 +9757,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
+        Command::Away | Command::Home | Command::Presence => {
+            unreachable!("presence commands are dispatched before storage init")
+        }
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
@@ -47774,6 +47798,75 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
 /// statusline spawns detached. Shares its fetch + cache-stamp logic
 /// with `aida fetch --store-only --quiet` (TASK-107); the only thing
 /// it adds is the lockfile lifecycle. trace:STORY-79 TASK-107 | ai:claude
+/// Resolve the away TTL for the current project: `[presence] away_ttl` from
+/// `.aida/config.toml` when present, else the 8h default. trace:TASK-756
+fn resolve_away_ttl_secs() -> u64 {
+    let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    presence::away_ttl_secs(&config_path_for_project(&project_root))
+}
+
+/// `aida away` — mark the operator away with the configured TTL.
+/// trace:TASK-756 | ai:claude
+fn handle_away_command() -> Result<()> {
+    let ttl = resolve_away_ttl_secs();
+    presence::set_away(ttl)?;
+    let now = chrono::Utc::now();
+    let set_at = now; // just set
+    println!(
+        "{} away — effective for {} (auto-flips home on any interactive command)",
+        "🚶".to_string(),
+        presence::ttl_remaining_label(set_at, ttl, now)
+    );
+    Ok(())
+}
+
+/// `aida home` — mark the operator back at the keyboard.
+/// trace:TASK-756 | ai:claude
+fn handle_home_command() -> Result<()> {
+    let ttl = resolve_away_ttl_secs();
+    presence::set_home(ttl)?;
+    println!("{} home", "🏠".to_string());
+    Ok(())
+}
+
+/// `aida presence` — print current effective presence.
+/// trace:TASK-756 | ai:claude
+fn handle_presence_command() -> Result<()> {
+    let now = chrono::Utc::now();
+    let file = presence::read_presence_file();
+    let effective = presence::current_presence(now);
+
+    match file {
+        Some(f) => {
+            let set_at = chrono::DateTime::parse_from_rfc3339(&f.set_at)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or(now);
+            print!(
+                "{} {} (set {}",
+                effective.glyph(),
+                effective.word().bold(),
+                presence::since_label(set_at, now)
+            );
+            if matches!(effective, presence::Presence::Away) {
+                print!(
+                    ", {}",
+                    presence::ttl_remaining_label(set_at, f.ttl_secs, now)
+                );
+            }
+            println!(")");
+        }
+        None => {
+            // No file written yet — default posture is home.
+            println!(
+                "{} {} (default — never set)",
+                effective.glyph(),
+                effective.word().bold()
+            );
+        }
+    }
+    Ok(())
+}
+
 fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
     // Always try to clean up the lockfile, even on early-exit paths.
     // Drop guard via a small helper struct so panics / early returns
@@ -60694,6 +60787,16 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         if let Some(seg) = wt_divergence_segment(&l.worktree_path, &l.slug) {
             parts.push(seg.yellow().bold().to_string());
         }
+    }
+    // TASK-756: operator-presence segment. Only the effective `away` state is
+    // surfaced (a short glyph + word) — `home` is the boring default and stays
+    // quiet, matching the cache/freshness "only the non-default is noise-worthy"
+    // contract. Read-only; presence changes nothing else here. trace:TASK-756
+    if matches!(
+        presence::current_presence(chrono::Utc::now()),
+        presence::Presence::Away
+    ) {
+        parts.push(format!("{} away", "🚶").yellow().bold().to_string());
     }
     println!("{}", parts.join(&separator));
     Ok(())
@@ -77198,6 +77301,33 @@ fn collect_queue_snapshot(
     (in_progress_rows, total)
 }
 
+/// TASK-756: a small additive presence line in `aida status`. Read-only —
+/// surfaces the effective operator presence (home/away) without changing any
+/// other section. Only the `away` state is loud enough to print; `home` is the
+/// boring default and stays quiet so the line appearing IS the signal.
+/// trace:TASK-756 | ai:claude
+fn print_status_presence_line(project_root: &std::path::Path) {
+    let now = chrono::Utc::now();
+    if !matches!(presence::current_presence(now), presence::Presence::Away) {
+        return;
+    }
+    let Some(file) = presence::read_presence_file() else {
+        return;
+    };
+    let set_at = chrono::DateTime::parse_from_rfc3339(&file.set_at)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or(now);
+    let _ = project_root; // reserved: per-project presence would key off this
+    println!(
+        "  {} {} (set {}, {})",
+        "🚶".to_string(),
+        "away".yellow().bold(),
+        presence::since_label(set_at, now),
+        presence::ttl_remaining_label(set_at, file.ttl_secs, now)
+    );
+    println!();
+}
+
 fn print_status_session_section(ctx: &UserStatusContext) {
     println!("{}", "─── Session ───".bold());
     match &ctx.session {
@@ -79659,6 +79789,7 @@ fn handle_status_command_distributed(
     let stdout = std::io::stdout();
     let _ = awaiting_report.render(verbose, stdout.lock());
 
+    print_status_presence_line(&project_root);
     print_status_session_section(&user_ctx);
     print_status_branch_section(&user_ctx);
     if !no_ci {
