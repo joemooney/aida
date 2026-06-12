@@ -1,0 +1,12 @@
+id: 019ebd87-55e8-7da0-b8bb-fb0ca10f0101
+spec_id: TASK-764
+agreed_id: TASK-764
+title: '**Phase 3: `--for human` queue routing.** Accept `human` as a `QueueEntry::for_role` target; union explicitly-routed with derived membership in the view. Establishes `human` as a first-class route target symmetric with agent roles'
+description: ''
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:30:23.720118445Z
+modified_at: 2026-06-12T20:30:23.720118445Z
+req_type: Task
