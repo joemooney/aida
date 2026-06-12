@@ -6835,6 +6835,15 @@ pub enum Command {
         #[clap(long)]
         no_agent: bool,
 
+        /// Skip the stale-base warning. By default, when the spec's PR is
+        /// behind its base branch, the review prints a warning naming the
+        /// gap and the rebase command (the review still proceeds either
+        /// way). Pass this flag when a deliberately stale review is
+        /// intended — same opt-out the reviewer-role pickup honors.
+        // trace:BUG-510 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        allow_stale_base: bool,
+
         #[clap(subcommand)]
         cmd: Option<ReviewCommand>,
     },
