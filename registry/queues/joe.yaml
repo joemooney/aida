@@ -814,3 +814,11 @@
   note: 'advisor-cleared: judged autonomous-safe at filing'
   added_at: 2026-06-12T04:38:54.434254270Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 019ebcdd-00af-7ed3-bd84-81c1960b708f
+  position: 424000
+  added_by: joe
+  added_at: 2026-06-12T17:25:09.299970951Z
+  for_role: reviewer
+  for_scope: STORY-564
+  added_by_machine: imac
