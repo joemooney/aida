@@ -4,7 +4,86 @@ All notable changes to this project are documented here. Generated
 mechanically from the spec graph (`aida changelog refresh`) — do not edit
 by hand; regenerate after merging.
 
-## [v0.13.0] — 2026-06-11
+## [v0.14.0] — 2026-06-12
+
+Specs merged since v0.13.0 (60):
+
+### Features
+
+- **STORY-561** — aida home / aida away: operator-presence state the autonomy ladder keys on (not per-command flags) (#796)
+- **STORY-560** — Headless advisor INTAKE pass: an advisor AGENT reads all open specs, proposes approve/reject/queue, and grooms the autonomous-able set (autonomous sibling of STORY-558) (#795)
+- **STORY-564** — aida queue work --zen: auto-exit on a clean finish (no human needed), pause only when a human IS needed (#793)
+- **STORY-555** — Close the aida questions -> burndown loop: answering a decision APPLIES the resolution + unparks the spec into the ready set (the human-decision complement of aida burndown run) (#792)
+- **STORY-554** — aida backlog groom --pickable: auto-select decision-free backlog into the queue via the burndown pickability gate (#791)
+- **TASK-721** — burndown/skill: prune merged implementer worktree + branch after auto-merge (#790)
+- **TASK-756** — STORY-561 slice: presence PRIMITIVE — aida home/away/status + timestamped file + TTL + TTY auto-flip + statusline (consumers deferred) (#789)
+- **TASK-754** — aida add --queue: file + approve + enqueue in one shot (record the advisor's filing-time autonomy judgment, skip backlog limbo) (#787)
+- **STORY-565** — Queue 'how do I get to zero?' must be answerable in one glance — disambiguate clear-vs-drain + always show the blocked remainder + the single next action (#786)
+- **STORY-566** — aida queue advance: one command that walks each queued item to its next step — drain the autonomous, dispatch the human-required interactively (#785)
+- **TASK-752** — aida doctor: detect + heal tracked legacy-store cruft (requirements*.yaml / scaffold-report.html) in a git-canonical project (#784)
+- **TASK-753** — Close the status --cleanup ↔ doctor seam: signpost the read→heal path + clarify --cleanup is read-only (#783)
+- **TASK-744** — Split overloaded 'needs-human' into 'needs-decision' (answer-to-unblock) vs 'needs-supervised-build' (keyboard build, not a question) (#777)
+- **TASK-747** — **Phase 3: `--for human` queue routing.** Accept `human` as a `QueueEntry::for_role` target; union explicitly-routed with derived membership in the view. Establishes `human` as a first-class route target symmetric with agent roles (#774)
+- **STORY-563** — aida human unblock: deterministic CLI that emits a paste-ready advisor prompt to groom blocked items into the burndown (#773)
+- **TASK-746** — **Phase 2: name the predicate + the `aida human` vector.** Add `burndown::human_required`, `Command::Human`, `handle_human_command` (bare → delegate to `handle_list_human`). The `aida human` front door + canonical predicate (#772)
+- **STORY-562** — aida list human (status-alias sibling to open/closed): the discoverable 'what needs me?' view over the human-attention set (#767)
+- **TASK-742** — Phase 3: `aida lifecycle --empirical --diff` — reconstruct the observed machine from `history:` arrays (TASK-121) and diff against the declared table (#766)
+- **STORY-559** — aida advisor status: expand into the advisor situational dashboard (fold registration in; flag for narrow output) (#764)
+- **TASK-737** — Phase 1: `aida lifecycle --diagram` + the committed-vs-generated doc pin (generate-only, zero behavior change) (#763)
+- **TASK-743** — aida list --short (--ids-only): print bare spec IDs one per line for pipe/loop consumption (#761)
+- **STORY-558** — Advisor burndown-prep: one guided pass from drafts → approved → queued (sign-off preserved, NOT auto-approve) (#760)
+- **STORY-556** — aida help: group commands by function + lead with the novice daily-drivers (tier the full surface) (#758)
+- **STORY-557** — /aida-clarify <spec>: advisor interrogates the human to author acceptance criteria for an under-specified spec (agentic complement to questions sweep) (#757)
+- **STORY-553** — aida review <spec>: single verb to drive human review of a held spec (dual of queue work) (#752)
+- **STORY-552** — aida init: offer to 'git init' when not in a git repo (complete the onboarding funnel, don't just bail) (#750)
+- **STORY-64** — aida role current: print the active role's name (#749)
+- **TASK-723** — burndown explain: findings-link + residual-note (prefixed comment) + multi-reason — STORY-548 safe slice (#746)
+
+### Fixes
+
+- **BUG-504** — aida queue list shows ARCHIVED specs (SPIKE-53 lingers in the queue after archive) — archive should prune queue entries / queue view should hide archived (#794)
+- **BUG-502** — aida human unblock misclassifies review:draft-only specs as QUEUE/CLARIFY instead of a REVIEW bucket (#782)
+- **BUG-500** — aida queue work --zen: the 'stop' path should run 'aida session end' (clean up worktree+lease), not just pause (#781)
+- **BUG-501** — MCP 'setup issue' warning recurs in every AIDA worktree — pre-approve the aida server in scaffolded settings (extend BUG-484 to worktrees) (#780)
+- **BUG-499** — burndown plan 'awaiting sign-off' hint should clarify that 'aida queue add' IS the advisor sign-off (role-gated), not a generic human action (#779)
+- **BUG-496** — Parallel burndown can merge two PRs that each pass CI alone but break main together — no integrated-main re-verify (#769)
+- **BUG-498** — Operator acting as advisor still seated as 'implementer' by default — statusline misleads; suggest 'role enter advisor' on advisor-style activity (#765)
+- **BUG-497** — aida archive --older-than: silent multi-second window for large sweeps — the BUG-425 'one fast commit' premise breaks at scale (#762)
+- **BUG-486** — MCP status gate is role-blind: refuses advisor-seat approve/plan despite AIDA_SESSION_ROLE=advisor (CLI↔MCP authority inconsistency) (#759)
+- **BUG-495** — aida questions sweep output refinements: skip non-implementable/built specs + clarify the misleading '--apply to write' message (#756)
+- **BUG-492** — aida archive has no guard against archiving non-terminal/queued specs — agent loop archived 128 Approved + active queued work (#751)
+- **BUG-494** — aida burndown plan footer falsely claims 'There is no aida burndown run' — but the run subcommand exists (STORY-545) (#748)
+- **BUG-493** — aida why over-claims 'held as a draft PR' from the review:draft-only TAG when the actual draft PR is closed/absent (#747)
+- **BUG-418** — aida db reconcile-status: real run printed 'No eligible flips' yet the spec ended Completed (misleading output or state confusion) (#745)
+- **BUG-59** — Stop hook ENOENT when cwd was a removed worktree (#743)
+
+### Documentation
+
+- **FR-173** — describe default requirement types (#788)
+- **SPIKE-57** — SPIKE: formalize 'human' as a first-class role — the escalation terminus — with an 'aida human' vector (classification, NOT assignment) (#768)
+- **SPIKE-56** — SPIKE: aida lifecycle — one declared spec-state transition model that generates the diagram, enforces the guards, and diffs declared-vs-empirical from history (#755)
+- **SPIKE-55** — SPIKE: audit skills for missing deterministic-CLI slices + formalize the slice/launcher/pure-agentic convention (NOT 1:1 CLI-clone every skill) (#754)
+- **TASK-733** — docs/lifecycle.md: Mermaid spec-lifecycle state diagram — orthogonal regions (status × archived × queued × lease × park) + 3 trigger-colors (CLI / LLM / git-event) (#753)
+
+### Internal
+
+- **TASK-740** — Phase 2c: migrate the merge auto-bump eligibility (`auto_bump_eligible_status`) behind the model's GitEvent guards (#776)
+- **TASK-741** — Phase 2d: express the BUG-492 / BUG-493 cross-axis invariants as `INVARIANTS` rows consulted by the archive + held-for-review paths (#775)
+- **TASK-739** — Phase 2b: migrate the advisor-authority gate (`status_requires_advisor_authority`) behind `validate_transition` (#771)
+- **TASK-738** — Phase 2a: introduce `aida-core/src/lifecycle.rs` with `LIFECYCLE` + `validate_transition`, migrate `forbidden_attention_transition` behind it with a parity test (#770)
+- **TASK-500** — BUG-360 follow-up: refactor queue-done gate to pure queue_done_precheck_diagnose function for isolated testability (#744)
+
+### Other
+
+- [AI:claude] docs(mailbox): user-guide chapter for the inter-agent mailbox (#692)
+- [AI:claude] fix(burndown): render the BuildSupervised bucket in explain + list-human, generalize its reason (TASK-744 follow-up) (#778)
+- [AI:claude] fix(cli): pass in_flight_scopes to question_sweep_candidate — unbreak main
+- docs(competitive): Beads + Gas Town vs AIDA snapshot, SPIKE-53 research
+- docs(competitive): weekly scan Lane B — agent orchestration & swarm frontier (2026-06-09) (#717)
+- docs(lifecycle): add status-vs-pickability section + plain glossary
+- docs: commit ECC competitive-analysis review + STORY-523 triage-sweep prototype (curated WIP) (#640)
+
+## [v0.13.0] — 2026-06-10
 
 Specs merged since v0.12.0 (98):
 
