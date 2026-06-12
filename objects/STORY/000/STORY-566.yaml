@@ -22,12 +22,12 @@ description: |-
   6. Empty queue -> 'Queue empty — nothing to advance.'
   7. Unit tests in burndown.rs::tests for the bucket->action mapping (pure: given OpenBucket, expected dispatch label).
   8. No SPEC-IDs in user-facing output (user-facing-text convention).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T05:12:12.592734612Z
-modified_at: 2026-06-12T05:32:34.441814156Z
+modified_at: 2026-06-12T05:43:27.479861521Z
 req_type: Story
 tags:
 - aida:queue
@@ -43,3 +43,15 @@ comments:
   content: Commit 0daf515f7 references this requirement
   created_at: 2026-06-12T05:32:34.441814156Z
   modified_at: 2026-06-12T05:32:34.441814156Z
+history:
+- id: 019eba5b-5282-7ca1-97b2-da9ca12495e4
+  author: aida-auto-bump
+  timestamp: 2026-06-12T05:43:27.618848505Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T05:43:27.479861521Z
+  completion_sha: eba304735431fc6def9d7f9c061779b1174b1712
