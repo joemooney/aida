@@ -109,3 +109,7 @@ docs/plans/_draft/
 
 # Rendered/shareable artifacts live in joemooney/artifacts, not the code repo.
 *.pdf
+
+# Legacy pre-git-canonical store snapshots (live store is the orphan aida-store branch)
+requirements*.yaml
+scaffold-report.html
