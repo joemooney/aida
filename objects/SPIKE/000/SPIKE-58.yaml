@@ -1,0 +1,19 @@
+id: 019ebd91-330b-77a2-840f-019b6d1aa22a
+spec_id: SPIKE-58
+agreed_id: SPIKE-58
+title: 'WS3a SPIKE: Beads interop feasibility — JSONL schema, ID mapping, what round-trips losslessly'
+description: 'Before building import/export: install bd locally, generate a real .beads project, and map its JSONL export schema (fields, link types: relates_to/duplicates/supersedes/replies_to/parent-child/blocks, hash IDs bd-a1b2 + hierarchical bd-a3f8.1.1, memory entries) against AIDA''s spec model (typed reqs, semantic IDs, relationships, history). Deliverable: a field-mapping table; what imports cleanly (issues→tasks, deps→BlockedBy, parent-child→parent); what''s lossy (Beads memory-decay summaries, replies_to); what AIDA adds on import (lifecycle status mapping, type inference); whether bd''s export is stable enough to target (v1.0 claim). Decides WS3b/c shape. Empirical, not docs-only — run the actual tool.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T20:41:10.155363313Z
+modified_at: 2026-06-12T20:41:10.155363313Z
+req_type: Spike
+tags:
+- beads
+- parent:EPIC-39
+- repositioning
+- spike
+- ws3-interop
+human_only: true
