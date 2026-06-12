@@ -10,12 +10,12 @@ description: |-
   Fix direction (in the /aida-burndown skill's integrate step, or a post-merge hook): after a successful squash-merge, remove the implementer's worktree (`git worktree remove`) and delete the local branch, so a long unattended drain doesn't accumulate worktrees. Auto-clean only worktrees whose spec reached Completed (leave held/draft-PR worktrees alone). Low priority — cosmetic/disk, not correctness; the drain completes fine regardless.
 
   Caller note: the Agent tool's `isolation: worktree` auto-cleans only if UNCHANGED; a committed+merged implementer worktree has changes, so it persists by design — the skill must prune explicitly.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-09T16:00:31.355691491Z
-modified_at: 2026-06-12T07:36:10.938897953Z
+modified_at: 2026-06-12T07:47:28.860140466Z
 req_type: Task
 tags:
 - aida:burndown
@@ -34,3 +34,15 @@ comments:
   content: Commit cf888618c references this requirement
   created_at: 2026-06-12T07:36:10.938897953Z
   modified_at: 2026-06-12T07:36:10.938897953Z
+history:
+- id: 019ebacc-de67-7c92-aa4a-9354d2478b45
+  author: aida-auto-bump
+  timestamp: 2026-06-12T07:47:28.999350418Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-12T07:47:28.860140466Z
+  completion_sha: f65a745c465381ba6da63a4fe990439575451aaf
