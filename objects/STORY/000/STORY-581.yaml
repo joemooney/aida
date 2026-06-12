@@ -1,0 +1,17 @@
+id: 019ebe41-df09-7962-acb7-b5f57768ae6c
+spec_id: STORY-581
+agreed_id: STORY-581
+title: 'Fail-soft cache staleness: return degraded rows + a stale flag on persistent lock contention instead of erroring (salvaged from STORY-543 L3)'
+description: 'Salvaged fail-soft piece from rejected STORY-543. Today the cache ERRORS after the retry ladder exhausts (with ''run aida doctor heal stale-locks'' guidance). This proposes: on persistent contention, return the last-readable rows + a ''stale/degraded'' signal instead — stderr warning + a top-level ''stale'' boolean in --json. JUDGMENT CALL (operator deferred): may not be worth it if error-with-guidance is fine. Build only after the WAL spec; re-validate whether it''s still wanted once WAL reduces contention.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-12T23:54:08.521304618Z
+modified_at: 2026-06-12T23:54:08.521304618Z
+req_type: Story
+tags:
+- aida:cache
+- deferred:revisit-after-wal
+- from:STORY-543
+- ux
