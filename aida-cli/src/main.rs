@@ -90742,6 +90742,88 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     );
                 }
             }
+
+            // STORY-565: "how do I get to zero?" footer. SIGNPOSTING over the
+            // SAME classifier `aida queue advance` uses — disambiguate drain
+            // (`aida burndown run`, does the work) from clear (`aida queue
+            // clear`, just drops them), and name the single next action for
+            // each non-ready queued item. We cover the items this list actually
+            // printed: the pickable `entries` plus the queued-but-`blocked_entries`
+            // (both are the operator's own queue). In-flight (Done) specs are
+            // already off the queue, so they're excluded. Build the OpenFacts
+            // index the way `handle_queue_advance` does. Suppressed under
+            // `--in-flight-only` (the regular queue render was skipped, so a
+            // "how to empty the queue" footer would be off-topic).
+            // trace:STORY-565
+            if !*in_flight_only {
+                // Collect the display-ids the list rendered, in order, deduped.
+                let mut queued_ids: Vec<String> = Vec::new();
+                let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+                let mut push_display = |display: String| {
+                    if seen.insert(display.to_ascii_uppercase()) {
+                        queued_ids.push(display);
+                    }
+                };
+                for e in &entries {
+                    if let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    {
+                        let display = req
+                            .agreed_id
+                            .clone()
+                            .or_else(|| req.spec_id.clone())
+                            .unwrap_or_else(|| req.id.to_string());
+                        push_display(display);
+                    }
+                }
+                for be in &blocked_entries {
+                    let display = be
+                        .req
+                        .agreed_id
+                        .clone()
+                        .or_else(|| be.req.spec_id.clone())
+                        .unwrap_or_else(|| be.req.id.to_string());
+                    push_display(display);
+                }
+
+                if !queued_ids.is_empty() {
+                    // Build the open-facts index once, keyed by UPPERCASE
+                    // display id — same construction `handle_queue_advance` uses.
+                    let in_flight = find_project_root()
+                        .ok()
+                        .map(|r| in_flight_lease_scopes(&r))
+                        .unwrap_or_default();
+                    let facts_by_id: std::collections::HashMap<String, burndown::OpenFacts> =
+                        collect_open_facts(&store, &in_flight)
+                            .into_iter()
+                            .map(|f| (f.id.to_ascii_uppercase(), f))
+                            .collect();
+
+                    let items: Vec<burndown::QueuedItem> = queued_ids
+                        .into_iter()
+                        .filter_map(|display| {
+                            let facts = facts_by_id.get(&display.to_ascii_uppercase())?;
+                            let (bucket, _reason) = burndown::explain_open(facts);
+                            Some(burndown::QueuedItem {
+                                id: display,
+                                bucket,
+                            })
+                        })
+                        .collect();
+
+                    if let Some(footer) = burndown::render_path_to_empty(&items) {
+                        println!();
+                        // Static framing colorized; the per-item SPEC-IDs and
+                        // command snippets ride through plain.
+                        for (i, line) in footer.lines().enumerate() {
+                            if i == 0 {
+                                println!("{}", line.bold());
+                            } else {
+                                println!("{}", line);
+                            }
+                        }
+                    }
+                }
+            }
         }
         QueueCommand::Load { user } => {
             let user_id = get_user(user);

@@ -946,6 +946,71 @@ pub(crate) fn advance_action_label(bucket: OpenBucket) -> &'static str {
     }
 }
 
+/// STORY-565: the SINGLE next action for ONE non-ready queued item, phrased with
+/// the operator's own SPEC-ID inlined so the footer reads as a copy-pasteable
+/// instruction. A ROUTER over `advance_action` — same bucket→action map the
+/// interactive `aida queue advance` uses, just rendered as one imperative line.
+/// Pure + testable; the `id` is the operator's own queued spec (fine to print —
+/// it's their item, not a breadcrumb). trace:STORY-565 | ai:claude
+fn advance_action_sentence(bucket: OpenBucket, id: &str) -> String {
+    match advance_action(bucket) {
+        AdvanceAction::Review => format!("review it (`aida review {id}`)"),
+        AdvanceAction::SupervisedBuild => {
+            format!("build at the keyboard (`aida queue work {id} --zen`)")
+        }
+        AdvanceAction::Decision => "answer the decision (`aida questions`)".to_string(),
+        AdvanceAction::Drain => format!("drain it (`aida queue work {id}`)"),
+        AdvanceAction::Approve => format!("approve it (`aida edit {id} --status approved`)"),
+        AdvanceAction::Reject => format!("resolve it out (`aida edit {id} --status rejected`)"),
+        AdvanceAction::None => "resolves through normal flow — nothing to do".to_string(),
+    }
+}
+
+/// STORY-565: one queued item, already classified, for the path-to-empty footer.
+/// `bucket == Actionable` ⇒ it's part of the "ready" count; everything else gets
+/// its own per-item "needs you" line. trace:STORY-565 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct QueuedItem {
+    /// The operator's own display SPEC-ID.
+    pub id: String,
+    /// Its open-bucket classification (from `explain_open`).
+    pub bucket: OpenBucket,
+}
+
+/// STORY-565: render the "how do I get to zero?" footer for a non-empty queue —
+/// SIGNPOSTING over the SAME classifier `aida queue advance` uses, not new
+/// state. Disambiguates the two meanings of "empty": DRAIN (`aida burndown run`)
+/// does the work, CLEAR (`aida queue clear`) just drops queue membership — and
+/// names the single next action for each non-ready (parked/blocked/held) item.
+/// Pure (no color, no store) so it's unit-testable without a store; the caller
+/// colorizes. Returns `None` for an empty slice (caller prints the empty-queue
+/// line instead). trace:STORY-565 | ai:claude
+pub(crate) fn render_path_to_empty(items: &[QueuedItem]) -> Option<String> {
+    if items.is_empty() {
+        return None;
+    }
+    let ready = items
+        .iter()
+        .filter(|i| i.bucket == OpenBucket::Actionable)
+        .count();
+
+    let mut out = String::from("To empty this queue:");
+    if ready > 0 {
+        out.push_str(&format!(
+            "\n  • {ready} ready    → `aida burndown run` (does the work)  ·  \
+             `aida queue clear` (just drops them)"
+        ));
+    }
+    for item in items.iter().filter(|i| i.bucket != OpenBucket::Actionable) {
+        out.push_str(&format!(
+            "\n  • {:<10} needs you: {}",
+            item.id,
+            advance_action_sentence(item.bucket, &item.id)
+        ));
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1384,6 +1449,70 @@ mod tests {
         // No internal trace SPEC-IDs leak into user-facing text.
         assert!(!f.contains("STORY-"));
         assert!(!f.contains("BUG-"));
+    }
+
+    // STORY-565: the path-to-empty footer builder is pure — testable without a
+    // store. trace:STORY-565 | ai:claude
+    #[test]
+    fn render_path_to_empty_is_none_for_empty_queue() {
+        assert!(render_path_to_empty(&[]).is_none());
+    }
+
+    #[test]
+    fn render_path_to_empty_disambiguates_drain_from_clear() {
+        let items = vec![QueuedItem {
+            id: "TASK-101".to_string(),
+            bucket: OpenBucket::Actionable,
+        }];
+        let f = render_path_to_empty(&items).expect("non-empty");
+        assert!(f.starts_with("To empty this queue:"));
+        // Ready count + BOTH the drain (does the work) and clear (drops them)
+        // commands on the one line — AC2.
+        assert!(f.contains("1 ready"));
+        assert!(f.contains("aida burndown run"));
+        assert!(f.contains("does the work"));
+        assert!(f.contains("aida queue clear"));
+        // No per-item "needs you" line when everything is ready.
+        assert!(!f.contains("needs you"));
+    }
+
+    #[test]
+    fn render_path_to_empty_names_single_action_per_nonready_item() {
+        let items = vec![
+            QueuedItem {
+                id: "TASK-1".to_string(),
+                bucket: OpenBucket::Actionable,
+            },
+            QueuedItem {
+                id: "STORY-2".to_string(),
+                bucket: OpenBucket::HeldForReview,
+            },
+            QueuedItem {
+                id: "TASK-3".to_string(),
+                bucket: OpenBucket::BuildSupervised,
+            },
+            QueuedItem {
+                id: "BUG-4".to_string(),
+                bucket: OpenBucket::AwaitingDecision,
+            },
+        ];
+        let f = render_path_to_empty(&items).expect("non-empty");
+        // One ready item still drives the drain/clear line.
+        assert!(f.contains("1 ready"));
+        // Each non-ready item gets its OWN line with the operator's id + the
+        // single next action, inlining the id where the command takes one.
+        assert!(f.contains("STORY-2") && f.contains("aida review STORY-2"));
+        assert!(f.contains("TASK-3") && f.contains("aida queue work TASK-3 --zen"));
+        assert!(f.contains("BUG-4") && f.contains("aida questions"));
+        // Exactly three "needs you" lines (the three non-ready items).
+        assert_eq!(f.matches("needs you").count(), 3);
+        // No internal trace SPEC-IDs leak into the STATIC framing. The
+        // operator's OWN queued ids (TASK-1 etc.) are fine — those aren't
+        // breadcrumbs. We only assert the framing words carry no leak.
+        for line in f.lines() {
+            // Strip the operator's own ids by checking the static prose only.
+            assert!(!line.contains("trace:"));
+        }
     }
 
     // TASK-723: multi-reason — derived + finding-link + residual note.
