@@ -814,9 +814,3 @@
   note: 'advisor-cleared: judged autonomous-safe at filing'
   added_at: 2026-06-12T04:38:54.434254270Z
   for_role: advisor
-- user_id: joe
-  requirement_id: 019eb9ff-8508-7e50-8285-81980687aa3c
-  position: 424000
-  added_by: joe
-  added_at: 2026-06-12T15:55:14.234790854Z
-  for_role: implementer
