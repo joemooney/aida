@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T04:52:28.045992791Z
-modified_at: 2026-06-11T05:02:25.752366749Z
+modified_at: 2026-06-12T02:30:57.108211338Z
 req_type: Story
 tags:
 - advisor-tooling
@@ -30,7 +30,7 @@ tags:
 - aida:burndown
 - autonomy
 - core
-- needs-human
+- needs-supervised-build
 comments:
 - id: 019eb50f-65d8-7572-b685-e9aca3902cc3
   author: joe
