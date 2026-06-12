@@ -38,12 +38,12 @@ description: |-
     - `--then-drain` flag overrides the config to `drain` for a single run.
 
   Implementation note: the DEFAULTS (approve-eligible bias + tight do-not-approve classes + stop-at-queue + propose-mode) must make `aida intake` safe AND useful with zero config. The `[intake]` block is opt-in tuning, not required. Document the policy knobs + defaults in `--help` and the /aida-intake skill. Guardrail flags from acceptance #3 (--max-approvals, --only-tag/--exclude-tag, --risk) compose with the config policy (flags override config for a run).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:05:52.155404135Z
-modified_at: 2026-06-12T18:31:21.780964826Z
+modified_at: 2026-06-12T18:56:23.198223782Z
 req_type: Story
 tags:
 - aida:advisor
@@ -76,7 +76,17 @@ comments:
       - Substrate-grade gate on `aida edit --status approved` by type (broader than this story)
   created_at: 2026-06-12T18:30:22.799630054Z
   modified_at: 2026-06-12T18:30:22.799630054Z
+history:
+- id: 019ebd31-452c-7f51-a2f7-1651cacc4db1
+  author: aida-auto-bump
+  timestamp: 2026-06-12T18:56:23.340106764Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 implementation_info:
   implemented: true
   implemented_at: 2026-06-12T18:30:18.747002197Z
   implemented_by: joe
+  completed_at: 2026-06-12T18:56:23.198223782Z
+  completion_sha: 8cd837ce693da302296964cdf0d51e896422f4f2
