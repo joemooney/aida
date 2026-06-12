@@ -2,13 +2,18 @@ id: 019ebd90-e3d8-7d23-be54-3cd804d8ce08
 spec_id: STORY-572
 agreed_id: STORY-572
 title: 'WS1: Rewrite the decision/vision substrate — VIS-1, OVERVIEW.md, README lead, CLAUDE.md strategic sections re-led with governance (ADR-4)'
-description: 'Re-lead every vision-level artifact with the ADR-4 position: AIDA = human-governance layer for agent-driven development. Rewrite VIS-1 (folds in STORY-551''s ''missing index'' retirement — relate, don''t duplicate), the OVERVIEW.md vision + Trojan-horse section (the hidden depth IS the governance machinery), README''s lead + moat slide content, CLAUDE.md''s strategic-positioning paragraph, and add a PRIN clause capturing govern-vs-unleash as a constitution principle. Acceptance: (1) each artifact leads with governance (approval gates, roles, traces, audit) and mentions the substrate as the MECHANISM not the pitch; (2) no overclaim — every comparative claim against Beads matches the verified table in the 2026-06-12 rescope doc; (3) ''missing index'' phrasing gone everywhere (grep-verifiable); (4) the candidate one-liner from ADR-4 (or operator-amended version) appears consistently in README + OVERVIEW + deck. On branch repositioning.'
+description: |-
+  Re-lead every vision-level artifact with the ADR-4 position USING THE OPERATOR'S CANONICAL LANGUAGE (recorded on ADR-4, 2026-06-12): AIDA is an AI DEVELOPER ASSISTANT — 'make it easier to develop when you have many agents from different vendors and want to coordinate work and feature development as the system grows in complexity — capturing the intent, the why, that can get lost during implementation.' Lead = multi-vendor coordination + intent/why preservation; governance (gates/roles/audit) = the mechanism + enterprise depth, NOT the lead word.
+
+  Scope: rewrite VIS-1 (folds in STORY-551's 'missing index' retirement — relate, don't duplicate); OVERVIEW.md vision + 'Public face' section (Trojan-horse retained: TUI = face, coordination+intent+governance = the named depth); README lead + moat content; CLAUDE.md strategic-positioning paragraph; add a PRIN clause (coordinate/govern-vs-unleash). PLUS the D8 acronym re-expansion sweep: 'AI Design Assistant' → 'AI Developer Assistant' at EVERY expansion site (CLAUDE.md line 1, README, OVERVIEW, aida-core/templates/ scaffolded CLAUDE.md/AGENTS.md, deck, crate descriptions if present — grep-verifiable).
+
+  Acceptance: (1) README lead is the operator's statement (or a tight edit of it), with multi-vendor + intent-capture up front; (2) each artifact presents governance as mechanism/depth, substrate as floor — never the pitch; (3) no overclaim — every comparative claim matches the verified table in the 2026-06-12 rescope doc; (4) 'missing index' phrasing gone everywhere (grep-verifiable); (5) 'AI Design Assistant' returns zero grep hits — re-expansion complete; (6) the Beads-contrast line (ADR-4 D2) appears in positioning papers only, not the README lead. On branch repositioning.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:40:49.880980182Z
-modified_at: 2026-06-12T20:43:10.685057896Z
+modified_at: 2026-06-12T21:39:10.791601526Z
 req_type: Story
 tags:
 - docs
