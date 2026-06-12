@@ -16783,5 +16783,41 @@ operations:
         - (c) questions: away → decision-required specs accumulate quietly in `aida questions` (no prompt/notification); home → surface them (in `aida status` / on the next interactive command). Composes with STORY-555's questions inbox — BUILD STORY-555 FIRST (this consumer wires into it).
 
       Implementation: defaults (consumers on, away_drain=headless-both, home_offer=surface) make presence-driven mode-selection work with zero config; the `[presence]` block is opt-out/tuning. Document the knobs + defaults in the away/home/presence --help and the consumers' --help. Honor every integrity gate (acceptance #4) — presence can make a drain headless, but CI/merge-on-green/authority still gate.
-clock: 1658
+- id: 019ebc8a-9a49-7bf2-946f-7f9feaed5df3
+  target_id: 019eb9ff-8508-7e50-8285-81980687aa3c
+  author: aida
+  node_id: '1'
+  lamport: 1659
+  timestamp: 2026-06-12T15:54:20.617199687Z
+  kind: !SetDescription
+    description: |-
+      Operator idea (2026-06-11): --zen ALWAYS pauses at grab-next/stop after the PR opens — even on a clean finish with no human needed — so the operator manually 'stop' + 'aida session end' every time (the BUG-500 friction). Proposal: --zen auto-decides its exit by whether a human was ACTUALLY needed, borrowing the orchestrator's auto-end-vs-escalate logic into the --zen lane (today --zen is defined as 'no orchestrator', so it can't auto-end). CLEAN finish (PR opened / spec Done, NO punt, NO design-fork escalation, NO operator-decision left) → AUTO-EXIT: run 'aida session end' (remove worktree + clear lease) and exit, no human round-trip. HUMAN-NEEDED finish (agent punted / hit a fork it couldn't resolve / left an explicit operator decision) → PAUSE at the checkpoint (current behavior) — the operator IS needed.
+
+      ## Acceptance
+      1. On a CLEAN --zen finish, the session auto-runs 'aida session end' and exits — no manual stop/cleanup. SUBSUMES BUG-500 (its cleanup-on-stop is acceptance #1 here).
+      2. On a HUMAN-NEEDED finish (punt / unresolved fork / explicit operator decision left), PAUSE at the finish-checkpoint (current behavior) — do NOT auto-exit.
+      3. The clean-vs-needs-human signal is the SAME one the orchestrator/escalation uses + the one the --zen finish-checkpoint already reports; wire it to the launcher's exit decision.
+      4. Escape hatch: a --pause-always flag forces the old always-pause behavior (when the operator wants to grab-next by hand).
+      5. (If STORY-561 presence lands) bias by presence: away → auto-exit; home → may still pause. Advisory, never overrides integrity gates.
+
+      Composes with: BUG-500 (the cleanup mechanic — subsumed), the orchestrator escalation cascade (the clean-vs-needs-human signal), the three-mode autonomy taxonomy (refines --zen's pause-behavior axis), STORY-561 (presence). Keystone-adjacent (touches the --zen session lifecycle + escalation signal) → keyboard-supervised build.
+
+      ## Resolved design (operator-resolved 2026-06-12 — BINDING). This build ALSO implements STORY-569 (same finish-sequence code path).
+
+      S1 (the clean-vs-needs-human SIGNAL — refines #3): an EXPLICIT finish-call, NOT inference. Add a structured `aida session finish` subcommand the /aida-pickup finish-checkpoint calls at end-of-work:
+        - `aida session finish --clean --pr <N>` when the work finished cleanly: PR opened + spec Done, with NO punt / unresolved design-fork / explicit operator-decision left.
+        - `aida session finish --needs-human --reason "<why>"` when a human is needed: the agent punted, hit a fork it couldn't resolve, or left an explicit decision.
+        It records the outcome (a small per-session status file). The --zen launcher AND the headless drain read this recorded outcome to decide exit-vs-pause — no inference from observable state.
+
+      S2 (exit vs pause — refines #1/#2): on a `clean` outcome → run `aida session end` (remove the work folder + clear the 'taken' lease) and EXIT. On `needs-human` → PAUSE at the checkpoint (current behavior). The `--pause-always` flag (acceptance #4) forces pause regardless. Wrapped in a `[zen] auto_exit = on (DEFAULT) | off` config knob; `--pause-always` overrides per-run; `auto_exit = off` restores the old always-pause default project-wide.
+
+      S3 (IMPLEMENTS STORY-569 — the review-brief, same finish sequence): the finish sequence also files a brief into the agent mailbox (.aida/agent-briefs/) so the advisor is notified WITHOUT an operator copy-paste:
+        - on a `clean` exit, BEFORE `aida session end`: file a review-brief to the advisor agent — `aida brief <advisor> <SPEC> --note "PR #N ready for review against the spec's Resolved-design block"`.
+        - on a `needs-human` pause: file a needs-decision brief to the advisor/operator instead, naming the reason.
+        The advisor surfaces it via `aida brief list --for-agent <advisor>` (+ MCP list_briefs). Trailer BOTH (STORY-564) and (STORY-569) on the PR so both auto-complete on merge.
+
+      S4 (deferred): the presence-bias (acceptance #5) waits for STORY-561's presence consumers — ship STORY-564 WITHOUT it; it becomes a small followup once presence lands (away → bias to auto-exit; home → may still pause). Advisory; never overrides integrity gates.
+
+      Implementation reuse: the finish-status + brief plumbing should reuse the existing session-lifecycle code (`aida session end`, the `.aida/agent-briefs/` brief writer, the /aida-pickup finish-checkpoint). New surface = the `aida session finish` subcommand + the `[zen] auto_exit` config + the brief-on-finish wiring. No SPEC-IDs in user-facing output; plain `// trace:STORY-564` / `// trace:STORY-569` comments.
+clock: 1659
 node_id: '1'
