@@ -1795,6 +1795,34 @@ pub enum MailboxCommand {
         /// with its recipient shown. Read-only — does not mark anything seen.
         #[clap(long, conflicts_with = "agent")]
         all: bool,
+
+        /// Show the inbox WITHOUT marking it seen (does not advance the
+        /// read-watermark). Lets a hook or a glance surface mail without
+        /// consuming the unread flag — reading/acking stays an explicit act
+        /// (a plain `aida mailbox inbox`). trace:STORY-585
+        #[clap(long, alias = "no-mark")]
+        peek: bool,
+
+        /// Show only UNREAD messages (newer than this inbox's read-watermark).
+        /// trace:STORY-585
+        #[clap(long)]
+        unread: bool,
+    },
+
+    /// Ambient unread-mail notice for an agent's context: a capped, plain,
+    /// role+user-scoped summary of unread messages, or nothing when the inbox
+    /// is caught up. Never marks anything seen. The SessionStart / per-turn
+    /// hook calls this; reading/acking stays the explicit `aida mailbox inbox`.
+    /// trace:STORY-585
+    Notice {
+        /// Whose mail to summarize. Default: the union of this shell's
+        /// agent/user identity and the session role (`AIDA_SESSION_ROLE`).
+        agent: Option<String>,
+
+        /// Max messages to list before collapsing the rest into "+N more"
+        /// (default: 5). Keeps the per-turn context injection bounded.
+        #[clap(long)]
+        cap: Option<usize>,
     },
 
     /// Operator overview: agents with mail waiting + unread / urgent-unread

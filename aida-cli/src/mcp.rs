@@ -2076,9 +2076,31 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(str::to_string)
             .unwrap_or_else(|| crate::current_user_id(None));
+        let unread_only = args
+            .get("unread")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let mark_seen = args
+            .get("mark_seen")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let all = crate::mailbox_store::read_local_messages(&self.project_root)
             .map_err(|e| e.to_string())?;
-        let messages: Vec<Value> = inbox_for(&agent, &all)
+        let watermark = crate::mailbox_store::read_watermark(&self.project_root, &agent);
+        let full = inbox_for(&agent, &all);
+        // `--unread`/`unread` filters to messages past the watermark; the
+        // seen-mark still advances to the FULL inbox's newest (an explicit ack
+        // catches everything, not just the filtered slice).
+        let mark = watermark.unwrap_or(i64::MIN);
+        let shown: Vec<&aida_core::mailbox::Message> = if unread_only {
+            full.iter()
+                .copied()
+                .filter(|m| m.timestamp > mark)
+                .collect()
+        } else {
+            full.clone()
+        };
+        let messages: Vec<Value> = shown
             .iter()
             .map(|m| {
                 let to = match &m.to {
@@ -2097,9 +2119,18 @@ impl<'a> McpServer<'a> {
                 })
             })
             .collect();
+        // Explicit ack only: advance the watermark to the full inbox's newest
+        // so the unread/notice surface clears. Default is a non-marking peek
+        // (STORY-585 acceptance #4). trace:STORY-585
+        if mark_seen {
+            if let Some(newest) = full.iter().map(|m| m.timestamp).max() {
+                let _ = crate::mailbox_store::set_watermark(&self.project_root, &agent, newest);
+            }
+        }
         serde_json::to_string_pretty(&json!({
             "agent": agent,
             "count": messages.len(),
+            "unread": unread_only,
             "messages": messages,
         }))
         .map_err(|e| e.to_string())
@@ -6022,15 +6053,17 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "read_inbox",
-            "description": "Read an agent's mailbox inbox — messages addressed to it plus broadcasts (excluding its own sent), oldest-first — mirroring `aida mailbox inbox`. Returns pretty-printed JSON.",
+            "description": "Read an agent's mailbox inbox — messages addressed to it plus broadcasts (excluding its own sent), oldest-first — mirroring `aida mailbox inbox`. Reading does NOT mark the inbox seen unless `mark_seen` is true (the explicit ack); pass `unread` to return only messages past the read-watermark. Returns pretty-printed JSON.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agent": { "type": "string", "description": "Whose inbox (default: this server's agent/user identity).", "example": "claude" }
+                    "agent": { "type": "string", "description": "Whose inbox (default: this server's agent/user identity).", "example": "claude" },
+                    "unread": { "type": "boolean", "description": "Return only unread messages (newer than this inbox's read-watermark). Default false (whole inbox).", "default": false },
+                    "mark_seen": { "type": "boolean", "description": "Advance the read-watermark to the newest message after reading — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false }
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON `{agent, count, messages:[{id,thread_id,from,to,timestamp,in_reply_to,body,urgent}]}`."
+                "pretty-printed JSON `{agent, count, unread, messages:[{id,thread_id,from,to,timestamp,in_reply_to,body,urgent}]}`."
             )
         },
         {
@@ -8397,6 +8430,53 @@ mod tests {
         // Neither `to` nor `broadcast` is a clean error, not a panic.
         let err = server.tool_send_message(&json!({ "body": "orphan" }));
         assert!(err.is_err(), "must require to/broadcast: {err:?}");
+    }
+
+    // trace:STORY-585 | ai:claude
+    /// read_inbox is a non-marking peek by default; `mark_seen` advances the
+    /// watermark (the explicit ack) and `unread` filters to the unread slice.
+    #[test]
+    fn mcp_read_inbox_peek_unread_and_mark_seen() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        server
+            .tool_send_message(&json!({ "to": "claude", "body": "one", "from": "codex" }))
+            .unwrap();
+        server
+            .tool_send_message(&json!({ "to": "claude", "body": "two", "from": "codex" }))
+            .unwrap();
+
+        // Default read does NOT mark seen — a second read still sees both unread.
+        let peek = server
+            .tool_read_inbox(&json!({ "agent": "claude" }))
+            .unwrap();
+        let peek_p: Value = serde_json::from_str(&peek).unwrap();
+        assert_eq!(peek_p["count"], 2);
+        let unread1 = server
+            .tool_read_inbox(&json!({ "agent": "claude", "unread": true }))
+            .unwrap();
+        let unread1_p: Value = serde_json::from_str(&unread1).unwrap();
+        assert_eq!(unread1_p["count"], 2, "peek did not consume: {unread1}");
+        assert_eq!(unread1_p["unread"], true);
+
+        // Explicit ack: mark_seen advances the watermark.
+        server
+            .tool_read_inbox(&json!({ "agent": "claude", "mark_seen": true }))
+            .unwrap();
+        let unread2 = server
+            .tool_read_inbox(&json!({ "agent": "claude", "unread": true }))
+            .unwrap();
+        let unread2_p: Value = serde_json::from_str(&unread2).unwrap();
+        assert_eq!(
+            unread2_p["count"], 0,
+            "ack cleared the unread set: {unread2}"
+        );
+        // The full inbox is still there (ack is a watermark, not a delete).
+        let full = server
+            .tool_read_inbox(&json!({ "agent": "claude" }))
+            .unwrap();
+        let full_p: Value = serde_json::from_str(&full).unwrap();
+        assert_eq!(full_p["count"], 2);
     }
 
     /// graph-query moat (the CLI half is covered by graph_walk's unit tests).
