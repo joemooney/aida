@@ -178,6 +178,37 @@ pub(crate) fn current_presence(now: DateTime<Utc>) -> Presence {
     }
 }
 
+/// Seconds of away-TTL remaining right now, or `None` when the effective
+/// presence is `Home` (no file, stored home, or the away-window already
+/// lapsed). READ-ONLY: reads the presence file but never writes it — the
+/// statusline must NOT auto-flip the operator home just by rendering, which is
+/// why this goes through `current_presence`/`effective_presence` and never
+/// `auto_flip_if_interactive`. trace:TASK-783
+pub(crate) fn current_away_remaining_secs(now: DateTime<Utc>) -> Option<u64> {
+    away_remaining_secs(read_presence_file().as_ref(), now)
+}
+
+/// PURE: away-TTL-remaining (seconds) from a borrowed record, or `None` when
+/// effective presence is `Home`. Borrows the record — never mutates it — so the
+/// statusline read is provably non-flipping. trace:TASK-783
+fn away_remaining_secs(file: Option<&PresenceFile>, now: DateTime<Utc>) -> Option<u64> {
+    let f = file?;
+    let set_at = f.set_at_utc().unwrap_or(now);
+    if effective_presence(f.stored_state(), set_at, f.ttl_secs, now) != Presence::Away {
+        return None;
+    }
+    let elapsed = (now - set_at).num_seconds().max(0) as u64;
+    Some(f.ttl_secs.saturating_sub(elapsed))
+}
+
+/// Compact away-TTL-remaining label for the statusline (e.g. `"2h"`), or
+/// `None` when home. Mirrors the cache-freshness "only render the non-default
+/// state" contract — `home` is the boring default and stays quiet.
+/// trace:TASK-783
+pub(crate) fn statusline_away_remaining(now: DateTime<Utc>) -> Option<String> {
+    current_away_remaining_secs(now).map(|secs| humanize_secs(secs as i64))
+}
+
 /// Read `[presence] away_ttl` from a project's `.aida/config.toml`, falling
 /// back to the 8h default. Accepts an integer (seconds) or a humantime-ish
 /// string (`"8h"`, `"30m"`, `"2h30m"`). Unparseable / absent → default.
@@ -616,6 +647,60 @@ mod tests {
             ttl_remaining_label(set_at, DEFAULT_AWAY_TTL_SECS, later),
             "expired"
         );
+    }
+
+    // --- TASK-783: statusline away-TTL-remaining (compact, non-flipping) ----
+
+    #[test]
+    fn away_remaining_compact_label_when_away() {
+        let set_at = t0();
+        // 8h TTL, 2h elapsed → 6h remaining → compact "6h".
+        let now = set_at + Duration::hours(2);
+        let file = PresenceFile::new(Presence::Away, set_at, DEFAULT_AWAY_TTL_SECS);
+        assert_eq!(
+            away_remaining_secs(Some(&file), now),
+            Some(DEFAULT_AWAY_TTL_SECS - 2 * 3600)
+        );
+        assert_eq!(
+            away_remaining_secs(Some(&file), now).map(|s| humanize_secs(s as i64)),
+            Some("6h".to_string())
+        );
+    }
+
+    #[test]
+    fn away_remaining_is_none_when_home() {
+        let now = t0();
+        let file = PresenceFile::new(Presence::Home, now, DEFAULT_AWAY_TTL_SECS);
+        assert_eq!(away_remaining_secs(Some(&file), now), None);
+        // No file at all → home → None.
+        assert_eq!(away_remaining_secs(None, now), None);
+    }
+
+    #[test]
+    fn away_remaining_is_none_when_ttl_expired() {
+        let set_at = t0();
+        // 8h TTL, 9h elapsed → effective home → None (the statusline goes quiet).
+        let now = set_at + Duration::hours(9);
+        let file = PresenceFile::new(Presence::Away, set_at, DEFAULT_AWAY_TTL_SECS);
+        assert_eq!(away_remaining_secs(Some(&file), now), None);
+    }
+
+    /// The remaining computation borrows the record and returns owned data — it
+    /// cannot mutate presence state. Rendering the statusline must never flip
+    /// the operator home. trace:TASK-783
+    #[test]
+    fn away_remaining_does_not_mutate_record() {
+        let set_at = t0();
+        let now = set_at + Duration::hours(1);
+        let file = PresenceFile::new(Presence::Away, set_at, DEFAULT_AWAY_TTL_SECS);
+        let before = (file.state.clone(), file.set_at.clone(), file.ttl_secs);
+        let _ = away_remaining_secs(Some(&file), now);
+        assert_eq!(
+            before,
+            (file.state.clone(), file.set_at.clone(), file.ttl_secs)
+        );
+        // Stored state is still away after the read.
+        assert_eq!(file.stored_state(), Presence::Away);
     }
 
     // --- STORY-561: `[presence]` consumer policy + drain-mode resolver ------
