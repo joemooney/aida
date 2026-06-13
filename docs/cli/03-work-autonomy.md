@@ -159,7 +159,7 @@ Three cross-cutting truths the tree assumes:
 
 **One line** — the async decision inbox you answer outside any agent.
 
-**Mental model.** When an autonomous agent hits a design fork it can't resolve, it distills a **structured question** rather than guessing. `aida questions` is where those land — answerable in **plain CLI, no LLM session**, on your own time. Bare `aida questions` lists the inbox and (at a TTY with pending items) offers the answer loop; `questions answer` records an answer as a pure data op that a later pass applies.
+**Mental model.** A parallel surface to code review: code review gates *implementations*, the questions inbox gates *decisions* — the design forks that block a spec. Two ways one gets created: the **ask-ahead** path (`questions ask`, often seeded by `questions sweep`) is where the *advisor* pre-distills a vague `needs-human` spec into a structured question + enumerated choices, so you later drain it with a **pure pick — no agent, no LLM session**; the **live** path (`questions clarify <spec>`) spins an agent to interrogate you and generate options *now*, reserved for specs too under-specified to pre-enumerate. The intended rhythm is **ask-ahead, answer-async**. Answering a question **applies** its resolution (binds acceptance / clears a gate / rejects) and **auto-queues** the now-decision-free spec onto the burndown ready set — so the decision inbox and the work drain are symmetric: `burndown run` drains the decision-*free* set (needs no human), `questions answer` drains the decision inbox (needs *only* the human).
 
 **Reach for it when** — you're back at the keyboard and want to clear the decisions agents escalated to you — the cheapest possible human-in-the-loop (no session to spin up, just answer).
 
@@ -216,4 +216,5 @@ These three support the autonomy machinery rather than driving work directly.
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: what `queue work` produces — branches, PRs, review, and the merge that earns Completed.
 - **[Chapter 6 — Roles & sessions](06-roles-sessions.md)**: the seats (advisor/implementer) and the leases that keep parallel drains from colliding.
 - **[Chapter 8 — Reporting](08-reporting.md)**: `aida status` and the lenses that show you the autonomy you just ran.
+- [`docs/review-process.md`](../review-process.md) — **who reviews in each mode** (manual brief → advisor by hand; `--auto-complete` → reviewer phase; `--no-human` → headless reviewer + cold-boot advisor tier), the fasttrack-vs-review tag split, and the completion handoff loop. The authoritative source for this chapter's review/escalation lore.
 - `docs/autonomous-drain.md` is the full practical guide to the drain modes this chapter summarizes.
