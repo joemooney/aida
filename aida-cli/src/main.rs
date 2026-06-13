@@ -1422,6 +1422,11 @@ fn run() -> Result<()> {
         Command::Away => return handle_away_command(),
         Command::Home => return handle_home_command(),
         Command::Presence => return handle_presence_command(),
+        // TASK-784: pure read of the caller-identity resolvers (env vars +
+        // current_user_id + detect_agent_type). No project store needed, so
+        // it dispatches here alongside the other env-only commands.
+        // trace:TASK-784
+        Command::Whoami => return handle_whoami_command(),
         _ => {}
     }
     // trace:FR-1-043 | ai:claude
@@ -2089,6 +2094,8 @@ fn run() -> Result<()> {
         Command::Away | Command::Home | Command::Presence => {
             unreachable!("presence commands are dispatched before storage init")
         }
+        // trace:TASK-784
+        Command::Whoami => unreachable!("whoami is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
@@ -10912,6 +10919,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Away | Command::Home | Command::Presence => {
             unreachable!("presence commands are dispatched before storage init")
         }
+        // trace:TASK-784
+        Command::Whoami => unreachable!("whoami is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
@@ -50496,6 +50505,123 @@ fn handle_presence_command() -> Result<()> {
     Ok(())
 }
 
+/// Pure source-label resolver for `aida whoami`'s user-id line. Mirrors
+/// `current_user_id`'s resolution order (`AIDA_USER` → `USER` → `USERNAME` →
+/// default) over already-read env values, so the printed source label can never
+/// drift from the value `current_user_id` actually returned. Each arg is the
+/// env var's value as `Option`, where an empty string counts as unset (matching
+/// the `is_ok_and(|v| !v.is_empty())` checks the resolver uses).
+/// trace:TASK-784
+fn whoami_user_source(
+    aida_user: Option<&str>,
+    user: Option<&str>,
+    username: Option<&str>,
+) -> &'static str {
+    fn set(o: Option<&str>) -> bool {
+        o.is_some_and(|v| !v.is_empty())
+    }
+    if set(aida_user) {
+        "from AIDA_USER"
+    } else if set(user) {
+        "from USER"
+    } else if set(username) {
+        "from USERNAME"
+    } else {
+        "default"
+    }
+}
+
+/// `aida whoami` — print the caller identity AIDA resolved, each line
+/// annotated with where the value came from. This is a PURE READ of the same
+/// resolvers the gating / queue / provenance code already uses
+/// (`current_user_id`, `agent_registry::detect_agent_type`, and the
+/// `AIDA_SESSION_*` / `AIDA_AGENT_*` / `AIDA_HEADLESS` / `AIDA_AI_TOOL` env
+/// reads) — no project store is loaded and no state is written. It exists to
+/// answer the recurring "why did this refuse?" (role resolved to a default,
+/// not advisor, so the advisor-gate fired) and "why is my queue empty?" (the
+/// shell's user/role identity differs from whatever queued the items — see the
+/// BUG-89 queue-identity note in CLAUDE.md).
+/// trace:TASK-784
+fn handle_whoami_command() -> Result<()> {
+    // Helper: read an env var, returning the value + a source label that names
+    // the env var when set (non-empty) and the fallback otherwise.
+    fn env_with_source(key: &str, fallback: &str) -> (String, String) {
+        match std::env::var(key) {
+            Ok(v) if !v.trim().is_empty() => (v, format!("from {key}")),
+            _ => (fallback.to_string(), "default".to_string()),
+        }
+    }
+
+    println!("{}", "AIDA caller identity".bold());
+
+    // Role — read of $AIDA_SESSION_ROLE, canonicalized exactly the way the
+    // gating/queue/routing code reads it (dialog → advisor, human casing).
+    // Unset means no role is seated; the gating code treats that as the
+    // implementer default, so name that explicitly — it's the value that
+    // surprises people at the advisor-gate.
+    match std::env::var("AIDA_SESSION_ROLE") {
+        Ok(raw) if !raw.trim().is_empty() => {
+            let canonical = canonical_role_name(&raw);
+            if canonical != raw {
+                println!(
+                    "  role:       {} (from AIDA_SESSION_ROLE={}, canonicalized)",
+                    canonical, raw
+                );
+            } else {
+                println!("  role:       {} (from AIDA_SESSION_ROLE)", canonical);
+            }
+        }
+        _ => println!("  role:       implementer (default — no AIDA_SESSION_ROLE seated)"),
+    }
+
+    // Agent type — detect_agent_type prefers $AIDA_AGENT_TYPE, then sniffs the
+    // env (CODEX_* / ANTIGRAVITY_* / GEMINI_* / CLAUDE*), else "other".
+    let agent_type = agent_registry::detect_agent_type();
+    let agent_type_source = match std::env::var("AIDA_AGENT_TYPE") {
+        Ok(v) if !v.trim().is_empty() => "from AIDA_AGENT_TYPE".to_string(),
+        _ => "env-sniff fallback".to_string(),
+    };
+    println!("  agent-type: {} ({})", agent_type, agent_type_source);
+
+    // Agent name.
+    let (agent_name, agent_name_src) = env_with_source("AIDA_AGENT_NAME", "(none)");
+    println!("  agent-name: {} ({})", agent_name, agent_name_src);
+
+    // User id — the queue/provenance identity (BUG-89). Mirror current_user_id's
+    // resolution order so the source label is precise.
+    let user_id = current_user_id(None);
+    let user_source = whoami_user_source(
+        std::env::var("AIDA_USER").ok().as_deref(),
+        std::env::var("USER").ok().as_deref(),
+        std::env::var("USERNAME").ok().as_deref(),
+    );
+    println!("  user-id:    {} ({})", user_id, user_source);
+
+    // Headless flag — set to "1" by the headless launchers.
+    match std::env::var("AIDA_HEADLESS") {
+        Ok(v) if !v.trim().is_empty() => {
+            println!("  headless:   {} (from AIDA_HEADLESS)", v)
+        }
+        _ => println!("  headless:   no (default — AIDA_HEADLESS unset)"),
+    }
+
+    // AI tool — provenance stamp source.
+    let (ai_tool, ai_tool_src) = env_with_source("AIDA_AI_TOOL", "(none)");
+    println!("  ai-tool:    {} ({})", ai_tool, ai_tool_src);
+
+    // Active session / scope — the AIDA_SESSION_* family.
+    let (scope, scope_src) = env_with_source("AIDA_SESSION_SCOPE", "(none)");
+    println!("  scope:      {} ({})", scope, scope_src);
+    let (project, project_src) = env_with_source("AIDA_SESSION_PROJECT", "(none)");
+    println!("  project:    {} ({})", project, project_src);
+    let (purpose, purpose_src) = env_with_source("AIDA_SESSION_PURPOSE", "(none)");
+    println!("  purpose:    {} ({})", purpose, purpose_src);
+    let (session_id, session_id_src) = env_with_source("AIDA_SESSION_ID", "(none)");
+    println!("  session-id: {} ({})", session_id, session_id_src);
+
+    Ok(())
+}
+
 fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
     // Always try to clean up the lockfile, even on early-exit paths.
     // Drop guard via a small helper struct so panics / early returns
@@ -56336,6 +56462,33 @@ mod bug_231_findings_promote_tests {
             queue_at_filing_refusal(&RequirementStatus::Approved, false),
             None
         );
+    }
+
+    // ---- TASK-784: `aida whoami` user-id source label ----
+
+    /// AIDA_USER wins over USER/USERNAME — the source label names it, matching
+    /// `current_user_id`'s resolution precedence (BUG-89 queue identity).
+    /// trace:TASK-784
+    #[test]
+    fn whoami_user_source_prefers_aida_user() {
+        assert_eq!(
+            whoami_user_source(Some("alice"), Some("bob"), Some("carol")),
+            "from AIDA_USER"
+        );
+    }
+
+    /// USER is used when AIDA_USER is unset (or empty); USERNAME when both
+    /// above are unset; "default" when none resolve. trace:TASK-784
+    #[test]
+    fn whoami_user_source_falls_through_to_user_then_username_then_default() {
+        assert_eq!(whoami_user_source(None, Some("bob"), None), "from USER");
+        assert_eq!(whoami_user_source(Some(""), Some("bob"), None), "from USER");
+        assert_eq!(
+            whoami_user_source(None, None, Some("carol")),
+            "from USERNAME"
+        );
+        assert_eq!(whoami_user_source(None, None, None), "default");
+        assert_eq!(whoami_user_source(Some(""), Some(""), Some("")), "default");
     }
 
     /// AC5: a requested-Approved intake that the advisor-authority gate
