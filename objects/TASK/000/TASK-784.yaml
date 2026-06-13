@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:35:41.443182960Z
-modified_at: 2026-06-13T15:35:51.826114988Z
+modified_at: 2026-06-13T15:46:05.184137642Z
 req_type: Task
 tags:
 - aida:cli
@@ -18,3 +18,9 @@ tags:
 - identity
 - relates:BUG-89
 - ux
+comments:
+- id: 019ec1a9-6700-71f3-a69e-ae17b9cb347b
+  author: joe
+  content: Commit f1c7c6eea references this requirement
+  created_at: 2026-06-13T15:46:05.184137642Z
+  modified_at: 2026-06-13T15:46:05.184137642Z
