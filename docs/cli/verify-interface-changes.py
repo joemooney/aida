@@ -36,7 +36,8 @@ USAGE
     python3 docs/cli/verify-interface-changes.py <base> <head>
 
 Exit 0 = clean (no surface change, or surface change with a marked spec).
-Exit 1 = surface change with no doc-impact-marked spec (hard fail).
+Exit 0 (+ ::warning::) = surface change with no doc-impact-marked spec
+(WARN-FIRST, non-blocking — STORY-603 / operator 2026-06-13; graduate to hard fail once proven).
 Exit 2 = could not resolve the store (can't verify) — soft, prints SKIP.
 """
 import os
@@ -179,12 +180,13 @@ def main():
     specs = referenced_specs(base, head)
     if not specs:
         print(
-            "FAIL doc-intent — surface changed but the diff references no spec.\n"
+            "WARN doc-intent (non-blocking) — surface changed but the diff references no spec.\n"
             "    A CLI/skill surface change must trace to a spec. Add a (SPEC-ID)\n"
             "    commit trailer or a `// trace:SPEC-ID` comment, then mark doc-impact\n"
             "    on that spec (populate interface_changes or add a `docs:impacted` tag)."
         )
-        sys.exit(1)
+        print("::warning::doc-intent: surface changed but the diff references no spec (WARN-first; non-blocking)")
+        sys.exit(0)
 
     print(f"referenced spec(s): {', '.join(sorted(specs))}")
 
@@ -213,14 +215,15 @@ def main():
         sys.exit(2)
 
     print(
-        "FAIL doc-intent — surface changed but NO referenced spec marks doc-impact.\n"
+        "WARN doc-intent (non-blocking) — surface changed but NO referenced spec marks doc-impact.\n"
         f"    Referenced: {', '.join(sorted(specs))}\n"
         "    Fix: on the shaping spec, populate `interface_changes` (value-framed cli/\n"
         "    mcp/tui deltas — see `aida queue done --interface-cli ...`) OR add a\n"
         "    `docs:impacted` tag (`aida edit <spec> --tags docs:impacted`). This is the\n"
         "    doc-intent protocol: the spec is the source of WHY the documenter needs."
     )
-    sys.exit(1)
+    print("::warning::doc-intent: surface change not marked with doc-impact (WARN-first; non-blocking — populate interface_changes or add docs:impacted to silence)")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
