@@ -3,12 +3,12 @@ spec_id: STORY-609
 agreed_id: STORY-609
 title: 'Split + beautify the lifecycle diagram: ~5 focused diagrams + a styling standard (hero SVG vs themed mermaid)'
 description: 'The single lifecycle.md/.html state diagram is overloaded (operator: barely readable, too busy). Split into ~5 single-question diagrams: (1) happy path Draft→…→Released; (2) review/rework loop; (3) punt/escalation cascade implementer→advisor→human; (4) the three autonomy modes; (5) merge auto-bump + two-leg git. PLUS a styling decision: hand-crafted SVG (Excalidraw-style) for the 2-3 HERO diagrams (lifecycle, autonomy ladder) where polish matters; themed mermaid for the rest. Acceptance: each diagram answers one question and is readable at a glance; lifecycle.md embeds the split set; a documented standard for which gets hand-crafted vs mermaid; render clean in mdBook (note: mdBook needs a mermaid preprocessor OR pre-rendered SVG — pre-rendered SVG sidesteps the dependency and is more beautiful).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:54.836737426Z
-modified_at: 2026-06-13T20:42:31.526159081Z
+modified_at: 2026-06-13T20:49:15.048015023Z
 req_type: Story
 tags:
 - diagrams
@@ -27,3 +27,21 @@ comments:
   content: Commit 9a3eacb46 references this requirement
   created_at: 2026-06-13T20:42:31.526159081Z
   modified_at: 2026-06-13T20:42:31.526159081Z
+history:
+- id: 019ec2be-f523-78c2-85e6-e70977f2d0eb
+  author: aida-reconcile
+  timestamp: 2026-06-13T20:49:15.043749498Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec2be-f528-7822-a9ca-7fa9063ed9b4
+  timestamp: 2026-06-13T20:49:15.048014458Z
+  agent: aida
+  commit_sha: 1ffca63e3e7d6db54e36a7641ec85be39b26917f
+  summary: Completed via merge 1ffca63e
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T20:49:14.895217297Z
+  completion_sha: 1ffca63e3e7d6db54e36a7641ec85be39b26917f
