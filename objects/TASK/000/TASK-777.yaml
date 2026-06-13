@@ -6,15 +6,19 @@ description: |-
   Operator (2026-06-12): the CONVERSATIONAL entry ('fasttrack it' in chat -> the /aida-fasttrack lane) is the primary + works today. CLI is a rare need. But the right architecture is single-source-of-truth: a thin 'aida fasttrack <title>' CLI command owns the fasttrack FILING convention (status=approved + queue + batch:fasttrack + lifecycle:no-review), and the /aida-fasttrack skill DELEGATES to it instead of hardcoding the tag string in markdown. Today the convention lives in the skill markdown (two places if the verb is added naively) — DRY it into the CLI primitive.
 
   Scope: a (possibly hidden / advanced) 'aida fasttrack <title> [--type]' that normalizes to the existing add+queue path (cleanest: rewrite to the equivalent Command::Add at dispatch, OR extract the add+queue core to a callable fn). Update the skill step 2 to call 'aida fasttrack "<desc>"'. The agentic workflow (implement->CI->merge) STAYS in the skill — only the deterministic filing moves to the CLI. Keeps the hard rule (CI-gated, lifecycle:no-review not no-ci-wait). Low priority — ergonomic/DRY, not capability. trace:STORY-587
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:22:50.011692151Z
-modified_at: 2026-06-13T15:26:17.102001611Z
+modified_at: 2026-06-13T15:41:24.600469504Z
 req_type: Task
 tags:
 - aida:cli
 - aida:fasttrack
 - papercut
 - parent:STORY-587
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-13T15:41:24.600469504Z
+  implemented_by: joe
