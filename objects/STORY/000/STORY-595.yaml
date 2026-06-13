@@ -1,0 +1,16 @@
+id: 019ebf9e-032f-71e2-bd17-90be4d1202ab
+spec_id: STORY-595
+agreed_id: STORY-595
+title: 'CLI manual: Ch9 — Integrations & servers: mcp-serve/serve/doc/docs (MCP + the requirements-as-docs projection)'
+description: 'Write the chapter to the template set by docs/cli/01-getting-started.md: per-command One-line / Mental model / Reach-for-it-when / Don''t-reach-for-it-when(+alternative) / Key options (RATIONALE ONLY — never reproduce the full flag list) / Gotchas / Chains-with. Ground every command against its live `--help` before writing (no invented flags). Cross-link into the journey spine in docs/cli/README.md. On branch cli-manual.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:14:24.303569844Z
+modified_at: 2026-06-13T06:14:24.303569844Z
+req_type: Story
+tags:
+- cli-manual
+- docs
+- parent:EPIC-40
