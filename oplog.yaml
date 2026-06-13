@@ -17783,5 +17783,26 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-13, operator decision via `aida questions answer`): Reuse maybe_sync_pull (fetch+rebase) before the preflight — Proven, never-fails; ~1 network pull per 'burndown run' (not a hot loop)
-clock: 1757
+- id: 019ec349-b0ec-7510-8981-45a1cdfebbb1
+  target_id: 019ec281-e316-7aa1-8253-4813fe993e1d
+  author: aida
+  node_id: '1'
+  lamport: 1758
+  timestamp: 2026-06-13T23:20:47.084424407Z
+  kind: !SetStatus
+    status: Approved
+- id: 019ec349-b10d-7770-ae37-19d0480e945f
+  target_id: 019ec281-e316-7aa1-8253-4813fe993e1d
+  author: aida
+  node_id: '1'
+  lamport: 1759
+  timestamp: 2026-06-13T23:20:47.117080768Z
+  kind: !SetDescription
+    description: |
+      Build one mdBook over the curated USER-FACING doc set: Getting Started (getting-started/first-project) · Core Concepts (lifecycle + the split diagrams) · CLI Reference (EPIC-40 manual, included as a section) · Review & Autonomy (review-process/autonomous-drain) · Setup & Admin (storage-modes/multi-user/forge) · Using with Claude Code · Glossary. SUMMARY.md curates membership; working docs (plans/competitive-analysis/...) excluded. Decide nesting: one book with the CLI manual as a part, vs the CLI manual mdBook staying standalone and this linking to it. Acceptance: mdbook build is warning-free; cross-doc links resolve within the book; the CLI manual chapters are reachable as a section; no working-artifact doc is included. Depends on the library-index curation deciding what is user-facing.
+
+      ## Acceptance
+
+      - Resolved (2026-06-13, operator decision via `aida questions answer`): CLI manual as a nested PART of the Book — One book; CLI manual is a section; PR #861 is already built this way (no rework)
+clock: 1759
 node_id: '1'

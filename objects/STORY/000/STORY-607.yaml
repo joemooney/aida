@@ -2,13 +2,18 @@ id: 019ec281-e316-7aa1-8253-4813fe993e1d
 spec_id: STORY-607
 agreed_id: STORY-607
 title: 'The AIDA Book: unified user-facing mdBook including the CLI manual as a section'
-description: 'Build one mdBook over the curated USER-FACING doc set: Getting Started (getting-started/first-project) · Core Concepts (lifecycle + the split diagrams) · CLI Reference (EPIC-40 manual, included as a section) · Review & Autonomy (review-process/autonomous-drain) · Setup & Admin (storage-modes/multi-user/forge) · Using with Claude Code · Glossary. SUMMARY.md curates membership; working docs (plans/competitive-analysis/...) excluded. Decide nesting: one book with the CLI manual as a part, vs the CLI manual mdBook staying standalone and this linking to it. Acceptance: mdbook build is warning-free; cross-doc links resolve within the book; the CLI manual chapters are reachable as a section; no working-artifact doc is included. Depends on the library-index curation deciding what is user-facing.'
-status: Draft
+description: |
+  Build one mdBook over the curated USER-FACING doc set: Getting Started (getting-started/first-project) · Core Concepts (lifecycle + the split diagrams) · CLI Reference (EPIC-40 manual, included as a section) · Review & Autonomy (review-process/autonomous-drain) · Setup & Admin (storage-modes/multi-user/forge) · Using with Claude Code · Glossary. SUMMARY.md curates membership; working docs (plans/competitive-analysis/...) excluded. Decide nesting: one book with the CLI manual as a part, vs the CLI manual mdBook staying standalone and this linking to it. Acceptance: mdbook build is warning-free; cross-doc links resolve within the book; the CLI manual chapters are reachable as a section; no working-artifact doc is included. Depends on the library-index curation deciding what is user-facing.
+
+  ## Acceptance
+
+  - Resolved (2026-06-13, operator decision via `aida questions answer`): CLI manual as a nested PART of the Book — One book; CLI manual is a section; PR #861 is already built this way (no rework)
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:32.726869661Z
-modified_at: 2026-06-13T23:02:59.350605264Z
+modified_at: 2026-06-13T23:20:47.062424638Z
 req_type: Story
 tags:
 - docs
@@ -47,4 +52,6 @@ decision_request:
     resolution: noop
   recommended: 0
   rationale: '#861 already assembled it as a part (no rework) and one book is simpler to navigate; pick standalone only if the CLI manual should version/ship independently.'
+  answered: 0
   asked_at: 2026-06-13T23:02:59.350605264Z
+  answered_at: 2026-06-13T23:20:47.057482923Z
