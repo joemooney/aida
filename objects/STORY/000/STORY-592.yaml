@@ -1,0 +1,16 @@
+id: 019ebf9d-6863-7272-abf3-b34a026515ad
+spec_id: STORY-592
+agreed_id: STORY-592
+title: 'CLI manual: Ch6 — Roles & sessions: role/agent/advisor/brief/mailbox (the seat model + inter-agent comms)'
+description: 'Write the chapter to the template set by docs/cli/01-getting-started.md: per-command One-line / Mental model / Reach-for-it-when / Don''t-reach-for-it-when(+alternative) / Key options (RATIONALE ONLY — never reproduce the full flag list) / Gotchas / Chains-with. Ground every command against its live `--help` before writing (no invented flags). Cross-link into the journey spine in docs/cli/README.md. On branch cli-manual.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:13:44.675829338Z
+modified_at: 2026-06-13T06:13:44.675829338Z
+req_type: Story
+tags:
+- cli-manual
+- docs
+- parent:EPIC-40
