@@ -1,0 +1,41 @@
+# The AIDA Book — the unified user-facing documentation site (STORY-607 / EPIC-41).
+#
+# Build:  mdbook build docs           (output → docs/book/, gitignored)
+# Read:   mdbook serve docs --open
+#
+# The CLI manual (docs/cli/*.md) is nested here as the "CLI Reference" part —
+# one Book, one nav, one search index (operator decision 2026-06-13). The
+# standalone docs/cli/book.toml remains as a focused CLI-only sub-view.
+#
+# DIAGRAMS: lifecycle.md uses mermaid. To render them as diagrams (not code):
+#   cargo install mdbook-mermaid && mdbook-mermaid install docs
+# That adds the assets + the [preprocessor.mermaid] block + the additional-js
+# lines below. Until then the book builds fine; diagrams show as fenced code.
+[book]
+title = "The AIDA Book"
+description = "AIDA documentation — from why-it-exists to running it for a team, including the full CLI reference."
+authors = ["AIDA"]
+src = "."
+language = "en"
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "navy"
+smart-punctuation = true
+no-section-label = true
+git-repository-url = "https://github.com/joemooney/aida"
+edit-url-template = "https://github.com/joemooney/aida/edit/main/docs/{path}"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+
+[output.html.search]
+enable = true
+limit-results = 25
+
+[output.html.fold]
+enable = true
+level = 1
+
+[preprocessor]
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
