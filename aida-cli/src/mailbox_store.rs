@@ -206,6 +206,7 @@ mod tests {
             in_reply_to: None,
             body: format!("body-{id}"),
             urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
             retracted: false,
             deleted: false,
         }
