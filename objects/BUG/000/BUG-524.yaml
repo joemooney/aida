@@ -11,10 +11,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T14:06:48.221738243Z
-modified_at: 2026-06-13T14:06:48.221738243Z
+modified_at: 2026-06-13T14:07:01.286390289Z
 req_type: Bug
 tags:
 - aida:show
+- batch:statusline
 - fasttrack
 - papercut
 - severity:cosmetic
