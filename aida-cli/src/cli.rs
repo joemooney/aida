@@ -5941,6 +5941,19 @@ pub enum Command {
         cmd: Option<QuestionsCommand>,
     },
 
+    /// Resolve a spec that needs a human — the natural entry point for the
+    /// decision verbs under `aida questions`. Smart-routes: if the spec has a
+    /// PENDING decision request (enumerated choices), this answers it
+    /// interactively (like `aida questions answer <spec>`); otherwise the spec
+    /// is under-specified, so this launches the interactive clarifier (like
+    /// `aida questions clarify <spec>`). A thin alias — the logic lives in
+    /// `aida questions`.
+    // trace:TASK-779 | ai:claude
+    Decide {
+        /// The spec (SPEC-ID or UUID) to resolve.
+        spec: String,
+    },
+
     /// Dispatch a SPIKE to a headless research agent: it produces a
     /// source-grounded analysis (attached to the spike) plus a recommendation,
     /// and escalates any strategic decision to `aida questions` for you to
