@@ -96166,14 +96166,33 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
-            storage.queue_remove(&user_id, &req.id)?;
+            // BUG-529: `--for <role>` is a role FILTER on remove, mirroring
+            // `queue add --for`. Resolve it the same way add does
+            // (`any` → unrouted/role-blind, otherwise canonicalize), then
+            // remove only the entry queued for that role so a spec queued for
+            // multiple roles can be dropped from one queue without emptying
+            // the others. Omitting `--for` keeps the historical role-blind
+            // remove (every entry for the spec). trace:BUG-529 | ai:claude
+            let remove_role: Option<String> = match r#for.as_deref() {
+                None | Some("any") => None,
+                Some(role) => Some(canonical_role_name(role)),
+            };
+            storage.queue_remove_for_role(&user_id, &req.id, remove_role.as_deref())?;
             // BUG-81: short id when present. trace:BUG-81 | ai:claude
             let display_id = req
                 .agreed_id
                 .as_deref()
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
-            println!("{} Removed {} from queue", "✓".green(), display_id.bold());
+            match remove_role.as_deref() {
+                Some(role) => println!(
+                    "{} Removed {} from queue [role:{}]",
+                    "✓".green(),
+                    display_id.bold(),
+                    role
+                ),
+                None => println!("{} Removed {} from queue", "✓".green(), display_id.bold()),
+            }
         }
         QueueCommand::Move {
             id,

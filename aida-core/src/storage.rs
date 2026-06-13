@@ -1541,6 +1541,20 @@ impl Storage {
         self.queue_backend()?.queue_remove(user_id, requirement_id)
     }
 
+    /// Remove an entry from a user's queue, optionally scoped to a single
+    /// routing role. `role == None` is role-blind (same as `queue_remove`);
+    /// `role == Some(r)` removes only the entry whose `for_role` matches `r`.
+    /// trace:BUG-529 | ai:claude
+    pub fn queue_remove_for_role(
+        &self,
+        user_id: &str,
+        requirement_id: &uuid::Uuid,
+        role: Option<&str>,
+    ) -> Result<()> {
+        self.queue_backend()?
+            .queue_remove_for_role(user_id, requirement_id, role)
+    }
+
     /// Reorder queue entries
     pub fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
         self.queue_backend()?.queue_reorder(user_id, items)

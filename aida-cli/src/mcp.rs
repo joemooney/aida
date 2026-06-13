@@ -3674,10 +3674,20 @@ impl<'a> McpServer<'a> {
         let store = self.storage.load().map_err(|e| e.to_string())?;
         let req = Self::resolve_requirement(&store, id)?;
         let display = Self::display_id_of(req);
+        // BUG-529: `for` is a role FILTER on remove, mirroring the CLI's
+        // `aida queue remove --for`. `any` (or absent) → role-blind; otherwise
+        // remove only the entry queued for that role. trace:BUG-529 | ai:claude
+        let remove_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
+            None | Some("any") => None,
+            Some(role) => Some(canonical_light_role_name(role)),
+        };
         self.storage
-            .queue_remove(&user_id, &req.id)
+            .queue_remove_for_role(&user_id, &req.id, remove_role.as_deref())
             .map_err(|e| e.to_string())?;
-        Ok(format!("Removed {} from queue.", display))
+        match remove_role.as_deref() {
+            Some(role) => Ok(format!("Removed {} from queue [role:{}].", display, role)),
+            None => Ok(format!("Removed {} from queue.", display)),
+        }
     }
 
     // ========================================================================
@@ -6737,12 +6747,13 @@ fn queue_tool_descriptors() -> Value {
         },
         {
             "name": "queue_remove",
-            "description": "Remove a requirement from the queue. Mirrors `aida queue remove`. Does not change the spec's status.",
+            "description": "Remove a requirement from the queue. Mirrors `aida queue remove`. Does not change the spec's status. Pass `for` to scope removal to one role's queue when the spec is queued for several.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to remove.", "example": "STORY-42" },
-                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" }
+                    "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
+                    "for": { "type": "string", "description": "Role filter: remove only the entry queued for this role (e.g. 'implementer', 'advisor'). 'any' or omitted = remove every entry for the spec.", "example": "advisor" }
                 },
                 "required": ["id"]
             },
