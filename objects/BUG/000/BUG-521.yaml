@@ -1,0 +1,16 @@
+id: 019ebfbd-ff41-7e53-b30c-f65831c57ebd
+spec_id: BUG-521
+agreed_id: BUG-521
+title: aida agent pause does not pause the process — verb misleads (only sets a dispatch marker; stop is what terminates)
+description: 'aida agent pause only sets a status marker for dispatch logic (budget-exhausted/rate-limited); the process keeps running. aida agent stop terminates. The verb pause strongly implies process control. Real UX trap. Fix: rename (agent mark-busy / agent flag) or, at minimum, lead the --help with the caveat. From the CLI-manual audit (EPIC-40).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:49:20.449952526Z
+modified_at: 2026-06-13T06:49:20.449952526Z
+req_type: Bug
+tags:
+- cli-consistency
+- from-manual-audit
+- papercut
