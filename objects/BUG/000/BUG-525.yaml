@@ -1,0 +1,24 @@
+id: 019ec1af-76eb-7a43-8d6e-5c34e04767ec
+spec_id: BUG-525
+agreed_id: BUG-525
+title: aida show panics on a title with a multibyte char near byte 10 (Review-PR prefix byte-slice not char-safe)
+description: |-
+  format_review_story_display() (aida-cli/src/main.rs) checks for the 'Review PR-' prefix with `title[..PREFIX.len()]` (a byte slice at index 10) guarded only by a BYTE-length check (`title.len() < PREFIX.len()`), not a char-boundary check. Any spec whose title has a multibyte char straddling byte 10 panics the whole 'aida show' command.
+
+  Repro: a spec titled 'TASK-782 — intent markers ...' (em-dash '—' at bytes 9-12) → `aida show <id>` panics: 'byte index 10 is not a char boundary; it is inside —'. Surfaced live 2026-06-13 when STORY-585's plan-followup auto-filer created TASK-788 with that title.
+
+  ## Acceptance
+  1. `aida show` (and any other caller of format_review_story_display) never panics on a non-ASCII title, regardless of where multibyte chars fall.
+  2. Fix: replace the byte-slice + byte-length guard with a char-boundary-safe prefix check (e.g. `title.get(..PREFIX.len())` → None on a non-boundary, or strip_prefix-style). The 'Review PR-:' detection behavior is unchanged for matching titles.
+  3. Regression test: format_review_story_display on a title with an em-dash near the prefix boundary returns None without panicking.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T15:52:42.475926565Z
+modified_at: 2026-06-13T15:52:42.475926565Z
+req_type: Bug
+tags:
+- aida:show
+- panic
+- reliability
