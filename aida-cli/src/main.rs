@@ -49845,17 +49845,27 @@ enum CacheFreshness {
     Stale,
     Behind,
     Unknown,
+    /// No `.aida-store` attached in this worktree (e.g. a harness /
+    /// general-purpose worktree with no orphan store checked out).
+    /// Distinct from `Unknown` (origin freshness is transiently
+    /// unknowable in an *attached* store): with no store at all there is
+    /// nothing to report, so the segment is omitted rather than rendering
+    /// a misleading `cache:?`. trace:BUG-518 | ai:claude
+    NoStore,
 }
 
 impl CacheFreshness {
     /// One-letter label used by statusline. None means "don't render"
-    /// (the Fresh case — boring, hide it). trace:STORY-78 | ai:claude
+    /// (the Fresh case — boring, hide it; and the NoStore case — there is
+    /// no store to report on, BUG-518). trace:STORY-78 | ai:claude
     fn label(self) -> Option<&'static str> {
         match self {
             CacheFreshness::Fresh => None,
             CacheFreshness::Stale => Some("stale"),
             CacheFreshness::Behind => Some("behind"),
             CacheFreshness::Unknown => Some("?"),
+            // No store attached → omit the segment entirely. trace:BUG-518
+            CacheFreshness::NoStore => None,
         }
     }
 }
@@ -49882,9 +49892,13 @@ fn classify_cache_freshness(
     last_fetch_age_secs: Option<u64>,
     freshness_threshold_secs: u64,
 ) -> CacheFreshness {
-    // No local store → no signal to render at all. Caller suppresses.
+    // No local store attached (e.g. a harness / general-purpose worktree
+    // with no `.aida-store` checked out) → there is nothing to report.
+    // Signal NoStore so the statusline omits the segment rather than
+    // rendering a misleading `cache:?` (which means "store attached,
+    // origin freshness transiently unknown"). trace:BUG-518 | ai:claude
     if local_sha.is_empty() {
-        return CacheFreshness::Unknown;
+        return CacheFreshness::NoStore;
     }
     // Axis 1: cache vs local. Stale wins over every other state because
     // the immediate consequence (slow next read while cache rebuilds) is
@@ -50581,22 +50595,25 @@ mod statusline_tests {
         assert_eq!(r, CacheFreshness::Unknown);
     }
 
-    /// Empty local SHA (no orphan store) → Unknown. Caller suppresses
-    /// rendering in this case anyway (cache.db wouldn't exist either),
-    /// but the classifier shouldn't claim Stale or Fresh from nothing.
+    /// Empty local SHA (no orphan store attached) → NoStore, distinct
+    /// from Unknown (transiently-unknown origin freshness on an attached
+    /// store). NoStore renders nothing so a store-less worktree doesn't
+    /// show a misleading `cache:?`. trace:BUG-518 | ai:claude
     #[test]
-    fn freshness_no_local_store_is_unknown() {
+    fn freshness_no_local_store_is_no_store() {
         let r = classify_cache_freshness(Some("aaaaaaa"), "", Some(true), Some(60), 300);
-        assert_eq!(r, CacheFreshness::Unknown);
+        assert_eq!(r, CacheFreshness::NoStore);
     }
 
-    /// Label mapping: Fresh suppressed, others render the documented strings.
+    /// Label mapping: Fresh + NoStore suppressed (render nothing), others
+    /// render the documented strings. trace:BUG-518 | ai:claude
     #[test]
     fn freshness_label_mapping() {
         assert_eq!(CacheFreshness::Fresh.label(), None);
         assert_eq!(CacheFreshness::Stale.label(), Some("stale"));
         assert_eq!(CacheFreshness::Behind.label(), Some("behind"));
         assert_eq!(CacheFreshness::Unknown.label(), Some("?"));
+        assert_eq!(CacheFreshness::NoStore.label(), None);
     }
 
     // ── derive_session_branch_suffix ──
