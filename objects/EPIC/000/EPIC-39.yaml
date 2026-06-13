@@ -24,10 +24,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:27.770511448Z
-modified_at: 2026-06-13T01:47:36.085073715Z
+modified_at: 2026-06-13T01:48:12.634752534Z
 req_type: Epic
 tags:
 - deferred:stabilization-first
+- from-spike:SPIKE-53
+- governance
+- parent-adr:ADR-4
+- repositioning
 relationships:
 - rel_type: !Custom related-to
   target_id: 019eacf6-86f6-7323-8e00-2cc9e3e8ffc5
