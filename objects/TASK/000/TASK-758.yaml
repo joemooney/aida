@@ -3,12 +3,12 @@ spec_id: TASK-758
 agreed_id: TASK-758
 title: 'aida zen finish: bias the auto-exit decision by operator presence (STORY-561)'
 description: 'Follow-up to STORY-564 (acceptance #5, deferred). Once STORY-561 presence consumers land (aida human home/away), have ''aida zen finish'' read ~/.aida/presence.toml: away → bias toward auto-exit even when a soft signal would pause; home → may still pause. ADVISORY ONLY — never overrides the integrity signals (needs-human marker / open punt / --pause-always), which stay hard. Wire into zen::classify_finish as an additional input, plumbed through handle_zen_command''s ZenCommand::Finish arm. Deferred because presence is plumbed-not-wired today (no consumers).'
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T17:21:56.724830144Z
-modified_at: 2026-06-12T17:41:42.372604648Z
+modified_at: 2026-06-13T02:20:52.547211103Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -26,3 +26,10 @@ relationships:
   target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
   created_at: 2026-06-12T17:41:42.372594503Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-13T02:20:52.547211103Z
+  implemented_by: joe
+interface_changes:
+  cli:
+  - '`aida zen finish` now treats explicit/effective operator home presence as an advisory soft pause and away/no-opinion as clean auto-exit, without overriding hard integrity gates.'
