@@ -3,12 +3,12 @@ spec_id: TASK-768
 agreed_id: TASK-768
 title: '**Optional: promote "needs-triage" to its own `OpenBucket` label** if the `NeedsAttention` shelf grows enough to warrant separate grouping (today it is a reason-string under `AwaitingDecision`)'
 description: ''
-status: Draft
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:31:28.108359459Z
-modified_at: 2026-06-13T01:48:05.293396818Z
+modified_at: 2026-06-13T01:48:06.161298602Z
 req_type: Task
 relationships:
 - rel_type: Child
