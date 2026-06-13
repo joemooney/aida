@@ -194,7 +194,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — print this manual's rationale entry for a command, inline in the terminal.
 
-**Mental model.** `aida manual <cmd>` is the bridge between this prose manual and your shell. `--help` tells you *what* a command does and *which* flags it takes; this manual tells you *when, why, and when not*. `aida manual <cmd>` pulls the matching `### \`aida <cmd>\`` section out of these chapters and prints it next to where you're working — so the rationale is one command away instead of a context-switch to the browser. It pages the output when a pager is available, otherwise prints plain. `--help` stays the source of truth for flags and defaults; `manual` never reproduces them.
+**Mental model.** `aida manual <cmd>` is the bridge between this prose manual and your shell. `--help` tells you *what* a command does and *which* flags it takes; this manual tells you *when, why, and when not*. `aida manual <cmd>` pulls the matching `### \`aida `<cmd>`\`` section out of these chapters and prints it next to where you're working — so the rationale is one command away instead of a context-switch to the browser. It pages the output when a pager is available, otherwise prints plain. `--help` stays the source of truth for flags and defaults; `manual` never reproduces them.
 
 **Reach for it when** — you know roughly which command you want but aren't sure it's the *right* one for the situation, or you want the "don't reach for it when" guidance before committing to an approach. It's the fast in-terminal lookup for the judgment layer.
 

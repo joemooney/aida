@@ -92,8 +92,7 @@ implements one iteration of it.
 
 ### batch
 
-A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --tags
-batch:NAME`), drained as a unit. `aida queue work --batch NAME` picks the
+A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --tags batch:NAME`), drained as a unit. `aida queue work --batch NAME` picks the
 head queued member of that batch; `--batch NAME --auto-complete` drains
 the whole batch sequentially.
 
@@ -439,8 +438,8 @@ commit history, and the requirement graph all survive.
 
 - Default **"ship"** to mean **merged to the main branch** — the
   developer-facing "out the door."
-- For earlier states, use the precise verb: "PR opened for <spec-id>", "<spec-id>
-  is reviewed, waiting on merge", "<spec-id>'s PR merged".
+- For earlier states, use the precise verb: "PR opened for `<spec-id>`", "`<spec-id>`
+  is reviewed, waiting on merge", "`<spec-id>`'s PR merged".
 - For "out to users with a version number," say **released** — distinct from
   merged, because a merge does not auto-release.
 - `lifecycle:*` tags change which orchestrator phases run; they do not change
@@ -451,8 +450,8 @@ commit history, and the requirement graph all survive.
 
 Better phrasing:
 
-- ~~"<spec-id> shipped"~~ → "<spec-id>'s PR merged" / "<spec-id> is on main"
-- ~~"shipped to a PR"~~ → "PR opened for <spec-id>"
+- ~~"`<spec-id>` shipped"~~ → "`<spec-id>`'s PR merged" / "`<spec-id>` is on main"
+- ~~"shipped to a PR"~~ → "PR opened for `<spec-id>`"
 - ~~"v1.2 shipped"~~ → "v1.2 was released" (binaries published)
 
 ## Why precision matters
