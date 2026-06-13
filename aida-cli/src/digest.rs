@@ -37,7 +37,8 @@ pub enum DigestAudience {
     Slf,
     /// CLI-surface diff for the day-to-day operator / power-user: new commands,
     /// changed flags & behaviors, fixes-you'll-notice, new skills — value-framed,
-    /// SPEC-IDs stripped, dev-noise dropped. trace:STORY-541
+    /// SPEC-IDs stripped, dev-noise dropped.
+    // trace:STORY-541 | ai:claude — plain `//` keeps it out of `--help` (BUG-523).
     Operator,
 }
 

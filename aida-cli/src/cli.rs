@@ -6670,7 +6670,7 @@ pub enum Command {
     /// SPEC-ID from being done?" with a bucket + reason derived from store
     /// signals (status, type, tags, blockers, decisions, live leases).
     Why {
-        /// The SPEC-ID to explain (e.g. STORY-543).
+        /// The SPEC-ID to explain (a story, task, or bug id).
         id: String,
         /// Machine-readable JSON (`{spec, bucket, reason, needs_human}`).
         #[clap(long)]
@@ -7077,7 +7077,7 @@ pub enum Command {
     // trace:STORY-67 | ai:claude
     // trace:STORY-553 | ai:claude
     Review {
-        /// Spec to review (e.g. `STORY-553`). Resolves its review surface,
+        /// Spec to review (a story, task, or bug id). Resolves its review surface,
         /// runs a reviewer over the diff, and prompts you to decide. Omit
         /// when using a `prompt` / `assemble` subcommand.
         spec: Option<String>,
