@@ -51,7 +51,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Two modes: the default **digest** mode is a per-requirement view sorted by last-touch ("what was I up to last session?"); `--events` switches to a **chronological per-event feed** that decodes each commit's YAML diff into one line per change. Digest is cheap and broad; events is slower (it shells out per file per commit) but precise — the mode for inspecting one spec closely.
 
-**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "Did my ship register?" (`--shipped`), "what moved this week?" (`--since`), "show me everything that happened to <spec-id>" (`--events --id`).
+**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "Did my ship register?" (`--shipped`), "what moved this week?" (`--since`), "show me everything that happened to `<spec-id>`" (`--events --id`).
 
 **Don't reach for it when** — you want a *readable narrative* for a person (that's `digest` — same events, editorial prose). And don't reach for `--events` as a general overview; it's slow by design. Use default digest mode for breadth, `--events` only when you're drilling into one spec or one transition type.
 
