@@ -920,3 +920,10 @@
   note: advisor-cleared at filing
   added_at: 2026-06-13T15:35:51.591373248Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 019ec199-93d1-7463-93bf-1fbc0aedca46
+  position: 443000
+  added_by: joe
+  added_at: 2026-06-13T16:20:00.458381011Z
+  for_role: implementer
+  added_by_machine: imac
