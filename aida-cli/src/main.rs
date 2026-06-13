@@ -36093,7 +36093,13 @@ fn format_review_story_display(display_id: &str, title: &str) -> Option<(String,
     // ORIGINAL title (not a lowercased copy) so the after-colon title keeps
     // its case.
     const PREFIX: &str = "Review PR-";
-    if title.len() < PREFIX.len() || !title[..PREFIX.len()].eq_ignore_ascii_case(PREFIX) {
+    // BUG-525: `str::get(..n)` returns None when `n` is out of bounds OR not a
+    // char boundary, so a non-ASCII title (e.g. an em-dash straddling byte 10)
+    // no longer panics the way a raw `title[..PREFIX.len()]` byte-slice did.
+    let Some(head) = title.get(..PREFIX.len()) else {
+        return None;
+    };
+    if !head.eq_ignore_ascii_case(PREFIX) {
         return None;
     }
     let rest = &title[PREFIX.len()..];
@@ -62296,6 +62302,20 @@ mod format_review_story_display_tests {
             format_review_story_display("STORY-50", "Add OAuth provider"),
             None
         );
+    }
+
+    /// BUG-525: a non-ASCII title with a multibyte char straddling the
+    /// `Review PR-` prefix boundary (byte 10) must return None, not panic on a
+    /// byte-slice that lands mid-char.
+    #[test]
+    fn non_ascii_title_near_prefix_boundary_does_not_panic() {
+        // '—' (em-dash) occupies bytes 9..12; a raw `title[..10]` slice panics.
+        let result =
+            format_review_story_display("TASK-788", "TASK-782 — intent markers + policy");
+        assert_eq!(result, None);
+        // A leading multibyte char, and an exactly-9-byte (sub-prefix) title.
+        assert_eq!(format_review_story_display("X", "→ go"), None);
+        assert_eq!(format_review_story_display("X", "Review P"), None);
     }
 
     /// Defensive: `Review PR-` followed by non-digits isn't the
