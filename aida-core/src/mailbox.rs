@@ -51,6 +51,16 @@ pub struct Message {
     /// trace:STORY-539 | ai:claude
     #[serde(default)]
     pub urgent: bool,
+    /// Sender/operator withdrawal: visible as a tombstone, body hidden in
+    /// normal views. Defaults false for older messages.
+    // trace:STORY-583 | ai:codex
+    #[serde(default)]
+    pub retracted: bool,
+    /// Sender/operator delete marker: suppresses the message from mailbox
+    /// views and wins during local/canonical merge so sync cannot resurrect it.
+    // trace:STORY-583 | ai:codex
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 impl Message {
@@ -58,6 +68,9 @@ impl Message {
     /// broadcast — but not its own sent messages (an agent doesn't inbox what
     /// it sent, including its own broadcasts).
     fn addressed_to(&self, agent: &str) -> bool {
+        if self.deleted {
+            return false;
+        }
         if self.from == agent {
             return false;
         }
@@ -82,7 +95,7 @@ pub fn inbox_for<'a>(agent: &str, messages: &'a [Message]) -> Vec<&'a Message> {
 pub fn thread<'a>(thread_id: &str, messages: &'a [Message]) -> Vec<&'a Message> {
     let mut out: Vec<&Message> = messages
         .iter()
-        .filter(|m| m.thread_id == thread_id)
+        .filter(|m| m.thread_id == thread_id && !m.deleted)
         .collect();
     out.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
     out
@@ -97,16 +110,31 @@ pub fn thread<'a>(thread_id: &str, messages: &'a [Message]) -> Vec<&'a Message> 
 pub fn merge_dedup(local: &[Message], canonical: &[Message]) -> Vec<Message> {
     use std::collections::HashMap;
     let mut by_id: HashMap<&str, &Message> = HashMap::new();
-    // Insert local first, then let canonical overwrite on collision.
     for m in local {
         by_id.insert(m.id.as_str(), m);
     }
     for m in canonical {
-        by_id.insert(m.id.as_str(), m);
+        match by_id.get(m.id.as_str()) {
+            Some(existing) if message_state_rank(existing) > message_state_rank(m) => {}
+            _ => {
+                by_id.insert(m.id.as_str(), m);
+            }
+        }
     }
     let mut out: Vec<Message> = by_id.into_values().cloned().collect();
     out.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
     out
+}
+
+// trace:STORY-583 | ai:codex
+pub fn message_state_rank(m: &Message) -> u8 {
+    if m.deleted {
+        2
+    } else if m.retracted {
+        1
+    } else {
+        0
+    }
 }
 
 /// One row of the operator overview (`aida mailbox list`): an agent that has
@@ -213,6 +241,8 @@ mod tests {
             in_reply_to: None,
             body: format!("body-{id}"),
             urgent: false,
+            retracted: false,
+            deleted: false,
         }
     }
 
@@ -325,6 +355,39 @@ mod tests {
         }"#;
         let m: Message = serde_json::from_str(legacy).unwrap();
         assert!(!m.urgent, "absent urgent field defaults to false");
+        assert!(!m.retracted, "absent retracted field defaults to false");
+        assert!(!m.deleted, "absent deleted field defaults to false");
+    }
+
+    // trace:STORY-583 | ai:codex
+    #[test]
+    fn merge_dedup_tombstone_and_delete_markers_win_over_regular_message() {
+        let original = msg("1", "t", "codex", Recipient::Agent("claude".into()), 10);
+        let retracted = Message {
+            retracted: true,
+            body: String::new(),
+            ..original.clone()
+        };
+        let deleted = Message {
+            deleted: true,
+            body: String::new(),
+            ..original.clone()
+        };
+
+        let merged = merge_dedup(
+            std::slice::from_ref(&retracted),
+            std::slice::from_ref(&original),
+        );
+        assert!(merged[0].retracted);
+        assert!(!merged[0].deleted);
+
+        let merged = merge_dedup(
+            std::slice::from_ref(&original),
+            std::slice::from_ref(&deleted),
+        );
+        assert!(merged[0].deleted);
+        assert!(inbox_for("claude", &merged).is_empty());
+        assert!(thread("t", &merged).is_empty());
     }
 
     #[test]

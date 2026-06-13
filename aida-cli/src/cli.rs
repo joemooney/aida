@@ -1770,6 +1770,20 @@ pub enum MailboxCommand {
     /// counts, most-recent-activity first.
     List,
 
+    /// Retract a sent message, leaving a withdrawn tombstone in mailbox views.
+    // trace:STORY-583 | ai:codex
+    Retract {
+        /// Message id to retract.
+        message_id: String,
+    },
+
+    /// Delete a sent message from mailbox views; records a marker so sync does not resurrect it.
+    // trace:STORY-583 | ai:codex
+    Delete {
+        /// Message id to delete.
+        message_id: String,
+    },
+
     /// Show a full conversation thread, oldest-first.
     Thread {
         /// The thread id.

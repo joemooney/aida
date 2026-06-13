@@ -10,7 +10,7 @@
 //! The read/filter/merge logic lives in the pure `aida_core::mailbox` core;
 //! this module is only the file I/O around it. trace:STORY-493 trace:TASK-603 | ai:claude
 
-use aida_core::mailbox::Message;
+use aida_core::mailbox::{message_state_rank, Message};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -86,21 +86,31 @@ pub(crate) fn read_canonical_messages(store_root: &Path) -> Result<Vec<Message>>
 ///   newly written; the CALLER stages + commits the orphan-store change.
 ///   trace:TASK-605 | ai:claude
 pub(crate) fn digest_local_to_canonical(store_root: &Path, project_root: &Path) -> Result<usize> {
-    use std::collections::HashSet;
+    use std::collections::HashMap;
     let local = read_local_messages(project_root)?;
-    let canonical_ids: HashSet<String> = read_canonical_messages(store_root)?
+    let canonical_by_id: HashMap<String, Message> = read_canonical_messages(store_root)?
         .into_iter()
-        .map(|m| m.id)
+        .map(|m| (m.id.clone(), m))
         .collect();
     let cdir = canonical_dir(store_root);
     let mut written = 0usize;
     for msg in &local {
-        if !canonical_ids.contains(&msg.id) {
-            write_message_in(&cdir, msg)?;
-            written += 1;
+        let should_write = match canonical_by_id.get(&msg.id) {
+            None => true,
+            Some(canonical) => message_state_rank(msg) > message_state_rank(canonical),
+        };
+        if !should_write {
+            continue;
         }
+        write_message_in(&cdir, msg)?;
+        written += 1;
     }
     Ok(written)
+}
+
+// trace:STORY-583 | ai:codex
+pub(crate) fn write_message_marker(project_root: &Path, msg: &Message) -> Result<()> {
+    write_message(project_root, msg)
 }
 
 /// Per-agent read-watermark directory: `<project_root>/.aida/mailbox/.read/`.
@@ -196,6 +206,8 @@ mod tests {
             in_reply_to: None,
             body: format!("body-{id}"),
             urgent: false,
+            retracted: false,
+            deleted: false,
         }
     }
 
@@ -275,6 +287,34 @@ mod tests {
             1
         );
         assert_eq!(read_canonical_messages(store.path()).unwrap().len(), 3);
+    }
+
+    // trace:STORY-583 | ai:codex
+    #[test]
+    fn digest_writes_delete_marker_for_already_synced_message() {
+        let proj = tempdir().unwrap();
+        let store = tempdir().unwrap();
+        let original = msg("a", "codex", Recipient::Broadcast, 10);
+        write_message(proj.path(), &original).unwrap();
+        assert_eq!(
+            digest_local_to_canonical(store.path(), proj.path()).unwrap(),
+            1
+        );
+
+        let marker = Message {
+            deleted: true,
+            body: String::new(),
+            ..original
+        };
+        write_message_marker(proj.path(), &marker).unwrap();
+        assert_eq!(
+            digest_local_to_canonical(store.path(), proj.path()).unwrap(),
+            1
+        );
+
+        let canon = read_canonical_messages(store.path()).unwrap();
+        assert_eq!(canon.len(), 1);
+        assert!(canon[0].deleted);
     }
 
     #[test]
