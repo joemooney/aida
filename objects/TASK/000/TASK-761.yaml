@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T18:31:02.591461429Z
-modified_at: 2026-06-13T01:56:59.969660967Z
+modified_at: 2026-06-13T02:21:02.663897528Z
 req_type: Task
 tags:
 - aida:intake
@@ -19,3 +19,12 @@ relationships:
   target_id: 019eb6ca-001b-7270-a518-5c35e141a4df
   created_at: 2026-06-12T18:31:21.454161009Z
   created_by: joe
+comments:
+- id: 019ebec8-5d47-7ca2-92b2-df52a5620de5
+  author: mcp
+  content: |-
+    Codex opened PR #803 for advisor review: https://github.com/joemooney/aida/pull/803
+
+    Implemented a substrate-grade edit-status gate that refuses approval promotion for vision/epic/principle/constraint/decision/term requirement types and added focused unit coverage. Verification passed: cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli. Not self-merged.
+  created_at: 2026-06-13T02:21:02.663893167Z
+  modified_at: 2026-06-13T02:21:02.663893167Z
