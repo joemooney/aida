@@ -1,0 +1,16 @@
+id: 019ec2b9-de12-7981-bb9f-f41c5cdb64de
+spec_id: TASK-796
+agreed_id: TASK-796
+title: 'Doc-intent part 4: drift-guard asserts surface-changing specs'' interface_changes are REFLECTED in the docs'
+description: 'Part 4 of STORY-603. Extend verify-manual.py beyond ''every command documented'' to ''every surface-changing spec''s interface_changes is reflected in the manual''. Builds on the part-1 gate (PR #858) which already resolves interface_changes per spec from the aida-store branch. Deferred from PR #858.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T20:43:41.458619693Z
+modified_at: 2026-06-13T20:43:41.458619693Z
+req_type: Task
+tags:
+- docs
+- parent:EPIC-40
+- parent:STORY-603
