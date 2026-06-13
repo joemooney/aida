@@ -4258,12 +4258,18 @@ pub enum QueueCommand {
 /// Slice 1 records the answer (pure data op); the loop-resume auto-applier
 /// that applies the chosen resolution token is deferred.
 // trace:STORY-522 | ai:claude
+// trace:TASK-780 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum QuestionsCommand {
+    /// Run by: anyone, when: you want to see what's pending (read-only).
+    ///
     /// List the decision inbox — every spec with a recorded DecisionRequest,
     /// pending ones first. The pure read; never prompts (scripting/scanning).
     List,
 
+    /// Run by: advisor / automation, when: detecting which specs need a human
+    /// decision before they're pickable (the detection pass).
+    ///
     /// Sweep the scoped backlog for specs that are likely to need a human
     /// decision before implementation, then attach DecisionRequests for the
     /// flagged candidates that do not already have an open request.
@@ -4280,6 +4286,9 @@ pub enum QuestionsCommand {
         apply: bool,
     },
 
+    /// Run by: the advisor, when: it hits a fork it can't resolve and needs to
+    /// pose the question to the human (not a human-run command).
+    ///
     /// Pose a structured DecisionRequest on a spec. The advisor distills a
     /// fork into a self-contained question + enumerated choices, each mapping
     /// to a deterministic resolution token. Refuses if the spec already has a
@@ -4312,6 +4321,9 @@ pub enum QuestionsCommand {
         force: bool,
     },
 
+    /// Run by: human + agent together (interactive), when: an under-specified
+    /// spec needs acceptance criteria authored before it's pickable.
+    ///
     /// Fire up an INTERACTIVE advisor that interrogates you to author
     /// acceptance criteria for under-specified specs — the human-side
     /// complement to `sweep` (sweep detects, clarify resolves). Launches
@@ -4331,6 +4343,9 @@ pub enum QuestionsCommand {
         dry_run: bool,
     },
 
+    /// Run by: the human, when: draining pending decisions (no LLM session — a
+    /// plain operator data op).
+    ///
     /// Answer pending decisions — the HUMAN-decision drain, the symmetric
     /// complement of `aida burndown run` (which drains the decision-FREE ready
     /// set with autonomous agents). Answering APPLIES the chosen resolution:
