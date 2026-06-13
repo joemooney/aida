@@ -1,0 +1,27 @@
+id: 019ec1b4-40b4-7e23-836e-7db6a9a9ce9f
+spec_id: STORY-603
+agreed_id: STORY-603
+title: 'Doc-intent protocol: surface-changing specs populate interface_changes; the documenter consumes spec INTENT (not just --help); docs trace back to specs'
+description: |-
+  Operator (2026-06-13): the overnight manual verified against --help (the surface/WHAT) but didn't consume spec INTENT (the WHY) — so it's a 'blind redetermination,' not intent-bearing docs. The shape to fix this already exists but is underused: interface_changes (STORY-542, per-spec cli/mcp surface-delta lines, gated by AIDA_CAPTURE_INTERFACE_CHANGES) + spec description/acceptance (intent) + processing_record (STORY-582, why-done) + trace comments (code<->spec). Are we capturing the right info for the documenter? The shape is right; capture is inconsistent; the documenter read the wrong source.
+
+  Protocol:
+  1. MARK doc-impact at the spec: a surface-changing spec populates interface_changes with VALUE-FRAMED deltas (not dev-jargon). ENFORCE via a check — diff touches cli.rs command/flag defs or the skill/command set => interface_changes non-empty OR a 'docs:impacted' tag. Substrate-as-bouncer, not a rule.
+  2. DOCUMENTER consumes the spec graph: --help (what) + interface_changes (delta) + spec description/acceptance (why) => entries that explain intent, traced to the shaping spec. STORY-600 (aida manual <cmd>) is the generated endgame.
+  3. BACKLINK: each manual entry traces to its shaping spec(s) so a reader/agent is one hop from intent.
+  4. DRIFT-GUARD extends (verify-manual.py / CI): not just 'every command documented' but 'every surface-changing spec's interface_changes is reflected in the docs.'
+
+  Children/relates: STORY-542 (interface_changes — make it reliably populated + value-framed), STORY-600 (aida manual <cmd>), STORY-601 (machine-digestible for aida-tutor), STORY-582 (processing record), TASK-787 (manual finalize). The unifying principle: the SPEC is the source of intent; docs DERIVE from the spec graph + the surface, never from the surface alone. trace:EPIC-40 trace:STORY-542
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T15:57:56.276099391Z
+modified_at: 2026-06-13T15:57:56.276099391Z
+req_type: Story
+tags:
+- aida:cli
+- docs
+- intent
+- parent:EPIC-40
+- relates:STORY-542
