@@ -20515,16 +20515,15 @@ fn handle_graph_command(
             "follow",
         )
     } else {
-        // BUG-448 / TASK-679: the epic rollup walks OUTGOING `Parent` to reach
-        // children — both `aida add --parent` and `aida rel add --type parent`
-        // store `parent --Parent--> child` on the parent (TASK-679 made `rel
-        // add` also write the reciprocal `child --Child--> parent`, so the two
-        // surfaces now agree). `Child` is KEPT in the union purely for
-        // back-compat: any legacy store whose hierarchy was recorded the other
-        // way round (a parent carrying `Child --> child` edges) still resolves
-        // its children without a migration. Both are OUTGOING from the epic and
-        // both resolve to children; the visited/seen sets dedup overlap.
-        // trace:BUG-448 | ai:claude trace:TASK-679 | ai:claude
+        // BUG-448: the spec hierarchy edge can live on EITHER endpoint, and the
+        // rel_type names the TARGET's role (the convention export.rs reads): a
+        // parent carries `Child → child`, while a child carries `Parent →
+        // parent` (what `aida add --parent` / import write — export.rs
+        // set_relationship). Unioning OUTGOING `Child` + `Parent` therefore
+        // traverses the hierarchy whichever side recorded the edge, and from any
+        // starting node — down via `Child`, up via `Parent` (so a query on a
+        // child reaches its epic and back down to its siblings). The
+        // visited/seen sets dedup the overlap. trace:BUG-448 | ai:claude
         (
             vec![(
                 vec![RelationshipType::Child, RelationshipType::Parent],
@@ -20582,10 +20581,48 @@ fn handle_graph_command(
         println!("  {}", "(no related specs in this direction)".dimmed());
         return Ok(());
     }
-    for nid in &result.nodes {
-        match store.get_requirement_by_id(nid) {
-            Some(r) => println!("  {}  {}", r.display_id().yellow(), r.title),
-            None => println!("  {}  {}", nid.to_string().yellow(), "(unresolved)".red()),
+    if is_tree {
+        // Indented hierarchy so parents, children, and siblings are distinct
+        // (BUG-534). tree_layout includes the queried node, rooted at the epic;
+        // a `▸` marks "you are here" when the query is not the structural root.
+        for (nid, depth) in aida_core::graph_walk::tree_layout(id, &result.nodes, &result.edges) {
+            let queried = nid == id;
+            let lead = if queried {
+                match depth {
+                    0 => "▸ ".to_string(),
+                    d => format!("{}▸ ", "  ".repeat(d - 1)),
+                }
+            } else {
+                "  ".repeat(depth)
+            };
+            match store.get_requirement_by_id(&nid) {
+                Some(r) => {
+                    let label = if queried {
+                        r.display_id().cyan().bold()
+                    } else {
+                        r.display_id().yellow()
+                    };
+                    let here = if queried {
+                        format!("  {}", "(queried)".dimmed())
+                    } else {
+                        String::new()
+                    };
+                    println!("{}{}  {}{}", lead, label, r.title, here);
+                }
+                None => println!(
+                    "{}{}  {}",
+                    lead,
+                    nid.to_string().yellow(),
+                    "(unresolved)".red()
+                ),
+            }
+        }
+    } else {
+        for nid in &result.nodes {
+            match store.get_requirement_by_id(nid) {
+                Some(r) => println!("  {}  {}", r.display_id().yellow(), r.title),
+                None => println!("  {}  {}", nid.to_string().yellow(), "(unresolved)".red()),
+            }
         }
     }
     if is_tree {
