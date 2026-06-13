@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:49:16.215550754Z
-modified_at: 2026-06-13T03:09:28.203779420Z
+modified_at: 2026-06-13T03:43:26.317478620Z
 req_type: Story
 tags:
 - aida:list
@@ -35,3 +35,9 @@ relationships:
   target_id: 019ebef4-87be-77f0-8494-ba8ef126b1b8
   created_at: 2026-06-13T03:09:28.203776621Z
   created_by: joe
+comments:
+- id: 019ebf13-cc6d-7961-8c73-dd32e27c7212
+  author: joe
+  content: Commit 5a4bbccf7 references this requirement
+  created_at: 2026-06-13T03:43:26.317478620Z
+  modified_at: 2026-06-13T03:43:26.317478620Z
