@@ -1,0 +1,37 @@
+id: 019ebfbe-6099-7740-a0d2-d88a24f29afc
+spec_id: TASK-778
+agreed_id: TASK-778
+title: 'CLI consistency audit: papercuts + inconsistencies surfaced writing the CLI manual (checklist)'
+description: |-
+  Captured while grounding every command for the CLI manual (EPIC-40). Each is small; bundle to avoid 20 separate specs. Triage + fix or split as warranted:
+
+  - search is case-INsensitive by default; grep is case-SENSITIVE by default — inverted footgun for two sibling search verbs.
+  - search --all = archived+deferred; list --all = archived+live — same flag, different everything across sibling lenses.
+  - comment add/list use a positional <ID>; comment edit/delete use --req-id — inconsistent argument shape for the same concept.
+  - comment add --content duplicates the positional [CONTENT].
+  - aida graph default mode is --tree but the --help description leads with blocked-by/blocks (buried default).
+  - rel list with no args dumps every edge, no --limit (firehose on large stores).
+  - doc vs docs (singular writes into graph; plural renders graph out) confusable by one letter; doc is hidden from help-all.
+  - doc show is overloaded: DOC-N id prints that entry; any other spec id prints all docs referencing it.
+  - github/gitlab/jira bridges have divergent verb sets — gitlab has no push (publish-to-tracker works for github/jira only).
+  - aida server subcommands require the TOP-LEVEL -s/--server flag, not a server-local one — confusing error.
+  - export --format default is mapping, but the documented export→import round-trip needs --format tree (silent wrong shape on bare export).
+  - db namespace mixes daily-recovery verbs (reconcile-status) with distributed/migration plumbing (retire-legacy-ids, workspace-init) — no tiering.
+  - aida plan --help top blurb still says Today: only verify but plan now has 7 subcommands (stale).
+  - plan fan-out silently drops low-priority tail unless --include-low (reads as missed specs).
+  - role active vs role current differ only in exit-code contract (could be one command + flag).
+  - config noun spans machine-global (config user) and project-local (config show/format) scopes.
+  - doctor --heal gates healing, but subcommands carry their own independent destructive opt-ins (--strip-dangling, --repair) — two mental models.
+  - status is help-all-tagged best entry point yet lives in Reporting (last groups), not Getting-started.
+  - verify-manual.py (the manual drift-guard) only checks flags against the parent command --help, not subcommands — descend into subcommand --help to kill the false-positive WARNs.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:49:45.369181454Z
+modified_at: 2026-06-13T06:49:45.369181454Z
+req_type: Task
+tags:
+- cli-consistency
+- from-manual-audit
+- papercut
