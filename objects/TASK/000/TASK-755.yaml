@@ -19,12 +19,12 @@ description: |-
   3. An epic/parent whose children carry corroborating commits is not flagged (or is clearly grouped).
   4. A genuinely-recent Completed code spec with no corroborating commit STILL surfaces individually — the real signal is preserved (regression-guard this).
   5. No SPEC-IDs in user-facing output.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:45:14.138395370Z
-modified_at: 2026-06-13T02:21:04.152888494Z
+modified_at: 2026-06-13T02:32:38.232030906Z
 req_type: Task
 tags:
 - aida:doctor
@@ -41,3 +41,15 @@ comments:
     Implemented completed-without-commit noise reduction: non-code requirement classes are excluded, default output shows recent uncorroborated completions and collapses older uncorroborated findings to a count, and --all expands the historical tail. Verification passed after rebasing onto latest origin/main: cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli. Not self-merged.
   created_at: 2026-06-13T02:21:04.152884985Z
   modified_at: 2026-06-13T02:21:04.152884985Z
+history:
+- id: 019ebed2-fae4-7fc3-845f-bfaa81455435
+  author: aida-auto-bump
+  timestamp: 2026-06-13T02:32:38.372245755Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T02:32:38.232030906Z
+  completion_sha: 0909d07d8bfd0db3a5279fbb14da004b5546a38a

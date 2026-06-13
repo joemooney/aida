@@ -40,12 +40,12 @@ description: |-
   ## Origin
 
   User question 2026-05-22 while a 3-PR recovery cascade ran in background via Bash tool. The cascade affected state (BUG-307, BUG-310, BUG-311 merges + lease cleanups) but \`aida status\` was silent on it.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T15:53:40.778620533Z
-modified_at: 2026-06-13T02:20:50.849645051Z
+modified_at: 2026-06-13T02:32:38.232030906Z
 req_type: Story
 tags:
 - advisor-activity
@@ -96,10 +96,20 @@ comments:
   content: 'Deferred 2026-05-30 (blocked-queue triage, operator-approved): off-phase for the current bugs-first → stability phase. Valid work — kept as Approved backlog, dequeued from the active queue, tagged deferred:post-stability. Revisit when the phase shifts. Note: observability feature; PARTIALLY built already — write-side breadcrumb (.aida/advisor-activity.jsonl) exists (main.rs:29130), only the aida-status read-side remains, so it''s smaller-than-filed when revisited.'
   created_at: 2026-05-31T04:43:33.162154088Z
   modified_at: 2026-05-31T04:43:33.162154088Z
+history:
+- id: 019ebed2-fae4-7fc3-845f-bf87434aaa6f
+  author: aida-auto-bump
+  timestamp: 2026-06-13T02:32:38.372215763Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T02:20:50.849645051Z
   implemented_by: joe
+  completed_at: 2026-06-13T02:32:38.232030906Z
+  completion_sha: acecb58c95615df71af43877a7b728f7d93f5fc7
 human_only: true
 interface_changes:
   cli:

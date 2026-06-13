@@ -31,12 +31,12 @@ description: |-
   ## Rationale
 
   Closes a real blast-radius gap most relevant to the unattended autonomous drains AIDA is investing in (burndown, --no-human). Frames safety as the deliberate posture for the unattended case — NOT a change to the operator's at-keyboard bypass default ([[user_permission_posture]]). Substrate-as-bouncer, composing native controls. Smallest valuable slice (write-containment + destructive denylist); containerization deferred.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:02:23.538240541Z
-modified_at: 2026-06-13T02:21:01.454847996Z
+modified_at: 2026-06-13T02:32:38.232030906Z
 req_type: Story
 tags:
 - agent-config
@@ -52,3 +52,15 @@ comments:
   content: 'Codex implementation opened PR #807. Spike finding: Claude Code native settings/deny rules plus Bash sandbox cover the v1 contained posture, so the implementation configures native sandboxing at launch and does not add OS-container infrastructure. CLI-facing changes: added `--sandbox` on Claude launch surfaces and `[agents] contained = true` as the opt-in contained posture; contained is mutually exclusive with bypass and uses the session lease worktree as the write boundary. Verification passed: `cargo build -p aida-cli`; `cargo fmt --all -- --check`; `cargo clippy -p aida-cli -- -D clippy::correctness`; `env -u AIDA_SESSION_ROLE cargo test -p aida-cli`.'
   created_at: 2026-06-13T02:21:01.454819229Z
   modified_at: 2026-06-13T02:21:01.454819229Z
+history:
+- id: 019ebed2-fae4-7fc3-845f-bf9d83503a80
+  author: aida-auto-bump
+  timestamp: 2026-06-13T02:32:38.372233596Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T02:32:38.232030906Z
+  completion_sha: e54fa47efb5884c5236956649bb59fc230138d55
