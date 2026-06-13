@@ -1,0 +1,18 @@
+id: 019ec351-cfbe-7370-a9b6-c8e276220040
+spec_id: BUG-541
+agreed_id: BUG-541
+title: burndown drain exits before its LAST PR's CI goes green — leaves it open+unmerged (orphaned)
+description: 'Observed 2x (2026-06-13): the drain (''aida burndown run'' → /aida-burndown) merges earlier PRs but EXITS while its final fanned-out PR still has CI running, leaving it OPEN+unmerged. #852 (BUG-534) and #864 (STORY-611) both stranded — the advisor had to merge them as backup integrator. The skill''s integrate step (''merge it... loop until drained'') should WAIT for every fanned-out PR''s CI to reach terminal + merge (or hold) before declaring the drain complete. At minimum, the completion handoff must LIST any PR left un-merged (''left for manual merge: #N'') so it''s not silently orphaned — silence reads as ''all merged''. Fix: the integrator loop drains its full PR set (poll each to terminal CI) before exit; report stragglers explicitly. trace:relates:EPIC-28 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:29:39.262777325Z
+modified_at: 2026-06-13T23:29:39.262777325Z
+req_type: Bug
+tags:
+- aida:burndown
+- drain
+- from-friction
+- relates:EPIC-28
+- reliability
