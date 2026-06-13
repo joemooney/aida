@@ -31,7 +31,7 @@ description: |-
   ## Rationale
 
   Closes a real blast-radius gap most relevant to the unattended autonomous drains AIDA is investing in (burndown, --no-human). Frames safety as the deliberate posture for the unattended case — NOT a change to the operator's at-keyboard bypass default ([[user_permission_posture]]). Substrate-as-bouncer, composing native controls. Smallest valuable slice (write-containment + destructive denylist); containerization deferred.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
