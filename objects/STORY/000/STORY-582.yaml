@@ -1,0 +1,32 @@
+id: 019ebebc-57f3-7340-8ba9-2906d6dd2010
+spec_id: STORY-582
+agreed_id: STORY-582
+title: 'Durable work-processing record: capture what an agent did + why when a brief/spec is processed (audit trail)'
+description: |-
+  Operator intuition (2026-06-12): as briefs/specs are processed (agent picks up -> implements -> PR -> merge -> Completed), AIDA does NOT keep a consolidated, DURABLE record of WHAT was done and WHY. Today the trail is scattered and partial on the why: the spec history: array (status/field deltas only), the commit/PR (code + message), spec comments (whatever got written), the aida review verdict files (.aida/review-verdicts/, GITIGNORED local-only), and the brief .acked file (GITIGNORED local-only). The agent's reasoning + key decisions (what it chose and why, what it punted, what the reviewer caught) are NOT systematically captured back onto the spec in a durable, committed, queryable form. Operator view: valuable over time; space is cheap; prune in due course.
+
+  GOVERNANCE-RELEVANT: this is the audit half of the EPIC-39 repositioning thesis. Per the SPIKE-58 verification, AIDA's defensible edge is a human-reviewable 'what changed in the code, against which approved requirement, by which agent' — AIDA proves the WHAT (trace + history) but currently LOSES the WHY. This closes that gap.
+
+  Acceptance:
+  1. When a spec is processed to Completed via a brief / queue-work / burndown, capture a durable PROCESSING RECORD committed to the store (in/alongside the YAML, NOT gitignored): summary of what was done, key decisions + rationale (the why), what was punted/escalated, and the PR/commit linkage.
+  2. Reuse existing capture points rather than adding a new author burden: fold the brief content, the implementer finish-checkpoint, and the aida review verdict into the committed record. Promote the gitignored verdict/brief artifacts into the durable record at completion time.
+  3. Queryable: aida show <ID> surfaces the processing record; a history/record view can walk it.
+  4. Prunable: a retention/prune path (fold into the archive sweep or an explicit prune verb) so the record can be trimmed later without losing the spec.
+  5. Privacy floor: no secrets/credentials in the committed record.
+
+  Composes with: briefs (gitignored today -> this makes the OUTCOME durable), aida review verdicts, the spec history: array, EPIC-39 governance/audit thesis. Design fork the advisor should resolve before pickup: structured comment vs a new history-adjacent field vs a sibling objects/RECORD file.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T02:07:54.867595770Z
+modified_at: 2026-06-13T02:07:54.867595770Z
+req_type: Story
+tags:
+- aida:brief
+- aida:history
+- audit
+- core
+- governance
+- parent:EPIC-39
+- provenance
