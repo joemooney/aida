@@ -20,12 +20,12 @@ description: |-
   5. Out of scope (explicit). Does NOT: add any new CLI verb (P1-P7 GAPs are TASK-734, master-gated); re-classify any A/B/C bucket; touch pure-agentic (bucket-A) skills; change the verbs' own behavior/output; or build a lint/CI guard (deferred — too fuzzy to detect reliably; revisit only if drift recurs).
 
   Primary callers: discipline-pack note → read on demand by AIDA-using sessions; checklist line → trips a reading agent inside /aida-commit + /aida-pr at ship time; backfill edits → skill markdown masters under `aida-core/templates/{skills,commands}/`.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:04:42.420956459Z
-modified_at: 2026-06-13T15:21:53.160796389Z
+modified_at: 2026-06-13T15:29:21.211451018Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -37,3 +37,21 @@ comments:
   content: Commit 1227e7015 references this requirement
   created_at: 2026-06-13T15:21:53.160796389Z
   modified_at: 2026-06-13T15:21:53.160796389Z
+history:
+- id: 019ec19a-1537-75f0-9ffb-b956c3838e69
+  author: aida-reconcile
+  timestamp: 2026-06-13T15:29:21.207483754Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec19a-153b-7e62-898d-f26fa5308478
+  timestamp: 2026-06-13T15:29:21.211449975Z
+  agent: aida
+  commit_sha: 300cf04b3f31e853efc22f42250cb2aff1061908
+  summary: Completed via merge 300cf04b
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T15:29:21.054965165Z
+  completion_sha: 300cf04b3f31e853efc22f42250cb2aff1061908
