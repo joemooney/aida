@@ -12377,6 +12377,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // triage the punt exists to request. trace:BUG-482 | ai:claude
                 let new_status = parse_status(canonical)?;
                 if status_advance_requires_advisor_authority(&req.status, &new_status) {
+                    // trace:TASK-761 | ai:codex
+                    if matches!(new_status, RequirementStatus::Approved)
+                        && approval_forbidden_for_type(&req.req_type)
+                    {
+                        anyhow::bail!(
+                            "{} specs cannot be promoted to {}. Leave this class outside the \
+                             approved execution pipeline.",
+                            req.req_type,
+                            canonical
+                        );
+                    }
                     if !has_advisor_authority() {
                         anyhow::bail!(
                             "promoting a {} spec to {} needs advisor authority (advisor role or \
@@ -50060,6 +50071,42 @@ mod statusline_tests {
         assert!(!gate(&S::InProgress, &S::NeedsAttention));
     }
 
+    // trace:TASK-761 | ai:codex
+    #[test]
+    fn approval_type_gate_blocks_non_execution_classes() {
+        use super::approval_forbidden_for_type as blocked;
+        use aida_core::models::RequirementType as T;
+
+        for req_type in [
+            T::Vision,
+            T::Epic,
+            T::Principle,
+            T::Constraint,
+            T::Decision,
+            T::Term,
+        ] {
+            assert!(blocked(&req_type), "{req_type} should not be approvable");
+        }
+
+        for req_type in [
+            T::Functional,
+            T::NonFunctional,
+            T::System,
+            T::User,
+            T::ChangeRequest,
+            T::Bug,
+            T::Story,
+            T::Task,
+            T::Spike,
+            T::Sprint,
+            T::Folder,
+            T::Meta,
+            T::Doc,
+        ] {
+            assert!(!blocked(&req_type), "{req_type} should remain approvable");
+        }
+    }
+
     /// TASK-739: exhaustive parity — `status_requires_advisor_authority` (now
     /// delegating to `lifecycle::target_requires_advisor_authority`) matches the
     /// pre-migration hand-coded predicate over every status. trace:TASK-739
@@ -61444,6 +61491,19 @@ pub(crate) fn status_advance_requires_advisor_authority(
     use aida_core::lifecycle::{transition_guard, GuardKind, State};
     transition_guard(State::from_status(from), State::from_status(to))
         == GuardKind::RequiresAdvisorAuthority
+}
+
+fn approval_forbidden_for_type(req_type: &RequirementType) -> bool {
+    // trace:TASK-761 | ai:codex
+    matches!(
+        req_type,
+        RequirementType::Vision
+            | RequirementType::Epic
+            | RequirementType::Principle
+            | RequirementType::Constraint
+            | RequirementType::Decision
+            | RequirementType::Term
+    )
 }
 
 /// TASK-130: resolve the `human_only` marker for a freshly-added spec from its
