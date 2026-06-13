@@ -1,6 +1,6 @@
 # Review process — who reviews, by execution mode
 
-<!-- trace:STORY-553 | ai:claude -->
+<!-- trace:STORY-553 trace:STORY-587 | ai:claude -->
 
 Every code change in AIDA is reviewed by **a different entity than the one that
 wrote it**. That invariant never changes. What *does* change — by execution
@@ -70,7 +70,8 @@ reads code; you surface only for escalations the advisor tier couldn't resolve.
 |------|-------------|---------------|-----------|---------------|
 | **manual brief fan-out** | agent (you dispatch) | **advisor, by hand (reads the diff)** | dispatch + watch | advisor escalates to you |
 | **`--zen --auto-complete`** | agent (interactive) | automated `reviewer` phase | present; handle forks, can intervene | pause for you |
-| **`--no-human=both`** | headless `claude -p` | headless `reviewer` phase | *absent* | headless advisor tier (`/aida-advise`) resolves-or-escalates |
+| **`--no-human=both` / `burndown run`** | headless `claude -p` | headless (cold-boot) `reviewer` phase | *absent* — only on escalation | headless advisor tier (`/aida-advise`) resolves-or-escalates |
+| **fasttrack item (any drain)** | agent / headless | **none — CI is the only gate** | *absent* unless it punts | implementer punts if non-trivial |
 
 ## Reviewer ≠ advisor tier
 
@@ -85,6 +86,44 @@ Two different jobs, easy to conflate:
 When a reviewer's verdict conflicts with the advisor's intuition on whether to
 merge, **trust the reviewer** — it read the code; the advisor read the commit
 messages.
+
+## Draining: fasttrack vs review — one drain, tag-differentiated
+
+There aren't two separate drains. There is **one** machinery —
+`aida queue work --auto-complete`, of which `aida burndown run` is the parallel
+form over the whole ready set — and each spec's `lifecycle:` tags decide which
+phases short-circuit:
+
+| Category | Phases | Reviewer |
+|---|---|---|
+| **fasttrack** (`lifecycle:no-review`) | implementer → CI → ~~review~~ → merge | **none — CI is the only gate** |
+| **default** | implementer → CI → review → merge (or punt) | reviewer phase (cold-boot under `--no-human`) |
+
+**Integrity gates never skip in either** — CI must be green before merge, and
+merge + `aida pull` auto-bump always run. So "fasttrack vs needs-review" is a
+per-spec **tag**, not a separate queue or pipeline. (`lifecycle:trivial` =
+`no-review` + `no-build` + `no-ci-wait`; prefer plain `no-review` for fasttrack
+so CI still *gates* the merge rather than merging optimistically.)
+
+**Fasttrack ⊂ the burndown ready set.** `lifecycle:no-review` is a phase-skip,
+**not** a parking tag, so it does not exclude a spec from the ready set.
+`aida burndown run` drains fasttrack and non-fasttrack items together — it just
+skips the review phase on the fasttrack ones. `aida queue work --batch fasttrack`
+is simply a *filtered* burndown over that subset. So yes: every fasttrack item
+is a burndown candidate.
+
+**Optimistic-by-default, demoted-on-discovery.** A low-risk item that turns out
+non-trivial does not silently merge. The headless implementer **punts** (parks
+`NeedsAttention`) → the cold-boot advisor tier tries to resolve → if it can't,
+it escalates to the human. The `/aida-fasttrack` skill encodes the same rule for
+the interactive path ("punt out of the lane if it turns out non-trivial").
+
+**The honest gap.** The *only* thing distinguishing "safe to fasttrack" from
+"needs review" today is the **tag a human/advisor put on the spec at filing**.
+There is no automatic triviality classifier — a spec mis-tagged `no-review` that
+isn't actually trivial has only CI plus the implementer's punt as a safety net.
+Keep `lifecycle:no-review` a *deliberate* tag on genuinely-cosmetic work, never a
+default.
 
 ## Which mode to use
 
