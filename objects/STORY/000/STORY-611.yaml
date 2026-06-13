@@ -10,12 +10,12 @@ description: |-
   (2) SWEEP (nice-to-have): 'aida review' is per-SPEC only — no 'all outstanding' mode. Add 'aida human review' (or 'aida review --all') that walks the outstanding-review set one by one (locate surface → reviewer verdict → approve/request-changes/defer per item). This completes the THREE-DRAINS symmetry: implement = 'burndown run' (agents), decide = 'aida questions answer' (human), review = 'aida human review' (human + reviewer agent). And 'aida human' becomes the complete what's-pending-for-me surface (decisions + reviews + triage), not just decisions+triage.
 
   Slice 1 = the bucket (bounded, read-only enumeration, drain-safe). Slice 2 = the sweep verb. trace:relates:BUG-535 trace:relates:STORY-553 trace:from-friction
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T22:53:32.987674748Z
-modified_at: 2026-06-13T23:26:42.951786011Z
+modified_at: 2026-06-13T23:33:25.671392950Z
 req_type: Story
 tags:
 - aida:human
@@ -61,3 +61,21 @@ comments:
   content: Commit f57067253 references this requirement
   created_at: 2026-06-13T23:26:42.951786011Z
   modified_at: 2026-06-13T23:26:42.951786011Z
+history:
+- id: 019ec355-4420-79b3-b4a6-eb978f26d94e
+  author: aida-auto-bump
+  timestamp: 2026-06-13T23:33:25.664562223Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec355-4427-78c2-bc4e-230e75953242
+  timestamp: 2026-06-13T23:33:25.671391181Z
+  agent: aida
+  commit_sha: 1da6f4606cd02afe7c018bbe4df3c14df9e5de48
+  summary: Completed via merge 1da6f460
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T23:33:25.502029444Z
+  completion_sha: 1da6f4606cd02afe7c018bbe4df3c14df9e5de48
