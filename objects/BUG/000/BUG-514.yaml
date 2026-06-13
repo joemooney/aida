@@ -6,7 +6,7 @@ description: |-
   Found in the STORY-568 (#805) advisor review. In burndown::classify, the spike type-check returns BEFORE the parking_tag check. So a spike carrying an explicit parking tag (e.g. deferred:stabilization-first, needs-human, blocked) is classified by classify_spike_lane (which only inspects human-only/needs-decision tags, defaulting to Research) and shows 'spike (research-lane) — dispatch to a research agent via aida research <ID>' — actively misleading for a spec the operator deliberately PARKED. Not a pickability bug (the spike is Parked either way), only a wrong reason STRING.
 
   Fix: either (a) move the parking_tag check ABOVE the spike-type check so an explicit operator park wins, or (b) have classify_spike_lane consult parking tags and surface the park reason. Add a test: a spike tagged 'deferred:x' reports the deferral, not the research lane.
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
