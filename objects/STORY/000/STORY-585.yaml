@@ -20,12 +20,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:09:45.946450558Z
-modified_at: 2026-06-13T15:18:23.390793172Z
+modified_at: 2026-06-13T15:28:59.884438057Z
 req_type: Story
 tags:
 - agent-context
 - aida:mailbox
 - relates:STORY-569
+relationships:
+- rel_type: Parent
+  target_id: 019ec199-93d1-7463-93bf-1fbc0aedca46
+  created_at: 2026-06-13T15:28:59.884435436Z
+  created_by: joe
 comments:
 - id: 019ebef7-ddfc-75e1-afd8-530187b16e4a
   author: joe
