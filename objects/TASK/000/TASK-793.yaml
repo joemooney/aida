@@ -1,0 +1,18 @@
+id: 019ec267-a983-7bc0-b3d7-b1da0182d5f1
+spec_id: TASK-793
+agreed_id: TASK-793
+title: 'config show: central policy registry so new knobs auto-surface (anti-drift slice 2 of BUG-533)'
+description: 'Follow-up to BUG-533 (PR #850 shipped slice 1 — render all sections with effective value + source — and explicitly deferred this). DURABLE ANTI-DRIFT: introduce a central policy registry/enumeration that BOTH the config readers AND ''aida config show'' consume, so a newly-added config knob auto-appears in config show without a separate edit. Substrate-as-bouncer: makes config-show completeness STRUCTURAL rather than a thing to remember. Without it, render_effective_policy hardcodes the known sections and will silently fall behind again — exactly the failure that produced BUG-533 (every policy added since config show was written was invisible to it). trace:relates:BUG-533'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T19:13:54.051680503Z
+modified_at: 2026-06-13T19:13:54.051680503Z
+req_type: Task
+tags:
+- aida:config
+- cli-consistency
+- discoverability
+- relates:BUG-533
+- tech-debt
