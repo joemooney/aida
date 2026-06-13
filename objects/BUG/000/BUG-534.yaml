@@ -14,12 +14,12 @@ description: |-
   Repro: `aida graph --tree STORY-592` lists EPIC-40 (the parent) and all sibling stories + TASK-789 at one flat indent level.
 
   Surfaced while writing the CLI manual (EPIC-40), Ch6/STORY-592.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:10:26.911789399Z
-modified_at: 2026-06-13T19:10:26.911789399Z
+modified_at: 2026-06-13T19:24:23.098776766Z
 req_type: Bug
 tags:
 - aida:graph
