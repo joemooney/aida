@@ -1,0 +1,16 @@
+id: 019ebf9e-2e93-7543-97cc-9358593cd934
+spec_id: STORY-596
+agreed_id: STORY-596
+title: 'CLI manual: Ch11 — Working on AIDA itself: dev/release (contributor-only)'
+description: 'Write the chapter to the template set by docs/cli/01-getting-started.md: per-command One-line / Mental model / Reach-for-it-when / Don''t-reach-for-it-when(+alternative) / Key options (RATIONALE ONLY — never reproduce the full flag list) / Gotchas / Chains-with. Ground every command against its live `--help` before writing (no invented flags). Cross-link into the journey spine in docs/cli/README.md. On branch cli-manual.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:14:35.411983821Z
+modified_at: 2026-06-13T06:14:35.411983821Z
+req_type: Story
+tags:
+- cli-manual
+- docs
+- parent:EPIC-40
