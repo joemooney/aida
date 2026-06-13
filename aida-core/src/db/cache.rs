@@ -192,6 +192,13 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
         // AIDA owns retry/backoff timing; rusqlite's default busy handler can
         // otherwise block inside a single attempt and hide the lock holder.
         conn.busy_timeout(Duration::from_millis(0))?;
+        // trace:STORY-580 | ai:codex
+        let journal_mode: String = conn
+            .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+            .context("Failed to enable WAL journal mode for cache")?;
+        if !journal_mode.eq_ignore_ascii_case("wal") {
+            anyhow::bail!("cache did not enter WAL journal mode: {journal_mode}");
+        }
         Ok(conn)
     })
 }
@@ -1406,6 +1413,65 @@ mod tests {
         let mut r2 = sample_req("BUG-7", "y");
         r2.spec_id = Some("BUG-7".into());
         assert_eq!(yaml_path_for(&r2), "objects/BUG/000/BUG-7.yaml");
+    }
+
+    #[test]
+    fn cache_open_enables_wal_and_keeps_busy_timeout_zero() {
+        // trace:STORY-580 | ai:codex
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let conn = cache.conn.lock().unwrap();
+
+        let journal_mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        let busy_timeout_ms: i64 = conn
+            .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(journal_mode.to_lowercase(), "wal");
+        assert_eq!(busy_timeout_ms, 0);
+    }
+
+    #[test]
+    fn cache_reader_sees_last_committed_snapshot_during_write() {
+        // trace:STORY-580 | ai:codex
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let writer_cache = Cache::open(&cache_path).unwrap();
+        let reader_cache = Cache::open(&cache_path).unwrap();
+
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("STORY-580-A", "committed"));
+        writer_cache.rebuild_from_store(&store, "head").unwrap();
+
+        let writer = Connection::open(&cache_path).unwrap();
+        writer.busy_timeout(Duration::from_millis(0)).unwrap();
+        writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+        writer
+            .execute(
+                "UPDATE requirements_cache SET title = ?1 WHERE spec_id = ?2",
+                params!["uncommitted", "STORY-580-A"],
+            )
+            .unwrap();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = reader_cache
+                .list_summaries(&ListFilter::default())
+                .map(|rows| rows.into_iter().map(|row| row.title).collect::<Vec<_>>());
+            tx.send(result).unwrap();
+        });
+
+        let titles = rx
+            .recv_timeout(Duration::from_millis(500))
+            .expect("reader should not block behind an uncommitted WAL writer")
+            .unwrap();
+        assert_eq!(titles, vec!["committed"]);
+
+        writer.execute_batch("ROLLBACK").unwrap();
     }
 
     #[test]
