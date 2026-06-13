@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:32.726869661Z
-modified_at: 2026-06-13T19:43:22.034683181Z
+modified_at: 2026-06-13T19:47:17.179813557Z
 req_type: Story
 tags:
 - docs
@@ -20,3 +20,9 @@ relationships:
   target_id: 019ec281-7d2a-7852-86ac-ac958b5128b6
   created_at: 2026-06-13T19:43:22.034668356Z
   created_by: joe
+comments:
+- id: 019ec286-3a3b-7003-b371-caf698fadbb1
+  author: joe
+  content: Commit 67620c400 references this requirement
+  created_at: 2026-06-13T19:47:17.179813557Z
+  modified_at: 2026-06-13T19:47:17.179813557Z
