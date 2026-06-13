@@ -3,12 +3,12 @@ spec_id: TASK-773
 agreed_id: TASK-773
 title: 'aida list open: exclude perpetual standing-artifact types (vision/principle/term/constraint/folder/meta) from the open-work view by default'
 description: 'Split from STORY-584 criterion 6. ''aida list open'' is a WORK view; perpetual standing-artifact types (vision, principle, term, constraint, folder, meta) are NOT work and should be excluded from the open-work view by default (they surface via --type / the aida-docs projection). Fixes VIS-1 reading as ''InProgress work''. Orthogonal to STORY-584''s deferred view-flag (type-based filtering, not a view-flag clone of archived) — split out to keep that slice clean. Acceptance: ''aida list'' / ''aida list open'' default view excludes those 6 types; --type <T> still surfaces them; --all or an explicit opt-in shows them.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:09:17.118251618Z
-modified_at: 2026-06-13T15:28:10.565357800Z
+modified_at: 2026-06-13T15:34:53.966281189Z
 req_type: Task
 tags:
 - aida:list
@@ -26,3 +26,22 @@ comments:
   content: Commit f2abb573c references this requirement
   created_at: 2026-06-13T15:28:10.565357800Z
   modified_at: 2026-06-13T15:28:10.565357800Z
+history:
+- id: 019ec19f-290d-7861-a471-4193cb91bd8a
+  author: aida-reconcile
+  timestamp: 2026-06-13T15:34:53.965974293Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec19f-290e-7893-b49b-729952da1351
+  timestamp: 2026-06-13T15:34:53.966280409Z
+  agent: 5fac59be-3ec5-40d8-814b-7781e0107f31
+  brief_ref: .aida/agent-briefs/codex/TASK-773-2026-06-13T064453Z.md.acked
+  commit_sha: b435c99aa6ffa0d2b19ffcce56d2341ef26cbca1
+  summary: Completed via merge b435c99a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T15:34:53.806128473Z
+  completion_sha: b435c99aa6ffa0d2b19ffcce56d2341ef26cbca1
