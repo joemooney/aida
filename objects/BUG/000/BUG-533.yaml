@@ -12,12 +12,12 @@ description: |-
   2. DURABLE (anti-drift): introduce a central policy registry/enumeration that BOTH the readers and 'config show' consume, so a newly-added knob auto-appears in config show (substrate-as-bouncer: the registry makes completeness structural, not a thing to remember). Without this, config show will silently fall behind again — exactly how it got here.
 
   ACCEPTANCE: 'aida config show' lists every config section with effective value + source; the agent bypass posture is shown prominently; adding a new knob surfaces it without a separate config-show edit (slice 2). trace:from-friction trace:relates:TASK-786
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T18:49:30.548592468Z
-modified_at: 2026-06-13T19:12:29.406735819Z
+modified_at: 2026-06-13T19:19:31.012271143Z
 req_type: Bug
 tags:
 - aida:config
@@ -33,3 +33,21 @@ comments:
   content: Commit e13073c8e references this requirement
   created_at: 2026-06-13T19:12:29.406735819Z
   modified_at: 2026-06-13T19:12:29.406735819Z
+history:
+- id: 019ec26c-cdbd-7450-9e26-88dfccb0787f
+  author: aida-auto-bump
+  timestamp: 2026-06-13T19:19:31.005891589Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec26c-cdc4-78c1-a67e-47405fc29e4d
+  timestamp: 2026-06-13T19:19:31.012270240Z
+  agent: aida
+  commit_sha: bca2e48883974193d6bfcf531e27a2825db8e05e
+  summary: Completed via merge bca2e488
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T19:19:30.851277604Z
+  completion_sha: bca2e48883974193d6bfcf531e27a2825db8e05e
