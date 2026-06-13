@@ -58,7 +58,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 
 **Mental model.** `list` is a **lens** — pure sight, no state change — over the *cache*, so it's instant even on a large store. By default it shows the *open, non-archived, non-meta* set: the work that's actually live. Everything else (`--archived`, `--all`, `--include-meta`) is an explicit opt-in to widen the view.
 
-**Reach for it when** — you want the current picture, or a filtered slice of it (`aida list approved`, `aida list --type bug`, `aida list --parent EPIC-12`). The positional status shortcut (`aida list open`) is the fast path.
+**Reach for it when** — you want the current picture, or a filtered slice of it (`aida list approved`, `aida list --type bug`, `aida list --parent <epic-id>`). The positional status shortcut (`aida list open`) is the fast path.
 
 **Don't reach for it when** — you want to know *why* a specific spec is in some state (that's `aida show` / `aida why`), or you want full-text search (that's `aida search` / `aida grep`). And don't conclude a backlog is "empty" from a *filtered* list — scan the open set across all types before declaring done; a filter that returns nothing often means the filter, not the backlog, is empty.
 

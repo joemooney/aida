@@ -89,6 +89,22 @@ def main():
         else:
             print(f"OK completeness — all {len(all_cmds)} help-all commands documented")
 
+    # 1b. SPEC-ID leakage — the user-facing manual must carry no STORY-x/TASK-x
+    # noise (same convention that keeps SPEC-IDs out of --help). Hard fail.
+    specid = re.compile(r"\b(STORY|TASK|BUG|EPIC|SPIKE|ADR|FR|PRIN|VIS|CON|TERM|CR)-[0-9]+")
+    leaks = []
+    for f in files:
+        for i, line in enumerate(open(f), 1):
+            for m in specid.finditer(line):
+                leaks.append(f"{os.path.basename(f)}:{i} {m.group(0)}")
+    if leaks:
+        hard_fail = True
+        print(f"FAIL spec-id leak — {len(leaks)} SPEC-ID(s) in the user-facing manual (use <spec-id>/<epic-id> placeholders):")
+        for l in leaks[:20]:
+            print(f"    {l}")
+    else:
+        print("OK spec-ids — no SPEC-ID noise in the manual")
+
     # 2. flag accuracy (advisory)
     warns = 0
     for cmd, flags in sorted(documented.items()):

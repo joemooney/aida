@@ -13,19 +13,23 @@ Two ways in:
 1. **[The journey](#the-journey--from-empty-repo-to-shipped-feature)** *(read this first)* — the narrative spine. One feature's life, start to finish, naming every command you touch and why. This is the "what to expect" story.
 2. **The chapters** *(reference)* — every command, grouped as `help-all` groups them, each with the full *when/why/when-not* treatment.
 
-| # | Chapter | Commands | Status |
-|---|---------|----------|--------|
-| 1 | [Getting started & the daily drivers](01-getting-started.md) | init · add · list · show · done (+ edit) | ✅ exemplar |
-| 2 | [Specs — shaping the graph](02-specs.md) | edit · del · search · grep · comment · graph · rel · trace · archive · unarchive · lint | ⬜ pending |
-| 3 | [Work & autonomy](03-work-autonomy.md) | queue · backlog · burndown · drain · goal · sandbox · autonomy · away/home/presence · human · headless/no-human | ⬜ pending |
-| 4 | [Git & lifecycle](04-git-lifecycle.md) | pr · review · rework · done · fetch · pull · push · rebase · remote | ⬜ pending |
-| 5 | [Planning](05-planning.md) | plan · ultraplan · decompose · import-plan · load | ⬜ pending |
-| 6 | [Roles & sessions](06-roles-sessions.md) | role · agent · advisor · brief · mailbox | ⬜ pending |
-| 7 | [Project setup](07-project-setup.md) | init · remote · node · rules · memories · doctor · … | ⬜ pending |
-| 8 | [Reporting](08-reporting.md) | history · metrics · digest · changelog · standup · insights · questions · findings | ⬜ pending |
-| 9 | [Integrations & servers](09-integrations.md) | mcp-serve · serve · doc · docs · … | ⬜ pending |
-| 10 | [Storage & data](10-storage.md) | db · cache · import/export · … | ⬜ pending |
-| 11 | [Working on AIDA itself](11-dev.md) | dev · release | ⬜ pending |
+Each chapter covers exactly the commands `aida help-all` lists under the named group — we deliberately **don't** hand-list them here (that table would drift from the binary; the drift-guard enforces coverage instead). Run `aida help-all` for the live membership.
+
+| # | Chapter | `help-all` group | Status |
+|---|---------|------------------|--------|
+| 1 | [Getting started & the daily drivers](01-getting-started.md) | *Getting started* (+ `edit`) | ✅ |
+| 2 | [Specs — shaping the graph](02-specs.md) | *Specs* | ✅ |
+| 3 | [Work & autonomy](03-work-autonomy.md) | *Work & autonomy* | 🚧 in progress |
+| 4 | [Git & lifecycle](04-git-lifecycle.md) | *Git & lifecycle* | ✅ |
+| 5 | [Planning](05-planning.md) | *Planning* | ✅ |
+| 6 | [Roles & sessions](06-roles-sessions.md) | *Roles & sessions* | ✅ |
+| 7 | [Project setup](07-project-setup.md) | *Project setup* | ✅ |
+| 8 | [Reporting & lenses](08-reporting.md) | *Reporting* | ✅ |
+| 9 | [Integrations & servers](09-integrations.md) | *Integrations & servers* | ✅ |
+| 10 | [Storage & data](10-storage.md) | *Storage & data* | ✅ |
+| 11 | [Working on AIDA itself](11-dev.md) | *Working on aida itself* | ✅ |
+
+> **Structured for downstream consumers.** Every command entry uses the same parseable shape — an `### \`aida <cmd>\`` header followed by fixed labeled fields — so a tool like `aida-tutor` (or a future `aida manual <cmd>`) can split any chapter into `{command → {field → text}}` without heuristics. And the manual carries **no SPEC-IDs** (`STORY-x`/`TASK-x`): it's user-facing, and those are kept out of user-facing surfaces by the same convention that keeps them out of `--help`. The drift-guard fails on either violation.
 
 ## How to read a command entry
 
