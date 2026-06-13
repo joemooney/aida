@@ -1,0 +1,20 @@
+id: 019ec19c-410a-73f2-878e-b3793a50b6d7
+spec_id: TASK-783
+agreed_id: TASK-783
+title: 'statusline: show ''away'' + TTL-remaining when the operator is away (hide when home)'
+description: |-
+  Presence is now load-bearing (advisor watch forks while away, --zen finish biases on it via TASK-758, the autonomy ladder keys on it), but the statusline doesn't show it. Add a compact presence segment that surfaces ONLY 'away' with TTL-remaining (e.g. 'away 2h') and shows NOTHING when home — mirrors the existing 'only surface non-default states' convention (cache freshness only renders non-fresh). Value: glance at your autonomy posture when you return, before you type (which flips you home).
+
+  GOTCHA (the non-trivial bit): read presence via the NON-FLIPPING path (presence::current_presence), NOT auto_flip_if_interactive — else the statusline render would itself flip you home on every prompt and could never display 'away'. Verify the statusline read does not mutate presence state. trace:STORY-561 trace:TASK-756
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T15:31:43.498071911Z
+modified_at: 2026-06-13T15:31:43.498071911Z
+req_type: Task
+tags:
+- aida:statusline
+- presence
+- relates:STORY-561
+- ux
