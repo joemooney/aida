@@ -8,13 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:43.025734467Z
-modified_at: 2026-06-13T01:47:14.964688069Z
+modified_at: 2026-06-13T01:47:41.001092620Z
 req_type: Story
 tags:
-- batch:repositioning
-- parent:EPIC-39
-- repositioning
-- ws4-governance
+- deferred:stabilization-first
 relationships:
 - rel_type: !Custom related-to
   target_id: 019ebc5b-0a32-7223-bf80-6e649b9a173b
