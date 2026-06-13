@@ -3,12 +3,12 @@ spec_id: TASK-791
 agreed_id: TASK-791
 title: 'aida questions answer: add ''type something'' (counter-proposal note) + ''chat'' (drop into clarify) at the interactive prompt'
 description: 'Operator (2026-06-13): at the ''aida questions answer'' interactive prompt, the only options are 1-N / default / s=skip. Two missing affordances (the AskUserQuestion model the operator expects): (4) TYPE SOMETHING — a free-text counter-proposal recorded as a note ALONGSIDE the chosen option (e.g. ''1, but name it list-claude-sessions''), staying a pure-data-op (no LLM at answer-time; the implementer reads choice+note); add a non-interactive --note <TEXT> flag too. (5) CHAT — drop into ''aida questions clarify <spec>'' (the interactive agent) when the operator wants to discuss before deciding. Keep the pure-pick path the default; 4/5 are escapes. Mirrors /aida-clarify + AskUserQuestion. trace:STORY-522'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:10:23.281220543Z
-modified_at: 2026-06-13T17:39:08.561821962Z
+modified_at: 2026-06-13T17:45:49.012351109Z
 req_type: Task
 tags:
 - aida:questions
@@ -23,3 +23,21 @@ comments:
   content: Commit 2b594363b references this requirement
   created_at: 2026-06-13T17:39:08.561821962Z
   modified_at: 2026-06-13T17:39:08.561821962Z
+history:
+- id: 019ec217-04d0-7440-bad4-23b57eea280c
+  author: aida-auto-bump
+  timestamp: 2026-06-13T17:45:49.008452680Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec217-04d4-7823-b3b4-f3dba56e6d5f
+  timestamp: 2026-06-13T17:45:49.012350390Z
+  agent: aida
+  commit_sha: b2e79e4e0c38fc088bd219229799f25448cbd903
+  summary: Completed via merge b2e79e4e
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T17:45:48.860956838Z
+  completion_sha: b2e79e4e0c38fc088bd219229799f25448cbd903
