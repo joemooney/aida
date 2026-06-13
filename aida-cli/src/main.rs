@@ -24723,6 +24723,20 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
+// trace:BUG-532 trace:BUG-535 — render a spec's (truncated) title as a dimmed
+// trailing cell beside its id, so id-list views (`burndown plan`, `aida human`)
+// read as scannable decision surfaces, mirroring how `aida list` / `aida queue
+// list` show id+title (60-col truncation via the shared `truncate` helper).
+// Returns the leading-space dimmed title cell, or an empty string when a title
+// is missing/empty so the id still prints cleanly. Shared so the two id-list
+// surfaces can never drift on how a title is rendered.
+fn spec_title_cell(titles: &std::collections::HashMap<String, String>, id: &str) -> String {
+    match titles.get(id) {
+        Some(t) if !t.is_empty() => format!("  {}", truncate(t, 60).dimmed()),
+        _ => String::new(),
+    }
+}
+
 // Compact inline rendering for the `aida list --show-tags` column: show
 // the first `max_chips` tags joined by ", ", append " +N more" when the
 // row carries additional tags, return empty string for a tagless row.
@@ -73240,6 +73254,23 @@ fn handle_list_human(short: bool) -> Result<()> {
     let in_flight_scopes = in_flight_lease_role_map(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
 
+    // trace:BUG-535 — display-id → title, built from the SAME store load the
+    // facts came from (no extra scan, no N+1), so every bucket can render the
+    // spec's title beside its bare id via the shared `spec_title_cell` helper
+    // (the same id+title rendering BUG-532 added for `burndown plan`).
+    let titles: std::collections::HashMap<String, String> = store
+        .requirements
+        .iter()
+        .filter_map(|req| {
+            let id = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| req.id.to_string());
+            (!req.title.is_empty()).then(|| (id, req.title.clone()))
+        })
+        .collect();
+
     // TASK-747: specs explicitly routed `--for human` are part of the
     // human-attention set even when the status/tag classifier wouldn't derive
     // them. We UNION the explicitly-routed members with the derived membership
@@ -73348,12 +73379,21 @@ fn handle_list_human(short: bool) -> Result<()> {
         );
         for (f, _, reasons) in rows {
             // Repeat the derived reason only when it differs from the header
-            // (e.g. per-spec decision tags); otherwise just the ID stays scannable.
+            // (e.g. per-spec decision tags); otherwise just the ID + title stays
+            // scannable. trace:BUG-535 — append the (truncated) title beside the
+            // id via the shared `spec_title_cell` helper so the bucket is a
+            // readable wall of titles, not bare ids.
             let derived = reasons.first().map(|r| r.text.clone()).unwrap_or_default();
+            let title = spec_title_cell(&titles, &f.id);
             if derived == sample_reason {
-                println!("    {}", f.id.cyan());
+                println!("    {}{}", f.id.cyan(), title);
             } else {
-                println!("    {} {}", f.id.cyan(), format!("({derived})").dimmed());
+                println!(
+                    "    {}{} {}",
+                    f.id.cyan(),
+                    title,
+                    format!("({derived})").dimmed()
+                );
             }
             // Fold in the additional reasons (finding-links + residual notes)
             // so the operator sees every reason it's still open — same as
@@ -73382,7 +73422,8 @@ fn handle_list_human(short: bool) -> Result<()> {
             "explicitly routed to you (`queue add --for human`)".dimmed()
         );
         for id in &routed_only {
-            println!("    {}", id.cyan());
+            // trace:BUG-535 — title beside the id, same as the derived buckets.
+            println!("    {}{}", id.cyan(), spec_title_cell(&titles, id));
         }
     }
 
@@ -73911,16 +73952,9 @@ fn handle_burndown_plan(
     let (ready, awaiting_signoff, parked, titles) = resolve_burndown_sets(status, tag, batch)?;
 
     // trace:BUG-532 — render the spec's (truncated) title beside its id so the
-    // plan reads as a scannable decision surface, mirroring how `aida list` /
-    // `aida queue list` show id+title (60-col truncation via the shared
-    // `truncate` helper). Returns the dimmed title cell, or an empty string when
-    // a title is unexpectedly missing so the id still prints cleanly.
-    let title_cell = |id: &str| -> String {
-        match titles.get(id) {
-            Some(t) if !t.is_empty() => format!("  {}", truncate(t, 60).dimmed()),
-            _ => String::new(),
-        }
-    };
+    // plan reads as a scannable decision surface, via the shared
+    // `spec_title_cell` helper (also used by `aida human`, BUG-535).
+    let title_cell = |id: &str| -> String { spec_title_cell(&titles, id) };
 
     if json {
         let payload = serde_json::json!({
