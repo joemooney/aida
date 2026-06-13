@@ -13037,6 +13037,23 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     if !req.processing_record.is_empty() {
                         print_processing_records(&req.processing_record);
                     }
+                    // BUG-527: surface queue membership — for-role + the
+                    // 1-based position the operator sees on `aida queue
+                    // list`. Mirrors how git-linkage is surfaced below; the
+                    // line is OMITTED when the spec sits in no queue so a
+                    // not-queued spec's card stays clean. Mirrored onto the
+                    // MCP `show_requirement` tool for parity (STORY-82).
+                    // trace:BUG-527
+                    {
+                        let project_root = store_path
+                            .parent()
+                            .map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                        let memberships = queue_memberships_for(&project_root, &req.id);
+                        if let Some(value) = format_queue_membership(&memberships) {
+                            println!("{}: {}", "Queued".green().bold(), value);
+                        }
+                    }
                     // TASK-241: append the git-linkage section unless
                     // --no-git. Grep against every id form the spec has
                     // worn (canonical / agreed / origin) so commits and
@@ -35955,6 +35972,84 @@ fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
     out
 }
 
+/// BUG-527: queue memberships for a single spec, across every user's queue
+/// file, for the `Queued:` line on `aida show <ID>` (and the MCP
+/// `show_requirement` mirror). Each membership is `(for_role, rank)`, where
+/// `for_role` is the canonical routing role (`None` = unrouted / general
+/// queue) and `rank` is the 1-based position the operator sees on
+/// `aida queue list` — the index within that role's queue ordered by raw
+/// on-disk position, NOT the sparse `entry.position` value (STORY-72's
+/// `max_position + 1000` scheme means the raw value is not a human rank).
+/// Reuses the same cheap `read_dir` + per-file YAML parse as
+/// [`all_queued_requirement_ids`] (no `Storage::load()`); queue membership
+/// is a project-global axis so we union across all queue files. Returns an
+/// empty vec when the dir is absent or the spec sits in no queue (the
+/// caller omits the line in that case). trace:BUG-527
+pub(crate) fn queue_memberships_for(
+    project_root: &std::path::Path,
+    requirement_id: &Uuid,
+) -> Vec<(Option<String>, usize)> {
+    let mut out: Vec<(Option<String>, usize)> = Vec::new();
+    let dir = project_root.join(".aida-store/registry/queues");
+    let Ok(dir_entries) = std::fs::read_dir(&dir) else {
+        return out;
+    };
+    for dirent in dir_entries.flatten() {
+        let p = dirent.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let Ok(mut items) = serde_yaml::from_str::<Vec<aida_core::QueueEntry>>(&content) else {
+            continue;
+        };
+        // Rank is per-role within this user's queue, ordered by raw position
+        // (the same ordering `aida queue list` groups + numbers by).
+        items.sort_by_key(|e| e.position);
+        let mut rank_by_role: std::collections::HashMap<Option<String>, usize> =
+            std::collections::HashMap::new();
+        for item in &items {
+            let role = item.for_role.as_deref().map(canonical_role_name);
+            let rank = rank_by_role.entry(role.clone()).or_insert(0);
+            *rank += 1;
+            if &item.requirement_id == requirement_id {
+                out.push((role, *rank));
+            }
+        }
+    }
+    // Stable presentation order: routed roles alphabetically, unrouted last,
+    // then by rank.
+    out.sort_by(|a, b| match (&a.0, &b.0) {
+        (Some(x), Some(y)) => x.cmp(y).then(a.1.cmp(&b.1)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.1.cmp(&b.1),
+    });
+    out
+}
+
+/// BUG-527: render the `(for_role, rank)` memberships from
+/// [`queue_memberships_for`] as the value half of the `Queued:` line, e.g.
+/// `implementer (pos 2)` or `implementer (pos 2), reviewer (pos 1)`.
+/// Unrouted entries render as `general (pos N)`. Returns `None` when there
+/// are no memberships so the caller can omit the line entirely.
+/// trace:BUG-527
+pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -> Option<String> {
+    if memberships.is_empty() {
+        return None;
+    }
+    let parts: Vec<String> = memberships
+        .iter()
+        .map(|(role, rank)| {
+            let label = role.as_deref().unwrap_or("general");
+            format!("{} (pos {})", label, rank)
+        })
+        .collect();
+    Some(parts.join(", "))
+}
+
 /// TASK-670: the set of scope strings held by *live* session leases — the input
 /// for the in-flight ▶ work-routing glyph. "Live" means a running claude was
 /// found inside the lease's worktree (the same probe `aida session leases` uses
@@ -56734,6 +56829,82 @@ mod bug_87_queue_filter_tests {
             .filter(|fr| entry_matches_role_filter(*fr, role_filter.as_deref(), only_unrouted))
             .collect();
         assert_eq!(kept, vec![None, None]);
+    }
+
+    /// BUG-527: the `Queued:` value formatter — empty → None (line omitted),
+    /// unrouted → `general`, multiple memberships joined.
+    /// trace:BUG-527 | ai:claude
+    #[test]
+    fn format_queue_membership_shapes() {
+        assert_eq!(format_queue_membership(&[]), None);
+        assert_eq!(
+            format_queue_membership(&[(Some("implementer".to_string()), 2)]).as_deref(),
+            Some("implementer (pos 2)")
+        );
+        assert_eq!(
+            format_queue_membership(&[(None, 1)]).as_deref(),
+            Some("general (pos 1)")
+        );
+        assert_eq!(
+            format_queue_membership(&[
+                (Some("implementer".to_string()), 2),
+                (Some("reviewer".to_string()), 1),
+            ])
+            .as_deref(),
+            Some("implementer (pos 2), reviewer (pos 1)")
+        );
+    }
+
+    /// BUG-527: `queue_memberships_for` ranks per-role within a user's queue
+    /// by raw position (1-based), surfaces the matching spec only, and
+    /// returns empty for a spec in no queue. trace:BUG-527 | ai:claude
+    #[test]
+    fn queue_memberships_for_ranks_and_filters() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project_root = tmp.path();
+        let qdir = project_root.join(".aida-store/registry/queues");
+        std::fs::create_dir_all(&qdir).unwrap();
+
+        let target = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let mk = |req: Uuid, pos: i64, role: Option<&str>| aida_core::QueueEntry {
+            user_id: "alice".to_string(),
+            requirement_id: req,
+            position: pos,
+            added_by: "alice".to_string(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: role.map(str::to_string),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        // implementer queue: other(pos 1000) then target(pos 2000) → target rank 2.
+        // reviewer queue: target(pos 500) alone → rank 1.
+        let entries = vec![
+            mk(other, 1000, Some("implementer")),
+            mk(target, 2000, Some("implementer")),
+            mk(target, 500, Some("reviewer")),
+        ];
+        std::fs::write(
+            qdir.join("alice.yaml"),
+            serde_yaml::to_string(&entries).unwrap(),
+        )
+        .unwrap();
+
+        let memberships = queue_memberships_for(project_root, &target);
+        // Sorted: routed roles alphabetically → implementer, reviewer.
+        assert_eq!(
+            memberships,
+            vec![
+                (Some("implementer".to_string()), 2),
+                (Some("reviewer".to_string()), 1)
+            ]
+        );
+
+        // A spec in no queue → empty (caller omits the line).
+        let absent = Uuid::new_v4();
+        assert!(queue_memberships_for(project_root, &absent).is_empty());
     }
 
     /// BUG-87: no regression — bare `aida queue list` in an implementer
