@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-13T17:47:08.497850686Z
+modified_at: 2026-06-13T17:48:18.415281566Z
 req_type: Story
 tags:
 - agent-context
@@ -23,3 +23,9 @@ tags:
 - observability
 - relates:EPIC-28
 - ux
+comments:
+- id: 019ec219-4c6f-7da2-9a8c-d0870bf3ea7e
+  author: joe
+  content: 'Concrete finding (2026-06-13): during a live ''aida burndown run'' (PID confirmed running), there was NO log file under .aida/ to tail and NO incremental output — because the headless ''claude -p'' is launched WITHOUT streaming flags, so it buffers silently until completion. Two-part implementation path: (a) launch the drain''s ''claude -p'' with ''--output-format stream-json --verbose'' (or equivalent) AND tee to a discoverable path like .aida/burndown/<drain-id>.log; (b) ''aida burndown status''/''watch'' tails that + renders plan position/phase. Until then the operator has no signal at all — not even a log. The in-flight marking (facet b) is the substrate complement: stamp blessed specs as ''claimed by drain <id>'' so list/show/queue reflect it even without reading the log.'
+  created_at: 2026-06-13T17:48:18.415281566Z
+  modified_at: 2026-06-13T17:48:18.415281566Z
