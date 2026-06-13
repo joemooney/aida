@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:06.634484873Z
-modified_at: 2026-06-13T19:43:23.715865661Z
+modified_at: 2026-06-13T19:47:12.013354444Z
 req_type: Epic
 tags:
 - docs
@@ -36,3 +36,9 @@ relationships:
   target_id: 019ebf9b-fb5a-7821-8fb5-47148be13a61
   created_at: 2026-06-13T19:43:23.715857317Z
   created_by: joe
+comments:
+- id: 019ec286-260d-78f0-a852-bebdc47f341a
+  author: joe
+  content: Commit 67620c400 references this requirement
+  created_at: 2026-06-13T19:47:12.013354444Z
+  modified_at: 2026-06-13T19:47:12.013354444Z
