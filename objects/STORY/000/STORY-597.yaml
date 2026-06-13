@@ -2,13 +2,22 @@ id: 019ebf9e-5f67-7311-a188-c718502712d3
 spec_id: STORY-597
 agreed_id: STORY-597
 title: 'CLI manual: drift-guard — completeness gate (every help-all command has a manual entry; flag stale entries)'
-description: A script/test (CI-wired) that parses `aida help-all`, asserts every command has an entry in some docs/cli/*.md chapter, and flags any command whose `--help` output changed since its entry was last edited (a checksum or last-touched marker). Fails CI on a missing command (the manual cannot silently omit a command); WARNS on stale prose. This is what makes the manual maintainable rather than a one-time drift liability. On branch cli-manual.
+description: |-
+  The drift-guard (verify-manual.py exists as the bootstrap) makes the CLI manual maintainable rather than a one-time liability. Per ADR-5, finalize it as the ENFORCING CI gate:
+
+  1. AUTHORITY = clap command tree (the complete source), NOT `aida help-all` (curatable — omits rules/doctor/defer per BUG-520). Derive the command set from clap so no command can silently escape the guard. (Today verify-manual.py parses help-all; switch it to the clap tree — e.g. a `--all-commands`/JSON dump, or clap_complete introspection.)
+  2. CI WIRING = the enforcing gate. A PR adding/renaming a command fails CI unless it has a manual entry. Substrate-as-bouncer for doc-drift.
+  3. FIX the subcommand blind-spot: currently only checks flags against the PARENT command --help, producing false-positive WARNs for subcommand flags. Descend into `aida <cmd> <sub> --help` so flag-accuracy is real, not noisy.
+  4. KEEP the SPEC-ID-leak check (manual must carry no STORY-x noise — already added).
+  5. EXTEND (ADR-5 endgame): assert every surface-changing spec's interface_changes is reflected in the docs — catches a spec that moved the surface without updating intent. (Gated on interface_changes being populated — STORY-542; forward-only.)
+
+  Acceptance: CI fails on an undocumented clap command; no false-positive subcommand WARNs; SPEC-ID leak fails; (later) interface_changes-vs-docs reflection check. On branch cli-manual.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:14:47.911828063Z
-modified_at: 2026-06-13T06:17:27.376290979Z
+modified_at: 2026-06-13T16:17:51.631615383Z
 req_type: Story
 tags:
 - cli-manual
