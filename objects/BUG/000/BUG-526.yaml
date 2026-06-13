@@ -1,0 +1,18 @@
+id: 019ec1fa-5f40-7e43-8365-3096961424e2
+spec_id: BUG-526
+agreed_id: BUG-526
+title: 'questions answer: when the answerer has advisor authority, promote a Draft spec to Approved so the auto-queue fires'
+description: 'Operator hit (2026-06-13): the doc/non-advisor filer lands specs Draft (advisor-gate TASK-647). ''aida questions answer'' on a Draft spec binds the decision + unparks but reports ''not auto-queued — status is Draft'' — so the ask-ahead/answer-async loop dead-ends (the operator must separately approve+queue). Fix: when the answerer has advisor authority (the answer is already advisor-gated), promote Draft->Approved as part of applying the resolution so the auto-queue fires. Keep the gate for non-advisor answerers. trace:STORY-522 trace:TASK-647'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T17:14:31.616451917Z
+modified_at: 2026-06-13T17:14:31.616451917Z
+req_type: Bug
+tags:
+- aida:questions
+- fasttrack
+- papercut
+- relates:STORY-522
+- ux
