@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T23:20:30.615798993Z
+modified_at: 2026-06-13T23:41:49.545030509Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -91,6 +91,11 @@ comments:
     DEFERRED from this away-session: composing B's delicate orphan-worktree ff unsupervised at a marathon tail is exactly the store-corruption risk to avoid (cf. the option-1 overturn). Implement in a focused/supervised pass once the operator picks A vs B. trace:relates:STORY-79
   created_at: 2026-06-13T21:14:59.226019193Z
   modified_at: 2026-06-13T21:14:59.226019193Z
+- id: 019ec35c-f469-7170-8512-c30847f98367
+  author: joe
+  content: Commit 1da6f4606 references this requirement
+  created_at: 2026-06-13T23:41:49.545030509Z
+  modified_at: 2026-06-13T23:41:49.545030509Z
 decision_request:
   question: 'BUG-530 fix approach: how should the burndown preflight avoid reading a stale local store?'
   choices:
