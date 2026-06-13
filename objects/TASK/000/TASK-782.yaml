@@ -18,10 +18,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:28:48.081889379Z
-modified_at: 2026-06-13T15:28:48.081889379Z
+modified_at: 2026-06-13T15:28:59.588950376Z
 req_type: Task
 tags:
 - agent-context
 - aida:mailbox
 - parent:STORY-585
 - relates:STORY-569
+relationships:
+- rel_type: Child
+  target_id: 019ebef4-f85a-7751-b0eb-1cd2c7a283c1
+  created_at: 2026-06-13T15:28:59.588944836Z
+  created_by: joe
