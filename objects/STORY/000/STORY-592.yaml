@@ -8,9 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:13:44.675829338Z
-modified_at: 2026-06-13T06:13:44.675829338Z
+modified_at: 2026-06-13T06:17:16.982549265Z
 req_type: Story
 tags:
 - cli-manual
 - docs
 - parent:EPIC-40
+relationships:
+- rel_type: Parent
+  target_id: 019ebf9b-fb5a-7821-8fb5-47148be13a61
+  created_at: 2026-06-13T06:17:16.982536089Z
+  created_by: joe
