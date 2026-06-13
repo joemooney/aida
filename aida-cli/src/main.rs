@@ -98765,8 +98765,21 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
                 })
                 .unwrap_or(false);
             let pause_always = zen_pause_always_in_force(&project_root);
-            let verdict =
-                zen::classify_finish(is_zen, needs_human_marked, has_open_punt, pause_always);
+            let presence_bias = if presence::read_presence_file().is_some() {
+                match presence::current_presence(chrono::Utc::now()) {
+                    presence::Presence::Away => zen::FinishPresence::Away,
+                    presence::Presence::Home => zen::FinishPresence::Home,
+                }
+            } else {
+                zen::FinishPresence::NoOpinion
+            };
+            let verdict = zen::classify_finish(
+                is_zen,
+                needs_human_marked,
+                has_open_punt,
+                pause_always,
+                presence_bias,
+            );
             if *json {
                 println!(
                     "{{\"decision\":\"{}\",\"reason\":\"{}\",\"corroborated\":{}}}",
