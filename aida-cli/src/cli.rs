@@ -5859,6 +5859,26 @@ pub enum Command {
         cmd: Option<QuestionsCommand>,
     },
 
+    /// Dispatch a SPIKE to a headless research agent: it produces a
+    /// source-grounded analysis (attached to the spike) plus a recommendation,
+    /// and escalates any strategic decision to `aida questions` for you to
+    /// answer. Propose-mode — the agent does the legwork; nothing is
+    /// auto-applied. The agent-able counterpart to the implementer drain.
+    // trace:STORY-568 | ai:claude
+    Research {
+        /// The spike to research (SPEC-ID or UUID).
+        id: String,
+
+        /// Compose + show the research prompt, classification, and artifact
+        /// paths without spawning the agent or writing anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Directory for the dated analysis + decision-sidecar artifacts.
+        #[clap(long, default_value = "docs/research")]
+        artifact_dir: String,
+    },
+
     /// Manage the live-advisor registration the `--no-human=both` orchestrator
     /// reads to decide whether to fork the live advisor (full in-flight
     /// context) or cold-boot a fresh headless advisor.
