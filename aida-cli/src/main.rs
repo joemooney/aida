@@ -4159,8 +4159,9 @@ fn handle_research_command(
     let log_path = project_root.join(format!(".aida/research/{display_id}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("research:{display_id}"));
-    let status = crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee)
-        .context("spawning headless research agent")?;
+    let status =
+        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
+            .context("spawning headless research agent")?;
     if !status.success() {
         anyhow::bail!(
             "research agent exited with {} — see log {}",
@@ -23466,7 +23467,17 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let merged = merge_dedup(&local, &canonical);
             let watermarks = mailbox_store::read_all_watermarks(project_root)?;
-            let summaries = aida_core::mailbox::agent_summaries(&merged, &watermarks);
+            // trace:BUG-513 | ai:codex
+            let known_agents: Vec<String> = list_roles(project_root)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|role| role.name)
+                .collect();
+            let summaries = aida_core::mailbox::agent_summaries_for_agents(
+                &merged,
+                &watermarks,
+                known_agents.iter().map(String::as_str),
+            );
             if summaries.is_empty() {
                 println!("{} no agents have mail", "✉".dimmed());
                 return Ok(());
