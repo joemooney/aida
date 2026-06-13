@@ -3,14 +3,21 @@ spec_id: TASK-770
 agreed_id: TASK-770
 title: '`aida human away/home` namespacing (SPIKE-57 Phase 2-4) — these aliases + the `aida human` vector; this build keeps the existing `aida away`/`home`/`presence` verbs'
 description: ''
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:32:01.574703885Z
-modified_at: 2026-06-13T01:59:24.637833198Z
+modified_at: 2026-06-13T02:14:51.061463151Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
   created_at: 2026-06-12T20:32:12.102818702Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-13T02:14:51.061463151Z
+  implemented_by: joe
+interface_changes:
+  cli:
+  - Added `aida human away`, `aida human home`, `aida human presence`, and `aida human status` as aliases over existing presence verbs; top-level `aida away`, `aida home`, and `aida presence` continue to work.
