@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:21:21.455702707Z
-modified_at: 2026-06-13T02:21:21.455702707Z
+modified_at: 2026-06-13T03:10:17.487087583Z
 req_type: Bug
 tags:
 - aida:mailbox
@@ -30,3 +30,9 @@ tags:
 - relates:STORY-569
 - severity:cosmetic
 - ux
+comments:
+- id: 019ebef5-738f-7190-9037-7966d085e283
+  author: mcp
+  content: 'Implemented in draft PR #812. Verification passed: cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli.'
+  created_at: 2026-06-13T03:10:17.487083723Z
+  modified_at: 2026-06-13T03:10:17.487083723Z
