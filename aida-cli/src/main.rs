@@ -69835,6 +69835,9 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("trace", "Code-to-requirement traceability"),
                 ("archive", "Hide a requirement from default views"),
                 ("unarchive", "Restore an archived requirement"),
+                // trace:BUG-520 — defer/undefer were real commands missing from any group
+                ("defer", "Park a spec as primed/conditional work"),
+                ("undefer", "Restore a deferred spec to the active view"),
                 ("lint", "EARS-style requirement quality lens"),
             ],
         ),
@@ -69866,9 +69869,7 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("rebase", "Rebase code + store"),
                 ("pr", "Pull-request helpers"),
                 ("review", "Send a held spec for human review"),
-                ("release", "Manage a release"),
                 ("changelog", "Refresh / generate CHANGELOG.md"),
-                ("upgrade", "Upgrade aida to the latest release"),
             ],
         ),
         (
@@ -69892,7 +69893,7 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
             ],
         ),
         (
-            "Project setup",
+            "Project setup & maintenance",
             &[
                 ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
                 ("config", "ID configuration (prefixes, formats, etc.)"),
@@ -69901,6 +69902,17 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("memories", "Starter memory-pack drift check"),
                 ("docs", "Project documentation management"),
                 ("statusline", "AIDA-aware statusline setup"),
+                // trace:BUG-520 — rules/doctor/remote were real commands missing from any
+                // group; release/upgrade are maintainer verbs better placed here than under
+                // Git & lifecycle.
+                (
+                    "rules",
+                    "Sync Claude Code path-gated rules from the spec graph",
+                ),
+                ("doctor", "Diagnose and heal multi-agent state drift"),
+                ("remote", "Set up a git origin for a project that has none"),
+                ("release", "Manage a release"),
+                ("upgrade", "Upgrade aida to the latest release"),
                 ("export", "Export requirements"),
                 ("import", "Import requirements from a tree JSON file"),
             ],
@@ -70036,12 +70048,31 @@ mod help_grouping_tests {
             "Git & lifecycle",
             "Planning",
             "Roles & sessions",
-            "Project setup",
+            "Project setup & maintenance",
             "Reporting",
         ] {
             assert!(
                 headings.contains(&required),
                 "missing required help heading: {required}"
+            );
+        }
+    }
+
+    // trace:BUG-520 | ai:claude — real top-level commands that were previously
+    // absent from every help-all group must now each appear exactly once.
+    #[test]
+    fn previously_ungrouped_commands_appear_exactly_once() {
+        let mut counts = std::collections::HashMap::new();
+        for (_group, cmds) in command_groups() {
+            for (name, _desc) in *cmds {
+                *counts.entry(*name).or_insert(0) += 1;
+            }
+        }
+        for cmd in ["rules", "doctor", "defer", "undefer", "remote", "release"] {
+            assert_eq!(
+                counts.get(cmd).copied().unwrap_or(0),
+                1,
+                "command `{cmd}` must appear in exactly one help-all group"
             );
         }
     }
