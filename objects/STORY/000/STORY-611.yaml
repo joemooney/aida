@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T22:53:32.987674748Z
-modified_at: 2026-06-13T23:05:24.741786417Z
+modified_at: 2026-06-13T23:26:42.951786011Z
 req_type: Story
 tags:
 - aida:human
@@ -56,3 +56,8 @@ comments:
     Bare 'aida human' stays the three-bucket listing; the subcommands let you resolve inline. ACCEPTANCE add: from 'aida human' output, every listed item is actionable WITHOUT switching commands (via the alias subcommands). Keep them pure pass-throughs to the canonical verbs (one implementation, aliases forward) so they can't drift. trace:STORY-611
   created_at: 2026-06-13T23:05:24.741786417Z
   modified_at: 2026-06-13T23:05:24.741786417Z
+- id: 019ec34f-1f07-7ea0-b7e7-3cf0e80f5d23
+  author: joe
+  content: Commit f57067253 references this requirement
+  created_at: 2026-06-13T23:26:42.951786011Z
+  modified_at: 2026-06-13T23:26:42.951786011Z
