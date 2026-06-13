@@ -3,12 +3,12 @@ spec_id: TASK-760
 agreed_id: TASK-760
 title: 'aida init: ship a commented [intake] example block in the config.toml template'
 description: Followup to STORY-560. The [intake] policy knobs (disposition_bias / do_not_approve_classes / on_apply) work with zero config, but a commented example block in the aida init config.toml template would aid discoverability. Defaults already safe; this is docs/discoverability only.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T18:30:52.048618833Z
-modified_at: 2026-06-12T23:56:14.182118244Z
+modified_at: 2026-06-13T00:27:48.624219559Z
 req_type: Task
 tags:
 - aida:intake
@@ -19,3 +19,15 @@ relationships:
   target_id: 019eb6ca-001b-7270-a518-5c35e141a4df
   created_at: 2026-06-12T18:31:19.777456151Z
   created_by: joe
+history:
+- id: 019ebe60-b29b-7102-aa73-a5f4eaf53b17
+  author: aida-auto-bump
+  timestamp: 2026-06-13T00:27:48.763720151Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T00:27:48.624219559Z
+  completion_sha: 998082521469c5d9eeef63d06416d7c96b6b5ad6
