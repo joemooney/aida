@@ -434,7 +434,7 @@ pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
         Some(prefix) => resolve_id(&prefix)?,
         None => pick_interactive(limit)?,
     };
-    exec_claude_resume(&target, None)
+    exec_claude_resume(&target, None, false)
 }
 
 /// `aida session new` — capture role + title up-front, append a record
@@ -453,6 +453,7 @@ pub fn new_session(
     permission_mode: Option<&str>,
     role_override: Option<String>,
     display_name: Option<String>,
+    contained: bool,
 ) -> Result<()> {
     let role = role_override
         .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
@@ -471,9 +472,13 @@ pub fn new_session(
     append_launch_log(&role, permission_mode.unwrap_or("native"), &title)?;
 
     let name_for_log = display_name.as_deref().unwrap_or("(auto)");
-    let mode_display = permission_mode
-        .map(|m| format!("--permission-mode {}", m))
-        .unwrap_or_else(|| "(native permission posture)".to_string());
+    let mode_display = if contained {
+        "contained sandbox".to_string()
+    } else {
+        permission_mode
+            .map(|m| format!("--permission-mode {}", m))
+            .unwrap_or_else(|| "(native permission posture)".to_string())
+    };
     eprintln!(
         "{} {} → claude {} (name: {})",
         "▶".green().bold(),
@@ -482,7 +487,13 @@ pub fn new_session(
         name_for_log,
     );
 
-    exec_claude_new(permission_mode, display_name.as_deref())
+    exec_claude(
+        permission_mode,
+        display_name.as_deref(),
+        None,
+        None,
+        contained,
+    )
 }
 
 /// TASK-31: derive a claude `--name` value from session metadata. Keeps the
@@ -618,10 +629,6 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// Replace this process with `claude --permission-mode <mode>`. When `name`
 /// is `Some(...)`, also passes `--name <n>` so the launched session is
 /// labeled in the /resume picker and terminal title. trace:TASK-31 | ai:claude
-fn exec_claude_new(permission_mode: Option<&str>, name: Option<&str>) -> Result<()> {
-    exec_claude(permission_mode, name, None, None)
-}
-
 /// STORY-42 / TASK-112: replace this process with `claude
 /// --permission-mode <mode> [--name <n>] --session-id <uuid>
 /// <initial_prompt>`. The initial prompt becomes claude's first message
@@ -636,12 +643,14 @@ pub fn exec_claude_with_session(
     name: Option<&str>,
     initial_prompt: &str,
     session_id: &str,
+    contained: bool,
 ) -> Result<()> {
     exec_claude(
         permission_mode,
         name,
         Some(initial_prompt),
         Some(session_id),
+        contained,
     )
 }
 
@@ -662,11 +671,15 @@ pub fn claude_session_args(
     name: Option<&str>,
     initial_prompt: Option<&str>,
     session_id: Option<&str>,
+    contained: bool,
 ) -> Vec<String> {
     let mut args = Vec::new();
     if let Some(m) = permission_mode {
         args.push("--permission-mode".to_string());
         args.push(m.to_string());
+    }
+    if contained {
+        args.extend(claude_contained_flags());
     }
     if let Some(n) = name {
         args.push("--name".to_string());
@@ -691,6 +704,7 @@ fn exec_claude(
     name: Option<&str>,
     initial_prompt: Option<&str>,
     session_id: Option<&str>,
+    contained: bool,
 ) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
@@ -699,6 +713,7 @@ fn exec_claude(
         name,
         initial_prompt,
         session_id,
+        contained,
     ));
     #[cfg(unix)]
     {
@@ -723,6 +738,7 @@ pub fn spawn_claude_session(
     name: Option<&str>,
     initial_prompt: &str,
     session_id: &str,
+    contained: bool,
 ) -> Result<std::process::ExitStatus> {
     std::process::Command::new("claude")
         .args(claude_session_args(
@@ -730,6 +746,7 @@ pub fn spawn_claude_session(
             name,
             Some(initial_prompt),
             Some(session_id),
+            contained,
         ))
         .status()
         .context("failed to spawn claude")
@@ -752,6 +769,7 @@ pub fn spawn_claude_headless(
     session_id: &str,
     log_path: &Path,
     tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
 ) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -762,7 +780,9 @@ pub fn spawn_claude_headless(
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
     let status = Command::new("claude")
-        .args(claude_headless_args(prompt, session_id))
+        .args(claude_headless_args_with_posture(
+            prompt, session_id, contained,
+        ))
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
@@ -777,11 +797,15 @@ pub fn spawn_claude_headless(
 pub fn spawn_claude_resume(
     id: &str,
     permission_mode: Option<&str>,
+    contained: bool,
 ) -> Result<std::process::ExitStatus> {
     let mut cmd = std::process::Command::new("claude");
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
+    }
+    if contained {
+        cmd.args(claude_contained_flags());
     }
     cmd.status().context("failed to spawn claude")
 }
@@ -811,10 +835,28 @@ pub fn spawn_claude_resume(
 /// Pure — the flag set is unit-tested without spawning claude.
 /// trace:STORY-263 | ai:claude
 pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
-    vec![
+    claude_headless_args_with_posture(prompt, session_id, false)
+}
+
+pub fn claude_headless_args_with_posture(
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> Vec<String> {
+    let permission_mode = if contained {
+        "dontAsk"
+    } else {
+        "bypassPermissions"
+    };
+    let mut args = vec![
         "-p".to_string(),
         "--permission-mode".to_string(),
-        "bypassPermissions".to_string(),
+        permission_mode.to_string(),
+    ];
+    if contained {
+        args.extend(claude_contained_flags());
+    }
+    args.extend([
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
@@ -822,8 +864,57 @@ pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
         "AskUserQuestion".to_string(),
         "--session-id".to_string(),
         session_id.to_string(),
-        // Prompt last — a positional, mirroring `exec_claude`.
         prompt.to_string(),
+    ]);
+    args
+}
+
+pub fn claude_contained_flags() -> Vec<String> {
+    vec![
+        "--setting-sources".to_string(),
+        "project".to_string(),
+        "--settings".to_string(),
+        claude_contained_settings_json(),
+    ]
+}
+
+fn claude_contained_settings_json() -> String {
+    serde_json::json!({
+        "permissions": {
+            "allow": [
+                "Edit(/**)"
+            ],
+            "deny": destructive_command_deny_rules()
+        },
+        "sandbox": {
+            "enabled": true,
+            "failIfUnavailable": true,
+            "autoAllowBashIfSandboxed": true,
+            "allowUnsandboxedCommands": false
+        }
+    })
+    .to_string()
+}
+
+fn destructive_command_deny_rules() -> Vec<&'static str> {
+    vec![
+        "Bash(rm -rf / *)",
+        "Bash(rm -rf /)",
+        "Bash(rm -rf ~ *)",
+        "Bash(rm -rf ~)",
+        "Bash(rm -rf .. *)",
+        "Bash(rm -rf ../*)",
+        "Bash(git reset --hard *)",
+        "Bash(git reset --hard)",
+        "Bash(git clean -fd *)",
+        "Bash(git clean -fd)",
+        "Bash(git clean -fx *)",
+        "Bash(git clean -fx)",
+        "Bash(git push --force *)",
+        "Bash(git push -f *)",
+        "Bash(git branch -D *)",
+        "Bash(git checkout -- *)",
+        "Bash(git restore --source * -- *)",
     ]
 }
 
@@ -853,6 +944,7 @@ pub fn exec_claude_headless(
     session_id: &str,
     log_path: &Path,
     tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
 ) -> Result<()> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -863,7 +955,9 @@ pub fn exec_claude_headless(
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
     let status = Command::new("claude")
-        .args(claude_headless_args(prompt, session_id))
+        .args(claude_headless_args_with_posture(
+            prompt, session_id, contained,
+        ))
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
@@ -880,10 +974,28 @@ pub fn exec_claude_headless(
 /// conversation with the working model it had already built. Pure — the flag
 /// set is unit-tested without spawning claude. trace:STORY-306 | ai:claude
 pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String> {
-    vec![
+    claude_headless_resume_args_with_posture(prompt, session_id, false)
+}
+
+pub fn claude_headless_resume_args_with_posture(
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> Vec<String> {
+    let permission_mode = if contained {
+        "dontAsk"
+    } else {
+        "bypassPermissions"
+    };
+    let mut args = vec![
         "-p".to_string(),
         "--permission-mode".to_string(),
-        "bypassPermissions".to_string(),
+        permission_mode.to_string(),
+    ];
+    if contained {
+        args.extend(claude_contained_flags());
+    }
+    args.extend([
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
@@ -895,9 +1007,9 @@ pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String
         "AskUserQuestion".to_string(),
         "--resume".to_string(),
         session_id.to_string(),
-        // Prompt last — a positional, mirroring `claude_headless_args`.
         prompt.to_string(),
-    ]
+    ]);
+    args
 }
 
 /// STORY-306: spawn a headless `claude -p --resume <id>` run and wait,
@@ -920,6 +1032,7 @@ pub fn spawn_claude_headless_resume(
     log_path: &Path,
     cwd: &Path,
     tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
 ) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -931,7 +1044,9 @@ pub fn spawn_claude_headless_resume(
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
     let status = Command::new("claude")
         .current_dir(cwd)
-        .args(claude_headless_resume_args(prompt, session_id))
+        .args(claude_headless_resume_args_with_posture(
+            prompt, session_id, contained,
+        ))
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
@@ -1854,12 +1969,15 @@ pub fn forget(id_query: &str, force: bool, dry_run: bool, yes: bool) -> Result<(
 /// + wait on platforms without exec semantics. `permission_mode`, when
 ///   given, is passed through so a resumed `aida queue work` session keeps
 ///   the same permission posture as a fresh one. trace:TASK-112 | ai:claude
-pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>) -> Result<()> {
+pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>, contained: bool) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
+    }
+    if contained {
+        cmd.args(claude_contained_flags());
     }
     #[cfg(unix)]
     {
@@ -2264,7 +2382,7 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_native_omits_permission_mode() {
-        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"));
+        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"), false);
         assert!(
             !args.iter().any(|a| a == "--permission-mode"),
             "native launch must not inject --permission-mode: {args:?}"
@@ -2278,7 +2396,7 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_some_injects_permission_mode() {
-        let args = claude_session_args(Some("bypassPermissions"), None, None, None);
+        let args = claude_session_args(Some("bypassPermissions"), None, None, None, false);
         let pos = args
             .iter()
             .position(|a| a == "--permission-mode")
@@ -2298,7 +2416,7 @@ mod tests {
     #[test]
     fn headless_args_force_bypass_regardless_of_interactive_default() {
         // The interactive builder is now native-by-default…
-        let interactive = claude_session_args(None, None, Some("/aida-review"), Some("sid"));
+        let interactive = claude_session_args(None, None, Some("/aida-review"), Some("sid"), false);
         assert!(!interactive.iter().any(|a| a == "--permission-mode"));
         // …yet the headless builder still hard-forces bypass.
         let headless = claude_headless_args("/aida-review", "sid");
@@ -2311,6 +2429,37 @@ mod tests {
             Some("bypassPermissions"),
             "headless must force bypassPermissions: {headless:?}"
         );
+    }
+
+    #[test]
+    fn contained_headless_args_use_strict_sandbox_settings() {
+        let args = claude_headless_args_with_posture("/aida-review", "sid", true);
+        let pos = args
+            .iter()
+            .position(|a| a == "--permission-mode")
+            .expect("contained headless must set a permission mode");
+        assert_eq!(args.get(pos + 1).map(String::as_str), Some("dontAsk"));
+        assert!(args.contains(&"--setting-sources".to_string()));
+        assert!(args.contains(&"project".to_string()));
+        let settings_pos = args
+            .iter()
+            .position(|a| a == "--settings")
+            .expect("contained launch must pass inline settings");
+        let settings: serde_json::Value =
+            serde_json::from_str(args.get(settings_pos + 1).unwrap()).unwrap();
+        assert_eq!(settings["sandbox"]["enabled"], true);
+        assert_eq!(settings["sandbox"]["failIfUnavailable"], true);
+        assert_eq!(settings["sandbox"]["allowUnsandboxedCommands"], false);
+        assert!(settings["permissions"]["allow"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::Value::String("Edit(/**)".to_string())));
+        assert!(settings["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::Value::String(
+                "Bash(git reset --hard *)".to_string()
+            )));
     }
 
     /// `--bare` strips OAuth/keychain auth and breaks login (spike Q1) — the

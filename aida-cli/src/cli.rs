@@ -595,6 +595,12 @@ pub enum SessionCommand {
         #[clap(long)]
         permission_mode: Option<String>,
 
+        /// Launch Claude in contained mode: strict Bash sandboxing, no
+        /// unsandboxed fallback, destructive-command deny rules, and
+        /// project-relative edit auto-allow only.
+        #[clap(long)]
+        sandbox: bool,
+
         /// Override the role recorded for this session (defaults to
         /// $AIDA_SESSION_ROLE).
         #[clap(long)]
@@ -696,6 +702,12 @@ pub enum SessionCommand {
         // trace:STORY-54, TASK-83 trace:STORY-495 | ai:claude
         #[clap(long)]
         permission_mode: Option<String>,
+
+        /// With --launch, launch Claude in contained mode: strict Bash
+        /// sandboxing, no unsandboxed fallback, destructive-command deny
+        /// rules, and project-relative edit auto-allow only.
+        #[clap(long)]
+        sandbox: bool,
 
         /// Override the role recorded in this session's lease (and, when
         /// `--launch` is set, the persona the launched Claude inherits).
@@ -3513,6 +3525,11 @@ pub enum QueueCommand {
         // trace:TASK-487 | ai:claude
         #[clap(long, value_name = "MODE")]
         permission_mode: Option<String>,
+        /// Launch Claude in contained mode: strict Bash sandboxing, no
+        /// unsandboxed fallback, destructive-command deny rules, and
+        /// project-relative edit auto-allow only.
+        #[clap(long)]
+        sandbox: bool,
         /// Run the full setup (worktree, lease, manifest) but skip the
         /// final `claude` exec. Useful for scripting / debugging the
         /// resolver.
@@ -5119,6 +5136,12 @@ pub enum AgentNewCommand {
         // trace:STORY-495 | ai:claude
         #[clap(long)]
         permission_mode: Option<String>,
+
+        /// Launch Claude in contained mode: strict Bash sandboxing, no
+        /// unsandboxed fallback, destructive-command deny rules, and
+        /// project-relative edit auto-allow only.
+        #[clap(long)]
+        sandbox: bool,
 
         /// Do not write/inject the AIDA launch-context snapshot.
         #[clap(long)]
