@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:42:01.933795456Z
-modified_at: 2026-06-13T01:48:24.647175656Z
+modified_at: 2026-06-13T01:48:39.966214305Z
 req_type: Story
 tags:
 - advisor
@@ -25,3 +25,5 @@ relationships:
   target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
   created_at: 2026-06-12T20:43:20.806075123Z
   created_by: joe
+archived: true
+archived_at: 2026-06-13T01:48:39.966214305Z
