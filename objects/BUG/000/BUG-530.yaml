@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T17:47:29.100804187Z
+modified_at: 2026-06-13T18:22:40.339630572Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -17,3 +17,28 @@ tags:
 - queue-routing
 - relates:BUG-528
 - reliability
+comments:
+- id: 019ec238-c2d3-7932-8f02-e77c5089e59b
+  author: joe
+  content: |-
+    ROOT CAUSE (confirmed empirically, advisor+operator 2026-06-13):
+
+    The shared selector `resolve_burndown_sets` (used by BOTH `handle_burndown_plan` AND `handle_burndown_run`'s preflight print) reads the spec store via `load_store_for_lookup`, which uses `aida_core::GitBackend` to read the `.aida-store/` WORKTREE YAML files directly — NOT the freshness-checked `.aida/cache.db`. Queue membership (`all_queued_requirement_ids`) likewise reads `.aida-store/registry/queues/*.yaml` directly.
+
+    The staleness: after an auto-bump (e.g. `aida pull` completing+dequeuing specs on merge), the bump commits to the orphan `aida-store` branch and updates the cache write-through, but the `.aida-store/` worktree CHECKOUT is not refreshed to the new HEAD until a later sync. During that lag window the worktree YAML still shows the OLD state (Approved + queued), so `resolve_burndown_sets` selects already-completed/dequeued specs as 'blessed/ready'. The cache-backed views (`aida show`/`aida list`/`aida queue list`) read the fresh cache and correctly hide them — hence the disagreement (preflight announced 'TASK-778, BUG-520' both Completed+unqueued; the skill's authoritative re-resolution drained the real set).
+
+    EMPIRICAL PROOF: at preflight time the worktree YAML for TASK-778/BUG-520 lagged at the stale state; checked again post-refresh, .aida-store/objects/{TASK/000/TASK-778,BUG/000/BUG-520}.yaml now say status: Completed, matching the cache. Transient, self-healing — exactly why it's intermittent. (Side note, separate issue: local `aida-store` HEAD diverged from `origin/aida-store` — flag, not in scope.)
+
+    FIX (recommend option 1):
+    1. Route `resolve_burndown_sets` through the SAME freshness-checked cache read that `aida list`/`show` use (stale-detection rebuilds before read), instead of `load_store_for_lookup`'s GitBackend-direct worktree read — and read queue membership from the fresh source too. Surgical; makes the preflight print authoritative.
+    2. (broader) Add stale-detection + worktree refresh to `load_store_for_lookup`: compare worktree HEAD vs orphan branch HEAD, refresh checkout if behind, before reading. Fixes ALL GitBackend-direct readers but heavier.
+    3. Defensive terminal-status exclusion ALONE is insufficient — the stale read reported status=Approved, so filtering on stale status won't catch it; only works atop a fresh read.
+
+    ACCEPTANCE:
+    - After an auto-bump that completes+dequeues specs, `burndown plan` and `burndown run` preflight must NOT list those specs as ready/blessed — must match cache-backed `aida list`/`show`.
+    - The 'N blessed spec(s) will drain: <ids>' print never names terminal-status or unqueued specs.
+    - Regression test: a store state where the GitBackend/worktree read would disagree with the cache (completed+dequeued-but-worktree-stale spec) → resolve_burndown_sets excludes it. Prove the test fails without the fix.
+
+    KEYBOARD-NOT-DRAIN: this is the autonomy keystone's own selector — fix at the keyboard via `aida queue work BUG-530` with the advisor watching, never an unsupervised drain. Do NOT E2E-test the fixed selector against real specs (unit test + dry-run only).
+  created_at: 2026-06-13T18:22:40.339630572Z
+  modified_at: 2026-06-13T18:22:40.339630572Z
