@@ -40,9 +40,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:04.203194099Z
-modified_at: 2026-06-13T00:07:31.548265562Z
+modified_at: 2026-06-13T01:47:06.134309949Z
 req_type: Decision
 tags:
+- batch:repositioning
 - from-spike:SPIKE-53
 - governance
 - repositioning
