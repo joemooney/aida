@@ -155,72 +155,294 @@ AIDA grew its own vocabulary; here it is in plain words.
 | **Ready** | a queued spec that passes all five gates — an agent will take it. |
 | **the "open set"** | every spec that isn't Completed, Rejected, or archived — the specs still "in play" (`aida why` and `aida list open` work over this set). |
 
-## The state diagram
+## The lifecycle diagrams
 
+<!-- trace:STORY-609 | ai:claude -->
 <!-- trace:TASK-733 -->
 
-> **Frozen snapshot — 2026-06-10.** This diagram is a point-in-time
-> hand-drawn map, deliberately *not* elaborately hand-maintained. When the
-> machinery drifts from it, trust the prose above and the `RequirementType` /
+> **Frozen snapshot — 2026-06-13.** These diagrams are point-in-time
+> hand-drawn maps, deliberately *not* elaborately hand-maintained. When the
+> machinery drifts from them, trust the prose above and the `RequirementType` /
 > transition code over the picture. The un-driftable, generated-from-source
 > version is the goal of the `aida lifecycle` SPIKE (SPIKE-56) — once that
-> ships, this block becomes a generated artifact and the date stops mattering.
+> ships, these blocks become generated artifacts and the date stops mattering.
 
-The prose above describes the lifecycle as a chain, but a spec's *real* state
-is not one value — it is **five orthogonal coordinates** that move
-independently. The status chain is only the first. The diagram below shows the
-status chain as a state machine, then the four other regions as separate
-tracks, with a note that they are orthogonal (a spec is one row from each
-region simultaneously — e.g. `InProgress` × `active` × `queued` × `leased` ×
-`pickable`).
+One overloaded "everything at once" state machine is hard to read, so the
+lifecycle is split into **five focused diagrams, each answering exactly one
+question.** Read the one that matches the question in your head; you never need
+all five at once.
 
-### Region 1 — `status` chain (the mainline)
+| # | Diagram | The one question it answers |
+|---|---------|-----------------------------|
+| 1 | [Happy path](#1--the-happy-path-draft--released) | What is the normal, no-surprises path Draft → Released? |
+| 2 | [Review / rework loop](#2--the-review--rework-loop) | What happens between PR-open and merge — and when does work bounce back? |
+| 3 | [Punt / escalation cascade](#3--the-punt--escalation-cascade-implementer--advisor--human) | When an agent can't decide, who gets the call next? |
+| 4 | [The three autonomy modes](#4--the-three-autonomy-modes) | How much does the human stay in the loop — and what changes per mode? |
+| 5 | [Merge auto-bump + two-leg git](#5--merge-auto-bump--the-two-leg-git) | How does a merge promote `done → completed`, and what are the two git legs? |
+
+All five colour their nodes by **trigger kind**, using the same legend:
+
+| Colour | Trigger kind | Who pulls it |
+|--------|--------------|--------------|
+| 🔵 **blue** | **CLI / human command** | a person (or script) runs an `aida` verb |
+| 🟣 **purple** | **LLM decision** | a Claude session decides and acts |
+| 🟢 **green** | **system / git-event** | a git event or background sweep fires it, no human in the loop |
+
+The boundary between blue and purple is *who decides*: a human typing
+`aida edit --status approved` is blue; a Claude session deciding to `punt`
+rather than guess is purple. Green is the substrate moving a spec with **no
+decision at all** — the merge commit lands and the auto-bump just happens.
+Because Mermaid colours nodes (not edges), the fill is a coarse hint for the
+*dominant* driver into a state; the edge labels carry the precise verb.
+
+### 1 · The happy path (Draft → Released)
+
+*The no-surprises mainline: no rework, no punts, no edge cases.* This is the
+status chain every spec aims to walk straight through.
 
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> Draft: aida add (LLM/human)
-
+    [*] --> Draft: aida add
     Draft --> Approved: aida edit --status approved
-    Approved --> Planned: aida edit --status planned
-    Approved --> InProgress: aida queue work
+    Approved --> Planned: aida edit --status planned (optional)
     Planned --> InProgress: aida queue work
-    InProgress --> Done: aida queue done / aida-pr
+    Approved --> InProgress: aida queue work
+    InProgress --> Done: /aida-pr (push + open PR)
     Done --> Completed: merge auto-bump (aida pull)
     Completed --> Released: release tag (scripts/release.sh)
-
-    InProgress --> NeedsAttention: punt (design-fork)
-    NeedsAttention --> InProgress: aida edit --status in-progress
-    NeedsAttention --> Approved: aida edit --status approved
-    NeedsAttention --> Rejected: aida edit --status rejected
-
-    Draft --> Rejected: aida edit --status rejected
-    Approved --> Rejected: aida edit --status rejected
-    Done --> InProgress: reviewer RequestChanges
-
     Released --> [*]
-    Rejected --> [*]
-    Completed --> [*]
 
     classDef cli fill:#1f6feb,stroke:#0d3b8a,color:#fff
     classDef llm fill:#8957e5,stroke:#5a2ca0,color:#fff
     classDef git fill:#2da44e,stroke:#176b2e,color:#fff
 
-    class Draft,Approved,Planned,Rejected cli
-    class InProgress,NeedsAttention llm
+    class Draft,Approved,Planned cli
+    class InProgress llm
     class Done,Completed,Released git
 ```
 
-A state's fill marks **which trigger kind most often drives entry into it** —
-see the legend below. (Most transitions out of a state are also labelled with
-their driving command.) Because Mermaid colours nodes, not edges, the fill is a
-coarse hint; the edge labels carry the precise driver.
+`Planned` is optional — many specs go straight from `Approved` to `InProgress`.
+The two load-bearing distinctions: **Done ≠ Completed** (branch vs `main`) and
+**Completed ≠ Released** (merged vs published version).
 
-### Regions 2–5 — the orthogonal coordinates
+### 2 · The review / rework loop
 
-These four tracks are **not** part of the status chain. Each is an independent
-flag that moves on its own trigger, at any point in the status chain. A spec
-holds exactly one value from *each* region at once.
+*What happens between PR-open and merge — and the one edge that bounces work
+back.* Once a spec reaches `Done`, a reviewer reads the diff and renders a
+verdict; an "approve" merges, a "request changes" sends it back to `InProgress`.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    InProgress --> Done: /aida-pr (push + open PR + queue reviewer)
+    Done --> UnderReview: aida queue work PR-N (reviewer picks it up)
+    UnderReview --> InProgress: RequestChanges verdict
+    UnderReview --> Merged: Approve verdict + gh pr merge --squash
+    Merged --> Completed: aida pull (auto-bump done → completed)
+
+    note right of UnderReview
+        A verdict is not a merge.
+        RequestChanges keeps the same
+        queue entry; the spec stays Done
+        in status but the work re-opens.
+    end note
+
+    classDef llm fill:#8957e5,stroke:#5a2ca0,color:#fff
+    classDef git fill:#2da44e,stroke:#176b2e,color:#fff
+
+    class InProgress,UnderReview llm
+    class Done,Merged,Completed git
+```
+
+`UnderReview` is a phase, not a distinct `status` value — the spec's `status`
+stays `Done` while a reviewer holds it. *Who* reviews (the advisor by hand, an
+automated reviewer phase, or a headless reviewer) depends on the execution
+mode; see [`docs/review-process.md`](review-process.md) for the topology.
+
+### 3 · The punt / escalation cascade (implementer → advisor → human)
+
+*When an agent hits a fork it can't safely resolve, who gets the call next?*
+The implementer never guesses past a design-fork — it **punts**, parking the
+spec `NeedsAttention`. Under a headless drain that punt climbs a cascade.
+
+```mermaid
+stateDiagram-v2
+    direction TB
+    [*] --> Implementer: aida queue work (InProgress)
+    Implementer --> Done: clear path — ships the PR
+    Implementer --> Punt: design-fork / ambiguous-spec / missing-context
+
+    Punt --> Advisor: headless drain routes the punt (/aida-advise)
+    Punt --> NeedsAttention: interactive — parks for triage
+
+    Advisor --> Implementer: resolves + resumes (answer grounded in substrate)
+    Advisor --> ShipDefault: --escalate-defaults — ships the defensible default
+    Advisor --> Human: --escalate-blocks (default) — parks for a person
+
+    Human --> Implementer: triage decision resumes the work
+    NeedsAttention --> Implementer: aida edit --status in-progress
+    NeedsAttention --> Rejected: aida edit --status rejected
+
+    classDef llm fill:#8957e5,stroke:#5a2ca0,color:#fff
+    classDef cli fill:#1f6feb,stroke:#0d3b8a,color:#fff
+    classDef git fill:#2da44e,stroke:#176b2e,color:#fff
+
+    class Implementer,Advisor,Punt llm
+    class Human,NeedsAttention,Rejected cli
+    class Done,ShipDefault git
+```
+
+The cascade is **implementer → advisor → human**: the implementer punts rather
+than guess, the headless advisor (STORY-306) resolves what's grounded in a
+recorded principle or preference, and only what genuinely needs a person
+escalates. `--escalate-blocks` (the default) parks for triage;
+`--escalate-defaults` ships the advisor's best-guess default. Full mechanism:
+the [`/aida-punt`](#the-off-mainline-state-needs-attention) skill and
+[`docs/autonomous-drain.md`](autonomous-drain.md).
+
+### 4 · The three autonomy modes
+
+*How much does the human stay in the loop?* The same lifecycle runs at three
+levels of human presence. They differ only in **where the human stands**, not
+in the states a spec passes through.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    state "default — interactive" as Default {
+        [*] --> d_work: aida queue work
+        d_work --> d_pause: pauses at each design-fork
+        d_pause --> d_work: human answers in the session
+        d_work --> d_pr: human drives review + merge
+    }
+
+    state "--zen — one spec, watched" as Zen {
+        [*] --> z_work: aida queue work SPEC --zen
+        z_work --> z_auto: runs the full lifecycle on ONE spec
+        z_auto --> z_done: human watches; steps in only on a fork
+    }
+
+    state "--no-human — headless drain" as NoHuman {
+        [*] --> n_work: aida queue work --auto-complete --no-human
+        n_work --> n_advisor: a fork punts to the headless advisor
+        n_advisor --> n_work: advisor resolves or escalates
+        n_work --> n_done: implement → CI → review → merge → pull → build
+    }
+
+    classDef cli fill:#1f6feb,stroke:#0d3b8a,color:#fff
+    classDef llm fill:#8957e5,stroke:#5a2ca0,color:#fff
+    classDef git fill:#2da44e,stroke:#176b2e,color:#fff
+
+    class d_work,d_pause,z_work,n_work cli
+    class d_pr,z_auto,z_done,n_advisor,n_done llm
+    class n_done git
+```
+
+The trade-off is real and the same across modes: **interactive sessions make
+better design decisions; headless drains deliver better throughput.** Drive
+design-fork specs at the keyboard (`default` / `--zen`); drain mechanical
+batches headless (`--no-human`). The flags and the evidence behind each:
+[`docs/autonomous-drain.md`](autonomous-drain.md).
+
+### 5 · Merge auto-bump + the two-leg git
+
+*How does a merge promote `done → completed`, and what are the two git legs?*
+AIDA's git verbs move **two legs at once** — the code leg (your branches on
+`main`) and the store leg (the orphan `aida-store` branch of requirement YAML).
+A merge on the code leg is what *triggers* the status auto-bump on the store leg.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    state "code leg (your branches → main)" as Code {
+        [*] --> c_pr: PR open (spec is Done)
+        c_pr --> c_merged: gh pr merge --squash --delete-branch
+        c_merged --> c_main: merge commit references (SPEC-ID) on main
+    }
+
+    state "store leg (orphan aida-store branch)" as Store {
+        [*] --> s_done: spec status = Done
+        s_done --> s_bump: aida pull scans main for the merge commit
+        s_bump --> s_completed: auto-bump done → completed
+    }
+
+    c_main --> s_bump: aida pull links the two legs
+
+    note right of Store
+        aida pull = code leg (--ff-only)
+        + store leg (--rebase), in one verb.
+        If the bump is missed:
+        aida db reconcile-status.
+    end note
+
+    classDef cli fill:#1f6feb,stroke:#0d3b8a,color:#fff
+    classDef git fill:#2da44e,stroke:#176b2e,color:#fff
+
+    class c_pr cli
+    class c_merged,c_main,s_done,s_bump,s_completed git
+```
+
+You rarely set `completed` by hand: `aida pull` (and `aida db sync --pull`)
+detect the merge commit referencing the spec and bump `done → completed`
+automatically. The code leg uses `git pull --ff-only` (refuses to surprise the
+working tree); the store leg uses `--rebase` (store conflicts are rare and the
+worktree is AIDA-managed). Missed bump → `aida db reconcile-status` replays the
+same scan over a wider window. The full two-leg verb surface (`fetch` / `pull`
+/ `push` / `rebase`, and the `--code-only` / `--store-only` rules) is
+[`docs/git-verb-surface.md`](git-verb-surface.md).
+
+## Diagram styling standard
+
+<!-- trace:STORY-609 | ai:claude -->
+
+A short, documented rule for *how* these diagrams are authored — so the next
+person who touches them doesn't have to re-decide. The trade-off is **portability
+vs. polish**: themed Mermaid is cheap to maintain and version-controls as text;
+hand-crafted SVG is more beautiful but is a binary artifact that drifts silently.
+
+**The standard:**
+
+1. **Themed Mermaid is the default for all diagrams.** Every diagram above is
+   authored as a fenced `mermaid` block with the shared three-colour `classDef`
+   legend (blue = CLI/human, purple = LLM, green = git/system). GitHub renders
+   Mermaid natively, so the source markdown is the artifact — no build step, no
+   binary to keep in sync.
+
+2. **Hand-crafted / pre-rendered SVG is reserved for HERO diagrams only.** A
+   *hero* diagram is one where polish carries real first-impression weight and
+   the content is stable enough to be worth hand-tuning. The **two HERO
+   candidates** are:
+   - **Diagram 1 — the happy path** (the single most-shown lifecycle picture), and
+   - **Diagram 4 — the three autonomy modes** (the autonomy-ladder framing).
+
+   These *may* be upgraded to hand-crafted (e.g. Excalidraw-style) or
+   pre-rendered SVG later. The other three (review loop, punt cascade, two-leg
+   git) stay Mermaid — they answer mechanical questions where clarity, not
+   beauty, is the bar.
+
+3. **For mdBook, prefer pre-rendered SVG over a live Mermaid preprocessor.**
+   mdBook does **not** render Mermaid out of the box: it needs either the
+   `mdbook-mermaid` preprocessor (a build dependency every reader/CI must
+   install) **or** pre-rendered SVG checked in alongside the markdown.
+   **Pre-rendered SVG is the preferred path** — it sidesteps the build
+   dependency entirely and renders identically everywhere. When a diagram is
+   promoted into an mdBook (e.g. "The AIDA Book", EPIC-41), export it to SVG
+   (`mmdc -i diagram.mmd -o diagram.svg`, the Mermaid CLI) and embed the SVG;
+   keep the `mermaid` source block in this file as the editable master.
+
+The rule of thumb: **author in Mermaid, ship Mermaid on GitHub, pre-render to
+SVG when (and only when) a diagram enters an mdBook or earns HERO polish.**
+
+## Appendix — status is not the whole state (the five orthogonal coordinates)
+
+The five diagrams above all track one axis: the `status` chain (plus its review,
+punt, and merge mechanics). But a spec's *real* state is not one value — `status`
+is only the first of **five orthogonal coordinates** that each move on their own
+trigger, at any point in the chain. A spec holds exactly one value from *each*
+region at once (e.g. `InProgress` × `active` × `queued` × `leased` × `pickable`).
 
 ```mermaid
 stateDiagram-v2
@@ -268,40 +490,26 @@ stateDiagram-v2
 ```
 
 **Orthogonal, not sequential.** A `Completed` spec can still be `active` (not
-yet archived); an `InProgress` spec can be `queued` + `leased` + `pickable`
-all at once; an archived spec keeps its frozen status. Read the five regions as
-five dials, each turned by its own trigger.
+yet archived); an `InProgress` spec can be `queued` + `leased` + `pickable` all
+at once; an archived spec keeps its frozen status. Read the regions as dials,
+each turned by its own trigger. (The `status` chain is Region 1 — the five
+diagrams above.)
 
-### Legend — the three trigger kinds
+**Illegal combinations — guarded.** The regions are independent, but not *every*
+combination is legal. Two have bitten us and are now guarded:
 
-| Colour | Trigger kind | Who pulls it | Examples |
-|--------|--------------|--------------|----------|
-| 🔵 **blue** | **CLI / human command** | A person (or script) runs an `aida` verb | `aida edit --status approved`, `aida queue add`, `aida archive`, `aida unarchive` |
-| 🟣 **purple** | **LLM decision** | A Claude session decides and acts | `aida queue work` starts implementing, `punt` on a design-fork, reviewer verdict, advisor resolves a punt |
-| 🟢 **green** | **system / git-event** | A git event or background sweep fires it, no human in the loop | merge auto-bump (`done → completed` on `aida pull`), release tag, crash-recovery lease sweep, blocked-by dependency clearing |
-
-The boundary between blue and purple is *who decides*: a human typing
-`aida edit --status approved` is blue; a Claude session deciding to `punt`
-rather than guess is purple. Green is the substrate moving a spec with **no
-decision at all** — the merge commit lands and the auto-bump just happens.
-
-### Don't let this happen — illegal orthogonal combinations
-
-The regions are independent, but not *every* combination is legal. Two have
-bitten us and are now guarded:
-
-- **`archived` AND `queued`** — an archived spec must never sit in a work
-  queue. Archiving is "hidden from default views"; a queued archived spec is
+- **`archived` AND `queued`** — an archived spec must never sit in a work queue.
+  Archiving is "hidden from default views"; a queued archived spec is
   invisible-but-pickable, so a drain picks up work the human thinks is gone.
   `aida archive` now refuses (or de-queues) a queued spec. (BUG-492)
 - **`review:draft-only` (held-for-review) AND PR-closed** — a spec parked
   "held for review" whose PR has already been closed/merged is a contradiction:
-  the review gate is waiting on a PR that no longer needs it. The held-reason is
-  now reconciled against real PR state so the spec doesn't wedge. (BUG-493)
+  the review gate waits on a PR that no longer needs it. The held-reason is now
+  reconciled against real PR state so the spec doesn't wedge. (BUG-493)
 
 The rule of thumb: a park-reason or visibility flag must always be *consistent
 with* the spec's queue/lease/PR reality. When they diverge, the spec silently
-falls out of the flow — which is exactly the failure both bugs describe.
+falls out of the flow.
 
 ## What "shipped" means — the verbs
 
@@ -440,6 +648,6 @@ lives in [`autonomous-drain.md`](autonomous-drain.md).
 - The `lifecycle-vocabulary.md` discipline guide scaffolded by `aida init`
   into `docs/aida/discipline/` — the same verb vocabulary, as a habit for any
   AIDA-using project
-- **SPIKE-56** (`aida lifecycle`) — the future generated-from-source diagram
-  that will replace [the frozen state diagram](#the-state-diagram) above, so
-  the picture can't drift from the transition code
+- **SPIKE-56** (`aida lifecycle`) — the future generated-from-source diagrams
+  that will replace [the frozen lifecycle diagrams](#the-lifecycle-diagrams)
+  above, so the picture can't drift from the transition code
