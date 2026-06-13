@@ -1,0 +1,16 @@
+id: 019ec2b9-4f60-77e1-95df-b4b3a79b9e06
+spec_id: TASK-794
+agreed_id: TASK-794
+title: 'Doc-intent part 2: documenter consumes the spec graph (--help + interface_changes + description/acceptance) into intent-bearing entries'
+description: 'Part 2 of STORY-603. The documenter must derive entries from the spec graph (--help = WHAT, interface_changes = delta, spec description/acceptance = WHY), not from --help alone. Endgame: STORY-600 (aida manual <cmd>). Deferred from PR #858 (part 1 = the substrate-as-bouncer gate).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T20:43:04.928967474Z
+modified_at: 2026-06-13T20:43:04.928967474Z
+req_type: Task
+tags:
+- docs
+- parent:EPIC-40
+- parent:STORY-603
