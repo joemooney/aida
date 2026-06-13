@@ -1798,8 +1798,11 @@ fn run() -> Result<()> {
             // TASK-754: --queue/--batch are git-backend-path features (they
             // reuse the backlog-groom enqueue helper); the deprecated
             // centralized backend ignores them. trace:TASK-754 | ai:claude
+            // BUG-528: --for routes the queued spec; also git-backend-only.
+            // trace:BUG-528 | ai:claude
             queue: _,
             batch: _,
+            r#for: _,
         } => {
             // TASK-725: positional title (`aida add "do X"`) — --title wins.
             let title = title.clone().or_else(|| title_positional.clone());
@@ -11843,6 +11846,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 no_human_only: false,
                 queue: true,
                 batch: Some("fasttrack".to_string()),
+                // BUG-528: route to the implementer queue by default (the
+                // common target for filed work). trace:BUG-528 | ai:claude
+                r#for: None,
             };
             return handle_git_backend_command(store_path, &add);
         }
@@ -11867,6 +11873,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_human_only,
             queue,
             batch,
+            r#for,
             ..
         } => {
             // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
@@ -12558,26 +12565,44 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     let storage = Storage::new(store_path);
                     let user_id = current_user_id(None);
                     let batch_norm: Option<&str> = batch.as_deref().map(normalize_batch_name);
-                    backlog::enqueue_groomed(
+                    // BUG-528: route the freshly-filed work explicitly rather
+                    // than to the FILER's session role. The common case is an
+                    // advisor filing implementation work, so `add --queue`
+                    // defaults to the `implementer` queue (the overwhelmingly
+                    // common target) — overridable with `--for <role>`, and
+                    // `--for any` leaves it unrouted. This mirrors the routing
+                    // surface of `aida queue add --for`; without it the
+                    // advisor-filed bug/task silently landed in the ADVISOR
+                    // queue and `burndown run` (which drains the implementer
+                    // queue) would miss it. trace:BUG-528 | ai:claude
+                    let route_role: Option<String> = add_queue_route_role(r#for.as_deref());
+                    backlog::enqueue_groomed_for(
                         &storage,
                         last,
                         batch_norm,
                         Some("advisor-cleared at filing"),
                         &user_id,
+                        route_role.clone(),
                     )?;
                     let did = last.spec_id.as_deref().unwrap_or("?");
+                    let route_suffix = match route_role.as_deref() {
+                        Some(role) => format!(" → {} queue", role),
+                        None => " (unrouted)".to_string(),
+                    };
                     if let Some(name) = batch_norm {
                         println!(
-                            "{} Queued {} (advisor-cleared at filing), tagged `batch:{}`.",
+                            "{} Queued {}{} (advisor-cleared at filing), tagged `batch:{}`.",
                             "✓".green(),
                             did.bold(),
+                            route_suffix,
                             name.bold()
                         );
                     } else {
                         println!(
-                            "{} Queued {} (advisor-cleared at filing).",
+                            "{} Queued {}{} (advisor-cleared at filing).",
                             "✓".green(),
-                            did.bold()
+                            did.bold(),
+                            route_suffix
                         );
                     }
                 }
@@ -57007,6 +57032,42 @@ mod bug_231_findings_promote_tests {
         );
     }
 
+    // ---- BUG-528: `aida add --queue` routing ----
+
+    /// Default (no `--for`): `add --queue` routes to the `implementer` queue —
+    /// the common target for filed work — NOT the filer's session role.
+    /// trace:BUG-528
+    #[test]
+    fn add_queue_routes_to_implementer_by_default() {
+        assert_eq!(add_queue_route_role(None), Some("implementer".to_string()));
+    }
+
+    /// `--for <role>` routes to that role's queue, canonicalized (so `dialog`
+    /// normalizes to `advisor`, matching `aida queue add --for`). trace:BUG-528
+    #[test]
+    fn add_queue_routes_to_explicit_role_canonicalized() {
+        assert_eq!(
+            add_queue_route_role(Some("advisor")),
+            Some("advisor".to_string())
+        );
+        assert_eq!(
+            add_queue_route_role(Some("reviewer")),
+            Some("reviewer".to_string())
+        );
+        // dialog is the deprecated alias for advisor — canonicalized on route.
+        assert_eq!(
+            add_queue_route_role(Some("dialog")),
+            Some("advisor".to_string())
+        );
+    }
+
+    /// `--for any` leaves the spec unrouted (explicit opt-out), mirroring the
+    /// `aida queue add --for any` write-side semantic. trace:BUG-528
+    #[test]
+    fn add_queue_for_any_is_unrouted() {
+        assert_eq!(add_queue_route_role(Some("any")), None);
+    }
+
     // ---- TASK-618: default-queue cross-machine collision predicate ----
 
     /// Non-"default" user_ids shard cleanly per user, so a foreign
@@ -63919,6 +63980,25 @@ fn queue_at_filing_refusal(
         Some(QueueAtFilingRefusal::Downgraded)
     } else {
         Some(QueueAtFilingRefusal::NotApproved)
+    }
+}
+
+/// BUG-528: resolve which role queue `aida add --queue` routes the freshly-filed
+/// spec to. Mirrors `aida queue add --for`'s `--for any` semantic, but the
+/// *default* (no `--for`) is the `implementer` queue — the overwhelmingly common
+/// target for filed work — rather than the filer's own session role. Before this,
+/// `enqueue_groomed` routed by `AIDA_SESSION_ROLE`, so an advisor filing
+/// implementation work with `--queue` silently landed it in the advisor queue,
+/// where `burndown run` (which drains the implementer queue) would miss it.
+///   * `Some("any")`  → `None` (unrouted, explicit opt-out).
+///   * `Some(role)`   → `Some(canonical_role_name(role))`.
+///   * `None`         → `Some("implementer")` (canonicalized).
+/// trace:BUG-528 | ai:claude
+fn add_queue_route_role(r#for: Option<&str>) -> Option<String> {
+    match r#for {
+        Some("any") => None,
+        Some(role) => Some(canonical_role_name(role)),
+        None => Some(canonical_role_name("implementer")),
     }
 }
 
