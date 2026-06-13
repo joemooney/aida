@@ -51218,6 +51218,62 @@ mod statusline_tests {
         );
     }
 
+    // BUG-506: a squash subject carrying MULTIPLE separate `(SPEC-ID)`
+    // groups — `... (BUG-503) (BUG-504) (#794)` — must deliver EVERY id,
+    // not just the last group before the PR number. Both the `aida pull`
+    // auto-bump scan and `aida db reconcile-status` share this extractor,
+    // so the single-group assumption stranded all-but-one spec of every
+    // two-spec cluster PR at its pre-merge status.
+    // trace:BUG-506 | ai:claude
+    #[test]
+    fn extract_spec_ids_collects_all_paren_groups() {
+        // Two separate groups + PR-number suffix → both ids, subject order.
+        let msg = "fix: x (BUG-1) (BUG-2) (#99)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-1".to_string(), "BUG-2".to_string()]
+        );
+        // The real-world shape that stranded BUG-503 (PR #794 squash).
+        let msg = "[AI:claude] fix(review): stale-base pre-flight + session \
+            lease for aida review <spec> (BUG-503) (BUG-504) (#794)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-503".to_string(), "BUG-504".to_string()]
+        );
+        // Three groups, no PR suffix.
+        let msg = "feat: y (TASK-1) (TASK-2) (TASK-3)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec![
+                "TASK-1".to_string(),
+                "TASK-2".to_string(),
+                "TASK-3".to_string()
+            ]
+        );
+        // Single-spec case still works.
+        let msg = "fix(scope): tweak (BUG-23) (#7)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-23".to_string()]
+        );
+        // No-spec case still yields nothing.
+        let msg = "chore: bump dep version (#12)\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+        // A conventional-commit `(scope)` group left of the id trailer must
+        // NOT be mined — the walk stops at the first non-spec-id group.
+        let msg = "feat(api): add endpoint (FR-1-042)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["FR-1-042".to_string()]
+        );
+        // Prose-y paren left of the trailer doesn't leak either.
+        let msg = "release: stuff (foo) (BUG-9)\n";
+        assert_eq!(extract_spec_ids_from_commit(msg), vec!["BUG-9".to_string()]);
+        // A non-spec-id LAST group still drops the line's contribution.
+        let msg = "release: v1.2.3 (BUG-9) (1.2.3)\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+    }
+
     // STORY-498: pure validity-gate core. A resolver maps id → resolution; the
     // gate must flag nonexistent + rejected references, pass live ones, and
     // honour the no-trailer / plan-commit exemptions. trace:STORY-498 | ai:claude
@@ -87265,20 +87321,29 @@ pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<Stri
     out
 }
 
-/// Walk one commit-message line for a trailing `(REQ-ID[, REQ-ID...])`
-/// group and push the spec-id-shaped tokens into `out`. Strips an optional
-/// `(#N)` PR-number suffix first (squash commits). Drops the line's
-/// contribution entirely if any token isn't spec-id-shaped (so prose-y
-/// parens like `(1.2.3)` or `(foo BUG-23)` don't false-match).
+/// Walk one commit-message line for trailing `(REQ-ID[, REQ-ID...])`
+/// groups and push the spec-id-shaped tokens into `out`. Skips `(#N)`
+/// PR-number groups (squash commits). A group whose tokens aren't ALL
+/// spec-id-shaped contributes nothing and stops the walk, so prose-y
+/// parens like `(1.2.3)`, `(foo BUG-23)`, or a conventional-commit
+/// `(scope)` don't false-match.
+///
+/// Collects EVERY consecutive trailing spec-id group, not just the last
+/// one — a cluster-PR squash subject like `fix: x (BUG-503) (BUG-504)
+/// (#794)` names one group per shipped spec, and both the `aida pull`
+/// auto-bump scan and `aida db reconcile-status` must graduate each.
+/// IDs are pushed in left-to-right subject order.
 /// trace:BUG-78 BUG-85 | ai:claude
+// trace:BUG-506 | ai:claude
 fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
-    let trimmed = line.trim();
-    let mut tail: &str = trimmed;
+    let mut tail: &str = line.trim();
+    let mut collected: Vec<String> = Vec::new();
     while tail.ends_with(')') {
         let Some(open_at) = tail.rfind('(') else {
             break;
         };
         let inner = &tail[open_at + 1..tail.len() - 1];
+        // `(#N)` PR-number group (squash commits): skip it and keep walking.
         if inner.starts_with('#')
             && inner.len() > 1
             && inner[1..].chars().all(|c| c.is_ascii_digit())
@@ -87286,36 +87351,30 @@ fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
             tail = tail[..open_at].trim_end();
             continue;
         }
-        tail = &tail[..open_at + inner.len() + 2];
-        break;
-    }
-    let Some(open_at) = tail.rfind('(') else {
-        return;
-    };
-    if !tail.ends_with(')') {
-        return;
-    }
-    let close_at = tail.len() - 1;
-    let inner = &tail[open_at + 1..close_at];
-    let line_start = out.len();
-    let mut all_ids = true;
-    let mut tok_count = 0;
-    for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
-        let tok = tok.trim();
-        if tok.is_empty() {
-            continue;
+        // Parse this group: every token must be spec-id-shaped, else the
+        // group contributes nothing and the walk stops.
+        let mut group: Vec<String> = Vec::new();
+        let mut all_ids = true;
+        for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+            let tok = tok.trim();
+            if tok.is_empty() {
+                continue;
+            }
+            if looks_like_spec_id(tok) {
+                group.push(tok.to_string());
+            } else {
+                all_ids = false;
+                break;
+            }
         }
-        tok_count += 1;
-        if looks_like_spec_id(tok) {
-            out.push(tok.to_string());
-        } else {
-            all_ids = false;
+        if !all_ids || group.is_empty() {
             break;
         }
+        // Prepend: we walk right-to-left, but `out` keeps subject order.
+        collected.splice(0..0, group);
+        tail = tail[..open_at].trim_end();
     }
-    if !all_ids || tok_count == 0 {
-        out.truncate(line_start);
-    }
+    out.extend(collected);
 }
 
 fn looks_like_spec_id(s: &str) -> bool {
