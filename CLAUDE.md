@@ -30,6 +30,8 @@ PostgreSQL is opt-in via the `postgres` feature flag. Legacy standalone YAML/SQL
 
 Architecture: `aida-core/src/hlc.rs`, `dispenser.rs`, `node.rs`, `object_store.rs`, `db/git_backend.rs`, `db/cache.rs`, `db/cached_git_backend.rs`, `git_ops.rs`, `conflict.rs`.
 
+**Every `AIDA_*` environment variable** — what it does, default, who sets it, scope — has one canonical reference: `docs/environment-variables.md`. When you add a new `AIDA_*` read, add a row there in the same change.
+
 ## Requirements management
 
 This project uses AIDA for its own requirements tracking. **Do NOT maintain a separate `REQUIREMENTS.md` file** — the orphan-branch YAML files plus the cache are the source of truth. Use `aida list`, `aida search`, `aida show <ID>`, `aida add`, `aida edit`, `aida comment add` to work with them.
