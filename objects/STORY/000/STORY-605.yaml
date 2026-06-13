@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:20:02.068423845Z
-modified_at: 2026-06-13T20:54:50.189748976Z
+modified_at: 2026-06-13T21:11:58.452169635Z
 req_type: Story
 tags:
 - agent-execution
@@ -47,3 +47,8 @@ comments:
     POSTURE: default-off ship is advisor-safe; the LIVE enable (operator sets allowed_hosts on a real drain) is the supervised keyboard step. trace:relates:SPIKE-61
   created_at: 2026-06-13T20:54:50.189748976Z
   modified_at: 2026-06-13T20:54:50.189748976Z
+- id: 019ec2d3-c2f4-7510-bf29-4b0daf146124
+  author: joe
+  content: Commit 2477b7736 references this requirement
+  created_at: 2026-06-13T21:11:58.452169635Z
+  modified_at: 2026-06-13T21:11:58.452169635Z
