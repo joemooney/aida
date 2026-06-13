@@ -121,6 +121,23 @@ jobs:
           BASE="origin/${{ github.base_ref }}"
           ./target/release/aida trace coverage --range "${BASE}..HEAD" || true
 
+      # STORY-603: doc-intent gate (substrate-as-bouncer). When a PR's diff
+      # touches the CLI command/flag surface (aida-cli/src/cli.rs) OR the
+      # agent-facing skill/command set, at least one spec the diff references
+      # must mark doc-impact — non-empty `interface_changes` (STORY-542) OR a
+      # `docs:impacted` tag. This stops "blind surface edits" where the surface
+      # moves but no spec captures the WHY the documenter needs. The store lives
+      # on the orphan `aida-store` branch (fetched by the trace gate above); the
+      # script reads it via `git show` with no attached worktree required, and
+      # SKIPs (non-failing) when the store can't resolve. trace:STORY-603
+      - name: Doc-intent gate (surface changes mark doc-impact)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags origin aida-store:aida-store 2>/dev/null || true
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
+          python3 docs/cli/verify-interface-changes.py "${BASE}" HEAD
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
