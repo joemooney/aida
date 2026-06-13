@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:31:34.799371027Z
-modified_at: 2026-06-13T20:31:34.799371027Z
+modified_at: 2026-06-13T20:32:05.658458588Z
 req_type: Bug
 tags:
 - aida:burndown
 - from-friction
 - lifecycle
 - relates:BUG-530
+comments:
+- id: 019ec2af-401a-7352-8001-40f5bb45e7c7
+  author: joe
+  content: Commit 85d068a8e references this requirement
+  created_at: 2026-06-13T20:32:05.658458588Z
+  modified_at: 2026-06-13T20:32:05.658458588Z
