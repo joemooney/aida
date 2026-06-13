@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-13, operator decision via `aida questions answer`): Rename session list to session conversations (or history) — the historical view gets a self-describing name; leases stays
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:30.256071770Z
-modified_at: 2026-06-13T17:13:39.620922968Z
+modified_at: 2026-06-13T17:14:28.575023091Z
 req_type: Bug
 tags:
 - cli-consistency
