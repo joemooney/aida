@@ -3,12 +3,12 @@ spec_id: BUG-527
 agreed_id: BUG-527
 title: aida show omits queue membership — can't tell if a spec is queued / for whom / at what position
 description: 'Operator hit (2026-06-13): looked at ''aida show BUG-526'' to check whether it was queued for the burndown and couldn''t tell — show renders status/tags/git-linkage but NOT queue state, even though the spec was queued (''advisor-cleared at filing'', pos 2 in the implementer queue). Gap: a queued spec is invisible as queued from its own show card; you must cross-reference ''aida queue list''. Fix: add a ''Queued:'' line to ''aida show <ID>'' (for-role + position, e.g. ''Queued: implementer (pos 2)''), mirroring how git-linkage is surfaced; omit the line when not queued. Mirror onto MCP show_requirement for parity (STORY-82). trace:from-friction'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:28:39.696240210Z
-modified_at: 2026-06-13T17:56:38.205556874Z
+modified_at: 2026-06-13T18:05:04.425484327Z
 req_type: Bug
 tags:
 - aida:show
@@ -23,3 +23,21 @@ comments:
   content: Commit a146c146a references this requirement
   created_at: 2026-06-13T17:56:38.205556874Z
   modified_at: 2026-06-13T17:56:38.205556874Z
+history:
+- id: 019ec228-a625-7d81-88e8-f7ace46b1a62
+  author: aida-auto-bump
+  timestamp: 2026-06-13T18:05:04.421280535Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec228-a629-7162-8dc8-e5b0e9644830
+  timestamp: 2026-06-13T18:05:04.425483488Z
+  agent: aida
+  commit_sha: fd23a6584d1b3f4fdda13e9b70d43d187534d08a
+  summary: Completed via merge fd23a658
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T18:05:04.275902776Z
+  completion_sha: fd23a6584d1b3f4fdda13e9b70d43d187534d08a

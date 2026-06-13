@@ -3,12 +3,12 @@ spec_id: BUG-529
 agreed_id: BUG-529
 title: aida queue remove accepts --for <role> but ignores it — removes the user's entry regardless of role filter
 description: 'Advisor hit (2026-06-13) while re-routing mis-queued specs: ''aida queue remove <id> --for advisor'' removed the spec from the IMPLEMENTER queue too (the entry I had just added with ''queue add --for implementer''). The --for flag is accepted on remove but not used as a filter — remove is role-blind and deletes the user-keyed entry for that spec regardless of which role''s queue you named. Consequence: you cannot surgically remove a spec from one role''s queue when it''s queued for multiple; and a remove aimed at one queue silently empties another. Fix: honor --for on ''queue remove'' (only remove the entry whose role matches), consistent with ''queue add --for''. Part of the queue --for consistency cluster (BUG-527 show-visibility, BUG-528 add --queue routing). trace:relates:BUG-528 trace:from-friction'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:32:41.277930304Z
-modified_at: 2026-06-13T17:57:51.960925291Z
+modified_at: 2026-06-13T18:05:04.433690991Z
 req_type: Bug
 tags:
 - aida:queue
@@ -23,3 +23,21 @@ comments:
   content: Commit fb1096b63 references this requirement
   created_at: 2026-06-13T17:57:51.960925291Z
   modified_at: 2026-06-13T17:57:51.960925291Z
+history:
+- id: 019ec228-a62d-7062-83b4-28c2b4d7a620
+  author: aida-auto-bump
+  timestamp: 2026-06-13T18:05:04.429668141Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec228-a631-7412-8886-356ab45334bc
+  timestamp: 2026-06-13T18:05:04.433690325Z
+  agent: aida
+  commit_sha: 3399f66058123138f4e19cd5a8ff1eaa8cab2acf
+  summary: Completed via merge 3399f660
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T18:05:04.275902776Z
+  completion_sha: 3399f66058123138f4e19cd5a8ff1eaa8cab2acf
