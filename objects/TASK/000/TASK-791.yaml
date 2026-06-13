@@ -1,0 +1,18 @@
+id: 019ec1f6-9531-7132-8942-a0a8418f7379
+spec_id: TASK-791
+agreed_id: TASK-791
+title: 'aida questions answer: add ''type something'' (counter-proposal note) + ''chat'' (drop into clarify) at the interactive prompt'
+description: 'Operator (2026-06-13): at the ''aida questions answer'' interactive prompt, the only options are 1-N / default / s=skip. Two missing affordances (the AskUserQuestion model the operator expects): (4) TYPE SOMETHING — a free-text counter-proposal recorded as a note ALONGSIDE the chosen option (e.g. ''1, but name it list-claude-sessions''), staying a pure-data-op (no LLM at answer-time; the implementer reads choice+note); add a non-interactive --note <TEXT> flag too. (5) CHAT — drop into ''aida questions clarify <spec>'' (the interactive agent) when the operator wants to discuss before deciding. Keep the pure-pick path the default; 4/5 are escapes. Mirrors /aida-clarify + AskUserQuestion. trace:STORY-522'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T17:10:23.281220543Z
+modified_at: 2026-06-13T17:10:23.281220543Z
+req_type: Task
+tags:
+- aida:questions
+- fasttrack
+- papercut
+- relates:STORY-522
+- ux
