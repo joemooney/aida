@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T20:32:42.844694408Z
+modified_at: 2026-06-13T21:14:59.226019193Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -67,3 +67,22 @@ comments:
     LESSON: I locked the fix direction from the root-cause finding alone, without verifying the proposed fix's MECHANISM against code. Verify the fix path actually avoids the bug before locking it.
   created_at: 2026-06-13T20:32:42.844694408Z
   modified_at: 2026-06-13T20:32:42.844694408Z
+- id: 019ec2d6-851a-7980-85f4-828a0e24d070
+  author: joe
+  content: |-
+    IMPLEMENTATION BRIEF (mechanism verified 2026-06-13; operator chose 'lightweight ff-the-orphan before preflight'):
+
+    BUILDING BLOCKS FOUND:
+    - maybe_sync_pull(store_path) (main.rs:51183) — the EXISTING --sync primitive: fetch + pull_rebase, NEVER fails the caller (all errors → warnings), updates last-fetch. HEAVYWEIGHT: a network pull on every call.
+    - git_ops::fetch_branch_into_local (git_ops.rs:297) — fetch + ff local branch. Also network.
+    - NO ready NO-NETWORK 'is local .aida-store worktree behind origin/aida-store, ff the checkout' primitive exists. The truly-lightweight version must COMPOSE it: (1) git -C .aida-store rev-list --count aida-store..origin/aida-store (local refs, no network); (2) if behind + ff-able, fast-forward the WORKTREE checkout (delicate — must update the checked-out files, not just the ref).
+
+    REFINED FORK (operator's call — surfaced, not picked):
+     A. SAFE-REUSE: call maybe_sync_pull() in handle_burndown_run before resolve_burndown_sets. Proven, never-fails, ~1 network pull per 'burndown run' (NOT a hot loop). Simple. Slightly heavier than 'lightweight'.
+     B. LIGHTWEIGHT-COMPOSED (operator's stated pref): no-network local-ref behind-check + ff-the-worktree. Cheaper, but needs a NEW delicate git primitive touching the orphan worktree checkout — a wrong ff could corrupt store state. Relies on the bg fetcher (STORY-79) keeping origin/aida-store current; residual worst-case (origin ref itself stale, no recent fetch) is NOT fixed by B (only A's pull catches it).
+
+    RECOMMENDATION: A for correctness+safety now (the network cost is trivial for an occasional 'burndown run'); B as an optimization later if the pull-per-run latency is felt. Either way: best-effort (never fail the drain), and a regression test (the freshness_local_lags pattern + a fixture) that fails without the fix.
+
+    DEFERRED from this away-session: composing B's delicate orphan-worktree ff unsupervised at a marathon tail is exactly the store-corruption risk to avoid (cf. the option-1 overturn). Implement in a focused/supervised pass once the operator picks A vs B. trace:relates:STORY-79
+  created_at: 2026-06-13T21:14:59.226019193Z
+  modified_at: 2026-06-13T21:14:59.226019193Z
