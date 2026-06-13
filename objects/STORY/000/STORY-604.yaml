@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-13T18:37:52.628865786Z
+modified_at: 2026-06-13T18:44:12.575842832Z
 req_type: Story
 tags:
 - agent-context
@@ -44,3 +44,18 @@ comments:
     RECOMMENDATION: ship B or C for the default walk-away drain (the drain's whole point is walk-away), PLUS A as an opt-in '--attached' for supervised drains. C is lightest if session-id capture is clean; B is most self-contained (we own the tee path). The in-flight/'expected-to-be-processed' marking (facet b of this story) is orthogonal and substrate-side — unchanged by this.
   created_at: 2026-06-13T18:37:52.628865786Z
   modified_at: 2026-06-13T18:37:52.628865786Z
+- id: 019ec24c-7a9f-70f3-b0fb-83cf275c8820
+  author: joe
+  content: |-
+    DESIGN DECISION (operator 2026-06-13): ship OPTION B as the primary; A is conditional/deferred.
+
+    PRIMARY — Option B, with a --verbose human view:
+    - 'aida burndown run --verbose' keeps the headless 'claude -p' launch (so AUTO-PROCEED through all specs is fully preserved — --verbose only adds visibility, never changes control flow) but launches with '--output-format stream-json --verbose --include-partial-messages', tees the JSONL to .aida/burndown/<drain-id>.jsonl, and renders a human-readable progress line per event to the operator's terminal. Default (no --verbose) stays quiet/summary.
+    - The teed JSONL is the substrate for FUTURE TOOLING (operator: 'other future tooling might like json') and for 'aida burndown status/watch'. So two views of one stream: --verbose = human render now; the .jsonl = machine-readable for later.
+    - Operator mental model: 'I would just do --verbose normally.'
+
+    CONDITIONAL — Option A (--attached interactive + native Ctrl-O): the operator wants A ONLY IF it still auto-exits and auto-proceeds to the next spec as reliably as headless. RISK: an interactive 'claude' (not -p) can stall on permission/decision prompts that headless 'bypassPermissions' skips, making auto-proceed unpredictable. Per operator: 'if that is frequently unpredictable I would not want it.' DECISION: do NOT ship A speculatively. Pursue it only after evidence (a small SPIKE) shows interactive 'claude' + /aida-burndown auto-proceeds as reliably as headless. Until then, A is deferred — B + --verbose covers the watch need without touching the autonomy guarantee.
+
+    SCOPE/POSTURE: this modifies the burndown-run LAUNCHER (keystone-adjacent), so implement at the KEYBOARD with the advisor watching, like BUG-530 — not an unsupervised drain. Facet (b), in-flight marking, stays orthogonal/substrate-side.
+  created_at: 2026-06-13T18:44:12.575842832Z
+  modified_at: 2026-06-13T18:44:12.575842832Z
