@@ -22,5 +22,6 @@ Follow the workflow in `.claude/skills/aida-pr.md`:
 6. Compose a PR title (`EPIC-N batch M: <one-line summary>`) and a body that mirrors recent PRs (per-spec sections, test plan)
 7. Show the title + first paragraph to the user and require sign-off
 8. Run `gh pr create` (HEREDOC body for proper formatting); print the URL
+9. Shipped a new CLI slice verb in this batch? Update its parent skill to call it (no re-impl) — see `docs/aida/discipline/skill-cli-symmetry.md` <!-- trace:TASK-736 -->
 
 Pairs with `/aida-commit` (commit first, then PR) and `/aida-code-review` (reviewer side after the PR opens).
