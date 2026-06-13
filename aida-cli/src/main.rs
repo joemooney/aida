@@ -1193,8 +1193,9 @@ fn run() -> Result<()> {
         return handle_why(id, *json);
     }
 
-    // STORY-563: `aida human unblock` self-loads the store like `aida why` /
-    // `burndown explain` — dispatch early, no shared storage handle needed.
+    // STORY-563: `aida human <subcommand>` self-loads the store like `aida why`
+    // / `burndown explain`, or delegates to the top-level presence handlers.
+    // Dispatch early, no shared storage handle needed.
     // trace:STORY-563 | ai:claude
     if let Command::Human {
         command: Some(human_cmd),
@@ -70878,7 +70879,7 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
 ///
 /// Presence (`home`/`away`/`status`) and `--for human` routing are later phases
 /// of SPIKE-57; this verb is just the front door + the named predicate today.
-/// trace:TASK-746 | ai:claude
+// trace:TASK-746 | ai:claude
 fn handle_human_command(short: bool) -> Result<()> {
     handle_list_human(short)
 }
@@ -71123,6 +71124,11 @@ fn collect_unblock_facts(
 /// the prompt drives. trace:STORY-563 | ai:claude
 fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
     match cmd {
+        // TASK-770: namespaced aliases over the existing top-level presence
+        // verbs; no duplicate state path or output shape.
+        cli::HumanCommand::Away => handle_away_command(),
+        cli::HumanCommand::Home => handle_home_command(),
+        cli::HumanCommand::Presence | cli::HumanCommand::Status => handle_presence_command(),
         cli::HumanCommand::Unblock { copy, stdout, json } => {
             handle_human_unblock(*copy, *stdout, *json)
         }
