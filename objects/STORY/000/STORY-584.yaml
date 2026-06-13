@@ -19,11 +19,11 @@ description: |-
 
   Why: the operator has hit 'I don't want these in aida list open but they are not archived' repeatedly — a legibility keystone. The trigger-bearing deferred tier turns a confusing 'why is this still here?' backlog into a scannable 'primed, returns when X' shelf. Relates: STORY-441 (archive view-flag this clones), the pickability gate (already honors deferred:* tags), [[machinery-glossary]] lifecycle vocabulary.
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:49:16.215550754Z
-modified_at: 2026-06-13T02:49:16.215550754Z
+modified_at: 2026-06-13T02:49:54.886029967Z
 req_type: Story
 tags:
 - aida:list
