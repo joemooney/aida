@@ -1210,6 +1210,7 @@ fn run() -> Result<()> {
         category,
         json,
         force,
+        all,
         since,
         cmd,
     } = &cli.command
@@ -1220,6 +1221,7 @@ fn run() -> Result<()> {
             category.as_deref(),
             *json,
             *force,
+            *all,
             since.as_deref(),
             cmd.as_ref(),
         );
@@ -25920,6 +25922,7 @@ fn handle_doctor_command(
     category: Option<&str>,
     json: bool,
     force: bool,
+    all: bool,
     since: Option<&str>,
     cmd: Option<&cli::DoctorCommand>,
 ) -> Result<()> {
@@ -25930,22 +25933,29 @@ fn handle_doctor_command(
             category: category.map(str::to_string),
             json,
             force,
+            all,
             since: since.map(str::to_string),
         });
     };
     match cmd {
-        cli::DoctorCommand::Check { category, json } => doctor_multi_agent(DoctorRunOptions {
+        cli::DoctorCommand::Check {
+            category,
+            all: sub_all,
+            json,
+        } => doctor_multi_agent(DoctorRunOptions {
             heal: false,
             yes,
             category: Some(category.clone()),
             json: *json,
             force,
+            all: all || *sub_all,
             since: since.map(str::to_string),
         }),
         cli::DoctorCommand::Heal {
             category,
             yes,
             force,
+            all: sub_all,
             json,
         } => doctor_multi_agent(DoctorRunOptions {
             heal: true,
@@ -25953,6 +25963,7 @@ fn handle_doctor_command(
             category: Some(category.clone()),
             json: *json,
             force: *force,
+            all: all || *sub_all,
             since: since.map(str::to_string),
         }),
         cli::DoctorCommand::MigrateCounterScope {
@@ -25989,6 +26000,7 @@ struct DoctorRunOptions {
     category: Option<String>,
     json: bool,
     force: bool,
+    all: bool,
     /// TASK-673: cutoff for the completed-without-commit integrity check —
     /// specs completed before this ref/date are exempt (legacy history).
     since: Option<String>,
@@ -26016,6 +26028,8 @@ struct DoctorHealResult {
 struct DoctorReport {
     total: usize,
     findings: Vec<DoctorFinding>,
+    #[serde(skip_serializing_if = "is_zero_usize")]
+    hidden_completed_without_commit: usize,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     healed: Vec<DoctorHealResult>,
 }
@@ -26025,9 +26039,14 @@ impl DoctorReport {
         Self {
             total: findings.len(),
             findings,
+            hidden_completed_without_commit: 0,
             healed: Vec::new(),
         }
     }
+}
+
+fn is_zero_usize(n: &usize) -> bool {
+    *n == 0
 }
 
 fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
@@ -26037,6 +26056,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    let mut hidden_completed_without_commit = 0;
 
     // TASK-673: the completed-without-commit integrity check runs git scans
     // (a default-branch `git log` + `git grep`) so it is kept OUT of the hot
@@ -26049,12 +26069,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
             .since
             .clone()
             .or_else(|| std::env::var("AIDA_DOCTOR_COMPLETED_SINCE").ok())
+            .or_else(default_completed_without_commit_recent_cutoff)
             .filter(|s| !s.trim().is_empty());
-        findings.extend(scan_completed_without_commit(
+        let scan = scan_completed_without_commit_with_options(
             &project_root,
             &store,
             since.as_deref(),
-        ));
+            opts.all,
+        );
+        hidden_completed_without_commit = scan.hidden_older;
+        findings.extend(scan.findings);
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -26068,6 +26092,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     }
 
     let mut report = DoctorReport::from_findings(findings);
+    report.hidden_completed_without_commit = hidden_completed_without_commit;
 
     if opts.heal {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
@@ -26615,6 +26640,34 @@ fn doctor_category_selected(filter: Option<&str>, category: &str) -> Result<bool
     }
 }
 
+const COMPLETED_WITHOUT_COMMIT_RECENT_DAYS: i64 = 60;
+
+fn default_completed_without_commit_recent_cutoff() -> Option<String> {
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(COMPLETED_WITHOUT_COMMIT_RECENT_DAYS);
+    Some(cutoff.format("%Y-%m-%d").to_string())
+}
+
+fn completed_without_commit_expects_code(req_type: &RequirementType) -> bool {
+    // trace:TASK-755 | ai:codex
+    matches!(
+        req_type,
+        RequirementType::Functional
+            | RequirementType::NonFunctional
+            | RequirementType::System
+            | RequirementType::User
+            | RequirementType::ChangeRequest
+            | RequirementType::Bug
+            | RequirementType::Story
+            | RequirementType::Task
+    )
+}
+
+#[derive(Debug, Clone, Default)]
+struct CompletedWithoutCommitScan {
+    findings: Vec<DoctorFinding>,
+    hidden_older: usize,
+}
+
 /// TASK-673: spec-graph ⟂ git tripwire. Returns a `completed-without-commit`
 /// finding for every spec in `Completed` status that NO commit on the default
 /// CODE branch references (by `(SPEC-ID)` subject/trailer) and that NO tracked
@@ -26639,22 +26692,32 @@ fn scan_completed_without_commit(
     store: &aida_core::models::RequirementsStore,
     since: Option<&str>,
 ) -> Vec<DoctorFinding> {
+    scan_completed_without_commit_with_options(project_root, store, since, false).findings
+}
+
+fn scan_completed_without_commit_with_options(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    since: Option<&str>,
+    include_older: bool,
+) -> CompletedWithoutCommitScan {
     use std::process::Command as PCmd;
 
     let completed: Vec<&aida_core::models::Requirement> = store
         .requirements
         .iter()
         .filter(|r| matches!(r.status, RequirementStatus::Completed))
+        .filter(|r| completed_without_commit_expects_code(&r.req_type))
         .filter(|r| r.spec_id.is_some() || r.agreed_id.is_some())
         .collect();
     if completed.is_empty() {
-        return Vec::new();
+        return CompletedWithoutCommitScan::default();
     }
 
     // No resolvable default branch (e.g. a store with no code repo) → we cannot
     // corroborate, so stay silent rather than flag every Completed spec.
     let Some(default_ref) = resolve_default_branch_ref(project_root) else {
-        return Vec::new();
+        return CompletedWithoutCommitScan::default();
     };
 
     let git = |args: &[&str]| -> Option<String> {
@@ -26707,12 +26770,8 @@ fn scan_completed_without_commit(
     let cutoff = since.and_then(|s| resolve_completed_since_cutoff(project_root, s));
 
     let mut findings = Vec::new();
+    let mut hidden_older = 0;
     for req in completed {
-        if let Some(cut) = cutoff {
-            if req.modified_at < cut {
-                continue; // legacy spec, exempt from the check
-            }
-        }
         let spec_id = req.spec_id.as_deref().or(req.agreed_id.as_deref());
         let Some(spec_id) = spec_id else { continue };
         let referenced_by_id = referenced.contains(&spec_id.to_ascii_uppercase())
@@ -26728,6 +26787,12 @@ fn scan_completed_without_commit(
                 .unwrap_or(false);
         if referenced_by_id {
             continue;
+        }
+        if let Some(cut) = cutoff {
+            if !include_older && req.modified_at < cut {
+                hidden_older += 1;
+                continue;
+            }
         }
         findings.push(DoctorFinding {
             category: "completed-without-commit".to_string(),
@@ -26746,7 +26811,10 @@ fn scan_completed_without_commit(
         });
     }
     findings.sort_by(|a, b| a.id.cmp(&b.id));
-    findings
+    CompletedWithoutCommitScan {
+        findings,
+        hidden_older,
+    }
 }
 
 // ============================================================================
@@ -27104,7 +27172,7 @@ fn resolve_completed_since_cutoff(
 
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
     println!("{}", "─── AIDA doctor ───".bold());
-    if report.findings.is_empty() {
+    if report.findings.is_empty() && report.hidden_completed_without_commit == 0 {
         println!("  {} no multi-agent state drift detected", "✓".green());
     } else {
         let mut current = "";
@@ -27118,9 +27186,24 @@ fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
             println!("  - {} [{}]", finding.summary, safety.dimmed());
             println!("    → {}", finding.action.dimmed());
         }
+        if report.hidden_completed_without_commit > 0 {
+            if current != "completed-without-commit" {
+                println!();
+                println!("{} {}", "•".cyan(), "completed-without-commit".bold());
+            }
+            println!(
+                "  ({} older completed-without-commit finding{} hidden — pass --all to list)",
+                report.hidden_completed_without_commit,
+                if report.hidden_completed_without_commit == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            );
+        }
         println!();
         println!(
-            "  Total: {} finding{}",
+            "  Total: {} visible finding{}",
             report.findings.len(),
             if report.findings.len() == 1 { "" } else { "s" }
         );
@@ -27826,6 +27909,7 @@ mod story_462_doctor_tests {
             category,
             json,
             force,
+            all,
             since,
             cmd,
         } = cli.command
@@ -27837,6 +27921,7 @@ mod story_462_doctor_tests {
         assert_eq!(category.as_deref(), Some("stale-leases"));
         assert!(json);
         assert!(!force);
+        assert!(!all);
         assert!(since.is_none());
         assert!(cmd.is_none());
     }
@@ -28060,15 +28145,22 @@ mod story_462_doctor_tests {
     #[test]
     fn doctor_check_and_heal_subcommands_parse() {
         let check =
-            Cli::try_parse_from(["aida", "doctor", "check", "OBE-briefs", "--json"]).unwrap();
+            Cli::try_parse_from(["aida", "doctor", "check", "OBE-briefs", "--json", "--all"])
+                .unwrap();
         let Command::Doctor {
-            cmd: Some(cli::DoctorCommand::Check { category, json }),
+            cmd:
+                Some(cli::DoctorCommand::Check {
+                    category,
+                    all,
+                    json,
+                }),
             ..
         } = check.command
         else {
             panic!("expected doctor check");
         };
         assert_eq!(category, "OBE-briefs");
+        assert!(all);
         assert!(json);
 
         let heal = Cli::try_parse_from([
@@ -28078,6 +28170,7 @@ mod story_462_doctor_tests {
             "orphan-branches",
             "--yes",
             "--force",
+            "--all",
         ])
         .unwrap();
         let Command::Doctor {
@@ -28086,6 +28179,7 @@ mod story_462_doctor_tests {
                     category,
                     yes,
                     force,
+                    all,
                     json,
                 }),
             ..
@@ -28096,6 +28190,7 @@ mod story_462_doctor_tests {
         assert_eq!(category, "orphan-branches");
         assert!(yes);
         assert!(force);
+        assert!(all);
         assert!(!json);
     }
 
@@ -28350,6 +28445,106 @@ mod story_462_doctor_tests {
         assert_eq!(ids, vec!["TASK-601"]);
     }
 
+    // trace:TASK-755 | ai:codex
+    #[test]
+    fn integrity_excludes_non_code_spec_types() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["commit", "--allow-empty", "-qm", "init"])
+            .output()
+            .unwrap();
+
+        let mut task = completed_spec("TASK-700");
+        task.req_type = RequirementType::Task;
+        let mut decision = completed_spec("ADR-1");
+        decision.req_type = RequirementType::Decision;
+        let mut principle = completed_spec("PRIN-1");
+        principle.req_type = RequirementType::Principle;
+        let mut term = completed_spec("TERM-1");
+        term.req_type = RequirementType::Term;
+        let mut constraint = completed_spec("CON-1");
+        constraint.req_type = RequirementType::Constraint;
+        let mut vision = completed_spec("VIS-1");
+        vision.req_type = RequirementType::Vision;
+        let mut doc = completed_spec("DOC-1");
+        doc.req_type = RequirementType::Doc;
+        let mut meta = completed_spec("META-1");
+        meta.req_type = RequirementType::Meta;
+        let mut folder = completed_spec("FOLDER-1");
+        folder.req_type = RequirementType::Folder;
+        let mut epic = completed_spec("EPIC-1");
+        epic.req_type = RequirementType::Epic;
+        let mut spike = completed_spec("SPIKE-1");
+        spike.req_type = RequirementType::Spike;
+
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![
+            task, decision, principle, term, constraint, vision, doc, meta, folder, epic, spike,
+        ];
+        storage.save(&store).unwrap();
+
+        let findings = scan_completed_without_commit(root, &store, None);
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["TASK-700"]);
+    }
+
+    // trace:TASK-755 | ai:codex
+    #[test]
+    fn integrity_collapses_historical_tail_by_default() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["commit", "--allow-empty", "-qm", "init"])
+            .output()
+            .unwrap();
+
+        let mut old = completed_spec("TASK-710");
+        old.modified_at = "2020-01-01T00:00:00Z".parse().unwrap();
+        let mut recent = completed_spec("TASK-711");
+        recent.modified_at = chrono::Utc::now();
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![old, recent];
+        storage.save(&store).unwrap();
+
+        let scan =
+            scan_completed_without_commit_with_options(root, &store, Some("2023-01-01"), false);
+        let ids: Vec<&str> = scan.findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["TASK-711"]);
+        assert_eq!(scan.hidden_older, 1);
+    }
+
+    // trace:TASK-755 | ai:codex
+    #[test]
+    fn integrity_all_expands_historical_tail() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["commit", "--allow-empty", "-qm", "init"])
+            .output()
+            .unwrap();
+
+        let mut old = completed_spec("TASK-720");
+        old.modified_at = "2020-01-01T00:00:00Z".parse().unwrap();
+        let mut recent = completed_spec("TASK-721");
+        recent.modified_at = chrono::Utc::now();
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![old, recent];
+        storage.save(&store).unwrap();
+
+        let scan =
+            scan_completed_without_commit_with_options(root, &store, Some("2023-01-01"), true);
+        let ids: Vec<&str> = scan.findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, vec!["TASK-720", "TASK-721"]);
+        assert_eq!(scan.hidden_older, 0);
+    }
+
     #[test]
     fn integrity_heal_reopens_completed_to_done() {
         let (tmp, storage) = integrity_fixture();
@@ -28424,6 +28619,7 @@ mod story_462_doctor_tests {
                 category: Some("stale-locks".to_string()),
                 json: false,
                 force: false,
+                all: false,
                 since: None,
             },
         )
@@ -28462,6 +28658,7 @@ mod story_462_doctor_tests {
                 category: Some("spec-status-drift".to_string()),
                 json: false,
                 force: false,
+                all: false,
                 since: None,
             },
         )
@@ -28506,6 +28703,7 @@ mod story_462_doctor_tests {
                 category: Some("spec-status-drift".to_string()),
                 json: false,
                 force: false,
+                all: false,
                 since: None,
             },
         )
@@ -28599,6 +28797,7 @@ mod story_462_doctor_tests {
             category: Some("orphan-queue-entries".to_string()),
             json: false,
             force: false,
+            all: false,
             since: None,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
