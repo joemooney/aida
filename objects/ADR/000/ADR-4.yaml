@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:04.203194099Z
-modified_at: 2026-06-12T22:42:25.623814008Z
+modified_at: 2026-06-13T00:07:31.548265562Z
 req_type: Decision
 tags:
 - from-spike:SPIKE-53
@@ -58,3 +58,13 @@ comments:
   content: 'OPERATOR GATE (2026-06-12): ADR-4 remains PROPOSED — not accepted — until SPIKE-58''s hands-on evaluation completes. Operator: ''I need to use bd/gt to get a feel before committing prematurely.'' Direction is provisionally endorsed (D8/D9 answered) but final acceptance is gated on direct experience with the competitor stack. WS1/WS2/WS5 copy does NOT lock before then; WS8/WS9 (make-claims-true code) and STORY-575 (audit legibility) are direction-independent and may proceed.'
   created_at: 2026-06-12T22:42:25.623814008Z
   modified_at: 2026-06-12T22:42:25.623814008Z
+- id: 019ebe4e-1fdc-7ad1-be66-40d3794a806e
+  author: joe
+  content: |-
+    CANONICAL WEDGE FORMULATION (operator, 2026-06-12 — supersedes prior wedge wording for all copy):
+
+    'AIDA governs at the FRONT — a programmatic pre-work approval-authority gate (agents literally cannot self-bless work in; bd's self-claim and GT's no-confirmation-at-execution are autonomous-by-design) — and BINDS code↔spec (trace + field-delta history). They govern at the BACK/SIDE (reactive escalation + merge gates), with no pre-work gate and no spec↔code binding.'
+
+    Structural (where the gate sits), not motive-reading. Anchored by Yegge's own positioning [verified, Beads Best Practices]: 'Everyone is focused on making planning tools, and Beads is an EXECUTION tool… use your favorite planning tool, then translate it into Beads' — the author publicly abdicates the front of the pipeline. SCOPE NOTES for copy: (a) our bind is trace-capture + auto-bump today, gate default-on via STORY-579, history coverage scoped 'since TASK-121' until backfill decision; (b) GT 'no confirmation, ever' needs a source citation before public use (SPIKE-58 confirms). Convergent evidence: branch rescope+ERRATUM AND main's 2026-06-12-beads-gastown-vs-aida.md (independent agent verification — three verified edges: trace binding, lifecycle+history, requirements-category abdication; corrections: typed-graph no longer unique [drop as headline], plain-git claim precise form = 'plain-git YAML substrate vs SQL-DB substrate [embedded Dolt]').
+  created_at: 2026-06-13T00:07:31.548265562Z
+  modified_at: 2026-06-13T00:07:31.548265562Z
