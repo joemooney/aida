@@ -233,7 +233,7 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 ---
 
-### `aida defer` · `aida undefer`
+### `aida defer`
 
 **One line** — park a spec as *primed, conditional* work — hidden from the default view, but not filed away like archive.
 
@@ -246,6 +246,20 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 **Gotchas.** Because defer is a view-flag, a deferred spec keeps its status — a deferred Approved spec is still Approved, just hidden. And like archive, it won't show in default `list` until you `undefer` (or pass `--deferred`/`--all`) — the same "where did my spec go?" surprise, so reach for `--all` when something's missing.
 
 **Chains with** — `defer --until` parks it; the trigger condition is your reminder; `undefer` (or a future trigger-aware sweep) brings it back to the ready set.
+
+---
+
+### `aida undefer`
+
+**One line** — the inverse of `aida defer`: clear the deferred flag so the spec rejoins default views.
+
+**Mental model.** Undefer removes the view-level deferred flag *and* its `--until` revisit trigger, so the spec reappears in `aida list` / `search` / `history` without `--deferred`/`--all`. It's the "the condition I was waiting for happened — bring it back" verb.
+
+**Reach for it when** — a deferred spec's revisit trigger has come true and you're ready to work it (or just see it) again.
+
+**Don't reach for it when** — you want to *keep* it deferred but peek at it — pass `--deferred` to the read commands instead; undefer is a state change, not a view toggle.
+
+**Chains with** — the counterpart to `defer`; after undefer, the spec is back in the open-work views and eligible for `queue add` / the pickability gate.
 
 ---
 
