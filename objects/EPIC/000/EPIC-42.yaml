@@ -1,0 +1,28 @@
+id: 019ec34e-c4a2-7642-967a-a2b9efda9a7d
+spec_id: EPIC-42
+agreed_id: EPIC-42
+title: 'Seat-separated worklists + advisor self-service: aida human = operator work, aida advisor = advisor work'
+description: |-
+  Operator design session (2026-06-13). CORE BUG: 'aida human' leaks ADVISOR-domain work into the operator view — the 'ungroomed' (grooming = advisor-gated, the operator can't do it) and 'umbrella' (decompose/complete epics = advisor/auto domain) buckets aren't operator actions. The operator sees a worklist that isn't theirs.
+
+  VISION (advisor agreed + refined):
+  1. SEAT-SEPARATE the worklists. 'aida human' (bare) = OPERATOR-only: decisions + reviews needing the person (the STORY-611 three buckets). 'aida advisor' (bare) = the ADVISOR worklist: ungroomed drafts (groom), umbrella epics (decompose/complete), un-captured observations. The 'aida advisor' status surface is the missing symmetry to 'aida human'.
+  2. 'aida advisor groom' — route grooming to the advisor seat: if a live advisor session is registered, message it (mailbox) the grooming worklist; if none, RESUME the most-recent advisor conversation (warm context) before COLD-BOOTING a fresh one. Precedence: live → resume-most-recent → cold-boot (last resort). Ties into 'aida advisor watch' (STORY-586) + the SPIKE-11 fork-from-live instinct + the headless-advisor-is-cold-boot gap.
+  3. Move ungroomed/umbrella OUT of 'aida human' into 'aida advisor'; keep 'aida human' purely operator-facing.
+
+  POSTURE: architecture-class (touches the human/advisor seat model + session resume/spawn) → SKETCH-FIRST + master sign-off before implementation; NOT an unsupervised drain. Smallest-valuable-slice first when pursued (likely: 'aida advisor' bare worklist + moving the two buckets out of 'aida human'; grooming-routing + warm-resume as later slices). trace:relates:STORY-611 trace:relates:STORY-586 trace:from-strategic
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:26:19.810200300Z
+modified_at: 2026-06-13T23:26:19.810200300Z
+req_type: Epic
+tags:
+- advisor-seat
+- aida:advisor
+- aida:human
+- architecture
+- from-strategic
+- relates:STORY-611
+- sketch-first
