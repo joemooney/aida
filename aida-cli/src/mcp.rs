@@ -1996,6 +1996,9 @@ impl<'a> McpServer<'a> {
             // day-to-day archived-work filter.
             archived_specs: std::collections::HashSet::new(),
             archived_only_specs: None,
+            // STORY-584: same — no defer filtering on the MCP ledger.
+            deferred_specs: std::collections::HashSet::new(),
+            deferred_only_specs: None,
         };
         let events = history::collect_event_records(self.storage.path(), &opts)
             .map_err(|e| e.to_string())?;
@@ -5231,6 +5234,10 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
             archived: r.archived,
             // trace:STORY-441 | ai:claude
             archived_at: r.archived_at.map(|dt| dt.to_rfc3339()),
+            // trace:STORY-584 | ai:claude
+            deferred: r.deferred,
+            deferred_at: r.deferred_at.map(|dt| dt.to_rfc3339()),
+            deferred_until: r.deferred_until.clone(),
             yaml_path: String::new(),
         })
         .collect()

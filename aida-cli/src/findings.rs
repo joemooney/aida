@@ -469,6 +469,9 @@ mod tests {
             modified_at: String::new(),
             archived: false,
             archived_at: None,
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
             yaml_path: String::new(),
         }
     }
