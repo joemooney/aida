@@ -1,0 +1,21 @@
+id: 019ec14e-819d-7ef3-9176-a3e71bf3177d
+spec_id: BUG-524
+agreed_id: BUG-524
+title: 'aida show: display Opened (created_at) + Modified (modified_at) timestamps, in local time'
+description: |-
+  aida show prints ID/Title/Type/Status/Priority/Tags but NOT when the spec was opened or last modified — so you can't tell from 'aida show' whether a spec is minutes or weeks old (this is exactly what made a 'why wasn't this done last night?' question ambiguous). Add two lines, e.g. 'Opened:   <ts>' and 'Modified: <ts>'.
+
+  Pointers: Requirement has created_at + modified_at (aida-core/src/models.rs); the git-backend show render is in aida-cli/src/main.rs around the 'ID:'/'UUID:' block (~line 19342) — add the lines near Priority/Status. Render in LOCAL time (feedback_local_time: UTC on disk, local in CLI) — reuse the history.rs pattern '.with_timezone(&chrono::Local)'. Keep UTC only on disk. trace:STORY-78 (statusline/show timestamps).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T14:06:48.221738243Z
+modified_at: 2026-06-13T14:06:48.221738243Z
+req_type: Bug
+tags:
+- aida:show
+- fasttrack
+- papercut
+- severity:cosmetic
+- ux
