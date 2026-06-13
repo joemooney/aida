@@ -17304,5 +17304,13 @@ operations:
   timestamp: 2026-06-13T00:07:37.378252930Z
   kind: !SetDescription
     description: "Write docs/positioning/vs-beads.md and vs-gastown.md as the NEW lead pair (demote vs-spec-kit/vs-kiro — update docs/positioning/README.md ordering + CLAUDE.md pointer). Rewrite docs/competitive-analysis/positioning.md around the front-vs-back governance wedge. Author a NEW dated keystone synthesis superseding 2026-05-31-round2 on specifics (frozen snapshots stay).\n\nCANONICAL WEDGE (operator, on ADR-4): AIDA governs at the FRONT (programmatic pre-work approval gate — agents cannot self-bless work in) + binds code↔spec (trace + field-delta history); bd/GT govern at the BACK/SIDE (reactive escalation + merge gates), no pre-work gate, no spec↔code binding. Anchor on Yegge's verified 'Beads is an execution tool — use your favorite planning tool' quote (author abdicates the front). \n\nSOURCES TO SYNTHESIZE (all three): the branch rescope + its ERRATUM, AND main's docs/competitive-analysis/2026-06-12-beads-gastown-vs-aida.md (independent verification: three verified edges = trace binding / lifecycle+history / requirements-category abdication; typed-graph headline DROPPED [near-parity]; plain-git claim in precise form = 'plain-git YAML vs SQL-DB substrate (embedded Dolt — no server)'; Beads discovered-from edge is something AIDA lacks — note honestly; Gas Town orchestrator BROADER than AIDA's at fleet scale — AIDA's edge is the advisor-escalation layer + the front gate, never scale).\n\nPLUS panel amendment (vs-spec-kit stale-at-birth): refresh vs-spec-kit.md — Issues integration shipped, YAML workflow engine (gates/resume/per-step dispatch) stales the 'one feature one agent' row; keep distinctions that survived reproduction; ~112k stars; bump date stamp on every edit.\n\nAcceptance: (1) vs-beads.md leads with the front/back wedge + Yegge quote, uses decisions-vs-changes audit framing, 'works with' tone (never 'funnel'); (2) every claim provenance-tagged; trace/audit/multi-vendor claims scoped until STORY-578/579 land; GT 'no confirmation' quote cited-or-cut; (3) new keystone synthesizes ALL THREE source docs + tripwires (Beads adds pre-work gating or code↔task links; GT Overseer becomes a disposition gate; Spec Kit workflow evolution); (4) vs-spec-kit refreshed, stamps bumped; (5) indexes updated."
-clock: 1702
+- id: 019ebea9-a276-7833-a44f-70ade083d87b
+  target_id: 019ebd86-f183-7722-9690-ec11ac0096fb
+  author: aida
+  node_id: '1'
+  lamport: 1703
+  timestamp: 2026-06-13T01:47:28.758348259Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1703
 node_id: '1'
