@@ -2358,6 +2358,15 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Decide { .. } => {
+            // `aida decide` routes to `aida questions answer`/`clarify`, both of
+            // which need the git-canonical store. trace:TASK-779 | ai:claude
+            anyhow::bail!(
+                "aida decide requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
         Command::Research { .. } => {
             // `aida research` attaches a comment + escalates a decision_request
             // on a spike; the deprecated SQLite backend persists neither.
@@ -4073,6 +4082,85 @@ fn handle_questions_command(
                 ),
             }
         }
+    }
+}
+
+/// `aida decide <spec>` — the natural human-resolution entry point. A thin
+/// dispatcher over the `aida questions` verbs: if the spec carries a PENDING
+/// DecisionRequest (enumerated choices), route to the answer path; otherwise
+/// the spec is under-specified, so route to the interactive clarifier. The
+/// underlying logic stays in `aida questions` — this only picks the lane and
+/// reuses the existing handlers.
+// trace:TASK-779 | ai:claude
+fn handle_decide_command(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    spec: &str,
+) -> Result<()> {
+    let req = backend
+        .get_requirement_by_spec_id(spec)?
+        .ok_or_else(|| not_found::requirement_not_found(spec, Some(store_path)))?;
+    let display_id = req.display_id();
+
+    if has_open_decision_request(&req) {
+        // Pending DecisionRequest → behave like `aida questions answer <spec>`.
+        // The request is pending (has_open_decision_request guaranteed it), so
+        // the field is present and non-resolved.
+        let dr = req
+            .decision_request
+            .as_ref()
+            .expect("pending DecisionRequest present");
+        let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+        if !interactive {
+            anyhow::bail!(
+                "{display_id} has a pending decision — answer it with \
+                 `aida questions answer {display_id} <choice>` (this needs a TTY)"
+            );
+        }
+        println!();
+        print_decision_request(&display_id, &req.title, dr);
+        let prompt = match dr.recommended {
+            Some(r) => format!(
+                "  Choice [1-{}, Enter={}, s=skip]: ",
+                dr.choices.len(),
+                r + 1
+            ),
+            None => format!("  Choice [1-{}, s=skip]: ", dr.choices.len()),
+        };
+        print!("{prompt}");
+        use std::io::Write;
+        std::io::stdout().flush()?;
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let entered = input.trim();
+        if entered.eq_ignore_ascii_case("s") || entered.eq_ignore_ascii_case("skip") {
+            println!("  {}", "skipped".dimmed());
+            return Ok(());
+        }
+        let choice = if entered.is_empty() {
+            // Enter accepts the recommended default when one exists.
+            if dr.recommended.is_none() {
+                println!(
+                    "  {}",
+                    "no default — type a choice number or s to skip".dimmed()
+                );
+                return Ok(());
+            }
+            "default".to_string()
+        } else {
+            entered.to_string()
+        };
+        // Reuse the existing single-answer handler: it records + applies the
+        // resolution and auto-queues the now-decision-free spec.
+        questions_answer_one(backend, store_path, &display_id, &choice)
+    } else {
+        // No pending decision → behave like `aida questions clarify <spec>`.
+        questions_clarify(
+            backend,
+            store_path,
+            std::slice::from_ref(&display_id),
+            false,
+        )
     }
 }
 
@@ -13160,6 +13248,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Questions { cmd } => {
             handle_questions_command(cmd.as_ref(), &backend, store_path)?;
         }
+        // trace:TASK-779 | ai:claude
+        Command::Decide { spec } => {
+            handle_decide_command(&backend, store_path, spec)?;
+        }
         Command::Research {
             id,
             dry_run,
@@ -14336,6 +14428,10 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
             cmd,
             Some(QuestionsCommand::Ask { .. }) | Some(QuestionsCommand::Answer { .. })
         ),
+        // TASK-779: `aida decide` may route to the answer path, which writes
+        // the decision_request + status + queue — treat it as a store writer.
+        // trace:TASK-779 | ai:claude
+        Command::Decide { .. } => true,
         Command::Config(cmd) => matches!(
             cmd,
             ConfigCommand::Format { .. }
