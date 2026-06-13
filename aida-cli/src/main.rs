@@ -62310,8 +62310,7 @@ mod format_review_story_display_tests {
     #[test]
     fn non_ascii_title_near_prefix_boundary_does_not_panic() {
         // '—' (em-dash) occupies bytes 9..12; a raw `title[..10]` slice panics.
-        let result =
-            format_review_story_display("TASK-788", "TASK-782 — intent markers + policy");
+        let result = format_review_story_display("TASK-788", "TASK-782 — intent markers + policy");
         assert_eq!(result, None);
         // A leading multibyte char, and an exactly-9-byte (sub-prefix) title.
         assert_eq!(format_review_story_display("X", "→ go"), None);

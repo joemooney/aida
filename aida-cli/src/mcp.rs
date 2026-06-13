@@ -6058,8 +6058,8 @@ pub fn tool_descriptors() -> Value {
                 "type": "object",
                 "properties": {
                     "agent": { "type": "string", "description": "Whose inbox (default: this server's agent/user identity).", "example": "claude" },
-                    "unread": { "type": "boolean", "description": "Return only unread messages (newer than this inbox's read-watermark). Default false (whole inbox).", "default": false },
-                    "mark_seen": { "type": "boolean", "description": "Advance the read-watermark to the newest message after reading — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false }
+                    "unread": { "type": "boolean", "description": "Return only unread messages (newer than this inbox's read-watermark). Default false (whole inbox).", "default": false, "example": true },
+                    "mark_seen": { "type": "boolean", "description": "Advance the read-watermark to the newest message after reading — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false, "example": true }
                 }
             },
             "outputSchema": text_envelope_output_schema(
