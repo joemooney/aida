@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:49:16.215550754Z
-modified_at: 2026-06-13T03:44:52.003511006Z
+modified_at: 2026-06-13T03:44:55.374378576Z
 req_type: Story
 tags:
 - aida:list
@@ -41,6 +41,17 @@ comments:
   content: Commit 5a4bbccf7 references this requirement
   created_at: 2026-06-13T03:43:26.317478620Z
   modified_at: 2026-06-13T03:43:26.317478620Z
+- id: 019ebf15-2b94-7d51-b6ff-8b1d8a220bf9
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-12-story-584-deferred-view-tier.md
+    filed 0 task(s)
+    declined 3:
+      - TASK-773: exclude standing-artifact types from `aida list open` (criterion 6)
+      - (Maybe) surface deferred state + trigger in `aida show` — deferred only when archive is too (parity)
+      - (Maybe) an age-based `aida defer --older-than` bulk sweep, if demand appears (archive has one)
+  created_at: 2026-06-13T03:44:56.212996452Z
+  modified_at: 2026-06-13T03:44:56.212996452Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T03:44:52.003511006Z
