@@ -1,0 +1,32 @@
+id: 019ebf5d-20c8-7390-8848-416f8de223eb
+spec_id: STORY-586
+agreed_id: STORY-586
+title: 'aida advisor watch: presence-gated fork-from-live advisor loop (garden + mailbox-triage + escalate while away)'
+description: |-
+  Composes existing pieces into the loop the operator sketched (2026-06-12): while 'aida away', periodically FORK-FROM-LIVE the advisor session (SPIKE-11 — copy-then-resume the JSONL, VIABLE per its verdict, ~$0.03 warm) and run a scoped headless pass that gardens the substrate + triages the mailbox + ESCALATES the rest; exit when the operator returns (aida home) or the away-TTL lapses. This is the AIDA-native answer to 'how does the advisor get woken periodically' — the orchestrator-style loop the operator proposed, NOT Claude's /loop.
+
+  Reuses: advisor::plan_fork/execute_fork (SPIKE-11/STORY-360, built), presence::current_presence (STORY-561, built), session::spawn_claude_headless_resume (built), the garden pass (aida doctor heal safe + db reconcile-status + ack OBE briefs), the mailbox (read + triage).
+
+  Correction baked in: you do NOT hijack/kill the interactive session — fork copies its JSONL so the headless pass boots with full context, leaving the live session untouched.
+
+  Acceptance (this slice):
+  1. 'aida advisor watch [--dry-run] [--once] [--interval <dur>] [--fork-interval <dur>]' — the presence-gated loop. Pure tick decision (presence + time-since-last-fork) is unit-tested without I/O.
+  2. On a fork tick: plan_fork(project_root) + execute_fork + spawn_claude_headless_resume with the scoped WATCH_PROMPT (garden + mailbox-triage + escalate). No live advisor session -> skip the pass (never block).
+  3. --dry-run previews the decision + the fork cost (estimated_fork_cost_usd) WITHOUT forking. Read-only.
+  4. Exits on Home / away-TTL.
+  5. Keystone-autonomy posture: opt-in by invocation (never on by default); the forked advisor is scoped to mechanical + escalate (no auto-merge / destructive); default-safe.
+
+  Deferred follow-ups (next, supervised): event-driven firing on incoming MAIL (vs timer) — needs STORY-585's surfacing; auto-act-on-bounded policy; cloud/durable supervisor for machine-asleep. trace:SPIKE-11
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T05:03:32.040748675Z
+modified_at: 2026-06-13T05:03:32.040748675Z
+req_type: Story
+tags:
+- advisor
+- aida:advisor
+- autonomy
+- parent:EPIC-39
+- relates:SPIKE-11
