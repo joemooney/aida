@@ -1,0 +1,18 @@
+id: 019ebfb9-3b3f-7da3-9884-1508cf978a1a
+spec_id: BUG-519
+agreed_id: BUG-519
+title: 'statusline: do not warn-glyph a deliberately-started general-purpose session'
+description: The statusline puts a warning glyph on 'session:general-purpose' (the fallback agent_type, worktree_lease.rs:156). When the operator deliberately started a general-purpose session, the warn reads as alarmist noise. Drop the warn glyph for general-purpose (or only warn when the session SHOULD be scoped). Verify triviality; fasttrack if it is a one-line glyph gate, else normal flow.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:44:08.127011307Z
+modified_at: 2026-06-13T06:44:08.127011307Z
+req_type: Bug
+tags:
+- aida:statusline
+- fasttrack
+- papercut
+- severity:cosmetic
+- ux
