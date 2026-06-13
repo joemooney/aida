@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:32.726869661Z
-modified_at: 2026-06-13T19:47:17.179813557Z
+modified_at: 2026-06-13T21:03:38.827832070Z
 req_type: Story
 tags:
 - docs
@@ -26,3 +26,8 @@ comments:
   content: Commit 67620c400 references this requirement
   created_at: 2026-06-13T19:47:17.179813557Z
   modified_at: 2026-06-13T19:47:17.179813557Z
+- id: 019ec2cc-234b-7f43-814e-a7b5c0385d9b
+  author: joe
+  content: 'NESTING DECISION (operator, 2026-06-13): the CLI manual becomes a PART of one unified AIDA Book — NOT standalone-linked. Single nav, single search index. Unblocked; implementing as the docs agent. The drain already merged the content (STORY-608 glossary → docs/cli/12-glossary.md; STORY-609 5 lifecycle diagrams in lifecycle.md; STORY-600 aida manual). STORY-607 = assemble docs/book.toml + docs/SUMMARY.md (book root = docs/) nesting the curated user-facing set (library index sections 1-6) with the CLI manual''s 12 chapters as a ''CLI Reference'' part. The unified root also RESOLVES the cli chapters'' ../lifecycle.md / ../review-process.md cross-links that the standalone book couldn''t.'
+  created_at: 2026-06-13T21:03:38.827832070Z
+  modified_at: 2026-06-13T21:03:38.827832070Z
