@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T21:57:48.321950294Z
-modified_at: 2026-06-12T23:56:05.200256514Z
+modified_at: 2026-06-13T00:04:53.040140157Z
 req_type: Bug
 tags:
 - from-self-test
 - panel-review
 - severity:major
 - workflow
+comments:
+- id: 019ebe4b-b4b0-73b2-9204-5c34bb717005
+  author: joe
+  content: Commit fdfc92372 references this requirement
+  created_at: 2026-06-13T00:04:53.040140157Z
+  modified_at: 2026-06-13T00:04:53.040140157Z
