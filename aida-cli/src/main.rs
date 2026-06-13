@@ -3915,6 +3915,23 @@ fn finalize_answer(
         );
     }
 
+    // BUG-526: when the answerer holds advisor authority (the answer is itself
+    // advisor-gated, TASK-647/ADR-3), promote a still-Draft spec to Approved as
+    // part of applying the resolution, so the R3 auto-queue below can fire and
+    // the ask-ahead/answer-async loop doesn't dead-end at "status is Draft".
+    // The resolution must not deliberately keep the spec parked (rejected /
+    // kept-parked stay where the chosen resolution left them), and a non-advisor
+    // answerer keeps the gate — their answer leaves the spec Draft for triage.
+    // trace:BUG-526
+    let mut promoted_to_approved = false;
+    if matches!(req.status, RequirementStatus::Draft)
+        && !applied.keeps_parked
+        && has_advisor_authority()
+    {
+        req.status = RequirementStatus::Approved;
+        promoted_to_approved = true;
+    }
+
     req.modified_at = chrono::Utc::now();
     backend.update_requirement(&req)?;
 
@@ -3929,6 +3946,13 @@ fn finalize_answer(
     }
     if !applied.is_disposition {
         println!("  {} bound the decision into ## Acceptance", "✓".green());
+    }
+    if promoted_to_approved {
+        // trace:BUG-526
+        println!(
+            "  {} promoted Draft → Approved (advisor authority)",
+            "✓".green()
+        );
     }
 
     // R3 + #2 + #4: re-check pickability and, if genuinely Ready, auto-queue.
