@@ -11,10 +11,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:31:43.498071911Z
-modified_at: 2026-06-13T15:31:43.498071911Z
+modified_at: 2026-06-13T15:31:54.288040757Z
 req_type: Task
 tags:
 - aida:statusline
+- batch:statusline
 - presence
 - relates:STORY-561
 - ux
