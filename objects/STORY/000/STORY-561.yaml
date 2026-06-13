@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T13:20:15.770546344Z
-modified_at: 2026-06-12T20:41:17.724730075Z
+modified_at: 2026-06-13T05:13:34.996559293Z
 req_type: Story
 tags:
 - aida:presence
@@ -114,6 +114,11 @@ comments:
     filed 10 task(s): TASK-762, TASK-763, TASK-764, TASK-765, TASK-766, TASK-767, TASK-768, TASK-769, TASK-770, TASK-771
   created_at: 2026-06-12T20:32:26.761501724Z
   modified_at: 2026-06-12T20:32:26.761501724Z
+- id: 019ebf66-5414-7901-8ce2-6fdd64d13d11
+  author: joe
+  content: Commit 73235eca7 references this requirement
+  created_at: 2026-06-13T05:13:34.996559293Z
+  modified_at: 2026-06-13T05:13:34.996559293Z
 history:
 - id: 019ebd91-512b-7ae1-89d1-dc1ab77c6a6d
   author: aida-auto-bump
