@@ -1229,12 +1229,18 @@ fn run() -> Result<()> {
     // / `burndown explain`, or delegates to the top-level presence handlers.
     // Dispatch early, no shared storage handle needed.
     // trace:STORY-563 | ai:claude
+    // Presence + unblock subcommands need no storage handle, so dispatch them
+    // here before store init. The STORY-611 action aliases (`answer`/`review`/
+    // `decide`) DO need the backend — they fall through to the main dispatch.
+    // trace:STORY-611 | ai:claude
     if let Command::Human {
         command: Some(human_cmd),
         ..
     } = &cli.command
     {
-        return handle_human_subcommand(human_cmd);
+        if human_subcommand_needs_no_storage(human_cmd) {
+            return handle_human_subcommand(human_cmd);
+        }
     }
 
     // Doctor commands run before storage init — they may need to operate
@@ -11254,7 +11260,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 if *sync {
                     maybe_sync_pull(store_path)?;
                 }
-                return handle_list_human(*short);
+                return handle_list_human(*short, &backend);
             }
             // TASK-0415: resolve the optional positional status shortcut.
             // `aida list approved` == `aida list --status approved`; the
@@ -13632,11 +13638,31 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         } => {
             handle_research_command(&backend, store_path, id, *dry_run, artifact_dir)?;
         }
-        // Bare `aida human [--short]` — the `Some(subcommand)` case already
-        // returned via the early dispatch above. trace:TASK-746 trace:STORY-563
-        Command::Human { short, .. } => {
-            handle_human_command(*short)?;
-        }
+        // Bare `aida human [--short]` lists the three pending-for-human
+        // buckets. The presence/unblock subcommands already returned via the
+        // early pre-storage dispatch; the STORY-611 action aliases
+        // (`answer`/`review`/`decide`) reach here because they need the
+        // backend, and delegate to their canonical verbs.
+        // trace:TASK-746 trace:STORY-563 trace:STORY-611
+        Command::Human { short, command } => match command {
+            // STORY-611: `aida human answer|decide <spec> <choice>` →
+            // `aida questions answer` (pure pass-through).
+            Some(cli::HumanCommand::Answer { spec, choice, note })
+            | Some(cli::HumanCommand::Decide { spec, choice, note }) => {
+                questions_answer_one(&backend, store_path, spec, choice, note.as_deref())?;
+            }
+            // STORY-611: `aida human review <spec>` → `aida review <spec>`.
+            Some(cli::HumanCommand::Review {
+                spec,
+                no_agent,
+                allow_stale_base,
+            }) => {
+                handle_review_spec(&backend, store_path, spec, *no_agent, *allow_stale_base)?;
+            }
+            _ => {
+                handle_human_command(*short, &backend)?;
+            }
+        },
         Command::Punt {
             id,
             category,
@@ -73186,8 +73212,8 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
 /// Presence (`home`/`away`/`status`) and `--for human` routing are later phases
 /// of SPIKE-57; this verb is just the front door + the named predicate today.
 // trace:TASK-746 | ai:claude
-fn handle_human_command(short: bool) -> Result<()> {
-    handle_list_human(short)
+fn handle_human_command(short: bool, backend: &aida_core::CachedGitBackend) -> Result<()> {
+    handle_list_human(short, backend)
 }
 
 // TASK-773: perpetual standing-artifact types — the docs-layer / structural
@@ -73255,7 +73281,94 @@ mod task_773_standing_artifact_tests {
     }
 }
 
-fn handle_list_human(short: bool) -> Result<()> {
+/// STORY-611: one row in the "Reviews awaiting you" bucket — a spec with a
+/// code-review surface that the human still has to act on.
+// trace:STORY-611 | ai:claude
+struct ReviewAwaiting {
+    spec_id: String,
+    /// Short human-readable surface label (e.g. "PR-42" / "branch foo").
+    surface: String,
+    /// True when an Approved reviewer verdict already exists for the PR — the
+    /// spec is in the awaiting-MERGE micro-state, NOT awaiting review.
+    reviewed: bool,
+}
+
+/// STORY-611: classify whether an open PR already carries an Approved reviewer
+/// verdict (the State-3 "reviewed + approved → awaiting merge" signal). Reuses
+/// the same verdict-file convention the orchestrator-resume probe reads:
+/// `.aida/review-verdicts/PR-{n}.json`. trace:STORY-611 | ai:claude
+fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bool {
+    let path = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(format!("PR-{pr_number}.json"));
+    matches!(
+        read_verdict_file(&path),
+        Ok(auto_complete::ReviewerOutcome::Verdict(
+            auto_complete::Verdict::Approved
+        ))
+    )
+}
+
+/// STORY-611: enumerate the specs that have a code-review surface awaiting the
+/// human — Done-on-branch / open-PR specs not yet merged, the SAME surface
+/// `aida review <SPEC>` locates. Candidate set = `Done`-status specs (work
+/// finished on a branch, awaiting review/merge); for each we run the exact
+/// surface-detection `handle_review_spec` uses (`collect_git_linkage` +
+/// `change_lookup_for_branch` + `classify_review_surface`) and keep only the
+/// `OpenChange` / `BranchNoChange` surfaces. `Shipped` (already merged) and
+/// `Local` (never pushed) are dropped. Each row is tagged `reviewed` so the
+/// caller can split awaiting-review from the awaiting-MERGE micro-state (the
+/// REFINEMENT comment's case 3). trace:STORY-611 | ai:claude
+fn reviews_awaiting_human(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+) -> Vec<ReviewAwaiting> {
+    let dones: Vec<aida_core::Requirement> = match backend.list_requirements(false) {
+        Ok(reqs) => reqs
+            .into_iter()
+            .filter(|r| !r.archived && r.status == aida_core::RequirementStatus::Done)
+            .collect(),
+        Err(_) => return Vec::new(),
+    };
+    let mut out = Vec::new();
+    for req in &dones {
+        let Some(spec_id) = req.spec_id.clone().or_else(|| req.agreed_id.clone()) else {
+            continue;
+        };
+        let ids = vec![spec_id.clone()];
+        let linkage = collect_git_linkage(project_root, &ids);
+        let change = linkage
+            .branch
+            .as_deref()
+            .map(|b| change_lookup_for_branch(project_root, b));
+        match classify_review_surface(&linkage, change) {
+            ReviewSurface::OpenChange { number, .. } => {
+                let forge = crate::forge::resolve_forge_kind(project_root);
+                let reviewed = pr_has_approved_verdict(project_root, number);
+                out.push(ReviewAwaiting {
+                    spec_id,
+                    surface: format!("{}-{}", forge.change_noun(), number),
+                    reviewed,
+                });
+            }
+            ReviewSurface::BranchNoChange { branch, .. } => {
+                out.push(ReviewAwaiting {
+                    spec_id,
+                    surface: format!("branch {branch}"),
+                    // No PR ⇒ no verdict file ⇒ never the awaiting-merge state.
+                    reviewed: false,
+                });
+            }
+            // Already merged or never pushed — nothing for the human to review.
+            ReviewSurface::Shipped { .. } | ReviewSurface::Local => {}
+        }
+    }
+    out.sort_by(|a, b| a.spec_id.cmp(&b.spec_id));
+    out
+}
+
+fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let store = load_store_for_lookup(&project_root).ok_or_else(|| {
@@ -73311,6 +73424,11 @@ fn handle_list_human(short: bool) -> Result<()> {
             (f, bucket, reasons)
         })
         .filter(|(f, _, _)| burndown::human_required(f, false))
+        // STORY-611: drop the derived `AwaitingDecision` rows — the first-class
+        // "decisions-awaiting" bucket (richer: the actual choices) supersedes
+        // them, so they must not also count toward `classified` (double-count
+        // in the total + double-list). trace:STORY-611
+        .filter(|(_, bucket, _)| *bucket != burndown::OpenBucket::AwaitingDecision)
         .collect();
 
     // TASK-747: the explicitly-routed members the derived classification did
@@ -73328,6 +73446,28 @@ fn handle_list_human(short: bool) -> Result<()> {
         .collect();
     routed_only.sort();
 
+    // STORY-611: the THREE first-class pending-for-human buckets, each → its
+    // drain verb. The banner already promises "a decision, review, or triage";
+    // deliver all three as real lists, not pointers. trace:STORY-611
+    //  1. Decisions awaiting you  → `aida questions answer <spec> <choice>`
+    //  2. Reviews awaiting you    → `aida review <SPEC>` (the must-have)
+    //  3. Triage (findings)       → `aida findings list`
+    let pending_decisions = collect_decision_requests(backend)
+        .map(|(pending, _)| pending)
+        .unwrap_or_default();
+    let reviews_all = reviews_awaiting_human(&project_root, backend);
+    // Split case 1 (code-review-needed) from case 3 of the REFINEMENT comment
+    // (already reviewed → awaiting MERGE, a distinct micro-state, NOT a review).
+    let (awaiting_merge, awaiting_review): (Vec<&ReviewAwaiting>, Vec<&ReviewAwaiting>) =
+        reviews_all.iter().partition(|r| r.reviewed);
+    // Findings stay a pointer + live count (cheap, no recompute): open findings
+    // targeting an open spec. trace:STORY-611
+    let open_findings = collect_findings_by_spec(&store)
+        .values()
+        .flat_map(|ids| ids.iter())
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+
     // `--short`: bare IDs, one per line — usable in `$(...)` / xargs. No
     // header, footer, color, or grouping (mirrors `aida list --short`).
     // Derived members first, then the explicitly-routed-only tail (TASK-747).
@@ -73342,7 +73482,13 @@ fn handle_list_human(short: bool) -> Result<()> {
     }
 
     println!("{} what needs a human", "▸".cyan().bold());
-    if classified.is_empty() && routed_only.is_empty() {
+    let nothing = classified.is_empty()
+        && routed_only.is_empty()
+        && pending_decisions.is_empty()
+        && awaiting_review.is_empty()
+        && awaiting_merge.is_empty()
+        && open_findings == 0;
+    if nothing {
         println!(
             "  {}",
             "Nothing needs you right now — everything open is in flight, deferred, \
@@ -73351,7 +73497,11 @@ fn handle_list_human(short: bool) -> Result<()> {
         );
         return Ok(());
     }
-    let total = classified.len() + routed_only.len();
+    let total = classified.len()
+        + routed_only.len()
+        + pending_decisions.len()
+        + awaiting_review.len()
+        + open_findings;
     println!(
         "  {} {} open {} need a decision, review, or triage from you",
         "→".green(),
@@ -73359,16 +73509,93 @@ fn handle_list_human(short: bool) -> Result<()> {
         if total == 1 { "item" } else { "items" },
     );
 
+    // STORY-611 — bucket 1: Decisions awaiting you. Upgrade from the old
+    // one-line pointer to a real list of the pending DecisionRequests; each
+    // resolvable inline with `aida human answer <spec> <choice>`.
+    // trace:STORY-611
+    if !pending_decisions.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "●".yellow(),
+            "decisions-awaiting".bold(),
+            "answer with `aida human answer <spec> <choice>`".dimmed()
+        );
+        for req in &pending_decisions {
+            let display_id = req.display_id();
+            let title = spec_title_cell(&titles, &display_id);
+            println!("    {}{}", display_id.cyan(), title);
+            if let Some(dr) = &req.decision_request {
+                println!("      {} {}", "?".magenta(), dr.question.dimmed());
+                for (i, choice) in dr.choices.iter().enumerate() {
+                    let rec = if dr.recommended == Some(i) {
+                        " (recommended)".green().to_string()
+                    } else {
+                        String::new()
+                    };
+                    println!(
+                        "        {}{} {}",
+                        format!("{}.", i + 1).bold(),
+                        rec,
+                        choice.label.dimmed()
+                    );
+                }
+            }
+        }
+    }
+
+    // STORY-611 — bucket 2: Reviews awaiting you (the must-have). Specs with a
+    // code-review surface (open PR / branch-with-commits) not yet merged — the
+    // SAME surface `aida review <SPEC>` locates. Each line → `aida review
+    // <SPEC>` (or the `aida human review <SPEC>` alias). trace:STORY-611
+    if !awaiting_review.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "●".yellow(),
+            "reviews-awaiting".bold(),
+            "review with `aida human review <spec>` (or `aida review <spec>`)".dimmed()
+        );
+        for r in &awaiting_review {
+            let title = spec_title_cell(&titles, &r.spec_id);
+            println!(
+                "    {}{} {}",
+                r.spec_id.cyan(),
+                title,
+                format!("[{}]", r.surface).dimmed()
+            );
+        }
+    }
+
+    // STORY-611 — the awaiting-MERGE micro-state (REFINEMENT case 3): already
+    // reviewed + approved, just needs the merge button. A distinct indicator,
+    // NOT part of the reviews bucket. trace:STORY-611
+    if !awaiting_merge.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "●".green(),
+            "awaiting-merge".bold(),
+            "reviewed + approved — just needs merging".dimmed()
+        );
+        for r in &awaiting_merge {
+            let title = spec_title_cell(&titles, &r.spec_id);
+            println!(
+                "    {}{} {}",
+                r.spec_id.cyan(),
+                title,
+                format!("[{}]", r.surface).dimmed()
+            );
+        }
+    }
+
     // Group by bucket, ordered most-actionable-first (matches the precedence in
     // `explain_open` / the explain view). trace:STORY-562
+    //
+    // STORY-611: `AwaitingDecision` is intentionally DROPPED from this derived
+    // set — the first-class "decisions-awaiting" bucket above supersedes it
+    // (same specs, richer output: the actual choices). Keeping both would
+    // double-list every pending decision, exactly the conflation the
+    // REFINEMENT comment warns against. trace:STORY-611
     use burndown::OpenBucket::*;
-    let order = [
-        HeldForReview,
-        AwaitingDecision,
-        BuildSupervised,
-        Ungroomed,
-        Umbrella,
-    ];
+    let order = [HeldForReview, BuildSupervised, Ungroomed, Umbrella];
     for bucket in order {
         let rows: Vec<&(
             burndown::OpenFacts,
@@ -73441,10 +73668,28 @@ fn handle_list_human(short: bool) -> Result<()> {
         }
     }
 
-    // Acceptance #4 (optional completeness): point at the two adjacent inboxes
-    // a human also drains. Cheap pointer text, not a recompute. trace:STORY-562
+    // STORY-611 — bucket 3: Triage (findings). A pointer + live count is the
+    // accepted shape (cheap; the full list lives in `aida findings list`).
+    // trace:STORY-562 trace:STORY-611
+    if open_findings > 0 {
+        println!(
+            "\n{} {} — {}",
+            "●".magenta(),
+            "triage-findings".bold(),
+            format!(
+                "{} finding{} awaiting triage — `aida findings list`",
+                open_findings,
+                if open_findings == 1 { "" } else { "s" }
+            )
+            .dimmed()
+        );
+    }
+
+    // The full decision inbox (incl. answered) lives in `aida questions list`;
+    // pending decisions already surfaced as their own bucket above.
+    // trace:STORY-562 trace:STORY-611
     println!(
-        "\n  {} findings awaiting triage: `aida findings list` · decision inbox: `aida questions list`",
+        "\n  {} full decision inbox: `aida questions list` · all findings: `aida findings list`",
         "↳".dimmed()
     );
     Ok(())
@@ -73530,6 +73775,74 @@ fn handle_human_subcommand(cmd: &cli::HumanCommand) -> Result<()> {
         cli::HumanCommand::Unblock { copy, stdout, json } => {
             handle_human_unblock(*copy, *stdout, *json)
         }
+        // STORY-611: the action aliases need a storage handle, so they are
+        // dispatched in the main `run()` body (where `backend`/`store_path`
+        // are in scope), not here. This arm is unreachable from the early
+        // pre-storage dispatch, which gates on `human_subcommand_needs_no_storage`.
+        // trace:STORY-611 | ai:claude
+        cli::HumanCommand::Answer { .. }
+        | cli::HumanCommand::Decide { .. }
+        | cli::HumanCommand::Review { .. } => {
+            unreachable!("STORY-611 action aliases are dispatched after store init")
+        }
+    }
+}
+
+/// STORY-611: which `aida human <sub>` verbs run WITHOUT a storage handle. The
+/// presence + unblock verbs do; the action aliases (`answer`/`review`/`decide`)
+/// delegate to backend-needing canonical verbs, so they fall through to the
+/// main dispatch instead of the early pre-storage return.
+/// trace:STORY-611 | ai:claude
+fn human_subcommand_needs_no_storage(cmd: &cli::HumanCommand) -> bool {
+    matches!(
+        cmd,
+        cli::HumanCommand::Away
+            | cli::HumanCommand::Home
+            | cli::HumanCommand::Presence
+            | cli::HumanCommand::Status
+            | cli::HumanCommand::Unblock { .. }
+    )
+}
+
+// trace:STORY-611 | ai:claude
+#[cfg(test)]
+mod story_611_human_alias_tests {
+    use super::human_subcommand_needs_no_storage;
+    use crate::cli::HumanCommand;
+
+    #[test]
+    fn presence_unblock_verbs_need_no_storage() {
+        assert!(human_subcommand_needs_no_storage(&HumanCommand::Away));
+        assert!(human_subcommand_needs_no_storage(&HumanCommand::Home));
+        assert!(human_subcommand_needs_no_storage(&HumanCommand::Presence));
+        assert!(human_subcommand_needs_no_storage(&HumanCommand::Status));
+        assert!(human_subcommand_needs_no_storage(&HumanCommand::Unblock {
+            copy: false,
+            stdout: false,
+            json: false,
+        }));
+    }
+
+    #[test]
+    fn action_aliases_need_storage_so_fall_through_to_main_dispatch() {
+        // The `answer`/`decide`/`review` aliases delegate to backend-needing
+        // canonical verbs — they must NOT be handled in the pre-storage early
+        // return. trace:STORY-611
+        assert!(!human_subcommand_needs_no_storage(&HumanCommand::Answer {
+            spec: "STORY-1".into(),
+            choice: "1".into(),
+            note: None,
+        }));
+        assert!(!human_subcommand_needs_no_storage(&HumanCommand::Decide {
+            spec: "STORY-1".into(),
+            choice: "1".into(),
+            note: None,
+        }));
+        assert!(!human_subcommand_needs_no_storage(&HumanCommand::Review {
+            spec: "STORY-1".into(),
+            no_agent: false,
+            allow_stale_base: false,
+        }));
     }
 }
 
