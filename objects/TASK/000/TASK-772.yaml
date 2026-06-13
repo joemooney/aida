@@ -3,12 +3,12 @@ spec_id: TASK-772
 agreed_id: TASK-772
 title: 'aida plan verify: support a ''(new)'' annotation for to-be-created file refs'
 description: 'Plans legitimately name files the work will CREATE (that''s the point of a plan), but plan verify errors ''file not found'' on any backticked repo-relative path that doesn''t exist — its only exemptions are placeholder patterns (angle brackets, *, path/to/, ..., NNN). The workaround (un-backtick future files) loses the path formatting and is undiscoverable. Hit while writing the EPIC-39 repositioning plan: 7 to-be-created refs all errored. Proposal: a sanctioned annotation — a path followed by ''(new)'' or ''(to create)'' on the same line downgrades not-found from ERROR to OK-new (and conversely: a ''(new)''-marked file that ALREADY exists warns, catching stale plans). Acceptance: marked future refs pass; unmarked missing refs still error; existing placeholder exemptions unchanged; convention documented in the plan template.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:47:05.618275758Z
-modified_at: 2026-06-13T00:19:02.804785302Z
+modified_at: 2026-06-13T00:27:48.624219559Z
 req_type: Task
 tags:
 - aida:plan
@@ -20,3 +20,15 @@ comments:
   content: Commit ef87f5d0a references this requirement
   created_at: 2026-06-13T00:19:02.804785302Z
   modified_at: 2026-06-13T00:19:02.804785302Z
+history:
+- id: 019ebe60-b29b-7102-aa73-a603394cb2d3
+  author: aida-auto-bump
+  timestamp: 2026-06-13T00:27:48.763726992Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T00:27:48.624219559Z
+  completion_sha: 3520851119d4160be8b57f64fd0ff62276ef9162
