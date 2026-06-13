@@ -5566,6 +5566,16 @@ pub enum Command {
         // trace:TASK-754 | ai:claude
         #[clap(long, value_name = "NAME")]
         batch: Option<String>,
+
+        /// When enqueuing with `--queue`, route the spec to ROLE's queue
+        /// (mirrors `aida queue add --for`). Defaults to `implementer` — the
+        /// common case is an advisor filing implementation work — rather than
+        /// the filer's own session role. Pass `--for advisor` to keep it on the
+        /// advisor queue, or `--for any` to leave it unrouted. No effect without
+        /// `--queue`.
+        // trace:BUG-528 | ai:claude
+        #[clap(long = "for", value_name = "ROLE")]
+        r#for: Option<String>,
     },
 
     /// File a trivial change into the fasttrack lane in one shot

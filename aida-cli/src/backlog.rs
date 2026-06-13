@@ -645,6 +645,32 @@ pub(crate) fn enqueue_groomed(
     note: Option<&str>,
     user_id: &str,
 ) -> Result<()> {
+    // Default routing: the active session role (AIDA_SESSION_ROLE) — the
+    // groom-from-an-advisor-shell behavior. trace:BUG-528 | ai:claude
+    enqueue_groomed_for(storage, req, batch, note, user_id, None)
+}
+
+/// Like `enqueue_groomed`, but with explicit queue routing. `for_role`:
+///   * `Some(role)` — route to that role's queue.
+///   * `None` — fall back to the active session role (`AIDA_SESSION_ROLE`),
+///     matching the historical groom behavior.
+///
+/// This lets `aida add --queue` route filed work to the implementer queue by
+/// default rather than the filer's (commonly advisor) session role.
+// trace:BUG-528 | ai:claude
+pub(crate) fn enqueue_groomed_for(
+    storage: &Storage,
+    req: &Requirement,
+    batch: Option<&str>,
+    note: Option<&str>,
+    user_id: &str,
+    for_role: Option<String>,
+) -> Result<()> {
+    let for_role = for_role.or_else(|| {
+        std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.is_empty())
+    });
     let entry = QueueEntry {
         user_id: user_id.to_string(),
         requirement_id: req.id,
@@ -652,9 +678,7 @@ pub(crate) fn enqueue_groomed(
         added_by: user_id.to_string(),
         note: note.map(str::to_string),
         added_at: Utc::now(),
-        for_role: std::env::var("AIDA_SESSION_ROLE")
-            .ok()
-            .filter(|s| !s.is_empty()),
+        for_role,
         for_scope: None,
         for_session: None,
         added_by_machine: None,
