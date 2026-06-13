@@ -1,0 +1,19 @@
+id: 019ec22b-5754-7682-98c1-b5603a316902
+spec_id: BUG-531
+agreed_id: BUG-531
+title: 'aida search lacks the output-mode flags aida list has: mirror --short/-q/--ids-only/--quiet (and --json) for surface parity'
+description: 'Operator asked (2026-06-13) whether ''aida search'' should have a --short/--show-id to report just the spec id. It should — and the precedent already exists on ''aida list'': ''-q''/''--short'' (aliases --ids-only/--quiet) emits one bare canonical spec ID per line (no header, no count footer), composes with filters, mutually exclusive with --json. ''aida search'' has NONE of these output-mode flags (no --short, no --json) — a surface-parity gap that forces the hand-rolled ''--json | jq -r .[].id'' workaround (which also doesn''t work since search has no --json either). Fix: mirror list''s output flags onto search — ''--short''/''-q''/''--ids-only''/''--quiet'' (bare-id-per-line) AND ''--json'', with the same mutual-exclusion + archive-default semantics. Do NOT introduce a new ''--show-id'' name; reuse list''s exact flag so the two surfaces share one vocabulary (''aida search "x" -q | xargs ...'' mirrors ''aida list ... -q''). trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T18:08:00.852564581Z
+modified_at: 2026-06-13T18:08:00.852564581Z
+req_type: Bug
+tags:
+- aida:search
+- cli-consistency
+- from-friction
+- papercut
+- relates:aida:list
+- scriptability
