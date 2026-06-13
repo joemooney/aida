@@ -1,0 +1,19 @@
+id: 019ec34a-16b8-7c62-9c23-f56a5d393a72
+spec_id: STORY-613
+agreed_id: STORY-613
+title: aida review (and sub-sessions) hand findings/leftover-questions to the advisor via mailbox/findings on finish — close the cut-n-paste loop
+description: 'Operator asked (2026-06-13) what the protocol is when a sub-session (e.g. ''aida review'') finishes with findings + leftover questions (''want me to file slice 2?'', housekeeping notes): cut-n-paste to the advisor is easiest but clunky — AND redundant (the advisor had already done both items). PROTOCOL (advisor rec): the sub-session posts its outcome to the advisor via the SUBSTRATE, not the operator''s clipboard — the reviewer-side analog of TASK-792 (drain→advisor mailbox handoff). On finish, ''aida review'' should: (1) post verdict + flagged findings + any ''want me to X?'' questions to the advisor mailbox (''aida mailbox send --to advisor --intent request|fyi …''); (2) file actionable items as findings (''aida findings add'') so they''re triageable. The operator stops being the courier; the advisor sees them in its inbox/findings and acts (or notes already-done, as happened here). Generalize the pattern across review/implement/drain so handoff is consistent. trace:relates:TASK-792 trace:relates:STORY-585 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:21:13.144327303Z
+modified_at: 2026-06-13T23:21:13.144327303Z
+req_type: Story
+tags:
+- agent-context
+- aida:mailbox
+- aida:review
+- from-friction
+- handoff-loop
+- relates:TASK-792
