@@ -1,0 +1,26 @@
+id: 019ebed5-9fbb-7620-99ab-9729682f8344
+spec_id: STORY-583
+agreed_id: STORY-583
+title: aida mailbox retract + delete as configurable policy (default allowed)
+description: |-
+  Operator decision (2026-06-12): support retracting AND deleting mailbox messages, both as configurable policy options defaulting to TRUE (allowed). Resolves the immutability question raised alongside BUG-513 (test/mistake broadcasts currently persist forever — there is no retract/delete verb).
+
+  Acceptance:
+  1. New verbs: 'aida mailbox retract <message-id>' (withdraw: leave a tombstone so the thread audit shows it was retracted) and 'aida mailbox delete <message-id>' (hard remove from the inbox view).
+  2. Configurable policy under [mailbox] in .aida/config.toml: 'allow_retract = true' and 'allow_delete = true', BOTH defaulting to true (the operator's chosen default). When a knob is false, the corresponding verb refuses with a clear message — lets a governance-sensitive project lock the mailbox to an immutable audit log.
+  3. Durability semantics: the mailbox has a git-canonical 'sync' (orphan-branch). Retract/delete must handle BOTH the local layer AND already-synced messages — retract writes a tombstone that syncs (replayable); delete removes locally and records a delete-marker so a re-sync doesn't resurrect it. Define + test the synced-message path explicitly.
+  4. Only the sender (or the operator) may retract/delete a message; document the identity check.
+  5. Mailbox 'list'/'inbox' views reflect retracted (shown as withdrawn) vs deleted (absent).
+
+  Why: closes the test/mistake-cruft gap, and the false-immutability surprise; the policy default (true) keeps it ergonomic while letting regulated projects opt into immutability. Relates: BUG-513, the EPIC-39 governance/audit thesis (an immutable mailbox is one governance posture; this makes it a choice).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T02:35:31.643637959Z
+modified_at: 2026-06-13T02:35:31.643637959Z
+req_type: Story
+tags:
+- aida:mailbox
+- governance
+- relates:BUG-513
