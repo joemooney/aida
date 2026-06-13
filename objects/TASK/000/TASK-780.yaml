@@ -3,12 +3,12 @@ spec_id: TASK-780
 agreed_id: TASK-780
 title: 'aida questions subcommands: make WHO-runs-it / WHEN explicit in each command''s help'
 description: 'Operator (2026-06-13): the ''aida questions'' subcommand help doesn''t say who runs each + when. Make the actor explicit per subcommand: ask = ADVISOR poses a question (distills a fork; not human-run); answer = HUMAN answers, no LLM session (the human-decision drain); clarify = INTERACTIVE human+agent (authors acceptance); sweep = advisor/automated detection; list = anyone (read). Lead each --help with a one-line ''Run by: <role>, when: <trigger>''. Mirrors the SPEC-IDs-out-of-user-output discipline — surface WHO/WHEN, the operator shouldn''t have to infer it.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T14:38:47.383027855Z
-modified_at: 2026-06-13T14:38:53.986683022Z
+modified_at: 2026-06-13T15:29:14.812767643Z
 req_type: Task
 tags:
 - aida:questions
@@ -17,3 +17,21 @@ tags:
 - fasttrack
 - papercut
 - ux
+history:
+- id: 019ec199-fbe0-70c0-af9f-4568a11b4eca
+  author: aida-reconcile
+  timestamp: 2026-06-13T15:29:14.720836127Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec199-fc3c-7e70-9429-2be5e6902986
+  timestamp: 2026-06-13T15:29:14.812766122Z
+  agent: aida
+  commit_sha: 7535821d91b75f6ed2bdcd0052b383f308966996
+  summary: Completed via merge 7535821d
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T15:29:14.567971595Z
+  completion_sha: 7535821d91b75f6ed2bdcd0052b383f308966996
