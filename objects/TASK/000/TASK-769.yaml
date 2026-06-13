@@ -8,12 +8,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:31:39.368008246Z
-modified_at: 2026-06-13T02:28:38.618814376Z
+modified_at: 2026-06-13T02:28:40.199695827Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
   created_at: 2026-06-12T20:31:58.330303023Z
+comments:
+- id: 019ebecf-5887-7fa1-8415-82640c4ab1b0
+  author: joe
+  content: 'Reverted Done→Approved: PR #804 marked this Done with ZERO implementation. TASK-769 is a CONDITIONAL task (''make per-knob tunable IF the fixed mapping proves too rigid'') — it should stay parked until the rigidity is actually felt, not auto-completed. Leave deferred.'
+  created_at: 2026-06-13T02:28:40.199695827Z
+  modified_at: 2026-06-13T02:28:40.199695827Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T02:14:48.325488870Z
