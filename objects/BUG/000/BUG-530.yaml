@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T18:28:25.419109901Z
+modified_at: 2026-06-13T18:41:15.819260470Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -47,3 +47,8 @@ comments:
   content: 'DECISION (operator 2026-06-13): implement FIX OPTION 1 — route resolve_burndown_sets through the SAME freshness-checked cache read that aida list/show use (stale-detection rebuilds before read), instead of load_store_for_lookup''s GitBackend-direct worktree read; read queue membership (all_queued_requirement_ids) from the fresh source too. Do NOT implement option 2 (worktree-refresh in load_store_for_lookup) or option 3 (defensive terminal-status filter) — option 1 is the chosen surgical fix. Keep the regression test that must fail without the fix.'
   created_at: 2026-06-13T18:28:25.419109901Z
   modified_at: 2026-06-13T18:28:25.419109901Z
+- id: 019ec249-c82b-7d10-b819-f990b984635a
+  author: joe
+  content: 'COORDINATION NOTE (2026-06-13): BUG-532 (PR #848, merges before this) added a 4th return value to resolve_burndown_sets — a titles HashMap<display-id, title> built from the SAME store scan, used by ''burndown plan'' to show id+title. When implementing option 1 (rerouting the store read through the freshness-checked cache), PRESERVE that titles map — build it from the cache rows too, so ''burndown plan'' titles don''t regress. The cache projection must expose title (it does — ''aida list'' shows titles from cache). Re-base on current main first; resolve_burndown_sets will already have the BUG-532 shape.'
+  created_at: 2026-06-13T18:41:15.819260470Z
+  modified_at: 2026-06-13T18:41:15.819260470Z
