@@ -21658,6 +21658,15 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
                     println!("  {}: {}", prefix, counter);
                 }
             }
+
+            // BUG-533: ID config alone hides the whole effective-policy
+            // surface (agent bypass posture, mailbox, advisor, archive,
+            // telemetry, intake, presence). Render every known section with
+            // its effective value + source so `config show` is the runtime
+            // complement to docs/environment-variables.md.
+            // trace:BUG-533
+            let project_root = store_sync_config_project_root(storage);
+            render_effective_policy(&project_root);
         }
         ConfigCommand::Format { format } => {
             store.id_config.format = match format.to_lowercase().as_str() {
@@ -21736,6 +21745,318 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Where an effective config value came from. Rendered beside each value by
+/// `aida config show` so the operator can tell a deliberate override from an
+/// inherited default at a glance. trace:BUG-533 | ai:claude
+enum PolicySource {
+    /// No file or env set this — the built-in default is in force.
+    Default,
+    /// Set in the project's `.aida/config.toml`.
+    ProjectConfig,
+    /// Set in the global `~/.aida/agents.toml` (agent permission posture).
+    GlobalAgents,
+    /// Overridden by an environment variable (named).
+    Env(&'static str),
+}
+
+impl PolicySource {
+    fn label(&self) -> String {
+        match self {
+            PolicySource::Default => "default".dimmed().to_string(),
+            PolicySource::ProjectConfig => ".aida/config.toml".dimmed().to_string(),
+            PolicySource::GlobalAgents => "~/.aida/agents.toml".dimmed().to_string(),
+            PolicySource::Env(name) => format!("{name} (env)").yellow().to_string(),
+        }
+    }
+}
+
+/// One rendered policy row: a knob's effective value and where it resolved
+/// from. trace:BUG-533 | ai:claude
+struct PolicyRow {
+    key: &'static str,
+    value: String,
+    source: PolicySource,
+}
+
+impl PolicyRow {
+    fn print(&self) {
+        println!(
+            "  {}: {}  {}",
+            self.key.cyan(),
+            self.value,
+            self.source.label()
+        );
+    }
+}
+
+/// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
+/// when absent / unparseable (so a missing file just means "all defaults").
+/// trace:BUG-533 | ai:claude
+fn read_project_config_value(project_root: &std::path::Path) -> Option<toml::Value> {
+    let body = std::fs::read_to_string(config_path_for_project(project_root)).ok()?;
+    toml::from_str(&body).ok()
+}
+
+/// Look up `[section].key` in a parsed config, returning the raw `toml::Value`
+/// when present. trace:BUG-533 | ai:claude
+fn config_lookup<'a>(
+    cfg: Option<&'a toml::Value>,
+    section: &str,
+    key: &str,
+) -> Option<&'a toml::Value> {
+    cfg?.get(section)?.get(key)
+}
+
+/// Render the full effective policy surface for `aida config show`. Each known
+/// config section is shown with its resolved value + source (default / project
+/// `.aida/config.toml` / global `~/.aida/agents.toml` / env). This is the
+/// runtime complement to `docs/environment-variables.md`.
+///
+/// Anti-drift note (BUG-533 slice 2): adding a knob here is a single push to
+/// the `rows` vec built per section — the readers and this renderer still live
+/// in separate places, so a fully-central registry remains a follow-up.
+/// trace:BUG-533 | ai:claude
+fn render_effective_policy(project_root: &std::path::Path) {
+    let cfg = read_project_config_value(project_root);
+
+    println!();
+    println!("{}", "Effective Policy:".blue().bold());
+
+    // --- Agent permission posture (security-relevant — lead with it). ---
+    // Resolution: global ~/.aida/agents.toml base, project .aida/agents.toml
+    // override; default false (faithful native posture). trace:STORY-495
+    println!();
+    println!("{}", "[agents] — agent permission posture".bold());
+    {
+        let global_path = aida_home_dir().map(|h| h.join(".aida/agents.toml"));
+        let project_agents = project_root.join(".aida/agents.toml");
+        let global_bypass = global_path
+            .as_deref()
+            .and_then(|p| read_agents_bypass_from_file(p).ok().flatten());
+        let project_bypass = read_agents_bypass_from_file(&project_agents).ok().flatten();
+        let (effective, source) = match (project_bypass, global_bypass) {
+            (Some(v), _) => (v, PolicySource::ProjectConfig),
+            (None, Some(v)) => (v, PolicySource::GlobalAgents),
+            (None, None) => (false, PolicySource::Default),
+        };
+        let rendered = if effective {
+            format!("{} (agents skip permission prompts)", "bypass".red().bold())
+        } else {
+            format!("{} (Claude prompts; faithful launcher)", "native".green())
+        };
+        PolicyRow {
+            key: "bypass",
+            value: rendered,
+            source,
+        }
+        .print();
+    }
+
+    // --- Mailbox act-on-mail policy. trace:TASK-782 ---
+    println!();
+    println!("{}", "[mailbox]".bold());
+    {
+        let raw = config_lookup(cfg.as_ref(), "mailbox", "act_on_mail")
+            .and_then(|v| v.as_str())
+            .and_then(aida_core::mailbox::ActOnMail::parse);
+        let (value, source) = match raw {
+            Some(aida_core::mailbox::ActOnMail::SurfaceAndRecommend) => (
+                "surface-and-recommend".to_string(),
+                PolicySource::ProjectConfig,
+            ),
+            Some(aida_core::mailbox::ActOnMail::EscalatePerCascade) => (
+                "escalate-per-cascade".to_string(),
+                PolicySource::ProjectConfig,
+            ),
+            None => ("surface-and-recommend".to_string(), PolicySource::Default),
+        };
+        PolicyRow {
+            key: "act_on_mail",
+            value,
+            source,
+        }
+        .print();
+    }
+
+    // --- Advisor calibration mode. trace:STORY-347 ---
+    println!();
+    println!("{}", "[advisor]".bold());
+    {
+        let raw =
+            config_lookup(cfg.as_ref(), "advisor", "calibration_mode").and_then(|v| v.as_str());
+        let (value, source) = match raw {
+            Some(s)
+                if matches!(
+                    s.trim().to_ascii_lowercase().as_str(),
+                    "on" | "true" | "1" | "yes"
+                ) =>
+            {
+                ("on".to_string(), PolicySource::ProjectConfig)
+            }
+            Some(_) => ("off".to_string(), PolicySource::ProjectConfig),
+            None => ("off".to_string(), PolicySource::Default),
+        };
+        PolicyRow {
+            key: "calibration_mode",
+            value,
+            source,
+        }
+        .print();
+    }
+
+    // --- Archive auto-sweep. trace:STORY-441 (env: AIDA_AUTO_ARCHIVE) ---
+    println!();
+    println!("{}", "[archive]".bold());
+    {
+        let env_off = std::env::var("AIDA_AUTO_ARCHIVE")
+            .map(|v| v.trim() == "0")
+            .unwrap_or(false);
+        let configured =
+            config_lookup(cfg.as_ref(), "archive", "auto_after_days").and_then(|v| v.as_integer());
+        let (value, source) = if env_off {
+            (
+                "disabled".to_string(),
+                PolicySource::Env("AIDA_AUTO_ARCHIVE"),
+            )
+        } else {
+            match configured {
+                Some(days) => {
+                    let clamped = days.max(7);
+                    (format!("after {clamped} days"), PolicySource::ProjectConfig)
+                }
+                None => ("disabled (unset)".to_string(), PolicySource::Default),
+            }
+        };
+        PolicyRow {
+            key: "auto_after_days",
+            value,
+            source,
+        }
+        .print();
+    }
+
+    // --- Telemetry. trace:STORY-122 (env: AIDA_TELEMETRY) ---
+    println!();
+    println!("{}", "[telemetry]".bold());
+    {
+        let env_off = std::env::var("AIDA_TELEMETRY")
+            .map(|v| matches!(v.trim(), "0" | "false" | "no" | "off"))
+            .unwrap_or(false);
+        let configured =
+            config_lookup(cfg.as_ref(), "telemetry", "enabled").and_then(|v| v.as_bool());
+        let (value, source) = if env_off {
+            ("disabled".to_string(), PolicySource::Env("AIDA_TELEMETRY"))
+        } else {
+            match configured {
+                Some(true) => ("enabled".to_string(), PolicySource::ProjectConfig),
+                Some(false) => ("disabled".to_string(), PolicySource::ProjectConfig),
+                None => ("enabled".to_string(), PolicySource::Default),
+            }
+        };
+        PolicyRow {
+            key: "enabled",
+            value,
+            source,
+        }
+        .print();
+    }
+
+    // --- Intake policy. trace:STORY-560 ---
+    println!();
+    println!("{}", "[intake]".bold());
+    {
+        let intake = crate::intake::IntakeConfig::load(project_root);
+        let default = crate::intake::IntakeConfig::default();
+        let src = |is_default: bool| {
+            if is_default {
+                PolicySource::Default
+            } else {
+                PolicySource::ProjectConfig
+            }
+        };
+        PolicyRow {
+            key: "disposition_bias",
+            value: intake.disposition_bias.as_str().to_string(),
+            source: src(intake.disposition_bias == default.disposition_bias),
+        }
+        .print();
+        PolicyRow {
+            key: "on_apply",
+            value: intake.on_apply.as_str().to_string(),
+            source: src(intake.on_apply == default.on_apply),
+        }
+        .print();
+        PolicyRow {
+            key: "do_not_approve_classes",
+            value: intake.do_not_approve_classes.join(", "),
+            source: src(intake.do_not_approve_classes == default.do_not_approve_classes),
+        }
+        .print();
+    }
+
+    // --- Presence settings. trace:STORY-561 ---
+    println!();
+    println!("{}", "[presence]".bold());
+    {
+        let render_str = |section: &str, key: &str, default: &str| match config_lookup(
+            cfg.as_ref(),
+            section,
+            key,
+        )
+        .and_then(|v| v.as_str())
+        {
+            Some(s) => (s.trim().to_string(), PolicySource::ProjectConfig),
+            None => (default.to_string(), PolicySource::Default),
+        };
+        for (key, default) in [
+            ("consumers", "on"),
+            ("away_drain", "headless-both"),
+            ("home_offer", "surface"),
+        ] {
+            let (value, source) = render_str("presence", key, default);
+            PolicyRow { key, value, source }.print();
+        }
+    }
+
+    // --- Workflow hints. trace:STORY-106 (env: AIDA_HINTS) ---
+    println!();
+    println!("{}", "[hints]".bold());
+    {
+        let env = std::env::var("AIDA_HINTS").ok().filter(|s| {
+            matches!(
+                s.trim().to_ascii_lowercase().as_str(),
+                "true" | "1" | "yes" | "on" | "false" | "0" | "no" | "off"
+            )
+        });
+        let configured =
+            config_lookup(cfg.as_ref(), "hints", "workflow_hints").and_then(|v| v.as_bool());
+        let effective = workflow_hints::enabled(Some(project_root));
+        let source = if env.is_some() {
+            PolicySource::Env("AIDA_HINTS")
+        } else if configured.is_some() {
+            PolicySource::ProjectConfig
+        } else {
+            PolicySource::Default
+        };
+        PolicyRow {
+            key: "workflow_hints",
+            value: if effective {
+                "enabled".to_string()
+            } else {
+                "disabled".to_string()
+            },
+            source,
+        }
+        .print();
+    }
+
+    println!();
+    println!(
+        "  {}",
+        "Override any AIDA_* env var per docs/environment-variables.md.".dimmed()
+    );
 }
 
 /// Handle `aida config hints [true|false]` — show or persist the
@@ -113990,5 +114311,63 @@ mod story_582_processing_record_tests {
         assert!(rel.ends_with("20260612T120000Z.md"), "{rel}");
         assert_eq!(agent, "advisor");
         assert_eq!(gb.as_deref(), Some("claude"));
+    }
+}
+
+/// BUG-533: `aida config show` effective-policy renderer helpers.
+#[cfg(test)]
+mod bug_533_config_show_tests {
+    use super::*;
+
+    #[test]
+    fn config_lookup_finds_nested_key() {
+        let cfg: toml::Value = "[telemetry]\nenabled = false\n".parse().unwrap();
+        let v = config_lookup(Some(&cfg), "telemetry", "enabled").and_then(|v| v.as_bool());
+        assert_eq!(v, Some(false));
+    }
+
+    #[test]
+    fn config_lookup_absent_section_is_none() {
+        let cfg: toml::Value = "[other]\nx = 1\n".parse().unwrap();
+        assert!(config_lookup(Some(&cfg), "telemetry", "enabled").is_none());
+        assert!(config_lookup(None, "telemetry", "enabled").is_none());
+    }
+
+    #[test]
+    fn read_project_config_value_missing_file_is_none() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read_project_config_value(dir.path()).is_none());
+    }
+
+    #[test]
+    fn read_project_config_value_parses_existing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[archive]\nauto_after_days = 30\n",
+        )
+        .unwrap();
+        let cfg = read_project_config_value(dir.path()).unwrap();
+        let days =
+            config_lookup(Some(&cfg), "archive", "auto_after_days").and_then(|v| v.as_integer());
+        assert_eq!(days, Some(30));
+    }
+
+    #[test]
+    fn policy_source_labels_distinct() {
+        // Labels carry ANSI color codes; assert the underlying text differs so
+        // a default never reads the same as an env override.
+        assert_ne!(
+            PolicySource::Default.label(),
+            PolicySource::ProjectConfig.label()
+        );
+        assert_ne!(
+            PolicySource::ProjectConfig.label(),
+            PolicySource::GlobalAgents.label()
+        );
+        assert!(PolicySource::Env("AIDA_TELEMETRY")
+            .label()
+            .contains("AIDA_TELEMETRY"));
     }
 }
