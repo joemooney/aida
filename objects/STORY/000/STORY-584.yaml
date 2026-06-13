@@ -18,12 +18,12 @@ description: |-
   6. STANDING-ARTIFACT companion: 'aida list open' is a WORK view; perpetual standing-artifact types (vision, principle, term, constraint, folder, meta) are NOT work and should be excluded from the open-work view by default (they surface via --type / the aida-docs projection). Fixes VIS-1 reading as 'InProgress work'. (May split to its own TASK if it complicates the slice.)
 
   Why: the operator has hit 'I don't want these in aida list open but they are not archived' repeatedly — a legibility keystone. The trigger-bearing deferred tier turns a confusing 'why is this still here?' backlog into a scannable 'primed, returns when X' shelf. Relates: STORY-441 (archive view-flag this clones), the pickability gate (already honors deferred:* tags), [[machinery-glossary]] lifecycle vocabulary.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:49:16.215550754Z
-modified_at: 2026-06-13T02:49:54.886029967Z
+modified_at: 2026-06-13T03:00:15.661651268Z
 req_type: Story
 tags:
 - aida:list
