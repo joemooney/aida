@@ -2378,6 +2378,14 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Defer { .. } | Command::Undefer { .. } => {
+            // STORY-584: defer uses the git-canonical write path.
+            anyhow::bail!(
+                "aida defer/undefer requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
 
         Command::StateSnapshot { .. } => {
             // The finish-state preamble's Spec row needs git-canonical
@@ -7148,6 +7156,96 @@ fn handle_unarchive_command(
     Ok(())
 }
 
+/// `aida defer <SPEC> [--until "<condition>"]` — park a spec as primed /
+/// conditional work, hidden from the default open-work view. Mirrors
+/// `archive_single` but sets the parallel defer view-flag and records the
+/// free-text revisit trigger that distinguishes deferred (prospective) from
+/// archived (filed). Defer does NOT touch the lifecycle state machine and
+/// deliberately carries no terminal-status guard — the whole point is to shelf
+/// live, open backlog. trace:STORY-584 | ai:claude
+fn defer_single(
+    id: &str,
+    until: Option<&str>,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+
+    // Re-deferring an already-deferred spec is allowed — it lets the operator
+    // update the revisit trigger via `--until` without an undefer round-trip.
+    let already = req.deferred;
+    let now = chrono::Utc::now();
+    req.deferred = true;
+    if already {
+        // Preserve the original defer timestamp on a trigger update.
+        if req.deferred_at.is_none() {
+            req.deferred_at = Some(now);
+        }
+    } else {
+        req.deferred_at = Some(now);
+    }
+    // Only overwrite the trigger when one is supplied, so a bare re-defer
+    // keeps the existing condition.
+    if let Some(cond) = until {
+        req.deferred_until = Some(cond.to_string());
+    }
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "defer");
+
+    let verb = if already { "Re-deferred:" } else { "Deferred:" };
+    println!("{} {display_id}", verb.cyan().bold());
+    match req.deferred_until.as_deref() {
+        Some(cond) => println!("  {} {cond}", "Revisit when:".dimmed()),
+        None => println!(
+            "  {} no revisit trigger recorded — add one with `aida defer {display_id} --until \"<condition>\"`",
+            "Note:".dimmed()
+        ),
+    }
+    Ok(())
+}
+
+/// Inverse of `aida defer` — clears the deferred flag + revisit trigger so the
+/// spec reappears in the default views. Mirrors `handle_unarchive_command`.
+/// trace:STORY-584 | ai:claude
+fn handle_undefer_command(
+    id: &str,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    // Honor-both migration: a spec deferred only via a legacy `deferred:*` tag
+    // has no flag to clear — name that so the operator knows to edit the tag.
+    let tag_deferred = req.tags.iter().any(|t| t.starts_with("deferred:"));
+    if !req.deferred {
+        if tag_deferred {
+            anyhow::bail!(
+                "{display_id} is hidden via a legacy `deferred:*` tag, not the deferred flag. \
+                 Remove the tag with `aida edit {display_id} --remove-tag <tag>` to restore it."
+            );
+        }
+        anyhow::bail!(
+            "{display_id} is not deferred — nothing to undefer. \
+             Use `aida defer {display_id}` if you meant to defer it."
+        );
+    }
+    let now = chrono::Utc::now();
+    req.deferred = false;
+    req.deferred_at = None;
+    req.deferred_until = None;
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "undefer");
+    println!("{} {display_id}", "Undeferred:".cyan().bold());
+    Ok(())
+}
+
 /// `aida done <SPEC>` — the newcomer's "I finished it" verb. Marks a spec
 /// Completed, the solo end of the capture → build → done loop. Found running a
 /// novice's first session: there was no `aida done`, and `aida edit --status
@@ -7228,6 +7326,50 @@ fn maybe_print_whats_left_tip(status_filter: Option<&str>, reqs: &[aida_core::Re
             "{}",
             "  Tip: `aida list open` shows just what's left to do.".dimmed()
         );
+    }
+}
+
+/// STORY-584 (criterion 4): in the `--deferred` view, print each spec's revisit
+/// trigger so the operator can scan "what is primed, and what brings each back."
+/// The trigger comes from the `deferred_until` field when set; for rows deferred
+/// only via a legacy `deferred:*` parking tag, fall back to the tag's suffix
+/// (e.g. `deferred:stabilization-first` → "stabilization-first"). Prints nothing
+/// outside the deferred view or when no rows carry a discoverable trigger.
+/// trace:STORY-584 | ai:claude
+fn print_deferred_triggers(deferred_view: bool, reqs: &[aida_core::RequirementSummary]) {
+    if !deferred_view || reqs.is_empty() {
+        return;
+    }
+    // Derive a trigger string for a row: explicit field first, else the
+    // suffix of the first `deferred:*` tag.
+    let trigger_of = |r: &aida_core::RequirementSummary| -> Option<String> {
+        if let Some(cond) = r.deferred_until.as_deref() {
+            if !cond.is_empty() {
+                return Some(cond.to_string());
+            }
+        }
+        r.tags
+            .iter()
+            .find_map(|t| t.strip_prefix("deferred:"))
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+    };
+
+    println!("\n{}", "Revisit triggers:".bold());
+    for r in reqs {
+        let display_id = r
+            .agreed_id
+            .as_deref()
+            .or(r.spec_id.as_deref())
+            .unwrap_or("?");
+        match trigger_of(r) {
+            Some(cond) => println!("  {}  {}", display_id.bold(), cond.dimmed()),
+            None => println!(
+                "  {}  {}",
+                display_id.bold(),
+                "(no trigger — set one with `aida defer <id> --until \"…\"`)".dimmed()
+            ),
+        }
     }
 }
 
@@ -10674,6 +10816,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             sync,
             all,
             archived,
+            deferred,
             json,
             tree,
             show_tags,
@@ -10798,6 +10941,23 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 aida_core::ArchiveFilter::NonArchivedOnly
             };
+            // STORY-584: three-way defer axis, parallel to archive. Default
+            // hides deferred rows (flag set OR `deferred:*`-tagged); `--deferred`
+            // shows only the primed shelf; `--all` shows the union. `--archived`
+            // keeps the defer axis open so the archive audit is complete.
+            // If the user explicitly filters on a `deferred:` tag, opening the
+            // axis is implied — otherwise the default hide would contradict the
+            // tag filter and return nothing. trace:STORY-584 | ai:claude
+            let asked_for_defer_tag = effective_tags
+                .iter()
+                .any(|t| t.starts_with("deferred:") || t.starts_with("deferred*"));
+            let defer = if *all || *archived || asked_for_defer_tag {
+                aida_core::DeferFilter::Both
+            } else if *deferred {
+                aida_core::DeferFilter::DeferredOnly
+            } else {
+                aida_core::DeferFilter::NonDeferredOnly
+            };
             let filter = aida_core::ListFilter {
                 status: effective_status.clone(),
                 req_type: r#type.clone(),
@@ -10807,6 +10967,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 feature: feature.clone(),
                 tags: effective_tags,
                 archive,
+                defer,
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
@@ -10945,6 +11106,45 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     0
                 };
 
+            // STORY-584: parallel count of deferred rows hidden from the default
+            // view, used to render the "(N deferred hidden — pass --deferred …)"
+            // footer nudge so the primed shelf stays discoverable.
+            // trace:STORY-584 | ai:claude
+            let deferred_hidden_count = if matches!(defer, aida_core::DeferFilter::NonDeferredOnly)
+            {
+                let deferred_filter = aida_core::ListFilter {
+                    defer: aida_core::DeferFilter::DeferredOnly,
+                    ..filter.clone()
+                };
+                backend.list_summaries(&deferred_filter)?.len()
+            } else {
+                0
+            };
+
+            // Shared footer nudge for both view axes. Each prints a dimmed,
+            // 2-space-indented line only when rows on that axis were hidden.
+            // trace:STORY-441 trace:STORY-584 | ai:claude
+            let print_hidden_hints = || {
+                if archived_hidden_count > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
+                        )
+                        .dimmed()
+                    );
+                }
+                if deferred_hidden_count > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({deferred_hidden_count} deferred hidden — pass --all or --deferred to see them)"
+                        )
+                        .dimmed()
+                    );
+                }
+            };
+
             // STORY-244: internal JSON output for the TUI launcher's
             // Backlog / History panes. Hidden from --help; schema is
             // internal and may change. Emits the row set straight as
@@ -11004,15 +11204,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if *tree {
                 if reqs.is_empty() {
                     println!("No requirements found.");
-                    if archived_hidden_count > 0 {
-                        println!(
-                            "  {}",
-                            format!(
-                                "({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
-                            )
-                            .dimmed()
-                        );
-                    }
+                    print_hidden_hints();
                     return Ok(());
                 }
                 let store = backend.load()?;
@@ -11094,30 +11286,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                 }
                 println!("\n{} requirements", reqs.len());
-                if archived_hidden_count > 0 {
-                    println!(
-                        "{}",
-                        format!(
-                            "  ({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
-                        )
-                        .dimmed()
-                    );
-                }
+                print_hidden_hints();
+                print_deferred_triggers(*deferred, &reqs);
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
                 return Ok(());
             }
 
             if reqs.is_empty() {
                 println!("No requirements found.");
-                if archived_hidden_count > 0 {
-                    println!(
-                        "  {}",
-                        format!(
-                            "({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
-                        )
-                        .dimmed()
-                    );
-                }
+                print_hidden_hints();
             } else {
                 // Default rendering: one ID column (canonical = agreed_id
                 // when present, else spec_id). Pass --show-origin to
@@ -11274,15 +11451,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                 }
                 println!("\n{} requirements", reqs.len());
-                if archived_hidden_count > 0 {
-                    println!(
-                        "{}",
-                        format!(
-                            "  ({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
-                        )
-                        .dimmed()
-                    );
-                }
+                print_hidden_hints();
+                print_deferred_triggers(*deferred, &reqs);
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
             }
         }
@@ -12984,6 +13154,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // STORY-441: inverse of `aida archive`. trace:STORY-441 | ai:claude
             handle_unarchive_command(id, &backend, store_path)?;
         }
+        Command::Defer { id, until } => {
+            // STORY-584: park a spec on the primed/conditional shelf, hidden
+            // from the default open-work view. trace:STORY-584 | ai:claude
+            defer_single(id, until.as_deref(), &backend, store_path)?;
+        }
+        Command::Undefer { id } => {
+            // STORY-584: inverse of `aida defer`. trace:STORY-584 | ai:claude
+            handle_undefer_command(id, &backend, store_path)?;
+        }
         Command::Done { spec } => {
             // TASK-728: the newcomer's "I finished it" verb. trace:TASK-727
             handle_done_command(spec, &backend, store_path)?;
@@ -12995,6 +13174,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             sync,
             all,
             archived,
+            deferred,
             include_meta,
             ..
         } => {
@@ -13011,10 +13191,20 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 aida_core::ArchiveFilter::NonArchivedOnly
             };
+            // STORY-584: same three-way defer axis as `aida list`. `--archived`
+            // keeps the defer axis open so the archive audit is complete.
+            // trace:STORY-584 | ai:claude
+            let defer = if *all || *archived {
+                aida_core::DeferFilter::Both
+            } else if *deferred {
+                aida_core::DeferFilter::DeferredOnly
+            } else {
+                aida_core::DeferFilter::NonDeferredOnly
+            };
             // Cache-backed FTS5 search (EPIC-1-001 Phase 2). Replaces a
             // full-store load + in-memory substring scan.
             // trace:EPIC-1-001 | ai:claude
-            let mut results = backend.search(query, *limit, archive)?;
+            let mut results = backend.search(query, *limit, archive, defer)?;
             if let Some(s) = status {
                 let needle = s.clone();
                 results.retain(|r| r.status.eq_ignore_ascii_case(&needle));
@@ -13904,6 +14094,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             oneline,
             all,
             archived,
+            deferred,
         } => {
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
@@ -13923,6 +14114,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 aida_core::ArchiveFilter::ArchivedOnly
             } else {
                 aida_core::ArchiveFilter::NonArchivedOnly
+            };
+            // STORY-584: parallel defer axis. `--id` bypasses (single-spec
+            // timeline); `--all` and `--archived` keep it open so those audits
+            // are complete; `--deferred` narrows to the shelf; default hides it.
+            // trace:STORY-584 | ai:claude
+            let defer = if id.is_some() || *all || *archived {
+                aida_core::DeferFilter::Both
+            } else if *deferred {
+                aida_core::DeferFilter::DeferredOnly
+            } else {
+                aida_core::DeferFilter::NonDeferredOnly
             };
             // Build the set of archived spec_ids the caller's archive filter
             // should hide. Cheap: one indexed SELECT. Empty when archive is
@@ -13952,6 +14154,35 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 ),
                 _ => None,
             };
+            // STORY-584: the same two sets on the defer axis. The DeferredOnly
+            // ListFilter honors both the flag and legacy `deferred:*` tags.
+            // trace:STORY-584 | ai:claude
+            let deferred_specs: std::collections::HashSet<String> = match defer {
+                aida_core::DeferFilter::NonDeferredOnly => backend
+                    .list_summaries(&aida_core::ListFilter {
+                        defer: aida_core::DeferFilter::DeferredOnly,
+                        archive: aida_core::ArchiveFilter::Both,
+                        ..Default::default()
+                    })?
+                    .into_iter()
+                    .filter_map(|s| s.spec_id)
+                    .collect(),
+                _ => std::collections::HashSet::new(),
+            };
+            let deferred_only_specs: Option<std::collections::HashSet<String>> = match defer {
+                aida_core::DeferFilter::DeferredOnly => Some(
+                    backend
+                        .list_summaries(&aida_core::ListFilter {
+                            defer: aida_core::DeferFilter::DeferredOnly,
+                            archive: aida_core::ArchiveFilter::Both,
+                            ..Default::default()
+                        })?
+                        .into_iter()
+                        .filter_map(|s| s.spec_id)
+                        .collect(),
+                ),
+                _ => None,
+            };
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
@@ -13968,6 +14199,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 oneline: *oneline,
                 archived_specs,
                 archived_only_specs,
+                deferred_specs,
+                deferred_only_specs,
             };
             history::run(store_path, &opts)?;
         }
@@ -14012,6 +14245,8 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
         | Command::Punt { .. }
         | Command::Archive { .. }
         | Command::Unarchive { .. }
+        | Command::Defer { .. }
+        | Command::Undefer { .. }
         | Command::Rework { .. } => true,
         Command::Queue(cmd) => matches!(
             cmd,

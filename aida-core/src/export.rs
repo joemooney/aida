@@ -336,6 +336,12 @@ pub struct ExportedRequirement {
     /// Archived flag
     #[serde(default)]
     pub archived: bool,
+    /// Deferred view-flag. trace:STORY-584 | ai:claude
+    #[serde(default)]
+    pub deferred: bool,
+    /// Revisit trigger recorded when deferred. trace:STORY-584 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_until: Option<String>,
     /// Child requirements (embedded tree structure)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<ExportedRequirement>,
@@ -495,6 +501,8 @@ fn export_requirement_tree(
         custom_status: req.custom_status.clone(),
         custom_priority: req.custom_priority.clone(),
         archived: req.archived,
+        deferred: req.deferred,
+        deferred_until: req.deferred_until.clone(),
         children,
         external_relationships: external_rels,
     })
@@ -597,6 +605,8 @@ fn import_requirement_recursive(
     new_req.custom_status = exported.custom_status.clone();
     new_req.custom_priority = exported.custom_priority.clone();
     new_req.archived = exported.archived;
+    new_req.deferred = exported.deferred;
+    new_req.deferred_until = exported.deferred_until.clone();
     new_req.created_by = options.created_by.clone();
 
     // Capture the new UUID before adding

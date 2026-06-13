@@ -43,6 +43,13 @@ pub struct HistoryOpts {
     /// Used by `--archived` to narrow the view to the archive itself.
     /// trace:STORY-441 | ai:claude
     pub archived_only_specs: Option<std::collections::HashSet<String>>,
+    /// Spec-IDs currently deferred (flag set OR `deferred:*`-tagged). The
+    /// default `aida history` view hides rows whose spec_id is in this set.
+    /// Empty when `--all` or `--deferred` was passed. trace:STORY-584 | ai:claude
+    pub deferred_specs: std::collections::HashSet<String>,
+    /// When `Some`, only rows whose spec_id is in this set are shown.
+    /// Used by `--deferred` to narrow to the primed shelf. trace:STORY-584 | ai:claude
+    pub deferred_only_specs: Option<std::collections::HashSet<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -324,6 +331,12 @@ fn collect_filtered_events(store_path: &Path, opts: &HistoryOpts) -> Result<(Vec
             Some(only) => only.contains(&e.spec_id),
             None => true,
         })
+        // STORY-584: same shape on the defer axis. trace:STORY-584 | ai:claude
+        .filter(|e| !opts.deferred_specs.contains(&e.spec_id))
+        .filter(|e| match &opts.deferred_only_specs {
+            Some(only) => only.contains(&e.spec_id),
+            None => true,
+        })
         .take(opts.limit)
         .collect();
 
@@ -498,6 +511,16 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         entries.retain(|e| only.contains(&e.spec_id));
     }
 
+    // STORY-584: same shape on the defer axis. trace:STORY-584 | ai:claude
+    let deferred_hidden = {
+        let before = entries.len();
+        entries.retain(|e| !opts.deferred_specs.contains(&e.spec_id));
+        before - entries.len()
+    };
+    if let Some(only) = &opts.deferred_only_specs {
+        entries.retain(|e| only.contains(&e.spec_id));
+    }
+
     // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
     entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
     entries.truncate(opts.limit);
@@ -509,6 +532,15 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
                 "{}",
                 format!(
                     "({archived_hidden} archived hidden — pass --all or --archived to see them)"
+                )
+                .dimmed()
+            );
+        }
+        if deferred_hidden > 0 {
+            eprintln!(
+                "{}",
+                format!(
+                    "({deferred_hidden} deferred hidden — pass --all or --deferred to see them)"
                 )
                 .dimmed()
             );
@@ -581,6 +613,13 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         println!(
             "{}",
             format!("  ({archived_hidden} archived hidden — pass --all or --archived to see them)")
+                .dimmed()
+        );
+    }
+    if deferred_hidden > 0 {
+        println!(
+            "{}",
+            format!("  ({deferred_hidden} deferred hidden — pass --all or --deferred to see them)")
                 .dimmed()
         );
     }

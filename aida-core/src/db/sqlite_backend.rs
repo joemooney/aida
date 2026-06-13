@@ -565,6 +565,11 @@ impl SqliteBackend {
                 // STORY-441: legacy centralized SQLite backend is deprecated
                 // and does not persist archived_at; treat reads as unset.
                 archived_at: None,
+                // STORY-584: legacy centralized SQLite backend is deprecated and
+                // does not persist the deferred view-flag; treat reads as unset.
+                deferred: false,
+                deferred_at: None,
+                deferred_until: None,
                 custom_status,
                 custom_priority,
                 custom_fields,
@@ -1501,6 +1506,10 @@ impl DatabaseBackend for SqliteBackend {
                     archived,
                     // STORY-441: legacy centralized backend — not persisted.
                     archived_at: None,
+                    // STORY-584: legacy centralized backend — not persisted.
+                    deferred: false,
+                    deferred_at: None,
+                    deferred_until: None,
                     custom_status,
                     custom_priority,
                     custom_fields,
