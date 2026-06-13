@@ -17605,5 +17605,13 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-13, operator decision via `aida questions answer`): Rename session list to session conversations (or history) — the historical view gets a self-describing name; leases stays
-clock: 1736
+- id: 019ec1fa-5376-72d0-89d5-856827619a1f
+  target_id: 019ebfbe-2590-7852-91a1-831c897815b9
+  author: aida
+  node_id: '1'
+  lamport: 1737
+  timestamp: 2026-06-13T17:14:28.598359725Z
+  kind: !SetStatus
+    status: Approved
+clock: 1737
 node_id: '1'
