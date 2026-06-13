@@ -17576,5 +17576,13 @@ operations:
       5. EXTEND (ADR-5 endgame): assert every surface-changing spec's interface_changes is reflected in the docs — catches a spec that moved the surface without updating intent. (Gated on interface_changes being populated — STORY-542; forward-only.)
 
       Acceptance: CI fails on an undocumented clap command; no false-positive subcommand WARNs; SPEC-ID leak fails; (later) interface_changes-vs-docs reflection check. On branch cli-manual.
-clock: 1733
+- id: 019ec1ef-641b-7492-ab45-b82be0b7f2b8
+  target_id: 019ebfbd-da99-7b31-9406-5c78d5c2619e
+  author: aida
+  node_id: '1'
+  lamport: 1734
+  timestamp: 2026-06-13T17:02:31.963160960Z
+  kind: !SetStatus
+    status: Approved
+clock: 1734
 node_id: '1'
