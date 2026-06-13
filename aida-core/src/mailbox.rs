@@ -248,6 +248,148 @@ where
     out
 }
 
+/// The unread slice of one agent's inbox: messages strictly newer than its
+/// read-watermark, oldest-first. `None` watermark = never read, so the whole
+/// inbox is unread. Read side of the notice surface — pure so the CLI's
+/// `mailbox notice` / `inbox --unread` and any hook compose over it without
+/// re-deriving the watermark comparison. trace:STORY-585 | ai:claude
+pub fn unread_inbox<'a>(
+    agent: &str,
+    messages: &'a [Message],
+    read_watermark: Option<i64>,
+) -> Vec<&'a Message> {
+    let mark = read_watermark.unwrap_or(i64::MIN);
+    inbox_for(agent, messages)
+        .into_iter()
+        .filter(|m| m.timestamp > mark)
+        .collect()
+}
+
+/// One unread message, flattened for the agent-facing notice: who sent it, a
+/// one-line subject (first non-empty body line, truncated), urgency, and the
+/// thread id to read the rest. trace:STORY-585 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoticeItem {
+    pub id: String,
+    pub from: String,
+    pub thread_id: String,
+    pub subject: String,
+    pub urgent: bool,
+}
+
+/// A capped, identity-scoped unread summary for surfacing into an agent's
+/// context (the `mailbox notice` verb the SessionStart / per-turn hook calls).
+/// `total` is the full unread count across the resolved identities; `shown`
+/// holds at most `cap` items (newest-last, like the inbox); `overflow` is how
+/// many were elided so the notice can say "+N more". `urgent` counts urgent
+/// unread across all of `total`. Empty (`total == 0`) when nothing is unread,
+/// so the caller stays silent. trace:STORY-585 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoticeSummary {
+    pub total: usize,
+    pub urgent: usize,
+    pub overflow: usize,
+    pub shown: Vec<NoticeItem>,
+}
+
+impl NoticeSummary {
+    pub fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+}
+
+/// Default cap on items rendered in a notice — keep the per-turn context
+/// injection bounded; the footer points at `aida mailbox inbox` for the rest.
+pub const NOTICE_DEFAULT_CAP: usize = 5;
+
+/// First non-empty line of `body`, trimmed and truncated to `max` chars (with
+/// an ellipsis when cut). A retracted message has no readable body, so it
+/// renders as a `[withdrawn]` placeholder. trace:STORY-585 | ai:claude
+fn subject_line(m: &Message, max: usize) -> String {
+    if m.retracted {
+        return "[withdrawn]".to_string();
+    }
+    let first = m
+        .body
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+    let mut chars = first.chars();
+    let head: String = chars.by_ref().take(max).collect();
+    if chars.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
+    }
+}
+
+/// Build the unread notice for the union of `identities` (e.g. the shell user
+/// id plus the session role). Messages are deduped by id across identities (a
+/// broadcast is in every identity's inbox but counts once), and each identity's
+/// own watermark gates its unread set — a message is unread if it is past the
+/// watermark of *any* identity that can see it. Ordered oldest-first; `shown`
+/// keeps the newest `cap`. trace:STORY-585 | ai:claude
+pub fn build_notice<'a, I>(
+    identities: I,
+    messages: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+    cap: usize,
+) -> NoticeSummary
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    use std::collections::HashMap;
+    // For each message any identity can see, track the message and the HIGHEST
+    // watermark among its viewing identities. A message is unread iff its
+    // timestamp is past *every* viewer's watermark — equivalently, past the max
+    // — so reading it as ANY identity (which advances that identity's
+    // watermark) clears it. Order-independent. A direct message has one viewer
+    // (its recipient); a broadcast is viewed by every identity.
+    let mut by_id: HashMap<&str, (&Message, i64)> = HashMap::new();
+    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for id in identities {
+        let id = id.trim();
+        if id.is_empty() || !seen_ids.insert(id.to_string()) {
+            continue;
+        }
+        let mark = watermarks.get(id).copied().unwrap_or(i64::MIN);
+        for m in inbox_for(id, messages) {
+            by_id
+                .entry(m.id.as_str())
+                .and_modify(|(_, wm)| *wm = (*wm).max(mark))
+                .or_insert((m, mark));
+        }
+    }
+    let mut unread: Vec<&Message> = by_id
+        .into_values()
+        .filter(|(m, max_wm)| m.timestamp > *max_wm)
+        .map(|(m, _)| m)
+        .collect();
+    unread.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+
+    let total = unread.len();
+    let urgent = unread.iter().filter(|m| m.urgent).count();
+    let overflow = total.saturating_sub(cap);
+    let shown = unread
+        .iter()
+        .skip(overflow) // keep the newest `cap`
+        .map(|m| NoticeItem {
+            id: m.id.clone(),
+            from: m.from.clone(),
+            thread_id: m.thread_id.clone(),
+            subject: subject_line(m, 60),
+            urgent: m.urgent,
+        })
+        .collect();
+    NoticeSummary {
+        total,
+        urgent,
+        overflow,
+        shown,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -484,5 +626,98 @@ mod tests {
         assert_eq!(agents, vec!["advisor"]);
         assert_eq!(rows[0].total, 1);
         assert_eq!(rows[0].unread, 1);
+    }
+
+    // ── STORY-585: the notice/read half ──────────────────────────────────
+
+    #[test]
+    fn unread_inbox_filters_strictly_past_the_watermark() {
+        let msgs = vec![
+            msg("a", "t", "codex", Recipient::Agent("claude".into()), 10),
+            msg("b", "t", "agy", Recipient::Broadcast, 20),
+            msg("c", "t", "codex", Recipient::Agent("claude".into()), 30),
+        ];
+        // Read up to ts=20 → only c (30) is unread; b (20) is NOT (strictly >).
+        let unread: Vec<&str> = unread_inbox("claude", &msgs, Some(20))
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect();
+        assert_eq!(unread, vec!["c"]);
+        // Never read → everything, oldest-first.
+        let all: Vec<&str> = unread_inbox("claude", &msgs, None)
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect();
+        assert_eq!(all, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn build_notice_counts_urgent_and_caps_with_overflow() {
+        let msgs = vec![
+            msg("1", "t", "x", Recipient::Agent("claude".into()), 10),
+            urgent_msg("2", "t", "x", Recipient::Agent("claude".into()), 20),
+            msg("3", "t", "x", Recipient::Agent("claude".into()), 30),
+            msg("4", "t", "x", Recipient::Agent("claude".into()), 40),
+        ];
+        let wm = std::collections::HashMap::new();
+        let n = build_notice(["claude"], &msgs, &wm, 2);
+        assert_eq!(n.total, 4);
+        assert_eq!(n.urgent, 1);
+        assert_eq!(n.overflow, 2);
+        // Keeps the NEWEST 2.
+        let shown: Vec<&str> = n.shown.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(shown, vec!["3", "4"]);
+    }
+
+    #[test]
+    fn build_notice_dedups_broadcast_across_identities_and_uses_max_watermark() {
+        // A broadcast both identities see; joe has read it, advisor has not.
+        // Reading as EITHER clears it → not unread (past the max watermark).
+        let msgs = vec![msg("b", "t", "codex", Recipient::Broadcast, 50)];
+        let mut wm = std::collections::HashMap::new();
+        wm.insert("joe".to_string(), 99i64); // joe read past it
+        wm.insert("advisor".to_string(), 10i64); // advisor has not
+        let n = build_notice(["joe", "advisor"], &msgs, &wm, 5);
+        assert!(
+            n.is_empty(),
+            "a broadcast read by any identity is not unread"
+        );
+
+        // Neither has read it → unread once (deduped), not twice.
+        let wm2 = std::collections::HashMap::new();
+        let n2 = build_notice(["joe", "advisor"], &msgs, &wm2, 5);
+        assert_eq!(n2.total, 1);
+    }
+
+    #[test]
+    fn build_notice_surfaces_role_addressed_mail_invisible_to_the_shell_user() {
+        // A `--to advisor` handoff: shell user "joe" never sees it, but the
+        // session is the advisor — the notice must surface it (the STORY-569
+        // handoff case). trace:STORY-585
+        let msgs = vec![msg(
+            "h",
+            "t",
+            "implementer",
+            Recipient::Agent("advisor".into()),
+            10,
+        )];
+        let wm = std::collections::HashMap::new();
+        let joe_only = build_notice(["joe"], &msgs, &wm, 5);
+        assert!(joe_only.is_empty(), "not in the shell user's inbox");
+        let with_role = build_notice(["joe", "advisor"], &msgs, &wm, 5);
+        assert_eq!(with_role.total, 1);
+        assert_eq!(with_role.shown[0].from, "implementer");
+    }
+
+    #[test]
+    fn build_notice_subject_is_first_nonempty_body_line_truncated() {
+        let mut m = msg("1", "t", "x", Recipient::Broadcast, 10);
+        m.body = "\n  PR ready for review on STORY-585 — please look at the diff and the resolved-design block\nsecond line".to_string();
+        let wm = std::collections::HashMap::new();
+        let n = build_notice(["claude"], &[m], &wm, 5);
+        let subj = &n.shown[0].subject;
+        assert!(subj.starts_with("PR ready for review"));
+        assert!(subj.ends_with('…'), "long subject is truncated: {subj}");
+        assert!(!subj.contains('\n'));
     }
 }
