@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:04.203194099Z
-modified_at: 2026-06-13T01:47:06.134309949Z
+modified_at: 2026-06-13T01:47:47.470813783Z
 req_type: Decision
 tags:
 - batch:repositioning
@@ -69,3 +69,8 @@ comments:
     Structural (where the gate sits), not motive-reading. Anchored by Yegge's own positioning [verified, Beads Best Practices]: 'Everyone is focused on making planning tools, and Beads is an EXECUTION tool… use your favorite planning tool, then translate it into Beads' — the author publicly abdicates the front of the pipeline. SCOPE NOTES for copy: (a) our bind is trace-capture + auto-bump today, gate default-on via STORY-579, history coverage scoped 'since TASK-121' until backfill decision; (b) GT 'no confirmation, ever' needs a source citation before public use (SPIKE-58 confirms). Convergent evidence: branch rescope+ERRATUM AND main's 2026-06-12-beads-gastown-vs-aida.md (independent agent verification — three verified edges: trace binding, lifecycle+history, requirements-category abdication; corrections: typed-graph no longer unique [drop as headline], plain-git claim precise form = 'plain-git YAML substrate vs SQL-DB substrate [embedded Dolt]').
   created_at: 2026-06-13T00:07:31.548265562Z
   modified_at: 2026-06-13T00:07:31.548265562Z
+- id: 019ebea9-eb8e-79d2-8625-1bb1b48dfeac
+  author: joe
+  content: 'PARKED (operator, 2026-06-12): ''I am going to try to stabilize aida before any pivot to bd/gt.'' ADR-4 stays PROPOSED; the SPIKE-58 hands-on gate is DEFERRED, not resolved. The whole EPIC-39 family is tagged deferred:stabilization-first (parked from burndown/intake grooming). REOPEN TRIGGER: operator declares stabilization done (the 2026-05-29 phase rule: clear known bugs → stability → then outward moves). Everything is preserved: branch ''repositioning'' (7 commits, pushed), plan + §13 red-team amendments, rescope + ERRATUM, the canonical front/back wedge on ADR-4, three convergent verification docs. Nothing expires except the competitor SNAPSHOTS — on reopen, re-run the stars/release check before any copy ships (Beads moves fast).'
+  created_at: 2026-06-13T01:47:47.470813783Z
+  modified_at: 2026-06-13T01:47:47.470813783Z
