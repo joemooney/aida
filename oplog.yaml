@@ -17804,5 +17804,13 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-13, operator decision via `aida questions answer`): CLI manual as a nested PART of the Book — One book; CLI manual is a section; PR #861 is already built this way (no rework)
-clock: 1759
+- id: 019ec362-44e9-75e0-ba96-eb9a64d098b0
+  target_id: 019ec281-7d2a-7852-86ac-ac958b5128b6
+  author: aida
+  node_id: '1'
+  lamport: 1760
+  timestamp: 2026-06-13T23:47:37.833726474Z
+  kind: !SetStatus
+    status: Completed
+clock: 1760
 node_id: '1'

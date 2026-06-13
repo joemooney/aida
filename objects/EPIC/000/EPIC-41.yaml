@@ -3,12 +3,12 @@ spec_id: EPIC-41
 agreed_id: EPIC-41
 title: 'AIDA documentation architecture: a unified user-facing mdBook ("The AIDA Book") + a library index + generated glossary + readable diagrams'
 description: 'Operator-surfaced (2026-06-13) building on the CLI manual (EPIC-40). AIDA has 27+ top-level docs + 16 subdirs with no navigable map. Vision: ONE curated user-facing mdBook (the CLI manual becomes a section), a library index mapping ALL docs by audience, the glossary surfaced (generated from aida docs glossary), and the overloaded lifecycle diagram split into ~5 readable ones. Working artifacts (plans/competitive-analysis/positioning/spikes) stay raw — indexed, not in the book. Composes with EPIC-40 (CLI manual = a book section) and ADR-5 (generated-not-hand-maintained). NOT a stabilization blocker — captured for sequencing after stability; near-term cheap slices (library index, glossary surface, diagram split) can land opportunistically.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:06.634484873Z
-modified_at: 2026-06-13T19:47:12.013354444Z
+modified_at: 2026-06-13T23:47:37.810358150Z
 req_type: Epic
 tags:
 - docs
