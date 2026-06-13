@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:51.960195662Z
-modified_at: 2026-06-13T01:48:23.908847259Z
+modified_at: 2026-06-13T01:48:39.553601590Z
 req_type: Story
 tags:
 - deferred:stabilization-first
@@ -21,3 +21,5 @@ relationships:
   target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
   created_at: 2026-06-12T20:43:19.651103352Z
   created_by: joe
+archived: true
+archived_at: 2026-06-13T01:48:39.553601590Z
