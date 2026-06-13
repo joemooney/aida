@@ -3,12 +3,12 @@ spec_id: STORY-606
 agreed_id: STORY-606
 title: 'Docs library index: a categorized map of every doc by audience (the missing top-level orientation)'
 description: 'docs/README.md (or a docs/index) as the LIBRARY MAP: every doc + subdir categorized by audience — user guide / reference / architecture-internal / working-artifact (plans, competitive-analysis, spikes, positioning). The one place a human or agent answers what doc do I want? Cheap, high-value, churn-independent. Distinguishes book-bound user docs from raw working artifacts. Acceptance: every docs/*.md and docs/*/ has a one-line entry under an audience heading; the working-artifact section explicitly says these are not manual material.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:21.721251431Z
-modified_at: 2026-06-13T19:47:14.863698944Z
+modified_at: 2026-06-13T19:54:56.148256657Z
 req_type: Story
 tags:
 - docs
