@@ -48,6 +48,8 @@ mod queue_recover;
 mod remote_activity;
 // trace:STORY-537 | ai:claude — guided origin bootstrap for `aida remote create`/`attach`.
 mod remote_create;
+// trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
+mod research;
 mod reviewer_summary;
 mod rules_sync;
 // trace:STORY-262 | ai:claude
@@ -2347,6 +2349,16 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
+        Command::Research { .. } => {
+            // `aida research` attaches a comment + escalates a decision_request
+            // on a spike; the deprecated SQLite backend persists neither.
+            // trace:STORY-568 | ai:claude
+            anyhow::bail!(
+                "aida research requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
         Command::Punt { .. } => {
             // `aida punt` writes the NeedsAttention status + structured punt
             // metadata; the deprecated SQLite backend does not persist it.
@@ -4045,6 +4057,201 @@ fn handle_questions_command(
             }
         }
     }
+}
+
+/// STORY-568: the research/spike lane. Dispatch a SPIKE to a headless research
+/// agent (reusing the `deep-research` skill), capture the source-grounded
+/// analysis as the deliverable (a dated artifact + a comment on the spike),
+/// and ESCALATE any strategic decision to the questions inbox — never
+/// auto-applied. The agent-able counterpart to the implementer drain; a
+/// spike's "done" is deliverable-produced, not PR-merged.
+///
+/// `--dry-run` composes the prompt + classification + artifact paths and stops
+/// (no spawn, no writes) so the advisor can inspect before paying for a run.
+// trace:STORY-568 | ai:claude
+fn handle_research_command(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    id: &str,
+    dry_run: bool,
+    artifact_dir: &str,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.display_id();
+
+    // Reclassify rather than flatly refuse: a genuinely human-only spike is
+    // not agent-able; everything else is the research lane.
+    if !matches!(req.req_type, aida_core::RequirementType::Spike) {
+        eprintln!(
+            "{} {display_id} is a {} — the research lane is for spikes. Proceeding anyway.",
+            "Note:".yellow(),
+            format!("{:?}", req.req_type).to_lowercase()
+        );
+    }
+    let tags: Vec<String> = req.tags.iter().cloned().collect();
+    if matches!(
+        crate::burndown::classify_spike_lane(&tags),
+        crate::burndown::SpikeLane::HumanOnly
+    ) {
+        anyhow::bail!(
+            "{display_id} is tagged `human-only` — human analysis required; the \
+             research lane does not dispatch it. Remove the tag to make it \
+             agent-able."
+        );
+    }
+
+    // Resolve artifact paths (dated). Body = description + the spike's own
+    // acceptance text already lives in `description` for AIDA specs.
+    let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let project_root = store_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let dir = project_root.join(artifact_dir);
+    let (analysis_path, sidecar_path) =
+        crate::research::research_artifact_paths(&dir, &display_id, &date);
+    let analysis_rel = format!(
+        "{}/{}",
+        artifact_dir.trim_end_matches('/'),
+        analysis_path
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    );
+
+    let prompt = crate::research::build_research_prompt(
+        &display_id,
+        &req.title,
+        &req.description,
+        &analysis_path,
+        &sidecar_path,
+    );
+
+    if dry_run {
+        println!(
+            "{} {display_id} — {}",
+            "Research dispatch:".cyan().bold(),
+            req.title
+        );
+        println!("  lane:     research-lane (agent-able)");
+        println!("  analysis: {}", analysis_path.display());
+        println!("  sidecar:  {}", sidecar_path.display());
+        println!("\n{}", "── research prompt ──".dimmed());
+        println!("{prompt}");
+        println!(
+            "\n{}",
+            "Dry run — nothing spawned or written. Drop --dry-run to dispatch.".dimmed()
+        );
+        return Ok(());
+    }
+
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating artifact dir {}", dir.display()))?;
+
+    // Dispatch the headless research agent. The spawn is the integration
+    // boundary; the pure transforms above/below are unit-tested.
+    println!(
+        "{} {display_id} — dispatching research agent (deep-research, headless)…",
+        "Research:".cyan().bold()
+    );
+    let session_id = Uuid::now_v7().to_string();
+    let log_path = project_root.join(format!(".aida/research/{display_id}-{date}.log"));
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+        .with_label(format!("research:{display_id}"));
+    let status = crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee)
+        .context("spawning headless research agent")?;
+    if !status.success() {
+        anyhow::bail!(
+            "research agent exited with {} — see log {}",
+            status.code().unwrap_or(-1),
+            log_path.display()
+        );
+    }
+
+    // Collect the deliverable. The analysis artifact is mandatory; the sidecar
+    // is optional (informational spikes have no decision to escalate).
+    if !analysis_path.exists() {
+        anyhow::bail!(
+            "research agent did not produce the analysis artifact at {} — see log {}",
+            analysis_path.display(),
+            log_path.display()
+        );
+    }
+    let now = chrono::Utc::now();
+
+    // Attach a provenance-tagged pointer comment so the deliverable is visible
+    // from `aida show` while the full report lives in the dated file.
+    let summary = std::fs::read_to_string(&sidecar_path)
+        .ok()
+        .and_then(|j| crate::research::parse_research_sidecar(&j).ok())
+        .map(|s| s.summary)
+        .unwrap_or_else(|| "Analysis produced (no machine-readable summary).".to_string());
+    req.comments.push(aida_core::Comment {
+        id: Uuid::now_v7(),
+        content: crate::research::provenance_comment(&analysis_rel, &summary),
+        author: "research-agent".to_string(),
+        created_at: now,
+        modified_at: now,
+        parent_id: None,
+        replies: Vec::new(),
+        reactions: Vec::new(),
+    });
+
+    // Escalate the decision (if any) — never auto-apply it. A pending decision
+    // parks the spike from any drain and surfaces in `aida questions`.
+    let mut escalated: Option<aida_core::DecisionRequest> = None;
+    if let Ok(json) = std::fs::read_to_string(&sidecar_path) {
+        if let Ok(sidecar) = crate::research::parse_research_sidecar(&json) {
+            if let Some(dr) = crate::research::sidecar_to_decision_request(&sidecar, now) {
+                if req
+                    .decision_request
+                    .as_ref()
+                    .map(|d| d.is_pending())
+                    .unwrap_or(false)
+                {
+                    eprintln!(
+                        "{} {display_id} already has a pending decision — leaving it; \
+                         the new analysis is attached as a comment.",
+                        "Note:".yellow()
+                    );
+                } else {
+                    req.decision_request = Some(dr.clone());
+                    escalated = Some(dr);
+                }
+            }
+        }
+    }
+
+    // Deliverable-produced = spike "done" (NOT PR-merged). Tag it so the lane
+    // is auditable and the spike reads as research-complete.
+    req.tags.insert("spike:deliverable-produced".to_string());
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+
+    println!(
+        "{} analysis at {}",
+        "✓ deliverable:".green().bold(),
+        analysis_path.display()
+    );
+    println!("  pointer comment attached to {display_id}");
+    if let Some(dr) = escalated {
+        println!(
+            "\n{}",
+            "Decision escalated — answer in your own time:".bold()
+        );
+        print_decision_request(&display_id, &req.title, &dr);
+        println!(
+            "{}",
+            "Answer with `aida questions answer` (or `aida questions` at a TTY).".dimmed()
+        );
+    } else {
+        println!(
+            "{}",
+            "  no strategic decision surfaced — informational deliverable only.".dimmed()
+        );
+    }
+    Ok(())
 }
 
 /// `aida questions sweep` - proactive producer for the async decision inbox.
@@ -12722,6 +12929,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Questions { cmd } => {
             handle_questions_command(cmd.as_ref(), &backend, store_path)?;
+        }
+        Command::Research {
+            id,
+            dry_run,
+            artifact_dir,
+        } => {
+            handle_research_command(&backend, store_path, id, *dry_run, artifact_dir)?;
         }
         // Bare `aida human [--short]` — the `Some(subcommand)` case already
         // returned via the early dispatch above. trace:TASK-746 trace:STORY-563
