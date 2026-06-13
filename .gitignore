@@ -24,7 +24,10 @@ release/
 # isolation dirs and Workflow-tool persisted scripts. Untracked otherwise, they
 # pollute the clean-tree check that scripts/release.sh requires. trace:BUG-467
 .claude/worktrees/
-.claude/workflows/
+# Workflow scripts stay ignored by default, but curated saved-script-lane
+# workflows are checked in explicitly (allow-list below). trace:BUG-509 | ai:claude
+.claude/workflows/*
+!.claude/workflows/panel-review.js
 
 # OS
 .DS_Store
