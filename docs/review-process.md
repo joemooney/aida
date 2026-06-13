@@ -83,6 +83,16 @@ Two different jobs, easy to conflate:
   the implementer couldn't decide. It resolves the decision or escalates; it is
   not the code-review gate.
 
+**Fork-from-live is not watch-only.** The in-drain advisor tier **forks-from-live
+when a live advisor is registered** (`advisor::plan_fork` → `AdvisorPass::Fork` —
+it copy-resumes the registered session's transcript so it inherits your context,
+~$0.03 warm) and **cold-boots only as the fallback** when no live advisor exists
+(`AdvisorPass::ColdBoot`, persistent substrate only). So fork-from-live (SPIKE-11)
+is used by **both** the in-drain escalation tier *and* `aida advisor watch`;
+cold-boot is the no-live-advisor fallback, not the in-drain default. (The
+"both runs fire" double-verdict is **calibration-mode only** — a shadow fork
+beside the cold-boot driver — not normal operation.)
+
 When a reviewer's verdict conflicts with the advisor's intuition on whether to
 merge, **trust the reviewer** — it read the code; the advisor read the commit
 messages.
@@ -114,8 +124,9 @@ is a burndown candidate.
 
 **Optimistic-by-default, demoted-on-discovery.** A low-risk item that turns out
 non-trivial does not silently merge. The headless implementer **punts** (parks
-`NeedsAttention`) → the cold-boot advisor tier tries to resolve → if it can't,
-it escalates to the human. The `/aida-fasttrack` skill encodes the same rule for
+`NeedsAttention`) → the advisor tier (fork-from-live if a live advisor is
+registered, else cold-boot) tries to resolve → if it can't, it escalates to the
+human. The `/aida-fasttrack` skill encodes the same rule for
 the interactive path ("punt out of the lane if it turns out non-trivial").
 
 **The honest gap.** The *only* thing distinguishing "safe to fasttrack" from
