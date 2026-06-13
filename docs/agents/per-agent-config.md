@@ -25,7 +25,7 @@ default_flags = ["--ask-for-approval=never", "--sandbox=danger-full-access"]
 default_flags = []
 ```
 
-## Faithful launchers + the uniform bypass knob (STORY-495)
+## Faithful launchers + posture knobs
 
 By default, every interactive launcher is *faithful* — it spawns the underlying
 tool with that tool's **native** permission/sandbox posture and injects nothing.
@@ -42,6 +42,20 @@ knob:
 [agents]
 bypass = true        # user base ~/.aida/agents.toml; project .aida/agents.toml overrides
 ```
+
+To opt into contained Claude Code launches, use:
+
+```toml
+[agents]
+contained = true
+```
+
+Contained mode is mutually exclusive with `bypass`. It launches Claude with
+Claude Code's native Bash sandbox enabled, hard-fails if the sandbox is
+unavailable, disables unsandboxed command retry, auto-allows project-relative
+edits only, and denies known destructive Bash commands. AIDA uses the session
+lease worktree as the write boundary; v1 does not build OS-container
+infrastructure.
 
 When `bypass = true` (and the launch has no more-specific override), each
 launcher injects that tool's appropriate bypass flag:
@@ -62,8 +76,9 @@ over the native default:
 2. `aida queue work` only: `AIDA_PERMISSION_MODE` env, then `.aida/config.toml [behavior] permission_mode`
 3. `--no-default-flags` (skips agents.toml entirely → native)
 4. Per-tool `[agents.<tool>] default_flags` (overrides the knob for that tool)
-5. `[agents] bypass = true` (uniform knob → each tool's bypass flag)
-6. Otherwise → native posture (nothing injected)
+5. `[agents] contained = true` (Claude strict sandbox posture)
+6. `[agents] bypass = true` (uniform knob → each tool's bypass flag)
+7. Otherwise → native posture (nothing injected)
 
 The first time an interactive Claude launch lands on the native default, AIDA
 prints a one-time pointer to this knob (suppressed thereafter via a marker under

@@ -22,9 +22,16 @@
 #   3. the agent's native default (faithful)
 # Merge: `~/.aida/agents.toml` is the base; this project file overrides it.
 # Leave it off unless every launch in this project is trusted to run unattended.
+#
+# Contained posture (mutually exclusive with bypass). This launches Claude
+# with native strict Bash sandboxing and destructive-command deny rules, using
+# the AIDA session lease worktree as the write boundary. v1 uses Claude Code's
+# native controls; it does not build container infrastructure.
+# contained = false
 
 # [agents]
 # bypass = false
+# contained = false
 
 # [agents.claude]
 # default_flags = []
