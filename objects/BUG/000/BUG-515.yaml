@@ -3,12 +3,12 @@ spec_id: BUG-515
 agreed_id: BUG-515
 title: 'origin/main build break: handle_research_command passes 4 args to 5-arg spawn_claude_headless (STORY-568 × STORY-567 merge collision)'
 description: 'origin/main HEAD (b33f0763e) does not compile: aida-cli/src/main.rs handle_research_command (STORY-568, PR #805) calls session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee) with 4 args, but STORY-567 (PR #807, ''contained Claude launch posture'') added a 5th ''contained: bool'' parameter. Both merged; the serial rebase did not reconcile the new call site. cargo build -p aida-cli fails E0061. Fix: pass contained=false at that call site (a deep-research dispatch is a standalone headless agent, not a contained-worktree launch). This is the ''several agents touch main.rs'' hazard — a sibling PR added a param while another added a caller. Blocks all branch work off main.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:05:32.545085548Z
-modified_at: 2026-06-13T03:29:07.792579385Z
+modified_at: 2026-06-13T03:29:08.776613446Z
 req_type: Bug
 tags:
 - aida:research
