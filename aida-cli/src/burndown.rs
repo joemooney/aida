@@ -75,6 +75,37 @@ pub(crate) fn parking_tag(tags: &[String]) -> Option<String> {
     None
 }
 
+/// STORY-568: which lane a SPIKE belongs in. A spike's deliverable is an
+/// analysis + decision, NOT a mergeable PR, so it never enters the implementer
+/// fan-out — but "not for the code drain" is three distinct things the old
+/// gate flattened into a single "human-only" label:
+///   - `Research`     — agent-able; dispatch to the research lane (`aida research`).
+///   - `NeedsDecision`— the research is done / not needed; a human must pick.
+///   - `HumanOnly`    — genuinely requires a human to do the analysis (rare).
+/// Tags drive the split; the default for an untagged spike is `Research`
+/// (most spikes are research the operator wrongly believed needed a human).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SpikeLane {
+    Research,
+    NeedsDecision,
+    HumanOnly,
+}
+
+/// Classify a spike into its lane from its tags. `human-only` wins over
+/// `needs-decision` (most specific human gate first); everything else is the
+/// agent-able `Research` default. Matched case-insensitively.
+// trace:STORY-568 | ai:claude
+pub(crate) fn classify_spike_lane(tags: &[String]) -> SpikeLane {
+    let has = |name: &str| tags.iter().any(|t| t.trim().eq_ignore_ascii_case(name));
+    if has("human-only") {
+        SpikeLane::HumanOnly
+    } else if has("needs-decision") {
+        SpikeLane::NeedsDecision
+    } else {
+        SpikeLane::Research
+    }
+}
+
 /// The pickability gate. READY iff the spec is bounded (not an epic),
 /// decision-free, unblocked, and not parking-tagged. Exclusions are ordered
 /// cheapest/broadest first so the parked reason names the most fundamental
@@ -90,6 +121,21 @@ pub(crate) fn classify(c: &BurndownCandidate) -> Pickability {
     }
     if c.has_unsatisfied_blocker {
         return Pickability::Parked("blocked by an unsatisfied dependency (BlockedBy)".to_string());
+    }
+    // STORY-568: a spike is never an implementer-fan-out candidate (no PR
+    // lifecycle), but name the precise lane instead of the old flat "human-
+    // only" — agent-able research is dispatched, not human-gated.
+    if c.req_type.eq_ignore_ascii_case("spike") {
+        return Pickability::Parked(match classify_spike_lane(&c.tags) {
+            SpikeLane::Research => {
+                "spike (research-lane) — dispatch to a research agent via `aida research <ID>`"
+                    .to_string()
+            }
+            SpikeLane::NeedsDecision => {
+                "spike (needs-decision) — escalate the call via `aida questions`".to_string()
+            }
+            SpikeLane::HumanOnly => "spike (human-only) — human analysis required".to_string(),
+        });
     }
     if let Some(tag) = parking_tag(&c.tags) {
         return Pickability::Parked(format!("tagged `{tag}`"));
@@ -1111,6 +1157,64 @@ mod tests {
             )),
             Pickability::Ready
         );
+    }
+
+    // STORY-568: spikes are parked from the implementer fan-out, but with a
+    // precise lane reason — never the old flat "human-only" for agent-able
+    // research.
+    #[test]
+    fn untagged_spike_is_research_lane_not_human_only() {
+        match classify(&cand("SPIKE-1", "spike", &[], false, false)) {
+            Pickability::Parked(r) => {
+                assert!(r.contains("research-lane"), "got {r:?}");
+                assert!(
+                    r.contains("aida research"),
+                    "names the dispatch path: {r:?}"
+                );
+                assert!(!r.to_lowercase().contains("human-only"), "got {r:?}");
+            }
+            other => panic!("a spike should park, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn spike_lane_split_by_tag() {
+        assert_eq!(classify_spike_lane(&[]), SpikeLane::Research);
+        assert_eq!(
+            classify_spike_lane(&["needs-supervised-build".into()]),
+            SpikeLane::Research
+        );
+        assert_eq!(
+            classify_spike_lane(&["needs-decision".into()]),
+            SpikeLane::NeedsDecision
+        );
+        assert_eq!(
+            classify_spike_lane(&["Human-Only".into()]),
+            SpikeLane::HumanOnly
+        );
+        // human-only is the most specific human gate and wins the tie.
+        assert_eq!(
+            classify_spike_lane(&["needs-decision".into(), "human-only".into()]),
+            SpikeLane::HumanOnly
+        );
+    }
+
+    #[test]
+    fn needs_decision_spike_parks_as_decision_lane() {
+        match classify(&cand("SPIKE-2", "spike", &["needs-decision"], false, false)) {
+            Pickability::Parked(r) => assert!(r.contains("needs-decision"), "got {r:?}"),
+            other => panic!("expected Parked, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn spike_with_pending_decision_reports_the_pending_question_first() {
+        // Research already escalated -> the pending-decision reason (more
+        // fundamental) wins over the lane reason.
+        match classify(&cand("SPIKE-3", "spike", &[], false, true)) {
+            Pickability::Parked(r) => assert!(r.contains("pending decision"), "got {r:?}"),
+            other => panic!("expected Parked, got {other:?}"),
+        }
     }
 
     #[test]
