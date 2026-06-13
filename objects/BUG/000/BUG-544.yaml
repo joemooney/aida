@@ -1,0 +1,19 @@
+id: 019ec368-b682-7643-8825-bcb27cdeba1a
+spec_id: BUG-544
+agreed_id: BUG-544
+title: aida human counts ALL findings (17) as 'awaiting triage' while aida findings list shows 0 — inflated count + bogus 'N open items' total
+description: 'Operator hit (2026-06-13): ''aida human'' shows ''23 open items need a decision, review, or triage'' and a ''triage-findings — 17 findings awaiting triage'' bucket, but ''aida findings list'' says ''No findings awaiting triage'' (the 17 are resolved/escalated/decision records, e.g. the ''2 resolved · 2 escalated'' advisor-decisions). aida human''s findings bucket (aida-cli/src/main.rs ~6835, comment claims ''reuses aida findings list query'') counts the WRONG set — all finding rows, not only AWAITING-TRIAGE ones — so it both shows a phantom 17 AND inflates the top-line ''N open items'' total (4 ungroomed + 2 umbrella + 17 phantom = 23; real = 6). Fix: aida human''s findings count must use the SAME awaiting-triage predicate as ''aida findings list'' (exclude resolved/escalated/decided). Add a regression: aida human findings-count == aida findings list awaiting-count. trace:relates:BUG-535 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:54:40.130287050Z
+modified_at: 2026-06-13T23:54:40.130287050Z
+req_type: Bug
+tags:
+- aida:findings
+- aida:human
+- cli-consistency
+- from-friction
+- papercut
+- relates:BUG-535
