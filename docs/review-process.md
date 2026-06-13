@@ -1,6 +1,6 @@
 # Review process — who reviews, by execution mode
 
-<!-- trace:STORY-553 trace:STORY-587 trace:STORY-522 | ai:claude -->
+<!-- trace:STORY-553 trace:STORY-587 trace:STORY-522 trace:STORY-569 | ai:claude -->
 
 Every code change in AIDA is reviewed by **a different entity than the one that
 wrote it**. That invariant never changes. What *does* change — by execution
@@ -138,6 +138,41 @@ default.
 
 The trade is explicit: **interactive = better decisions, headless = better
 throughput.** Pick by the cost of a missed defect, not by what's fastest.
+
+## How completion reaches review — the handoff loop
+
+A finished implementation has to *reach* a reviewer. How it does depends on the
+finish mode:
+
+- **default `aida queue work`** — the session **waits for you** (Ctrl+D); you
+  drive the exit and relay the PR. No handoff is filed.
+- **`--zen`** — the session **auto-exits on a clean finish** and **auto-files a
+  review brief to the advisor's mailbox** (STORY-569) — no clipboard. It still
+  pauses on design forks (you decide), and it does *not* review or merge.
+- **`--no-human` / `--auto-complete`** — the orchestrator runs the reviewer
+  phase itself (cold-boot) and merges; you see only escalations.
+
+**The autodetect loop** (in assembly) chains those into hands-off completion:
+
+```
+--zen clean finish ──(STORY-569)──▶ review brief in advisor mailbox
+        │
+        ├──(STORY-585, read-side)──▶ surfaced into a live advisor session's context
+        │
+        └──(STORY-586 `aida advisor watch`)──▶ if you're away, a forked advisor
+                                                reads the mailbox and acts:
+                                                merges the bounded, ESCALATES the careful
+```
+
+When all three are live *and* `aida advisor watch` is running, completion →
+review flows without a human relaying it. Two invariants the loop preserves:
+
+- **Keystone/careful PRs escalate, never auto-merge** — even inside the loop.
+  The watch-fork is scoped to mechanical-work-plus-escalate, so a careful PR
+  surfaces to the human. The loop removes *detection* toil, not *judgment*.
+- **It needs `aida advisor watch` running** for the away case. Nothing
+  autodetects on its own — `aida away` alone leaves handoffs sitting in the
+  mailbox until a session reads them.
 
 ## Resolving decisions, not code — the questions inbox
 
