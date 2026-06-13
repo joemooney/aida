@@ -14240,6 +14240,75 @@ fn create_agent_brief(
     Ok(path)
 }
 
+/// STORY-569: does the agent's mailbox already hold a PENDING brief for this
+/// spec? An ack renames the file to `*.md.acked`, so a pending brief is a
+/// plain `.md` whose name starts with `<SPEC>-` (the [`create_agent_brief`]
+/// naming scheme). Keeps the zen-finish handoff idempotent — the finish gate
+/// can be consulted more than once per checkpoint without double-filing.
+// trace:STORY-569 | ai:claude
+fn pending_brief_exists(project_root: &std::path::Path, agent: &str, spec_id: &str) -> bool {
+    let dir = project_root.join(".aida").join("agent-briefs").join(agent);
+    let prefix = format!("{}-", spec_id.to_ascii_uppercase());
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return false;
+    };
+    entries.flatten().any(|e| {
+        let name = e.file_name().to_string_lossy().to_string();
+        name.to_ascii_uppercase().starts_with(&prefix) && name.ends_with(".md")
+    })
+}
+
+/// STORY-569: the clean-finish build→review handoff. When a standalone
+/// `--zen` session finishes with an open PR on its lease branch, file a
+/// pickup brief to the advisor's mailbox (`.aida/agent-briefs/<agent>/`)
+/// carrying the spec id, the PR number/url, and the pointer to review
+/// against the spec's resolved-design block — so the reviewing session
+/// learns about the PR through the substrate, never an operator relay.
+///
+/// Returns `Ok(None)` when there is nothing to do: the handoff is disabled
+/// (`[zen] review_brief_agent = ""`), the lease has no open PR (or the
+/// forge is unreachable — fail open, a notify must never block a finish),
+/// or a pending brief for the spec already sits in the mailbox
+/// (idempotent). Reuses the existing brief writer + `.pending` sentinel;
+/// nothing reinvented. trace:STORY-569 | ai:claude
+fn file_zen_review_brief(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> Result<Option<(String, std::path::PathBuf)>> {
+    let Some(agent) = read_zen_review_brief_agent(project_root) else {
+        return Ok(None);
+    };
+    let spec_id = lease.scope.trim().to_string();
+    if spec_id.is_empty() {
+        return Ok(None);
+    }
+    let crate::forge::ChangeLookup::Found(change) =
+        change_lookup_for_branch(project_root, &lease.branch)
+    else {
+        return Ok(None);
+    };
+    if pending_brief_exists(project_root, &agent, &spec_id) {
+        return Ok(None);
+    }
+    let store = load_store_for_lookup(project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {}",
+            project_root.display()
+        )
+    })?;
+    let note = format!(
+        "PR #{} is ready for review: {}\n\
+         Review the diff against {}'s acceptance criteria and resolved-design block \
+         (`aida show {}`), then ack this brief.",
+        change.id, change.url, spec_id, spec_id
+    );
+    let path = create_agent_brief(project_root, &store, &agent, &spec_id, Some(&note), None)?;
+    // Urgent-path sentinel so the advisor's `aida status` surfaces it
+    // without waiting on a mailbox poll (the `--notify` mechanic).
+    add_pending_brief(project_root, &agent, &path)?;
+    Ok(Some((agent, path)))
+}
+
 fn validate_brief_agent(agent: &str) -> Result<&str> {
     let agent = agent.trim();
     if agent.is_empty() {
@@ -16320,6 +16389,132 @@ fn init_intake_config_section() -> &'static str {
 }
 
 #[cfg(test)]
+mod story_569_review_brief_tests {
+    use super::*;
+
+    fn write_config(root: &std::path::Path, body: &str) {
+        let dir = root.join(".aida");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("config.toml"), body).unwrap();
+    }
+
+    /// trace:STORY-569 | ai:claude — default advisor; empty string disables;
+    /// explicit value wins; unparseable TOML falls back to the default.
+    #[test]
+    fn review_brief_agent_default_disable_and_override() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // No config at all → the advisor default.
+        assert_eq!(
+            read_zen_review_brief_agent(root),
+            Some("advisor".to_string())
+        );
+
+        // Config without the key → still the default.
+        write_config(root, "[zen]\nauto_exit = true\n");
+        assert_eq!(
+            read_zen_review_brief_agent(root),
+            Some("advisor".to_string())
+        );
+
+        // Explicit empty string → handoff disabled.
+        write_config(root, "[zen]\nreview_brief_agent = \"\"\n");
+        assert_eq!(read_zen_review_brief_agent(root), None);
+
+        // Explicit target wins.
+        write_config(root, "[zen]\nreview_brief_agent = \"codex\"\n");
+        assert_eq!(read_zen_review_brief_agent(root), Some("codex".to_string()));
+
+        // Unparseable TOML fails open to the default.
+        write_config(root, "[zen\nnot toml");
+        assert_eq!(
+            read_zen_review_brief_agent(root),
+            Some("advisor".to_string())
+        );
+    }
+
+    /// trace:STORY-569 | ai:claude — only an unacked `.md` counts as pending;
+    /// acked briefs (`.md.acked`) and other specs' briefs don't, and the
+    /// spec match is case-insensitive (brief filenames carry the canonical
+    /// uppercase id).
+    #[test]
+    fn pending_brief_exists_counts_only_unacked_md() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // No mailbox dir at all.
+        assert!(!pending_brief_exists(root, "advisor", "STORY-569"));
+
+        let dir = root.join(".aida").join("agent-briefs").join("advisor");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Acked brief only → not pending.
+        std::fs::write(dir.join("STORY-569-20260612T000000Z.md.acked"), "x").unwrap();
+        assert!(!pending_brief_exists(root, "advisor", "STORY-569"));
+
+        // Another spec's pending brief → not ours.
+        std::fs::write(dir.join("STORY-570-20260612T000000Z.md"), "x").unwrap();
+        assert!(!pending_brief_exists(root, "advisor", "STORY-569"));
+
+        // A pending brief for the spec → found, case-insensitively.
+        std::fs::write(dir.join("STORY-569-20260612T000001Z.md"), "x").unwrap();
+        assert!(pending_brief_exists(root, "advisor", "STORY-569"));
+        assert!(pending_brief_exists(root, "advisor", "story-569"));
+    }
+
+    /// trace:STORY-569 | ai:claude — a disabled target short-circuits before
+    /// any forge/store work, and an empty lease scope files nothing.
+    #[test]
+    fn file_zen_review_brief_short_circuits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        let lease = |scope: &str| SessionLease {
+            id: "zen001".into(),
+            scope: scope.into(),
+            slug: scope.to_lowercase(),
+            owner: "tester".into(),
+            worktree_path: root.join("wt"),
+            branch: "story-569".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+        };
+
+        // Handoff disabled → None, no side effects.
+        write_config(root, "[zen]\nreview_brief_agent = \"\"\n");
+        assert!(matches!(
+            file_zen_review_brief(root, &lease("STORY-569")),
+            Ok(None)
+        ));
+
+        // Empty scope → None (nothing to brief on).
+        write_config(root, "[zen]\nreview_brief_agent = \"advisor\"\n");
+        assert!(matches!(
+            file_zen_review_brief(root, &lease("  ")),
+            Ok(None)
+        ));
+
+        assert!(
+            !root.join(".aida").join("agent-briefs").exists(),
+            "short-circuit paths must not create mailbox state"
+        );
+    }
+}
+
+#[cfg(test)]
 mod task_760_intake_config_section_tests {
     use super::*;
 
@@ -16992,6 +17187,30 @@ fn read_zen_auto_exit(project_root: &std::path::Path) -> bool {
 fn zen_pause_always_in_force(project_root: &std::path::Path) -> bool {
     std::env::var(zen::ZEN_PAUSE_ALWAYS_ENV).as_deref() == Ok("1")
         || !read_zen_auto_exit(project_root)
+}
+
+/// STORY-569: read `[zen] review_brief_agent` from `.aida/config.toml` — the
+/// mailbox target for the clean-finish build→review handoff. Missing config /
+/// key / unparseable TOML → the default `advisor`. An explicitly empty string
+/// disables the handoff. trace:STORY-569 | ai:claude
+fn read_zen_review_brief_agent(project_root: &std::path::Path) -> Option<String> {
+    let default = || Some("advisor".to_string());
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return default();
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return default();
+    };
+    match value
+        .get("zen")
+        .and_then(|t| t.get("review_brief_agent"))
+        .and_then(|v| v.as_str())
+    {
+        None => default(),
+        Some(s) if s.trim().is_empty() => None,
+        Some(s) => Some(s.trim().to_string()),
+    }
 }
 
 /// STORY-441: opt-out env var matching the `AIDA_AUTO_BUMP` shape.
@@ -99920,6 +100139,38 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
                 );
             } else {
                 println!("{}", verdict.decision_word());
+            }
+            // STORY-569: on a CLEAN finish — auto-exit, or a pause only
+            // because the operator elected `--pause-always` — hand the
+            // just-opened PR to the advisor through the agent mailbox.
+            // This lives in the gate (not skill text) so the finish
+            // sequence is finish → PR → review brief → exit by
+            // construction, and the build→review handoff never falls back
+            // to an operator relay. A needs-human / punt pause skips: the
+            // operator is actively in the loop and the PR may still
+            // change. Fail-open: a notify failure must never block the
+            // finish decision. trace:STORY-569 | ai:claude
+            let clean_finish = matches!(
+                verdict,
+                zen::ZenFinish::AutoExit | zen::ZenFinish::Pause(zen::FinishPause::PauseAlways)
+            );
+            if clean_finish {
+                if let Some(l) = lease.as_ref() {
+                    match file_zen_review_brief(&project_root, l) {
+                        Ok(Some((agent, path))) => eprintln!(
+                            "  {} review brief filed to the {} mailbox: {}",
+                            "ⓘ".cyan(),
+                            agent.cyan(),
+                            path.display()
+                        ),
+                        Ok(None) => {}
+                        Err(e) => eprintln!(
+                            "  {} could not file the review brief ({e}) — \
+                             hand the PR to your reviewer manually",
+                            "⚠".yellow().bold()
+                        ),
+                    }
+                }
             }
             Ok(())
         }

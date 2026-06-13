@@ -642,6 +642,18 @@ substrate gate — do **not** decide by feel:
 aida zen finish        # prints `auto-exit` or `pause`
 ```
 
+On a CLEAN finish (`auto-exit`, or a `pause` that fired *only* because of
+`--pause-always`), `aida zen finish` also files a **review brief** to the
+advisor's mailbox (`.aida/agent-briefs/<advisor>/`) carrying the spec, the
+PR number, and the pointer to review against — so the reviewing session
+learns about the PR through the substrate, never an operator copy-paste. It
+prints `ⓘ review brief filed to the <advisor> mailbox: …` to stderr when it
+does. The target is `[zen] review_brief_agent` in `.aida/config.toml`
+(default `advisor`; set to `""` to disable). The handoff is idempotent (it
+skips when a pending brief for the spec already exists) and fail-open (a
+notify hiccup never blocks the finish). You do **not** run `aida brief`
+yourself — the gate does it.
+
 - **`auto-exit`** — a CLEAN finish: this session never paused for the
   operator, raised no punt, and `--pause-always` / `[zen] auto_exit = false`
   is not set. There is no decision left for a human, so **do not render the
@@ -651,7 +663,7 @@ aida zen finish        # prints `auto-exit` or `pause`
   Print the lead-in, then run `aida session end` (see the cleanup block
   below) and tell the user the worktree + lease are released:
 
-  PR-<N> opened: <url>. Review story filed (step 11). Clean finish — auto-ending this session (no human needed).
+  PR-<N> opened: <url>. Review story filed (step 11); review brief sent to the advisor mailbox. Clean finish — auto-ending this session (no human needed).
 
 - **`pause`** — a HUMAN-NEEDED finish (this session marked itself
   human-needed via `aida zen needs-human`, or raised a punt, or
