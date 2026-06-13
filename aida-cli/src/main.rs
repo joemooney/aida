@@ -73828,6 +73828,15 @@ fn resolve_burndown_sets(
         if req.archived {
             continue;
         }
+        // Deferred specs are parked/conditional work — hidden from the default
+        // active view (STORY-584), so they must not pollute the burndown
+        // ready/awaiting/parked sets either. Without this, a `aida defer`d spec
+        // (deferred:true in its YAML) still showed up under "awaiting advisor
+        // sign-off" in `burndown plan` — the archived filter above had no defer
+        // sibling. trace:BUG-537 | ai:claude
+        if req.deferred {
+            continue;
+        }
         if norm(&req.status.to_string()) != want_status {
             continue;
         }
