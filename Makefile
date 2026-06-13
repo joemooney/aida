@@ -5,7 +5,7 @@
         cli-remote gui-remote run-cli run-gui run-server run-server-force \
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
-        docs proto fmt lint check \
+        docs docs-build book book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates \
         docker-build docker-up docker-up-d docker-down docker-shell \
@@ -267,6 +267,18 @@ docs: ## Generate and open documentation
 
 docs-build: ## Generate documentation without opening
 	cargo doc --workspace --no-deps
+
+# trace:STORY-608 — the AIDA Book's Glossary chapter is GENERATED from
+# `aida docs glossary`, never hand-maintained (ADR-5). Regenerate it, then
+# build the mdBook.
+book-glossary: ## Regenerate the AIDA Book's Glossary chapter from `aida docs glossary`
+	bash docs/cli/generate-glossary.sh
+
+book: book-glossary ## Build the AIDA Book (mdBook) — regenerates the Glossary chapter first
+	mdbook build docs/cli
+
+book-serve: book-glossary ## Serve the AIDA Book locally with live reload (regenerates the Glossary first)
+	mdbook serve docs/cli --open
 
 user-guide: cli ## Open user guide in browser
 	./target/debug/aida user-guide
