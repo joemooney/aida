@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T04:45:14.138395370Z
-modified_at: 2026-06-12T04:45:14.138395370Z
+modified_at: 2026-06-13T02:21:04.152888494Z
 req_type: Task
 tags:
 - aida:doctor
@@ -32,3 +32,12 @@ tags:
 - needs-decision
 - noise-reduction
 - papercut
+comments:
+- id: 019ebec8-6318-7183-8f90-717bf41ca26a
+  author: mcp
+  content: |-
+    Codex opened PR #806 for advisor review: https://github.com/joemooney/aida/pull/806
+
+    Implemented completed-without-commit noise reduction: non-code requirement classes are excluded, default output shows recent uncorroborated completions and collapses older uncorroborated findings to a count, and --all expands the historical tail. Verification passed after rebasing onto latest origin/main: cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli. Not self-merged.
+  created_at: 2026-06-13T02:21:04.152884985Z
+  modified_at: 2026-06-13T02:21:04.152884985Z
