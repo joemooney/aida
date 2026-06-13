@@ -2271,6 +2271,10 @@ pub enum DoctorCommand {
         /// stale-remote-branches, OBE-briefs.
         category: String,
 
+        /// Show older completed-without-commit findings individually.
+        #[clap(long)]
+        all: bool,
+
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
@@ -2290,6 +2294,10 @@ pub enum DoctorCommand {
         /// Permit riskier destructive fixes such as branch deletion.
         #[clap(long)]
         force: bool,
+
+        /// Show older completed-without-commit findings individually.
+        #[clap(long)]
+        all: bool,
 
         /// Emit machine-readable JSON.
         #[clap(long)]
@@ -6466,6 +6474,10 @@ pub enum Command {
         /// Permit riskier destructive fixes such as branch deletion.
         #[clap(long)]
         force: bool,
+
+        /// Show older completed-without-commit findings individually.
+        #[clap(long)]
+        all: bool,
 
         /// Exempt specs completed before this point from the
         /// completed-without-commit integrity check (a git ref/tag whose
