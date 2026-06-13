@@ -250,6 +250,10 @@ pub(crate) enum FinishPause {
     /// `--pause-always` / `[zen] auto_exit = false` — the operator wants to
     /// drive grab-next by hand.
     PauseAlways,
+    /// Operator presence explicitly says the human is at the keyboard. This is
+    /// advisory: away/no-opinion clean finishes still auto-exit, and integrity
+    /// gates above this still pause.
+    OperatorHome,
 }
 
 impl ZenFinish {
@@ -270,22 +274,38 @@ impl ZenFinish {
             ZenFinish::Pause(FinishPause::NeedsHuman) => "needs-human",
             ZenFinish::Pause(FinishPause::Punt) => "punt",
             ZenFinish::Pause(FinishPause::PauseAlways) => "pause-always",
+            ZenFinish::Pause(FinishPause::OperatorHome) => "operator-home",
         }
     }
 }
 
+/// Advisory operator-presence input for the finish checkpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FinishPresence {
+    /// No presence file or unreadable presence state: preserve pre-presence
+    /// clean-finish behavior.
+    NoOpinion,
+    /// Effective `away`: bias clean finishes toward auto-exit.
+    Away,
+    /// Effective `home`: a soft reason to pause for operator handoff.
+    Home,
+}
+
 /// Pure decision: given whether this is a corroborated zen session, whether it
 /// marked itself human-needed, whether an open punt for the spec was raised
-/// this session, and whether pause-always is in force, return the finish
-/// verdict. Split out from [`detect_finish`] so it is unit-testable without
-/// touching the environment or filesystem. Order encodes precedence: a
-/// non-zen session never auto-exits; among the human-needed signals the first
-/// hit names the reason. trace:STORY-564 | ai:claude
+/// this session, whether pause-always is in force, and the advisory operator
+/// presence, return the finish verdict. Split out from [`detect_finish`] so it
+/// is unit-testable without touching the environment or filesystem. Order
+/// encodes precedence: a non-zen session never auto-exits; integrity signals
+/// beat presence; explicit/effective home is only a soft pause.
+// trace:STORY-564 | ai:claude
+// trace:TASK-758 | ai:codex
 pub(crate) fn classify_finish(
     is_zen: bool,
     needs_human_marked: bool,
     has_open_punt: bool,
     pause_always: bool,
+    presence: FinishPresence,
 ) -> ZenFinish {
     if !is_zen {
         return ZenFinish::Pause(FinishPause::NotZen);
@@ -298,6 +318,9 @@ pub(crate) fn classify_finish(
     }
     if pause_always {
         return ZenFinish::Pause(FinishPause::PauseAlways);
+    }
+    if matches!(presence, FinishPresence::Home) {
+        return ZenFinish::Pause(FinishPause::OperatorHome);
     }
     ZenFinish::AutoExit
 }
@@ -487,7 +510,7 @@ mod tests {
         // The headline case: a corroborated zen session that never needed a
         // human, no open punt, no pause-always → AUTO-EXIT. This is what
         // erases the BUG-500 manual-stop friction.
-        let f = classify_finish(true, false, false, false);
+        let f = classify_finish(true, false, false, false, FinishPresence::NoOpinion);
         assert_eq!(f, ZenFinish::AutoExit);
         assert_eq!(f.decision_word(), "auto-exit");
         assert_eq!(f.reason_slug(), "clean");
@@ -497,7 +520,7 @@ mod tests {
     fn finish_non_zen_never_auto_exits() {
         // An uncorroborated / interactive session must never be torn down
         // automatically — auto-exit is a zen-only affordance.
-        let f = classify_finish(false, false, false, false);
+        let f = classify_finish(false, false, false, false, FinishPresence::NoOpinion);
         assert_eq!(f, ZenFinish::Pause(FinishPause::NotZen));
         assert_eq!(f.decision_word(), "pause");
         assert_eq!(f.reason_slug(), "not-zen");
@@ -505,23 +528,40 @@ mod tests {
 
     #[test]
     fn finish_needs_human_marker_pauses() {
-        let f = classify_finish(true, true, false, false);
+        let f = classify_finish(true, true, false, false, FinishPresence::Away);
         assert_eq!(f, ZenFinish::Pause(FinishPause::NeedsHuman));
         assert_eq!(f.reason_slug(), "needs-human");
     }
 
     #[test]
     fn finish_open_punt_pauses() {
-        let f = classify_finish(true, false, true, false);
+        let f = classify_finish(true, false, true, false, FinishPresence::Away);
         assert_eq!(f, ZenFinish::Pause(FinishPause::Punt));
         assert_eq!(f.reason_slug(), "punt");
     }
 
     #[test]
     fn finish_pause_always_pauses() {
-        let f = classify_finish(true, false, false, true);
+        let f = classify_finish(true, false, false, true, FinishPresence::Away);
         assert_eq!(f, ZenFinish::Pause(FinishPause::PauseAlways));
         assert_eq!(f.reason_slug(), "pause-always");
+    }
+
+    #[test]
+    fn finish_presence_home_soft_pauses_but_away_auto_exits() {
+        let home = classify_finish(true, false, false, false, FinishPresence::Home);
+        assert_eq!(home, ZenFinish::Pause(FinishPause::OperatorHome));
+        assert_eq!(home.reason_slug(), "operator-home");
+
+        let away = classify_finish(true, false, false, false, FinishPresence::Away);
+        assert_eq!(away, ZenFinish::AutoExit);
+    }
+
+    #[test]
+    fn finish_presence_no_opinion_preserves_clean_auto_exit() {
+        let f = classify_finish(true, false, false, false, FinishPresence::NoOpinion);
+        assert_eq!(f, ZenFinish::AutoExit);
+        assert_eq!(f.reason_slug(), "clean");
     }
 
     #[test]
@@ -529,12 +569,16 @@ mod tests {
         // When several human-needed signals fire, the reported reason follows
         // the fixed precedence: marker → punt → pause-always.
         assert_eq!(
-            classify_finish(true, true, true, true),
+            classify_finish(true, true, true, true, FinishPresence::Home),
             ZenFinish::Pause(FinishPause::NeedsHuman)
         );
         assert_eq!(
-            classify_finish(true, false, true, true),
+            classify_finish(true, false, true, true, FinishPresence::Home),
             ZenFinish::Pause(FinishPause::Punt)
+        );
+        assert_eq!(
+            classify_finish(true, false, false, true, FinishPresence::Home),
+            ZenFinish::Pause(FinishPause::PauseAlways)
         );
     }
 
