@@ -864,3 +864,10 @@
   note: advisor-cleared at filing
   added_at: 2026-06-13T06:44:14.582086753Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 019ec14e-819d-7ef3-9176-a3e71bf3177d
+  position: 433000
+  added_by: joe
+  note: advisor-cleared at filing
+  added_at: 2026-06-13T14:07:01.017180110Z
+  for_role: advisor
