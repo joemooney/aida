@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:36:34.818451052Z
-modified_at: 2026-06-13T03:45:45.892731476Z
+modified_at: 2026-06-13T15:28:37.586564658Z
 req_type: Story
 tags:
 - aida:brief
@@ -39,6 +39,11 @@ comments:
   content: 'NOT implemented in STORY-564''s PR #793 (2026-06-12) despite being baked into STORY-564''s S3 — the implementer queued a review story (STORY-571) instead of filing an agent-mailbox brief. The review-story-queue partly serves the no-relay goal but is NOT the mailbox-brief mechanism. STORY-569 stays open. Reconsider on pickup: is the auto-queued review-story a sufficient substitute (re-scope/close), or do we want the actual brief? Lean: the brief is more general (agent-to-agent, not just review) — keep, but verify whether #793 even auto-queues the review story on EVERY finish or just did it once for #793.'
   created_at: 2026-06-12T17:34:11.288644596Z
   modified_at: 2026-06-12T17:34:11.288644596Z
+- id: 019ec199-6ad2-7170-b9ca-dc5511590f78
+  author: joe
+  content: Commit fe1700904 references this requirement
+  created_at: 2026-06-13T15:28:37.586564658Z
+  modified_at: 2026-06-13T15:28:37.586564658Z
 history:
 - id: 019ebf15-ee41-7af3-8309-f21acefc8d82
   author: aida-auto-bump
