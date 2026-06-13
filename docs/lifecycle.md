@@ -121,7 +121,9 @@ parked item to its action interactively) now close that gap.
   ("this spec is taken") stops two agents grabbing the same one. So N different
   specs build simultaneously.
 - **Review runs alongside builds.** `aida review <SPEC>` on a finished spec
-  doesn't block other builds.
+  doesn't block other builds. *Who* does the review — the advisor by hand vs. an
+  automated reviewer phase vs. a headless reviewer — depends on the execution
+  mode; see [`docs/review-process.md`](review-process.md) for the full topology.
 - **The one serial point is merging to `main`.** Build many in parallel; land
   them one at a time. A post-merge "does integrated `main` still build?" check
   guards against two PRs that were each green separately but conflict together.
