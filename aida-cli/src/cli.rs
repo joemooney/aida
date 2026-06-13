@@ -4803,6 +4803,11 @@ pub enum AdvisorCommand {
         #[clap(long)]
         once: bool,
 
+        /// Conservative mode: the forked advisor still gardens but only
+        /// surfaces/escalates mailbox items (never acts on a request).
+        #[clap(long)]
+        triage_only: bool,
+
         /// Seconds between presence re-checks (default 60).
         #[clap(long, default_value_t = 60)]
         poll_interval: u64,

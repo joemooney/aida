@@ -5703,6 +5703,7 @@ fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
         AdvisorCommand::Watch {
             dry_run,
             once,
+            triage_only,
             poll_interval,
             fork_interval,
         } => {
@@ -5714,6 +5715,7 @@ fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
                     fork_interval_secs: *fork_interval,
                     dry_run: *dry_run,
                     once: *once,
+                    triage_only: *triage_only,
                 },
             )
         }

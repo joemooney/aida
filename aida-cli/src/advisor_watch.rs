@@ -41,6 +41,23 @@ safe and reversible.
 
 End with a 3-5 line summary: what you gardened, what mail you handled, what you escalated.";
 
+/// Conservative variant (TASK-776, `--triage-only`): still runs the safe garden
+/// pass, but only SURFACES/escalates mailbox items — never acts on a request.
+const WATCH_PROMPT_TRIAGE: &str = "\
+You are a forked advisor session running UNATTENDED while the operator is away, in \
+TRIAGE-ONLY mode. Run the safe garden pass, then SURFACE the mailbox — do not act on \
+any mailbox request.
+
+1. `aida doctor --heal --category OBE-briefs --yes` then `--category stale-leases --yes` \
+(safe auto-fixes only; REPORT [manual] findings, never --force them).
+2. `aida queue list` — for any 'auto-bump missed' item, run `aida db reconcile-status --spec <ID>`.
+3. `aida mailbox inbox advisor` — for each unread message, record a one-line escalation via \
+`aida findings add` (or a comment on the relevant spec) for the operator. Do NOT act on the \
+requests themselves; leave them for the operator to decide.
+4. Do NOT merge PRs, approve specs, run drains, or take any non-garden action.
+
+End with a 3-5 line summary: what you gardened and what mail you surfaced for the operator.";
+
 /// One tick's decision. Pure — see [`plan_watch_tick`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WatchTick {
@@ -54,21 +71,27 @@ pub(crate) enum WatchTick {
 
 /// Pure tick decision. `presence` is the effective presence (already accounts
 /// for the away-TTL, so `Home` covers both "operator returned" and "TTL
-/// lapsed"). `secs_since_last_fork` is `None` before the first fork. Forks on
-/// the first away tick, then every `fork_interval_secs`.
+/// lapsed"). `has_unread_mail` forks immediately (event-driven — TASK-776; the
+/// loop's poll sleep rate-limits how often this fires). Otherwise forks on the
+/// first away tick and then every `fork_interval_secs` (`secs_since_last_fork`
+/// is `None` before the first fork).
 pub(crate) fn plan_watch_tick(
     presence: Presence,
+    has_unread_mail: bool,
     secs_since_last_fork: Option<u64>,
     fork_interval_secs: u64,
 ) -> WatchTick {
     if matches!(presence, Presence::Home) {
         return WatchTick::Exit("operator is home (returned or away-TTL lapsed)".to_string());
     }
+    if has_unread_mail {
+        return WatchTick::Fork;
+    }
     match secs_since_last_fork {
         None => WatchTick::Fork,
         Some(s) if s >= fork_interval_secs => WatchTick::Fork,
         Some(s) => WatchTick::Skip(format!(
-            "away; {s}s since last fork (< {fork_interval_secs}s cadence)"
+            "away; no unread mail; {s}s since last fork (< {fork_interval_secs}s cadence)"
         )),
     }
 }
@@ -83,6 +106,9 @@ pub(crate) struct WatchOpts {
     pub dry_run: bool,
     /// Run a single tick and return (cron / testing).
     pub once: bool,
+    /// Conservative mode: the forked advisor still runs the safe garden pass but
+    /// SURFACES/escalates mailbox items instead of acting on bounded requests.
+    pub triage_only: bool,
 }
 
 /// The watch loop. Returns when the operator is home / the away-TTL lapses, or
@@ -97,10 +123,17 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
         opts.fork_interval_secs
     );
 
+    let prompt = if opts.triage_only {
+        WATCH_PROMPT_TRIAGE
+    } else {
+        WATCH_PROMPT
+    };
+
     loop {
         let presence = presence::current_presence(Utc::now());
         let secs = last_fork.map(|t| t.elapsed().as_secs());
-        match plan_watch_tick(presence, secs, opts.fork_interval_secs) {
+        let has_unread = advisor_unread_count(project_root) > 0;
+        match plan_watch_tick(presence, has_unread, secs, opts.fork_interval_secs) {
             WatchTick::Exit(reason) => {
                 println!("advisor watch exiting: {reason}");
                 break;
@@ -109,10 +142,13 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
                 println!("  · skip: {reason}");
             }
             WatchTick::Fork => {
+                if has_unread {
+                    println!("  · unread advisor mail — forking now");
+                }
                 if opts.dry_run {
                     preview_fork(project_root, &config);
                 } else {
-                    fork_and_run(project_root, &config)?;
+                    fork_and_run(project_root, &config, prompt)?;
                 }
                 last_fork = Some(Instant::now());
             }
@@ -123,6 +159,20 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
         std::thread::sleep(Duration::from_secs(opts.poll_interval_secs));
     }
     Ok(())
+}
+
+/// Count unread messages addressed to the `advisor` (direct + broadcast),
+/// merging the local + canonical mailbox layers against the advisor's read
+/// watermark. Used for the event-driven fork trigger (TASK-776). Best-effort —
+/// any read failure yields 0 (never blocks the loop). trace:TASK-776 | ai:claude
+fn advisor_unread_count(project_root: &Path) -> usize {
+    let store_root = project_root.join(".aida-store");
+    let local = crate::mailbox_store::read_local_messages(project_root).unwrap_or_default();
+    let canonical = crate::mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
+    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+    let mark = crate::mailbox_store::read_watermark(project_root, "advisor");
+    let (unread, _urgent) = aida_core::mailbox::unread_counts("advisor", &merged, mark);
+    unread
 }
 
 fn short_uuid(uuid: &str) -> &str {
@@ -142,7 +192,7 @@ fn preview_fork(project_root: &Path, config: &AdvisorConfig) {
     }
 }
 
-fn fork_and_run(project_root: &Path, config: &AdvisorConfig) -> Result<()> {
+fn fork_and_run(project_root: &Path, config: &AdvisorConfig, prompt: &str) -> Result<()> {
     let Some(plan) = advisor::plan_fork(project_root, config) else {
         println!("  · no live advisor session to fork — skipping this pass");
         return Ok(());
@@ -159,7 +209,7 @@ fn fork_and_run(project_root: &Path, config: &AdvisorConfig) -> Result<()> {
         .join(format!("{}.log", plan.fork_uuid));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor-watch");
     let status = session::spawn_claude_headless_resume(
-        WATCH_PROMPT,
+        prompt,
         &plan.fork_uuid,
         &log_path,
         project_root,
@@ -183,37 +233,58 @@ mod tests {
     #[test]
     fn home_exits_the_loop_even_before_first_fork() {
         assert!(matches!(
-            plan_watch_tick(Presence::Home, None, 60),
+            plan_watch_tick(Presence::Home, false, None, 60),
             WatchTick::Exit(_)
         ));
         assert!(matches!(
-            plan_watch_tick(Presence::Home, Some(9999), 60),
+            plan_watch_tick(Presence::Home, false, Some(9999), 60),
             WatchTick::Exit(_)
         ));
     }
 
     #[test]
     fn away_forks_on_the_first_tick() {
-        assert_eq!(plan_watch_tick(Presence::Away, None, 60), WatchTick::Fork);
+        assert_eq!(
+            plan_watch_tick(Presence::Away, false, None, 60),
+            WatchTick::Fork
+        );
     }
 
     #[test]
     fn away_forks_once_the_cadence_has_elapsed() {
         assert_eq!(
-            plan_watch_tick(Presence::Away, Some(60), 60),
+            plan_watch_tick(Presence::Away, false, Some(60), 60),
             WatchTick::Fork
         );
         assert_eq!(
-            plan_watch_tick(Presence::Away, Some(600), 60),
+            plan_watch_tick(Presence::Away, false, Some(600), 60),
             WatchTick::Fork
         );
     }
 
     #[test]
-    fn away_skips_before_the_cadence() {
+    fn away_skips_before_the_cadence_with_no_mail() {
         assert!(matches!(
-            plan_watch_tick(Presence::Away, Some(30), 60),
+            plan_watch_tick(Presence::Away, false, Some(30), 60),
             WatchTick::Skip(_)
+        ));
+    }
+
+    #[test]
+    fn unread_mail_forks_immediately_even_before_the_cadence() {
+        // TASK-776: event-driven — unread advisor mail beats the idle timer.
+        assert_eq!(
+            plan_watch_tick(Presence::Away, true, Some(1), 60),
+            WatchTick::Fork
+        );
+    }
+
+    #[test]
+    fn home_wins_over_unread_mail() {
+        // Presence is the hard gate — never fork once the operator is back.
+        assert!(matches!(
+            plan_watch_tick(Presence::Home, true, Some(1), 60),
+            WatchTick::Exit(_)
         ));
     }
 }
