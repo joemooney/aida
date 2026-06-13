@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:20:02.068423845Z
-modified_at: 2026-06-13T19:20:02.068423845Z
+modified_at: 2026-06-13T20:54:50.189748976Z
 req_type: Story
 tags:
 - agent-execution
@@ -24,3 +24,26 @@ tags:
 - parent:SPIKE-61
 - sandbox
 - security
+comments:
+- id: 019ec2c4-124d-7aa0-8b66-baf0acacd4c6
+  author: joe
+  content: |-
+    IMPLEMENTATION BRIEF (advisor reviewed + agreed, 2026-06-13; Claude Code sandbox schema verified via claude-code-guide):
+
+    PATH (clean — NOT direct bubblewrap): the contained posture works by AIDA generating a --settings JSON (claude_contained_settings_json() in aida-cli/src/session.rs) that enables Claude Code's OWN sandbox. Egress = add a 'network' key to that JSON. Verified schema (cite: code.claude.com/docs/en/sandboxing 'Network isolation'; schemastore claude-code-settings sandbox.network):
+      sandbox.network.allowedDomains: [string]  — allowlist, wildcards ok (*.example.com); default empty = blocked/prompt
+      sandbox.network.deniedDomains:  [string]  — blocklist, overrides allow wildcards
+      sandbox.network.allowManagedDomainsOnly: bool — MANAGED-settings only; block-without-prompt (true default-deny)
+    Linux backend: bubblewrap + an out-of-sandbox proxy doing HOSTNAME-based allow/deny (no TLS inspection — domain-fronting caveat; broad wildcards like *.amazonaws.com weaken it).
+
+    IMPLEMENTATION (default-off, reviewable):
+    1. Config: [sandbox] allowed_hosts = [..] (+ optional denied_hosts), default EMPTY.
+    2. claude_contained_settings_json(): when allowed_hosts non-empty, add "network": {"allowedDomains": [...]}; empty → omit the key entirely (→ identical JSON → unchanged behavior).
+    3. Tests: empty allowlist → JSON byte-identical to today (the acceptance); non-empty → network.allowedDomains present + correct.
+    4. HEADLESS NUANCE (keystone care): plain allowedDomains PROMPTS on a non-allowed domain — a headless 'claude -p' drain can't answer → could hang. True block-without-prompt needs allowManagedDomainsOnly via MANAGED settings (not project --settings). SLICE-1 decision: ship the allowedDomains config (interactive-safe) + DOCUMENT the headless-prompt limitation; the managed-settings/headless default-deny is a slice-1.5 follow-up the operator enables supervised. Do NOT silently ship something that hangs headless drains.
+    5. Suggest a sensible default allowlist in docs (github.com, api.anthropic.com, crates.io + static.crates.io, registry.npmjs.org) but ship EMPTY (opt-in).
+    6. Add the AIDA_* / config row to docs/environment-variables.md.
+
+    POSTURE: default-off ship is advisor-safe; the LIVE enable (operator sets allowed_hosts on a real drain) is the supervised keyboard step. trace:relates:SPIKE-61
+  created_at: 2026-06-13T20:54:50.189748976Z
+  modified_at: 2026-06-13T20:54:50.189748976Z
