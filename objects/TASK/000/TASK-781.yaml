@@ -8,11 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T14:54:37.104370863Z
-modified_at: 2026-06-13T14:54:37.104370863Z
+modified_at: 2026-06-13T14:54:42.598819020Z
 req_type: Task
 tags:
 - advisor
 - aida:questions
 - autonomy
+- batch:fasttrack
 - parent:STORY-586
 - relates:STORY-602
