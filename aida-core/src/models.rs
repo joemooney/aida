@@ -1982,6 +1982,80 @@ impl HistoryEntry {
     }
 }
 
+/// STORY-582: a durable, committed audit record of WHAT an agent did to
+/// process a spec and WHY — captured at completion time and written into the
+/// spec YAML as a `processing_record:` array parallel to `history:`. Where
+/// `history:` records structured field deltas (status/priority/tag changes),
+/// a `ProcessingRecord` records the human-meaningful outcome: the summary, the
+/// key decisions + rationale, what was punted/escalated, and the PR/commit
+/// linkage — promoting the otherwise-gitignored review verdict + brief
+/// artifacts into a durable, queryable, prunable field. This is the audit half
+/// of the EPIC-39 governance thesis: AIDA already proves the WHAT (trace +
+/// history); this captures the WHY. trace:STORY-582 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct ProcessingRecord {
+    /// Unique identifier for this record entry.
+    pub id: Uuid,
+
+    /// When the spec was processed to completion.
+    pub timestamp: DateTime<Utc>,
+
+    /// The agent that did the work (e.g. `claude`, `codex`), best-effort from
+    /// the brief's `generated_by` / the session lease role / a fallback.
+    pub agent: String,
+
+    /// Project-relative path of the pickup brief this work was routed by, when
+    /// one existed (`.aida/agent-briefs/...`). Promotes the gitignored brief
+    /// outcome into the durable record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brief_ref: Option<String>,
+
+    /// The merge/commit SHA that completed the spec, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_sha: Option<String>,
+
+    /// The PR/MR number that carried the work, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr: Option<u64>,
+
+    /// One-line human-readable summary of what was done.
+    pub summary: String,
+
+    /// Key decisions + rationale (the WHY) — typically promoted from the
+    /// review verdict summary and the implementer's recorded notes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decisions: Vec<String>,
+
+    /// What was punted or escalated during the work (follow-up TASK ids,
+    /// design-fork punts) — so the deferred tail is auditable, not lost.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub punted: Vec<String>,
+
+    /// The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected`),
+    /// promoted from the gitignored `.aida/review-verdicts/<spec>.json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_verdict: Option<String>,
+}
+
+impl ProcessingRecord {
+    /// Build a record with a fresh id + `now()` timestamp. Callers fill the
+    /// optional linkage/decision fields after construction.
+    pub fn new(agent: String, summary: String) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            timestamp: Utc::now(),
+            agent,
+            brief_ref: None,
+            commit_sha: None,
+            pr: None,
+            summary,
+            decisions: Vec::new(),
+            punted: Vec::new(),
+            review_verdict: None,
+        }
+    }
+}
+
 /// A snapshot of a requirement at a specific point in time (for baselines)
 /// This is a full copy of the requirement state, not a reference
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -3589,6 +3663,14 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<HistoryEntry>,
 
+    /// STORY-582: durable processing records — the committed audit trail of
+    /// what was done + why each time this spec was processed to completion.
+    /// Parallel to `history:` (which holds structured field deltas); this holds
+    /// the human-meaningful outcome promoted from the brief / review verdict.
+    /// trace:STORY-582 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub processing_record: Vec<ProcessingRecord>,
+
     /// Whether this requirement is archived
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub archived: bool,
@@ -3734,6 +3816,7 @@ impl Requirement {
             relationships: Vec::new(),
             comments: Vec::new(),
             history: Vec::new(),
+            processing_record: Vec::new(),
             archived: false,
             archived_at: None,
             custom_status: None,
@@ -3934,6 +4017,27 @@ impl Requirement {
             self.history.push(entry);
             self.modified_at = Utc::now();
         }
+    }
+
+    /// STORY-582: append a durable processing record (audit of what was done +
+    /// why at completion time). Idempotent on `commit_sha`: a record already
+    /// present for the same non-empty completing SHA is not duplicated, so a
+    /// re-run of the merge-driven auto-bump (or `reconcile-status`) over the
+    /// same commit doesn't stack identical entries. Bumps `modified_at` only
+    /// when a record is actually added. trace:STORY-582 | ai:claude
+    pub fn add_processing_record(&mut self, record: ProcessingRecord) -> bool {
+        if let Some(sha) = record.commit_sha.as_deref().filter(|s| !s.is_empty()) {
+            if self
+                .processing_record
+                .iter()
+                .any(|r| r.commit_sha.as_deref() == Some(sha))
+            {
+                return false;
+            }
+        }
+        self.processing_record.push(record);
+        self.modified_at = Utc::now();
+        true
     }
 
     /// Helper to create a field change

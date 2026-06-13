@@ -223,6 +223,8 @@ pub use models::{
     LinkOrigin,
     MetaSubtype,
     NumberingStrategy,
+    // Durable processing-record audit trail (STORY-582)
+    ProcessingRecord,
     PuntCategory,
     // Queue types
     QueueEntry,

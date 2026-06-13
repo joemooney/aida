@@ -572,6 +572,9 @@ impl SqliteBackend {
                 attachments,
                 trace_links,
                 gitlab_issues,
+                // STORY-582: legacy centralized SQLite backend is deprecated
+                // and does not persist processing records. trace:STORY-582
+                processing_record: Vec::new(),
                 // STORY-476: legacy centralized SQLite backend is deprecated
                 // and does not persist external refs. trace:STORY-476 | ai:claude
                 external_refs: Vec::new(),
@@ -1498,6 +1501,8 @@ impl DatabaseBackend for SqliteBackend {
                     relationships,
                     comments,
                     history,
+                    // STORY-582: legacy centralized backend — not persisted.
+                    processing_record: Vec::new(),
                     archived,
                     // STORY-441: legacy centralized backend — not persisted.
                     archived_at: None,

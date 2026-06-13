@@ -1956,6 +1956,13 @@ fn run() -> Result<()> {
                  Run `aida init --distributed` first, or pass --file pointing to a git store."
             );
         }
+        Command::Record(_) => {
+            // STORY-582: the processing-record trail is a git-canonical field.
+            anyhow::bail!(
+                "aida record commands are only available in git-canonical (distributed) mode. \
+                 Run `aida init` (defaults to distributed) first."
+            );
+        }
         Command::Node(_) => {
             anyhow::bail!(
                 "aida node commands are only available in git-canonical (distributed) mode. \
@@ -10380,6 +10387,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Cache(cache_cmd) => {
             return handle_cache_command(cache_cmd, &backend);
         }
+        Command::Record(record_cmd) => {
+            // STORY-582: inspect / prune the durable processing-record trail.
+            return handle_record_command(record_cmd, &backend, store_path);
+        }
         Command::Mailbox(mailbox_cmd) => {
             // trace:STORY-493 | ai:claude — local layer only; git-canonical
             // digest is a later slice. Needs only the project root.
@@ -12426,6 +12437,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         for c in &req.comments {
                             print_comment(c, 0);
                         }
+                    }
+                    // STORY-582: surface the durable processing record — the
+                    // committed audit of what was done + why at completion.
+                    // Always shown (not gated on --verbose) so the audit trail
+                    // is visible on a plain `aida show`. trace:STORY-582
+                    if !req.processing_record.is_empty() {
+                        print_processing_records(&req.processing_record);
                     }
                     // TASK-241: append the git-linkage section unless
                     // --no-git. Grep against every id form the spec has
@@ -19434,6 +19452,182 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// STORY-582: render the durable processing-record audit trail for `aida
+/// show`. One block per record: timestamp + agent header, the linkage
+/// (PR/commit/brief), the summary, and the decisions / punted / verdict
+/// tails when present. trace:STORY-582 | ai:claude
+fn print_processing_records(records: &[aida_core::ProcessingRecord]) {
+    println!("\n{}:", "Processing record".green().bold());
+    for rec in records {
+        println!(
+            "\n{}  {}",
+            rec.timestamp
+                .with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+                .yellow(),
+            format!("by {}", rec.agent).cyan(),
+        );
+        // Linkage line — PR / commit / brief, whichever are present.
+        let mut linkage: Vec<String> = Vec::new();
+        if let Some(pr) = rec.pr {
+            linkage.push(format!("PR #{pr}"));
+        }
+        if let Some(sha) = rec.commit_sha.as_deref() {
+            linkage.push(format!("commit {}", &sha[..sha.len().min(8)]));
+        }
+        if let Some(brief) = rec.brief_ref.as_deref() {
+            linkage.push(format!("brief {brief}"));
+        }
+        if let Some(v) = rec.review_verdict.as_deref() {
+            linkage.push(format!("verdict {v}"));
+        }
+        if !linkage.is_empty() {
+            println!("  {} {}", "↳".dimmed(), linkage.join(" · ").dimmed());
+        }
+        println!("  {}", rec.summary);
+        for d in &rec.decisions {
+            println!("  {} {}", "decision:".magenta(), d);
+        }
+        for p in &rec.punted {
+            println!("  {} {}", "punted:".yellow(), p);
+        }
+    }
+}
+
+/// STORY-582: `aida record list|prune` — inspect or trim the durable
+/// processing-record audit trail. List is read-only (backend); prune writes
+/// through `Storage::update_atomically`, propose-by-default. trace:STORY-582
+fn handle_record_command(
+    cmd: &crate::cli::RecordCommand,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    use crate::cli::RecordCommand;
+    match cmd {
+        RecordCommand::List { spec } => {
+            let store = backend.load()?;
+            let mut shown = 0usize;
+            for req in &store.requirements {
+                if req.processing_record.is_empty() {
+                    continue;
+                }
+                if let Some(want) = spec {
+                    let hit = [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|s| s.eq_ignore_ascii_case(want));
+                    if !hit {
+                        continue;
+                    }
+                }
+                println!("{} — {}", req.display_id().cyan().bold(), req.title);
+                print_processing_records(&req.processing_record);
+                println!();
+                shown += 1;
+            }
+            if shown == 0 {
+                match spec {
+                    Some(s) => println!("No processing records on {s}."),
+                    None => println!("No processing records recorded yet."),
+                }
+            }
+            Ok(())
+        }
+        RecordCommand::Prune {
+            spec,
+            older_than,
+            apply,
+        } => {
+            let cutoff =
+                older_than.map(|days| chrono::Utc::now() - chrono::Duration::days(days as i64));
+            // Pure decision over the loaded store: how many records each
+            // matched spec would lose. Reused for the dry-run report and the
+            // atomic write so the two never drift.
+            let store = backend.load()?;
+            let mut plan: Vec<(String, usize, usize)> = Vec::new(); // (id, remove, keep)
+            for req in &store.requirements {
+                if req.processing_record.is_empty() {
+                    continue;
+                }
+                if let Some(want) = spec {
+                    let hit = [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|s| s.eq_ignore_ascii_case(want));
+                    if !hit {
+                        continue;
+                    }
+                }
+                let remove = req
+                    .processing_record
+                    .iter()
+                    .filter(|r| cutoff.map(|c| r.timestamp < c).unwrap_or(true))
+                    .count();
+                if remove > 0 {
+                    plan.push((
+                        req.display_id(),
+                        remove,
+                        req.processing_record.len() - remove,
+                    ));
+                }
+            }
+
+            if plan.is_empty() {
+                println!("Nothing to prune.");
+                return Ok(());
+            }
+
+            let total: usize = plan.iter().map(|(_, r, _)| r).sum();
+            let window = older_than
+                .map(|d| format!("older than {d}d"))
+                .unwrap_or_else(|| "all".to_string());
+            println!(
+                "{} {} processing record(s) across {} spec(s) ({}):",
+                if *apply { "Pruning" } else { "Would prune" },
+                total,
+                plan.len(),
+                window
+            );
+            for (id, remove, keep) in &plan {
+                println!("  {id}: −{remove} (keeps {keep})");
+            }
+
+            if !*apply {
+                println!("\n{}", "Dry run — pass --apply to write.".dimmed());
+                return Ok(());
+            }
+
+            let storage = Storage::new(store_path);
+            let spec_filter = spec.clone();
+            storage.update_atomically(|s| {
+                for req in &mut s.requirements {
+                    if req.processing_record.is_empty() {
+                        continue;
+                    }
+                    if let Some(want) = spec_filter.as_deref() {
+                        let hit = [req.agreed_id.as_deref(), req.spec_id.as_deref()]
+                            .into_iter()
+                            .flatten()
+                            .any(|s| s.eq_ignore_ascii_case(want));
+                        if !hit {
+                            continue;
+                        }
+                    }
+                    let before = req.processing_record.len();
+                    req.processing_record
+                        .retain(|r| cutoff.map(|c| r.timestamp >= c).unwrap_or(false));
+                    if req.processing_record.len() != before {
+                        req.modified_at = chrono::Utc::now();
+                    }
+                }
+            })?;
+            println!("{} pruned {} record(s).", "✓".green(), total);
+            Ok(())
+        }
+    }
 }
 
 // trace:REQ-0232 | ai:claude:high
@@ -76086,6 +76280,238 @@ fn collect_covers_completed_review_flips(
 /// - Returns a `Vec<AutoBumpFlip>` of flips for the caller to summarize.
 ///   Empty vec = nothing to print.
 ///
+/// STORY-582: privacy floor for the durable processing record — redact
+/// anything that looks like a secret before it lands in the committed YAML.
+/// Conservative, prefix/keyword-driven (NOT a long-run base64 sweep, which
+/// would eat legitimate SHAs): known token prefixes (`ghp_`, `sk-`, `AKIA…`,
+/// `xoxb-`, …), `Bearer <token>`, and `secret/token/password/api_key = VALUE`
+/// shapes collapse to `[REDACTED]`. trace:STORY-582 | ai:claude
+fn redact_secrets(text: &str) -> String {
+    let mut out: Vec<String> = Vec::with_capacity(text.split_whitespace().count());
+    // Token-ish if it carries a known secret prefix OR is a long opaque run
+    // gated behind a secret prefix — we only redact whole whitespace tokens.
+    let looks_secret = |tok: &str| -> bool {
+        let t = tok.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '-');
+        const PREFIXES: [&str; 9] = [
+            "ghp_",
+            "gho_",
+            "ghu_",
+            "ghs_",
+            "ghr_",
+            "github_pat_",
+            "sk-",
+            "xoxb-",
+            "xoxp-",
+        ];
+        if PREFIXES.iter().any(|p| t.starts_with(p)) {
+            return true;
+        }
+        // AWS access key id: AKIA + 16 base32 chars.
+        if t.len() == 20 && t.starts_with("AKIA") {
+            return true;
+        }
+        false
+    };
+    let mut prev_lower = String::new();
+    for tok in text.split_whitespace() {
+        // `Bearer <token>` → redact the token after a `Bearer`/`token:` lead.
+        let after_bearer = prev_lower == "bearer";
+        // `key = VALUE` / `key: VALUE` where key is secret-ish.
+        let kv_secret = {
+            let key = prev_lower
+                .trim_end_matches([':', '='])
+                .rsplit(['=', ':'])
+                .next()
+                .unwrap_or("");
+            matches!(
+                key,
+                "secret" | "token" | "password" | "passwd" | "api_key" | "apikey"
+            ) || prev_lower.ends_with("secret=")
+                || prev_lower.ends_with("token=")
+                || prev_lower.ends_with("password=")
+                || prev_lower.ends_with("api_key=")
+        };
+        // `secret=VALUE` inline (no space).
+        let inline_kv = {
+            let lo = tok.to_ascii_lowercase();
+            ["secret=", "token=", "password=", "api_key=", "apikey="]
+                .iter()
+                .any(|k| lo.starts_with(k))
+        };
+        if looks_secret(tok) || after_bearer || kv_secret {
+            out.push("[REDACTED]".to_string());
+        } else if inline_kv {
+            let key = tok.split_once('=').map(|(k, _)| k).unwrap_or(tok);
+            out.push(format!("{key}=[REDACTED]"));
+        } else {
+            out.push(tok.to_string());
+        }
+        prev_lower = tok.to_ascii_lowercase();
+    }
+    out.join(" ")
+}
+
+/// STORY-582: read the reviewer verdict promoted into the durable record from
+/// the gitignored `.aida/review-verdicts/<SPEC>.json`. Returns the normalized
+/// verdict word plus the one-line summary, when the file exists + parses.
+/// trace:STORY-582 | ai:claude
+fn read_review_verdict_for_record(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Option<reviewer_summary::VerdictFile> {
+    let path = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(format!("{spec_id}.json"));
+    let body = std::fs::read_to_string(path).ok()?;
+    reviewer_summary::parse_verdict_file(&body)
+}
+
+/// STORY-582: find the most recent brief (pending `.md` or acked
+/// `.md.acked`) routed for `spec_id`, across every agent mailbox dir.
+/// Returns `(project_relative_path, agent, generated_by)`. The brief is the
+/// otherwise-gitignored routing artifact we promote into the durable record.
+/// trace:STORY-582 | ai:claude
+fn latest_brief_for_spec(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Option<(String, String, Option<String>)> {
+    let root = project_root.join(".aida").join("agent-briefs");
+    let prefix = format!("{}-", spec_id.to_ascii_uppercase());
+    let mut best: Option<(String, String, std::path::PathBuf)> = None; // (fname, agent, path)
+    let agent_dirs = std::fs::read_dir(&root).ok()?;
+    for agent_entry in agent_dirs.flatten() {
+        if !agent_entry.path().is_dir() {
+            continue;
+        }
+        let agent = agent_entry.file_name().to_string_lossy().to_string();
+        let Ok(briefs) = std::fs::read_dir(agent_entry.path()) else {
+            continue;
+        };
+        for b in briefs.flatten() {
+            let fname = b.file_name().to_string_lossy().to_string();
+            let is_brief = fname.ends_with(".md") || fname.ends_with(".md.acked");
+            if !is_brief || !fname.to_ascii_uppercase().starts_with(&prefix) {
+                continue;
+            }
+            // Filenames embed a sortable `…-<UTC timestamp>.md`, so the
+            // lexically-greatest name is the most recent brief.
+            if best.as_ref().map(|(f, _, _)| &fname > f).unwrap_or(true) {
+                best = Some((fname.clone(), agent.clone(), b.path()));
+            }
+        }
+    }
+    let (_, agent, path) = best?;
+    let generated_by = std::fs::read_to_string(&path).ok().and_then(|body| {
+        body.lines()
+            .find_map(|l| {
+                l.strip_prefix("generated_by:")
+                    .map(|v| v.trim().to_string())
+            })
+            .filter(|s| !s.is_empty())
+    });
+    let rel = path
+        .strip_prefix(project_root)
+        .unwrap_or(&path)
+        .display()
+        .to_string();
+    Some((rel, agent, generated_by))
+}
+
+/// STORY-582: assemble the durable [`ProcessingRecord`] for a spec being
+/// completed — promoting the gitignored review verdict + brief artifacts and
+/// the punt ledger into a committed, queryable, secret-scrubbed audit row.
+/// Reuses existing capture points (AC-2): no new author burden. The PR number
+/// is best-effort from the verdict's review-comment URL. trace:STORY-582
+fn build_processing_record(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    commit_sha: &str,
+) -> aida_core::ProcessingRecord {
+    let brief = latest_brief_for_spec(project_root, spec_id);
+    let verdict = read_review_verdict_for_record(project_root, spec_id);
+
+    // Agent: brief `generated_by` → live lease role on the spec → "aida".
+    let agent = brief
+        .as_ref()
+        .and_then(|(_, _, gb)| gb.clone())
+        .or_else(|| {
+            list_leases(project_root)
+                .into_iter()
+                .find(|l| l.scope.eq_ignore_ascii_case(spec_id))
+                .and_then(|l| l.role)
+        })
+        .unwrap_or_else(|| "aida".to_string());
+
+    let summary = verdict
+        .as_ref()
+        .and_then(|v| v.summary.clone())
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| redact_secrets(&s))
+        .unwrap_or_else(|| {
+            let short = &commit_sha[..commit_sha.len().min(8)];
+            format!("Completed via merge {short}")
+        });
+
+    let mut decisions: Vec<String> = Vec::new();
+    if let Some(v) = verdict.as_ref() {
+        if let Some(c) = v.complexity_agreement.as_deref().filter(|s| !s.is_empty()) {
+            decisions.push(redact_secrets(&format!("complexity: {c}")));
+        }
+    }
+
+    // Punted: this spec's punt-ledger details + any follow-up TASKs the
+    // reviewer filed.
+    let mut punted: Vec<String> = punt::read_ledger(project_root)
+        .into_iter()
+        .filter(|r| r.spec.eq_ignore_ascii_case(spec_id))
+        .map(|r| {
+            let detail = redact_secrets(r.detail.trim());
+            match r.resolution_path.as_str() {
+                "escalated-to-human" => format!("escalated: {detail}"),
+                "advisor-resolved" => format!("resolved: {detail}"),
+                _ => format!("punted: {detail}"),
+            }
+        })
+        .collect();
+    if let Some(filed) = verdict.as_ref().and_then(|v| v.findings_filed.clone()) {
+        for f in filed.into_iter().filter(|f| !f.trim().is_empty()) {
+            punted.push(format!("follow-up: {}", f.trim()));
+        }
+    }
+
+    let pr = verdict
+        .as_ref()
+        .and_then(|v| v.comment_url.as_deref())
+        .and_then(parse_pr_number_from_url);
+
+    let mut record = aida_core::ProcessingRecord::new(agent, summary);
+    record.brief_ref = brief.map(|(rel, _, _)| rel);
+    record.commit_sha = (!commit_sha.is_empty()).then(|| commit_sha.to_string());
+    record.pr = pr;
+    record.decisions = decisions;
+    record.punted = punted;
+    record.review_verdict = verdict
+        .map(|v| v.verdict.trim().to_string())
+        .filter(|s| !s.is_empty());
+    record
+}
+
+/// STORY-582: pull a PR/MR number out of a forge review-comment URL like
+/// `https://github.com/o/r/pull/123#issuecomment-…`. trace:STORY-582
+fn parse_pr_number_from_url(url: &str) -> Option<u64> {
+    let marker = url.find("/pull/").map(|i| i + "/pull/".len()).or_else(|| {
+        url.find("/merge_requests/")
+            .map(|i| i + "/merge_requests/".len())
+    })?;
+    url[marker..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()
+}
+
 /// trace:STORY-86 | ai:claude
 fn auto_bump_done_to_completed(
     project_root: &std::path::Path,
@@ -76387,6 +76813,12 @@ fn auto_bump_done_to_completed(
                 if info.completion_sha.is_none() && !flip.sha.is_empty() {
                     info.completion_sha = Some(flip.sha.clone());
                 }
+                // STORY-582: capture the durable processing record — promote
+                // the brief / review-verdict / punt artifacts into a committed
+                // audit row. Idempotent on the completing SHA (re-runs of the
+                // bump don't stack duplicates). trace:STORY-582 | ai:claude
+                let record = build_processing_record(project_root, &flip.spec_id, &flip.sha);
+                r.add_processing_record(record);
             }
         }
         // TASK-246 / BUG-219: review stories whose PR merged before the
@@ -76888,6 +77320,10 @@ fn handle_db_reconcile_status(
                 if info.completion_sha.is_none() && !flip.sha.is_empty() {
                     info.completion_sha = Some(flip.sha.clone());
                 }
+                // STORY-582: same durable processing-record capture on the
+                // manual reconcile-status replay path. trace:STORY-582
+                let record = build_processing_record(project_root, &flip.spec_id, &flip.sha);
+                r.add_processing_record(record);
             }
         }
         // BUG-219: review stories whose PR merged before review finished.
@@ -111759,5 +112195,123 @@ mod task_0414_statusline_setup {
         assert!(err.to_string().contains("valid JSON"));
         // The original bytes are untouched.
         assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{ not json");
+    }
+}
+
+/// trace:STORY-582 | ai:claude — durable processing-record audit trail.
+#[cfg(test)]
+mod story_582_processing_record_tests {
+    use super::*;
+
+    #[test]
+    fn redact_secrets_collapses_known_token_shapes() {
+        let cases = [
+            "token is ghp_abcdEFGH1234567890abcdEFGH1234567890",
+            "key sk-ABCdef0123456789ABCdef0123456789",
+            "aws AKIAIOSFODNN7EXAMPLE here",
+            "Authorization: Bearer eyJsupersecretvalue",
+            "password=hunter2 in the log",
+            "api_key = s3cr3tvalue trailing",
+        ];
+        for c in cases {
+            let out = redact_secrets(c);
+            assert!(
+                out.contains("[REDACTED]"),
+                "expected redaction in {c:?} → {out:?}"
+            );
+        }
+        // A normal sentence + a short SHA is untouched.
+        let clean = "Completed via merge a1b2c3d4 after reviewer approved";
+        assert_eq!(redact_secrets(clean), clean);
+    }
+
+    #[test]
+    fn parse_pr_number_from_url_github_and_gitlab() {
+        assert_eq!(
+            parse_pr_number_from_url("https://github.com/o/r/pull/123#issuecomment-9"),
+            Some(123)
+        );
+        assert_eq!(
+            parse_pr_number_from_url("https://gitlab.com/o/r/-/merge_requests/45"),
+            Some(45)
+        );
+        assert_eq!(
+            parse_pr_number_from_url("https://github.com/o/r/issues/7"),
+            None
+        );
+        assert_eq!(parse_pr_number_from_url("not a url"), None);
+    }
+
+    #[test]
+    fn add_processing_record_is_idempotent_on_commit_sha() {
+        let mut req = aida_core::Requirement::new("Test".to_string(), "desc".to_string());
+        let mut rec = aida_core::ProcessingRecord::new("claude".into(), "did the thing".into());
+        rec.commit_sha = Some("deadbeef".into());
+        assert!(req.add_processing_record(rec.clone()));
+        // Same SHA → not duplicated.
+        assert!(!req.add_processing_record(rec.clone()));
+        assert_eq!(req.processing_record.len(), 1);
+        // A different SHA → appended.
+        let mut rec2 = rec.clone();
+        rec2.commit_sha = Some("cafef00d".into());
+        assert!(req.add_processing_record(rec2));
+        assert_eq!(req.processing_record.len(), 2);
+        // An empty/None SHA always appends (no idempotency key).
+        let rec3 = aida_core::ProcessingRecord::new("claude".into(), "manual".into());
+        assert!(req.add_processing_record(rec3.clone()));
+        assert!(req.add_processing_record(rec3));
+        assert_eq!(req.processing_record.len(), 4);
+    }
+
+    #[test]
+    fn build_processing_record_falls_back_with_no_artifacts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // No brief, no verdict, no punts → agent "aida", summary from sha.
+        let rec = build_processing_record(root, "STORY-582", "abcdef1234567890");
+        assert_eq!(rec.agent, "aida");
+        assert_eq!(rec.commit_sha.as_deref(), Some("abcdef1234567890"));
+        assert!(rec.summary.contains("abcdef12"), "{}", rec.summary);
+        assert!(rec.brief_ref.is_none());
+        assert!(rec.review_verdict.is_none());
+    }
+
+    #[test]
+    fn build_processing_record_promotes_verdict() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let vdir = root.join(".aida").join("review-verdicts");
+        std::fs::create_dir_all(&vdir).unwrap();
+        std::fs::write(
+            vdir.join("STORY-582.json"),
+            r#"{"verdict":"Approved","summary":"clean diff, good tests","comment_url":"https://github.com/o/r/pull/811#c1"}"#,
+        )
+        .unwrap();
+        let rec = build_processing_record(root, "STORY-582", "abcdef1234567890");
+        assert_eq!(rec.review_verdict.as_deref(), Some("Approved"));
+        assert_eq!(rec.summary, "clean diff, good tests");
+        assert_eq!(rec.pr, Some(811));
+    }
+
+    #[test]
+    fn latest_brief_for_spec_prefers_newest_and_reads_generated_by() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = root.join(".aida").join("agent-briefs").join("advisor");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("STORY-582-20260101T000000Z.md"),
+            "---\ngenerated_by: codex\n---\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("STORY-582-20260612T120000Z.md"),
+            "---\ngenerated_by: claude\n---\n",
+        )
+        .unwrap();
+        let (rel, agent, gb) = latest_brief_for_spec(root, "STORY-582").unwrap();
+        assert!(rel.ends_with("20260612T120000Z.md"), "{rel}");
+        assert_eq!(agent, "advisor");
+        assert_eq!(gb.as_deref(), Some("claude"));
     }
 }
