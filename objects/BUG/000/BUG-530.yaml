@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T18:22:40.339630572Z
+modified_at: 2026-06-13T18:28:25.419109901Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -42,3 +42,8 @@ comments:
     KEYBOARD-NOT-DRAIN: this is the autonomy keystone's own selector — fix at the keyboard via `aida queue work BUG-530` with the advisor watching, never an unsupervised drain. Do NOT E2E-test the fixed selector against real specs (unit test + dry-run only).
   created_at: 2026-06-13T18:22:40.339630572Z
   modified_at: 2026-06-13T18:22:40.339630572Z
+- id: 019ec23e-06cb-7ba0-bf59-85fa5ddf4169
+  author: joe
+  content: 'DECISION (operator 2026-06-13): implement FIX OPTION 1 — route resolve_burndown_sets through the SAME freshness-checked cache read that aida list/show use (stale-detection rebuilds before read), instead of load_store_for_lookup''s GitBackend-direct worktree read; read queue membership (all_queued_requirement_ids) from the fresh source too. Do NOT implement option 2 (worktree-refresh in load_store_for_lookup) or option 3 (defensive terminal-status filter) — option 1 is the chosen surgical fix. Keep the regression test that must fail without the fix.'
+  created_at: 2026-06-13T18:28:25.419109901Z
+  modified_at: 2026-06-13T18:28:25.419109901Z
