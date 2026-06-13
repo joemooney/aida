@@ -13,3 +13,7 @@
 - [9 · Integrations & servers](09-integrations.md)
 - [10 · Storage & data](10-storage.md)
 - [11 · Working on AIDA itself](11-dev.md)
+
+---
+
+[Glossary](12-glossary.md)
