@@ -4418,6 +4418,15 @@ pub enum QuestionsCommand {
         /// one, in a single batch.
         #[clap(long)]
         all_defaults: bool,
+
+        /// Attach a free-text counter-proposal recorded ALONGSIDE the chosen
+        /// option (e.g. "name it list-claude-sessions"). A pure data op — no
+        /// LLM at answer-time; the implementer reads choice + note later. The
+        /// non-interactive form of the interactive prompt's "type something"
+        /// escape; pair with <spec> <choice>.
+        // trace:TASK-791 | ai:claude
+        #[clap(long, value_name = "TEXT")]
+        note: Option<String>,
     },
 }
 

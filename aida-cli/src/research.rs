@@ -158,6 +158,7 @@ pub(crate) fn sidecar_to_decision_request(
         recommended,
         rationale: s.rationale.clone(),
         answered: None,
+        note: None,
         asked_at: Some(asked_at),
         answered_at: None,
     })

@@ -464,6 +464,13 @@ pub struct DecisionRequest {
     /// pending (unanswered).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub answered: Option<usize>,
+    /// Free-text counter-proposal recorded ALONGSIDE the chosen option — the
+    /// "1, but name it list-claude-sessions" escape. A pure data op: no LLM at
+    /// answer-time; the implementer later reads choice + note. `None` when the
+    /// human took the pure-pick path.
+    // trace:TASK-791 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
     /// When the question was first posed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asked_at: Option<DateTime<Utc>>,
@@ -7582,6 +7589,7 @@ mod tests {
             recommended: Some(1),
             rationale: Some("the read/answer slice is bounded".to_string()),
             answered: None,
+            note: None,
             asked_at: Some(Utc::now()),
             answered_at: None,
         }

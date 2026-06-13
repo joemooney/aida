@@ -3446,6 +3446,7 @@ fn formulate_sweep_decision_request(
                 "Held by the `{tag}` parking tag with no question attached; a human disposition unparks it (or confirms the hold).",
             )),
             answered: None,
+            note: None,
             asked_at: Some(now),
             answered_at: None,
         },
@@ -3476,6 +3477,7 @@ fn formulate_sweep_decision_request(
                 candidate.reason
             )),
             answered: None,
+            note: None,
             asked_at: Some(now),
             answered_at: None,
         },
@@ -4107,21 +4109,31 @@ fn handle_questions_command(
             spec,
             choice,
             all_defaults,
+            note,
         }) => {
             if *all_defaults {
-                if spec.is_some() || choice.is_some() {
+                if spec.is_some() || choice.is_some() || note.is_some() {
                     anyhow::bail!(
                         "--all-defaults answers every recommended default in bulk; \
-                         do not also pass <spec>/<choice>"
+                         do not also pass <spec>/<choice>/--note"
                     );
                 }
                 return questions_answer_all_defaults(backend, store_path);
             }
             match (spec, choice) {
+                // trace:TASK-791 | ai:claude
                 (Some(spec), Some(choice)) => {
-                    questions_answer_one(backend, store_path, spec, choice)
+                    questions_answer_one(backend, store_path, spec, choice, note.as_deref())
                 }
-                (None, None) => questions_answer_loop(backend, store_path),
+                (None, None) => {
+                    if note.is_some() {
+                        anyhow::bail!(
+                            "--note attaches a counter-proposal to a specific answer; \
+                             pass <spec> and <choice> too"
+                        );
+                    }
+                    questions_answer_loop(backend, store_path)
+                }
                 _ => anyhow::bail!(
                     "answer takes either both <spec> and <choice> \
                      (non-interactive) or neither (interactive loop)"
@@ -4165,40 +4177,31 @@ fn handle_decide_command(
         }
         println!();
         print_decision_request(&display_id, &req.title, dr);
-        let prompt = match dr.recommended {
-            Some(r) => format!(
-                "  Choice [1-{}, Enter={}, s=skip]: ",
-                dr.choices.len(),
-                r + 1
-            ),
-            None => format!("  Choice [1-{}, s=skip]: ", dr.choices.len()),
-        };
-        print!("{prompt}");
-        use std::io::Write;
-        std::io::stdout().flush()?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        let entered = input.trim();
-        if entered.eq_ignore_ascii_case("s") || entered.eq_ignore_ascii_case("skip") {
-            println!("  {}", "skipped".dimmed());
-            return Ok(());
-        }
-        let choice = if entered.is_empty() {
-            // Enter accepts the recommended default when one exists.
-            if dr.recommended.is_none() {
-                println!(
-                    "  {}",
-                    "no default — type a choice number or s to skip".dimmed()
-                );
+        // trace:TASK-791 | ai:claude — shared prompt carries the type-note + chat escapes.
+        let (choice, note) = match prompt_decision_action(dr)? {
+            DecisionPromptAction::Skip => {
+                println!("  {}", "skipped".dimmed());
                 return Ok(());
             }
-            "default".to_string()
-        } else {
-            entered.to_string()
+            DecisionPromptAction::NoOp => return Ok(()),
+            DecisionPromptAction::Chat => {
+                println!(
+                    "  {} dropping into clarify — discuss, then re-run `aida decide`",
+                    "→".green()
+                );
+                return questions_clarify(
+                    backend,
+                    store_path,
+                    std::slice::from_ref(&display_id),
+                    false,
+                );
+            }
+            DecisionPromptAction::Pick(c) => (c, None),
+            DecisionPromptAction::PickWithNote { choice, note } => (choice, Some(note)),
         };
         // Reuse the existing single-answer handler: it records + applies the
         // resolution and auto-queues the now-decision-free spec.
-        questions_answer_one(backend, store_path, &display_id, &choice)
+        questions_answer_one(backend, store_path, &display_id, &choice, note.as_deref())
     } else {
         // No pending decision → behave like `aida questions clarify <spec>`.
         questions_clarify(
@@ -4698,6 +4701,11 @@ fn questions_list(backend: &aida_core::CachedGitBackend) -> Result<usize> {
                         req.title.dimmed(),
                         label.bold()
                     );
+                    // TASK-791: surface the counter-proposal note so the
+                    // implementer reads choice + note.
+                    if let Some(note) = &dr.note {
+                        println!("  {:<14} {} {}", "", "note:".dimmed(), note);
+                    }
                 }
             }
         }
@@ -4766,6 +4774,7 @@ fn questions_ask(
         recommended,
         rationale: rationale.map(|s| s.to_string()),
         answered: None,
+        note: None,
         asked_at: Some(now),
         answered_at: None,
     };
@@ -4784,11 +4793,13 @@ fn questions_ask(
 
 /// Record one answer on a spec's DecisionRequest (the non-interactive,
 /// agent-free data op). trace:STORY-522 | ai:claude
+// trace:TASK-791 | ai:claude
 fn questions_answer_one(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
     spec: &str,
     choice: &str,
+    note: Option<&str>,
 ) -> Result<()> {
     let mut req = backend
         .get_requirement_by_spec_id(spec)?
@@ -4803,15 +4814,130 @@ fn questions_answer_one(
         anyhow::bail!("{display_id} is already answered");
     }
     let idx = record_answer(request, choice)?;
+    // TASK-791: a free-text counter-proposal rides ALONGSIDE the picked option.
+    // Pure data: recorded on the request, never interpreted at answer-time.
+    if let Some(n) = note.map(str::trim).filter(|n| !n.is_empty()) {
+        request.note = Some(n.to_string());
+    }
 
     // STORY-555: record was slice 1; now APPLY the resolution + (if it unparks)
     // auto-queue, so answering closes the questions -> burndown loop.
     finalize_answer(backend, store_path, req, idx)
 }
 
+/// What the operator chose at the interactive decision prompt. The pure-pick
+/// path (`Pick`) stays the default; `PickWithNote` / `Chat` are the TASK-791
+/// escapes that mirror /aida-clarify + the AskUserQuestion model.
+// trace:TASK-791 | ai:claude
+enum DecisionPromptAction {
+    /// Skip this question (`s`/`skip`) — leave it pending.
+    Skip,
+    /// No input + no recommended default — re-prompt / move on without acting.
+    NoOp,
+    /// The pure-pick path: a 1-based number or `default`/`recommended`.
+    Pick(String),
+    /// (4) TYPE SOMETHING — a pick plus a free-text counter-proposal note
+    /// recorded alongside it (pure data; no LLM at answer-time).
+    PickWithNote { choice: String, note: String },
+    /// (5) CHAT — drop into the interactive clarifier to discuss before
+    /// deciding.
+    Chat,
+}
+
+/// Render the decision prompt + read one operator action. Shared by the answer
+/// loop and the `aida decide` single-spec path so the option list and the two
+/// escapes stay identical. trace:TASK-791 | ai:claude
+fn prompt_decision_action(request: &aida_core::DecisionRequest) -> Result<DecisionPromptAction> {
+    use std::io::Write;
+    let prompt = match request.recommended {
+        Some(r) => format!(
+            "  Choice [1-{}, Enter={}, s=skip, t=type a note, c=chat]: ",
+            request.choices.len(),
+            r + 1
+        ),
+        None => format!(
+            "  Choice [1-{}, s=skip, t=type a note, c=chat]: ",
+            request.choices.len()
+        ),
+    };
+    print!("{prompt}");
+    std::io::stdout().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    let entered = input.trim();
+
+    if entered.eq_ignore_ascii_case("s") || entered.eq_ignore_ascii_case("skip") {
+        return Ok(DecisionPromptAction::Skip);
+    }
+    // (5) CHAT — drop into `aida questions clarify <spec>` to discuss first.
+    if entered.eq_ignore_ascii_case("c") || entered.eq_ignore_ascii_case("chat") {
+        return Ok(DecisionPromptAction::Chat);
+    }
+    // (4) TYPE SOMETHING — pick an option, then attach a counter-proposal note.
+    // Pure data op: no LLM at answer-time; the implementer reads choice + note.
+    if entered.eq_ignore_ascii_case("t")
+        || entered.eq_ignore_ascii_case("type")
+        || entered.eq_ignore_ascii_case("note")
+    {
+        let pick = read_line_prompt(&format!(
+            "  Which option does the note refine? [1-{}, Enter={}]: ",
+            request.choices.len(),
+            request
+                .recommended
+                .map(|r| (r + 1).to_string())
+                .unwrap_or_else(|| "?".to_string()),
+        ))?;
+        let pick = pick.trim();
+        let choice = if pick.is_empty() {
+            if request.recommended.is_none() {
+                println!("  {}", "no default — note needs a choice number".dimmed());
+                return Ok(DecisionPromptAction::NoOp);
+            }
+            "default".to_string()
+        } else {
+            pick.to_string()
+        };
+        let note = read_line_prompt("  Your note / counter-proposal: ")?;
+        let note = note.trim();
+        if note.is_empty() {
+            println!("  {}", "empty note — nothing recorded".dimmed());
+            return Ok(DecisionPromptAction::NoOp);
+        }
+        return Ok(DecisionPromptAction::PickWithNote {
+            choice,
+            note: note.to_string(),
+        });
+    }
+
+    if entered.is_empty() {
+        // Enter accepts the recommended default when one exists.
+        if request.recommended.is_none() {
+            println!(
+                "  {}",
+                "no default — type a choice number, t to add a note, c to chat, or s to skip"
+                    .dimmed()
+            );
+            return Ok(DecisionPromptAction::NoOp);
+        }
+        return Ok(DecisionPromptAction::Pick("default".to_string()));
+    }
+    Ok(DecisionPromptAction::Pick(entered.to_string()))
+}
+
+/// Print a prompt and read one trimmed line. trace:TASK-791 | ai:claude
+fn read_line_prompt(prompt: &str) -> Result<String> {
+    use std::io::Write;
+    print!("{prompt}");
+    std::io::stdout().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    Ok(input)
+}
+
 /// Interactive answer loop over every pending DecisionRequest. Reads a
-/// choice number (or `s`/`skip`) from stdin per question.
-// trace:STORY-522 | ai:claude
+/// choice number (or `s`/`skip`, `t`=type a note, `c`=chat) from stdin per
+/// question. trace:STORY-522 | ai:claude
+// trace:TASK-791 | ai:claude
 fn questions_answer_loop(
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
@@ -4830,38 +4956,30 @@ fn questions_answer_loop(
         };
         println!();
         print_decision_request(&spec, &req.title, dr);
-        let prompt = match dr.recommended {
-            Some(r) => format!(
-                "  Choice [1-{}, Enter={}, s=skip]: ",
-                dr.choices.len(),
-                r + 1
-            ),
-            None => format!("  Choice [1-{}, s=skip]: ", dr.choices.len()),
-        };
-        print!("{prompt}");
-        use std::io::Write;
-        std::io::stdout().flush()?;
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        let entered = input.trim();
-        if entered.eq_ignore_ascii_case("s") || entered.eq_ignore_ascii_case("skip") {
-            println!("  {}", "skipped".dimmed());
-            continue;
-        }
-        let choice = if entered.is_empty() {
-            // Enter accepts the recommended default when one exists.
-            if dr.recommended.is_none() {
-                println!(
-                    "  {}",
-                    "no default — type a choice number or s to skip".dimmed()
-                );
+        let (choice, note) = match prompt_decision_action(dr)? {
+            DecisionPromptAction::Skip => {
+                println!("  {}", "skipped".dimmed());
                 continue;
             }
-            "default".to_string()
-        } else {
-            entered.to_string()
+            DecisionPromptAction::NoOp => continue,
+            DecisionPromptAction::Chat => {
+                // (5) CHAT — hand off to the interactive clarifier on this spec,
+                // then move on (the discussion may resolve it out-of-band).
+                println!(
+                    "  {} dropping into clarify — discuss, then re-run `aida questions answer`",
+                    "→".green()
+                );
+                if let Err(e) =
+                    questions_clarify(backend, store_path, std::slice::from_ref(&spec), false)
+                {
+                    println!("  {} {e}", "error:".red());
+                }
+                continue;
+            }
+            DecisionPromptAction::Pick(c) => (c, None),
+            DecisionPromptAction::PickWithNote { choice, note } => (choice, Some(note)),
         };
-        match questions_answer_one(backend, store_path, &spec, &choice) {
+        match questions_answer_one(backend, store_path, &spec, &choice, note.as_deref()) {
             Ok(()) => answered += 1,
             Err(e) => println!("  {} {e}", "error:".red()),
         }
@@ -4944,6 +5062,7 @@ mod questions_tests {
             recommended: Some(1),
             rationale: None,
             answered: None,
+            note: None,
             asked_at: None,
             answered_at: None,
         }
@@ -5223,6 +5342,34 @@ mod questions_tests {
         assert!(!req.is_pending());
         // A second answer is refused.
         assert!(record_answer(&mut req, "2").is_err());
+    }
+
+    // TASK-791: a counter-proposal note rides ALONGSIDE the chosen option as
+    // pure data — it never changes which index is recorded.
+    #[test]
+    fn note_is_recorded_alongside_the_pick() {
+        let mut req = sample_request();
+        let idx = record_answer(&mut req, "1").unwrap();
+        // Mirror questions_answer_one's note-attachment step.
+        let note = Some("name it list-claude-sessions");
+        if let Some(n) = note.map(str::trim).filter(|n| !n.is_empty()) {
+            req.note = Some(n.to_string());
+        }
+        assert_eq!(idx, 0, "the picked index is unaffected by the note");
+        assert_eq!(req.answered, Some(0));
+        assert_eq!(req.note.as_deref(), Some("name it list-claude-sessions"));
+    }
+
+    // TASK-791: a blank/whitespace note is dropped (pure-pick path stays clean).
+    #[test]
+    fn blank_note_is_not_recorded() {
+        let mut req = sample_request();
+        record_answer(&mut req, "1").unwrap();
+        let note = Some("   ");
+        if let Some(n) = note.map(str::trim).filter(|n| !n.is_empty()) {
+            req.note = Some(n.to_string());
+        }
+        assert_eq!(req.note, None);
     }
 
     #[test]
