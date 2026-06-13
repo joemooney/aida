@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T04:11:39.441808375Z
-modified_at: 2026-06-13T04:11:39.441808375Z
+modified_at: 2026-06-13T04:13:20.453717453Z
 req_type: Bug
 tags:
 - aida:generate-types
 - build
 - ci
 - relates:STORY-542
+comments:
+- id: 019ebf2f-2cc5-70d0-bcc4-5959023ce399
+  author: joe
+  content: Commit b925723aa references this requirement
+  created_at: 2026-06-13T04:13:20.453717453Z
+  modified_at: 2026-06-13T04:13:20.453717453Z
