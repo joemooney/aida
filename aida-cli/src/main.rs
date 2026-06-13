@@ -13877,6 +13877,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             r#type,
             dangling,
             all,
+            limit,
         }) => {
             // trace:TASK-65 | ai:claude
             // Three modes:
@@ -13893,6 +13894,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 r#type.as_deref(),
                 *dangling,
                 *all,
+                *limit,
             )?;
         }
 
@@ -65981,6 +65983,20 @@ fn plan_fan_out(
             why,
             dropped.join(", ")
         );
+        // Spell out that the low-priority tail is *intentionally* skipped and
+        // how to include it, so dropped specs don't read as silently-missed
+        // work. trace:TASK-778
+        if !include_low
+            && candidates
+                .iter()
+                .any(|c| c.is_low_priority && c.is_approved && dropped.contains(&c.spec_id))
+        {
+            println!(
+                "  {} low-priority specs are skipped by default; re-run with {} to plan them too.",
+                "ℹ".dimmed(),
+                "--include-low".cyan()
+            );
+        }
     }
     if set.is_empty() {
         println!("  nothing to fan out.");
@@ -86017,6 +86033,20 @@ fn handle_export_command(
     // Load requirements
     let store = storage.load()?;
 
+    // The default format is `mapping`, but the documented export -> import
+    // round-trip needs `--format tree`. Passing `--id` while leaving the
+    // format at its default is almost always "I meant a tree export" — warn
+    // rather than silently emit the wrong shape. trace:TASK-778
+    if id.is_some() && format != "tree" {
+        eprintln!(
+            "{}: --id is set but --format is `{}`. The export -> import \
+             round-trip needs `--format tree`; --id is ignored for `{}`.",
+            "Note".yellow(),
+            format,
+            format
+        );
+    }
+
     match format {
         "mapping" => {
             let output_path = output
@@ -86525,8 +86555,15 @@ fn handle_rel_list_modern(
     type_filter: Option<&str>,
     dangling_only: bool,
     include_all: bool,
+    limit: Option<usize>,
 ) -> Result<()> {
     use aida_core::DatabaseBackend;
+
+    // Default cap for the unfiltered global firehose so `aida rel list` with
+    // no args doesn't dump every edge on a large store. Any filter (source /
+    // target / type / dangling) or an explicit --limit overrides it.
+    // trace:TASK-778
+    const GLOBAL_AUTO_CAP: usize = 50;
 
     if source.is_some() && target.is_some() {
         anyhow::bail!(
@@ -86661,6 +86698,26 @@ fn handle_rel_list_modern(
         return Ok(());
     }
 
+    // Apply the row cap. An explicit --limit (when non-zero) always wins;
+    // otherwise the unfiltered global listing auto-caps to avoid a firehose.
+    // A source/target/type/dangling filter lifts the auto-cap. trace:TASK-778
+    let total_rows = rows.len();
+    let is_filtered =
+        source.is_some() || target.is_some() || type_filter.is_some() || dangling_only;
+    let effective_cap: Option<usize> = match limit {
+        Some(0) => None,                               // explicit "no cap"
+        Some(n) => Some(n),                            // explicit cap
+        None if !is_filtered => Some(GLOBAL_AUTO_CAP), // unfiltered global firehose
+        None => None,                                  // filtered: show all matches
+    };
+    let mut truncated_by: Option<(usize, bool)> = None; // (shown, was_auto_cap)
+    if let Some(cap) = effective_cap {
+        if rows.len() > cap {
+            rows.truncate(cap);
+            truncated_by = Some((cap, limit.is_none()));
+        }
+    }
+
     // Column widths sized to data.
     let from_w = rows
         .iter()
@@ -86719,7 +86776,16 @@ fn handle_rel_list_modern(
         );
     }
 
-    println!("\n{} edges", rows.len());
+    if let Some((shown, was_auto_cap)) = truncated_by {
+        let hint = if was_auto_cap {
+            " — pass --limit 0 for all, or a filter (--source/--target/--type)"
+        } else {
+            " — raise or drop --limit (0 = all) to see more"
+        };
+        println!("\n{} of {} edges shown{}", shown, total_rows, hint.dimmed());
+    } else {
+        println!("\n{} edges", rows.len());
+    }
     if hidden_terminal > 0 {
         println!(
             "{}",

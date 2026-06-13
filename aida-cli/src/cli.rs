@@ -2861,6 +2861,14 @@ pub enum RelationshipCommand {
         /// view focuses on actionable work, matching `aida list`.
         #[clap(long)]
         all: bool,
+
+        /// Cap the number of edges shown (0 = no cap). When unset, the
+        /// unfiltered global listing auto-caps to avoid a firehose on large
+        /// stores and prints a note; a source/target/type/dangling filter
+        /// lifts the auto-cap. Pass an explicit `--limit` to override either way.
+        // trace:TASK-778
+        #[clap(long)]
+        limit: Option<usize>,
     },
 }
 
@@ -2871,8 +2879,12 @@ pub enum CommentCommand {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
 
-        /// Comment content (positional or --content)
-        #[clap(long)]
+        /// Comment content. Prefer the positional `[CONTENT]`; this flag is a
+        /// hidden backward-compat alias kept so existing `--content` scripts
+        /// keep working.
+        // trace:TASK-778 — de-duplicated from the positional [CONTENT];
+        // hidden from --help so the two forms don't read as distinct args.
+        #[clap(long, hide = true)]
         content: Option<String>,
 
         /// Comment content (positional argument)
@@ -5806,11 +5818,13 @@ pub enum Command {
         rels: bool,
     },
 
-    /// Query the cross-spec relationship graph from a root spec: transitive
-    /// blocked-by / blocks chains, epic rollup, and reverse impact — the
-    /// questions a flat per-feature spec tool structurally can't answer.
-    /// Read-only. Pick at most one mode (default: --tree).
+    /// Query the cross-spec relationship graph from a root spec. The default
+    /// mode is the epic-rollup tree (`--tree`); other modes answer the
+    /// transitive blocked-by / blocks and reverse-impact questions a flat
+    /// per-feature spec tool structurally can't. Read-only. Pick at most one
+    /// mode.
     // trace:STORY-489 | ai:claude
+    // trace:TASK-778
     Graph {
         /// The root spec (SPEC-ID or UUID) to query from.
         id: String,
@@ -7049,7 +7063,9 @@ pub enum Command {
     /// Export requirements to different formats
     #[clap(hide = true)]
     Export {
-        /// Output format (mapping, json, tree)
+        /// Output format: mapping, json, spec, impl, tree. The default is
+        /// `mapping`; the export -> import round-trip needs `--format tree`.
+        // trace:TASK-778
         #[clap(long, short = 'f', default_value = "mapping")]
         format: String,
 
@@ -7669,11 +7685,13 @@ pub enum Command {
         diff: bool,
     },
 
-    /// Work with implementation plans archived under `docs/plans/`.
-    /// Today: `aida plan verify <file>` lints a plan against the
-    /// structured template — drifted line refs, missing files, absent
-    /// required sections.
+    /// Work with implementation plans archived under `docs/plans/`:
+    /// `verify` lints a plan against the structured template, `helpers`
+    /// derives a reusable-helpers section from the trace graph, `promote`
+    /// moves Approved -> Planned when a plan file exists, and `fan-out`
+    /// plans a whole set. Run `aida plan --help` for the full subcommand list.
     // trace:TASK-93 | ai:claude
+    // trace:TASK-778
     #[clap(subcommand)]
     Plan(PlanCommand),
 
