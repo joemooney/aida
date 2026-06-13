@@ -30588,16 +30588,23 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         SessionCommand::New {
             title,
             permission_mode,
+            sandbox,
             role,
         } => {
             // STORY-495: faithful default — resolve to None (native) unless an
             // explicit `--permission-mode` or the uniform `[agents] bypass`
             // knob says otherwise.
-            let mode = resolve_interactive_launch_mode(permission_mode.as_deref());
-            if mode.is_none() {
+            let mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            if mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
-            session::new_session(title.clone(), mode.as_deref(), role.clone(), None)
+            session::new_session(
+                title.clone(),
+                mode.mode.as_deref(),
+                role.clone(),
+                None,
+                mode.contained,
+            )
         }
         SessionCommand::Start {
             owns,
@@ -30611,14 +30618,15 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             title,
             name,
             permission_mode,
+            sandbox,
             role,
             force_claim,
         } => {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
             // STORY-495: faithful default for the `--launch` path.
-            let mode = resolve_interactive_launch_mode(permission_mode.as_deref());
-            if *launch && mode.is_none() {
+            let mode = resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox)?;
+            if *launch && mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
             session_start(
@@ -30632,7 +30640,8 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 *launch,
                 title.clone(),
                 name.clone(),
-                mode.as_deref(),
+                mode.mode.as_deref(),
+                mode.contained,
                 role.clone(),
                 *force_claim,
             )
@@ -30706,6 +30715,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec,
             cwd,
             permission_mode,
+            sandbox,
             no_context,
             show_context,
             prompt,
@@ -30719,6 +30729,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec.clone(),
             cwd.as_deref(),
             permission_mode.as_deref(),
+            *sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
@@ -30941,6 +30952,18 @@ fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
     }
 }
 
+// trace:STORY-567 | ai:codex
+fn tool_contained_flags(agent_type: &str) -> Vec<String> {
+    match agent_type {
+        "claude" => {
+            let mut flags = vec!["--permission-mode".to_string(), "dontAsk".to_string()];
+            flags.extend(session::claude_contained_flags());
+            flags
+        }
+        _ => Vec::new(),
+    }
+}
+
 /// TASK-646: resolve the role for a SPAWNED CHILD agent. ADR-2 ordering:
 ///   1. `--role X` → use X (no prompt).
 ///   2. no `--role`, stdin is a TTY → prompt via the shared role picker,
@@ -30993,6 +31016,7 @@ fn agent_new_claude(
     spec: Option<String>,
     cwd: Option<&std::path::Path>,
     permission_mode: Option<&str>,
+    sandbox: bool,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -31012,11 +31036,18 @@ fn agent_new_claude(
     // operator passed it explicitly. Otherwise leave Claude on its native
     // posture and let the uniform `[agents] bypass` knob (applied in
     // `apply_agent_default_flags`) decide whether to flip the whole fleet.
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
     let mut default_args = Vec::new();
-    let mut explicit = permission_mode.is_some();
+    let mut explicit = permission_mode.is_some() || sandbox;
     if let Some(m) = permission_mode {
         default_args.push("--permission-mode".to_string());
         default_args.push(m.to_string());
+    } else if sandbox {
+        default_args.extend(tool_contained_flags("claude"));
     } else if bg {
         // STORY-495: a detached `--bg` launch has no answerable TTY, so a
         // native (prompting) child would hang forever on the first
@@ -31514,10 +31545,23 @@ fn apply_agent_default_flags(
         // precedence over the uniform knob (TASK-557 raw passthrough). A
         // `--no-default-flags` launch skips this block entirely (agents.toml
         // is never read), so it lands on the faithful native default.
-        if !explicit_permission && per_tool.is_empty() && load_agents_bypass(project_root)? {
-            config
-                .default_args
-                .extend(tool_bypass_flags(config.agent_type));
+        if !explicit_permission && per_tool.is_empty() {
+            let bypass = load_agents_bypass(project_root)?;
+            let contained = load_agents_contained(project_root)?;
+            if bypass && contained {
+                anyhow::bail!(
+                    "[agents] bypass and [agents] contained are mutually exclusive launch postures"
+                );
+            }
+            if contained {
+                config
+                    .default_args
+                    .extend(tool_contained_flags(config.agent_type));
+            } else if bypass {
+                config
+                    .default_args
+                    .extend(tool_bypass_flags(config.agent_type));
+            }
         }
         config.default_args.extend(per_tool);
     }
@@ -31594,6 +31638,22 @@ fn load_agents_bypass(project_root: &std::path::Path) -> Result<bool> {
         bypass = v;
     }
     Ok(bypass)
+}
+
+// trace:STORY-567 | ai:codex
+fn load_agents_contained(project_root: &std::path::Path) -> Result<bool> {
+    let mut contained = false;
+    if let Some(home) = aida_home_dir() {
+        if let Some(v) = read_agents_bool_from_file(&home.join(".aida/agents.toml"), "contained")? {
+            contained = v;
+        }
+    }
+    if let Some(v) =
+        read_agents_bool_from_file(&project_root.join(".aida/agents.toml"), "contained")?
+    {
+        contained = v;
+    }
+    Ok(contained)
 }
 
 /// TASK-698: first-machine-setup prompt for the agent permission posture.
@@ -31724,12 +31784,16 @@ fn write_global_agents_posture(path: &std::path::Path, bypass: bool) -> Result<(
 }
 
 fn read_agents_bypass_from_file(path: &std::path::Path) -> Result<Option<bool>> {
+    read_agents_bool_from_file(path, "bypass")
+}
+
+fn read_agents_bool_from_file(path: &std::path::Path, key: &str) -> Result<Option<bool>> {
     let Some(value) = parse_agents_toml(path)? else {
         return Ok(None);
     };
     Ok(value
         .get("agents")
-        .and_then(|agents| agents.get("bypass"))
+        .and_then(|agents| agents.get(key))
         .and_then(|b| b.as_bool()))
 }
 
@@ -31740,16 +31804,56 @@ fn read_agents_bypass_from_file(path: &std::path::Path) -> Result<Option<bool>> 
 /// these launchers do not layer the `AIDA_PERMISSION_MODE` env or
 /// `[behavior] permission_mode` config — that resolution is queue-work
 /// specific and predates this change.)
-fn resolve_interactive_launch_mode(flag: Option<&str>) -> Option<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedClaudeLaunch {
+    mode: Option<String>,
+    contained: bool,
+}
+
+fn resolve_interactive_launch_mode(
+    flag: Option<&str>,
+    sandbox: bool,
+) -> Result<ResolvedClaudeLaunch> {
+    if sandbox && flag.filter(|s| !s.is_empty()).is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
     if let Some(m) = flag.filter(|s| !s.is_empty()) {
-        return Some(m.to_string());
+        return Ok(ResolvedClaudeLaunch {
+            mode: Some(m.to_string()),
+            contained: false,
+        });
     }
     if let Ok(root) = find_main_worktree_root() {
-        if load_agents_bypass(&root).unwrap_or(false) {
-            return Some("bypassPermissions".to_string());
+        let bypass = load_agents_bypass(&root).unwrap_or(false);
+        let contained = sandbox || load_agents_contained(&root).unwrap_or(false);
+        if bypass && contained {
+            anyhow::bail!(
+                "[agents] bypass and [agents] contained are mutually exclusive launch postures"
+            );
+        }
+        if contained {
+            return Ok(ResolvedClaudeLaunch {
+                mode: Some("dontAsk".to_string()),
+                contained: true,
+            });
+        }
+        if bypass {
+            return Ok(ResolvedClaudeLaunch {
+                mode: Some("bypassPermissions".to_string()),
+                contained: false,
+            });
         }
     }
-    None
+    Ok(ResolvedClaudeLaunch {
+        mode: if sandbox {
+            Some("dontAsk".to_string())
+        } else {
+            None
+        },
+        contained: sandbox,
+    })
 }
 
 /// STORY-495: one-time, discoverable migration pointer printed the first time
@@ -31863,6 +31967,8 @@ fn prepare_agent_launch(
                 // launch path injects its own posture via `config.default_args`.
                 /* launch_permission_mode */
                 None,
+                /* launch_contained */
+                false,
                 role.clone(),
                 /* force_claim */ false,
             );
@@ -32971,6 +33077,31 @@ mod agent_launcher_tests {
         assert!(tool_bypass_flags("unknown").is_empty());
     }
 
+    #[test]
+    fn tool_contained_flags_for_claude_include_strict_settings() {
+        let flags = tool_contained_flags("claude");
+        assert_eq!(flags[0], "--permission-mode");
+        assert_eq!(flags[1], "dontAsk");
+        assert!(flags.contains(&"--setting-sources".to_string()));
+        assert!(flags.contains(&"project".to_string()));
+        let settings_pos = flags
+            .iter()
+            .position(|flag| flag == "--settings")
+            .expect("contained flags include inline settings");
+        let settings: serde_json::Value =
+            serde_json::from_str(flags.get(settings_pos + 1).unwrap()).unwrap();
+        assert_eq!(settings["sandbox"]["enabled"], true);
+        assert_eq!(settings["sandbox"]["failIfUnavailable"], true);
+        assert_eq!(settings["sandbox"]["allowUnsandboxedCommands"], false);
+        assert!(settings["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::Value::String(
+                "Bash(git push --force *)".into()
+            )));
+        assert!(tool_contained_flags("codex").is_empty());
+    }
+
     /// STORY-495: the `[agents] bypass` knob is off when no agents.toml
     /// declares it; project overrides the user base. trace:STORY-495 | ai:claude
     #[test]
@@ -33009,6 +33140,30 @@ mod agent_launcher_tests {
         merge_agent_flags_from_file(&mut flags, &project.join(".aida/agents.toml"), "codex")
             .unwrap();
         assert_eq!(flags, vec!["--foo"]);
+    }
+
+    #[test]
+    fn agents_contained_knob_user_base_and_project_override() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        assert!(!load_agents_contained(&project).unwrap());
+        std::fs::write(
+            home.join(".aida/agents.toml"),
+            "[agents]\ncontained = true\n",
+        )
+        .unwrap();
+        assert!(load_agents_contained(&project).unwrap());
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\ncontained = false\n",
+        )
+        .unwrap();
+        assert!(!load_agents_contained(&project).unwrap());
     }
 
     /// TASK-698: the first-machine-setup writer emits a valid agents.toml whose
@@ -33099,6 +33254,68 @@ mod agent_launcher_tests {
             claude.default_args,
             vec!["--permission-mode", "bypassPermissions"]
         );
+    }
+
+    #[test]
+    fn apply_agent_default_flags_contained_injects_when_native() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\ncontained = true\n",
+        )
+        .unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        let mut claude = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        apply_agent_default_flags(
+            &mut claude,
+            &project,
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+            false,
+        )
+        .unwrap();
+        assert_eq!(claude.default_args[0], "--permission-mode");
+        assert_eq!(claude.default_args[1], "dontAsk");
+        assert!(claude.default_args.contains(&"--settings".to_string()));
+    }
+
+    #[test]
+    fn apply_agent_default_flags_rejects_bypass_and_contained() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\nbypass = true\ncontained = true\n",
+        )
+        .unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        let mut claude = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: "claude",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        let err = apply_agent_default_flags(
+            &mut claude,
+            &project,
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+            false,
+        )
+        .unwrap_err();
+        assert!(format!("{err:?}").contains("mutually exclusive"));
     }
 
     /// STORY-495: an explicit posture (e.g. `--permission-mode`) skips the
@@ -36512,6 +36729,7 @@ fn session_start(
     launch_name: Option<String>,
     // STORY-495: `None` → faithful native launch (no `--permission-mode`).
     launch_permission_mode: Option<&str>,
+    launch_contained: bool,
     launch_role: Option<String>,
     // BUG-379: claim a spec stuck in InProgress (no local lease) or
     // NeedsAttention. Done/Completed/Rejected/Draft still refuse.
@@ -37372,9 +37590,13 @@ fn session_start(
             format!(
                 "launching claude in {} ({})",
                 worktree_path.display(),
-                launch_permission_mode
-                    .map(|m| format!("permission-mode {}", m))
-                    .unwrap_or_else(|| "native permission posture".to_string())
+                if launch_contained {
+                    "contained sandbox".to_string()
+                } else {
+                    launch_permission_mode
+                        .map(|m| format!("permission-mode {}", m))
+                        .unwrap_or_else(|| "native permission posture".to_string())
+                }
             )
             .cyan()
         );
@@ -37397,6 +37619,7 @@ fn session_start(
             launch_permission_mode,
             launch_role,
             derived_name,
+            launch_contained,
         );
     }
 
@@ -88994,7 +89217,7 @@ fn handle_review_spec(
     let status: std::process::ExitStatus = if interactive {
         // Interactive reviewer: let the human watch; native permission posture.
         let name = format!("review-{}", spec_id.to_ascii_lowercase());
-        session::spawn_claude_session(None, Some(&name), &prompt, &session_id)
+        session::spawn_claude_session(None, Some(&name), &prompt, &session_id, false)
             .context("failed to launch the reviewer")?
     } else {
         // Non-interactive: headless reviewer, AskUserQuestion structurally denied.
@@ -89003,7 +89226,7 @@ fn handle_review_spec(
             .join("headless-logs")
             .join(format!("review-{}-{}.jsonl", spec_id, session_id));
         let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-        session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee_opts)
+        session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee_opts, false)
             .context("failed to launch the headless reviewer")?
     };
     if !status.success() {
@@ -94749,6 +94972,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             id,
             count,
             permission_mode,
+            sandbox,
             no_launch,
             plan_only,
             with_plan,
@@ -95424,6 +95648,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 &user_id,
                 resolved_id.as_deref().or(effective_id),
                 permission_mode.as_deref(),
+                *sandbox,
                 *no_launch,
                 role.as_deref(),
                 *no_pull,
@@ -96294,7 +96519,7 @@ mod headless_hint_tests {
             "it's a prompt",
         ] {
             let sid = "019e34ab-a8e0-7530-9569-e8ea6783af4a";
-            let hint = headless_launch_hint(prompt, sid);
+            let hint = headless_launch_hint(prompt, sid, false);
             let parsed = split_shell_words(&hint);
 
             // STORY-278: hint prefixes `AIDA_HEADLESS=1` to mirror the env
@@ -96536,6 +96761,7 @@ fn handle_queue_rework(
             &user_id,
             Some(&spec_id),
             permission_mode,
+            /* sandbox */ false,
             /* no_launch */ false,
             for_role_resolved.as_deref(),
             no_pull,
@@ -97425,9 +97651,19 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str, plan_only: bool) -
 /// STORY-278: prefix `AIDA_HEADLESS=1` so the copy-paste hint also sets
 /// the env var `exec_claude_headless` puts on the child via `.env(...)`.
 /// trace:BUG-225 | ai:claude
-fn headless_launch_hint(prompt: &str, session_id: &str) -> String {
-    let argv = session::claude_headless_args(prompt, session_id);
+fn headless_launch_hint(prompt: &str, session_id: &str, contained: bool) -> String {
+    let argv = session::claude_headless_args_with_posture(prompt, session_id, contained);
     format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv))
+}
+
+fn claude_posture_display(permission_mode: Option<&str>, contained: bool) -> String {
+    if contained {
+        "contained sandbox".to_string()
+    } else {
+        permission_mode
+            .map(|m| format!("permission-mode {}", m))
+            .unwrap_or_else(|| "native permission posture".to_string())
+    }
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -97441,6 +97677,7 @@ fn handle_queue_work(
     user_id: &str,
     arg: Option<&str>,
     permission_mode: Option<&str>,
+    sandbox: bool,
     no_launch: bool,
     role_override: Option<&str>,
     no_pull: bool,
@@ -97673,14 +97910,37 @@ fn handle_queue_work(
         .as_deref()
         .map(|r| load_agents_bypass(r).unwrap_or(false))
         .unwrap_or(false);
-    let (permission_mode, permission_mode_origin) = resolve_queue_work_permission_mode(
-        permission_mode,
-        env_mode.as_deref(),
-        config_mode.as_deref(),
-        bypass_knob,
-        plan_only,
-    );
-    if permission_mode.is_none() {
+    let contained_knob = project_root_for_config
+        .as_deref()
+        .map(|r| load_agents_contained(r).unwrap_or(false))
+        .unwrap_or(false);
+    let contained_env = std::env::var("AIDA_CONTAINED")
+        .ok()
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "yes"));
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    let contained = !plan_only && (sandbox || contained_env || contained_knob);
+    if contained && bypass_knob {
+        anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
+    }
+    if contained {
+        std::env::set_var("AIDA_CONTAINED", "1");
+    }
+    let (permission_mode, permission_mode_origin) = if contained {
+        (Some("dontAsk".to_string()), "contained sandbox")
+    } else {
+        resolve_queue_work_permission_mode(
+            permission_mode,
+            env_mode.as_deref(),
+            config_mode.as_deref(),
+            bypass_knob,
+            plan_only,
+        )
+    };
+    if permission_mode.is_none() && !contained {
         maybe_show_faithful_launcher_notice();
     }
 
@@ -98237,6 +98497,8 @@ fn handle_queue_work(
         // the resolved `permission_mode` into the exec call directly.
         /* permission_mode */
         permission_mode.as_deref(),
+        /* launch_contained */
+        false,
         /* role */ Some(role.clone()),
         /* force_claim */ force_claim,
     )?;
@@ -98400,16 +98662,24 @@ fn handle_queue_work(
             // the env `exec_claude_headless` sets, so the copy-pasted hint
             // launches an equivalent process.
             let sid = claude_session_id.as_deref().unwrap_or_default();
-            eprintln!("  {}", headless_launch_hint(&prompt, sid).cyan());
+            eprintln!("  {}", headless_launch_hint(&prompt, sid, contained).cyan());
         } else {
-            // STORY-495: omit `--permission-mode` from the hint when native.
-            let mode_prefix = permission_mode
-                .as_deref()
-                .map(|m| format!("--permission-mode {} ", m))
-                .unwrap_or_default();
+            let mut args = session::claude_session_args(
+                permission_mode.as_deref(),
+                None,
+                Some(&prompt),
+                None,
+                contained,
+            );
+            if contained && !args.iter().any(|arg| arg == "--permission-mode") {
+                args.splice(
+                    0..0,
+                    ["--permission-mode".to_string(), "dontAsk".to_string()],
+                );
+            }
             eprintln!(
                 "  {}",
-                format!("claude {}\"{}\"", mode_prefix, prompt).cyan()
+                format!("claude {}", shell_join_display(&args)).cyan()
             );
         }
         return Ok(());
@@ -98492,6 +98762,7 @@ fn handle_queue_work(
             no_human,
             quiet,
             &verdict_path,
+            contained,
         );
     }
     match launch {
@@ -98505,9 +98776,10 @@ fn handle_queue_work(
                     "{} {}",
                     "▶".green().bold(),
                     format!(
-                        "resuming claude headless session {} in {} (claude -p, permission-mode bypassPermissions, prompt `{}`)",
+                        "resuming claude headless session {} in {} (claude -p, {}, prompt `{}`)",
                         &id[..id.len().min(8)],
                         lease.worktree_path.display(),
+                        claude_posture_display(permission_mode.as_deref(), contained),
                         prompt
                     )
                     .cyan()
@@ -98529,6 +98801,7 @@ fn handle_queue_work(
                     &log_path,
                     &lease.worktree_path,
                     &tee_opts,
+                    contained,
                 )?;
                 std::process::exit(status.code().unwrap_or(1));
             }
@@ -98539,14 +98812,11 @@ fn handle_queue_work(
                     "resuming claude session {} in {} ({})",
                     &id[..id.len().min(8)],
                     lease.worktree_path.display(),
-                    permission_mode
-                        .as_deref()
-                        .map(|m| format!("permission-mode {}", m))
-                        .unwrap_or_else(|| "native permission posture".to_string())
+                    claude_posture_display(permission_mode.as_deref(), contained)
                 )
                 .cyan()
             );
-            session::exec_claude_resume(&id, permission_mode.as_deref())
+            session::exec_claude_resume(&id, permission_mode.as_deref(), contained)
         }
         QueueWorkLaunch::Fresh(id) => {
             let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
@@ -98564,8 +98834,9 @@ fn handle_queue_work(
                     "{} {}",
                     "▶".green().bold(),
                     format!(
-                        "launching claude headless in {} (claude -p, permission-mode bypassPermissions, prompt `{}`)",
+                        "launching claude headless in {} (claude -p, {}, prompt `{}`)",
                         lease.worktree_path.display(),
+                        claude_posture_display(permission_mode.as_deref(), contained),
                         prompt
                     )
                     .cyan()
@@ -98582,7 +98853,9 @@ fn handle_queue_work(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label(&lease.branch);
-                return session::exec_claude_headless(&prompt, &id, &log_path, &tee_opts);
+                return session::exec_claude_headless(
+                    &prompt, &id, &log_path, &tee_opts, contained,
+                );
             }
             eprintln!(
                 "{} {}",
@@ -98590,10 +98863,7 @@ fn handle_queue_work(
                 format!(
                     "launching claude in {} ({}, prompt `{}`)",
                     lease.worktree_path.display(),
-                    permission_mode
-                        .as_deref()
-                        .map(|m| format!("permission-mode {}", m))
-                        .unwrap_or_else(|| "native permission posture".to_string()),
+                    claude_posture_display(permission_mode.as_deref(), contained),
                     prompt
                 )
                 .cyan()
@@ -98603,6 +98873,7 @@ fn handle_queue_work(
                 name.as_deref(),
                 &prompt,
                 &id,
+                contained,
             )
         }
     }
@@ -98634,6 +98905,7 @@ fn run_standalone_reviewer(
     no_human: bool,
     quiet: bool,
     verdict_path: &std::path::Path,
+    contained: bool,
 ) -> Result<()> {
     // Spawn claude, wait, and capture the headless JSONL log path (None
     // for an interactive review — there is no stream-json log).
@@ -98648,9 +98920,10 @@ fn run_standalone_reviewer(
                     "{} {}",
                     "▶".green().bold(),
                     format!(
-                        "resuming claude headless reviewer session {} in {} (claude -p, permission-mode bypassPermissions)",
+                        "resuming claude headless reviewer session {} in {} (claude -p, {})",
                         &id[..id.len().min(8)],
-                        worktree.display()
+                        worktree.display(),
+                        claude_posture_display(permission_mode, contained)
                     )
                     .cyan()
                 );
@@ -98666,7 +98939,7 @@ fn run_standalone_reviewer(
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
                 let status = session::spawn_claude_headless_resume(
-                    prompt, &id, &log_path, worktree, &tee_opts,
+                    prompt, &id, &log_path, worktree, &tee_opts, contained,
                 )?;
                 (status, Some(log_path))
             } else {
@@ -98677,13 +98950,14 @@ fn run_standalone_reviewer(
                         "resuming claude reviewer session {} in {} ({})",
                         &id[..id.len().min(8)],
                         worktree.display(),
-                        permission_mode
-                            .map(|m| format!("permission-mode {}", m))
-                            .unwrap_or_else(|| "native permission posture".to_string())
+                        claude_posture_display(permission_mode, contained)
                     )
                     .cyan()
                 );
-                (session::spawn_claude_resume(&id, permission_mode)?, None)
+                (
+                    session::spawn_claude_resume(&id, permission_mode, contained)?,
+                    None,
+                )
             }
         }
         QueueWorkLaunch::Fresh(id) => {
@@ -98696,8 +98970,9 @@ fn run_standalone_reviewer(
                     "{} {}",
                     "▶".green().bold(),
                     format!(
-                        "launching claude headless reviewer in {} (claude -p, permission-mode bypassPermissions)",
-                        worktree.display()
+                        "launching claude headless reviewer in {} (claude -p, {})",
+                        worktree.display(),
+                        claude_posture_display(permission_mode, contained)
                     )
                     .cyan()
                 );
@@ -98712,7 +98987,8 @@ fn run_standalone_reviewer(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                let status = session::spawn_claude_headless(prompt, &id, &log_path, &tee_opts)?;
+                let status =
+                    session::spawn_claude_headless(prompt, &id, &log_path, &tee_opts, contained)?;
                 (status, Some(log_path))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
@@ -98722,15 +98998,18 @@ fn run_standalone_reviewer(
                     format!(
                         "launching claude reviewer in {} ({}, prompt `{}`)",
                         worktree.display(),
-                        permission_mode
-                            .map(|m| format!("permission-mode {}", m))
-                            .unwrap_or_else(|| "native permission posture".to_string()),
+                        claude_posture_display(permission_mode, contained),
                         prompt
                     )
                     .cyan()
                 );
-                let status =
-                    session::spawn_claude_session(permission_mode, name.as_deref(), prompt, &id)?;
+                let status = session::spawn_claude_session(
+                    permission_mode,
+                    name.as_deref(),
+                    prompt,
+                    &id,
+                    contained,
+                )?;
                 (status, None)
             }
         }
@@ -107004,6 +107283,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &log_path,
             &worktree,
             &tee_opts,
+            false,
         )
         .map_err(|e| {
             PhaseFailure::of(
