@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T18:52:20.803652533Z
-modified_at: 2026-06-13T18:52:20.803652533Z
+modified_at: 2026-06-13T19:13:11.259075250Z
 req_type: Spike
 tags:
 - agent-execution
@@ -17,4 +17,10 @@ tags:
 - research
 - sandbox
 - security
+comments:
+- id: 019ec267-025b-70c1-82fe-124091607bdc
+  author: joe
+  content: 'Research synthesis complete → docs/competitive-analysis/2026-06-13-sandbox-execution.md (3 parallel web-research streams + repo code-mapping; every claim source-URL''d, least-sure claims flagged). KEY FINDING: the seam already exists — STORY-567''s [agents] contained posture turns on Claude Code''s own bubblewrap Bash sandbox; what''s missing is (a) an OS boundary around the WHOLE claude process and (b) network-egress allowlisting (the headline competitor capability; AIDA is currently in the open-egress camp with Jules/OpenHands/Aider/Amp). RECOMMENDED: bubblewrap for cheap-local (already in the stack, native perf, surgical worktree scoping — overturns Podman-first), Firecracker microVM for unattended drains with gVisor fallback (overturns gVisor-first: gVisor has a real cargo-build FS-syscall tax + no iptables NAT). The egress allowlist is host/proxy-enforced, NOT a sandbox property — reuse Anthropic''s devcontainer init-firewall.sh (default-DROP + ipset). SMALLEST SLICE FIRST: Slice1 (~1d) = harden the existing contained settings JSON with allowedDomains (git remote + crates.io + npmjs) — config-only, closes the egress hole, matches table-stakes-plus; Slice2 = opt-in [sandbox] backend=bwrap wrapping the spawn, worktree as mount scope; Slice3 = microvm/gvisor for --no-human, PARK until 1-2 prove the seam.'
+  created_at: 2026-06-13T19:13:11.259075250Z
+  modified_at: 2026-06-13T19:13:11.259075250Z
 human_only: true
