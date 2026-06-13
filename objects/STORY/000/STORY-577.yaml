@@ -8,10 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:42:01.933795456Z
-modified_at: 2026-06-13T01:47:43.278851714Z
+modified_at: 2026-06-13T01:48:24.647175656Z
 req_type: Story
 tags:
+- advisor
 - deferred:stabilization-first
+- parent:EPIC-39
+- repositioning
+- ws6-triage
 relationships:
 - rel_type: !Custom related-to
   target_id: 019eacf3-b6b0-7993-bee7-57646f035ddb
