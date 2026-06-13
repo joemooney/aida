@@ -13,7 +13,7 @@ description: |-
   5. Mailbox 'list'/'inbox' views reflect retracted (shown as withdrawn) vs deleted (absent).
 
   Why: closes the test/mistake-cruft gap, and the false-immutability surprise; the policy default (true) keeps it ergonomic while letting regulated projects opt into immutability. Relates: BUG-513, the EPIC-39 governance/audit thesis (an immutable mailbox is one governance posture; this makes it a choice).
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
