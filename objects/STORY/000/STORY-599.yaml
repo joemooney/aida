@@ -3,12 +3,12 @@ spec_id: STORY-599
 agreed_id: STORY-599
 title: 'CLI manual: Ch10 — Storage and data: db/cache/import/export/fetch (the git-canonical store + cache model)'
 description: Write to the docs/cli/01-getting-started.md template. Ground each command against live --help. Explain the orphan-branch store + rebuildable cache + write-through model. Cross-link the journey spine. Branch cli-manual.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:16:31.616062115Z
-modified_at: 2026-06-13T06:17:29.098520692Z
+modified_at: 2026-06-13T20:10:57.746042157Z
 req_type: Story
 tags:
 - cli-manual
