@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T21:14:59.226019193Z
+modified_at: 2026-06-13T23:02:59.035546810Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -86,3 +86,15 @@ comments:
     DEFERRED from this away-session: composing B's delicate orphan-worktree ff unsupervised at a marathon tail is exactly the store-corruption risk to avoid (cf. the option-1 overturn). Implement in a focused/supervised pass once the operator picks A vs B. trace:relates:STORY-79
   created_at: 2026-06-13T21:14:59.226019193Z
   modified_at: 2026-06-13T21:14:59.226019193Z
+decision_request:
+  question: 'BUG-530 fix approach: how should the burndown preflight avoid reading a stale local store?'
+  choices:
+  - label: Reuse maybe_sync_pull (fetch+rebase) before the preflight
+    consequence: Proven, never-fails; ~1 network pull per 'burndown run' (not a hot loop)
+    resolution: noop
+  - label: Lightweight no-network local-ref behind-check + ff-the-worktree
+    consequence: Cheaper, but needs new delicate orphan-worktree git plumbing (store-corruption risk); leans on the bg fetcher
+    resolution: noop
+  recommended: 0
+  rationale: A = correctness+safety now, trivial cost for occasional runs; B = an optimization once pull latency is actually felt.
+  asked_at: 2026-06-13T23:02:59.035546810Z
