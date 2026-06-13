@@ -3,12 +3,12 @@ spec_id: TASK-766
 agreed_id: TASK-766
 title: '**Phase 5 (deferred, NAMED — not designed here): assignment / RBAC.** Which-human assignment, permissions, human hierarchy. Out of scope per the classification/assignment line; only meaningful with >1 human'
 description: ''
-status: Draft
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:31:03.173431900Z
-modified_at: 2026-06-13T01:47:34.624087703Z
+modified_at: 2026-06-13T01:47:36.144105481Z
 req_type: Task
 relationships:
 - rel_type: Child
