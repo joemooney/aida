@@ -11,12 +11,12 @@ description: |-
   3. Concurrent-read-during-write test: a reader gets the last-committed snapshot, no block/error, while a writer holds a write txn.
   4. WAL sidecar files (-wal, -shm) are gitignored (.aida/* already deny-by-default — confirm).
   5. No behavior change to the write-through model.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T23:53:59.721720918Z
-modified_at: 2026-06-13T01:57:47.101856703Z
+modified_at: 2026-06-13T02:12:29.461675334Z
 req_type: Story
 tags:
 - aida:cache
@@ -30,3 +30,15 @@ comments:
   content: 'Codex implementation opened PR #802 from branch codex/story-580-581. Scope: enable WAL at cache connection open while preserving busy_timeout=0 and existing retry ladder; added PRAGMA and concurrent-read-during-write tests. Verification passed: cargo test -p aida-core cache_ --features native; cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli.'
   created_at: 2026-06-13T01:57:47.101852396Z
   modified_at: 2026-06-13T01:57:47.101852396Z
+history:
+- id: 019ebec0-893c-7263-b1be-ad84b41dcb66
+  author: aida-auto-bump
+  timestamp: 2026-06-13T02:12:29.628465944Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T02:12:29.461675334Z
+  completion_sha: 35651f2e4b8bf17054e6cb8ed2accb02cc5fa8bc
