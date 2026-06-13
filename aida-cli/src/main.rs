@@ -72854,6 +72854,22 @@ fn handle_burndown_run(
     permission_mode: Option<&str>,
     dry_run: bool,
 ) -> Result<()> {
+    // BUG-530: sync the orphan store before computing the blessed set. The
+    // preflight reads the local `.aida-store/` worktree (via
+    // resolve_burndown_sets → load_store_for_lookup → GitBackend), which can
+    // LAG origin when a prior drain pushed Done→Completed bumps that this clone
+    // hasn't pulled — so the preflight would otherwise announce stale specs
+    // (e.g. already-Completed/unqueued ones). maybe_sync_pull is the proven
+    // `--sync` primitive: fetch + ff/rebase, and it NEVER fails the caller (every
+    // error → a warning), so a degraded/offline sync just falls back to the
+    // local view. Runs on dry-run too, so the previewed set matches the real
+    // drain. trace:BUG-530 | ai:claude
+    if let Ok(project_root) = find_project_root() {
+        if let Some(store_path) = detect_distributed_store_from(&project_root) {
+            let _ = maybe_sync_pull(&store_path);
+        }
+    }
+
     let (ready, awaiting_signoff, parked, _titles) = resolve_burndown_sets(status, tag, batch)?;
 
     println!("{} burndown run", "▸".cyan().bold());
