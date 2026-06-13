@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-13T17:48:18.415281566Z
+modified_at: 2026-06-13T18:37:52.628865786Z
 req_type: Story
 tags:
 - agent-context
@@ -29,3 +29,18 @@ comments:
   content: 'Concrete finding (2026-06-13): during a live ''aida burndown run'' (PID confirmed running), there was NO log file under .aida/ to tail and NO incremental output — because the headless ''claude -p'' is launched WITHOUT streaming flags, so it buffers silently until completion. Two-part implementation path: (a) launch the drain''s ''claude -p'' with ''--output-format stream-json --verbose'' (or equivalent) AND tee to a discoverable path like .aida/burndown/<drain-id>.log; (b) ''aida burndown status''/''watch'' tails that + renders plan position/phase. Until then the operator has no signal at all — not even a log. The in-flight marking (facet b) is the substrate complement: stamp blessed specs as ''claimed by drain <id>'' so list/show/queue reflect it even without reading the log.'
   created_at: 2026-06-13T17:48:18.415281566Z
   modified_at: 2026-06-13T17:48:18.415281566Z
+- id: 019ec246-ae74-7d91-8b2a-defd3c28818d
+  author: joe
+  content: |-
+    DESIGN ENRICHMENT (operator's Ctrl-O question, 2026-06-13; Claude Code facts confirmed via claude-code-guide):
+
+    Ctrl-O = the interactive transcript/verbose-tool-use viewer; TUI-ONLY, no equivalent in 'claude -p' headless mode. But the same event stream is reachable headlessly, AND a full JSONL transcript is already written to ~/.claude/projects/<project>/<session-id>.jsonl (one JSON object per line: messages, tool-uses, metadata; 30-day retention). 'claude -p' sessions don't appear in the session picker but ARE resumable by id (claude --resume <id>). Headless streaming flags: '--output-format stream-json --verbose --include-partial-messages' → JSONL events (system/init, tool calls, text_delta, system/api_retry with attempt/max_retries — note: this is also how the wave-2 rate-limit hiccup would surface). They compose; render with jq.
+
+    THREE OBSERVABILITY PATHS:
+     A. ATTACHED/WATCH mode — 'aida burndown run --attached' launches an INTERACTIVE 'claude' (not -p) so the operator watches live via native Ctrl-O. Trades walk-away for visibility; near-zero new code (leans on Claude Code's own viewer). Ideal for the SUPERVISED case (e.g. keystone-reliability drains the advisor is told to watch).
+     B. STREAM-TEE — keep 'claude -p', add '--output-format stream-json --verbose --include-partial-messages', tee to .aida/burndown/<drain-id>.jsonl; 'aida burndown status/watch' renders it (jq-style). Walk-away preserved + progress on demand.
+     C. TRANSCRIPT-TAIL — keep the launch as-is, capture the child session-id at spawn, and have 'aida burndown watch' tail the EXISTING ~/.claude/projects/<slug>/<session-id>.jsonl. Lightest (no launch-flag change) — only needs session-id capture.
+
+    RECOMMENDATION: ship B or C for the default walk-away drain (the drain's whole point is walk-away), PLUS A as an opt-in '--attached' for supervised drains. C is lightest if session-id capture is clean; B is most self-contained (we own the tee path). The in-flight/'expected-to-be-processed' marking (facet b of this story) is orthogonal and substrate-side — unchanged by this.
+  created_at: 2026-06-13T18:37:52.628865786Z
+  modified_at: 2026-06-13T18:37:52.628865786Z
