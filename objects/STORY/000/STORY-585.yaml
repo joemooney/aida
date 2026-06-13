@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:09:45.946450558Z
-modified_at: 2026-06-13T15:51:05.234023494Z
+modified_at: 2026-06-13T15:51:14.787184626Z
 req_type: Story
 tags:
 - agent-context
@@ -57,3 +57,10 @@ comments:
   content: 'Re-scoped 2026-06-13 (operator decision): this story keeps the NOTICE/READ half — acceptance #1-5 (peek/unread, the mailbox-notice verb + SessionStart/per-turn hooks, /aida-read-mail, explicit-ack-stays-opt-in, role+user identity, MCP parity). The INTERPRET half from the 2026-06-12 refinements comment (intent markers fyi|request|handoff + the act-vs-prompt [mailbox] policy) moved to child TASK-782 — it is a Message schema change + autonomy-mode wiring deserving its own focused review. #1-5 here close the demonstrated ''mail sits unread'' gap.'
   created_at: 2026-06-13T15:29:00.160660850Z
   modified_at: 2026-06-13T15:29:00.160660850Z
+- id: 019ec1ae-2107-7753-96ba-006362e6735c
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-13-story-585-mailbox-notice.md
+    filed 1 task(s): TASK-788
+  created_at: 2026-06-13T15:51:14.951669511Z
+  modified_at: 2026-06-13T15:51:14.951669511Z
