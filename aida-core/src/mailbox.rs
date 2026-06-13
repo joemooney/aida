@@ -28,6 +28,113 @@ pub enum Recipient {
     Broadcast,
 }
 
+/// The *interpreted intent* of a message (TASK-782): how the recipient should
+/// treat it, an axis **orthogonal** to `urgent` (urgency is "how loud"; intent
+/// is "what kind").
+///
+/// - `Fyi` — purely informational. Surface only; no action is expected.
+/// - `Request` — asks the recipient to do or answer something. Actionable.
+/// - `Handoff` — transfers a piece of work to the recipient. Actionable.
+///
+/// Defaults to `Fyi` so messages written before this field existed (and the
+/// common informational case) deserialize unchanged — append-only and
+/// non-breaking, the same pattern as `urgent`. Mail is **interpreted input,
+/// not a command channel**: an actionable intent is a *recommendation* to act,
+/// never an authenticated directive — see [`mail_disposition`].
+/// trace:TASK-782 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Intent {
+    #[default]
+    Fyi,
+    Request,
+    Handoff,
+}
+
+impl Intent {
+    /// Parse a CLI/MCP intent token (case-insensitive); `None` if unrecognized.
+    pub fn parse(s: &str) -> Option<Intent> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "fyi" => Some(Intent::Fyi),
+            "request" => Some(Intent::Request),
+            "handoff" => Some(Intent::Handoff),
+            _ => None,
+        }
+    }
+
+    /// The lowercase token form (matches the serde rename and CLI input).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Intent::Fyi => "fyi",
+            Intent::Request => "request",
+            Intent::Handoff => "handoff",
+        }
+    }
+
+    /// Does this intent expect the recipient to act, versus purely inform?
+    /// `request` / `handoff` are actionable; `fyi` is not.
+    pub fn is_actionable(&self) -> bool {
+        matches!(self, Intent::Request | Intent::Handoff)
+    }
+}
+
+/// Project policy for how an agent treats *actionable* received mail
+/// (TASK-782, the act-vs-prompt knob; configured under `[mailbox] act_on_mail`).
+/// The safe default is [`ActOnMail::SurfaceAndRecommend`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ActOnMail {
+    /// Interactive sessions: surface the message and recommend an action, but
+    /// never auto-act — the human (or the agent at the keyboard) decides.
+    #[default]
+    SurfaceAndRecommend,
+    /// Headless sessions: route actionable mail through the implementer →
+    /// advisor → human escalation cascade rather than acting on it blindly.
+    EscalatePerCascade,
+}
+
+impl ActOnMail {
+    /// Parse a config token (case-insensitive, accepts `-` or `_`); `None` if
+    /// unrecognized so callers can fall back to the default.
+    pub fn parse(s: &str) -> Option<ActOnMail> {
+        match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "surface-and-recommend" => Some(ActOnMail::SurfaceAndRecommend),
+            "escalate-per-cascade" => Some(ActOnMail::EscalatePerCascade),
+            _ => None,
+        }
+    }
+}
+
+/// What the read pipeline should do with a received message, given its intent
+/// and the project's [`ActOnMail`] policy (TASK-782). This encodes the integrity
+/// floor in the type system: the strongest disposition is *escalate* — never
+/// "auto-execute blindly". `Fyi` always merely surfaces; an actionable message
+/// surfaces-and-recommends in interactive sessions and escalates-per-cascade in
+/// headless ones. Bounded-safe auto-action (if any) is the caller's judgment
+/// layered on top of this; ambiguous or destructive actions always surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MailDisposition {
+    /// Inform only — no action expected (every `fyi`).
+    Surface,
+    /// Surface the message and recommend an action; do not auto-act.
+    SurfaceAndRecommend,
+    /// Route the actionable message through the escalation cascade.
+    EscalatePerCascade,
+}
+
+/// Decide a received message's disposition from its `intent` and the project
+/// `policy`. Pure and total — the act-vs-prompt seam the read surface calls so
+/// the policy is interpreted in exactly one place. trace:TASK-782 | ai:claude
+pub fn mail_disposition(intent: Intent, policy: ActOnMail) -> MailDisposition {
+    if !intent.is_actionable() {
+        return MailDisposition::Surface;
+    }
+    match policy {
+        ActOnMail::SurfaceAndRecommend => MailDisposition::SurfaceAndRecommend,
+        ActOnMail::EscalatePerCascade => MailDisposition::EscalatePerCascade,
+    }
+}
+
 /// One append-only inter-agent message. `id` is a time-ordered unique id
 /// (uuid7 / HLC at the write boundary); `timestamp` is an epoch-millis stamp
 /// passed in by the writer (kept out of this pure module so it has no clock
@@ -51,6 +158,13 @@ pub struct Message {
     /// trace:STORY-539 | ai:claude
     #[serde(default)]
     pub urgent: bool,
+    /// Interpreted intent (TASK-782): `fyi` (informational, surface only) vs
+    /// `request` / `handoff` (actionable). Defaults to `fyi` for messages
+    /// written before this field existed — append-only and non-breaking, the
+    /// same pattern as `urgent`. Orthogonal to `urgent`: urgency is "how loud",
+    /// intent is "what kind". trace:TASK-782 | ai:claude
+    #[serde(default)]
+    pub intent: Intent,
     /// Sender/operator withdrawal: visible as a tombstone, body hidden in
     /// normal views. Defaults false for older messages.
     // trace:STORY-583 | ai:codex
@@ -404,6 +518,7 @@ mod tests {
             in_reply_to: None,
             body: format!("body-{id}"),
             urgent: false,
+            intent: Intent::Fyi,
             retracted: false,
             deleted: false,
         }
@@ -520,6 +635,65 @@ mod tests {
         assert!(!m.urgent, "absent urgent field defaults to false");
         assert!(!m.retracted, "absent retracted field defaults to false");
         assert!(!m.deleted, "absent deleted field defaults to false");
+        assert_eq!(m.intent, Intent::Fyi, "absent intent field defaults to fyi");
+    }
+
+    // trace:TASK-782 | ai:claude
+    #[test]
+    fn intent_parses_and_round_trips_through_snake_case() {
+        assert_eq!(Intent::parse("fyi"), Some(Intent::Fyi));
+        assert_eq!(Intent::parse("REQUEST"), Some(Intent::Request));
+        assert_eq!(Intent::parse(" Handoff "), Some(Intent::Handoff));
+        assert_eq!(Intent::parse("nope"), None);
+        for i in [Intent::Fyi, Intent::Request, Intent::Handoff] {
+            let s = serde_json::to_string(&i).unwrap();
+            assert_eq!(s, format!("\"{}\"", i.as_str()));
+            assert_eq!(serde_json::from_str::<Intent>(&s).unwrap(), i);
+            assert_eq!(Intent::parse(i.as_str()), Some(i));
+        }
+        assert!(!Intent::Fyi.is_actionable());
+        assert!(Intent::Request.is_actionable());
+        assert!(Intent::Handoff.is_actionable());
+    }
+
+    // trace:TASK-782 | ai:claude
+    #[test]
+    fn mail_disposition_keeps_integrity_floor_fyi_never_acts() {
+        // FYI only ever surfaces, regardless of policy.
+        for policy in [
+            ActOnMail::SurfaceAndRecommend,
+            ActOnMail::EscalatePerCascade,
+        ] {
+            assert_eq!(
+                mail_disposition(Intent::Fyi, policy),
+                MailDisposition::Surface
+            );
+        }
+        // Actionable mail follows the policy; the strongest disposition is
+        // escalate — never blind auto-execution.
+        assert_eq!(
+            mail_disposition(Intent::Request, ActOnMail::SurfaceAndRecommend),
+            MailDisposition::SurfaceAndRecommend
+        );
+        assert_eq!(
+            mail_disposition(Intent::Handoff, ActOnMail::EscalatePerCascade),
+            MailDisposition::EscalatePerCascade
+        );
+    }
+
+    // trace:TASK-782 | ai:claude
+    #[test]
+    fn act_on_mail_parses_and_defaults_safe() {
+        assert_eq!(ActOnMail::default(), ActOnMail::SurfaceAndRecommend);
+        assert_eq!(
+            ActOnMail::parse("surface-and-recommend"),
+            Some(ActOnMail::SurfaceAndRecommend)
+        );
+        assert_eq!(
+            ActOnMail::parse("escalate_per_cascade"),
+            Some(ActOnMail::EscalatePerCascade)
+        );
+        assert_eq!(ActOnMail::parse("bogus"), None);
     }
 
     // trace:STORY-583 | ai:codex

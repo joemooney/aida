@@ -24263,6 +24263,7 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             in_reply_to,
             from,
             urgent,
+            intent,
         } => {
             let recipient = if *broadcast {
                 Recipient::Broadcast
@@ -24271,6 +24272,12 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             } else {
                 anyhow::bail!("specify --to <agent> or --broadcast");
             };
+            // trace:TASK-782 | ai:claude
+            let parsed_intent = aida_core::mailbox::Intent::parse(intent).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "invalid --intent '{intent}'; expected one of: fyi, request, handoff"
+                )
+            })?;
             let sender = from.clone().unwrap_or_else(|| current_user_id(None));
             let id = uuid::Uuid::new_v4().to_string();
             // A message with no explicit thread starts its own thread (id == thread).
@@ -24284,15 +24291,23 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 in_reply_to: in_reply_to.clone(),
                 body: body.clone(),
                 urgent: *urgent,
+                intent: parsed_intent,
                 retracted: false,
                 deleted: false,
             };
             mailbox_store::write_message(project_root, &msg)?;
-            let flag = if *urgent {
-                format!(" {}", "[urgent]".red().bold())
-            } else {
-                String::new()
-            };
+            let mut flag = String::new();
+            if *urgent {
+                flag.push_str(&format!(" {}", "[urgent]".red().bold()));
+            }
+            // Echo a non-default intent so the sender confirms it landed; fyi is
+            // the default, so it stays quiet (mirrors the urgent flag).
+            if parsed_intent.is_actionable() {
+                flag.push_str(&format!(
+                    " {}",
+                    format!("[{}]", parsed_intent.as_str()).blue()
+                ));
+            }
             println!(
                 "{} sent {} (thread {}){}",
                 "✉".green(),
@@ -24545,18 +24560,22 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
     }
 }
 
-// trace:STORY-583 | ai:codex
+// trace:STORY-583 trace:TASK-782 | ai:codex,claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct MailboxPolicy {
     allow_retract: bool,
     allow_delete: bool,
+    /// How an agent treats *actionable* received mail (TASK-782 act-vs-prompt).
+    /// Safe default: surface-and-recommend (never auto-act).
+    act_on_mail: aida_core::mailbox::ActOnMail,
 }
 
-// trace:STORY-583 | ai:codex
+// trace:STORY-583 trace:TASK-782 | ai:codex,claude
 fn mailbox_policy(project_root: &std::path::Path) -> MailboxPolicy {
     let mut policy = MailboxPolicy {
         allow_retract: true,
         allow_delete: true,
+        act_on_mail: aida_core::mailbox::ActOnMail::default(),
     };
     let Ok(body) = std::fs::read_to_string(project_root.join(".aida").join("config.toml")) else {
         return policy;
@@ -24572,6 +24591,13 @@ fn mailbox_policy(project_root: &std::path::Path) -> MailboxPolicy {
     }
     if let Some(v) = mailbox.get("allow_delete").and_then(|v| v.as_bool()) {
         policy.allow_delete = v;
+    }
+    // An unrecognized act_on_mail value falls back to the safe default rather
+    // than erroring — a typo never escalates autonomy. trace:TASK-782
+    if let Some(v) = mailbox.get("act_on_mail").and_then(|v| v.as_str()) {
+        if let Some(parsed) = aida_core::mailbox::ActOnMail::parse(v) {
+            policy.act_on_mail = parsed;
+        }
     }
     policy
 }
@@ -24638,14 +24664,22 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     } else {
         String::new()
     };
+    // Surface an actionable intent so an agent can tell an FYI from a
+    // request/handoff (TASK-782); fyi is the default and stays unmarked.
+    let intent_tag = if m.intent.is_actionable() {
+        format!("{} ", format!("[{}]", m.intent.as_str()).blue())
+    } else {
+        String::new()
+    };
     let body = if m.retracted {
         "[withdrawn]".dimmed().to_string()
     } else {
         m.body.clone()
     };
     println!(
-        "  {}{} {} → {}  {}  {}",
+        "  {}{}{} {} → {}  {}  {}",
         flag,
+        intent_tag,
         short.dimmed(),
         m.from.cyan(),
         to.yellow(),
@@ -56654,19 +56688,21 @@ mod bug_231_findings_promote_tests {
     // trace:STORY-583 | ai:codex
     #[test]
     fn mailbox_policy_defaults_allowed_and_reads_false_overrides() {
+        use aida_core::mailbox::ActOnMail;
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(
             mailbox_policy(dir.path()),
             MailboxPolicy {
                 allow_retract: true,
                 allow_delete: true,
+                act_on_mail: ActOnMail::SurfaceAndRecommend,
             }
         );
 
         std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
         std::fs::write(
             dir.path().join(".aida/config.toml"),
-            "[mailbox]\nallow_retract = false\nallow_delete = false\n",
+            "[mailbox]\nallow_retract = false\nallow_delete = false\nact_on_mail = \"escalate-per-cascade\"\n",
         )
         .unwrap();
         assert_eq!(
@@ -56674,7 +56710,26 @@ mod bug_231_findings_promote_tests {
             MailboxPolicy {
                 allow_retract: false,
                 allow_delete: false,
+                act_on_mail: ActOnMail::EscalatePerCascade,
             }
+        );
+    }
+
+    // trace:TASK-782 | ai:claude
+    #[test]
+    fn mailbox_policy_act_on_mail_typo_falls_back_to_safe_default() {
+        use aida_core::mailbox::ActOnMail;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[mailbox]\nact_on_mail = \"yolo-auto-act\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            mailbox_policy(dir.path()).act_on_mail,
+            ActOnMail::SurfaceAndRecommend,
+            "an unrecognized value must never escalate autonomy"
         );
     }
 
@@ -56690,6 +56745,7 @@ mod bug_231_findings_promote_tests {
             in_reply_to: None,
             body: "hi".into(),
             urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
             retracted: false,
             deleted: false,
         };
@@ -75173,6 +75229,7 @@ mod mailbox_digest_autotrigger_tests {
             in_reply_to: None,
             body: format!("body-{id}"),
             urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
             retracted: false,
             deleted: false,
         }

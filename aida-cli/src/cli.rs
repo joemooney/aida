@@ -1782,6 +1782,12 @@ pub enum MailboxCommand {
         /// a purely-chronological inbox. Lightweight: normal vs urgent only.
         #[clap(long)]
         urgent: bool,
+
+        /// How the recipient should treat this message: `fyi` (informational,
+        /// surface only), `request` (needs a response), or `handoff` (work
+        /// transfer). Default: fyi. Orthogonal to --urgent (loudness vs kind).
+        #[clap(long, value_name = "INTENT", default_value = "fyi")]
+        intent: String,
     },
 
     /// Show an agent's inbox: messages addressed to it + broadcasts, oldest-first.
