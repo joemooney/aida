@@ -3,12 +3,12 @@ spec_id: BUG-518
 agreed_id: BUG-518
 title: 'statusline: cache:? is noise in a store-less worktree — show cache:n/a (or omit) when no .aida-store is attached'
 description: In a harness/general-purpose worktree with no attached .aida-store, the statusline shows 'cache:?' (CacheFreshness::Unknown, main.rs:63452). Distinguish no-store (show 'cache:n/a' or omit the segment) from transient-unknown (keep '?'). Needs the freshness computation to signal no-store, so it is NOT a pure cosmetic one-liner — normal flow, not fasttrack. trace:STORY-78
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:43:58.796221344Z
-modified_at: 2026-06-13T06:44:04.542487501Z
+modified_at: 2026-06-13T14:27:27.250324008Z
 req_type: Bug
 tags:
 - aida:statusline
@@ -16,3 +16,15 @@ tags:
 - papercut
 - severity:cosmetic
 - ux
+history:
+- id: 019ec161-6a2a-7710-a60a-8720a09300a5
+  author: aida-reconcile
+  timestamp: 2026-06-13T14:27:27.402215502Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T14:27:27.250324008Z
+  completion_sha: fa4aa00f64b74d6d3d1951cc991da9bf07e9cc98
