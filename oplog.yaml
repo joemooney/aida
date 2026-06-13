@@ -17613,5 +17613,18 @@ operations:
   timestamp: 2026-06-13T17:14:28.598359725Z
   kind: !SetStatus
     status: Approved
-clock: 1737
+- id: 019ec1fc-f4ce-7cb0-aed9-4186f98def55
+  target_id: 019ebfbd-ff41-7e53-b30c-f65831c57ebd
+  author: aida
+  node_id: '1'
+  lamport: 1738
+  timestamp: 2026-06-13T17:17:20.974527580Z
+  kind: !SetDescription
+    description: |
+      aida agent pause only sets a status marker for dispatch logic (budget-exhausted/rate-limited); the process keeps running. aida agent stop terminates. The verb pause strongly implies process control. Real UX trap. Fix: rename (agent mark-busy / agent flag) or, at minimum, lead the --help with the caveat. From the CLI-manual audit (EPIC-40).
+
+      ## Acceptance
+
+      - Resolved (2026-06-13, operator decision via `aida questions answer`): Clarify the help — verb stays; help honestly says it sets a dispatch marker and points at stop to terminate — smallest fix
+clock: 1738
 node_id: '1'
