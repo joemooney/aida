@@ -7604,7 +7604,9 @@ pub enum Command {
     /// human must decide, review, or triage), the same set as `aida list
     /// human`, grouped by WHY. `aida human unblock` emits a paste-ready advisor
     /// prompt that grooms the open items keeping themselves out of the
-    /// burndown. The human is the permanent terminus of the escalation cascade
+    /// burndown. `aida human away/home/presence` names the operator-presence
+    /// verbs under the same role vector while keeping the top-level aliases.
+    /// The human is the permanent terminus of the escalation cascade
     /// (implementer → advisor → human); this gives that role a first-class home
     /// symmetric with the agent roles.
     // trace:TASK-746 trace:STORY-563 | ai:claude — plain `//` keeps it out of `--help`.
@@ -7635,6 +7637,22 @@ pub enum Command {
 // trace:STORY-563 | ai:claude — the role-vector design is SPIKE-57.
 #[derive(Subcommand, Debug)]
 pub enum HumanCommand {
+    /// Mark yourself away from the keyboard. Alias for top-level `aida away`.
+    // trace:TASK-770 | ai:codex
+    Away,
+
+    /// Mark yourself back at the keyboard. Alias for top-level `aida home`.
+    // trace:TASK-770 | ai:codex
+    Home,
+
+    /// Show current effective presence. Alias for top-level `aida presence`.
+    // trace:TASK-770 | ai:codex
+    Presence,
+
+    /// Show current effective presence. Alias for `aida human presence`.
+    // trace:TASK-770 | ai:codex
+    Status,
+
     /// Emit a paste-ready advisor prompt to groom the open items that are
     /// keeping themselves out of the burndown ready set. Read-only +
     /// deterministic — no LLM, no writes; it classifies each open spec by
@@ -8368,5 +8386,34 @@ mod tests {
         // `--human` conflicts with `--status` / `--json` / `--tree` at the clap layer.
         assert!(Cli::try_parse_from(["aida", "list", "--human", "--json"]).is_err());
         assert!(Cli::try_parse_from(["aida", "list", "--human", "--status", "draft"]).is_err());
+    }
+
+    // trace:TASK-770 | ai:codex
+    #[test]
+    fn human_presence_aliases_parse() {
+        for (word, want) in [
+            ("away", "away"),
+            ("home", "home"),
+            ("presence", "presence"),
+            ("status", "status"),
+        ] {
+            let cli = Cli::try_parse_from(["aida", "human", word]).unwrap();
+            match cli.command {
+                Command::Human {
+                    short: false,
+                    command: Some(cmd),
+                } => {
+                    let got = match cmd {
+                        HumanCommand::Away => "away",
+                        HumanCommand::Home => "home",
+                        HumanCommand::Presence => "presence",
+                        HumanCommand::Status => "status",
+                        HumanCommand::Unblock { .. } => "unblock",
+                    };
+                    assert_eq!(got, want);
+                }
+                other => panic!("expected human {word}, got {other:?}"),
+            }
+        }
     }
 }
