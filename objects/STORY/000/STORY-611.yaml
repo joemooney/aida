@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T22:53:32.987674748Z
-modified_at: 2026-06-13T22:53:32.987674748Z
+modified_at: 2026-06-13T22:55:21.979592296Z
 req_type: Story
 tags:
 - aida:human
@@ -25,3 +25,14 @@ tags:
 - from-friction
 - relates:STORY-553
 - ux
+comments:
+- id: 019ec332-6b7b-7591-97fb-c960c308dd0f
+  author: joe
+  content: |-
+    REFINEMENT (operator, 2026-06-13): the human-attention surface must DISTINGUISH three states that 'awaiting your review' loosely conflates — don't merge them into one bucket:
+     1. REVIEW (code quality) — a separate entity must read the diff vs acceptance (esp. advisor-AUTHORED PRs, where self-review is barred). → 'aida review <SPEC>'. THIS is the 'Reviews awaiting you' bucket.
+     2. DECISION (design/policy/fork) — needs operator judgment, NOT a code-reviewer pass (e.g. STORY-607 Book nesting, BUG-530 A/B). → belongs in the DECISION inbox (aida questions), not the reviews bucket. 'aida review' is the wrong tool here.
+     3. MERGE (already reviewed by the advisor) — just needs the merge button. → a distinct 'awaiting merge' micro-state, NOT 'awaiting review'.
+    ACCEPTANCE add: the reviews bucket contains ONLY case 1 (code-review-needed); cases 2/3 route to the decision inbox / an awaiting-merge indicator respectively. The three-drains symmetry maps exactly: review→'aida review/human review', decide→'aida questions answer', merge→the merge step. Pairs with the precise-lifecycle-vocabulary discipline (don't conflate review/decide/merge). trace:STORY-611
+  created_at: 2026-06-13T22:55:21.979592296Z
+  modified_at: 2026-06-13T22:55:21.979592296Z
