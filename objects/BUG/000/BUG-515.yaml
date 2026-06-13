@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:05:32.545085548Z
-modified_at: 2026-06-13T03:05:32.545085548Z
+modified_at: 2026-06-13T03:29:07.792579385Z
 req_type: Bug
 tags:
 - aida:research
@@ -16,3 +16,9 @@ tags:
 - core
 - from-merge-collision
 - regression
+comments:
+- id: 019ebf06-b2d0-7b62-ac12-d55d44fa74ee
+  author: joe
+  content: 'Resolved on origin/main (HEAD a4b7498ef): the research call site now passes contained=false, reconciled during the serial rebase of sibling merges — not via PR #813 (closed redundant). Build break cleared.'
+  created_at: 2026-06-13T03:29:07.792579385Z
+  modified_at: 2026-06-13T03:29:07.792579385Z
