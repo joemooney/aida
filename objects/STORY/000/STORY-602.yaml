@@ -3,12 +3,12 @@ spec_id: STORY-602
 agreed_id: STORY-602
 title: '/aida-decide skill: sweep the outstanding questions/needs-human inbox and interactively resolve each (the human-decision drain as a skill)'
 description: 'Operator idea (2026-06-13): a skill (/aida-decide, or extend /aida-advise) that drains the whole decision inbox interactively — sweep all pending DecisionRequests + needs-human specs, then for each either record the answer (questions answer) or interrogate the operator to author acceptance (questions clarify), looping until the inbox is empty. The human-decision-drain analog of ''aida burndown run'' (which drains the decision-FREE set). Mostly composes existing pieces: questions sweep + questions clarify (bare = swept set) + questions answer. The NEW bit is the single orchestrating skill that loops the operator through the whole inbox. Decide: new /aida-decide vs extending /aida-advise (advise is the headless advisor tier — different actor; a human-facing decide skill is probably distinct). trace:STORY-522'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T14:38:56.146918849Z
-modified_at: 2026-06-13T14:54:48.526560032Z
+modified_at: 2026-06-13T16:23:08.140059756Z
 req_type: Story
 tags:
 - aida:questions
