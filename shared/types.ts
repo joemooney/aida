@@ -108,7 +108,14 @@ rationale?: string | null,
  * 0-based index of the chosen answer. `None` while the request is
  * pending (unanswered).
  */
-answered?: number | null, 
+answered?: number | null,
+/**
+ * Free-text counter-proposal recorded ALONGSIDE the chosen option — the
+ * "1, but name it list-claude-sessions" escape. A pure data op: no LLM at
+ * answer-time; the implementer later reads choice + note. `None` when the
+ * human took the pure-pick path.
+ */
+note?: string | null,
 /**
  * When the question was first posed.
  */
