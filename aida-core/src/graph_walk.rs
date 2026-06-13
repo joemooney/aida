@@ -204,6 +204,88 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
     r
 }
 
+/// Lay the walked graph out as a depth-annotated hierarchy for the `--tree`
+/// render, so parents, children, and siblings are visually distinct instead of
+/// a flat list (BUG-534).
+///
+/// Parent→child direction is normalized from the relationship type: a `Parent`
+/// edge is `from`(parent)→`to`(child); a `Child` edge is its reciprocal, so
+/// `to`(parent)→`from`(child). The queried `root` is included even though
+/// [`walk`] excludes it from `nodes`, so the caller can mark "you are here" —
+/// and because the walk records the epic→root edge (it pushes edges before the
+/// visited check), a queried non-root node still nests under its real parent.
+///
+/// Returns `(node, depth)` in pre-order DFS rooted at structural roots (any
+/// node that is not another walked node's child, in first-seen order so the
+/// epic leads). Cycle-safe via a visited set; any node not reachable from a
+/// structural root (a cycle remnant) is appended so nothing is dropped.
+/// trace:BUG-534 | ai:claude
+pub fn tree_layout(root: Uuid, nodes: &[Uuid], edges: &[GraphEdge]) -> Vec<(Uuid, usize)> {
+    // First-seen node universe: the queried root, then BFS-discovered nodes.
+    let mut universe: Vec<Uuid> = Vec::new();
+    let mut in_universe: HashSet<Uuid> = HashSet::new();
+    for &n in std::iter::once(&root).chain(nodes.iter()) {
+        if in_universe.insert(n) {
+            universe.push(n);
+        }
+    }
+
+    // Relationship direction names the TARGET's role (the convention export.rs
+    // reads): `X --Parent--> Y` ⇒ Y is X's parent; `X --Child--> Y` ⇒ Y is X's
+    // child. Both reduce to a single parent→child fact. The store carries both
+    // orientations (a parent with Child→child edges AND children with
+    // Parent→parent edges), and walk_union returns both — they agree here.
+    let mut children: std::collections::HashMap<Uuid, Vec<Uuid>> = std::collections::HashMap::new();
+    let mut has_parent: HashSet<Uuid> = HashSet::new();
+    for e in edges {
+        let (parent, child) = match e.rel_type {
+            RelationshipType::Parent => (e.to, e.from),
+            RelationshipType::Child => (e.from, e.to),
+            _ => continue,
+        };
+        if !in_universe.contains(&parent) || !in_universe.contains(&child) || parent == child {
+            continue;
+        }
+        let kids = children.entry(parent).or_default();
+        if !kids.contains(&child) {
+            kids.push(child);
+        }
+        has_parent.insert(child);
+    }
+
+    fn dfs(
+        n: Uuid,
+        depth: usize,
+        children: &std::collections::HashMap<Uuid, Vec<Uuid>>,
+        visited: &mut HashSet<Uuid>,
+        out: &mut Vec<(Uuid, usize)>,
+    ) {
+        if !visited.insert(n) {
+            return;
+        }
+        out.push((n, depth));
+        if let Some(kids) = children.get(&n) {
+            for &k in kids {
+                dfs(k, depth + 1, children, visited, out);
+            }
+        }
+    }
+
+    let mut out: Vec<(Uuid, usize)> = Vec::new();
+    let mut visited: HashSet<Uuid> = HashSet::new();
+    // Structural roots first (epic leads), then any cycle remnant so the union
+    // of emitted nodes equals the universe.
+    for &n in &universe {
+        if !has_parent.contains(&n) {
+            dfs(n, 0, &children, &mut visited, &mut out);
+        }
+    }
+    for &n in &universe {
+        dfs(n, 0, &children, &mut visited, &mut out);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,6 +452,104 @@ mod tests {
         assert_eq!(r.in_progress, 1);
         assert_eq!(r.shelved, 1);
         assert_eq!(r.remaining, 1);
+    }
+
+    // trace:BUG-534 | ai:claude
+    #[test]
+    fn tree_layout_roots_at_epic_and_nests_the_queried_story() {
+        // The BUG-534 repro: query a STORY (not the epic). The walk goes UP to
+        // the epic (reciprocal Child edge) then back DOWN to the siblings; the
+        // layout must root at the epic with every story nested under it — the
+        // queried story included — not a flat list.
+        let mut epic = make_req("EPIC-X", RequirementStatus::InProgress);
+        let mut s1 = make_req("STORY-1", RequirementStatus::Approved);
+        let mut s2 = make_req("STORY-2", RequirementStatus::Approved);
+        // Storage convention (export.rs): the target names the role — a parent
+        // carries `Child→child`, a child carries `Parent→parent`. Mirror both,
+        // as the real store does.
+        link(&mut epic, RelationshipType::Child, s1.id);
+        link(&mut epic, RelationshipType::Child, s2.id);
+        link(&mut s1, RelationshipType::Parent, epic.id);
+        link(&mut s2, RelationshipType::Parent, epic.id);
+        let (eid, s1id, s2id) = (epic.id, s1.id, s2.id);
+        let store = store_with(vec![epic, s1, s2]);
+
+        let res = walk_union(
+            &store,
+            s1id, // query the STORY
+            &[(
+                vec![RelationshipType::Child, RelationshipType::Parent],
+                Direction::Outgoing,
+            )],
+            None,
+        );
+        let layout = tree_layout(s1id, &res.nodes, &res.edges);
+        // Epic is the structural root at depth 0; both stories nest at depth 1.
+        assert_eq!(layout[0], (eid, 0), "epic roots the tree");
+        let depths: std::collections::HashMap<Uuid, usize> = layout.iter().copied().collect();
+        assert_eq!(
+            depths.get(&s1id),
+            Some(&1),
+            "queried story nests under epic"
+        );
+        assert_eq!(depths.get(&s2id), Some(&1), "sibling nests under epic");
+        // Every walked node plus the query is emitted exactly once.
+        assert_eq!(layout.len(), 3);
+    }
+
+    // trace:BUG-534 | ai:claude
+    #[test]
+    fn tree_layout_nests_grandchildren_by_depth() {
+        // EPIC → STORY → TASK must render at depths 0, 1, 2.
+        let mut epic = make_req("EPIC-X", RequirementStatus::InProgress);
+        let mut story = make_req("STORY-1", RequirementStatus::Approved);
+        let mut task = make_req("TASK-1", RequirementStatus::Approved);
+        link(&mut epic, RelationshipType::Child, story.id);
+        link(&mut story, RelationshipType::Child, task.id);
+        link(&mut story, RelationshipType::Parent, epic.id);
+        link(&mut task, RelationshipType::Parent, story.id);
+        let (eid, sid, tid) = (epic.id, story.id, task.id);
+        let store = store_with(vec![epic, story, task]);
+
+        let res = walk_union(
+            &store,
+            eid,
+            &[(
+                vec![RelationshipType::Child, RelationshipType::Parent],
+                Direction::Outgoing,
+            )],
+            None,
+        );
+        let layout = tree_layout(eid, &res.nodes, &res.edges);
+        assert_eq!(layout, vec![(eid, 0), (sid, 1), (tid, 2)]);
+    }
+
+    // trace:BUG-534 | ai:claude
+    #[test]
+    fn tree_layout_drops_nothing_on_a_cycle() {
+        // A pathological parent cycle (A→B→A) must still terminate and emit
+        // both nodes rather than hang or silently drop one.
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let edges = vec![
+            GraphEdge {
+                from: a,
+                rel_type: RelationshipType::Parent,
+                to: b,
+            },
+            GraphEdge {
+                from: b,
+                rel_type: RelationshipType::Parent,
+                to: a,
+            },
+        ];
+        let layout = tree_layout(a, &[b], &edges);
+        let seen: HashSet<Uuid> = layout.iter().map(|(n, _)| *n).collect();
+        assert_eq!(
+            seen,
+            HashSet::from([a, b]),
+            "both nodes emitted, none dropped"
+        );
     }
 
     #[test]
