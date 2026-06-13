@@ -7978,6 +7978,48 @@ pub enum HumanCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Answer a pending decision inline. Thin alias for `aida questions answer
+    /// <spec> <choice>` — resolve a decision listed by `aida human` without
+    /// switching commands. Pure pass-through; the canonical verb owns the logic.
+    // trace:STORY-611 | ai:claude
+    Answer {
+        /// The spec carrying the pending decision (SPEC-ID or UUID).
+        spec: String,
+        /// The choice to record (1-based index, or the choice label).
+        choice: String,
+        /// Attach a counter-proposal note to the answer.
+        #[clap(long)]
+        note: Option<String>,
+    },
+
+    /// Answer a pending decision inline. Alias of `aida human answer` (reads
+    /// better for some) — delegates to `aida questions answer`.
+    // trace:STORY-611 | ai:claude
+    Decide {
+        /// The spec carrying the pending decision (SPEC-ID or UUID).
+        spec: String,
+        /// The choice to record (1-based index, or the choice label).
+        choice: String,
+        /// Attach a counter-proposal note to the answer.
+        #[clap(long)]
+        note: Option<String>,
+    },
+
+    /// Review a spec inline. Thin alias for `aida review <spec>` — drain a
+    /// review listed by `aida human` without switching commands. Pure
+    /// pass-through; the canonical verb owns the surface-detection + reviewer.
+    // trace:STORY-611 | ai:claude
+    Review {
+        /// The spec to review (SPEC-ID or UUID).
+        spec: String,
+        /// Skip launching the reviewer agent — just report the surface.
+        #[clap(long)]
+        no_agent: bool,
+        /// Proceed even if the PR's base branch is stale.
+        #[clap(long)]
+        allow_stale_base: bool,
+    },
 }
 
 /// Opt-in statusline bootstrap actions. AIDA's bootstrap goal is to make
@@ -8705,6 +8747,10 @@ mod tests {
                         HumanCommand::Presence => "presence",
                         HumanCommand::Status => "status",
                         HumanCommand::Unblock { .. } => "unblock",
+                        // trace:STORY-611 | ai:claude — action aliases.
+                        HumanCommand::Answer { .. } => "answer",
+                        HumanCommand::Decide { .. } => "decide",
+                        HumanCommand::Review { .. } => "review",
                     };
                     assert_eq!(got, want);
                 }
