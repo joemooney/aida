@@ -11,12 +11,12 @@ description: |-
   1. `aida show` (and any other caller of format_review_story_display) never panics on a non-ASCII title, regardless of where multibyte chars fall.
   2. Fix: replace the byte-slice + byte-length guard with a char-boundary-safe prefix check (e.g. `title.get(..PREFIX.len())` → None on a non-boundary, or strip_prefix-style). The 'Review PR-:' detection behavior is unchanged for matching titles.
   3. Regression test: format_review_story_display on a title with an em-dash near the prefix boundary returns None without panicking.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:52:42.475926565Z
-modified_at: 2026-06-13T15:56:15.521898335Z
+modified_at: 2026-06-13T19:46:58.013355760Z
 req_type: Bug
 tags:
 - aida:show
