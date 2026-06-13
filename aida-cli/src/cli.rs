@@ -7767,6 +7767,19 @@ pub enum Command {
     #[clap(subcommand)]
     Changelog(ChangelogCommand),
 
+    /// Print the CLI-manual rationale section for a command — the *when /
+    /// why / when-not* that sits next to `--help`'s *what*. Greps the manual
+    /// chapters under `docs/cli/*.md` for the command's entry and prints it
+    /// (paged when a pager is available). `aida <cmd> --help` stays the fact
+    /// source — this is the rationale. Exits non-zero with a clear message
+    /// when no manual entry matches.
+    // trace:STORY-600 | ai:claude
+    Manual {
+        /// The command whose manual entry to print, e.g. `graph` (or
+        /// `aida graph` — the leading `aida ` is optional).
+        command: String,
+    },
+
     /// Assemble a rich, structured planning prompt for a SPEC and hand it
     /// to `/ultraplan`. Pulls the spec's description, acceptance criteria,
     /// related-spec context, the spec's enrichment comments, the AIDA

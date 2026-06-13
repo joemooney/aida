@@ -190,6 +190,22 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ---
 
+### `aida manual`
+
+**One line** — print this manual's rationale entry for a command, inline in the terminal.
+
+**Mental model.** `aida manual <cmd>` is the bridge between this prose manual and your shell. `--help` tells you *what* a command does and *which* flags it takes; this manual tells you *when, why, and when not*. `aida manual <cmd>` pulls the matching `### \`aida <cmd>\`` section out of these chapters and prints it next to where you're working — so the rationale is one command away instead of a context-switch to the browser. It pages the output when a pager is available, otherwise prints plain. `--help` stays the source of truth for flags and defaults; `manual` never reproduces them.
+
+**Reach for it when** — you know roughly which command you want but aren't sure it's the *right* one for the situation, or you want the "don't reach for it when" guidance before committing to an approach. It's the fast in-terminal lookup for the judgment layer.
+
+**Don't reach for it when** — you want the exact flag list, defaults, or argument syntax (that's `aida <cmd> --help`, always authoritative and never drifting), or you want to read the whole journey end-to-end (open the manual's index for the narrative spine and cross-links).
+
+**Gotchas.** It matches the command's *entry header*, so it works for any command this manual documents — including ones covered under a shared header with sibling commands. If a command has no manual entry yet, it exits non-zero and says so rather than printing nothing; that's also a hint the manual is lagging the binary.
+
+**Chains with** — the natural follow-on to `aida <cmd> --help`: read the facts, then read the rationale. Pairs with `aida user-guide` (browser, whole-guide) for the in-terminal, one-command slice.
+
+---
+
 ### `aida record`
 
 **One line** — inspect or prune the durable per-spec **processing record** — the audit trail of *what was done and why*, captured at completion.
