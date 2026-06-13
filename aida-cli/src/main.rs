@@ -4159,8 +4159,13 @@ fn handle_research_command(
     let log_path = project_root.join(format!(".aida/research/{display_id}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("research:{display_id}"));
-    let status = crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee)
-        .context("spawning headless research agent")?;
+    // BUG-515: a deep-research dispatch is a standalone headless agent, not a
+    // contained-worktree launch — pass contained=false. (STORY-567 added the
+    // `contained` param after STORY-568 added this caller; the serial rebase
+    // missed reconciling them.) trace:BUG-515 | ai:claude
+    let status =
+        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
+            .context("spawning headless research agent")?;
     if !status.success() {
         anyhow::bail!(
             "research agent exited with {} — see log {}",
