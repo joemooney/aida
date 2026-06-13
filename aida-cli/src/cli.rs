@@ -4789,6 +4789,29 @@ pub enum AdvisorCommand {
     /// registered.
     Unregister,
 
+    /// Presence-gated fork-from-live watch loop: while `away`, periodically fork
+    /// the live advisor session and run a garden + mailbox-triage + escalate
+    /// pass headless. Opt-in by invocation; exits on `aida home` (or away-TTL).
+    /// The forked advisor only does safe/bounded work and escalates the rest.
+    // trace:STORY-586 | ai:claude
+    Watch {
+        /// Preview each tick's decision (and the fork cost) without forking.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Run a single tick and exit (cron-friendly).
+        #[clap(long)]
+        once: bool,
+
+        /// Seconds between presence re-checks (default 60).
+        #[clap(long, default_value_t = 60)]
+        poll_interval: u64,
+
+        /// Seconds between forks while away (default 1200 = 20m).
+        #[clap(long, default_value_t = 1200)]
+        fork_interval: u64,
+    },
+
     /// The advisor's read-only situational dashboard — one screen of counts,
     /// each row pointing at the canonical command to act on it: live-advisor
     /// readiness, intake drafts, pending decisions, findings, backlog,
@@ -7725,6 +7748,8 @@ pub enum Command {
 
 /// The `aida human` role-vector: the human-tier attention verbs. `unblock` is
 /// the deterministic prompt-assembler that ends the recurring "how do I get
+/// open items into the burndown?" question by GENERATING the grooming question
+/// for the advisor.
 /// open items into the burndown?" question by GENERATING the grooming question
 /// for the advisor.
 // trace:STORY-563 | ai:claude — the role-vector design is SPIKE-57.

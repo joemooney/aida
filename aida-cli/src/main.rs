@@ -1,4 +1,5 @@
 mod advisor;
+mod advisor_watch;
 mod agent_registry;
 mod auto_complete;
 mod auto_complete_telemetry;
@@ -5696,6 +5697,25 @@ fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
             advisor::clear_registration()?;
             println!("Advisor registration cleared.");
             Ok(())
+        }
+        // STORY-586: presence-gated fork-from-live watch loop. Store-less —
+        // self-loads advisor config + presence. trace:STORY-586 | ai:claude
+        AdvisorCommand::Watch {
+            dry_run,
+            once,
+            poll_interval,
+            fork_interval,
+        } => {
+            let project_root = main_worktree_root_from(&find_project_root()?);
+            advisor_watch::run_advisor_watch(
+                &project_root,
+                &advisor_watch::WatchOpts {
+                    poll_interval_secs: *poll_interval,
+                    fork_interval_secs: *fork_interval,
+                    dry_run: *dry_run,
+                    once: *once,
+                },
+            )
         }
         // STORY-559: only the narrow `--registration` view reaches this
         // store-less early handler; the default dashboard dispatches after
