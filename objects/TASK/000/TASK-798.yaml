@@ -1,0 +1,18 @@
+id: 019ec33f-281d-7431-a1de-0250c4e7eeec
+spec_id: TASK-798
+agreed_id: TASK-798
+title: 'Config coherence: contained ENABLE is [agents] contained but the egress allowlist is [contained] allowed_hosts — two sections for one feature'
+description: 'Review finding on STORY-605 (#862): the contained posture''s enable toggle lives at [agents] contained (and bypass at [agents] bypass, in ~/.aida/agents.toml), but the egress allowlist I added lives at [contained] allowed_hosts (project .aida/config.toml). Two files/sections for one feature — could bite operators writing configs. ADVISOR REC: unify under [contained] (matches the --contained posture name, keeps the containment config together, avoids the [agents]-spans-agents.toml-vs-config.toml ambiguity) — i.e. also accept [contained] enable as an alias of [agents] contained. Low priority: the feature is default-off so no operator configs exist yet. Config-interface decision → keyboard/review, not an unsupervised drain. trace:relates:STORY-605 trace:from-friction'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:09:16.701019716Z
+modified_at: 2026-06-13T23:09:16.701019716Z
+req_type: Task
+tags:
+- aida:contained
+- cli-consistency
+- config-coherence
+- from-friction
+- relates:STORY-605
