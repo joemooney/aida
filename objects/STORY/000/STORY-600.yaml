@@ -3,12 +3,12 @@ spec_id: STORY-600
 agreed_id: STORY-600
 title: 'aida manual <command> (a.k.a. --doc): print the CLI-manual rationale section for a command inline'
 description: 'Operator idea (2026-06-12): a command that prints the corresponding manual section so users reference the when/why next to --help. The manual''s ''### `aida <cmd>`'' headers are the extraction key (one header to the next = that command''s entry). Smallest slice: `aida manual <cmd>` greps docs/cli/*.md for the command''s section and prints it (paged); `aida <cmd> --help` stays the fact source. Endgame: rationale-strings embedded beside clap so it''s generated, not grepped. Requires the manual chapters to use the consistent header convention (enforced by STORY-597 drift-guard). Depends on enough chapters existing.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:31:23.927658996Z
-modified_at: 2026-06-13T20:09:36.576289268Z
+modified_at: 2026-06-13T20:54:09.005798818Z
 req_type: Story
 tags:
 - cli-manual
@@ -20,3 +20,21 @@ relationships:
   target_id: 019ebf9b-fb5a-7821-8fb5-47148be13a61
   created_at: 2026-06-13T06:31:45.323484746Z
   created_by: joe
+history:
+- id: 019ec2c3-7166-7b73-9da0-40cf33952406
+  author: aida-reconcile
+  timestamp: 2026-06-13T20:54:08.998777589Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec2c3-716d-7e13-a9eb-20c030c30042
+  timestamp: 2026-06-13T20:54:09.005798076Z
+  agent: aida
+  commit_sha: d81af2775e1732f60dca3795ad4511ded3472a2d
+  summary: Completed via merge d81af277
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T20:54:08.845387328Z
+  completion_sha: d81af2775e1732f60dca3795ad4511ded3472a2d
