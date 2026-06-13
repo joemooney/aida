@@ -5509,6 +5509,30 @@ pub enum Command {
         batch: Option<String>,
     },
 
+    /// File a trivial change into the fasttrack lane in one shot
+    ///
+    /// The low-ceremony entry for genuinely trivial work — a doc tweak, a
+    /// one-line UX papercut, a string fix. Files the spec Approved, queues
+    /// it, and tags it for the fasttrack bucket (`batch:fasttrack` +
+    /// `lifecycle:no-review`) so the human-review round-trip is skipped.
+    /// This is a thin wrapper over `aida add ... --status approved --queue`
+    /// — it owns the lane's filing convention in one place so the
+    /// `/aida-fasttrack` skill can call it instead of re-typing the tags.
+    ///
+    /// CI is NOT skipped. The lane drops the human-review ceremony only;
+    /// CI still runs and must be green before merge.
+    // trace:TASK-777 | ai:claude — plain `//` keeps the marker out of `--help`.
+    Fasttrack {
+        /// One-line description of the trivial change (becomes the title).
+        #[clap(value_name = "TITLE")]
+        title: String,
+
+        /// Requirement type: use `bug` for a papercut/defect, `task` for a
+        /// chore or doc tweak. Defaults to `task`.
+        #[clap(long, default_value = "task")]
+        r#type: String,
+    },
+
     /// List all requirements
     List {
         /// Optional status shortcut: `aida list approved` is the same as

@@ -716,6 +716,36 @@ mod story_423_asciinema_tests {
         ));
     }
 
+    // TASK-777: `aida fasttrack <title>` parses with `task` as the default type
+    // and accepts a `--type` override. The verb rewrites to the equivalent
+    // `Command::Add` at dispatch, so this parse test pins the surface; the
+    // filing convention (Approved + queue + batch:fasttrack + lifecycle:no-review)
+    // is exercised by the Add path it delegates to. trace:TASK-777
+    #[test]
+    fn task_777_fasttrack_parses_with_default_and_override_type() {
+        match Cli::try_parse_from(["aida", "fasttrack", "fix a typo"])
+            .unwrap()
+            .command
+        {
+            Command::Fasttrack { title, r#type } => {
+                assert_eq!(title, "fix a typo");
+                assert_eq!(r#type, "task");
+            }
+            other => panic!("expected fasttrack, got {other:?}"),
+        }
+
+        match Cli::try_parse_from(["aida", "fasttrack", "papercut", "--type", "bug"])
+            .unwrap()
+            .command
+        {
+            Command::Fasttrack { title, r#type } => {
+                assert_eq!(title, "papercut");
+                assert_eq!(r#type, "bug");
+            }
+            other => panic!("expected fasttrack, got {other:?}"),
+        }
+    }
+
     #[test]
     fn strip_wrapper_flags_preserves_inner_command() {
         let raw = vec![
@@ -1732,6 +1762,15 @@ fn run() -> Result<()> {
             anyhow::bail!(
                 "`aida done` is available in the default (distributed) mode. In legacy \
                  --centralized mode, use `aida edit <spec> --status completed`."
+            );
+        }
+        // TASK-777: the fasttrack lane is a distributed-mode convention (it
+        // queues + batches), so it isn't wired into the deprecated legacy
+        // storage path. trace:TASK-777
+        Command::Fasttrack { .. } => {
+            anyhow::bail!(
+                "`aida fasttrack` is available in the default (distributed) mode. In legacy \
+                 --centralized mode, use `aida add \"<title>\" --status approved`."
             );
         }
         Command::Add {
@@ -11601,6 +11640,40 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 print_deferred_triggers(*deferred, &reqs);
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
             }
+        }
+        // TASK-777: `aida fasttrack <title>` is a thin primitive that owns the
+        // fasttrack-lane filing convention in ONE place — Approved + queued +
+        // `batch:fasttrack` + `lifecycle:no-review` — so the /aida-fasttrack
+        // skill delegates to it instead of hardcoding the tag string in
+        // markdown (the same anti-drift DRY discipline as the CLI↔MCP mirror).
+        // It rewrites to the equivalent `Command::Add` and recurses, reusing
+        // the entire add+queue path. The lane skips human review only; CI still
+        // gates merge (lifecycle:no-review, never no-ci-wait). trace:TASK-777
+        Command::Fasttrack { title, r#type } => {
+            let add = Command::Add {
+                title: Some(title.clone()),
+                title_positional: None,
+                description: None,
+                description_from_file: None,
+                description_stdin: false,
+                status: Some("approved".to_string()),
+                priority: None,
+                r#type: Some(r#type.clone()),
+                owner: None,
+                feature: None,
+                tags: Some("lifecycle:no-review".to_string()),
+                prefix: None,
+                parent: None,
+                blocked_by: Vec::new(),
+                force_parent: false,
+                interactive: false,
+                effort: None,
+                human_only: false,
+                no_human_only: false,
+                queue: true,
+                batch: Some("fasttrack".to_string()),
+            };
+            return handle_git_backend_command(store_path, &add);
         }
         Command::Add {
             title,
