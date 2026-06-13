@@ -116,3 +116,6 @@ docs/plans/_draft/
 # Legacy pre-git-canonical store snapshots (live store is the orphan aida-store branch)
 requirements*.yaml
 scaffold-report.html
+
+# mdBook rendered output (derived artifact)
+docs/cli/book/
