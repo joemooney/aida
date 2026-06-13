@@ -50425,6 +50425,19 @@ mod statusline_tests {
         assert!(!mismatch);
     }
 
+    /// BUG-519: `general-purpose` is the harness's generic fallback agent_type,
+    /// not a real AIDA role — a deliberately-started general-purpose session
+    /// must NOT get the warn glyph. The segment reads as the plain `role:X`.
+    #[test]
+    fn role_segment_general_purpose_session_is_not_warned() {
+        let (text, mismatch) = role_segment_text("implementer", Some("general-purpose"), true);
+        assert_eq!(text, "role:implementer");
+        assert!(!mismatch);
+        // Case-insensitive — `General-Purpose` is still the generic fallback.
+        let (_, mismatch) = role_segment_text("implementer", Some("General-Purpose"), true);
+        assert!(!mismatch);
+    }
+
     /// TASK-244: the `[statusline] role_mismatch_warning = false` knob
     /// suppresses the warning even when the roles disagree.
     #[test]
@@ -63167,9 +63180,18 @@ fn role_segment_text(
     session_role: Option<&str>,
     warn_enabled: bool,
 ) -> (String, bool) {
+    // BUG-519: `general-purpose` is the harness's generic fallback agent_type
+    // (worktree_lease.rs), written onto the lease `role` for a subagent that
+    // carries no AIDA role. When the operator deliberately started a
+    // general-purpose session, warn-glyphing it as a role mismatch reads as
+    // alarmist noise — it isn't a misrouted reviewer/implementer, it's the
+    // intended generic seat. Only warn when the session role names a real,
+    // scoped AIDA role that disagrees with the shell. trace:BUG-519
     let mismatch = warn_enabled
         && session_role
-            .map(|s| !s.eq_ignore_ascii_case(shell_role))
+            .map(|s| {
+                !s.eq_ignore_ascii_case(shell_role) && !s.eq_ignore_ascii_case("general-purpose")
+            })
             .unwrap_or(false);
     if mismatch {
         (
