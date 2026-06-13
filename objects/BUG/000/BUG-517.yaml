@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:03:42.514071124Z
-modified_at: 2026-06-13T06:03:42.514071124Z
+modified_at: 2026-06-13T06:05:26.877708104Z
 req_type: Bug
 tags:
 - aida:queue
@@ -16,3 +16,9 @@ tags:
 - papercut
 - severity:cosmetic
 - ux
+comments:
+- id: 019ebf95-cfdd-7fe1-ad67-080d465cf825
+  author: joe
+  content: Commit 4d83ccd11 references this requirement
+  created_at: 2026-06-13T06:05:26.877708104Z
+  modified_at: 2026-06-13T06:05:26.877708104Z
