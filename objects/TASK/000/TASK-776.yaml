@@ -3,15 +3,27 @@ spec_id: TASK-776
 agreed_id: TASK-776
 title: 'advisor watch: event-driven mail firing + --triage-only conservative mode'
 description: 'STORY-586 follow-up (implementable now). (a) Event-driven firing: fork not only on the idle timer but as soon as there is unread ADVISOR mail (reuse mailbox_store::read_local_messages/read_canonical_messages/read_watermark + mailbox::merge_dedup/unread_counts; the loop''s poll sleep rate-limits it). (b) --triage-only flag: a conservative prompt variant where the forked advisor still runs the safe garden pass but SURFACES/escalates mailbox items instead of acting on bounded requests (per the configurable-policy-with-default preference; safety-additive). Defaults preserve current behavior (timer + act-bounded). trace:STORY-586'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T05:55:52.391299129Z
-modified_at: 2026-06-13T05:55:52.391299129Z
+modified_at: 2026-06-13T06:08:18.129569607Z
 req_type: Task
 tags:
 - advisor
 - aida:advisor
 - autonomy
 - parent:STORY-586
+history:
+- id: 019ebf98-6d6d-7573-9917-00b6db928a38
+  author: aida-auto-bump
+  timestamp: 2026-06-13T06:08:18.285432074Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T06:08:18.129569607Z
+  completion_sha: 0d0e67db0826df17803e5c74503083cc996bc160
