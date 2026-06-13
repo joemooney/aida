@@ -13,12 +13,12 @@ description: |-
   5. Mailbox 'list'/'inbox' views reflect retracted (shown as withdrawn) vs deleted (absent).
 
   Why: closes the test/mistake-cruft gap, and the false-immutability surprise; the policy default (true) keeps it ergonomic while letting regulated projects opt into immutability. Relates: BUG-513, the EPIC-39 governance/audit thesis (an immutable mailbox is one governance posture; this makes it a choice).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:35:31.643637959Z
-modified_at: 2026-06-13T03:10:18.103444204Z
+modified_at: 2026-06-13T03:24:18.465510868Z
 req_type: Story
 tags:
 - aida:mailbox
@@ -30,3 +30,15 @@ comments:
   content: 'Implemented in draft PR #814. Verification passed: cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli.'
   created_at: 2026-06-13T03:10:18.103440126Z
   modified_at: 2026-06-13T03:10:18.103440126Z
+history:
+- id: 019ebf02-492e-71e1-a82b-5a703a82caf2
+  author: aida-auto-bump
+  timestamp: 2026-06-13T03:24:18.606634274Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T03:24:18.465510868Z
+  completion_sha: a4b7498ef4d2e39e6fc14e05d7290172c6f1515b
