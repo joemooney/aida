@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:10.155363313Z
-modified_at: 2026-06-13T01:48:19.762682685Z
+modified_at: 2026-06-13T01:48:42.537675288Z
 req_type: Spike
 tags:
 - beads
@@ -39,4 +39,6 @@ comments:
   content: 'Governance research half DONE (2026-06-12): docs/competitive-analysis/2026-06-12-spike-58-governance-verification.md. VERDICT: the repositioning headline ''AIDA = the governance layer Beads/GT lack'' is OVERCLAIM — won''t survive a skeptic. GT has tiered design-fork escalation (Deacon->Mayor->human); Beads ships actor-attributed audit logging (v1.0.1). DEFENSIBLE SLICE (narrow the WS copy to this): AIDA governs at the FRONT (programmatic pre-work approval-authority gate — agents can''t self-bless) + binds code<->spec (trace + field-delta history); bd/GT govern at the back/side (reactive escalation + merge gates), no pre-work gate, no spec<->code binding. 3 verified AIDA-only edges + 3 corrections (drop no-audit/no-escalation; don''t headline containment) in the doc. STILL NEEDS your HANDS-ON (this spike''s core): does an escalated GT agent block-or-proceed; GT approval-prefs; live bd issues.jsonl schema; is GT governance good-or-merely-present. Spike stays open for the hands-on.'
   created_at: 2026-06-13T00:04:37.144404045Z
   modified_at: 2026-06-13T00:04:37.144404045Z
+archived: true
+archived_at: 2026-06-13T01:48:42.537675288Z
 human_only: true
