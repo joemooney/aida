@@ -1459,6 +1459,15 @@ impl<'a> McpServer<'a> {
             }
         }
 
+        // BUG-527: queue membership — mirror the `Queued:` line `aida show`
+        // surfaces (CLI/MCP parity, STORY-82). For-role + the 1-based
+        // position the operator sees on `aida queue list`; omitted entirely
+        // when the spec sits in no queue. trace:BUG-527
+        let memberships = crate::queue_memberships_for(&self.project_root, &req.id);
+        if let Some(value) = crate::format_queue_membership(&memberships) {
+            output.push_str(&format!("\n## Queued\n\n{}\n", value));
+        }
+
         // STORY-82: git linkage — reuse the same collection `aida show`
         // renders so MCP clients see commits / branch / PR / shipped state.
         // Off when include_git=false (the `aida show --no-git` view).
