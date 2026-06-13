@@ -1,0 +1,18 @@
+id: 019ec344-9ed4-7583-8559-7f2dd037db49
+spec_id: BUG-539
+agreed_id: BUG-539
+title: aida review re-reviews already-Completed/merged specs + offers a stale review→merge menu (should short-circuit)
+description: 'Operator hit (2026-06-13): ran ''aida review STORY-605'' after STORY-605 was already Completed (#862 merged, commit a47727d2e on main). The review session re-reviewed the merged work, reached APPROVE, and presented the ''Approve → print the merge command / Request changes / Defer'' menu — offering to merge something already merged + risking a Request-changes rework of Completed work. It confused the operator into thinking the merge hadn''t happened. Fix: ''aida review <SPEC>'' should detect a spec already in a terminal/merged state (Completed, or its PR state=MERGED) and short-circuit with ''already merged/completed — nothing to review (commit <sha>, #<pr>)'' instead of running a full review + offering Approve/Request-changes. At most offer a read-only ''show the merged diff''. trace:relates:STORY-553 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:15:14.772835845Z
+modified_at: 2026-06-13T23:15:14.772835845Z
+req_type: Bug
+tags:
+- aida:review
+- cli-consistency
+- from-friction
+- papercut
+- relates:STORY-553
