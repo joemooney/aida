@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:16:12.305345160Z
-modified_at: 2026-06-13T06:17:04.876450077Z
+modified_at: 2026-06-13T06:17:05.896769762Z
 req_type: Story
 tags:
 - cli-manual
 - docs
 - parent:EPIC-40
+comments:
+- id: 019ebfa0-7a68-7e30-a673-1d13c3882217
+  author: joe
+  content: Duplicate of STORY-595 (Ch9) — rg missed 595 in background output. Rejected.
+  created_at: 2026-06-13T06:17:05.896769762Z
+  modified_at: 2026-06-13T06:17:05.896769762Z
