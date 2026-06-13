@@ -155,9 +155,42 @@ unattended drain, schedule the next wave via a wake-up rather than blocking.
 
 ### 6. Report
 
-When the ready set is empty (or `--max` reached), send a `PushNotification`
-summary: specs completed, any parked-with-reason, any worktrees that couldn't be
-pruned (flagged + skipped in step 3), and what's left needing the operator.
+When the ready set is empty (or `--max` reached), report the drain on **two
+channels** — they reach different audiences and neither replaces the other:
+
+1. **`PushNotification`** — the ambient at-the-keyboard ping (specs completed,
+   parked-with-reason, worktrees that couldn't be pruned, what's left).
+
+2. **Post the completion summary to the advisor mailbox** so the *narrative* —
+   the caveats and reasoning a `PushNotification` can't carry — lands in the
+   advisor session's unread notice / inbox **without the operator relaying it.**
+   Outcomes already reach the advisor automatically (merged PRs via the monitor,
+   completed specs via the cache); what *doesn't* is the
+   reasoning/caveats/escalations, so the operator has been cut-n-pasting every
+   drain report. This step closes that paste loop — the burn-down analog of
+   STORY-569's `--zen` clean-finish → review brief; same substrate-handoff
+   principle, applied to the drain's completion report:
+
+   ```
+   aida mailbox send --to advisor --intent handoff "Burn-down complete (<selector>).
+
+   Completed: <SPEC + PR url per landed spec>
+   Caveats / verifications worth noting: <e.g. 'TASK-X passed CI but the integrated-main build was only a compile check'>
+   Held / awaiting sign-off: <review:draft-only PRs left for the operator>
+   Parked (with reason): <spec + why, from the gate's parked set + any punt-and-continue parks>
+   Worktrees not pruned: <flagged + skipped paths from step 3, if any>"
+   ```
+
+   - Use `--intent handoff` for a normal completion report. Use
+     `--intent request` instead if the summary contains something that needs an
+     advisor **decision** (e.g. a parked spec the advisor must triage). Add
+     `--urgent` only if the drain hit a `main`-breaking HALT (step 3) the advisor
+     must see out-of-band.
+   - Keep the body to the lines above — specs+PRs, caveats, held,
+     parked-with-reason, unpruned worktrees. Omit a heading that has nothing
+     under it (don't post empty lines). One message per completed drain.
+   - **Best-effort:** a failed mailbox send must **never** retroactively fail an
+     otherwise-complete drain — note it and continue.
 
 ## Guardrails
 
@@ -183,4 +216,4 @@ parallel. They are **not** competitors: reach for `/aida-burndown` to drain a
 *ready set*; reach for the orchestrator drain when its single-spec lifecycle is
 what you want. Don't run both against the same set.
 
-trace:STORY-527 | ai:claude
+trace:STORY-527 trace:TASK-792 | ai:claude
