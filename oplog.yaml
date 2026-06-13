@@ -17626,5 +17626,13 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-13, operator decision via `aida questions answer`): Clarify the help — verb stays; help honestly says it sets a dispatch marker and points at stop to terminate — smallest fix
-clock: 1738
+- id: 019ec1ff-26b6-7671-9f0c-c28ce9899a8e
+  target_id: 019ebfbd-ff41-7e53-b30c-f65831c57ebd
+  author: aida
+  node_id: '1'
+  lamport: 1739
+  timestamp: 2026-06-13T17:19:44.822636720Z
+  kind: !SetStatus
+    status: Approved
+clock: 1739
 node_id: '1'

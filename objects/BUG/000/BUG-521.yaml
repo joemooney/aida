@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-13, operator decision via `aida questions answer`): Clarify the help — verb stays; help honestly says it sets a dispatch marker and points at stop to terminate — smallest fix
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:20.449952526Z
-modified_at: 2026-06-13T17:17:20.908713646Z
+modified_at: 2026-06-13T17:19:44.798868022Z
 req_type: Bug
 tags:
 - cli-consistency
