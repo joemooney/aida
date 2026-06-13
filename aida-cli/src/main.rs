@@ -5055,6 +5055,56 @@ fn questions_answer_all_defaults(
     Ok(())
 }
 
+// BUG-531: `aida search` mirrors `aida list`'s output-mode flags. These tests
+// assert the clap surface (flag + aliases parse, mutual exclusion enforced) at
+// parse level — no backend / CWD / HOME / git. trace:BUG-531 | ai:claude
+#[cfg(test)]
+mod search_output_flags_tests {
+    use super::*;
+    use crate::cli::Command;
+    use clap::Parser;
+
+    #[test]
+    fn search_short_and_aliases_parse() {
+        for flag in ["--short", "-q", "--ids-only", "--quiet"] {
+            let cli = Cli::try_parse_from(["aida", "search", "auth", flag])
+                .unwrap_or_else(|e| panic!("`{flag}` should parse: {e}"));
+            match cli.command {
+                Command::Search { short, json, .. } => {
+                    assert!(short, "`{flag}` should set short");
+                    assert!(!json, "`{flag}` should not set json");
+                }
+                other => panic!("expected search, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn search_json_parses() {
+        let cli = Cli::try_parse_from(["aida", "search", "auth", "--json"]).unwrap();
+        match cli.command {
+            Command::Search { short, json, .. } => {
+                assert!(json);
+                assert!(!short);
+            }
+            other => panic!("expected search, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn search_short_and_json_are_mutually_exclusive() {
+        // Mirrors `aida list`'s --short ⊥ --json. clap rejects the combo.
+        assert!(
+            Cli::try_parse_from(["aida", "search", "auth", "--short", "--json"]).is_err(),
+            "--short and --json must be mutually exclusive"
+        );
+        assert!(
+            Cli::try_parse_from(["aida", "search", "auth", "-q", "--json"]).is_err(),
+            "-q and --json must be mutually exclusive"
+        );
+    }
+}
+
 // STORY-522: `aida questions` parser + record/confirm logic. These tests are
 // fully isolated — pure functions over in-memory DecisionRequest values, no
 // backend / CWD / HOME / git. trace:STORY-522 | ai:claude
@@ -13637,6 +13687,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             archived,
             deferred,
             include_meta,
+            short,
+            json,
             ..
         } => {
             // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
@@ -13676,6 +13728,55 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // --include-meta. trace:BUG-488 | ai:claude
             if !*include_meta {
                 results.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
+            }
+
+            // BUG-531: mirror `aida list`'s output-mode flags onto search.
+            // `--short`/`-q`/`--ids-only`/`--quiet` emits one bare canonical
+            // spec ID per line — no header, no count footer, no color — so the
+            // output is directly pipeable into `$(...)` / xargs. Runs AFTER the
+            // shared filter + meta passes (same row set the human table shows)
+            // and returns early, before the table or JSON rendering. Mutually
+            // exclusive with --json (enforced by clap). Empty result = no
+            // output (and a zero exit), matching `aida list --short`.
+            // trace:BUG-531 | ai:claude
+            if *short {
+                for req in &results {
+                    let id = req.agreed_id.as_deref().or(req.spec_id.as_deref());
+                    if let Some(id) = id {
+                        println!("{id}");
+                    }
+                }
+                return Ok(());
+            }
+
+            // BUG-531: `--json` emits the row set as a JSON array without the
+            // human chrome (header / count footer / colour), mirroring
+            // `aida list --json`. trace:BUG-531 | ai:claude
+            if *json {
+                #[derive(serde::Serialize)]
+                struct SearchJsonRow<'a> {
+                    spec_id: &'a str,
+                    title: &'a str,
+                    req_type: &'a str,
+                    status: &'a str,
+                    tags: &'a [String],
+                }
+                let out: Vec<SearchJsonRow> = results
+                    .iter()
+                    .map(|req| SearchJsonRow {
+                        spec_id: req
+                            .agreed_id
+                            .as_deref()
+                            .or(req.spec_id.as_deref())
+                            .unwrap_or(""),
+                        title: req.title.as_str(),
+                        req_type: req.req_type.as_str(),
+                        status: req.status.as_str(),
+                        tags: &req.tags,
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&out)?);
+                return Ok(());
             }
 
             if results.is_empty() {
