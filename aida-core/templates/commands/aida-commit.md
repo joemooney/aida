@@ -17,3 +17,4 @@ Follow the workflow in `.claude/skills/aida-commit.md`:
 3. Offer to create requirements for untraced work
 4. Create commit with requirement links in message
 5. Update linked requirement statuses
+6. Shipped a new CLI slice verb? Update its parent skill to call it (no re-impl) — see `docs/aida/discipline/skill-cli-symmetry.md` <!-- trace:TASK-736 -->
