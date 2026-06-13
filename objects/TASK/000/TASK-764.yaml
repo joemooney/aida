@@ -8,12 +8,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:30:23.720118445Z
-modified_at: 2026-06-13T02:28:35.018028434Z
+modified_at: 2026-06-13T02:28:37.079696367Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
   created_at: 2026-06-12T20:30:32.946303917Z
+comments:
+- id: 019ebecf-4c57-7452-a1bd-ede62ac085d0
+  author: joe
+  content: 'Rejected: verbatim duplicate of TASK-747 (Completed) — ''--for human queue routing'' shipped under TASK-747. PR #804 relabeled TASK-747 trace comments to TASK-764/ai:codex; reverted. No new work.'
+  created_at: 2026-06-13T02:28:37.079696367Z
+  modified_at: 2026-06-13T02:28:37.079696367Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T02:14:45.554311235Z
