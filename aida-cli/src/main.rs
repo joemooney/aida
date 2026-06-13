@@ -63654,15 +63654,22 @@ fn handle_statusline_command(color: &str) -> Result<()> {
             parts.push(seg.yellow().bold().to_string());
         }
     }
-    // TASK-756: operator-presence segment. Only the effective `away` state is
-    // surfaced (a short glyph + word) — `home` is the boring default and stays
-    // quiet, matching the cache/freshness "only the non-default is noise-worthy"
-    // contract. Read-only; presence changes nothing else here. trace:TASK-756
-    if matches!(
-        presence::current_presence(chrono::Utc::now()),
-        presence::Presence::Away
-    ) {
-        parts.push(format!("{} away", "🚶").yellow().bold().to_string());
+    // TASK-756/TASK-783: operator-presence segment. Only the effective `away`
+    // state is surfaced (a short glyph + word + compact TTL-remaining, e.g.
+    // `🚶 away 2h`) — `home` is the boring default and stays quiet, matching
+    // the cache/freshness "only the non-default is noise-worthy" contract.
+    // READ-ONLY: this goes through the non-flipping `statusline_away_remaining`
+    // (→ `current_presence`/`effective_presence`), NEVER
+    // `auto_flip_if_interactive` — else rendering the statusline on every
+    // prompt would itself flip the operator home and `away` could never show.
+    // trace:TASK-756 trace:TASK-783
+    if let Some(remaining) = presence::statusline_away_remaining(chrono::Utc::now()) {
+        parts.push(
+            format!("{} away {}", "🚶", remaining)
+                .yellow()
+                .bold()
+                .to_string(),
+        );
     }
     println!("{}", parts.join(&separator));
     Ok(())
