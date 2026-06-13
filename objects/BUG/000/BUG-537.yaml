@@ -1,0 +1,17 @@
+id: 019ec2ae-c78f-79b0-aa99-afd80bf805b7
+spec_id: BUG-537
+agreed_id: BUG-537
+title: burndown plan / resolve_burndown_sets doesn't exclude deferred specs — deferred:true specs pollute awaiting-sign-off
+description: 'Verified (2026-06-13): resolve_burndown_sets filters ''if req.archived { continue }'' but has NO ''deferred'' sibling, so a spec with deferred:true (set by ''aida defer'', STORY-584) still appears in burndown plan''s awaiting-sign-off (hit with TASK-769/TASK-793). Fix: skip req.deferred too, mirroring the archived filter — deferred specs are parked/conditional and must not pollute the ready/awaiting/parked sets (they show in ''aida list --deferred''). Split from BUG-530 (whose stale-read core is a separate, larger fix). trace:relates:BUG-530 trace:relates:STORY-584'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T20:31:34.799371027Z
+modified_at: 2026-06-13T20:31:34.799371027Z
+req_type: Bug
+tags:
+- aida:burndown
+- from-friction
+- lifecycle
+- relates:BUG-530
