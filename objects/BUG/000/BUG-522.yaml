@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-13, operator decision via `aida questions answer`): Rename session list to session conversations (or history) — the historical view gets a self-describing name; leases stays
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:30.256071770Z
-modified_at: 2026-06-13T17:28:02.310915293Z
+modified_at: 2026-06-13T17:40:27.179125805Z
 req_type: Bug
 tags:
 - cli-consistency
@@ -29,6 +29,24 @@ comments:
   content: Commit 9c5e91778 references this requirement
   created_at: 2026-06-13T17:28:02.310915293Z
   modified_at: 2026-06-13T17:28:02.310915293Z
+history:
+- id: 019ec212-1ba7-7e30-814c-fd93cbb6abd1
+  author: aida-auto-bump
+  timestamp: 2026-06-13T17:40:27.175417941Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec212-1bab-75e1-843e-53b8103bb07a
+  timestamp: 2026-06-13T17:40:27.179125453Z
+  agent: aida
+  commit_sha: fd62237cadd66fd375f3ed34386718c18ac34a36
+  summary: Completed via merge fd62237c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T17:40:27.026055041Z
+  completion_sha: fd62237cadd66fd375f3ed34386718c18ac34a36
 decision_request:
   question: aida session list (historical Claude conversations) and aida session leases (active scoped work) are two unrelated concepts under one namespace. How to disambiguate?
   choices:
