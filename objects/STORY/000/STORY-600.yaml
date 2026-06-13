@@ -1,0 +1,17 @@
+id: 019ebfad-9217-7620-8f6c-cffd4b037419
+spec_id: STORY-600
+agreed_id: STORY-600
+title: 'aida manual <command> (a.k.a. --doc): print the CLI-manual rationale section for a command inline'
+description: 'Operator idea (2026-06-12): a command that prints the corresponding manual section so users reference the when/why next to --help. The manual''s ''### `aida <cmd>`'' headers are the extraction key (one header to the next = that command''s entry). Smallest slice: `aida manual <cmd>` greps docs/cli/*.md for the command''s section and prints it (paged); `aida <cmd> --help` stays the fact source. Endgame: rationale-strings embedded beside clap so it''s generated, not grepped. Requires the manual chapters to use the consistent header convention (enforced by STORY-597 drift-guard). Depends on enough chapters existing.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:31:23.927658996Z
+modified_at: 2026-06-13T06:31:23.927658996Z
+req_type: Story
+tags:
+- cli-manual
+- docs
+- from-product
+- parent:EPIC-40
