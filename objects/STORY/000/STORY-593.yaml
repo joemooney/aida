@@ -1,0 +1,16 @@
+id: 019ebf9d-8ed6-7f42-8669-fb9cc9d2c589
+spec_id: STORY-593
+agreed_id: STORY-593
+title: 'CLI manual: Ch7 — Project setup: init(deep)/remote/node/rules/memories/doctor + first-machine global setup'
+description: 'Write the chapter to the template set by docs/cli/01-getting-started.md: per-command One-line / Mental model / Reach-for-it-when / Don''t-reach-for-it-when(+alternative) / Key options (RATIONALE ONLY — never reproduce the full flag list) / Gotchas / Chains-with. Ground every command against its live `--help` before writing (no invented flags). Cross-link into the journey spine in docs/cli/README.md. On branch cli-manual.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:13:54.518384239Z
+modified_at: 2026-06-13T06:13:54.518384239Z
+req_type: Story
+tags:
+- cli-manual
+- docs
+- parent:EPIC-40
