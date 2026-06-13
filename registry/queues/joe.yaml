@@ -850,3 +850,10 @@
   added_at: 2026-06-12T23:56:15.083669252Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019ebfb9-16cc-7461-94bc-e0ccb6918743
+  position: 431000
+  added_by: joe
+  note: advisor-cleared at filing
+  added_at: 2026-06-13T06:44:04.287752400Z
+  for_role: advisor
