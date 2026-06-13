@@ -1,0 +1,16 @@
+id: 019ebf9f-a911-7581-91df-0426208f5fa3
+spec_id: STORY-598
+agreed_id: STORY-598
+title: 'CLI manual: Ch9 — Integrations and servers: mcp-serve/serve/doc/docs (MCP + the requirements-as-docs projection)'
+description: Write to the docs/cli/01-getting-started.md template (one-line/mental-model/reach-when/dont-reach-when/key-options-rationale-only/gotchas/chains-with). Ground each command against live --help. Cross-link the journey spine. Branch cli-manual.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:16:12.305345160Z
+modified_at: 2026-06-13T06:16:12.305345160Z
+req_type: Story
+tags:
+- cli-manual
+- docs
+- parent:EPIC-40
