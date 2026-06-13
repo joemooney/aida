@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:12:11.226673112Z
-modified_at: 2026-06-13T18:38:19.443953558Z
+modified_at: 2026-06-13T19:26:33.466932208Z
 req_type: Epic
 tags:
 - cli-manual
@@ -121,3 +121,8 @@ comments:
   content: Commit 2a20d8308 references this requirement
   created_at: 2026-06-13T18:38:19.443953558Z
   modified_at: 2026-06-13T18:38:19.443953558Z
+- id: 019ec273-3ffa-7ee2-8f60-b9b616612943
+  author: joe
+  content: Commit bca2e4888 references this requirement
+  created_at: 2026-06-13T19:26:33.466932208Z
+  modified_at: 2026-06-13T19:26:33.466932208Z
