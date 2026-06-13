@@ -1,0 +1,18 @@
+id: 019ec16b-8eca-7021-aab6-50fe6fd6a3ae
+spec_id: TASK-779
+agreed_id: TASK-779
+title: 'aida decide <spec>: human-resolution entry alias (routes to questions answer if a DecisionRequest is pending, else questions clarify)'
+description: 'Operator hit the discoverability gap (2026-06-13): tried ''aida decide'', ''aida answer'', ''aida question'' — none exist; the real verbs live under ''aida questions {answer,clarify}''. Add ''aida decide <spec>'' as the natural human-resolution entry. Smart routing: if the spec has a PENDING DecisionRequest (enumerated choices) -> behave like ''aida questions answer <spec>''; else (under-specified / needs-human, no choices) -> behave like ''aida questions clarify <spec>'' (interactive). A thin alias/dispatcher; the underlying logic stays in ''aida questions''. trace:STORY-522'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T14:38:32.138693714Z
+modified_at: 2026-06-13T14:38:32.138693714Z
+req_type: Task
+tags:
+- aida:cli
+- aida:questions
+- fasttrack
+- papercut
+- ux
