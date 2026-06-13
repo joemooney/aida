@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:32:41.277930304Z
-modified_at: 2026-06-13T17:32:41.277930304Z
+modified_at: 2026-06-13T17:57:51.960925291Z
 req_type: Bug
 tags:
 - aida:queue
@@ -17,3 +17,9 @@ tags:
 - papercut
 - queue-routing
 - relates:BUG-528
+comments:
+- id: 019ec222-0cd8-7e03-8a55-05ad8d9cd038
+  author: joe
+  content: Commit fb1096b63 references this requirement
+  created_at: 2026-06-13T17:57:51.960925291Z
+  modified_at: 2026-06-13T17:57:51.960925291Z
