@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:51:05.785133115Z
-modified_at: 2026-06-13T15:55:56.559105471Z
+modified_at: 2026-06-13T15:55:56.966588096Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019ebef4-f85a-7751-b0eb-1cd2c7a283c1
   created_at: 2026-06-13T15:51:11.873840300Z
+comments:
+- id: 019ec1b2-6ea6-79f0-a19a-603d1fd6cdf9
+  author: joe
+  content: Rejected as a duplicate — the interpret-half follow-up was already filed as TASK-782 (child of STORY-585) before this auto-followup ran. The plan's Followups bullet literally named TASK-782, so the auto-filer created a redundant TASK referencing it. See TASK-782.
+  created_at: 2026-06-13T15:55:56.966588096Z
+  modified_at: 2026-06-13T15:55:56.966588096Z
