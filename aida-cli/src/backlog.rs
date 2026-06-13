@@ -1064,6 +1064,7 @@ mod tests {
             relationships: Vec::new(),
             comments: Vec::new(),
             history: Vec::new(),
+            processing_record: Vec::new(),
             archived: false,
             archived_at: None,
             custom_status: None,

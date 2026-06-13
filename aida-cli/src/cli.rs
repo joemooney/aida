@@ -1656,6 +1656,37 @@ pub enum CacheCommand {
     Status,
 }
 
+/// Inspect / prune the durable processing-record audit trail.
+// trace:STORY-582 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RecordCommand {
+    /// List the processing records for one spec (or every spec carrying any,
+    /// when no id is given).
+    List {
+        /// Spec id to inspect. Omit to walk every spec with a record.
+        spec: Option<String>,
+    },
+
+    /// Trim processing records, keeping the spec. Records can be pruned later
+    /// without losing the spec or its history. Propose-by-default — pass
+    /// `--apply` to write.
+    Prune {
+        /// Restrict to one spec. Omit to sweep every spec.
+        #[clap(long)]
+        spec: Option<String>,
+
+        /// Drop records older than this many days (e.g. `90`). When omitted,
+        /// every record on the matched spec(s) is pruned.
+        #[clap(long)]
+        older_than: Option<u64>,
+
+        /// Actually write the prune. Without it, the command only reports what
+        /// it would remove (propose-by-default).
+        #[clap(long)]
+        apply: bool,
+    },
+}
+
 /// Throwaway sandbox store for drain-testing and scenario play.
 /// The sandbox is an ordinary git-canonical store living under a temp dir; it
 /// is targeted via the `AIDA_STORE` env override, so it never touches the
@@ -6012,6 +6043,12 @@ pub enum Command {
     /// SQLite cache view commands (git-canonical mode only)
     #[clap(subcommand, hide = true)]
     Cache(CacheCommand),
+
+    /// Inspect or prune the durable per-spec processing record — the audit
+    /// trail of what was done + why, captured at completion time.
+    // trace:STORY-582 | ai:claude — plain `//` keeps the id out of `--help`.
+    #[clap(subcommand, hide = true)]
+    Record(RecordCommand),
 
     /// Throwaway sandbox store for drain-testing / scenario play. Creates a
     /// discardable git-canonical store under a temp dir; point `aida` at it

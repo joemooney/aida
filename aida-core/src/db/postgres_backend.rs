@@ -406,6 +406,8 @@ impl PostgresBackend {
             relationships,
             comments,
             history,
+            // STORY-582: postgres backend does not persist processing records.
+            processing_record: Vec::new(),
             archived,
             archived_at,
             custom_status,
