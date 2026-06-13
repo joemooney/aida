@@ -9,7 +9,7 @@
 
 ## 1. TL;DR — the recommendation
 
-**The gap is real but narrower than it looks, because AIDA already has the seam.** As of STORY-567 (in flight on `codex/story-567-contained`) AIDA has an opt-in **`[agents] contained`** posture that turns on Claude Code's *own* Bash sandbox (bubblewrap on Linux) instead of bypassing permissions. What's missing is (a) an AIDA-controlled **OS boundary around the whole `claude -p` process** (the contained mode only sandboxes Claude's Bash tool, not Edit/Write/MCP/network), and (b) **network-egress allowlisting**, which is the single most differentiated competitor capability.
+**The gap is real but narrower than it looks, because AIDA already has the seam.** As of STORY-567 (Completed, on main) AIDA has an opt-in **`[agents] contained`** posture that turns on Claude Code's *own* Bash sandbox (bubblewrap on Linux) instead of bypassing permissions. What's missing is (a) an AIDA-controlled **OS boundary around the whole `claude -p` process** (the contained mode only sandboxes Claude's Bash tool, not Edit/Write/MCP/network), and (b) **network-egress allowlisting**, which is the single most differentiated competitor capability.
 
 **Recommended shape** (confirms the advisor's prior, with one correction):
 
