@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:32.726869661Z
-modified_at: 2026-06-13T21:08:14.620840826Z
+modified_at: 2026-06-13T23:02:59.350605264Z
 req_type: Story
 tags:
 - docs
@@ -36,3 +36,15 @@ comments:
   content: Commit 2477b7736 references this requirement
   created_at: 2026-06-13T21:08:14.620840826Z
   modified_at: 2026-06-13T21:08:14.620840826Z
+decision_request:
+  question: 'AIDA Book (STORY-607) nesting: how should the CLI manual relate to the unified Book?'
+  choices:
+  - label: CLI manual as a nested PART of the Book
+    consequence: 'One book; CLI manual is a section; PR #861 is already built this way (no rework)'
+    resolution: noop
+  - label: CLI manual standalone, LINKED from the Book
+    consequence: 'CLI manual stays its own mdBook; Book links to it; #861 needs rework'
+    resolution: noop
+  recommended: 0
+  rationale: '#861 already assembled it as a part (no rework) and one book is simpler to navigate; pick standalone only if the CLI manual should version/ship independently.'
+  asked_at: 2026-06-13T23:02:59.350605264Z
