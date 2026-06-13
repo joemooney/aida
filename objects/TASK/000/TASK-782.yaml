@@ -13,12 +13,12 @@ description: |-
   5. CADENCE for idle/long-running agents: mail piggybacks the EXISTING brief-poll heartbeat (no bespoke mail daemon); urgent --notify gives out-of-band wake. Poll interval configurable with a default.
 
   Relates: STORY-585 (notice half), STORY-569 (write half / --zen handoff), the three-mode autonomy ladder (docs/architecture/autonomy-and-escalation.md), brief-polling discipline.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:28:48.081889379Z
-modified_at: 2026-06-13T16:41:23.394883501Z
+modified_at: 2026-06-13T17:23:14.643021023Z
 req_type: Task
 tags:
 - agent-context
@@ -36,7 +36,23 @@ comments:
   content: Commit fa26cf355 references this requirement
   created_at: 2026-06-13T16:39:20.281619948Z
   modified_at: 2026-06-13T16:39:20.281619948Z
+history:
+- id: 019ec202-5a4e-7d52-9422-3cd155eeb95d
+  author: aida-auto-bump
+  timestamp: 2026-06-13T17:23:14.638305681Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec202-5a53-7682-89ad-04834928df15
+  timestamp: 2026-06-13T17:23:14.643020055Z
+  agent: implementer
+  commit_sha: 49243823d14403c13c9c03938eb31773de140b8a
+  summary: Completed via merge 49243823
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T16:41:23.394883501Z
   implemented_by: joe
+  completed_at: 2026-06-13T17:23:14.450932396Z
+  completion_sha: 49243823d14403c13c9c03938eb31773de140b8a
