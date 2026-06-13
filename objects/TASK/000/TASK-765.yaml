@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:30:37.072810100Z
-modified_at: 2026-06-12T20:30:37.072810100Z
+modified_at: 2026-06-13T01:47:32.469067341Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
   created_at: 2026-06-12T20:30:57.809601266Z
+comments:
+- id: 019ebea9-b0f5-7663-b050-6fde0d7922a2
+  author: joe
+  content: 'Obsolete: presence shipped (TASK-756 primitive + STORY-561 consumers, both Completed). The ''Phase 4 presence'' work is done. Rejecting.'
+  created_at: 2026-06-13T01:47:32.469067341Z
+  modified_at: 2026-06-13T01:47:32.469067341Z
