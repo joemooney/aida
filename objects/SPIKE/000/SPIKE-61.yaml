@@ -3,12 +3,12 @@ spec_id: SPIKE-61
 agreed_id: SPIKE-61
 title: 'SPIKE: sandboxed/containerized agent execution — isolate autonomous drains in a Linux container/sandbox'
 description: 'Operator (2026-06-13): market research identified sandboxed agent execution as a competitive HOLE. We run autonomous drains as headless ''claude -p'' with bypassed permissions ([agents] bypass / --dangerously-skip-permissions) doing real git ops + cargo/npm builds with no OS-level isolation beyond git worktrees. Research goals: (1) how to MOST EFFICIENTLY sandbox this on Linux (Docker/Podman/devcontainer/bubblewrap/nsjail/Landlock/gVisor/Firecracker/systemd-nspawn — isolation strength vs overhead vs setup friction); (2) what COMPETITORS do (Claude Code devcontainer + sandbox-exec, Codex seatbelt/landlock, OpenHands Docker runtime, Devin cloud VMs, Cursor background agents, Jules, Copilot agent, Replit, Amp, Factory); (3) cleanest integration point given AIDA already has worktree isolation. Output: a docs/competitive-analysis or docs/research synthesis + a recommended approach (likely an opt-in [sandbox] posture wrapping the claude -p spawn). Fanned out to 3 parallel research agents 2026-06-13. trace:from-strategic'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T18:52:20.803652533Z
-modified_at: 2026-06-13T19:16:01.048969565Z
+modified_at: 2026-06-13T20:10:03.241590858Z
 req_type: Spike
 tags:
 - agent-execution
