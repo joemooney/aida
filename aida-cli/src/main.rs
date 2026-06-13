@@ -94131,10 +94131,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     println!("{}", "Your queue is empty.".dimmed());
                 }
                 // TASK-46: if the queue *looks* empty only because all
-                // remaining items are terminal-status, point at the
-                // escape hatch so the user isn't confused.
-                // trace:TASK-46 | ai:claude
-                if hidden_terminal_count > 0 {
+                // remaining items are terminal-status, point at the escape
+                // hatch so the user isn't confused. BUG-517: only on the
+                // everything view (`--all`) — on the default role-filtered
+                // list it's noise. trace:TASK-46 trace:BUG-517 | ai:claude
+                if hidden_terminal_count > 0 && *all {
                     println!(
                         "  ({} terminal-status entr{} hidden; pass --include-terminal to show)",
                         hidden_terminal_count,
