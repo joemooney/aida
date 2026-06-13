@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T18:41:15.819260470Z
+modified_at: 2026-06-13T20:23:06.797312936Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -52,3 +52,8 @@ comments:
   content: 'COORDINATION NOTE (2026-06-13): BUG-532 (PR #848, merges before this) added a 4th return value to resolve_burndown_sets — a titles HashMap<display-id, title> built from the SAME store scan, used by ''burndown plan'' to show id+title. When implementing option 1 (rerouting the store read through the freshness-checked cache), PRESERVE that titles map — build it from the cache rows too, so ''burndown plan'' titles don''t regress. The cache projection must expose title (it does — ''aida list'' shows titles from cache). Re-base on current main first; resolve_burndown_sets will already have the BUG-532 shape.'
   created_at: 2026-06-13T18:41:15.819260470Z
   modified_at: 2026-06-13T18:41:15.819260470Z
+- id: 019ec2a7-072d-7a92-9646-d99f281b8ed4
+  author: joe
+  content: 'SCOPE EXPANSION (2026-06-13, verified): resolve_burndown_sets ALSO fails to filter DEFERRED specs — TASK-769/TASK-793 have deferred:true in their YAML (aida list --deferred shows them) yet still appear in burndown plan''s awaiting-sign-off. The function filters ''if req.archived { continue }'' but has no ''deferred'' check. Fix this in the SAME PR as the cache-routing fix (I''m in resolve_burndown_sets anyway): exclude deferred specs from ALL three sets (ready/awaiting/parked → deferred goes to its own bucket or is hidden, matching aida list''s default). Trailer BUG-530 covers both the stale-read fix and this deferred-filter fix.'
+  created_at: 2026-06-13T20:23:06.797312936Z
+  modified_at: 2026-06-13T20:23:06.797312936Z
