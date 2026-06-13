@@ -17495,5 +17495,30 @@ operations:
   timestamp: 2026-06-13T06:17:04.991575186Z
   kind: !SetStatus
     status: Rejected
-clock: 1726
+- id: 019ec17f-c56a-7412-a7bd-3c5432b0d97f
+  target_id: 019eb57f-58b4-70d3-be4f-76737abb4c6f
+  author: aida
+  node_id: '1'
+  lamport: 1727
+  timestamp: 2026-06-13T15:00:36.842124091Z
+  kind: !SetDescription
+    description: |-
+      Standing follow-up to SPIKE-55 (risk #2 / followup bullet): when a skill's deterministic slice becomes a CLI verb, the parent skill must *call* the verb, not keep a re-implementation — the same anti-drift discipline as the CLI↔MCP mirror (STORY-82). Staged: (a) codify the rule durably going forward, (b) apply it once as a backfill against the 8 already-shipped slice verbs.
+
+      Shipped slice verbs in backfill scope: `aida ultraplan`/`plan helpers` (/aida-plan, /ultraplan) · `aida review prompt`/`assemble` (/aida-review) · `aida burndown plan` (/aida-burndown) · `aida goal` (/goal, /aida-drain-queue) · `aida digest` (/aida-digest) · `aida rebase` (/aida-rebase) · `aida doctor` scan slice (/aida-doctor) · `aida plan verify` partial (/aida-import-plan).
+
+      ## Acceptance
+
+      1. Codify the forward rule (discipline pack). A durable statement lands in `aida-core/templates/docs/aida/discipline/` (new short note, e.g. `skill-cli-symmetry.md`, or folded into the README table — NOT the frozen SPIKE-55 plan doc). Rule, in substance: "When a skill's deterministic slice ships as a CLI verb, the parent skill must call that verb in the same PR rather than re-implement the logic — same anti-drift discipline as the CLI↔MCP mirror (STORY-82)." The discipline-pack README.md pointer table gains a row. Edit the master template (symlink + build.rs embed propagate to `.claude/`).
+
+      2. Trip-point checklist line. Both /aida-commit and /aida-pr skill masters gain one checklist line, in substance: "Shipped a new CLI slice verb? Update its parent skill to call it (no re-impl)." Honest bound: a prompt-level nudge to a reading agent, NOT a hard gate.
+
+      3. Backfill audit of the 8 shipped-slice skills. For each parent skill above, determine calls-the-verb vs re-implements. State the per-skill verdict in the implementing PR/commit (no separate audit doc required).
+
+      4. Fix only genuine drift. Where a skill re-implements a verb's logic, rewrite that section to invoke the CLI verb (e.g. "run `aida burndown plan --json` and use its output") instead of re-deriving inline. Skills already calling their verb are untouched. "No drift found" is an acceptable outcome — the bar is audited + fixed-if-drifted, not N skills edited.
+
+      5. Out of scope (explicit). Does NOT: add any new CLI verb (P1-P7 GAPs are TASK-734, master-gated); re-classify any A/B/C bucket; touch pure-agentic (bucket-A) skills; change the verbs' own behavior/output; or build a lint/CI guard (deferred — too fuzzy to detect reliably; revisit only if drift recurs).
+
+      Primary callers: discipline-pack note → read on demand by AIDA-using sessions; checklist line → trips a reading agent inside /aida-commit + /aida-pr at ship time; backfill edits → skill markdown masters under `aida-core/templates/{skills,commands}/`.
+clock: 1727
 node_id: '1'
