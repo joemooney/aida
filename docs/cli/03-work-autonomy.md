@@ -209,6 +209,20 @@ These three support the autonomy machinery rather than driving work directly.
 
 **`aida goal`** — derive a *machine-checkable* completion condition from spec metadata, ready to paste into `/goal` or `/schedule`. Each flag is one clause (`--batch`, `--epic`, `--queue-empty`, …); flags compose with AND; every clause carries an explicit verification command. **Reach for it when** you want a loop/drain to stop on a *deterministic* condition rather than a vague "make it pass." **Don't** pick a clause whose mechanism your drain bypasses (e.g. a `--queue-empty` condition met trivially because autonomous-merge skipped that queue) — the clause must match how the work actually routes.
 
+### Contained-mode network egress — `[contained] allowed_hosts`
+
+When the **contained** posture is on (`--contained` / `[agents] contained`), an agent's Bash runs inside Claude Code's sandbox (bubblewrap on Linux). By default that sandbox prompts the first time a command reaches a new network domain. To pre-restrict egress to a known allowlist, set a project config:
+
+```toml
+# .aida/config.toml
+[contained]
+allowed_hosts = ["github.com", "api.anthropic.com", "static.crates.io", "registry.npmjs.org"]
+```
+
+This injects `sandbox.network.allowedDomains` into the contained `--settings` (the proxy default-denies egress except to these hosts; wildcards like `*.crates.io` work). **It is strictly opt-in:** with `allowed_hosts` unset, the contained settings are byte-unchanged — no network restriction is applied. **Reach for it when** you run unattended drains and want to bound where they can reach.
+
+**Slice-1 limitation:** a non-allowlisted domain *prompts* for approval — fine interactively, but a **headless** `claude -p` drain can't answer the prompt. True block-without-prompt for headless drains needs `network.allowManagedDomainsOnly` via *managed* settings; that's a follow-up. Don't rely on `allowed_hosts` alone to hard-contain a `--no-human` drain yet. (trace:STORY-605, SPIKE-61)
+
 ---
 
 ## Where to go next
