@@ -1,0 +1,25 @@
+id: 019ec1a7-963b-72e3-aefb-447ee170d01f
+spec_id: TASK-787
+agreed_id: TASK-787
+title: 'Finalize + merge the CLI manual (cli-manual branch): catch up to current CLI, advisor-review the 8 drafts, wire verify-manual.py into CI'
+description: |-
+  The cli-manual branch (11 chapters, docs-only, verifier-clean as of last night) is NOT yet mergeable: (1) it's already incomplete vs current main — today's additions (undefer, mailbox retract/delete, status --activity, queue advance, advisor watch flags, defer, human aliases, + anything from the still-draining statusline/identity batch) aren't documented; (2) Ch2/5/6/7/8/9/10/11 are agent first-drafts — verifier-clean (no invented flags) but prose not advisor-reviewed, and some lean on project lore beyond --help (Ch6 advisor fork-vs-cold-boot is the flagged one).
+
+  Finalize pass (do once the current CLI-addition burst settles, to avoid immediate re-drift):
+  1. Catch up to current main: re-run docs/cli/verify-manual.py against live --help, document every newly-flagged command.
+  2. Advisor-review the 8 draft chapters — Ch6 (lore) FIRST, advisor is the right reviewer for lore chapters; operator blesses voice/depth.
+  3. Wire verify-manual.py into CI as an ENFORCING gate (substrate-as-bouncer: a new command can't merge without a manual entry).
+  4. Then merge cli-manual to main with the guard green.
+
+  Branch-rot is NOT a concern (all-new files, zero conflict) — only content drift, which step 1 fixes. Children/related: STORY-600 (aida manual <cmd>), STORY-601 (machine-digestible for aida-tutor), BUG-523 (--help SPEC-ID leak — fasttrack separately), TASK-778 (consistency checklist). trace:EPIC-40
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T15:44:06.203846384Z
+modified_at: 2026-06-13T15:44:06.203846384Z
+req_type: Task
+tags:
+- aida:cli
+- docs
+- parent:EPIC-40
