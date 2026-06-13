@@ -7545,6 +7545,28 @@ pub enum Command {
         // trace:STORY-584 | ai:claude
         #[clap(long, conflicts_with_all = ["all", "archived"])]
         deferred: bool,
+
+        /// Emit one bare canonical spec ID per line — no header, no count
+        /// footer, no color. Directly usable in `$(...)` / xargs:
+        /// `aida edit $(aida search "auth" --short) ...`. Composes with
+        /// every filter and honors the same archive/defer default as plain
+        /// `search`. Mutually exclusive with --json. Mirrors `aida list
+        /// --short`.
+        // trace:BUG-531 | ai:claude
+        #[clap(
+            long,
+            visible_alias = "ids-only",
+            visible_alias = "quiet",
+            short = 'q',
+            conflicts_with = "json"
+        )]
+        short: bool,
+
+        /// Emit results as a JSON array. Mutually exclusive with --short.
+        /// Mirrors `aida list --json`.
+        // trace:BUG-531 | ai:claude
+        #[clap(long, conflicts_with = "short")]
+        json: bool,
     },
 
     /// Project activity — what's been touched and how it stands now.
