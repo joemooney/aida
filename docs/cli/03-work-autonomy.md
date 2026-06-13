@@ -221,6 +221,8 @@ allowed_hosts = ["github.com", "api.anthropic.com", "static.crates.io", "registr
 
 This injects `sandbox.network.allowedDomains` into the contained `--settings` (the proxy default-denies egress except to these hosts; wildcards like `*.crates.io` work). **It is strictly opt-in:** with `allowed_hosts` unset, the contained settings are byte-unchanged — no network restriction is applied. **Reach for it when** you run unattended drains and want to bound where they can reach.
 
+> **`allowed_hosts = []` (or omitted) means *no restriction*, not "deny all".** An empty list reads like a lockdown but is the unrestricted default — full egress, current behavior. You only restrict egress when the list is **non-empty**, in which case **only** those hosts are allowed.
+
 **Slice-1 limitation:** a non-allowlisted domain *prompts* for approval — fine interactively, but a **headless** `claude -p` drain can't answer the prompt. True block-without-prompt for headless drains needs `network.allowManagedDomainsOnly` via *managed* settings; that's a follow-up. Don't rely on `allowed_hosts` alone to hard-contain a `--no-human` drain yet. (trace:STORY-605, SPIKE-61)
 
 ---
