@@ -15,12 +15,12 @@ description: |-
   5. Privacy floor: no secrets/credentials in the committed record.
 
   Composes with: briefs (gitignored today -> this makes the OUTCOME durable), aida review verdicts, the spec history: array, EPIC-39 governance/audit thesis. Design fork the advisor should resolve before pickup: structured comment vs a new history-adjacent field vs a sibling objects/RECORD file.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:07:54.867595770Z
-modified_at: 2026-06-13T03:25:10.415836633Z
+modified_at: 2026-06-13T04:22:03.113583307Z
 req_type: Story
 tags:
 - aida:brief
@@ -36,3 +36,15 @@ comments:
   content: 'Design fork RESOLVED (advisor, 2026-06-12): use a STRUCTURED FIELD on the spec YAML — a ''processing_record:'' array parallel to the existing ''history:'' array — NOT a free-text comment and NOT a sidecar objects/RECORD file. Rationale: (a) durable + committed (rides the same orphan-branch write as history); (b) queryable (aida show surfaces it; structured, unlike a prose comment); (c) prunable (trim the array — fold into the archive sweep); (d) reuses the proven history-array pattern + write path, no new storage surface. Each entry: {ts, agent, brief_ref?, pr/commit, summary, decisions[], punted[]}. Populate at completion time from the brief + the implementer finish-checkpoint + the aida review verdict (promote those two gitignored artifacts into the durable field). This supersedes acceptance #1''s ''in/alongside the YAML'' with the precise form. Implementer: treat this as binding.'
   created_at: 2026-06-13T02:40:10.012339426Z
   modified_at: 2026-06-13T02:40:10.012339426Z
+history:
+- id: 019ebf37-26fe-7a22-b61a-0a005f9ecdc5
+  author: aida-auto-bump
+  timestamp: 2026-06-13T04:22:03.262375474Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T04:22:03.113583307Z
+  completion_sha: 872b9e9d949027ffa90ff3616352ffec81b13be3
