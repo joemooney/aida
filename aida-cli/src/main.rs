@@ -21843,14 +21843,14 @@ impl PolicyRow {
 /// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
 /// when absent / unparseable (so a missing file just means "all defaults").
 /// trace:BUG-533 | ai:claude
-fn read_project_config_value(project_root: &std::path::Path) -> Option<toml::Value> {
+pub(crate) fn read_project_config_value(project_root: &std::path::Path) -> Option<toml::Value> {
     let body = std::fs::read_to_string(config_path_for_project(project_root)).ok()?;
     toml::from_str(&body).ok()
 }
 
 /// Look up `[section].key` in a parsed config, returning the raw `toml::Value`
 /// when present. trace:BUG-533 | ai:claude
-fn config_lookup<'a>(
+pub(crate) fn config_lookup<'a>(
     cfg: Option<&'a toml::Value>,
     section: &str,
     key: &str,
