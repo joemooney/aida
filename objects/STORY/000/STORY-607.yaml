@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-13, operator decision via `aida questions answer`): CLI manual as a nested PART of the Book — One book; CLI manual is a section; PR #861 is already built this way (no rework)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:32.726869661Z
-modified_at: 2026-06-13T23:20:47.062424638Z
+modified_at: 2026-06-13T23:32:49.049108410Z
 req_type: Story
 tags:
 - docs
@@ -41,6 +41,24 @@ comments:
   content: Commit 2477b7736 references this requirement
   created_at: 2026-06-13T21:08:14.620840826Z
   modified_at: 2026-06-13T21:08:14.620840826Z
+history:
+- id: 019ec354-b514-7e60-81e1-5ff9cc7dda36
+  author: aida-auto-bump
+  timestamp: 2026-06-13T23:32:49.044810143Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec354-b519-7541-8512-4af6197fc8f8
+  timestamp: 2026-06-13T23:32:49.049107749Z
+  agent: aida
+  commit_sha: 9d3ea3d81759e0e60b693c6ed0d3234adbd820b2
+  summary: Completed via merge 9d3ea3d8
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T23:32:48.889089929Z
+  completion_sha: 9d3ea3d81759e0e60b693c6ed0d3234adbd820b2
 decision_request:
   question: 'AIDA Book (STORY-607) nesting: how should the CLI manual relate to the unified Book?'
   choices:
