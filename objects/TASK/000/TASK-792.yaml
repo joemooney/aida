@@ -8,12 +8,12 @@ description: |-
   FIX: on completion, the drain posts its summary to the advisor mailbox via 'aida mailbox send advisor --intent handoff "<summary>"' (or 'request' if it needs an advisor decision). Include: specs completed (+PRs), any caveats/verifications-worth-noting, held/awaiting-sign-off items, parked-with-reason, and any worktrees that couldn't be pruned. With TASK-782/790's intent marker the message surfaces as actionable in the unread notice, so the advisor reads it via 'aida mailbox inbox' / the notice — NO paste. This is the burndown analog of STORY-569 (the --zen clean-finish → mailbox review brief); same substrate-handoff principle, applied to the drain's completion report.
 
   Wire it in the /aida-burndown skill's final step (master template aida-core/templates/skills/aida-burndown.md); optionally also have the 'burndown run' launcher post a one-line 'drain started/finished' bookend so an away advisor sees both ends. ACCEPTANCE: after a headless drain completes, the advisor session's mailbox/notice shows the completion summary without the operator relaying it. trace:relates:STORY-569 trace:relates:STORY-585 trace:from-friction
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T18:58:41.391731646Z
-modified_at: 2026-06-13T18:58:41.391731646Z
+modified_at: 2026-06-13T19:14:11.803164639Z
 req_type: Task
 tags:
 - agent-context
@@ -22,3 +22,21 @@ tags:
 - from-friction
 - handoff-loop
 - relates:STORY-569
+history:
+- id: 019ec267-eed7-76d2-9e18-4daa8ec910b6
+  author: aida-auto-bump
+  timestamp: 2026-06-13T19:14:11.799248433Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec267-eedb-7300-936e-22d4fa629034
+  timestamp: 2026-06-13T19:14:11.803164058Z
+  agent: aida
+  commit_sha: d9f1d28803aeb2c2f6374a16b148947e843837c1
+  summary: Completed via merge d9f1d288
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T19:14:11.648971324Z
+  completion_sha: d9f1d28803aeb2c2f6374a16b148947e843837c1
