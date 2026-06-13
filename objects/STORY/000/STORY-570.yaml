@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T17:00:31.951353181Z
-modified_at: 2026-06-13T01:47:25.113506758Z
+modified_at: 2026-06-13T01:48:48.906094266Z
 req_type: Story
 tags:
 - batch:repositioning
@@ -26,3 +26,5 @@ tags:
 - deferred:post-stability
 - from:SPIKE-53
 - interop
+archived: true
+archived_at: 2026-06-13T01:48:48.906094266Z
