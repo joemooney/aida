@@ -24952,7 +24952,19 @@ fn render_mailbox_notice(
     );
     for item in &summary.shown {
         let mark = if item.urgent { "⚠ " } else { "" };
-        let _ = writeln!(s, "  {}— {} (from {})", mark, item.subject, item.from);
+        // Surface an actionable intent so the agent can tell an FYI from a
+        // request/handoff at the notice level — fyi is the unmarked default,
+        // matching `aida mailbox inbox`. trace:TASK-790 | ai:claude
+        let intent_tag = if item.intent.is_actionable() {
+            format!("[{}] ", item.intent.as_str())
+        } else {
+            String::new()
+        };
+        let _ = writeln!(
+            s,
+            "  {}{}— {} (from {})",
+            mark, intent_tag, item.subject, item.from
+        );
     }
     if summary.overflow > 0 {
         let _ = writeln!(s, "  …and {} more.", summary.overflow);
@@ -57023,7 +57035,7 @@ mod bug_231_findings_promote_tests {
     // trace:STORY-585 | ai:claude
     #[test]
     fn render_mailbox_notice_frames_count_urgency_overflow_and_guidance() {
-        use aida_core::mailbox::{NoticeItem, NoticeSummary};
+        use aida_core::mailbox::{Intent, NoticeItem, NoticeSummary};
         let summary = NoticeSummary {
             total: 4,
             urgent: 1,
@@ -57035,6 +57047,7 @@ mod bug_231_findings_promote_tests {
                     thread_id: "t".into(),
                     subject: "heads up: rebasing forge".into(),
                     urgent: false,
+                    intent: Intent::Fyi,
                 },
                 NoticeItem {
                     id: "b".into(),
@@ -57042,6 +57055,7 @@ mod bug_231_findings_promote_tests {
                     thread_id: "t".into(),
                     subject: "STOP — CI is red".into(),
                     urgent: true,
+                    intent: Intent::Request,
                 },
             ],
         };
@@ -57054,6 +57068,9 @@ mod bug_231_findings_promote_tests {
             out.contains("⚠ ") && out.contains("STOP — CI is red"),
             "urgent mark: {out}"
         );
+        // Actionable intent is tagged; the fyi default stays unmarked (TASK-790).
+        assert!(out.contains("[request]"), "actionable intent tag: {out}");
+        assert!(!out.contains("[fyi]"), "fyi stays unmarked: {out}");
         assert!(out.contains("…and 2 more."), "overflow: {out}");
         assert!(out.contains("aida mailbox inbox"), "ack guidance: {out}");
         assert!(

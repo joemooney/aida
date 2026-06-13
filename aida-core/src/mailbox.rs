@@ -380,8 +380,10 @@ pub fn unread_inbox<'a>(
 }
 
 /// One unread message, flattened for the agent-facing notice: who sent it, a
-/// one-line subject (first non-empty body line, truncated), urgency, and the
-/// thread id to read the rest. trace:STORY-585 | ai:claude
+/// one-line subject (first non-empty body line, truncated), urgency, the
+/// interpreted intent (so an agent can tell an FYI from an actionable
+/// request/handoff at the notice level, not only after opening the inbox —
+/// TASK-790), and the thread id to read the rest. trace:STORY-585 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoticeItem {
     pub id: String,
@@ -389,6 +391,10 @@ pub struct NoticeItem {
     pub thread_id: String,
     pub subject: String,
     pub urgent: bool,
+    /// Interpreted intent (TASK-782): `fyi` vs `request` / `handoff`. The notice
+    /// renderer surfaces only the actionable ones, matching `aida mailbox inbox`.
+    // trace:TASK-790 | ai:claude
+    pub intent: Intent,
 }
 
 /// A capped, identity-scoped unread summary for surfacing into an agent's
@@ -494,6 +500,8 @@ where
             thread_id: m.thread_id.clone(),
             subject: subject_line(m, 60),
             urgent: m.urgent,
+            // trace:TASK-790 | ai:claude
+            intent: m.intent,
         })
         .collect();
     NoticeSummary {
