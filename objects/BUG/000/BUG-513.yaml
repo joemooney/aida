@@ -1,0 +1,32 @@
+id: 019ebec8-a6af-7df1-ad09-c7efcc0c1b1f
+spec_id: BUG-513
+agreed_id: BUG-513
+title: mailbox list operator-overview omits unread broadcasts to not-yet-materialized agent inboxes (disagrees with statusline)
+description: |-
+  Verified live 2026-06-12. The operator overview 'aida mailbox list' enumerates only agents with a MATERIALIZED inbox (one that has sent-by-name or been read at least once). A broadcast to an agent whose inbox has never been opened is NOT reflected in the overview, even though (a) the message IS delivered (the agent sees it on first 'aida mailbox inbox <id>') and (b) the per-role STATUSLINE counts it (the advisor saw 'mail:1' while 'mailbox list' said 'no agents have mail'). The two surfaces disagree.
+
+  Repro:
+  1. Fresh mailbox, no inbox yet materialized for role 'advisor'.
+  2. Another agent broadcasts: aida mailbox send --broadcast --from codex "...".
+  3. aida mailbox list  ->  'no agents have mail'  (WRONG: a broadcast is pending for every agent).
+  4. But statusline for role:advisor shows mail:1, and 'aida mailbox inbox advisor' shows the message.
+  5. After advisor reads its inbox once, advisor then appears in 'mailbox list'.
+
+  Root cause (hypothesis): list derives its agent set from materialized inbox records; the statusline computes the current role's unread via a direct path. Broadcasts to never-opened inboxes fall in the gap.
+
+  Fix options (advisor to pick): seed the overview agent-set from the role registry (~/.aida/roles/) and/or known agent ids; OR add a 'N broadcasts pending (delivered on inbox open)' line to the overview; OR materialize inboxes for configured roles at broadcast time.
+
+  Why it matters: STORY-569 routes the --zen finish handoff to the advisor THROUGH this mailbox. If the advisor inbox is not yet materialized, the operator's 'mailbox list' triage view misses the handoff that the statusline flags — undermining the overview exactly where STORY-569 relies on it.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T02:21:21.455702707Z
+modified_at: 2026-06-13T02:21:21.455702707Z
+req_type: Bug
+tags:
+- aida:mailbox
+- papercut
+- relates:STORY-569
+- severity:cosmetic
+- ux
