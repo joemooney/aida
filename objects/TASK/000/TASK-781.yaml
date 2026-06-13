@@ -1,0 +1,18 @@
+id: 019ec17a-4830-7153-bd27-6738aa5bbf7c
+spec_id: TASK-781
+agreed_id: TASK-781
+title: Advisor garden pass runs 'aida questions sweep' — keep the decision inbox populated with pickable questions
+description: 'Operator (2026-06-13): ''aida questions sweep'' should be part of the periodic advisor cleanup/garden pass. Rationale: sweep detects vague needs-human/likely-decision specs and (with questions ask) pre-distills them into structured DecisionRequests, so the human drains them later with pure picks (questions answer, no agent) instead of firing a live clarify session per spec. Add ''aida questions sweep'' to: (1) the advisor-watch garden prompt (STORY-586 WATCH_PROMPT — between the doctor heal + reconcile steps and the mailbox step), and (2) the documented periodic garden-pass toolkit (alongside doctor heal / reconcile-status / ack OBE / read mail). Keep it sweep-only (detect + record-request); ACTUAL answering stays human (questions answer) or the /aida-decide skill (STORY-602). trace:STORY-586 trace:STORY-522'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T14:54:37.104370863Z
+modified_at: 2026-06-13T14:54:37.104370863Z
+req_type: Task
+tags:
+- advisor
+- aida:questions
+- autonomy
+- parent:STORY-586
+- relates:STORY-602
