@@ -12,12 +12,12 @@ description: |-
   4. Honors the no-relay goal: the operator never manually relays 'PR ready' between implementer and reviewer sessions.
 
   Composes with: STORY-564 (--zen auto-exit), aida brief / the mailbox (docs/mailbox.md), aida queue work --auto-complete (the no-relay orchestrator), the escalation cascade.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:36:34.818451052Z
-modified_at: 2026-06-13T02:53:34.079179574Z
+modified_at: 2026-06-13T02:53:37.351381907Z
 req_type: Story
 tags:
 - aida:brief
