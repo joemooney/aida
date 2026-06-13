@@ -8,9 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:31:03.173431900Z
-modified_at: 2026-06-12T20:31:03.173431900Z
+modified_at: 2026-06-13T01:47:34.624087703Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
   created_at: 2026-06-12T20:31:13.499355827Z
+comments:
+- id: 019ebea9-b960-71a2-b9ce-2436dca84e97
+  author: joe
+  content: Duplicate/obsolete within the SPIKE-57 cluster (Phase5-RBAC / needs-triage-bucket re-files, or re-parent-STORY-561 which is now Completed). Rejecting; canonical kept.
+  created_at: 2026-06-13T01:47:34.624087703Z
+  modified_at: 2026-06-13T01:47:34.624087703Z
