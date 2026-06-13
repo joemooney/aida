@@ -55,6 +55,11 @@ fn generate_types_content() -> String {
         models::Relationship::decl(),
         models::FieldChange::decl(),
         models::HistoryEntry::decl(),
+        // STORY-542: Requirement.interface_changes references InterfaceChanges,
+        // so its definition must be emitted too (else the web dashboard
+        // type-check fails with "Cannot find name 'InterfaceChanges'"). BUG-516.
+        // trace:BUG-516 | ai:claude
+        models::InterfaceChanges::decl(),
         models::ReactionDefinition::decl(),
         models::CommentReaction::decl(),
         models::UrlOpenMode::decl(),

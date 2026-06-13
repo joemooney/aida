@@ -376,6 +376,24 @@ timestamp: string,
  */
 changes: Array<FieldChange>, };
 
+export type InterfaceChanges = { 
+/**
+ * CLI-surface deltas: new commands/subcommands, changed flags/behavior.
+ */
+cli?: Array<string>, 
+/**
+ * MCP tool/resource surface deltas (new tools, gating, schema changes).
+ */
+mcp?: Array<string>, 
+/**
+ * TUI surface deltas: new keybindings, panes, overlays, status.
+ */
+tui?: Array<string>, 
+/**
+ * Any other user-facing interface delta that is not cli/mcp/tui.
+ */
+other?: Array<string>, };
+
 export type ReactionDefinition = { 
 /**
  * Unique identifier/key for the reaction (e.g., "resolved", "rejected")
@@ -888,6 +906,28 @@ archived?: boolean,
  */
 archived_at?: string | null, 
 /**
+ * Whether this requirement is deferred — a view-flag orthogonal to status
+ * (parallel to `archived`, NOT a new status). A deferred spec is primed
+ * work that returns on a trigger; it is hidden from the default open-work
+ * view but is not filed away the way archived is.
+ * trace:STORY-584 | ai:claude
+ */
+deferred?: boolean, 
+/**
+ * Timestamp when this requirement was deferred (None when not deferred).
+ * Cleared on undefer.
+ * trace:STORY-584 | ai:claude
+ */
+deferred_at?: string | null, 
+/**
+ * The revisit trigger — the free-text condition that brings a deferred
+ * spec back (e.g. "when a slice verb ships", "if the shelf grows"). This
+ * is the one thing that distinguishes deferred (prospective/primed) from
+ * archived (retrospective/filed). Set via `aida defer --until "<cond>"`.
+ * trace:STORY-584 | ai:claude
+ */
+deferred_until?: string | null, 
+/**
  * Custom status string (for types with custom statuses)
  * If set, this takes precedence over the `status` enum field
  */
@@ -967,7 +1007,16 @@ human_only?: boolean,
  * recorded. Set by `aida questions ask`, answered by
  * `aida questions answer`. trace:STORY-522 | ai:claude
  */
-decision_request?: DecisionRequest | null, };
+decision_request?: DecisionRequest | null, 
+/**
+ * User-facing interface changes captured at spec close — the deterministic
+ * Layer-1 source for the operator digest. `None` / empty ⇒ no user-facing
+ * surface change ⇒ never appears in the operator digest. Populated by
+ * `aida queue done` (interactive derive-and-confirm at a TTY, or
+ * `--interface-{cli,mcp,tui,other}` flags non-interactively) and readable
+ * by the digest's capabilities lens. trace:STORY-542 | ai:claude
+ */
+interface_changes?: InterfaceChanges | null, };
 
 export type RequirementSnapshot = { 
 /**
