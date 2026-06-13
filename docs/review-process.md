@@ -1,6 +1,6 @@
 # Review process — who reviews, by execution mode
 
-<!-- trace:STORY-553 trace:STORY-587 | ai:claude -->
+<!-- trace:STORY-553 trace:STORY-587 trace:STORY-522 | ai:claude -->
 
 Every code change in AIDA is reviewed by **a different entity than the one that
 wrote it**. That invariant never changes. What *does* change — by execution
@@ -138,6 +138,37 @@ default.
 
 The trade is explicit: **interactive = better decisions, headless = better
 throughput.** Pick by the cost of a missed defect, not by what's fastest.
+
+## Resolving decisions, not code — the questions inbox
+
+Code review (above) gates *implementations*. A parallel surface gates
+*decisions* — the design forks an implementer or advisor can't settle alone.
+Same "separate the thinker from the doer" spirit, two paths:
+
+| Path | Who thinks | How the human answers |
+|---|---|---|
+| **`aida questions ask` → `list` → `answer`** | the advisor **pre-distilled** it (question + enumerated choices recorded ahead of time) | **pick a choice — no agent, no LLM session** (a pure operator data op) |
+| **`aida questions clarify <spec>`** | an agent **thinks live**, interrogating the operator and generating options now | answer the interactive agent |
+
+The intended workflow is **ask-ahead, answer-async**: the advisor converts vague
+`needs-human` specs into pre-recorded structured DecisionRequests (`questions
+sweep` detects candidates; `questions ask` records the distilled question +
+choices), so the human drains them later with pure picks at their own pace —
+reserving the expensive live-`clarify` agent only for specs too under-specified
+to even enumerate choices for. Answering a DecisionRequest **applies** its
+resolution (binds acceptance / clears a gate / rejects) and auto-queues the
+now-decision-free spec onto the burndown ready set.
+
+So the two drains are symmetric:
+
+- **`aida burndown run`** drains the decision-*free* ready set with autonomous
+  agents — needs *no* human.
+- **`aida questions answer`** drains the decision inbox — needs *only* the human
+  (no agent, no LLM).
+
+Keep the inbox populated by running **`aida questions sweep`** as part of the
+advisor's periodic garden pass — otherwise each decision falls back to a live
+`clarify` session.
 
 ## Related
 
