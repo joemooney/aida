@@ -1,0 +1,26 @@
+id: 019ec2a6-e846-7ad3-b792-b9f4010d159c
+spec_id: STORY-610
+agreed_id: STORY-610
+title: 'Supervised-only marker + burndown plan partition: separate ''queue work these'' (keyboard) from the drain ready set; relabel ''awaiting sign-off'''
+description: |-
+  Operator+advisor hit (2026-06-13). TWO linked problems:
+
+  (1) SUBSTRATE GAP (substrate-as-bouncer): the queue is a single pool both 'queue work' (keyboard) and 'burndown run' (drain) pull from. There is NO 'queued-for-keyboard, excluded-from-drain' state, so a keystone spec can't be queued for supervised work without becoming drain-eligible — the 'keystone never drains unsupervised' invariant depends on the advisor REMEMBERING (and it was just violated: BUG-530/536 got queued into the drain set by mistake). Fix: a 'supervised-only' / 'no-unattended-drain' marker (tag or field) that resolve_burndown_sets EXCLUDES from the drain ready set, but 'queue work <id>' still honors. Make the invariant structural, not a rule.
+
+  (2) BURNDOWN PLAN MISLABELS (operator Q): the 'Awaiting advisor sign-off' bucket is really just 'Approved but not queued' and flattens THREE distinct states: (a) genuinely untriaged, (b) advisor-DECIDED-keyboard (the advisor HAS signed off — work via 'queue work', not drain), (c) should-be-deferred. Fix: partition the output into 'Ready (drain)' / 'Supervised — queue work these' (the marker set) / 'Awaiting triage' / 'Deferred' / 'Parked'. This is the operator's request: 'a list of specs I should queue work instead.' Relabel (b) away from 'awaiting sign-off' since the advisor already signed off as supervised.
+
+  trace:relates:BUG-530 trace:from-friction
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T20:22:58.886139281Z
+modified_at: 2026-06-13T20:22:58.886139281Z
+req_type: Story
+tags:
+- aida:burndown
+- aida:queue
+- cli-consistency
+- from-friction
+- relates:BUG-530
+- substrate-as-bouncer
