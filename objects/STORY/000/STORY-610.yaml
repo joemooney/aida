@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:22:58.886139281Z
-modified_at: 2026-06-13T20:22:58.886139281Z
+modified_at: 2026-06-13T23:42:36.269249441Z
 req_type: Story
 tags:
 - aida:burndown
@@ -24,3 +24,9 @@ tags:
 - from-friction
 - relates:BUG-530
 - substrate-as-bouncer
+comments:
+- id: 019ec35d-aaed-7112-9ea4-7657d904f3c7
+  author: joe
+  content: 'MORE EVIDENCE (2026-06-13): answering BUG-530''s DecisionRequest AUTO-QUEUED it (BUG-526''s auto-queue-on-answer) — which put a KEYSTONE spec (the burndown selector, being hand-implemented) into the drain-eligible set. Caught it in a ''burndown run --dry-run'' (BUG-530 + BUG-541 both appeared) and de-queued manually. This is a THIRD path that leaks keystone work into the drain (after: advisor mis-queue, and the queue being a single pool). The supervised-only marker this story proposes is the structural fix — auto-queue (at filing, at answer) and burndown-run alike would all exclude marked specs. Until it exists, every auto-queue path needs manual keystone de-queuing. trace:STORY-610'
+  created_at: 2026-06-13T23:42:36.269249441Z
+  modified_at: 2026-06-13T23:42:36.269249441Z
