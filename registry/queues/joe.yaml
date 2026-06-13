@@ -1088,3 +1088,10 @@
   note: unparked by `aida questions answer`
   added_at: 2026-06-13T23:20:31.162896420Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019ec281-e316-7aa1-8253-4813fe993e1d
+  position: 471000
+  added_by: joe
+  note: unparked by `aida questions answer`
+  added_at: 2026-06-13T23:20:47.639513267Z
+  for_role: implementer
