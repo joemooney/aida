@@ -17592,5 +17592,18 @@ operations:
   timestamp: 2026-06-13T17:02:33.117238942Z
   kind: !SetStatus
     status: Approved
-clock: 1735
+- id: 019ec1f9-91c7-76e1-b71d-4ceda012df7a
+  target_id: 019ebfbe-2590-7852-91a1-831c897815b9
+  author: aida
+  node_id: '1'
+  lamport: 1736
+  timestamp: 2026-06-13T17:13:39.015717298Z
+  kind: !SetDescription
+    description: |
+      aida session list/resume/new/prune/forget operate on historical Claude Code .jsonl conversations; aida session start/end/leases/show/manifest operate on scoped work LEASES. The help text repeatedly has to disclaim this. A newcomer typing aida session list to find what is running gets the wrong substrate. Fix options: split the conversation verbs into aida convo/aida cc, OR have session list print a one-line pointer to session leases. From CLI-manual audit (EPIC-40).
+
+      ## Acceptance
+
+      - Resolved (2026-06-13, operator decision via `aida questions answer`): Rename session list to session conversations (or history) — the historical view gets a self-describing name; leases stays
+clock: 1736
 node_id: '1'
