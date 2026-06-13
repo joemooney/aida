@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T14:38:56.146918849Z
-modified_at: 2026-06-13T14:38:56.146918849Z
+modified_at: 2026-06-13T14:54:48.526560032Z
 req_type: Story
 tags:
 - aida:questions
 - autonomy
 - parent:STORY-522
 - skill
+comments:
+- id: 019ec17a-74ce-7542-829f-00f2f51ac908
+  author: joe
+  content: Commit dae3ce5d0 references this requirement
+  created_at: 2026-06-13T14:54:48.526560032Z
+  modified_at: 2026-06-13T14:54:48.526560032Z
