@@ -8,9 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:42:13.347386912Z
-modified_at: 2026-06-12T20:43:22.495235746Z
+modified_at: 2026-06-13T01:47:24.002033163Z
 req_type: Spike
 tags:
+- batch:repositioning
 - parent:EPIC-39
 - repositioning
 - reqif
