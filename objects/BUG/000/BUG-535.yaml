@@ -3,12 +3,12 @@ spec_id: BUG-535
 agreed_id: BUG-535
 title: aida human lists bare SPEC-IDs without titles — same scannability gap as burndown plan (BUG-532)
 description: 'Operator hit (2026-06-13): ''aida human'' groups open items by bucket (ungroomed/umbrella/findings) but prints bare SPEC-IDs with NO titles — the ''ungroomed'' bucket is a wall of 18 IDs you can''t read. Same papercut BUG-532 fixed for ''burndown plan''. Fix: append the (truncated) title beside each id in every bucket, ideally via the SAME id+title render helper BUG-532 added (don''t duplicate). trace:relates:BUG-532 trace:from-friction'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:12:07.189828941Z
-modified_at: 2026-06-13T20:44:48.525248745Z
+modified_at: 2026-06-13T20:54:06.272569751Z
 req_type: Bug
 tags:
 - aida:human
@@ -23,3 +23,21 @@ comments:
   content: Commit aa7d44704 references this requirement
   created_at: 2026-06-13T20:44:48.525248745Z
   modified_at: 2026-06-13T20:44:48.525248745Z
+history:
+- id: 019ec2c3-66bc-7062-bc88-5565af235e22
+  author: aida-reconcile
+  timestamp: 2026-06-13T20:54:06.268378830Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec2c3-66c0-73c3-b318-bb0672fcb7c0
+  timestamp: 2026-06-13T20:54:06.272568513Z
+  agent: aida
+  commit_sha: 9836901aa5d9a0557f9a02ab43331c68c245ab0b
+  summary: Completed via merge 9836901a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T20:54:06.120276672Z
+  completion_sha: 9836901aa5d9a0557f9a02ab43331c68c245ab0b
