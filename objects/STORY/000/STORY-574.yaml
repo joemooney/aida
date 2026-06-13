@@ -14,15 +14,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:24.659625510Z
-modified_at: 2026-06-13T01:47:11.345349937Z
+modified_at: 2026-06-13T01:47:40.389047330Z
 req_type: Story
 tags:
-- batch:repositioning
-- beads
-- blocked-by:ws3a
-- parent:EPIC-39
-- repositioning
-- ws3-interop
+- deferred:stabilization-first
 relationships:
 - rel_type: Parent
   target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
