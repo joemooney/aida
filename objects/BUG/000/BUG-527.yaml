@@ -1,0 +1,19 @@
+id: 019ec207-5010-7d11-9d26-aecd6e05a720
+spec_id: BUG-527
+agreed_id: BUG-527
+title: aida show omits queue membership — can't tell if a spec is queued / for whom / at what position
+description: 'Operator hit (2026-06-13): looked at ''aida show BUG-526'' to check whether it was queued for the burndown and couldn''t tell — show renders status/tags/git-linkage but NOT queue state, even though the spec was queued (''advisor-cleared at filing'', pos 2 in the implementer queue). Gap: a queued spec is invisible as queued from its own show card; you must cross-reference ''aida queue list''. Fix: add a ''Queued:'' line to ''aida show <ID>'' (for-role + position, e.g. ''Queued: implementer (pos 2)''), mirroring how git-linkage is surfaced; omit the line when not queued. Mirror onto MCP show_requirement for parity (STORY-82). trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T17:28:39.696240210Z
+modified_at: 2026-06-13T17:28:39.696240210Z
+req_type: Bug
+tags:
+- aida:show
+- cli-consistency
+- discoverability
+- from-friction
+- papercut
+- relates:STORY-82
