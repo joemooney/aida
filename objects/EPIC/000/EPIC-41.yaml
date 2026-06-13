@@ -8,10 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:06.634484873Z
-modified_at: 2026-06-13T19:42:06.634484873Z
+modified_at: 2026-06-13T19:43:19.245696205Z
 req_type: Epic
 tags:
 - docs
 - docs-architecture
 - from-product
 - mdbook
+relationships:
+- rel_type: Child
+  target_id: 019ec281-b819-7bd0-9d23-370951875220
+  created_at: 2026-06-13T19:43:19.245690492Z
+  created_by: joe
