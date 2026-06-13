@@ -1,0 +1,25 @@
+id: 019ec218-3b51-7390-8132-7fa05609a8c4
+spec_id: STORY-604
+agreed_id: STORY-604
+title: 'Observability for a running burndown drain: live progress + ''expected to be processed / in-flight'' marking on specs'
+description: |-
+  Operator hit (2026-06-13): 'aida burndown run' launches a headless 'claude -p' and then sits SILENT — no progress, for a potentially very long time. Two missing surfaces, one theme (observability of a running drain):
+
+  (a) LIVE PROGRESS — surface what the drain is doing without tailing a raw log. Options to weigh: 'aida burndown run' streams a phase line per spec ('2/4 BUG-528: reviewer phase'); and/or a companion 'aida burndown status' / 'watch' that reads the drain's log + queue + lease state and renders plan position / current phase / done-so-far. Headless claude -p output already lands in a log under .aida/ — the status surface can read that + the lease/queue state.
+
+  (b) EXPECTED / IN-FLIGHT MARKING — a spec the drain plans to process (blessed + in its run-set) should be visibly distinguishable in 'aida list' / 'aida show' / 'aida queue list' from a merely-queued spec: 'queued (not started)' vs 'a drain is expected to reach it' vs 'actively leased now'. Extends the existing in-flight/lease concept (queue list --in-flight, session leases, 'Done — awaiting merge') to cover the 'claimed by a running drain plan' state that today has no marker. trace:from-friction
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T17:47:08.497850686Z
+modified_at: 2026-06-13T17:47:08.497850686Z
+req_type: Story
+tags:
+- agent-context
+- aida:burndown
+- burndown
+- from-friction
+- observability
+- relates:EPIC-28
+- ux
