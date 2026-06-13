@@ -10,12 +10,12 @@ description: |-
   OUT OF SCOPE (slice 2, separate spec): an OS boundary around the WHOLE 'claude -p' process (contained only sandboxes Bash, not Edit/Write/MCP) and the Firecracker-microVM strong-isolation profile for unattended drains (gVisor fallback). File slice 2 after slice 1 lands.
 
   POSTURE: keystone-adjacent (sandboxing the autonomy keystone) → implement at the KEYBOARD, advisor-watched, never an unsupervised drain. ACCEPTANCE: with contained on + an egress allowlist set, a drain's network is default-deny except the allowlisted hosts; off/unset = today's behavior unchanged. trace:relates:SPIKE-61 trace:relates:STORY-567
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:20:02.068423845Z
-modified_at: 2026-06-13T21:11:58.452169635Z
+modified_at: 2026-06-13T22:59:34.579599645Z
 req_type: Story
 tags:
 - agent-execution
@@ -52,3 +52,22 @@ comments:
   content: Commit 2477b7736 references this requirement
   created_at: 2026-06-13T21:11:58.452169635Z
   modified_at: 2026-06-13T21:11:58.452169635Z
+history:
+- id: 019ec336-462f-7d72-a004-7d3e666820fb
+  author: aida-auto-bump
+  timestamp: 2026-06-13T22:59:34.575453919Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec336-4633-76c2-ac8f-daa84996362a
+  timestamp: 2026-06-13T22:59:34.579598526Z
+  agent: reviewer
+  commit_sha: a47727d2e35112bd39dc679ed4713cc19686671f
+  summary: Keystone-safe opt-in egress allowlist; empty-unchanged invariant unit-tested, mechanism correct. Section-naming ([contained] vs [agents]) flagged for operator decision before merge.
+  review_verdict: Approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T22:59:34.427649104Z
+  completion_sha: a47727d2e35112bd39dc679ed4713cc19686671f
