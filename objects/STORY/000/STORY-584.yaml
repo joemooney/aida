@@ -1,0 +1,32 @@
+id: 019ebee2-34b7-7c73-aa1b-8919ba6f6fd9
+spec_id: STORY-584
+agreed_id: STORY-584
+title: 'deferred: a third view-state between active and archived (primed/conditional work, hidden from the open work view)'
+description: |-
+  Operator friction (recurring, named 2026-06-12): there is no lifecycle tier between 'active open backlog' and 'archived'. Conditional/deferred/primed work (e.g. 'promote needs-triage IF the shelf grows', 'decide on real demand', 'when a slice verb ships', 'if the mapping proves too rigid') is real and will return on a trigger — but today it either clutters 'aida list open' OR has to be archived (wrong connotation: archive = filed-away/audit). The operator explicitly does NOT want to archive core backlog but does NOT want to see it in the open work view.
+
+  Current gap: 'deferred:*' parking tags ALREADY exist and correctly exclude a spec from the burndown/queue pickability gate — but they do NOTHING to the 'aida list' / 'aida list open' VIEW. The tag says parked; the list ignores it.
+
+  Proposal — THREE tiers: active (default) / deferred (new) / archived.
+
+  Acceptance:
+  1. New view-flag 'deferred' on a spec — a boolean orthogonal to status (parallel to 'archived'), NOT a new status (deferred-ness is independent of lifecycle position; reuse archived's flag plumbing rather than touch the state machine).
+  2. Verbs: 'aida defer <id> [--until "<trigger/condition>"]' parks it + records the REVISIT TRIGGER (the free-text condition that brings it back — this is the one thing that distinguishes deferred from archived: prospective/primed vs retrospective/filed). 'aida undefer <id>' restores to active.
+  3. View semantics MIRROR archived exactly: 'aida list' / 'aida list open' / search / history HIDE deferred rows by default; 'aida list --deferred' shows only-deferred; '--all' shows the union. Same mutual-exclusions as --archived/--all.
+  4. The deferred view shows each spec's revisit trigger so the operator can scan 'what is primed, and what brings each back'.
+  5. Migration: the existing 'deferred:*' tags map onto this — 'aida defer' subsumes them (or they coexist and the list honors both).
+  6. STANDING-ARTIFACT companion: 'aida list open' is a WORK view; perpetual standing-artifact types (vision, principle, term, constraint, folder, meta) are NOT work and should be excluded from the open-work view by default (they surface via --type / the aida-docs projection). Fixes VIS-1 reading as 'InProgress work'. (May split to its own TASK if it complicates the slice.)
+
+  Why: the operator has hit 'I don't want these in aida list open but they are not archived' repeatedly — a legibility keystone. The trigger-bearing deferred tier turns a confusing 'why is this still here?' backlog into a scannable 'primed, returns when X' shelf. Relates: STORY-441 (archive view-flag this clones), the pickability gate (already honors deferred:* tags), [[machinery-glossary]] lifecycle vocabulary.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T02:49:16.215550754Z
+modified_at: 2026-06-13T02:49:16.215550754Z
+req_type: Story
+tags:
+- aida:list
+- lifecycle
+- relates:STORY-441
+- ux
