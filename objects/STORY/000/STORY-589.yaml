@@ -3,12 +3,12 @@ spec_id: STORY-589
 agreed_id: STORY-589
 title: 'CLI manual: Ch3 — Work & autonomy: queue/backlog/burndown/drain/goal/sandbox/autonomy/away/home/presence/human/headless/no-human (the autonomy ladder — the trickiest chapter; many overlapping commands need a clear decision tree)'
 description: 'Write the chapter to the template set by docs/cli/01-getting-started.md: per-command One-line / Mental model / Reach-for-it-when / Don''t-reach-for-it-when(+alternative) / Key options (RATIONALE ONLY — never reproduce the full flag list) / Gotchas / Chains-with. Ground every command against its live `--help` before writing (no invented flags). Cross-link into the journey spine in docs/cli/README.md. On branch cli-manual.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:13:08.229937763Z
-modified_at: 2026-06-13T06:17:29.653051826Z
+modified_at: 2026-06-13T20:10:34.542591735Z
 req_type: Story
 tags:
 - cli-manual
