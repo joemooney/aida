@@ -1,0 +1,27 @@
+# mdBook config for the AIDA CLI Reference Manual.
+# Build:  mdbook build docs/cli       (output → docs/cli/book/, gitignored)
+# Read:   mdbook serve docs/cli --open  (live-reloading local server)
+#
+# The book is the *presentation* layer; the markdown chapters are the source of
+# truth (and, per ADR-5, the eventual target the generated manual must match).
+# mdBook renders whatever markdown exists — hand-authored today, generated later.
+[book]
+title = "AIDA CLI Reference Manual"
+description = "When and why to use every AIDA command — the rationale layer above `aida <cmd> --help`."
+authors = ["AIDA"]
+src = "."
+language = "en"
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "navy"
+smart-punctuation = true
+no-section-label = true
+
+[output.html.search]
+enable = true
+limit-results = 20
+
+[output.html.fold]
+enable = true
+level = 1
