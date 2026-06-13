@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:40:59.510569010Z
-modified_at: 2026-06-13T01:48:19.118481438Z
+modified_at: 2026-06-13T01:48:36.603930045Z
 req_type: Story
 tags:
 - competitive-analysis
@@ -22,3 +22,5 @@ relationships:
   target_id: 019ebd8f-a31a-7521-915c-80a1cc712061
   created_at: 2026-06-12T20:43:12.642358104Z
   created_by: joe
+archived: true
+archived_at: 2026-06-13T01:48:36.603930045Z
