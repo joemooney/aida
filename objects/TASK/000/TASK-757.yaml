@@ -8,9 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T17:00:26.994307434Z
-modified_at: 2026-06-12T17:00:26.994307434Z
+modified_at: 2026-06-13T01:47:26.580446920Z
 req_type: Task
 tags:
+- batch:repositioning
 - competitive
 - deferred:post-stability
 - from:SPIKE-53
