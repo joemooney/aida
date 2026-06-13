@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-13, operator decision via `aida questions answer`): Clarify the help — verb stays; help honestly says it sets a dispatch marker and points at stop to terminate — smallest fix
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:20.449952526Z
-modified_at: 2026-06-13T17:26:00.217620012Z
+modified_at: 2026-06-13T17:40:27.175393938Z
 req_type: Bug
 tags:
 - cli-consistency
@@ -25,6 +25,24 @@ comments:
   content: Commit 74101fd27 references this requirement
   created_at: 2026-06-13T17:26:00.217620012Z
   modified_at: 2026-06-13T17:26:00.217620012Z
+history:
+- id: 019ec212-1ba3-7963-8d55-c873ed468836
+  author: aida-auto-bump
+  timestamp: 2026-06-13T17:40:27.171545563Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec212-1ba7-7e30-814c-fd8d22ebfa72
+  timestamp: 2026-06-13T17:40:27.175393370Z
+  agent: aida
+  commit_sha: d33a8c79dfb0ed2dd5b3c8bc5c12bc9bc22efbec
+  summary: Completed via merge d33a8c79
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T17:40:27.026055041Z
+  completion_sha: d33a8c79dfb0ed2dd5b3c8bc5c12bc9bc22efbec
 decision_request:
   question: aida agent pause only sets a dispatch marker; it does NOT pause the process (stop terminates). The verb misleads. How to fix?
   choices:
