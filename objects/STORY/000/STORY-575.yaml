@@ -8,9 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:43.025734467Z
-modified_at: 2026-06-12T22:12:45.361781805Z
+modified_at: 2026-06-13T01:47:14.964688069Z
 req_type: Story
 tags:
+- batch:repositioning
 - parent:EPIC-39
 - repositioning
 - ws4-governance
