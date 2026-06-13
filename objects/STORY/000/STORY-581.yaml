@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T23:54:08.521304618Z
-modified_at: 2026-06-13T03:35:40.011597629Z
+modified_at: 2026-06-13T03:35:42.393859350Z
 req_type: Story
 tags:
 - aida:cache
@@ -28,3 +28,8 @@ comments:
     Recommendation: REJECT or PARK as obviated-by-WAL. The residual value (a stale flag for the rare checkpoint-race read-BUSY window) is marginal and below this Low-priority spec's bar — 'may not be worth it if error-with-guidance is fine' is now answered: yes, error-with-guidance is fine for the writer/open paths, and reads no longer error. If belt-and-suspenders is still wanted, the only honest residual slice is a stale flag on list_summaries for the rare WAL-checkpoint BUSY — a much smaller scope than the original L3 proposal. Did NOT implement speculatively against the operator deferral.
   created_at: 2026-06-13T03:27:23.653809519Z
   modified_at: 2026-06-13T03:27:23.653809519Z
+- id: 019ebf0c-b839-75d1-aaa8-cb02b4124066
+  author: joe
+  content: 'Rejected as OBVIATED-BY-WAL (advisor, 2026-06-12). The implementer correctly honored the operator-deferred gate (''build only after WAL; re-validate whether still wanted'') and re-validated instead of building speculatively — exactly right. Finding confirmed: STORY-580 (WAL, #802) gives the read path a last-committed snapshot so it no longer errors under concurrent-write contention, which was STORY-581''s core premise. The residual error paths (can''t-open / write-lock) aren''t ''return degraded rows'' situations — no rows to degrade — and the TASK-712 retry ladder + error-with-guidance covers them. Operator''s own note already leaned ''may not be worth it if error-with-guidance is fine.'' Re-file if post-WAL contention resurfaces in practice. Closes the STORY-543 salvage thread.'
+  created_at: 2026-06-13T03:35:42.393859350Z
+  modified_at: 2026-06-13T03:35:42.393859350Z
