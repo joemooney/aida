@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:09:17.118251618Z
-modified_at: 2026-06-13T03:09:26.776696640Z
+modified_at: 2026-06-13T15:28:10.565357800Z
 req_type: Task
 tags:
 - aida:list
@@ -20,3 +20,9 @@ relationships:
   target_id: 019ebee2-34b7-7c73-aa1b-8919ba6f6fd9
   created_at: 2026-06-13T03:09:26.776690448Z
   created_by: joe
+comments:
+- id: 019ec199-0145-7fa0-a535-fb23dc4f74df
+  author: joe
+  content: Commit f2abb573c references this requirement
+  created_at: 2026-06-13T15:28:10.565357800Z
+  modified_at: 2026-06-13T15:28:10.565357800Z
