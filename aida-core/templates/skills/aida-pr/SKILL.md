@@ -775,3 +775,7 @@ questions; only mechanical confirmations auto-resolve.
 - **Half-shipped batch**: one of the REQ-IDs is still `In Progress`. Report which commit references it and ask the user to either `aida edit <id> --status completed` first or drop the commit. If the spec needs another round of work (reviewer found gaps, CI red, etc.), `aida queue rework <id> --work --resume` (TASK-218) is the one-verb recovery — flips status back to InProgress, re-queues for implementer, and chains the session relaunch.
 - **REQ-ID typo**: `aida show` returns "not found". Report the commit SHA and the bad ID; ask the user to amend the commit or file the missing requirement.
 - **`cargo fmt --all --check` drift (TASK-61)**: refuse the PR and walk the user through `cargo fmt --all` + commit. Don't push the drifted code so CI doesn't have to catch it.
+
+## Ship-time checklist
+
+- Shipped a new CLI slice verb in this batch? Update its parent skill to call it (no re-impl) — see `docs/aida/discipline/skill-cli-symmetry.md`. A skill that re-derives a verb's logic in prose is a second copy that drifts the moment the verb changes; the symmetry is cheapest to honour in the same PR. <!-- trace:TASK-736 -->

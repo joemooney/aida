@@ -207,6 +207,7 @@ aida comment add <SPEC-ID> "..."
 - Always include REQ-ID for feat/fix commits; add commit hash to requirement comments for bidirectional traceability
 - Use `[AI:claude]` when the commit includes AI-assisted code
 - Don't skip trace comments for substantial code (>20 lines of logic)
+- Shipped a new CLI slice verb? Update its parent skill to call it (no re-impl) — see `docs/aida/discipline/skill-cli-symmetry.md`. <!-- trace:TASK-736 -->
 
 ## Related skills / commands
 

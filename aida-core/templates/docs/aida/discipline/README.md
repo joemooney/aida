@@ -24,5 +24,6 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`agent-agnostic-vs-claude-specific.md`](agent-agnostic-vs-claude-specific.md) | Which discipline is universal (enforced by substrate gates, every agent) vs Claude Code-shaped convenience (`.claude/skills`, slash commands, memory pack) — so Codex/Antigravity users can tell the load-bearing from the optional |
 | [`brief-polling.md`](brief-polling.md) | How agents should poll AIDA's brief surface — the scratchpad-drift failure mode and the `aida queue done` pending-brief banner |
 | [`robust-project-root-resolution.md`](robust-project-root-resolution.md) | Project-root resolution fallbacks, explaining how skill-rendering gracefully handles missing git repositories |
+| [`skill-cli-symmetry.md`](skill-cli-symmetry.md) | When a skill's deterministic slice ships as a CLI verb, the parent skill must *call* that verb in the same PR rather than re-implement the logic — the same anti-drift discipline as the CLI↔MCP mirror (STORY-82) |
 
 **Companion:** `aida init --with-memories` writes the same discipline as persistent *memory* files (one fact per file), so the habits surface in-session — not only when these docs are read.
