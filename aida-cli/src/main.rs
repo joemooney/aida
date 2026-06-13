@@ -11040,6 +11040,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
 
+            // TASK-773: `aida list` / `aida list open` is a WORK view, so
+            // perpetual standing-artifact types — vision, principle, term,
+            // constraint, folder, meta — are NOT work and are hidden from the
+            // default view (this stops e.g. VIS-1 reading as 'InProgress
+            // work'). They still surface via an explicit `--type <T>` filter
+            // (which overrides the exclusion) and via `--all`. This is
+            // type-based filtering, orthogonal to STORY-584's deferred
+            // view-flag. trace:TASK-773
+            let user_asked_for_standing_type = r#type
+                .as_deref()
+                .map(is_standing_artifact_type)
+                .unwrap_or(false);
+            if !*all && !user_asked_for_standing_type {
+                reqs.retain(|r| !is_standing_artifact_type(&r.req_type));
+            }
+
             // TASK-743: --short emits one bare canonical spec ID per line —
             // no header, no count footer, no color, no routing glyphs — so
             // the output is directly pipeable into `$(...)` / xargs. Runs
@@ -71609,6 +71625,71 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
 // trace:TASK-746 | ai:claude
 fn handle_human_command(short: bool) -> Result<()> {
     handle_list_human(short)
+}
+
+// TASK-773: perpetual standing-artifact types — the docs-layer / structural
+// types that are NOT work and should be hidden from the default `aida list`
+// open-work view. They surface via an explicit `--type <T>` filter or `--all`.
+// `req_type` here is the cache summary's Display string (e.g. "Vision").
+// trace:TASK-773
+const STANDING_ARTIFACT_TYPES: [&str; 6] = [
+    "vision",
+    "principle",
+    "term",
+    "constraint",
+    "folder",
+    "meta",
+];
+
+fn is_standing_artifact_type(req_type: &str) -> bool {
+    STANDING_ARTIFACT_TYPES
+        .iter()
+        .any(|s| req_type.eq_ignore_ascii_case(s))
+}
+
+#[cfg(test)]
+mod task_773_standing_artifact_tests {
+    use super::*;
+
+    #[test]
+    fn standing_artifact_types_are_recognized_case_insensitively() {
+        // The cache summary's Display form is "Vision", "Principle", etc.
+        for t in [
+            "Vision",
+            "Principle",
+            "Term",
+            "Constraint",
+            "Folder",
+            "Meta",
+        ] {
+            assert!(is_standing_artifact_type(t), "{t} should be standing");
+            assert!(
+                is_standing_artifact_type(&t.to_lowercase()),
+                "{t} lowercase should be standing"
+            );
+        }
+    }
+
+    #[test]
+    fn work_types_are_not_standing_artifacts() {
+        // Open-work types must NOT be excluded from the default list view.
+        for t in [
+            "Functional",
+            "Bug",
+            "Epic",
+            "Story",
+            "Task",
+            "Spike",
+            "Sprint",
+            "Decision",
+            "Doc",
+            "User",
+            "System",
+            "Change Request",
+        ] {
+            assert!(!is_standing_artifact_type(t), "{t} should be work");
+        }
+    }
 }
 
 fn handle_list_human(short: bool) -> Result<()> {
