@@ -1,0 +1,15 @@
+id: 019ebfbe-2590-7852-91a1-831c897815b9
+spec_id: BUG-522
+agreed_id: BUG-522
+title: 'session namespace collides two unrelated concepts: leases (active scoped work) vs list (historical Claude conversations)'
+description: 'aida session list/resume/new/prune/forget operate on historical Claude Code .jsonl conversations; aida session start/end/leases/show/manifest operate on scoped work LEASES. The help text repeatedly has to disclaim this. A newcomer typing aida session list to find what is running gets the wrong substrate. Fix options: split the conversation verbs into aida convo/aida cc, OR have session list print a one-line pointer to session leases. From CLI-manual audit (EPIC-40).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:49:30.256071770Z
+modified_at: 2026-06-13T06:49:30.256071770Z
+req_type: Bug
+tags:
+- cli-consistency
+- from-manual-audit
