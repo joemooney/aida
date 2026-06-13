@@ -13,9 +13,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T21:57:28.334576297Z
-modified_at: 2026-06-12T22:13:05.431379336Z
+modified_at: 2026-06-13T01:47:18.407642016Z
 req_type: Story
 tags:
+- batch:repositioning
 - multi-vendor
 - orchestrator
 - parent:EPIC-39
