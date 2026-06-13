@@ -37,7 +37,7 @@ docs/cli/
 
 1. `docs/cli/README.md` ✅ — index + journey spine.
 2. `docs/cli/01-getting-started.md` ✅ — exemplar chapter.
-3. `docs/cli/02-specs.md` … `11-dev.md` — one slice each (EPIC-40 children).
+3. docs/cli/02-specs.md … 11-dev.md *(to create)* — one slice each (EPIC-40 children).
 4. `docs/cli/_completeness` drift-guard (script + CI wire).
 5. Pointer from root `README.md` / `OVERVIEW.md` to `docs/cli/` once ≥3 chapters land (reviewer visibility).
 
@@ -85,5 +85,5 @@ aida help-all | <extract commands> | <assert each has a docs/cli entry>   # exit
 ## 10. Related
 
 - **Specs:** EPIC-40 + chapter children + drift-guard slice.
-- **Docs:** `docs/lifecycle.md` (state machine — linked, not duplicated), `docs/lifecycle.html` (rendered), `docs/aida/discipline/` (vocabulary), `README.md` "CLI reference (authoritative)" section (the terse current pointer this supersedes in depth).
+- **Docs:** `docs/lifecycle.md` (state machine — linked, not duplicated), its rendered HTML twin, `docs/aida/discipline/` (vocabulary), `README.md` "CLI reference (authoritative)" section (the terse current pointer this supersedes in depth).
 - **Memories:** precise-lifecycle-vocabulary, failed-flag-attempts-are-ux-signals (chapters will surface these), run-help-before-suggesting-flags (D3).
