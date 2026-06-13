@@ -8,9 +8,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:20.449952526Z
-modified_at: 2026-06-13T06:49:20.449952526Z
+modified_at: 2026-06-13T17:01:26.422437771Z
 req_type: Bug
 tags:
 - cli-consistency
 - from-manual-audit
 - papercut
+decision_request:
+  question: aida agent pause only sets a dispatch marker; it does NOT pause the process (stop terminates). The verb misleads. How to fix?
+  choices:
+  - label: Clarify the help
+    consequence: verb stays; help honestly says it sets a dispatch marker and points at stop to terminate — smallest fix
+    resolution: noop
+  - label: Rename the verb
+    consequence: e.g. agent hold/quiesce, with pause kept as a deprecated alias; accurate verb, small migration
+    resolution: noop
+  - label: Make pause actually pause the process
+    consequence: literal process pause via signal; bigger + riskier (signal/resume semantics)
+    resolution: noop
+  recommended: 0
+  rationale: the dispatch-marker is a real feature; the verb's help just over-promises — clarifying is the smallest correct fix; rename only if 'pause' is too misleading to keep.
+  asked_at: 2026-06-13T17:01:26.422437771Z
