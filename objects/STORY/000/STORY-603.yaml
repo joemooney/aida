@@ -12,12 +12,12 @@ description: |-
   4. DRIFT-GUARD extends (verify-manual.py / CI): not just 'every command documented' but 'every surface-changing spec's interface_changes is reflected in the docs.'
 
   Children/relates: STORY-542 (interface_changes — make it reliably populated + value-framed), STORY-600 (aida manual <cmd>), STORY-601 (machine-digestible for aida-tutor), STORY-582 (processing record), TASK-787 (manual finalize). The unifying principle: the SPEC is the source of intent; docs DERIVE from the spec graph + the surface, never from the surface alone. trace:EPIC-40 trace:STORY-542
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:57:56.276099391Z
-modified_at: 2026-06-13T15:57:56.276099391Z
+modified_at: 2026-06-13T20:56:19.572574016Z
 req_type: Story
 tags:
 - aida:cli
@@ -25,3 +25,21 @@ tags:
 - intent
 - parent:EPIC-40
 - relates:STORY-542
+history:
+- id: 019ec2c5-6f70-74a0-adf1-4e60ba9d7d0b
+  author: aida-auto-bump
+  timestamp: 2026-06-13T20:56:19.568376864Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec2c5-6f74-7860-a516-855da8949b26
+  timestamp: 2026-06-13T20:56:19.572573363Z
+  agent: aida
+  commit_sha: 2477b7736106f40886832b75c9017c074e415b9c
+  summary: Completed via merge 2477b773
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T20:56:19.419628875Z
+  completion_sha: 2477b7736106f40886832b75c9017c074e415b9c
