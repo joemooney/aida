@@ -8,8 +8,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:30.256071770Z
-modified_at: 2026-06-13T06:49:30.256071770Z
+modified_at: 2026-06-13T17:01:26.780692666Z
 req_type: Bug
 tags:
 - cli-consistency
 - from-manual-audit
+decision_request:
+  question: aida session list (historical Claude conversations) and aida session leases (active scoped work) are two unrelated concepts under one namespace. How to disambiguate?
+  choices:
+  - label: Rename session list to session conversations (or history)
+    consequence: the historical view gets a self-describing name; leases stays
+    resolution: noop
+  - label: Rename session leases to session active (or work)
+    consequence: the active-work view gets a clearer name; list stays
+    resolution: noop
+  - label: Clarify help only (keep both names)
+    consequence: smallest; document the distinction, no rename
+    resolution: noop
+  recommended: 0
+  rationale: '''list'' is the ambiguous one (list of what?); renaming it to conversations/history makes the two concepts self-distinguishing; leases is already meaningful.'
+  asked_at: 2026-06-13T17:01:26.780692666Z
