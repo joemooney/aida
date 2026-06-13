@@ -15,12 +15,12 @@ description: |-
   5. Privacy floor: no secrets/credentials in the committed record.
 
   Composes with: briefs (gitignored today -> this makes the OUTCOME durable), aida review verdicts, the spec history: array, EPIC-39 governance/audit thesis. Design fork the advisor should resolve before pickup: structured comment vs a new history-adjacent field vs a sibling objects/RECORD file.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:07:54.867595770Z
-modified_at: 2026-06-13T02:40:10.012339426Z
+modified_at: 2026-06-13T03:25:06.304889553Z
 req_type: Story
 tags:
 - aida:brief
