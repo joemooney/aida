@@ -1,0 +1,20 @@
+id: 019ec209-5115-7fa3-9d3f-e579e1f5873c
+spec_id: BUG-528
+agreed_id: BUG-528
+title: 'aida add --queue mis-routes: no --for flag, defaults to the FILER''s role — advisor-filed implementation work lands in the advisor queue'
+description: 'Operator+advisor hit (2026-06-13): the atomic ''aida add --queue'' (TASK-754) has no --for flag and queues to the FILER''s session role. So an advisor filing implementation work with ''AIDA_SESSION_ROLE=advisor aida add ... --queue'' lands the spec in the ADVISOR queue, not the implementer queue. The common case — advisor files a bug/task FOR an implementer — is silently mis-routed. Caught because three specs (TASK-791, BUG-526, BUG-527) filed via ''add --queue'' as advisor sat in the advisor queue while two filed via explicit ''queue add --for implementer'' routed correctly; ''burndown plan'' counted all five as ready (it reads across queues) but ''burndown run'' drains the IMPLEMENTER queue, so the three would have been missed. Two-part fix: (1) add a ''--for <role>'' flag to ''aida add --queue'' mirroring ''aida queue add --for''; (2) decide the safe DEFAULT when --for is omitted — default to ''implementer'' (the overwhelmingly common queue target for filed work) rather than the filer''s role, OR refuse with guidance when an advisor files non-advisor work without --for. Also reconcile the burndown plan-vs-run queue mismatch so ''ready'' can''t overcount specs the run won''t drain. trace:relates:TASK-754 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T17:30:51.029929638Z
+modified_at: 2026-06-13T17:30:51.029929638Z
+req_type: Bug
+tags:
+- aida:add
+- aida:queue
+- cli-consistency
+- from-friction
+- papercut
+- queue-routing
+- relates:TASK-754
