@@ -25,9 +25,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-11T07:04:42.420956459Z
-modified_at: 2026-06-13T15:00:46.262482188Z
+modified_at: 2026-06-13T15:21:53.160796389Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb551-5e12-7e70-aa87-84e93cd38410
   created_at: 2026-06-11T07:04:45.489940600Z
+comments:
+- id: 019ec193-3f08-7e01-a77c-c43f664460ac
+  author: joe
+  content: Commit 1227e7015 references this requirement
+  created_at: 2026-06-13T15:21:53.160796389Z
+  modified_at: 2026-06-13T15:21:53.160796389Z
