@@ -1973,6 +1973,8 @@ fn run() -> Result<()> {
             ci: _,
             no_ci: _,
             cleanup: _,
+            activity: _,
+            since: _,
             awaiting: _,
             verbose: _,
             no_hygiene: _,
@@ -10250,6 +10252,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             ci,
             no_ci,
             cleanup,
+            activity,
+            since,
             awaiting,
             verbose,
             no_hygiene,
@@ -10262,6 +10266,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 *ci,
                 *no_ci,
                 *cleanup,
+                *activity,
+                since.as_deref(),
                 *awaiting,
                 *verbose,
                 *no_hygiene,
@@ -81453,6 +81459,8 @@ fn handle_status_command_distributed(
     ci_only: bool,
     no_ci: bool,
     cleanup: bool,
+    activity: bool,
+    activity_since: Option<&str>,
     awaiting: bool,
     verbose: bool,
     no_hygiene: bool,
@@ -81476,6 +81484,14 @@ fn handle_status_command_distributed(
             let stdout = std::io::stdout();
             let _ = report.render(verbose, stdout.lock());
         }
+        return Ok(());
+    }
+
+    if activity {
+        let since = activity_since
+            .map(parse_status_activity_since_arg)
+            .transpose()?;
+        print_status_advisor_activity_full(&project_root, since)?;
         return Ok(());
     }
 
@@ -81630,6 +81646,12 @@ fn handle_status_command_distributed(
     // the "Active agents" section. Read-only; silent when no remote signal.
     // trace:STORY-452 | ai:claude
     print_status_remote_activity_section(&project_root, 5);
+
+    // STORY-405: live state-affecting advisor/external activity recorded by
+    // AIDA verbs such as `aida pr ship`. Read-only and silent when absent or
+    // older than the default window.
+    // trace:STORY-405 | ai:codex
+    print_status_advisor_activity_footer(&project_root)?;
 
     // TASK-539: pending-findings backlog — silent when empty. Surfaced before
     // the working-tree section so triage-able items are visible without
@@ -81803,6 +81825,176 @@ fn handle_status_command_distributed(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AdvisorActivityEvent {
+    ts: chrono::DateTime<chrono::Utc>,
+    command: String,
+    step: String,
+    status: String,
+    pr: Option<u64>,
+}
+
+impl AdvisorActivityEvent {
+    fn target_label(&self) -> String {
+        self.pr
+            .map(|n| format!("PR #{n}"))
+            .unwrap_or_else(|| "-".to_string())
+    }
+}
+
+fn advisor_activity_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida").join("advisor-activity.jsonl")
+}
+
+fn parse_advisor_activity_line(line: &str) -> Option<AdvisorActivityEvent> {
+    let value: serde_json::Value = serde_json::from_str(line).ok()?;
+    let ts_raw = value.get("ts")?.as_str()?;
+    let ts = chrono::DateTime::parse_from_rfc3339(ts_raw)
+        .ok()?
+        .with_timezone(&chrono::Utc);
+    let command = value
+        .get("command")
+        .and_then(|v| v.as_str())
+        .unwrap_or("aida")
+        .to_string();
+    let step = value
+        .get("step")
+        .and_then(|v| v.as_str())
+        .unwrap_or("activity")
+        .to_string();
+    let status = value
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let pr = value.get("pr").and_then(|v| v.as_u64());
+    Some(AdvisorActivityEvent {
+        ts,
+        command,
+        step,
+        status,
+        pr,
+    })
+}
+
+fn read_advisor_activity_events(
+    project_root: &std::path::Path,
+    since: Option<chrono::DateTime<chrono::Utc>>,
+) -> Vec<AdvisorActivityEvent> {
+    let path = advisor_activity_path(project_root);
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut events: Vec<_> = body
+        .lines()
+        .filter_map(parse_advisor_activity_line)
+        .filter(|e| since.map(|cutoff| e.ts >= cutoff).unwrap_or(true))
+        .collect();
+    events.sort_by(|a, b| b.ts.cmp(&a.ts));
+    events
+}
+
+fn parse_status_activity_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
+    parse_since_arg(raw)
+}
+
+fn print_status_advisor_activity_full(
+    project_root: &std::path::Path,
+    since: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<()> {
+    let events = read_advisor_activity_events(project_root, since);
+    println!("{}", "─── Recent advisor activity ───".bold());
+    if events.is_empty() {
+        println!("  (no recorded advisor activity)");
+        println!();
+        return Ok(());
+    }
+    for event in events {
+        println!(
+            "  {}  {:<12} {:<8} {:<8} {}",
+            event.ts.to_rfc3339(),
+            event.step,
+            event.status,
+            event.target_label(),
+            event.command.dimmed()
+        );
+    }
+    println!();
+    Ok(())
+}
+
+fn print_status_advisor_activity_footer(project_root: &std::path::Path) -> Result<()> {
+    let since = chrono::Utc::now() - chrono::Duration::minutes(30);
+    let events = read_advisor_activity_events(project_root, Some(since));
+    if events.is_empty() {
+        return Ok(());
+    }
+    println!("{}", "─── Recent advisor activity ───".bold());
+    for event in events.iter().take(5) {
+        println!(
+            "  {:<12} {:<8} {} — {}",
+            event.step,
+            event.status,
+            event.target_label(),
+            event.ts.to_rfc3339()
+        );
+    }
+    if events.len() > 5 {
+        println!(
+            "  {}",
+            format!("… {} more; run `aida status --activity`", events.len() - 5).dimmed()
+        );
+    }
+    println!();
+    Ok(())
+}
+
+#[cfg(test)]
+mod story_405_advisor_activity_tests {
+    use super::*;
+
+    #[test]
+    fn parses_minimal_pr_ship_activity_event() {
+        let line = r#"{"ts":"2026-06-12T10:00:00Z","command":"aida pr ship","step":"pr-merge","status":"ok","pr":801}"#;
+        let event = parse_advisor_activity_line(line).expect("valid event");
+        assert_eq!(event.command, "aida pr ship");
+        assert_eq!(event.step, "pr-merge");
+        assert_eq!(event.status, "ok");
+        assert_eq!(event.pr, Some(801));
+        assert_eq!(event.target_label(), "PR #801");
+    }
+
+    #[test]
+    fn activity_reader_ignores_malformed_lines_filters_and_sorts_newest_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let aida_dir = tmp.path().join(".aida");
+        std::fs::create_dir_all(&aida_dir).unwrap();
+        std::fs::write(
+            aida_dir.join("advisor-activity.jsonl"),
+            concat!(
+                "not-json\n",
+                "{\"ts\":\"2026-06-12T10:00:00Z\",\"command\":\"aida pr ship\",\"step\":\"pr-watch-ci\",\"status\":\"ok\",\"pr\":1}\n",
+                "{\"ts\":\"2026-06-12T10:10:00Z\",\"command\":\"aida pr ship\",\"step\":\"pr-merge\",\"status\":\"failed\",\"pr\":2}\n",
+                "{\"ts\":\"garbage\",\"command\":\"aida pr ship\",\"step\":\"pr-pull\",\"status\":\"ok\"}\n",
+            ),
+        )
+        .unwrap();
+        let since = chrono::DateTime::parse_from_rfc3339("2026-06-12T10:05:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let events = read_advisor_activity_events(tmp.path(), Some(since));
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].step, "pr-merge");
+        assert_eq!(events[0].status, "failed");
+
+        let all = read_advisor_activity_events(tmp.path(), None);
+        assert_eq!(
+            all.iter().map(|e| e.pr).collect::<Vec<_>>(),
+            vec![Some(2), Some(1)]
+        );
+    }
 }
 
 /// Compare a project's `.claude/skills/`, `.claude/commands/`, `.claude/hooks/`
