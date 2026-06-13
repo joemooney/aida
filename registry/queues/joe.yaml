@@ -949,13 +949,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 019ec207-5010-7d11-9d26-aecd6e05a720
-  position: 449000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-06-13T17:28:57.820624176Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 019ec1f6-9531-7132-8942-a0a8418f7379
   position: 450000
   added_by: joe
@@ -967,5 +960,12 @@
   position: 451000
   added_by: joe
   added_at: 2026-06-13T17:30:12.211679077Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 019ec207-5010-7d11-9d26-aecd6e05a720
+  position: 452000
+  added_by: joe
+  added_at: 2026-06-13T17:30:17.226921667Z
   for_role: implementer
   added_by_machine: imac
