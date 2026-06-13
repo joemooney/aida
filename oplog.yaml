@@ -17770,5 +17770,18 @@ operations:
   timestamp: 2026-06-13T20:10:57.769023558Z
   kind: !SetStatus
     status: Completed
-clock: 1756
+- id: 019ec349-70af-7713-882f-208732c883e6
+  target_id: 019ec218-8bcc-7562-90b5-1475297e2af6
+  author: aida
+  node_id: '1'
+  lamport: 1757
+  timestamp: 2026-06-13T23:20:30.639245027Z
+  kind: !SetDescription
+    description: |
+      Operator+advisor hit (2026-06-13): 'aida burndown run' printed '2 blessed spec(s) will drain: TASK-778, BUG-520' — but BOTH are status=Completed AND in NO queue (verified: 'queue list --for implementer' shows neither). The command's own --help says it 'Drains ONLY the queued + pickable set ... never an unqueued spec.' Seconds later 'burndown run --dry-run' reported a DIFFERENT set (4: TASK-791, BUG-528, BUG-527, BUG-529), and 'burndown plan' had reported 7 — three inconsistent answers within seconds. No active leases existed at the time, so a live drain consuming the set does not explain it. Likely cause: the blessed-set selection reads a STALE projection (the .aida/cache.db cache, or a snapshot that wasn't refreshed) and/or queue entries are NOT dequeued when a spec auto-completes via 'aida pull' — so completed specs linger as 'blessed'. Fix: (1) compute the blessed set from a fresh/consistent read; (2) exclude terminal-status (Completed/Rejected) specs from the blessed set defensively; (3) dequeue on auto-complete so a completed spec cannot remain queued. Reliability bug in the autonomy keystone — fix at the keyboard, not via unsupervised drain. trace:relates:BUG-528 trace:from-friction
+
+      ## Acceptance
+
+      - Resolved (2026-06-13, operator decision via `aida questions answer`): Reuse maybe_sync_pull (fetch+rebase) before the preflight — Proven, never-fails; ~1 network pull per 'burndown run' (not a hot loop)
+clock: 1757
 node_id: '1'
