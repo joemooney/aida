@@ -13,11 +13,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:30.256071770Z
-modified_at: 2026-06-13T17:13:38.993232478Z
+modified_at: 2026-06-13T17:13:39.620922968Z
 req_type: Bug
 tags:
 - cli-consistency
 - from-manual-audit
+comments:
+- id: 019ec1f9-9424-7b51-86a5-81046b750619
+  author: joe
+  content: 'Rename target: ''session conversations'' (refinement on choice 1) — NOT list-claude-sessions (avoids the session-sessions redundancy) and NOT ''history'' (would collide with ''aida history'', the spec-activity log). Keep ''session leases'' as-is. Add a deprecated ''session list'' alias for back-compat.'
+  created_at: 2026-06-13T17:13:39.620922968Z
+  modified_at: 2026-06-13T17:13:39.620922968Z
 decision_request:
   question: aida session list (historical Claude conversations) and aida session leases (active scoped work) are two unrelated concepts under one namespace. How to disambiguate?
   choices:
