@@ -23,10 +23,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:49:16.215550754Z
-modified_at: 2026-06-13T03:00:15.661651268Z
+modified_at: 2026-06-13T03:09:28.203779420Z
 req_type: Story
 tags:
 - aida:list
 - lifecycle
 - relates:STORY-441
 - ux
+relationships:
+- rel_type: Parent
+  target_id: 019ebef4-87be-77f0-8494-ba8ef126b1b8
+  created_at: 2026-06-13T03:09:28.203776621Z
+  created_by: joe
