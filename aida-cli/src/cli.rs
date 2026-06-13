@@ -521,25 +521,27 @@ pub enum TriageCommand {
 // trace:FR-1-043 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum SessionCommand {
-    /// List recent Claude Code sessions for this project (cwd) with
-    /// role + spec context extracted from each session's .jsonl. By
-    /// default shows sessions with activity in the last 24 hours, up
-    /// to 20 entries — `--all` bypasses the recency cutoff.
+    /// List recent Claude Code conversations for this project (cwd)
+    /// with role + spec context extracted from each conversation's
+    /// .jsonl. By default shows conversations with activity in the last
+    /// 24 hours, up to 20 entries — `--all` bypasses the recency cutoff.
     ///
-    /// This is the HISTORICAL view (past conversations). For the live
-    /// view of which scoped session leases are holding work right now,
-    /// use `aida session leases`. The two views answer different
-    /// questions; when in doubt for "what's running?" reach for
-    /// `aida session leases`.
+    /// This is the HISTORICAL view (past Claude Code conversations).
+    /// For the live view of which scoped work leases are held right
+    /// now, use `aida session leases`.
     // trace:BUG-98 | ai:claude
+    // trace:BUG-522 | ai:claude — renamed from `session list` (the old
+    // name collided with the leases view); `list` is kept as a
+    // deprecated clap alias.
     ///
-    /// The INITIAL TOPIC column is the session title Claude Code set at
-    /// conversation start — it is fixed and does NOT track current
-    /// work, so for a long-running session it can read stale. Identify
-    /// a session by its SPEC + AGE, not the topic.
+    /// The INITIAL TOPIC column is the conversation title Claude Code
+    /// set at start — it is fixed and does NOT track current work, so
+    /// for a long-running conversation it can read stale. Identify a
+    /// conversation by its SPEC + AGE, not the topic.
     // trace:TASK-236
-    List {
-        /// Show at most N sessions (default 20).
+    #[clap(alias = "list")]
+    Conversations {
+        /// Show at most N conversations (default 20).
         #[clap(long, short = 'n', default_value = "20")]
         limit: usize,
 
@@ -547,8 +549,8 @@ pub enum SessionCommand {
         #[clap(long)]
         no_color: bool,
 
-        /// Bypass the default 24h recency cutoff and show every session
-        /// the limit allows.
+        /// Bypass the default 24h recency cutoff and show every
+        /// conversation the limit allows.
         // trace:STORY-59 | ai:claude
         #[clap(long)]
         all: bool,
@@ -850,12 +852,10 @@ pub enum SessionCommand {
     /// List active session leases — the canonical "who holds what
     /// scoped work right now" view.
     ///
-    /// Separate from `aida session list`, which lists HISTORICAL Claude
-    /// Code conversations in this project (.jsonl files) — a different
-    /// concept that does NOT show the scoped leases `aida session start`
-    /// creates. For "what's running?" reach for `aida session leases`
-    /// first.
+    /// For the historical record of past Claude Code conversations in
+    /// this project, see `aida session conversations`.
     // trace:BUG-98 | ai:claude
+    // trace:BUG-522 | ai:claude
     Leases {
         /// Probe live `claude` processes and warn about ones whose cwd is
         /// `(deleted)` — worktree was removed without ending claude. `-v`
