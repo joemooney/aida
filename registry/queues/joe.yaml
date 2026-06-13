@@ -1082,13 +1082,6 @@
   added_at: 2026-06-13T23:15:20.862814149Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 019ec218-8bcc-7562-90b5-1475297e2af6
-  position: 470000
-  added_by: joe
-  note: unparked by `aida questions answer`
-  added_at: 2026-06-13T23:20:31.162896420Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019ec281-e316-7aa1-8253-4813fe993e1d
   position: 471000
   added_by: joe
