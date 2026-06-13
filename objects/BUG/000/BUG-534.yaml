@@ -1,0 +1,27 @@
+id: 019ec264-805f-74f3-b59f-1881494b14c7
+spec_id: BUG-534
+agreed_id: BUG-534
+title: aida graph --tree renders a FLAT list, not an indented tree — parents and siblings are indistinguishable
+description: |-
+  `aida graph --tree <ID>` is named 'tree' but prints a flat list at a fixed 2-space indent, so the hierarchy is invisible — you cannot tell a parent epic from its sibling stories, and child tasks are not nested under their parent.
+
+  Root cause: walk_union returns GraphResult with BOTH a flat `nodes: Vec<Uuid>` (BFS order) AND `edges: Vec<GraphEdge>` ({from, rel_type, to}) — aida-core/src/graph_walk.rs:39. The renderer at aida-cli/src/main.rs:20585 iterates `result.nodes` with a uniform 2-space indent and IGNORES `edges`, discarding the depth/parent structure that the walk already computed.
+
+  Fix: reconstruct the hierarchy from result.edges and render depth-indented with tree connectors (├─/└─), rooted at the queried node. Optionally highlight the queried node when it is not the structural root.
+
+  Secondary surprise that compounds it: querying a non-root node (e.g. a STORY) walks OUTGOING Child+Parent (main.rs:20528), i.e. UP to the parent epic via the reciprocal Child edge then back DOWN to all siblings + their children. Flattened, the parent epic and the siblings land at the same indent level. A real indented render would make this readable; consider whether up-then-down from a leaf is the intended default or should root the tree at the epic.
+
+  Repro: `aida graph --tree STORY-592` lists EPIC-40 (the parent) and all sibling stories + TASK-789 at one flat indent level.
+
+  Surfaced while writing the CLI manual (EPIC-40), Ch6/STORY-592.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T19:10:26.911789399Z
+modified_at: 2026-06-13T19:10:26.911789399Z
+req_type: Bug
+tags:
+- aida:graph
+- papercut
+- relates:STORY-489
