@@ -31967,11 +31967,21 @@ fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
-        SessionCommand::List {
+        // trace:BUG-522 | ai:claude — renamed from `session list`;
+        // `list` stays a deprecated clap alias routing to the same
+        // handler. Emit a one-line pointer when the old name is used.
+        SessionCommand::Conversations {
             limit,
             no_color,
             all,
-        } => session::list(*limit, *no_color, *all),
+        } => {
+            if std::env::args().any(|a| a == "list") {
+                eprintln!(
+                    "note: `aida session list` is deprecated — use `aida session conversations` (the historical conversation view). `aida session leases` shows live work leases."
+                );
+            }
+            session::list(*limit, *no_color, *all)
+        }
         SessionCommand::Resume { id, limit } => session::resume(id.clone(), *limit),
         SessionCommand::New {
             title,
@@ -47650,7 +47660,7 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
         eprintln!();
         eprintln!(
             "{}",
-            "(for the historical list of Claude Code conversations in this project, run `aida session list`)"
+            "(for the historical list of Claude Code conversations in this project, run `aida session conversations`)"
                 .dimmed()
         );
         return Ok(());
