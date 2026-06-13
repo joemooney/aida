@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T05:03:32.040748675Z
-modified_at: 2026-06-13T05:03:32.040748675Z
+modified_at: 2026-06-13T05:13:37.901176778Z
 req_type: Story
 tags:
 - advisor
@@ -30,3 +30,9 @@ tags:
 - autonomy
 - parent:EPIC-39
 - relates:SPIKE-11
+comments:
+- id: 019ebf66-5f6d-7af3-be34-21632b12a867
+  author: joe
+  content: Commit 73235eca7 references this requirement
+  created_at: 2026-06-13T05:13:37.901176778Z
+  modified_at: 2026-06-13T05:13:37.901176778Z
