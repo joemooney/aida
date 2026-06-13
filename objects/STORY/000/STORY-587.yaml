@@ -19,10 +19,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:03:48.048600740Z
-modified_at: 2026-06-13T06:03:48.048600740Z
+modified_at: 2026-06-13T06:05:29.718650262Z
 req_type: Story
 tags:
 - aida:queue
 - autonomy
 - parent:EPIC-39
 - workflow
+comments:
+- id: 019ebf95-daf6-7a42-b8df-544ddc499cbd
+  author: joe
+  content: Commit 4d83ccd11 references this requirement
+  created_at: 2026-06-13T06:05:29.718650262Z
+  modified_at: 2026-06-13T06:05:29.718650262Z
