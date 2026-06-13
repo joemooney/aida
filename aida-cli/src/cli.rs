@@ -5212,9 +5212,12 @@ pub enum AgentCommand {
     // trace:STORY-528 | ai:claude
     Status,
 
-    /// Mark an agent paused (e.g. budget exhausted / rate-limited) so status
-    /// and brief-time dispatch flag it. Does not stop the process.
+    /// Set a dispatch marker (NOT a process pause): marks the agent busy
+    /// (e.g. budget exhausted / rate-limited) so status and brief-time dispatch
+    /// logic skip it. The process keeps running — use `aida agent stop` to
+    /// terminate it.
     // trace:STORY-528 | ai:claude
+    // trace:BUG-521 | ai:claude
     Pause {
         /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
         agent: String,
