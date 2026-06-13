@@ -3,12 +3,12 @@ spec_id: TASK-790
 agreed_id: TASK-790
 title: Surface message intent in mailbox notice + read-mail skill (fold into STORY-585 surface)
 description: 'TASK-782 added the mailbox intent marker (fyi|request|handoff) and surfaced it where surfaces already exist (aida mailbox inbox, read_inbox MCP). The unread *notice* surface and the read-mail skill are owned by STORY-585''s notice/read half, which is in-flight in a sibling worktree and not yet on main. When STORY-585 lands: (1) the mailbox notice should show a message''s intent so an agent can tell an FYI from an actionable request/handoff; (2) the read-mail skill''s interpret step should call aida_core::mailbox::mail_disposition(intent, policy) and codify the notice->read->interpret->(bounded-safe? act) OR (surface+recommend) pipeline. Core API already shipped in TASK-782: Intent, ActOnMail, mail_disposition. Docs in docs/mailbox.md.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T16:40:22.934086536Z
-modified_at: 2026-06-13T18:25:30.105206376Z
+modified_at: 2026-06-13T18:32:52.539829963Z
 req_type: Task
 tags:
 - agent-context
@@ -21,6 +21,24 @@ comments:
   content: Commit e15400496 references this requirement
   created_at: 2026-06-13T18:25:30.105206376Z
   modified_at: 2026-06-13T18:25:30.105206376Z
+history:
+- id: 019ec242-1a37-7e32-af03-eb9cf400d441
+  author: aida-reconcile
+  timestamp: 2026-06-13T18:32:52.535869108Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec242-1a3b-7351-9185-966c47709997
+  timestamp: 2026-06-13T18:32:52.539829378Z
+  agent: aida
+  commit_sha: bdd5b69459f1abd3a58137278458c3193f1b5630
+  summary: Completed via merge bdd5b694
 deferred: true
 deferred_at: 2026-06-13T16:40:35.552311559Z
 deferred_until: STORY-585 notice/read surface (mailbox notice + read-mail skill) merges to main
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T18:32:52.380658942Z
+  completion_sha: bdd5b69459f1abd3a58137278458c3193f1b5630
