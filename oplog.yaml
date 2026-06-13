@@ -17520,5 +17520,12 @@ operations:
       5. Out of scope (explicit). Does NOT: add any new CLI verb (P1-P7 GAPs are TASK-734, master-gated); re-classify any A/B/C bucket; touch pure-agentic (bucket-A) skills; change the verbs' own behavior/output; or build a lint/CI guard (deferred — too fuzzy to detect reliably; revisit only if drift recurs).
 
       Primary callers: discipline-pack note → read on demand by AIDA-using sessions; checklist line → trips a reading agent inside /aida-commit + /aida-pr at ship time; backfill edits → skill markdown masters under `aida-core/templates/{skills,commands}/`.
-clock: 1727
+- id: 019ec1a3-9e94-7101-84d7-44f167d24f48
+  target_id: 019ec1a2-dc64-7660-ba69-bd693060164b
+  author: aida
+  node_id: '1'
+  lamport: 1728
+  timestamp: 2026-06-13T15:39:46.196526579Z
+  kind: Archive
+clock: 1728
 node_id: '1'
