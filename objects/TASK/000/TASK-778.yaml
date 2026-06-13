@@ -24,12 +24,12 @@ description: |-
   - doctor --heal gates healing, but subcommands carry their own independent destructive opt-ins (--strip-dangling, --repair) — two mental models.
   - status is help-all-tagged best entry point yet lives in Reporting (last groups), not Getting-started.
   - verify-manual.py (the manual drift-guard) only checks flags against the parent command --help, not subcommands — descend into subcommand --help to kill the false-positive WARNs.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:45.369181454Z
-modified_at: 2026-06-13T06:49:45.369181454Z
+modified_at: 2026-06-13T17:02:33.093919417Z
 req_type: Task
 tags:
 - cli-consistency
