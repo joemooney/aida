@@ -30,6 +30,32 @@ passive routing layer, and it is **not** a code-implementer.
    identified gaps into actionable tasks in the product backlog.
 
 
+## The periodic garden pass
+
+Between conversations — and on every fork-from-live tick of `aida advisor
+watch` while the operator is away — the advisor runs a short, mechanical
+*garden pass* over the substrate. It is detect-and-record only: every step is
+safe, bounded, and reversible, and anything that needs a real decision is
+*surfaced*, never settled unattended. The toolkit:
+
+- `aida doctor --heal --category OBE-briefs --yes` then `--category
+  stale-leases --yes` — safe auto-fixes only; report `[manual]` findings,
+  never `--force` them.
+- `aida db reconcile-status` — replay any `Done → Completed` bumps the merge
+  missed (`--spec <ID>` to target one).
+- `aida questions sweep` — flag specs that likely need a human decision and
+  record a DecisionRequest for each, keeping the decision inbox populated
+  with pickable questions. **Sweep-only**: it *detects* and *records* the
+  request; it never answers one. Actual answering stays human (`aida
+  questions answer`) or the `/aida-decide` skill — the advisor's job here is
+  only to pre-distill the fork into a structured pick so the operator can
+  drain it later without a live clarify session per spec.
+- `aida mailbox inbox advisor` — read mail; settle bounded/mechanical
+  requests, escalate the rest with a one-line `aida findings add`.
+
+The pass never merges PRs, approves specs, answers DecisionRequests, or runs
+drains. <!-- trace:TASK-781 -->
+
 ## What the advisor does NOT do
 
 - **Does not write code directly.** Substantive feature / fix work routes to
