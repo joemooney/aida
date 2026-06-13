@@ -6032,6 +6032,20 @@ pub enum Command {
         // trace:TASK-753 | ai:claude
         #[clap(long, conflicts_with_all = ["queue", "ci", "short", "awaiting"])]
         cleanup: bool,
+        /// Focus on live advisor/external activity recorded in
+        /// `.aida/advisor-activity.jsonl`.
+        ///
+        /// This is a READ-ONLY view. Default `aida status` shows a short
+        /// recent footer when activity exists; pass `--activity` for the full
+        /// filtered feed.
+        // trace:STORY-405 | ai:codex
+        #[clap(long, conflicts_with_all = ["queue", "ci", "short", "cleanup", "awaiting"])]
+        activity: bool,
+        /// With `--activity`, only show events after this relative duration
+        /// (`30m`, `12h`, `2d`) or RFC3339 timestamp.
+        // trace:STORY-405 | ai:codex
+        #[clap(long, requires = "activity")]
+        since: Option<String>,
         /// Focus on the "Awaiting you" section only — every human-gate item
         /// (mergeable PRs with no pending CI / requested changes, unacked
         /// briefs, findings awaiting triage, NeedsAttention escalations).
