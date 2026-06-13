@@ -1,0 +1,16 @@
+id: 019ec2b9-aba5-7000-81d8-7ee4016d5068
+spec_id: TASK-795
+agreed_id: TASK-795
+title: 'Doc-intent part 3: each manual entry backlinks to its shaping spec(s) via a machine-readable convention'
+description: 'Part 3 of STORY-603. A reader/agent should be one hop from intent. Non-trivial: the user-facing manual carries NO SPEC-IDs (verify-manual.py hard-fails on SPEC-ID leaks), so the backlink needs a machine-readable, non-leaking convention (e.g. HTML-comment trace markers) + reconciliation with the leak check. Deferred from PR #858.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T20:43:28.549415650Z
+modified_at: 2026-06-13T20:43:28.549415650Z
+req_type: Task
+tags:
+- docs
+- parent:EPIC-40
+- parent:STORY-603
