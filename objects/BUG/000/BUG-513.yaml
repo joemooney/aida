@@ -17,7 +17,7 @@ description: |-
   Fix options (advisor to pick): seed the overview agent-set from the role registry (~/.aida/roles/) and/or known agent ids; OR add a 'N broadcasts pending (delivered on inbox open)' line to the overview; OR materialize inboxes for configured roles at broadcast time.
 
   Why it matters: STORY-569 routes the --zen finish handoff to the advisor THROUGH this mailbox. If the advisor inbox is not yet materialized, the operator's 'mailbox list' triage view misses the handoff that the statusline flags — undermining the overview exactly where STORY-569 relies on it.
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
