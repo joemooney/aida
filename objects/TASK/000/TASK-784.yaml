@@ -1,0 +1,19 @@
+id: 019ec19f-e283-7be1-b436-f4e9a5866973
+spec_id: TASK-784
+agreed_id: TASK-784
+title: 'aida whoami: print the caller identity AIDA resolved (role, agent-type, agent-name, user, headless, session)'
+description: 'Operator (2026-06-13): AIDA resolves a rich caller identity (AIDA_SESSION_ROLE, AIDA_AGENT_TYPE via detect_agent_type''s env-sniff, AIDA_AGENT_NAME, AIDA_USER/current_user_id, AIDA_HEADLESS, AIDA_AI_TOOL, AIDA_SESSION_*) but there''s no single command to SEE it. Add ''aida whoami'' (read-only): print the resolved role, agent-type, agent-name, user-id, headless flag, and active session/scope — each annotated with its source (env var vs fallback vs default). Diagnoses the recurring surprises: ''why did this refuse?'' (role resolved to default, not advisor → advisor-gate), ''why is my queue empty?'' (user/role identity differs from what queued the items). Pure read of the same resolvers the gating/queue/provenance code already uses — no new state. Pairs with the statusline (which shows role) but is the full, explicit dump. trace:BUG-89'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T15:35:41.443182960Z
+modified_at: 2026-06-13T15:35:41.443182960Z
+req_type: Task
+tags:
+- aida:cli
+- diagnostic
+- fasttrack
+- identity
+- relates:BUG-89
+- ux
