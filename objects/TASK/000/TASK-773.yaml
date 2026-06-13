@@ -1,0 +1,17 @@
+id: 019ebef4-87be-77f0-8494-ba8ef126b1b8
+spec_id: TASK-773
+agreed_id: TASK-773
+title: 'aida list open: exclude perpetual standing-artifact types (vision/principle/term/constraint/folder/meta) from the open-work view by default'
+description: 'Split from STORY-584 criterion 6. ''aida list open'' is a WORK view; perpetual standing-artifact types (vision, principle, term, constraint, folder, meta) are NOT work and should be excluded from the open-work view by default (they surface via --type / the aida-docs projection). Fixes VIS-1 reading as ''InProgress work''. Orthogonal to STORY-584''s deferred view-flag (type-based filtering, not a view-flag clone of archived) — split out to keep that slice clean. Acceptance: ''aida list'' / ''aida list open'' default view excludes those 6 types; --type <T> still surfaces them; --all or an explicit opt-in shows them.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T03:09:17.118251618Z
+modified_at: 2026-06-13T03:09:17.118251618Z
+req_type: Task
+tags:
+- aida:list
+- lifecycle
+- parent:STORY-584
+- ux
