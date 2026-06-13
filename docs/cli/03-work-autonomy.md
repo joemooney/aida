@@ -12,24 +12,24 @@ The whole chapter answers one question: **"I have approved work; how does it get
 Do you have approved, queued work to execute?
 │
 ├─ ONE spec, you want to drive it interactively
-│     → aida queue work <SPEC>           (pick it up, launch a session)
+│ → aida queue work <SPEC> (pick it up, launch a session)
 │
 ├─ SEVERAL queued specs, you're AT THE KEYBOARD watching
-│     → aida queue work --auto-complete nextN   (sequential drain, you supervise)
-│       …or the parallel fan-out: /aida-burndown  (Claude Code skill)
+│ → aida queue work --auto-complete nextN (sequential drain, you supervise)
+│ …or the parallel fan-out: /aida-burndown (Claude Code skill)
 │
 ├─ SEVERAL specs, you're AWAY / want it unattended overnight
-│     → aida away   (set presence)  then  aida queue work --auto-complete
-│       …presence makes it default to headless; integrity gates still apply
+│ → aida away (set presence) then aida queue work --auto-complete
+│ …presence makes it default to headless; integrity gates still apply
 │
 ├─ You don't know WHAT'S READY to drain yet
-│     → aida burndown plan            (read-only: ready vs parked, the pickability gate)
+│ → aida burndown plan (read-only: ready vs parked, the pickability gate)
 │
 ├─ You have APPROVED work but it's not queued yet
-│     → aida backlog list → aida backlog groom   (tee it up — the advisor sign-off)
+│ → aida backlog list → aida backlog groom (tee it up — the advisor sign-off)
 │
 └─ A drain is RUNNING and you want to know what it's doing
-      → aida drain status
+ → aida drain status
 ```
 
 Three cross-cutting truths the tree assumes:
