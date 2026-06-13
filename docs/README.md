@@ -52,6 +52,7 @@ These cut through the *"should I even use this?"* question honestly.
 | [multi-advisor-coordination.md](multi-advisor-coordination.md) | Coordinating multiple advisor seats on one project. |
 | [session-lifecycle.md](session-lifecycle.md) | Scoped sessions, worktrees, and leases — how concurrent work stays isolated. |
 | [agents/](agents/) | Per-agent setup (Claude Code, Codex, Cursor, …), the MCP install matrix, and inter-agent communication. |
+| [environment-variables.md](environment-variables.md) | The canonical reference for every `AIDA_*` environment variable — what it does, default, who sets it, scope. |
 
 ## 5. Extending & contributing
 
