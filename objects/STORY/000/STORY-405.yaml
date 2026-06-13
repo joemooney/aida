@@ -40,12 +40,12 @@ description: |-
   ## Origin
 
   User question 2026-05-22 while a 3-PR recovery cascade ran in background via Bash tool. The cascade affected state (BUG-307, BUG-310, BUG-311 merges + lease cleanups) but \`aida status\` was silent on it.
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-22T15:53:40.778620533Z
-modified_at: 2026-06-11T02:36:19.967566585Z
+modified_at: 2026-06-13T02:20:50.849645051Z
 req_type: Story
 tags:
 - advisor-activity
@@ -96,4 +96,12 @@ comments:
   content: 'Deferred 2026-05-30 (blocked-queue triage, operator-approved): off-phase for the current bugs-first → stability phase. Valid work — kept as Approved backlog, dequeued from the active queue, tagged deferred:post-stability. Revisit when the phase shifts. Note: observability feature; PARTIALLY built already — write-side breadcrumb (.aida/advisor-activity.jsonl) exists (main.rs:29130), only the aida-status read-side remains, so it''s smaller-than-filed when revisited.'
   created_at: 2026-05-31T04:43:33.162154088Z
   modified_at: 2026-05-31T04:43:33.162154088Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-13T02:20:50.849645051Z
+  implemented_by: joe
 human_only: true
+interface_changes:
+  cli:
+  - '`aida status` now shows a recent advisor activity footer when `.aida/advisor-activity.jsonl` has recent entries.'
+  - '`aida status --activity` lists recorded advisor activity, and `--since <duration|RFC3339>` filters it.'
