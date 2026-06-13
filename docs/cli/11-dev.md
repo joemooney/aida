@@ -53,6 +53,20 @@ These commands exist because AIDA dogfoods itself: the people building AIDA run 
 
 ---
 
+### `aida upgrade`
+
+**One line** — upgrade the installed `aida` binary to the latest (or a specified) release.
+
+**Mental model.** `upgrade` detects *how* aida was installed (cargo vs pre-built binary) and uses the matching strategy. From a developer build, with no `--target`, it also scans common install locations and offers to upgrade any **stale sibling installs** — handy when aida is on PATH in several places.
+
+**Reach for it when** — a new release is out and you want this machine on it; `--check` first to compare current/sibling versions against the latest *without* installing.
+
+**Don't reach for it when** — you're on an in-repo dev build you're actively changing (don't overwrite your own build — use the `aida dev` activation flow). `upgrade` is for *installed* aida, not the one you're hacking on.
+
+**Chains with** — the counterpart to `aida release`; `--check` pairs with the statusline's version-staleness hint.
+
+---
+
 ## Where to go next
 
 That's the contributor surface. If you came here by accident and you're a *user*, not a developer of AIDA:

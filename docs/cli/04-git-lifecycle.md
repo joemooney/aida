@@ -171,6 +171,22 @@ Here's the thing raw git doesn't know about your AIDA project: **there are two b
 
 ---
 
+### `aida changelog`
+
+**One line** — generate `CHANGELOG.md` mechanically from git tags + the spec graph.
+
+**Mental model.** The changelog is *derived*, not hand-written: `changelog` walks `v*` tags as release boundaries, scans the commits between them for `(SPEC-ID)` trailers, classifies each referenced spec (Features / Fixes / Documentation / Infrastructure / Internal / Other), and renders one structured section per release. Same git state → byte-identical output, so it's safe to regenerate any time.
+
+**Reach for it when** — cutting a release (it's part of the release flow), or any time you want the changelog to reflect what actually merged. `refresh` writes the file (idempotent); `generate` prints to stdout/`--out`; `preview` shows only the `[Unreleased]` section.
+
+**Don't reach for it when** — you want to *hand-edit* prose into the changelog — it's mechanically regenerated, so manual edits get overwritten. If a release needs narrative, that belongs in release notes, not `CHANGELOG.md`.
+
+**Gotchas.** The classification depends on the `(SPEC-ID)` trailer convention — commits without a trailer land in "Other." This is one more reason the commit-trailer discipline matters.
+
+**Chains with** — driven by `aida release` (which regenerates it as part of the version bump); reads the same `(SPEC-ID)` trailers that earn Done→Completed.
+
+---
+
 ## Where to go next
 
 You now own the back half of the lifecycle and the two-leg sync model. Next:
