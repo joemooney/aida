@@ -190,6 +190,22 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ---
 
+### `aida record`
+
+**One line** — inspect or prune the durable per-spec **processing record** — the audit trail of *what was done and why*, captured at completion.
+
+**Mental model.** When a spec reaches completion, AIDA can persist a **processing record** on it: a durable note of what the work actually did and the reasoning behind it — distinct from the `history:` array (which logs *field transitions*) and from git linkage (which shows *commits*). The processing record is the *narrative audit* — the "why," captured while the context is fresh. `aida record list` reads it (for one spec, or every spec carrying one); the block also surfaces inside `aida show`. `aida record prune` trims records to save space **without** touching the spec or its history.
+
+**Reach for it when** — you (or a reviewer/auditor) want the *reasoning trail* behind a completed spec — what a drain decided and why — not just the diff. It's the substrate behind the "explain intent, not just surface" goal: a place the *why* lives after the work is done.
+
+**Don't reach for it when** — you want *field-change* history (that's `aida history --events`) or the *commits/files* a spec touched (that's `aida show`'s git linkage). Record is the narrative layer above both.
+
+**Gotchas.** `record prune` is **propose-by-default** — it shows what it *would* trim and only writes with `--apply`. So a bare `aida record prune` is safe to run as a preview. Pruning loses the narrative, not the spec or its transition history.
+
+**Chains with** — populated at completion (the audit the governance/intent story leans on); read via `record list` or inline in `aida show`; complements `aida history` (transitions) and `aida digest` (the outward-facing surface-change summary).
+
+---
+
 ## Where to go next
 
 You now have every read-only lens: live orientation (`status`), the audit trail (`history`), the narrative write-up (`digest`), the configuration report (`report`), the telemetry surfaces (`usage` / `metrics`), the single-spec drill-down (`why`), and the docs launcher (`user-guide`). The questions they answer route back into the rest of the manual:

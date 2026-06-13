@@ -233,6 +233,22 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 ---
 
+### `aida defer` · `aida undefer`
+
+**One line** — park a spec as *primed, conditional* work — hidden from the default view, but not filed away like archive.
+
+**Mental model.** `defer` is a **view-level flag, orthogonal to status** (it doesn't touch the lifecycle state machine — same as archive). The distinction from archive is *direction in time*: **archive is retrospective** ("done with this, filed"); **defer is prospective** ("not now, but bring it back when X happens"). That `X` is the whole point — `--until "<condition>"` records the **revisit trigger** (free text, e.g. `--until "when the slice verb ships"`), and it's the one thing that separates a deferred spec from an archived one. Deferred rows drop out of `aida list` / `search` / `history` by default; `--deferred` shows only them, `--all` shows the union. `undefer` clears the flag (and its trigger) so the spec rejoins the default views.
+
+**Reach for it when** — a spec is real and approved but *blocked on a future condition you can't act on yet* (an upstream release, a decision pending elsewhere) and you want it out of your working view without pretending it's done. Record the trigger so future-you knows what brings it back.
+
+**Don't reach for it when** — the spec is *finished* (that's the lifecycle → Completed, then `archive` for the long tail); or it's blocked by *another spec* (use a `BlockedBy` edge — the graph tracks that precisely, and the pickability gate already excludes it). Defer is for conditions the graph *can't* express as an edge.
+
+**Gotchas.** Because defer is a view-flag, a deferred spec keeps its status — a deferred Approved spec is still Approved, just hidden. And like archive, it won't show in default `list` until you `undefer` (or pass `--deferred`/`--all`) — the same "where did my spec go?" surprise, so reach for `--all` when something's missing.
+
+**Chains with** — `defer --until` parks it; the trigger condition is your reminder; `undefer` (or a future trigger-aware sweep) brings it back to the ready set.
+
+---
+
 ## Where to go next
 
 You can now shape, query, and groom the graph. Next:
