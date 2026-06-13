@@ -13,12 +13,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:49:20.449952526Z
-modified_at: 2026-06-13T17:19:44.798868022Z
+modified_at: 2026-06-13T17:26:00.217620012Z
 req_type: Bug
 tags:
 - cli-consistency
 - from-manual-audit
 - papercut
+comments:
+- id: 019ec204-e119-7ab0-9760-907ee435d121
+  author: joe
+  content: Commit 74101fd27 references this requirement
+  created_at: 2026-06-13T17:26:00.217620012Z
+  modified_at: 2026-06-13T17:26:00.217620012Z
 decision_request:
   question: aida agent pause only sets a dispatch marker; it does NOT pause the process (stop terminates). The verb misleads. How to fix?
   choices:
