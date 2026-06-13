@@ -1,0 +1,17 @@
+id: 019ec282-1102-77a1-8c09-57c410d51fbf
+spec_id: STORY-608
+agreed_id: STORY-608
+title: 'Glossary chapter: surface aida docs glossary (generated) as a book page'
+description: 'The glossary already exists as aida docs glossary (machinery + lifecycle vocabulary, sourced from docs/aida/discipline/glossary.yaml + machinery-glossary.md). Surface it as a Glossary chapter in the AIDA Book — GENERATED, not hand-written (ADR-5 principle): a build step emits the markdown from aida docs glossary so it never drifts. Acceptance: a Glossary page renders in the book from the generated source; regenerating after a vocabulary edit changes the page; no hand-maintained term list. Consider also folding lifecycle-vocabulary terms (committed/pushed/merged/completed/released) since the CLI manual leans on them.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T19:42:44.482103037Z
+modified_at: 2026-06-13T19:42:44.482103037Z
+req_type: Story
+tags:
+- docs
+- docs-architecture
+- glossary
+- parent-epic:docbook
