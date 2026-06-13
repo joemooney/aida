@@ -17,12 +17,12 @@ description: |-
   5. Keystone-autonomy posture: opt-in by invocation (never on by default); the forked advisor is scoped to mechanical + escalate (no auto-merge / destructive); default-safe.
 
   Deferred follow-ups (next, supervised): event-driven firing on incoming MAIL (vs timer) — needs STORY-585's surfacing; auto-act-on-bounded policy; cloud/durable supervisor for machine-asleep. trace:SPIKE-11
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T05:03:32.040748675Z
-modified_at: 2026-06-13T05:13:37.901176778Z
+modified_at: 2026-06-13T05:50:00.336980657Z
 req_type: Story
 tags:
 - advisor
@@ -36,3 +36,15 @@ comments:
   content: Commit 73235eca7 references this requirement
   created_at: 2026-06-13T05:13:37.901176778Z
   modified_at: 2026-06-13T05:13:37.901176778Z
+history:
+- id: 019ebf87-ad27-7dc0-8b8c-8b905cd078fd
+  author: aida-auto-bump
+  timestamp: 2026-06-13T05:50:00.487778765Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T05:50:00.336980657Z
+  completion_sha: 519639141b3e1bd5c984da44deb578d1238e0d01
