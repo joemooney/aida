@@ -1,0 +1,19 @@
+id: 019ec20a-ffbd-7963-843e-9d5c76f84ab0
+spec_id: BUG-529
+agreed_id: BUG-529
+title: aida queue remove accepts --for <role> but ignores it — removes the user's entry regardless of role filter
+description: 'Advisor hit (2026-06-13) while re-routing mis-queued specs: ''aida queue remove <id> --for advisor'' removed the spec from the IMPLEMENTER queue too (the entry I had just added with ''queue add --for implementer''). The --for flag is accepted on remove but not used as a filter — remove is role-blind and deletes the user-keyed entry for that spec regardless of which role''s queue you named. Consequence: you cannot surgically remove a spec from one role''s queue when it''s queued for multiple; and a remove aimed at one queue silently empties another. Fix: honor --for on ''queue remove'' (only remove the entry whose role matches), consistent with ''queue add --for''. Part of the queue --for consistency cluster (BUG-527 show-visibility, BUG-528 add --queue routing). trace:relates:BUG-528 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T17:32:41.277930304Z
+modified_at: 2026-06-13T17:32:41.277930304Z
+req_type: Bug
+tags:
+- aida:queue
+- cli-consistency
+- from-friction
+- papercut
+- queue-routing
+- relates:BUG-528
