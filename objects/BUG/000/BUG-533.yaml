@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T18:49:30.548592468Z
-modified_at: 2026-06-13T18:49:30.548592468Z
+modified_at: 2026-06-13T19:12:29.406735819Z
 req_type: Bug
 tags:
 - aida:config
@@ -27,3 +27,9 @@ tags:
 - papercut
 - relates:TASK-786
 - security
+comments:
+- id: 019ec266-5ede-7512-a9fe-a2f76c1b2934
+  author: joe
+  content: Commit e13073c8e references this requirement
+  created_at: 2026-06-13T19:12:29.406735819Z
+  modified_at: 2026-06-13T19:12:29.406735819Z
