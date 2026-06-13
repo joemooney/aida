@@ -23467,7 +23467,17 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let merged = merge_dedup(&local, &canonical);
             let watermarks = mailbox_store::read_all_watermarks(project_root)?;
-            let summaries = aida_core::mailbox::agent_summaries(&merged, &watermarks);
+            // trace:BUG-513 | ai:codex
+            let known_agents: Vec<String> = list_roles(project_root)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|role| role.name)
+                .collect();
+            let summaries = aida_core::mailbox::agent_summaries_for_agents(
+                &merged,
+                &watermarks,
+                known_agents.iter().map(String::as_str),
+            );
             if summaries.is_empty() {
                 println!("{} no agents have mail", "✉".dimmed());
                 return Ok(());

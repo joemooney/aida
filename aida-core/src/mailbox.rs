@@ -159,10 +159,25 @@ pub fn agent_summaries(
     messages: &[Message],
     watermarks: &std::collections::HashMap<String, i64>,
 ) -> Vec<AgentMailSummary> {
+    agent_summaries_for_agents(messages, watermarks, std::iter::empty::<&str>())
+}
+
+/// Build the operator overview, seeded with externally-known agents (for
+/// example the role registry). Broadcasts are delivered lazily, so a known
+/// agent with no materialized inbox still has pending broadcast mail.
+// trace:BUG-513 | ai:codex
+pub fn agent_summaries_for_agents<'a, I>(
+    messages: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+    known_agents: I,
+) -> Vec<AgentMailSummary>
+where
+    I: IntoIterator<Item = &'a str>,
+{
     use std::collections::BTreeSet;
     // Known agents = every explicit direct-recipient + every sender (so an
     // agent that has only ever sent still shows once it receives a broadcast)
-    // + every agent with a recorded watermark.
+    // + every agent with a recorded watermark + externally-known recipients.
     let mut agents: BTreeSet<String> = BTreeSet::new();
     for m in messages {
         agents.insert(m.from.clone());
@@ -172,6 +187,12 @@ pub fn agent_summaries(
     }
     for k in watermarks.keys() {
         agents.insert(k.clone());
+    }
+    for agent in known_agents {
+        let trimmed = agent.trim();
+        if !trimmed.is_empty() {
+            agents.insert(trimmed.to_string());
+        }
     }
 
     let mut out: Vec<AgentMailSummary> = Vec::new();
@@ -387,5 +408,18 @@ mod tests {
         let rows = agent_summaries(&msgs, &wm);
         let agents: Vec<&str> = rows.iter().map(|r| r.agent.as_str()).collect();
         assert_eq!(agents, vec!["claude"], "only the recipient is listed");
+    }
+
+    // trace:BUG-513 | ai:codex
+    #[test]
+    fn agent_summaries_for_agents_lists_broadcasts_for_unmaterialized_known_inboxes() {
+        let msgs = vec![msg("1", "t", "codex", Recipient::Broadcast, 10)];
+        let wm = std::collections::HashMap::new();
+        let rows = agent_summaries_for_agents(&msgs, &wm, ["advisor"]);
+        let agents: Vec<&str> = rows.iter().map(|r| r.agent.as_str()).collect();
+
+        assert_eq!(agents, vec!["advisor"]);
+        assert_eq!(rows[0].total, 1);
+        assert_eq!(rows[0].unread, 1);
     }
 }
