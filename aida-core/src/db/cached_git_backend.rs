@@ -341,6 +341,17 @@ impl DatabaseBackend for CachedGitBackend {
         self.inner.queue_remove(user_id, requirement_id)
     }
 
+    // trace:BUG-529 | ai:claude
+    fn queue_remove_for_role(
+        &self,
+        user_id: &str,
+        requirement_id: &Uuid,
+        role: Option<&str>,
+    ) -> Result<()> {
+        self.inner
+            .queue_remove_for_role(user_id, requirement_id, role)
+    }
+
     fn queue_reorder(&self, user_id: &str, items: &[(Uuid, i64)]) -> Result<()> {
         self.inner.queue_reorder(user_id, items)
     }

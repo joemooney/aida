@@ -435,6 +435,25 @@ pub trait DatabaseBackend: Send + Sync {
         anyhow::bail!("Queue not supported for this backend")
     }
 
+    /// Removes an entry from a user's queue, optionally scoped to a single
+    /// routing role. When `role` is `Some(r)`, only the entry whose
+    /// `for_role` matches `r` (case-insensitive, after role-name
+    /// canonicalization) is removed — so a spec queued for several roles can
+    /// be surgically dropped from one queue without emptying the others.
+    /// When `role` is `None`, removal is role-blind (every entry for the
+    /// requirement is dropped), matching `queue_remove`. The default impl
+    /// ignores the role filter and delegates to `queue_remove`; backends
+    /// that store `for_role` override this.
+    // trace:BUG-529 | ai:claude
+    fn queue_remove_for_role(
+        &self,
+        user_id: &str,
+        requirement_id: &Uuid,
+        _role: Option<&str>,
+    ) -> Result<()> {
+        self.queue_remove(user_id, requirement_id)
+    }
+
     /// Reorders queue entries by updating positions
     fn queue_reorder(&self, _user_id: &str, _items: &[(Uuid, i64)]) -> Result<()> {
         anyhow::bail!("Queue not supported for this backend")

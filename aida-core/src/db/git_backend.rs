@@ -714,6 +714,20 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_remove(&self, user_id: &str, requirement_id: &uuid::Uuid) -> Result<()> {
+        self.queue_remove_for_role(user_id, requirement_id, None)
+    }
+
+    // BUG-529: honor an optional routing-role filter so `aida queue remove
+    // <id> --for <role>` drops only the entry queued for that role, leaving a
+    // sibling entry (same spec queued for a different role) intact. With
+    // `role == None` this is the historical role-blind remove.
+    // trace:BUG-529 | ai:claude
+    fn queue_remove_for_role(
+        &self,
+        user_id: &str,
+        requirement_id: &uuid::Uuid,
+        role: Option<&str>,
+    ) -> Result<()> {
         let path = self
             .root
             .join("registry/queues")
@@ -723,7 +737,21 @@ impl DatabaseBackend for GitBackend {
         }
         // trace:TASK-712 — abort on parse error rather than overwrite with [].
         let mut entries = Self::read_queue_file(&path)?;
-        entries.retain(|e| e.requirement_id != *requirement_id);
+        entries.retain(|e| {
+            // Keep entries that don't match the requirement at all.
+            if e.requirement_id != *requirement_id {
+                return true;
+            }
+            // Requirement matches: drop it only if the role filter also
+            // matches (or there's no role filter). trace:BUG-529 | ai:claude
+            match role {
+                None => false,
+                Some(r) => !e
+                    .for_role
+                    .as_deref()
+                    .is_some_and(|er| er.eq_ignore_ascii_case(r)),
+            }
+        });
         let yaml = serde_yaml::to_string(&entries)?;
         std::fs::write(&path, yaml)?;
         self.auto_commit_paths(
@@ -1047,6 +1075,83 @@ mod tests {
         let ids: Vec<_> = entries.iter().map(|e| e.requirement_id).collect();
         assert!(ids.contains(&e1.requirement_id));
         assert!(ids.contains(&e2.requirement_id));
+    }
+
+    // BUG-529: `queue_remove_for_role` with a role filter drops ONLY the entry
+    // queued for that role; a sibling entry for the same spec queued for a
+    // different role survives. The role-blind path (role == None) still wipes
+    // every entry for the spec. trace:BUG-529 | ai:claude
+    #[test]
+    fn test_queue_remove_for_role_filters_by_role() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Same spec queued twice for the same user, once per role. (queue_add
+        // upserts by requirement_id, so write the two-entry state directly —
+        // it can arise via cross-machine merge or manual queue edits.)
+        let spec_id = uuid::Uuid::new_v4();
+        let mut impl_entry = sample_queue_entry("dave", 1000);
+        impl_entry.requirement_id = spec_id;
+        impl_entry.for_role = Some("implementer".to_string());
+        let mut adv_entry = sample_queue_entry("dave", 2000);
+        adv_entry.requirement_id = spec_id;
+        adv_entry.for_role = Some("advisor".to_string());
+        let queues_dir = root.join("registry/queues");
+        std::fs::create_dir_all(&queues_dir).unwrap();
+        std::fs::write(
+            queues_dir.join("dave.yaml"),
+            serde_yaml::to_string(&vec![impl_entry, adv_entry]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(backend.queue_list("dave", false).unwrap().len(), 2);
+
+        // Remove ONLY the advisor entry — implementer entry must remain.
+        backend
+            .queue_remove_for_role("dave", &spec_id, Some("advisor"))
+            .unwrap();
+        let after = backend.queue_list("dave", false).unwrap();
+        assert_eq!(after.len(), 1, "implementer entry must survive");
+        assert_eq!(after[0].for_role.as_deref(), Some("implementer"));
+
+        // Case-insensitive: a differently-cased role still matches the
+        // canonical stored value.
+        backend
+            .queue_remove_for_role("dave", &spec_id, Some("IMPLEMENTER"))
+            .unwrap();
+        assert!(backend.queue_list("dave", false).unwrap().is_empty());
+    }
+
+    // BUG-529: role == None preserves the historical role-blind remove —
+    // every entry for the spec is dropped. trace:BUG-529 | ai:claude
+    #[test]
+    fn test_queue_remove_for_role_none_is_role_blind() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let spec_id = uuid::Uuid::new_v4();
+        let mut a = sample_queue_entry("erin", 1000);
+        a.requirement_id = spec_id;
+        a.for_role = Some("implementer".to_string());
+        let mut b = sample_queue_entry("erin", 2000);
+        b.requirement_id = spec_id;
+        b.for_role = Some("advisor".to_string());
+        let queues_dir = root.join("registry/queues");
+        std::fs::create_dir_all(&queues_dir).unwrap();
+        std::fs::write(
+            queues_dir.join("erin.yaml"),
+            serde_yaml::to_string(&vec![a, b]).unwrap(),
+        )
+        .unwrap();
+
+        backend
+            .queue_remove_for_role("erin", &spec_id, None)
+            .unwrap();
+        assert!(
+            backend.queue_list("erin", false).unwrap().is_empty(),
+            "role-blind remove drops every entry for the spec"
+        );
     }
 
     // trace:TASK-712 — an empty / whitespace-only queue file is the empty queue,
