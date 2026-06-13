@@ -1,0 +1,19 @@
+id: 019ec218-8bcc-7562-90b5-1475297e2af6
+spec_id: BUG-530
+agreed_id: BUG-530
+title: 'burndown run blessed-set is stale/inconsistent: reported draining Completed + unqueued specs (TASK-778, BUG-520), violating its own contract'
+description: 'Operator+advisor hit (2026-06-13): ''aida burndown run'' printed ''2 blessed spec(s) will drain: TASK-778, BUG-520'' — but BOTH are status=Completed AND in NO queue (verified: ''queue list --for implementer'' shows neither). The command''s own --help says it ''Drains ONLY the queued + pickable set ... never an unqueued spec.'' Seconds later ''burndown run --dry-run'' reported a DIFFERENT set (4: TASK-791, BUG-528, BUG-527, BUG-529), and ''burndown plan'' had reported 7 — three inconsistent answers within seconds. No active leases existed at the time, so a live drain consuming the set does not explain it. Likely cause: the blessed-set selection reads a STALE projection (the .aida/cache.db cache, or a snapshot that wasn''t refreshed) and/or queue entries are NOT dequeued when a spec auto-completes via ''aida pull'' — so completed specs linger as ''blessed''. Fix: (1) compute the blessed set from a fresh/consistent read; (2) exclude terminal-status (Completed/Rejected) specs from the blessed set defensively; (3) dequeue on auto-complete so a completed spec cannot remain queued. Reliability bug in the autonomy keystone — fix at the keyboard, not via unsupervised drain. trace:relates:BUG-528 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T17:47:29.100804187Z
+modified_at: 2026-06-13T17:47:29.100804187Z
+req_type: Bug
+tags:
+- aida:burndown
+- burndown
+- from-friction
+- queue-routing
+- relates:BUG-528
+- reliability
