@@ -1,0 +1,29 @@
+id: 019ec1a3-9746-76e0-b206-0ee610c7385f
+spec_id: TASK-786
+agreed_id: TASK-786
+title: 'docs: consolidated environment-variables reference (docs/environment-variables.md) — all AIDA_* vars, one chapter'
+description: |-
+  Operator (2026-06-13): the ~58 AIDA_* env vars are documented piecemeal (CLAUDE.md mentions + per-feature docs); no single reference. Create docs/environment-variables.md as the canonical chapter. For EACH var: what it does, default, who sets it (user / launch-path / dev), and scope. Group them, e.g.:
+  - Identity/session: AIDA_SESSION_ROLE, AIDA_USER, AIDA_AGENT_TYPE, AIDA_AGENT_NAME, AIDA_AI_TOOL, AIDA_AUTHOR, AIDA_SESSION_ID/PROJECT/SCOPE, AIDA_ADVISOR_SESSION_UUID, AIDA_AGENT_REGISTRY_TOKEN, AIDA_REGISTRY_PATH
+  - Autonomy/lifecycle: AIDA_ZEN, AIDA_HEADLESS, AIDA_CALIBRATE, AIDA_CONTAINED, AIDA_LIFECYCLE_TAGS, AIDA_NO_HUMAN_ACKNOWLEDGED, AIDA_PERMISSION_MODE, AIDA_AUTO_FOLLOWUPS, AIDA_AUTO_ARCHIVE, AIDA_AUTO_BUMP, AIDA_AUTO_MERGE_GATE, AIDA_ALLOW_INTERMEDIATE_ONLY, AIDA_HINTS, AIDA_WITH_PLAN, AIDA_CAPTURE_INTERFACE_CHANGES, AIDA_PR_SHIP_NO_CI_WAIT, AIDA_TEE_HEADLESS
+  - Storage/cache: AIDA_STORE, AIDA_HOME, AIDA_CACHE_LOCK_STALE_SECS, AIDA_CACHE_RETRY_COUNT, AIDA_CACHE_RETRY_MS, AIDA_DOCTOR_COMPLETED_SINCE
+  - Git/fetch/forge/tokens: AIDA_GITHUB_TOKEN, AIDA_GITLAB_TOKEN, AIDA_JIRA_TOKEN, AIDA_PUSH_DEFAULT, AIDA_BG_FETCH(+_INTERVAL_SECS), AIDA_FETCH_FRESHNESS_SECS, AIDA_SERVER, AIDA_MCP_PROFILE
+  - Telemetry: AIDA_TELEMETRY
+  - Exit/timing: AIDA_EXIT_GRACE_MS, AIDA_EXIT_POLL_MS
+  - Dev/test (internal): AIDA_DEV_*, AIDA_TEST_*, AIDA_SHELL_WRAPPER, AIDA_DEBUG_*, AIDA_INIT_COMMIT_SCAFFOLD, AIDA_REVIEW_VERDICT_FILE
+
+  CRITICAL: the inventory above came from one grep pattern (env::var/env_nonempty/var_os). Re-grep ALL read patterns to catch any missed (AIDA_COMMIT_STRICT, AIDA_SKIP_XPLAT_CHECK, AIDA_TENANT/presence vars etc. are referenced elsewhere). Verify each default by reading the call site — do NOT guess.
+
+  Anti-drift (stretch): add a test that asserts every AIDA_* var read in the code appears in the doc (substrate-as-bouncer — keeps the reference from drifting). Add a CLAUDE.md one-line pointer + the convention 'new AIDA_* var -> document it here'. trace:STORY-587
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T15:39:44.326619875Z
+modified_at: 2026-06-13T15:39:44.326619875Z
+req_type: Task
+tags:
+- aida:cli
+- docs
+- reference
+- relates:STORY-587
