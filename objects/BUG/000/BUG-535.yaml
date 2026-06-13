@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:12:07.189828941Z
-modified_at: 2026-06-13T20:12:07.189828941Z
+modified_at: 2026-06-13T20:44:48.525248745Z
 req_type: Bug
 tags:
 - aida:human
@@ -17,3 +17,9 @@ tags:
 - from-friction
 - papercut
 - relates:BUG-532
+comments:
+- id: 019ec2ba-e40d-7ae2-a20a-fcadbed11e95
+  author: joe
+  content: Commit aa7d44704 references this requirement
+  created_at: 2026-06-13T20:44:48.525248745Z
+  modified_at: 2026-06-13T20:44:48.525248745Z
