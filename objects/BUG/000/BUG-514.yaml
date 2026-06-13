@@ -11,10 +11,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:35:42.939617016Z
-modified_at: 2026-06-13T02:35:42.939617016Z
+modified_at: 2026-06-13T03:10:16.223768082Z
 req_type: Bug
 tags:
 - aida:burndown
 - papercut
 - relates:STORY-568
 - severity:cosmetic
+comments:
+- id: 019ebef5-6e9f-7990-bab6-2fa19b6564a4
+  author: mcp
+  content: 'Implemented in draft PR #810. Verification passed: cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli.'
+  created_at: 2026-06-13T03:10:16.223764081Z
+  modified_at: 2026-06-13T03:10:16.223764081Z
