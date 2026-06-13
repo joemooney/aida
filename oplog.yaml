@@ -17559,5 +17559,22 @@ operations:
   timestamp: 2026-06-13T16:13:12.748536061Z
   kind: !SetStatus
     status: Completed
-clock: 1732
+- id: 019ec1c6-7e7d-7f82-9712-cf430e17828a
+  target_id: 019ebf9e-5f67-7311-a188-c718502712d3
+  author: aida
+  node_id: '1'
+  lamport: 1733
+  timestamp: 2026-06-13T16:17:51.741365703Z
+  kind: !SetDescription
+    description: |-
+      The drift-guard (verify-manual.py exists as the bootstrap) makes the CLI manual maintainable rather than a one-time liability. Per ADR-5, finalize it as the ENFORCING CI gate:
+
+      1. AUTHORITY = clap command tree (the complete source), NOT `aida help-all` (curatable — omits rules/doctor/defer per BUG-520). Derive the command set from clap so no command can silently escape the guard. (Today verify-manual.py parses help-all; switch it to the clap tree — e.g. a `--all-commands`/JSON dump, or clap_complete introspection.)
+      2. CI WIRING = the enforcing gate. A PR adding/renaming a command fails CI unless it has a manual entry. Substrate-as-bouncer for doc-drift.
+      3. FIX the subcommand blind-spot: currently only checks flags against the PARENT command --help, producing false-positive WARNs for subcommand flags. Descend into `aida <cmd> <sub> --help` so flag-accuracy is real, not noisy.
+      4. KEEP the SPEC-ID-leak check (manual must carry no STORY-x noise — already added).
+      5. EXTEND (ADR-5 endgame): assert every surface-changing spec's interface_changes is reflected in the docs — catches a spec that moved the surface without updating intent. (Gated on interface_changes being populated — STORY-542; forward-only.)
+
+      Acceptance: CI fails on an undocumented clap command; no false-positive subcommand WARNs; SPEC-ID leak fails; (later) interface_changes-vs-docs reflection check. On branch cli-manual.
+clock: 1733
 node_id: '1'
