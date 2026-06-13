@@ -62521,6 +62521,37 @@ mod in_flight_linkage_integration_tests {
         ));
     }
 
+    // BUG-539: `aida review <SPEC>` must short-circuit on a terminal/merged
+    // spec rather than re-running a full review + Approve/Request-changes menu.
+    #[test]
+    fn review_terminal_noop_short_circuits_completed_and_rejected() {
+        assert!(
+            review_is_terminal_noop(&RequirementStatus::Completed),
+            "Completed (merged) work has nothing to review"
+        );
+        assert!(
+            review_is_terminal_noop(&RequirementStatus::Rejected),
+            "Rejected work has nothing to review"
+        );
+    }
+
+    #[test]
+    fn review_terminal_noop_leaves_pre_merge_states_reviewable() {
+        // Done is the normal pre-review state — must NOT short-circuit.
+        for s in [
+            RequirementStatus::Draft,
+            RequirementStatus::Approved,
+            RequirementStatus::Planned,
+            RequirementStatus::InProgress,
+            RequirementStatus::Done,
+        ] {
+            assert!(
+                !review_is_terminal_noop(&s),
+                "{s:?} still has a live review surface"
+            );
+        }
+    }
+
     /// TASK-241: a spec nothing references — no commits, no trace files.
     #[test]
     fn linkage_for_never_touched_spec_is_empty() {
@@ -92398,6 +92429,21 @@ fn acquire_review_lease(
     Ok(ReviewLeaseGuard { path })
 }
 
+/// BUG-539: a spec already in a terminal/merged state has no live review
+/// surface — running a full review + the Approve / Request-changes menu over
+/// it is at best confusing and at worst lets Request-changes → `aida queue
+/// rework` disrupt already-merged work. `Completed` (merged to the default
+/// branch) is the authoritative signal; `Rejected` is likewise terminal and
+/// has nothing to review. Keep this a plain `//`-doc on a non-clap fn so the
+/// trace marker can't leak into `--help`.
+// trace:BUG-539 | ai:claude
+fn review_is_terminal_noop(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Completed | RequirementStatus::Rejected
+    )
+}
+
 /// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
 /// counterpart to `aida queue work`. Resolves the spec's review surface,
 /// runs the existing headless reviewer tier (`/aida-review`) over the diff
@@ -92435,6 +92481,58 @@ fn handle_review_spec(
     let ids = vec![spec_id.clone()];
     let linkage = collect_git_linkage(project_root, &ids);
     let forge = crate::forge::resolve_forge_kind(project_root);
+
+    // BUG-539: short-circuit a spec already in a terminal/merged state. When
+    // the spec is Completed (work merged to the default branch) — or Rejected
+    // — a full review + the Approve / Request-changes menu is at best
+    // confusing and at worst lets the Request-changes → `aida queue rework`
+    // path disrupt already-merged work. Detect it up front and report instead
+    // of reviewing. We key off status as the authoritative signal — git-linkage
+    // squash-PR parsing can miss the merge — and enrich the message with the
+    // merge commit / PR number from linkage when available. At most we offer a
+    // read-only `git show` of the merged diff. trace:BUG-539 | ai:claude
+    if review_is_terminal_noop(&req.status) {
+        let change_noun = forge.change_noun();
+        let merged = matches!(req.status, RequirementStatus::Completed);
+        let mut details: Vec<String> = Vec::new();
+        if let Some((_, short, _)) = linkage.commits.first() {
+            details.push(format!("commit {short}"));
+        }
+        if let Some(pr) = linkage.shipped_pr {
+            details.push(format!("{change_noun}-{pr}"));
+        }
+        let detail_suffix = if details.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", details.join(", "))
+        };
+        let headline = if merged {
+            "already merged/completed — nothing to review"
+        } else {
+            "rejected — nothing to review"
+        };
+        println!(
+            "  {} {}{}",
+            "Surface".bold(),
+            headline.yellow(),
+            detail_suffix.dimmed()
+        );
+        if merged {
+            if let Some((full, _, _)) = linkage.commits.first() {
+                println!(
+                    "  {} to see the merged diff: {}",
+                    "↳".dimmed(),
+                    format!("git show {full}").cyan()
+                );
+            }
+            println!(
+                "  {} if it genuinely needs another look, {}.",
+                "↳".dimmed(),
+                format!("aida queue rework {spec_id}").cyan()
+            );
+        }
+        return Ok(());
+    }
 
     // Resolve the change lookup only when there's an in-flight branch — the
     // shipped / local cases never touch the forge.
