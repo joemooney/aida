@@ -8,10 +8,23 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T23:54:08.521304618Z
-modified_at: 2026-06-12T23:54:08.521304618Z
+modified_at: 2026-06-13T03:27:23.653809519Z
 req_type: Story
 tags:
 - aida:cache
 - deferred:revisit-after-wal
 - from:STORY-543
 - ux
+comments:
+- id: 019ebf05-1c05-7fb2-9a59-c6b39efaabd4
+  author: joe
+  content: |-
+    Re-validation (2026-06-12, the operator-deferred 'revisit-after-wal' gate): STORY-580 (WAL cache reads, PR #802) has now MERGED — and it largely obviates this spec as written. Evidence from aida-core/src/db/cache.rs:
+
+    1. The steady-state READ path (list_summaries / search / show) uses a persistent pooled connection (self.conn.lock()), NOT the with_cache_retry ladder. Under WAL, a reader gets the last-committed snapshot and never blocks behind a writer (STORY-580's own test: cache_reader_sees_last_committed_snapshot_during_write). So the contention this spec targets — 'reader errors after the retry ladder exhausts' — no longer happens on the dominant read path. WAL already delivers the 'return last-readable rows' behavior natively, without a stale flag.
+
+    2. The retry+error ladder that still errors with 'run aida doctor heal stale-locks' is used by open_connection_with_retry and with_cache_write (rebuild/upsert/delete/schema). Fail-soft 'return degraded rows + stale flag' is not semantically applicable to a WRITE (a rebuild/upsert returns no rows to degrade) or to cache OPEN (no rows yet).
+
+    Recommendation: REJECT or PARK as obviated-by-WAL. The residual value (a stale flag for the rare checkpoint-race read-BUSY window) is marginal and below this Low-priority spec's bar — 'may not be worth it if error-with-guidance is fine' is now answered: yes, error-with-guidance is fine for the writer/open paths, and reads no longer error. If belt-and-suspenders is still wanted, the only honest residual slice is a stale flag on list_summaries for the rare WAL-checkpoint BUSY — a much smaller scope than the original L3 proposal. Did NOT implement speculatively against the operator deferral.
+  created_at: 2026-06-13T03:27:23.653809519Z
+  modified_at: 2026-06-13T03:27:23.653809519Z
