@@ -8,9 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:41:51.960195662Z
-modified_at: 2026-06-12T22:12:40.991142164Z
+modified_at: 2026-06-13T01:47:16.439993096Z
 req_type: Story
 tags:
+- batch:repositioning
 - docs
 - parent:EPIC-39
 - repositioning
