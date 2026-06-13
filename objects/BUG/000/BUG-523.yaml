@@ -3,12 +3,12 @@ spec_id: BUG-523
 agreed_id: BUG-523
 title: Real SPEC-IDs leak into --help output (aida review shows STORY-553, digest STORY-541, why STORY-543)
 description: 'Convention: SPEC-IDs stay out of user-facing output including help text (trace markers are // not ///). But the --help for aida review / digest / why embeds real recent SPEC-IDs (STORY-553 / STORY-541 / STORY-543) — almost certainly a /// doc-comment that referenced the implementing spec, or a leaked trace: marker. (done/lint use TASK-1/STORY-42, obviously-illustrative and fine.) Fix: scrub the real refs from those doc-comments; keep any example IDs obviously-fake. Operator flagged this directly 2026-06-12 while reviewing the CLI manual effort (EPIC-40).'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:50:07.175644524Z
-modified_at: 2026-06-13T15:56:54.362528332Z
+modified_at: 2026-06-13T16:13:12.725593154Z
 req_type: Bug
 tags:
 - cli-consistency
