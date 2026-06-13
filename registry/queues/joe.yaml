@@ -913,3 +913,10 @@
   added_at: 2026-06-13T15:14:56.235737475Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 019ebfa5-ba9b-7660-9b08-24f636317a74
+  position: 440000
+  added_by: joe
+  added_at: 2026-06-13T15:15:02.899567126Z
+  for_role: implementer
+  added_by_machine: imac
