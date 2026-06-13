@@ -1,0 +1,19 @@
+id: 019ec33e-4b25-7943-8f59-17493a80e8dd
+spec_id: STORY-612
+agreed_id: STORY-612
+title: 'Sandbox slice 2: OS boundary around the whole claude -p process + Firecracker microVM strong-isolation profile'
+description: 'Follow-up to STORY-605/SPIKE-61 (slice 1 — egress allowlist on the contained Bash sandbox — landed in PR #862). Slice 2 is the bigger isolation the research recommended: (a) an OS boundary around the WHOLE ''claude -p'' process (contained mode only sandboxes Claude''s Bash tool, not Edit/Write/MCP/network); (b) the Firecracker-microVM strong-isolation profile for unattended drains (gVisor as the no-/dev/kvm fallback) — the genuinely-differentiated ''local strong isolation'' the competitor scan found missing. Plus the headless default-deny piece (network.allowManagedDomainsOnly via managed settings) that slice 1 documented as a limitation. Keystone-adjacent → keyboard. See docs/competitive-analysis/2026-06-13-sandbox-execution.md. trace:relates:SPIKE-61 trace:relates:STORY-605'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:08:20.133582563Z
+modified_at: 2026-06-13T23:08:20.133582563Z
+req_type: Story
+tags:
+- agent-execution
+- competitive-hole
+- from-strategic
+- parent:SPIKE-61
+- sandbox
+- security
