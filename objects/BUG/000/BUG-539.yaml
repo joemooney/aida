@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:15:14.772835845Z
-modified_at: 2026-06-13T23:15:54.363048412Z
+modified_at: 2026-06-13T23:50:06.054105499Z
 req_type: Bug
 tags:
 - aida:review
@@ -22,3 +22,8 @@ comments:
   content: 'CORRECTION (operator, 2026-06-13): the ''Approve'' option is PRINT-ONLY (''print the merge command'') — it does NOT auto-merge, so picking it on already-merged work is harmless (you just don''t run the printed command). The actual footgun is ''Request changes → aida queue rework'', which WOULD run rework on a Completed spec. So the bug is narrower than first stated: not ''offers to re-merge'' (Approve is inert) but (a) it runs a full review + presents the action menu at all on already-Completed/merged work — confusing — and (b) the Request-changes path is live and could disrupt Completed work. Fix still stands: short-circuit on terminal/merged state before offering the menu.'
   created_at: 2026-06-13T23:15:54.363048412Z
   modified_at: 2026-06-13T23:15:54.363048412Z
+- id: 019ec364-87e6-70a3-a294-998c2d866373
+  author: joe
+  content: Commit 803cf2db6 references this requirement
+  created_at: 2026-06-13T23:50:06.054105499Z
+  modified_at: 2026-06-13T23:50:06.054105499Z
