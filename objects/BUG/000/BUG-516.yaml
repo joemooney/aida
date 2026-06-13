@@ -1,0 +1,17 @@
+id: 019ebf2d-a231-7ea0-a425-ba473302f52b
+spec_id: BUG-516
+agreed_id: BUG-516
+title: aida-generate-types omits InterfaceChanges decl — regen produces types.ts with undefined 'InterfaceChanges', breaks web dashboard type-check
+description: 'STORY-542 added Requirement.interface_changes: Option<InterfaceChanges>, so the generator emits ''interface_changes?: InterfaceChanges'' on the Requirement TS interface — but InterfaceChanges::decl() was never added to the emit list in aida-generate-types/src/main.rs, so the type is referenced but never defined. main''s committed types.ts is stale (predates the field) so it stayed green; ANY ''cargo run -p aida-generate-types'' since produces a types.ts that fails the web-dashboard type-check (TS2304: Cannot find name ''InterfaceChanges''). Surfaced regenerating bindings for STORY-582/STORY-584. Fix: add models::InterfaceChanges::decl() to the vec (done).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T04:11:39.441808375Z
+modified_at: 2026-06-13T04:11:39.441808375Z
+req_type: Bug
+tags:
+- aida:generate-types
+- build
+- ci
+- relates:STORY-542
