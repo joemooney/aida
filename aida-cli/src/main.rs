@@ -32,6 +32,7 @@ mod history;
 mod intake;
 mod integrate;
 mod mailbox_store;
+mod manual;
 mod mcp;
 mod metrics;
 mod network_retry;
@@ -1374,6 +1375,15 @@ fn run() -> Result<()> {
         return handle_changelog_command(cl_cmd);
     }
 
+    // `aida manual <cmd>` only reads the markdown chapters under docs/cli/ —
+    // no store, no cache, no network. Dispatch it before storage init like
+    // changelog. trace:STORY-600 | ai:claude
+    if let Command::Manual { command } = &cli.command {
+        let project_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        return manual::run(command, &project_root);
+    }
+
     // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
     // trace:TASK-113 | ai:claude
     if let Command::Ultraplan {
@@ -2127,6 +2137,7 @@ fn run() -> Result<()> {
             unreachable!("lifecycle is dispatched before storage init")
         }
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
+        Command::Manual { .. } => unreachable!("manual is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
@@ -11173,6 +11184,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             unreachable!("lifecycle is dispatched before storage init")
         }
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
+        Command::Manual { .. } => unreachable!("manual is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
@@ -70908,6 +70920,8 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("metrics", "Agent-lift metrics over telemetry"),
                 ("why", "Explain a spec's current state"),
                 ("user-guide", "Open the user guide in the default browser"),
+                // trace:STORY-600 — the CLI manual's when/why beside --help's what.
+                ("manual", "Print a command's CLI-manual rationale section"),
             ],
         ),
         (
