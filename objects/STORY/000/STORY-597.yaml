@@ -1,0 +1,17 @@
+id: 019ebf9e-5f67-7311-a188-c718502712d3
+spec_id: STORY-597
+agreed_id: STORY-597
+title: 'CLI manual: drift-guard — completeness gate (every help-all command has a manual entry; flag stale entries)'
+description: A script/test (CI-wired) that parses `aida help-all`, asserts every command has an entry in some docs/cli/*.md chapter, and flags any command whose `--help` output changed since its entry was last edited (a checksum or last-touched marker). Fails CI on a missing command (the manual cannot silently omit a command); WARNS on stale prose. This is what makes the manual maintainable rather than a one-time drift liability. On branch cli-manual.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T06:14:47.911828063Z
+modified_at: 2026-06-13T06:14:47.911828063Z
+req_type: Story
+tags:
+- cli-manual
+- docs
+- parent:EPIC-40
+- substrate-as-bouncer
