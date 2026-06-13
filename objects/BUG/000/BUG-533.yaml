@@ -1,0 +1,29 @@
+id: 019ec251-54b4-7153-8642-e8e33070e3a9
+spec_id: BUG-533
+agreed_id: BUG-533
+title: aida config show only renders ID config — expand to the full effective policy surface (agent bypass posture, mailbox, advisor, archive, telemetry, intake, presence)
+description: |-
+  Operator hit (2026-06-13): 'aida config show' prints ONLY the ID/dispenser settings (format, numbering, digits, next number). The whole policy surface is invisible — most notably the AGENT PERMISSION POSTURE ('[agents] bypass' / the --dangerously-skip-permissions equivalent, STORY-495/TASK-698), which is security-relevant: the operator should see 'am I in bypass mode?' at a glance. Also missing: '[mailbox] act_on_mail' (TASK-782), '[advisor] calibration_mode', '[archive] auto_after_days', '[telemetry] enabled', '[intake]' policy, '[presence]' settings.
+
+  ROOT OF THE DRIFT: config is decentralized — IdConfiguration (aida-core/src/models.rs) is the only thing config show knows; the other knobs are read ad-hoc at their own call sites from .aida/config.toml (project) + ~/.aida/agents.toml (global agent posture). No central registry, so every new policy was added without config show learning about it.
+
+  FIX (two slices):
+  1. MVP: expand 'aida config show' to render all known sections, grouped, with EFFECTIVE value + SOURCE (default / project .aida/config.toml / global ~/.aida/agents.toml / env override). Lead with the agent permission posture (security-relevant). This is the runtime complement to docs/environment-variables.md (TASK-786, which lists the AIDA_* overrides) — config show should show the resolved values those docs describe.
+  2. DURABLE (anti-drift): introduce a central policy registry/enumeration that BOTH the readers and 'config show' consume, so a newly-added knob auto-appears in config show (substrate-as-bouncer: the registry makes completeness structural, not a thing to remember). Without this, config show will silently fall behind again — exactly how it got here.
+
+  ACCEPTANCE: 'aida config show' lists every config section with effective value + source; the agent bypass posture is shown prominently; adding a new knob surfaces it without a separate config-show edit (slice 2). trace:from-friction trace:relates:TASK-786
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T18:49:30.548592468Z
+modified_at: 2026-06-13T18:49:30.548592468Z
+req_type: Bug
+tags:
+- aida:config
+- cli-consistency
+- discoverability
+- from-friction
+- papercut
+- relates:TASK-786
+- security
