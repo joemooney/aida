@@ -51827,6 +51827,60 @@ diff --git a/gone.rs b/gone.rs
         assert!(!has_plan_source_ext("no_extension"));
     }
 
+    // trace:TASK-772 | ai:claude
+    /// TASK-772: the `(new)` / `(to create)` annotation after a backticked
+    /// path marks a to-be-created file — missing is OK, already-exists warns,
+    /// and unmarked missing paths still error.
+    #[test]
+    fn plan_verify_marked_new_annotation() {
+        // The marker matcher itself: case-insensitive, optional whitespace,
+        // must be the next thing after the backtick.
+        assert!(plan_path_marked_new(" (new) — to be created"));
+        assert!(plan_path_marked_new("(NEW)"));
+        assert!(plan_path_marked_new("  (To Create) later"));
+        assert!(!plan_path_marked_new(" — purpose (new)"));
+        assert!(!plan_path_marked_new(" (newish)"));
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/exists.rs"), "// here\n").unwrap();
+        std::fs::write(root.join("src/stale.rs"), "// here\n").unwrap();
+
+        let plan = "\
+# Plan: test
+
+## Files (in build-order)
+
+- `src/exists.rs` — existing file, unmarked
+- `src/created_later.rs` (new) — to be created by this work
+- `src/also_later.rs` (to create) — alternate marker form
+- `src/missing.rs` — unmarked missing ref
+- `src/stale.rs` (new) — marked new but already exists
+";
+        let report = compute_plan_report(plan, root);
+        let find = |needle: &str| {
+            report
+                .files
+                .iter()
+                .find(|f| f.msg.contains(needle))
+                .unwrap_or_else(|| panic!("no file finding for {needle}"))
+        };
+
+        // Existing unmarked file: plain OK, unchanged behavior.
+        assert_eq!(find("src/exists.rs").level, PlanFindingLevel::Ok);
+        // Marked-new missing files pass instead of erroring.
+        assert_eq!(find("src/created_later.rs").level, PlanFindingLevel::Ok);
+        assert!(find("src/created_later.rs").msg.contains("marked new"));
+        assert_eq!(find("src/also_later.rs").level, PlanFindingLevel::Ok);
+        // Unmarked missing file still errors.
+        assert_eq!(find("src/missing.rs").level, PlanFindingLevel::Error);
+        assert!(find("src/missing.rs").msg.contains("file not found"));
+        // Marked-new file that already exists warns (stale plan signal).
+        assert_eq!(find("src/stale.rs").level, PlanFindingLevel::Warn);
+        assert!(find("src/stale.rs").msg.contains("already exists"));
+    }
+
     /// TASK-93: symbol extraction strips item keywords and rejects prose,
     /// paths, and commands so only real identifiers are verified.
     #[test]
@@ -62119,7 +62173,8 @@ const PLAN_SOURCE_EXTS: &[&str] = &[
     "html",
 ];
 
-#[derive(PartialEq)]
+// trace:TASK-772 | ai:claude — Debug for test assertions
+#[derive(PartialEq, Debug)]
 enum PlanFindingLevel {
     Ok,
     Warn,
@@ -63772,6 +63827,17 @@ fn is_plan_placeholder_path(tok: &str) -> bool {
         || tok.contains("NNN")
 }
 
+// trace:TASK-772 | ai:claude
+/// True when the text immediately following a backticked path ref marks the
+/// file as one the plan will *create*: optional whitespace, then `(new)` or
+/// `(to create)`, case-insensitive. A marked path that doesn't exist yet is
+/// OK rather than an error; a marked path that already exists draws a
+/// stale-annotation warning.
+fn plan_path_marked_new(rest: &str) -> bool {
+    let lower = rest.trim_start().to_ascii_lowercase();
+    lower.starts_with("(new)") || lower.starts_with("(to create)")
+}
+
 /// True when `tok` (already stripped of any `:line` suffix) has a known
 /// source-file extension.
 fn has_plan_source_ext(tok: &str) -> bool {
@@ -63999,19 +64065,33 @@ fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
             if is_plan_placeholder_path(&tok) || !has_plan_source_ext(&tok) || !tok.contains('/') {
                 continue;
             }
+            // trace:TASK-772 | ai:claude — a `(new)` / `(to create)` marker
+            // right after the closing backtick sanctions a to-be-created file.
+            let marked_new = plan_path_marked_new(&line[cap.get(0).unwrap().end()..]);
             if !checked_paths.insert(tok.clone()) {
                 continue;
             }
-            if root.join(&tok).exists() {
-                file_findings.push(PlanFinding {
+            match (root.join(&tok).exists(), marked_new) {
+                (true, false) => file_findings.push(PlanFinding {
                     level: PlanFindingLevel::Ok,
                     msg: tok,
-                });
-            } else {
-                file_findings.push(PlanFinding {
+                }),
+                (true, true) => file_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Warn,
+                    msg: format!(
+                        "{tok} — marked new but already exists; stale annotation? \
+                         (plan line {})",
+                        idx + 1
+                    ),
+                }),
+                (false, true) => file_findings.push(PlanFinding {
+                    level: PlanFindingLevel::Ok,
+                    msg: format!("{tok} — marked new (to be created)"),
+                }),
+                (false, false) => file_findings.push(PlanFinding {
                     level: PlanFindingLevel::Error,
                     msg: format!("{tok} — file not found (plan line {})", idx + 1),
-                });
+                }),
             }
         }
 
