@@ -1,0 +1,18 @@
+id: 019ec23e-9701-75d3-b637-5e7f6ca7eb68
+spec_id: BUG-532
+agreed_id: BUG-532
+title: aida burndown plan is ID-only — add the title/subject per spec for scannability (mirror aida list / queue list)
+description: 'Operator asked (2026-06-13): ''aida burndown plan'' lists Ready / Awaiting-sign-off / Parked as bare SPEC-IDs (''✓ TASK-790'', ''+ STORY-604'') with no title — so the advisor must ''aida show'' each just to know what they''re about to bless/drain. SPEC-IDs are opaque breadcrumbs; the plan is a DECISION surface and should be scannable. Both ''aida list'' and ''aida queue list'' already render the title beside the id. Fix: append the (truncated) title to each line in all three sections — e.g. ''✓ TASK-790  Surface message intent in mailbox notice…'' — mirroring queue list''s id+title rendering; keep the Parked section''s ''tagged deferred:*'' annotation. Default shows titles (burndown plan is not the scripting surface — that''s ''list --short''). trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T18:29:02.337822869Z
+modified_at: 2026-06-13T18:29:02.337822869Z
+req_type: Bug
+tags:
+- aida:burndown
+- cli-consistency
+- discoverability
+- from-friction
+- papercut
