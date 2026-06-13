@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T20:23:06.797312936Z
+modified_at: 2026-06-13T20:32:42.844694408Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -57,3 +57,13 @@ comments:
   content: 'SCOPE EXPANSION (2026-06-13, verified): resolve_burndown_sets ALSO fails to filter DEFERRED specs — TASK-769/TASK-793 have deferred:true in their YAML (aida list --deferred shows them) yet still appear in burndown plan''s awaiting-sign-off. The function filters ''if req.archived { continue }'' but has no ''deferred'' check. Fix this in the SAME PR as the cache-routing fix (I''m in resolve_burndown_sets anyway): exclude deferred specs from ALL three sets (ready/awaiting/parked → deferred goes to its own bucket or is hidden, matching aida list''s default). Trailer BUG-530 covers both the stale-read fix and this deferred-filter fix.'
   created_at: 2026-06-13T20:23:06.797312936Z
   modified_at: 2026-06-13T20:23:06.797312936Z
+- id: 019ec2af-d15c-71f2-9919-cc3f469bad7e
+  author: joe
+  content: |-
+    COURSE CORRECTION (2026-06-13, implementation investigation): the locked 'option 1 — route resolve_burndown_sets through the cache' is OVERTURNED. Deeper code-reading: GitBackend reads WORKTREE FILES via fs::read_to_string (git_backend.rs:257,470), and CachedGitBackend::list_requirements (cached_git_backend.rs:247) reads from that SAME inner GitBackend AFTER ensure_cache_fresh — it does NOT read from cache.db. So both the cache rebuild and the preflight read the same .aida-store worktree files; when that local worktree lags origin (observed: local aida-store HEAD != origin), BOTH go stale. Routing through the cache would NOT have fixed it. Corrected fix direction: SYNC/refresh the store worktree before the preflight read (what 'aida pull' store-leg does) — a design fork (how aggressively to sync in a read path; network cost). NEEDS A DECISION before implementing.
+
+    DEFERRED-FILTER SLICE SPLIT OUT: the part of this bug that was clean + safe (resolve_burndown_sets didn't exclude deferred specs) shipped as BUG-537 / PR #855. This BUG-530 now tracks ONLY the stale-read core (preflight naming Completed/unqueued specs). Do NOT trailer-complete it until the sync-before-read fix lands.
+
+    LESSON: I locked the fix direction from the root-cause finding alone, without verifying the proposed fix's MECHANISM against code. Verify the fix path actually avoids the bug before locking it.
+  created_at: 2026-06-13T20:32:42.844694408Z
+  modified_at: 2026-06-13T20:32:42.844694408Z
