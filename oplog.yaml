@@ -17479,5 +17479,13 @@ operations:
   lamport: 1724
   timestamp: 2026-06-13T03:33:33.614680520Z
   kind: Archive
-clock: 1724
+- id: 019ebf0c-af03-7a30-92f4-6c674adf28e5
+  target_id: 019ebe41-df09-7962-acb7-b5f57768ae6c
+  author: aida
+  node_id: '1'
+  lamport: 1725
+  timestamp: 2026-06-13T03:35:40.035943385Z
+  kind: !SetStatus
+    status: Rejected
+clock: 1725
 node_id: '1'
