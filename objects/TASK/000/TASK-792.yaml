@@ -1,0 +1,24 @@
+id: 019ec259-bc6f-7721-9525-4ed5bacd951a
+spec_id: TASK-792
+agreed_id: TASK-792
+title: Burndown drain posts its completion summary to the advisor mailbox (close the paste loop) — burndown analog of STORY-569 --zen handoff
+description: |-
+  Operator hit (2026-06-13): a headless 'aida burndown run' ends with a rich narrative summary (specs landed, caveats, 'one verification worth noting…', held/escalated items) — but it is STDOUT-ONLY (the /aida-burndown skill builds a summary at its last step but never posts it). So the drain's NARRATIVE never reaches the advisor session; the operator has been cut-n-pasting every drain report all session. Outcomes DO reach the advisor automatically (merged PRs via monitor, completed specs via cache) — only the reasoning/caveats/escalations don't.
+
+  FIX: on completion, the drain posts its summary to the advisor mailbox via 'aida mailbox send advisor --intent handoff "<summary>"' (or 'request' if it needs an advisor decision). Include: specs completed (+PRs), any caveats/verifications-worth-noting, held/awaiting-sign-off items, parked-with-reason, and any worktrees that couldn't be pruned. With TASK-782/790's intent marker the message surfaces as actionable in the unread notice, so the advisor reads it via 'aida mailbox inbox' / the notice — NO paste. This is the burndown analog of STORY-569 (the --zen clean-finish → mailbox review brief); same substrate-handoff principle, applied to the drain's completion report.
+
+  Wire it in the /aida-burndown skill's final step (master template aida-core/templates/skills/aida-burndown.md); optionally also have the 'burndown run' launcher post a one-line 'drain started/finished' bookend so an away advisor sees both ends. ACCEPTANCE: after a headless drain completes, the advisor session's mailbox/notice shows the completion summary without the operator relaying it. trace:relates:STORY-569 trace:relates:STORY-585 trace:from-friction
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T18:58:41.391731646Z
+modified_at: 2026-06-13T18:58:41.391731646Z
+req_type: Task
+tags:
+- agent-context
+- aida:burndown
+- aida:mailbox
+- from-friction
+- handoff-loop
+- relates:STORY-569
