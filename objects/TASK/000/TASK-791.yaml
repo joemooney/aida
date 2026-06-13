@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:10:23.281220543Z
-modified_at: 2026-06-13T17:10:40.342520487Z
+modified_at: 2026-06-13T17:39:08.561821962Z
 req_type: Task
 tags:
 - aida:questions
@@ -17,3 +17,9 @@ tags:
 - papercut
 - relates:STORY-522
 - ux
+comments:
+- id: 019ec210-e891-7970-a1f6-9dde715da00c
+  author: joe
+  content: Commit 2b594363b references this requirement
+  created_at: 2026-06-13T17:39:08.561821962Z
+  modified_at: 2026-06-13T17:39:08.561821962Z
