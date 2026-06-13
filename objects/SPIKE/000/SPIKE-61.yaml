@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T18:52:20.803652533Z
-modified_at: 2026-06-13T19:13:11.259075250Z
+modified_at: 2026-06-13T19:16:01.048969565Z
 req_type: Spike
 tags:
 - agent-execution
@@ -23,4 +23,18 @@ comments:
   content: 'Research synthesis complete → docs/competitive-analysis/2026-06-13-sandbox-execution.md (3 parallel web-research streams + repo code-mapping; every claim source-URL''d, least-sure claims flagged). KEY FINDING: the seam already exists — STORY-567''s [agents] contained posture turns on Claude Code''s own bubblewrap Bash sandbox; what''s missing is (a) an OS boundary around the WHOLE claude process and (b) network-egress allowlisting (the headline competitor capability; AIDA is currently in the open-egress camp with Jules/OpenHands/Aider/Amp). RECOMMENDED: bubblewrap for cheap-local (already in the stack, native perf, surgical worktree scoping — overturns Podman-first), Firecracker microVM for unattended drains with gVisor fallback (overturns gVisor-first: gVisor has a real cargo-build FS-syscall tax + no iptables NAT). The egress allowlist is host/proxy-enforced, NOT a sandbox property — reuse Anthropic''s devcontainer init-firewall.sh (default-DROP + ipset). SMALLEST SLICE FIRST: Slice1 (~1d) = harden the existing contained settings JSON with allowedDomains (git remote + crates.io + npmjs) — config-only, closes the egress hole, matches table-stakes-plus; Slice2 = opt-in [sandbox] backend=bwrap wrapping the spawn, worktree as mount scope; Slice3 = microvm/gvisor for --no-human, PARK until 1-2 prove the seam.'
   created_at: 2026-06-13T19:13:11.259075250Z
   modified_at: 2026-06-13T19:13:11.259075250Z
+- id: 019ec269-9998-7230-ba94-cebda1c78d7b
+  author: joe
+  content: |-
+    ADVISOR VERDICT (2026-06-13, after reviewing the research doc PR #851 + verifying its load-bearing claim): research is excellent and ACCEPTED. Source-grounded competitor table + tech tradeoff matrix; confirms the prior with two well-argued corrections.
+
+    VERIFIED (provenance): the doc's key claim — that AIDA already has the 'contained' seam — checks out, with ONE correction: STORY-567 ('Contained execution posture') is COMPLETED and ON MAIN (the '--contained' flag exists in aida-cli/src/cli.rs:600,708: 'Launch Claude in contained mode: strict Bash sandboxing'), NOT 'in flight on codex/story-567-contained' as the doc states — that branch is an unpruned leftover. So slice 1 builds on already-shipped code, not pending work.
+
+    CORRECTIONS TO THE PRIOR (accepted): (1) bubblewrap OVER rootless Podman for cheap local isolation — it's already in the stack via Claude Code, zero cargo-build overhead, no rootless-net/UID-map friction. (2) Firecracker microVM OVER gVisor for the strong unattended-drain profile — gVisor imposes a real cargo-build slowdown + lacks the iptables nat table clean egress-allowlisting needs; gVisor stays as the no-/dev/kvm fallback.
+
+    THE REAL GAPS (what to build): (a) an OS boundary around the WHOLE 'claude -p' process — the contained posture only sandboxes Claude's Bash tool, not Edit/Write/MCP/network; (b) network-egress allowlisting — the single most differentiated competitor capability. DIFFERENTIATION: an opt-in LOCAL strong-isolation mode (microVM) is genuinely novel — every competitor's strong isolation is cloud-only.
+
+    ROADMAP: slice 1 (~1 day) = harden the EXISTING contained posture with default-deny egress allowlist config. slice 2 = the OS-wrapper [sandbox] posture around the full process. Both keystone-adjacent → keyboard, advisor-watched, not unsupervised drain. Awaiting operator go before filing slice 1 as an implementable spec.
+  created_at: 2026-06-13T19:16:01.048969565Z
+  modified_at: 2026-06-13T19:16:01.048969565Z
 human_only: true
