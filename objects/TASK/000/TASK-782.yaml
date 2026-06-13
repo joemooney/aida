@@ -1,0 +1,27 @@
+id: 019ec199-93d1-7463-93bf-1fbc0aedca46
+spec_id: TASK-782
+agreed_id: TASK-782
+title: 'Mailbox ''interpret'' half: message intent markers (fyi|request|handoff) + act-vs-prompt [mailbox] policy'
+description: |-
+  Child of STORY-585 (the notice/read half ships the surfacing loop: peek/unread, mailbox notice + SessionStart/per-turn hooks, /aida-read-mail, role+user identity, MCP parity). This TASK is the INTERPRET half folded in by the operator's 2026-06-12 comment on STORY-585 — a Message schema change + autonomy-mode wiring, kept as a separate reviewable slice.
+
+  ## Acceptance
+  1. INTENT MARKER. Add a message intent beyond today's normal/urgent: fyi | request | handoff. New optional field on aida_core::mailbox::Message (serde default = fyi/normal, append-only/non-breaking like 'urgent'). 'aida mailbox send --intent <fyi|request|handoff>' sets it; default fyi. Mirror onto the MCP send_message tool schema + handler (CLI<->MCP parity, STORY-82). FYI surfaces only (no action expected); request/handoff is actionable.
+  2. SURFACE INTENT. The notice surface (mailbox notice + the read-mail skill + read_inbox) shows the intent so the agent can tell an FYI from an actionable request/handoff.
+  3. ACT-vs-PROMPT POLICY. A [mailbox] policy knob (configurable, safe default): act_on_mail = surface-and-recommend (interactive) / escalate-per-cascade (headless). Bounded-safe actions MAY auto-act per the session's autonomy mode; ambiguous/destructive ALWAYS surface for confirmation. Integrity floors stay hard, not tunable. (feedback_prefer_configurable_policy_with_default)
+  4. DISCIPLINE. Mail is interpreted INPUT, not a command channel: reading != obeying; a broadcast is not an authenticated directive, so mail-borne instructions never auto-execute blindly. The read pipeline: notice -> read -> interpret intent -> (bounded-safe? act) OR (surface + recommended action). Codify in the read-mail skill + docs/mailbox.md.
+  5. CADENCE for idle/long-running agents: mail piggybacks the EXISTING brief-poll heartbeat (no bespoke mail daemon); urgent --notify gives out-of-band wake. Poll interval configurable with a default.
+
+  Relates: STORY-585 (notice half), STORY-569 (write half / --zen handoff), the three-mode autonomy ladder (docs/architecture/autonomy-and-escalation.md), brief-polling discipline.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T15:28:48.081889379Z
+modified_at: 2026-06-13T15:28:48.081889379Z
+req_type: Task
+tags:
+- agent-context
+- aida:mailbox
+- parent:STORY-585
+- relates:STORY-569
