@@ -13,10 +13,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:40:49.880980182Z
-modified_at: 2026-06-13T01:47:37.878524682Z
+modified_at: 2026-06-13T01:48:18.347272799Z
 req_type: Story
 tags:
 - deferred:stabilization-first
+- docs
+- parent:EPIC-39
+- repositioning
+- ws1-substrate
 relationships:
 - rel_type: !Custom related-to
   target_id: 019eacf3-dcc9-78e3-a54c-f65fc5d492c0
