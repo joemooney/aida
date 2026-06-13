@@ -1,0 +1,28 @@
+id: 019ebef4-f85a-7751-b0eb-1cd2c7a283c1
+spec_id: STORY-585
+agreed_id: STORY-585
+title: Surface unread mailbox into the agent's session context — the read/notice half of inter-agent comms
+description: |-
+  Gap demonstrated live 2026-06-12: the mailbox WRITE side works (send_message; STORY-569 writes a --zen handoff into it) but there is NO read/notice affordance for an interactive agent. An agent only sees its mailbox if it manually runs 'aida mailbox inbox <role>' — which it never does unprompted. The statusline mail counter is the OPERATOR's surface; nothing injects unread mail into the AGENT's context, and no hook/skill exists. Result: messages (incl. STORY-569 handoffs) sit unread indefinitely while the operator watches the statusline nag wondering why the agent hasn't acted. Concrete: the persistent statusline 'mail:1' was a probe broadcast the advisor session never proactively read.
+
+  This is the READ half of the loop STORY-569 opens on the WRITE side. STORY-569 without this = a handoff nobody reads.
+
+  Acceptance:
+  1. Non-marking peek: 'aida mailbox inbox <role> --peek' (or --no-mark) shows unread WITHOUT clearing the unread flag, so a hook can surface it without consuming it.
+  2. Proactive surfacing (the substrate-as-bouncer fix): a hook (SessionStart + per-prompt or periodic) injects an unread-mail summary (count + sender + subject, capped) into the agent's context as a system-reminder, so the agent NOTICES without being asked. Don't rely on the agent remembering to poll.
+  3. On-demand convenience: a '/aida-read-mail' (or '/aida-inbox') skill that wraps the full read + offers to ack/act.
+  4. Reading + acking stay EXPLICIT — the peek/hook surfaces; the agent decides to read/ack. No silent auto-mark from the hook (else a glance consumes the unread).
+  5. Scope the surfacing to the session's role identity (advisor/implementer/reviewer), same identity the statusline uses.
+
+  Why HIGH: pairs with STORY-569 (High). Briefs already have a notice path (--notify + aida status); raw mailbox messages do not — this closes that asymmetry. Relates: STORY-569 (write half), STORY-583 (retract — so stale msgs don't nag forever), the statusline mail counter (same data, different consumer), [[feedback_substrate_as_bouncer_not_rules]].
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T03:09:45.946450558Z
+modified_at: 2026-06-13T03:09:45.946450558Z
+req_type: Story
+tags:
+- agent-context
+- aida:mailbox
+- relates:STORY-569
