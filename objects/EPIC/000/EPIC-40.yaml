@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:12:11.226673112Z
-modified_at: 2026-06-13T06:17:25.037213638Z
+modified_at: 2026-06-13T06:17:26.123225Z
 req_type: Epic
 tags:
 - cli-manual
@@ -79,4 +79,8 @@ relationships:
 - rel_type: Child
   target_id: 019ebf9e-2e93-7543-97cc-9358593cd934
   created_at: 2026-06-13T06:17:25.037203661Z
+  created_by: joe
+- rel_type: Child
+  target_id: 019ebf9e-5f67-7311-a188-c718502712d3
+  created_at: 2026-06-13T06:17:26.123217459Z
   created_by: joe
