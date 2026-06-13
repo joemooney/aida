@@ -1095,3 +1095,10 @@
   note: unparked by `aida questions answer`
   added_at: 2026-06-13T23:20:47.639513267Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019ec349-f922-76c0-9a89-abfdd1d0cf95
+  position: 472000
+  added_by: joe
+  note: advisor-cleared at filing
+  added_at: 2026-06-13T23:21:11.075165807Z
+  for_role: implementer
