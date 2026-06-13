@@ -3,12 +3,12 @@ spec_id: TASK-761
 agreed_id: TASK-761
 title: 'Substrate-grade gate: refuse aida edit --status approved for do-not-approve classes by type'
 description: Followup to STORY-560. The intake launcher fences do-not-approve classes (vision/epic/principle/constraint/decision/term) out of the agent's candidate set, but the underlying 'aida edit --status approved' path is gated only on advisor authority (status transition), not requirement TYPE. A substrate-grade type gate would harden the HARD authority bound across ALL approval paths, not just intake. Broader than STORY-560; needs design (which types, config-driven?, interaction with ADR-3).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T18:31:02.591461429Z
-modified_at: 2026-06-13T02:21:02.663897528Z
+modified_at: 2026-06-13T02:32:38.232030906Z
 req_type: Task
 tags:
 - aida:intake
@@ -28,3 +28,15 @@ comments:
     Implemented a substrate-grade edit-status gate that refuses approval promotion for vision/epic/principle/constraint/decision/term requirement types and added focused unit coverage. Verification passed: cargo build -p aida-cli; cargo fmt --all -- --check; cargo clippy -p aida-cli -- -D clippy::correctness; env -u AIDA_SESSION_ROLE cargo test -p aida-cli. Not self-merged.
   created_at: 2026-06-13T02:21:02.663893167Z
   modified_at: 2026-06-13T02:21:02.663893167Z
+history:
+- id: 019ebed2-fae4-7fc3-845f-bfc066454583
+  author: aida-auto-bump
+  timestamp: 2026-06-13T02:32:38.372254832Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T02:32:38.232030906Z
+  completion_sha: 836e7f6123faf4124ad7f730f6124a46822907fa
