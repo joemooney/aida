@@ -12393,6 +12393,24 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         status_display::status_badge(&status)
                     );
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
+                    // BUG-524: surface when the spec was opened / last touched so
+                    // `aida show` reveals its age. Stored UTC, rendered in local
+                    // time (feedback_local_time) reusing history.rs's format.
+                    // trace:BUG-524 | ai:claude
+                    println!(
+                        "{}: {}",
+                        "Opened".bold(),
+                        req.created_at
+                            .with_timezone(&chrono::Local)
+                            .format("%Y-%m-%d %H:%M")
+                    );
+                    println!(
+                        "{}: {}",
+                        "Modified".bold(),
+                        req.modified_at
+                            .with_timezone(&chrono::Local)
+                            .format("%Y-%m-%d %H:%M")
+                    );
                     if !req.owner.is_empty() {
                         println!("{}: {}", "Owner".bold(), req.owner);
                     }
