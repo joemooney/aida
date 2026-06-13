@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:42:54.836737426Z
-modified_at: 2026-06-13T19:42:54.836737426Z
+modified_at: 2026-06-13T19:43:23.341785608Z
 req_type: Story
 tags:
 - diagrams
@@ -16,3 +16,8 @@ tags:
 - docs-architecture
 - from-product
 - parent-epic:docbook
+relationships:
+- rel_type: Parent
+  target_id: 019ec281-7d2a-7852-86ac-ac958b5128b6
+  created_at: 2026-06-13T19:43:23.341779946Z
+  created_by: joe
