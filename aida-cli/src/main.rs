@@ -6852,8 +6852,8 @@ fn handle_advisor_dashboard(
         .count();
 
     // --- Burndown readiness (reuses the exact `aida burndown plan` resolver)
-    let (ready, awaiting_signoff, parked) = resolve_burndown_sets("approved", None, None)
-        .unwrap_or_else(|_| (Vec::new(), Vec::new(), Vec::new()));
+    let (ready, awaiting_signoff, parked, _titles) = resolve_burndown_sets("approved", None, None)
+        .unwrap_or_else(|_| (Vec::new(), Vec::new(), Vec::new(), Default::default()));
 
     // --- Queue depth + in-flight (Done-awaiting-merge) ---------------------
     let queue_depth = backend
@@ -72411,7 +72411,7 @@ fn handle_burndown_run(
     permission_mode: Option<&str>,
     dry_run: bool,
 ) -> Result<()> {
-    let (ready, awaiting_signoff, parked) = resolve_burndown_sets(status, tag, batch)?;
+    let (ready, awaiting_signoff, parked, _titles) = resolve_burndown_sets(status, tag, batch)?;
 
     println!("{} burndown run", "▸".cyan().bold());
     println!(
@@ -73408,11 +73408,21 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
 /// renders it) and `burndown run` (which preflights + drains it) so the two can
 /// NEVER disagree on what's drainable. trace:STORY-527 trace:STORY-546 trace:STORY-545
 #[allow(clippy::type_complexity)]
+// trace:BUG-532 — the title map (display-id → title) is built from the SAME
+// single store load the set resolution already does, so `burndown plan`'s text
+// output can show id+title with no extra store scan (no N+1 lookup).
+type BurndownSets = (
+    Vec<String>,
+    Vec<String>,
+    Vec<(String, String)>,
+    std::collections::HashMap<String, String>,
+);
+
 fn resolve_burndown_sets(
     status: &str,
     tag: Option<&str>,
     batch: Option<&str>,
-) -> Result<(Vec<String>, Vec<String>, Vec<(String, String)>)> {
+) -> Result<BurndownSets> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let store = load_store_for_lookup(&project_root).ok_or_else(|| {
@@ -73451,6 +73461,9 @@ fn resolve_burndown_sets(
     // be split into the blessed (queued) drain set vs awaiting-sign-off.
     // trace:STORY-546
     let mut queued_disp: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // trace:BUG-532 — display-id → title, populated from this same scan so the
+    // text plan output can show id+title without re-loading the store.
+    let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for req in &store.requirements {
         // Archived specs are out of active scope — never fan them out (matches
         // `aida list`'s default non-archived view). trace:STORY-527
@@ -73489,6 +73502,7 @@ fn resolve_burndown_sets(
         if queued_ids.contains(&req.id) {
             queued_disp.insert(disp.clone());
         }
+        titles.insert(disp.clone(), req.title.clone());
         candidates.push(burndown::BurndownCandidate {
             id: disp,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
@@ -73507,7 +73521,7 @@ fn resolve_burndown_sets(
     // `ready` = blessed + drainable; `awaiting_signoff` = pickable but the
     // advisor hasn't queued it yet (the `--candidates` curation list).
     let (ready, awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
-    Ok((ready, awaiting_signoff, parked))
+    Ok((ready, awaiting_signoff, parked, titles))
 }
 
 /// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
@@ -73527,7 +73541,19 @@ fn handle_burndown_plan(
     candidates_view: bool,
     json: bool,
 ) -> Result<()> {
-    let (ready, awaiting_signoff, parked) = resolve_burndown_sets(status, tag, batch)?;
+    let (ready, awaiting_signoff, parked, titles) = resolve_burndown_sets(status, tag, batch)?;
+
+    // trace:BUG-532 — render the spec's (truncated) title beside its id so the
+    // plan reads as a scannable decision surface, mirroring how `aida list` /
+    // `aida queue list` show id+title (60-col truncation via the shared
+    // `truncate` helper). Returns the dimmed title cell, or an empty string when
+    // a title is unexpectedly missing so the id still prints cleanly.
+    let title_cell = |id: &str| -> String {
+        match titles.get(id) {
+            Some(t) if !t.is_empty() => format!("  {}", truncate(t, 60).dimmed()),
+            _ => String::new(),
+        }
+    };
 
     if json {
         let payload = serde_json::json!({
@@ -73592,7 +73618,7 @@ fn handle_burndown_plan(
             "Ready (queued + bounded + unblocked + decision-free):".bold()
         );
         for id in &ready {
-            println!("  {} {}", "✓".green(), id.cyan());
+            println!("  {} {}{}", "✓".green(), id.cyan(), title_cell(id));
         }
     }
     // STORY-546: pickable but not blessed — show them so the advisor knows what
@@ -73605,13 +73631,21 @@ fn handle_burndown_plan(
             "Awaiting advisor sign-off (mechanical gate passed; the advisor blesses these into the drain with `aida queue add <id>` — advisor authority required):".bold()
         );
         for id in &awaiting_signoff {
-            println!("  {} {}", "+".yellow(), id);
+            println!("  {} {}{}", "+".yellow(), id, title_cell(id));
         }
     }
     if !parked.is_empty() {
         println!("\n{}", "Parked:".bold());
         for (id, reason) in &parked {
-            println!("  {} {} — {}", "·".dimmed(), id, reason.dimmed());
+            // trace:BUG-532 — keep the parked annotation (`reason`, e.g.
+            // "tagged `deferred:design`") AND add the title between id and reason.
+            println!(
+                "  {} {}{} — {}",
+                "·".dimmed(),
+                id,
+                title_cell(id),
+                reason.dimmed()
+            );
         }
     }
 
