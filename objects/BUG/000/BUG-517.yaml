@@ -3,12 +3,12 @@ spec_id: BUG-517
 agreed_id: BUG-517
 title: 'queue list: terminal-hidden hint is noise on the default role view (keep it only on --all)'
 description: 'Operator (2026-06-12): plain ''aida queue list'' prints ''(N terminal-status entries hidden; pass --include-terminal to show)''. On the default role-filtered view that''s noise; it''s fine on ''aida queue list --all'' (the everything view). Fix: gate the TASK-46 terminal-hidden hint on *all. First ''fasttrack'' demo item. trace:TASK-46'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:03:42.514071124Z
-modified_at: 2026-06-13T06:05:26.877708104Z
+modified_at: 2026-06-13T06:22:44.421769358Z
 req_type: Bug
 tags:
 - aida:queue
@@ -22,3 +22,15 @@ comments:
   content: Commit 4d83ccd11 references this requirement
   created_at: 2026-06-13T06:05:26.877708104Z
   modified_at: 2026-06-13T06:05:26.877708104Z
+history:
+- id: 019ebfa5-a55d-7b32-b853-a12e2ebdecc8
+  author: aida-auto-bump
+  timestamp: 2026-06-13T06:22:44.573278969Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-13T06:22:44.421769358Z
+  completion_sha: f2b8b2aa2438fe4a75ee9fe652eae53a6e0ee5d7
