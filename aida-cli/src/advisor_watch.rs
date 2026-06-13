@@ -24,6 +24,7 @@ use crate::session;
 
 /// The scoped instruction the forked advisor runs headless each pass. Mechanical
 /// gardening + mailbox triage + escalate-the-rest only.
+// trace:TASK-781 | ai:claude — questions sweep added to the garden pass (sweep-only)
 const WATCH_PROMPT: &str = "\
 You are a forked advisor session running UNATTENDED while the operator is away. \
 Do ONLY safe, bounded, reversible work; ESCALATE everything else — never make a \
@@ -33,11 +34,15 @@ Run this garden + triage pass, then exit:
 1. `aida doctor --heal --category OBE-briefs --yes` then `--category stale-leases --yes` \
 (safe auto-fixes only; REPORT [manual] findings, never --force them).
 2. `aida queue list` — for any 'auto-bump missed' item, run `aida db reconcile-status --spec <ID>`.
-3. `aida mailbox inbox advisor` — for each unread message: if it is a bounded/mechanical \
+3. `aida questions sweep` — flag specs that likely need a human decision and record a \
+DecisionRequest for each (so the operator drains them later as pure picks via `aida \
+questions answer`). SWEEP ONLY: detect + record the request — do NOT answer any question \
+yourself; answering stays human (`aida questions answer`) or the /aida-decide skill.
+4. `aida mailbox inbox advisor` — for each unread message: if it is a bounded/mechanical \
 request you can settle safely, do it; otherwise leave it and record a one-line escalation \
 via `aida findings add` (or a comment on the relevant spec) for the operator.
-4. Do NOT merge PRs, approve specs, run drains, or take any action you are not certain is \
-safe and reversible.
+5. Do NOT merge PRs, approve specs, answer DecisionRequests, run drains, or take any action \
+you are not certain is safe and reversible.
 
 End with a 3-5 line summary: what you gardened, what mail you handled, what you escalated.";
 
@@ -51,10 +56,13 @@ any mailbox request.
 1. `aida doctor --heal --category OBE-briefs --yes` then `--category stale-leases --yes` \
 (safe auto-fixes only; REPORT [manual] findings, never --force them).
 2. `aida queue list` — for any 'auto-bump missed' item, run `aida db reconcile-status --spec <ID>`.
-3. `aida mailbox inbox advisor` — for each unread message, record a one-line escalation via \
+3. `aida questions sweep` — flag specs that likely need a human decision and record a \
+DecisionRequest for each, so the operator drains them later as pure picks. SWEEP ONLY: \
+detect + record — never answer a question yourself.
+4. `aida mailbox inbox advisor` — for each unread message, record a one-line escalation via \
 `aida findings add` (or a comment on the relevant spec) for the operator. Do NOT act on the \
 requests themselves; leave them for the operator to decide.
-4. Do NOT merge PRs, approve specs, run drains, or take any non-garden action.
+5. Do NOT merge PRs, approve specs, answer DecisionRequests, run drains, or take any non-garden action.
 
 End with a 3-5 line summary: what you gardened and what mail you surfaced for the operator.";
 
