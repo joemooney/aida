@@ -410,6 +410,13 @@ impl PostgresBackend {
             processing_record: Vec::new(),
             archived,
             archived_at,
+            // STORY-584: the deferred view-flag is not persisted by the
+            // Postgres backend (opt-in, behind the `postgres` feature) — the
+            // git-canonical backend is the source of truth for it.
+            // trace:STORY-584 | ai:claude
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
             custom_status,
             custom_priority,
             custom_fields,

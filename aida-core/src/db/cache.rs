@@ -39,6 +39,12 @@ pub struct RequirementSummary {
     pub archived: bool,
     /// ISO RFC3339 timestamp; None when not archived. trace:STORY-441 | ai:claude
     pub archived_at: Option<String>,
+    /// Whether the spec carries the deferred view-flag. trace:STORY-584 | ai:claude
+    pub deferred: bool,
+    /// ISO RFC3339 timestamp; None when not deferred. trace:STORY-584 | ai:claude
+    pub deferred_at: Option<String>,
+    /// Free-text revisit trigger; None when not set. trace:STORY-584 | ai:claude
+    pub deferred_until: Option<String>,
     pub yaml_path: String,
 }
 
@@ -57,6 +63,32 @@ pub enum ArchiveFilter {
     /// everything-escape-hatch).
     Both,
 }
+
+/// Three-way filter for the defer axis. STORY-584 introduces defer as a
+/// view-level flag parallel to archive — `aida list` defaults to
+/// `NonDeferredOnly`, `--deferred` flips to `DeferredOnly`, `--all` is `Both`.
+/// `NonDeferredOnly` additionally honors the legacy `deferred:*` parking tags
+/// (a spec carrying any such tag is treated as deferred for view purposes even
+/// when the flag is unset), bridging pre-flag tags onto the new tier.
+/// trace:STORY-584 | ai:claude
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum DeferFilter {
+    /// Default: deferred rows (flag set OR carrying a `deferred:*` tag) are
+    /// hidden from the result.
+    #[default]
+    NonDeferredOnly,
+    /// Only deferred rows are returned (flag set OR carrying a `deferred:*` tag).
+    DeferredOnly,
+    /// Deferred and non-deferred rows are both returned (the
+    /// everything-escape-hatch).
+    Both,
+}
+
+/// SQL fragment matching specs that carry a legacy `deferred:*` parking tag.
+/// Tags are stored as a JSON array of strings, so a tag like
+/// `deferred:stabilization-first` appears in the column as the substring
+/// `"deferred:`. trace:STORY-584 | ai:claude
+const DEFER_TAG_LIKE: &str = r#"tags_json LIKE '%"deferred:%'"#;
 
 /// Filter passed to cache list queries. All fields are AND'd together;
 /// each field's match semantics are documented inline.
@@ -85,6 +117,10 @@ pub struct ListFilter {
     /// Archive axis — see `ArchiveFilter`. Default `NonArchivedOnly` means
     /// archived rows are filtered out. trace:STORY-441 | ai:claude
     pub archive: ArchiveFilter,
+    /// Defer axis — see `DeferFilter`. Default `NonDeferredOnly` means deferred
+    /// rows (flag set OR `deferred:*`-tagged) are filtered out.
+    /// trace:STORY-584 | ai:claude
+    pub defer: DeferFilter,
     /// Optional cap on returned rows (after ordering by modified_at DESC).
     pub limit: Option<usize>,
 }
@@ -125,7 +161,9 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // transparent rebuild via `CachedGitBackend::ensure_fresh`.
 // STORY-476: bumped to "3" when the `external_refs` FTS column was added so
 // external issue refs become searchable.
-const SCHEMA_VERSION: &str = "3";
+// STORY-584: bumped to "4" when the `deferred` / `deferred_at` / `deferred_until`
+// columns were added (view-flag parallel to archived).
+const SCHEMA_VERSION: &str = "4";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -568,7 +606,8 @@ impl Cache {
         let mut sql = String::from(
             "SELECT id, spec_id, agreed_id, title, description, status, priority,
                     owner, feature, req_type, tags_json, created_at, modified_at,
-                    archived, archived_at, yaml_path
+                    archived, archived_at, deferred, deferred_at, deferred_until,
+                    yaml_path
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -579,6 +618,19 @@ impl Cache {
             ArchiveFilter::NonArchivedOnly => sql.push_str(" AND archived = 0"),
             ArchiveFilter::ArchivedOnly => sql.push_str(" AND archived = 1"),
             ArchiveFilter::Both => {} // no archive clause
+        }
+
+        // STORY-584: three-way defer filter, parallel to the archive axis.
+        // "Deferred" = the `deferred` flag is set OR the spec carries a legacy
+        // `deferred:*` parking tag (honor-both migration). trace:STORY-584 | ai:claude
+        match filter.defer {
+            DeferFilter::NonDeferredOnly => {
+                sql.push_str(&format!(" AND deferred = 0 AND NOT ({DEFER_TAG_LIKE})"));
+            }
+            DeferFilter::DeferredOnly => {
+                sql.push_str(&format!(" AND (deferred = 1 OR {DEFER_TAG_LIKE})"));
+            }
+            DeferFilter::Both => {} // no defer clause
         }
         if let Some(s) = &filter.status {
             // The cache stores RequirementStatus's Debug form (e.g.
@@ -670,6 +722,7 @@ impl Cache {
         query: &str,
         limit: usize,
         archive: ArchiveFilter,
+        defer: DeferFilter,
     ) -> Result<Vec<RequirementSummary>> {
         let escaped = escape_fts5_query(query);
         // Empty query (or whitespace-only) → FTS5 rejects an empty MATCH
@@ -682,6 +735,15 @@ impl Cache {
             ArchiveFilter::ArchivedOnly => " AND c.archived = 1",
             ArchiveFilter::Both => "",
         };
+        // STORY-584: defer axis, parallel to archive. Honors the `deferred`
+        // flag and legacy `deferred:*` tags. trace:STORY-584 | ai:claude
+        let defer_clause = match defer {
+            DeferFilter::NonDeferredOnly => {
+                format!(" AND c.deferred = 0 AND NOT (c.{DEFER_TAG_LIKE})")
+            }
+            DeferFilter::DeferredOnly => format!(" AND (c.deferred = 1 OR c.{DEFER_TAG_LIKE})"),
+            DeferFilter::Both => String::new(),
+        };
         let conn = self.conn.lock().unwrap();
         // FTS5 requires the MATCH clause to use the bare table name, not an
         // alias — hence no `f` alias on requirements_fts.
@@ -689,10 +751,11 @@ impl Cache {
             "SELECT c.id, c.spec_id, c.agreed_id, c.title, c.description,
                           c.status, c.priority, c.owner, c.feature, c.req_type,
                           c.tags_json, c.created_at, c.modified_at, c.archived,
-                          c.archived_at, c.yaml_path
+                          c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
+                          c.yaml_path
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
-                   WHERE requirements_fts MATCH ?{archive_clause}
+                   WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
                    ORDER BY rank
                    LIMIT ?"
         );
@@ -763,6 +826,10 @@ fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
     let archived = if req.archived { 1 } else { 0 };
     // trace:STORY-441 | ai:claude
     let archived_at = req.archived_at.map(|dt| dt.to_rfc3339());
+    // trace:STORY-584 | ai:claude
+    let deferred = if req.deferred { 1 } else { 0 };
+    let deferred_at = req.deferred_at.map(|dt| dt.to_rfc3339());
+    let deferred_until = req.deferred_until.clone();
     let req_type_str = format!("{:?}", req.req_type);
     let status_str = req
         .custom_status
@@ -777,8 +844,8 @@ fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
         "INSERT INTO requirements_cache (
             id, spec_id, agreed_id, title, description, status, priority,
             owner, feature, req_type, tags_json, created_at, modified_at,
-            archived, archived_at, yaml_path
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            archived, archived_at, deferred, deferred_at, deferred_until, yaml_path
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -795,6 +862,9 @@ fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
             req.modified_at.to_rfc3339(),
             archived,
             archived_at,
+            deferred,
+            deferred_at,
+            deferred_until,
             yaml_path,
         ],
     )?;
@@ -825,6 +895,7 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
     let tags_json: String = row.get(10)?;
     let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
     let archived_int: i64 = row.get(13)?;
+    let deferred_int: i64 = row.get(15)?;
     Ok(RequirementSummary {
         id,
         spec_id: row.get(1)?,
@@ -842,7 +913,11 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         archived: archived_int != 0,
         // trace:STORY-441 | ai:claude — column index 14, nullable.
         archived_at: row.get(14)?,
-        yaml_path: row.get(15)?,
+        // trace:STORY-584 | ai:claude — columns 15/16/17.
+        deferred: deferred_int != 0,
+        deferred_at: row.get(16)?,
+        deferred_until: row.get(17)?,
+        yaml_path: row.get(18)?,
     })
 }
 
@@ -1197,6 +1272,182 @@ mod tests {
         );
     }
 
+    /// trace:STORY-584 | ai:claude
+    #[test]
+    fn defer_filter_non_deferred_only_excludes_deferred() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let active = sample_req("FR-1-001", "active");
+        let mut deferred = sample_req("FR-1-002", "deferred");
+        deferred.deferred = true;
+        deferred.deferred_at = Some(chrono::Utc::now());
+        deferred.deferred_until = Some("when the shelf grows".into());
+        store.requirements.push(active);
+        store.requirements.push(deferred);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::NonDeferredOnly,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "active");
+    }
+
+    /// The legacy `deferred:*` parking tag is honored by the default view even
+    /// when the flag is unset (honor-both migration). trace:STORY-584 | ai:claude
+    #[test]
+    fn defer_filter_honors_legacy_deferred_tag() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let active = sample_req("FR-1-001", "active");
+        let mut tagged = sample_req("FR-1-002", "tag-deferred");
+        tagged.tags.insert("deferred:stabilization-first".into());
+        store.requirements.push(active);
+        store.requirements.push(tagged);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Default hides the tag-deferred spec...
+        let active_rows = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::NonDeferredOnly,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(active_rows.len(), 1);
+        assert_eq!(active_rows[0].title, "active");
+
+        // ...and DeferredOnly surfaces it despite the unset flag.
+        let deferred_rows = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::DeferredOnly,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(deferred_rows.len(), 1);
+        assert_eq!(deferred_rows[0].title, "tag-deferred");
+        assert!(!deferred_rows[0].deferred); // flag unset; matched by tag
+    }
+
+    /// trace:STORY-584 | ai:claude
+    #[test]
+    fn defer_filter_deferred_only_returns_flag_and_tag_deferred() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("FR-1-001", "active"));
+        let mut flagged = sample_req("FR-1-002", "flag-deferred");
+        flagged.deferred = true;
+        let mut tagged = sample_req("FR-1-003", "tag-deferred");
+        tagged.tags.insert("deferred:on-demand".into());
+        store.requirements.push(flagged);
+        store.requirements.push(tagged);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::DeferredOnly,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|r| r.title != "active"));
+    }
+
+    /// trace:STORY-584 | ai:claude
+    #[test]
+    fn defer_filter_both_returns_everything() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("FR-1-001", "active"));
+        let mut deferred = sample_req("FR-1-002", "deferred");
+        deferred.deferred = true;
+        store.requirements.push(deferred);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+    }
+
+    /// The defer axis is orthogonal to the archive axis — each filters
+    /// independently. trace:STORY-584 | ai:claude
+    #[test]
+    fn defer_and_archive_axes_compose_independently() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("FR-1-001", "active"));
+        let mut deferred = sample_req("FR-1-002", "deferred");
+        deferred.deferred = true;
+        let mut archived = sample_req("FR-1-003", "archived");
+        archived.archived = true;
+        store.requirements.push(deferred);
+        store.requirements.push(archived);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Default both-axes view: only the active row.
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::NonArchivedOnly,
+                defer: DeferFilter::NonDeferredOnly,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "active");
+    }
+
+    /// deferred_at + deferred_until survive the cache round-trip.
+    /// trace:STORY-584 | ai:claude
+    #[test]
+    fn deferred_fields_round_trip_through_cache() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut req = sample_req("FR-1-001", "deferred");
+        req.deferred = true;
+        let ts = chrono::Utc::now();
+        req.deferred_at = Some(ts);
+        req.deferred_until = Some("when a slice verb ships".into());
+        store.requirements.push(req);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
+        let row = rows.into_iter().next().expect("at least one row");
+        assert!(row.deferred);
+        assert_eq!(
+            row.deferred_until.as_deref(),
+            Some("when a slice verb ships")
+        );
+        let raw = row.deferred_at.expect("deferred_at should be set");
+        let parsed = chrono::DateTime::parse_from_rfc3339(&raw).unwrap();
+        assert_eq!(
+            parsed.with_timezone(&chrono::Utc).timestamp_millis(),
+            ts.timestamp_millis()
+        );
+    }
+
     #[test]
     fn search_uses_fts5() {
         let dir = tempdir().unwrap();
@@ -1216,7 +1467,12 @@ mod tests {
         cache.rebuild_from_store(&store, "head").unwrap();
 
         let hits = cache
-            .search("canonical", 10, ArchiveFilter::NonArchivedOnly)
+            .search(
+                "canonical",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly,
+            )
             .unwrap();
         assert_eq!(hits.len(), 2);
         let titles: Vec<_> = hits.iter().map(|h| h.title.as_str()).collect();
@@ -1241,7 +1497,12 @@ mod tests {
         // Each of these used to error with `no such column: 9` (or similar).
         for q in &["PR-9", "EPIC-20", "STORY-86", "BUG:78", "*foo", "(a)"] {
             let _ = cache
-                .search(q, 10, ArchiveFilter::NonArchivedOnly)
+                .search(
+                    q,
+                    10,
+                    ArchiveFilter::NonArchivedOnly,
+                    DeferFilter::NonDeferredOnly,
+                )
                 .unwrap_or_else(|e| {
                     panic!("search({:?}) errored: {}", q, e);
                 });
@@ -1256,15 +1517,32 @@ mod tests {
         let c2 = Cache::open(dir2.path().join("cache.db")).unwrap();
         c2.rebuild_from_store(&s, "head").unwrap();
         let hits = c2
-            .search("alpha beta", 10, ArchiveFilter::NonArchivedOnly)
+            .search(
+                "alpha beta",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly,
+            )
             .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].title, "alpha beta gamma");
 
         // Empty query: well-formed (returns nothing rather than panicking).
-        assert!(cache.search("", 10, ArchiveFilter::NonArchivedOnly).is_ok());
         assert!(cache
-            .search("   ", 10, ArchiveFilter::NonArchivedOnly)
+            .search(
+                "",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly
+            )
+            .is_ok());
+        assert!(cache
+            .search(
+                "   ",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly
+            )
             .is_ok());
     }
 
@@ -1285,7 +1563,12 @@ mod tests {
         cache.rebuild_from_store(&store, "head").unwrap();
 
         let hits = cache
-            .search("LIN-123", 10, ArchiveFilter::NonArchivedOnly)
+            .search(
+                "LIN-123",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly,
+            )
             .unwrap();
         assert_eq!(
             hits.len(),
@@ -1296,7 +1579,12 @@ mod tests {
 
         // The other ref's token is searchable too.
         let hits2 = cache
-            .search("owner", 10, ArchiveFilter::NonArchivedOnly)
+            .search(
+                "owner",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly,
+            )
             .unwrap();
         assert_eq!(hits2.len(), 1);
         assert_eq!(hits2[0].spec_id.as_deref(), Some("STORY-476"));
@@ -1361,7 +1649,12 @@ mod tests {
 
         // And the external ref is searchable, proving the column is live.
         let hits = cache
-            .search("LIN-485", 10, ArchiveFilter::NonArchivedOnly)
+            .search(
+                "LIN-485",
+                10,
+                ArchiveFilter::NonArchivedOnly,
+                DeferFilter::NonDeferredOnly,
+            )
             .unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].spec_id.as_deref(), Some("BUG-485"));

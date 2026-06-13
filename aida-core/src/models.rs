@@ -3682,6 +3682,28 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
 
+    /// Whether this requirement is deferred — a view-flag orthogonal to status
+    /// (parallel to `archived`, NOT a new status). A deferred spec is primed
+    /// work that returns on a trigger; it is hidden from the default open-work
+    /// view but is not filed away the way archived is.
+    /// trace:STORY-584 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub deferred: bool,
+
+    /// Timestamp when this requirement was deferred (None when not deferred).
+    /// Cleared on undefer.
+    /// trace:STORY-584 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_at: Option<DateTime<Utc>>,
+
+    /// The revisit trigger — the free-text condition that brings a deferred
+    /// spec back (e.g. "when a slice verb ships", "if the shelf grows"). This
+    /// is the one thing that distinguishes deferred (prospective/primed) from
+    /// archived (retrospective/filed). Set via `aida defer --until "<cond>"`.
+    /// trace:STORY-584 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_until: Option<String>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3819,6 +3841,10 @@ impl Requirement {
             processing_record: Vec::new(),
             archived: false,
             archived_at: None,
+            // trace:STORY-584 | ai:claude
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),

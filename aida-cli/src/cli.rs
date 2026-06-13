@@ -5547,19 +5547,28 @@ pub enum Command {
         #[clap(long)]
         sync: bool,
 
-        /// Include archived requirements (the everything-escape-hatch).
-        /// By default `aida list` hides archived rows; archived ≠ status,
-        /// so freshly-Completed specs stay visible until archived.
-        /// Mutually exclusive with `--archived` (only-archived view).
+        /// Include archived AND deferred requirements (the
+        /// everything-escape-hatch). By default `aida list` hides both archived
+        /// and deferred rows; archived/deferred ≠ status, so freshly-Completed
+        /// specs stay visible until archived. Mutually exclusive with
+        /// `--archived` and `--deferred` (the only-X views).
         // trace:STORY-441 | ai:claude — supersedes TASK-64's terminal-status hide.
-        #[clap(long, conflicts_with = "archived")]
+        // trace:STORY-584 | ai:claude — now widens the defer axis too.
+        #[clap(long, conflicts_with_all = ["archived", "deferred"])]
         all: bool,
 
         /// Show only archived requirements. Use this to audit the archive
-        /// itself; `--all` shows the union of archived + non-archived.
+        /// itself; `--all` shows the union of active + deferred + archived.
         // trace:STORY-441 | ai:claude
-        #[clap(long, conflicts_with = "all")]
+        #[clap(long, conflicts_with_all = ["all", "deferred"])]
         archived: bool,
+
+        /// Show only deferred requirements — the primed/conditional shelf,
+        /// with each spec's revisit trigger. Honors both the deferred flag and
+        /// legacy `deferred:*` parking tags. `--all` shows the union.
+        // trace:STORY-584 | ai:claude
+        #[clap(long, conflicts_with_all = ["all", "archived"])]
+        deferred: bool,
 
         /// Emit `[{spec_id,title,req_type,status,tags}]` as JSON instead
         /// of the human table. Internal-use surface for the TUI launcher
@@ -6029,6 +6038,39 @@ pub enum Command {
     // trace:STORY-441 | ai:claude
     Unarchive {
         /// SPEC-ID or UUID to unarchive.
+        id: String,
+    },
+
+    /// Defer a spec — park it as primed/conditional work, hidden from the
+    /// default open-work view but not filed away the way archive is.
+    ///
+    /// Defer is a view-level flag distinct from status (it does not touch the
+    /// lifecycle state machine). Use `--until` to record the revisit trigger —
+    /// the free-text condition that brings the spec back (e.g.
+    /// `--until "when a slice verb ships"`). That trigger is the one thing
+    /// distinguishing deferred (prospective, primed) from archived
+    /// (retrospective, filed). Deferred rows are hidden from `aida list`,
+    /// `aida search`, and `aida history` by default; surface them with
+    /// `--deferred` (only) or `--all` (union).
+    // trace:STORY-584 | ai:claude
+    Defer {
+        /// SPEC-ID or UUID to defer.
+        id: String,
+
+        /// The revisit trigger — the condition that brings this spec back
+        /// (free text). Stored alongside the spec and shown in the deferred
+        /// view so you can scan what is primed and what returns each item.
+        // trace:STORY-584 | ai:claude
+        #[clap(long, value_name = "CONDITION")]
+        until: Option<String>,
+    },
+
+    /// Inverse of `aida defer` — clears the deferred flag (and its revisit
+    /// trigger) so the spec reappears in default `aida list` / `aida history`
+    /// / `aida search` views.
+    // trace:STORY-584 | ai:claude
+    Undefer {
+        /// SPEC-ID or UUID to undefer.
         id: String,
     },
 
@@ -7321,16 +7363,24 @@ pub enum Command {
         #[clap(long)]
         include_meta: bool,
 
-        /// Include archived requirements in the search (everything-escape-hatch).
-        /// Default excludes archived rows for consistency with `aida list`.
+        /// Include archived AND deferred requirements in the search
+        /// (everything-escape-hatch). Default excludes both for consistency
+        /// with `aida list`.
         // trace:STORY-441 | ai:claude
-        #[clap(long, conflicts_with = "archived")]
+        // trace:STORY-584 | ai:claude — now widens the defer axis too.
+        #[clap(long, conflicts_with_all = ["archived", "deferred"])]
         all: bool,
 
         /// Show only archived requirements.
         // trace:STORY-441 | ai:claude
-        #[clap(long, conflicts_with = "all")]
+        #[clap(long, conflicts_with_all = ["all", "deferred"])]
         archived: bool,
+
+        /// Show only deferred requirements (the primed/conditional shelf).
+        /// Honors both the deferred flag and legacy `deferred:*` tags.
+        // trace:STORY-584 | ai:claude
+        #[clap(long, conflicts_with_all = ["all", "archived"])]
+        deferred: bool,
     },
 
     /// Project activity — what's been touched and how it stands now.
@@ -7404,18 +7454,24 @@ pub enum Command {
         #[clap(long)]
         oneline: bool,
 
-        /// Include archived requirements (everything-escape-hatch).
+        /// Include archived AND deferred requirements (everything-escape-hatch).
         /// Symmetric with `aida list --all`. By default `aida history`
-        /// surfaces every non-archived spec (including freshly-Completed
-        /// ships); `--all` widens to the full archive.
+        /// surfaces every active spec (including freshly-Completed ships) but
+        /// hides archived and deferred rows; `--all` widens to the full union.
         // trace:STORY-441 | ai:claude — supersedes TASK-64's terminal-status hide.
-        #[clap(long, conflicts_with = "archived")]
+        // trace:STORY-584 | ai:claude — now widens the defer axis too.
+        #[clap(long, conflicts_with_all = ["archived", "deferred"])]
         all: bool,
 
         /// Show only archived requirements.
         // trace:STORY-441 | ai:claude
-        #[clap(long, conflicts_with = "all")]
+        #[clap(long, conflicts_with_all = ["all", "deferred"])]
         archived: bool,
+
+        /// Show only deferred requirements (the primed/conditional shelf).
+        // trace:STORY-584 | ai:claude
+        #[clap(long, conflicts_with_all = ["all", "archived"])]
+        deferred: bool,
     },
 
     /// Opt-in EARS-style quality lint for requirement text. AIDA stays a
