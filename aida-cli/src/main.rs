@@ -16046,6 +16046,92 @@ fn init_ultraplan_config_section() -> &'static str {
      suggest_threshold = \"spec-thinness\"\n"
 }
 
+// trace:TASK-760 | ai:claude
+// The commented `[intake]` example block `aida init` scaffolds into a new
+// project's `.aida/config.toml`. `aida intake` works with zero config (every
+// knob has a safe default), so the block ships fully commented-out — it exists
+// purely to make the policy knobs discoverable next to the other sections.
+// Appended like the `[forge]` / `[ultraplan]` sections so all init paths
+// share one source of truth. The example values mirror the defaults in
+// `intake::IntakeConfig::default()` — keep them in lockstep.
+fn init_intake_config_section() -> &'static str {
+    "\n# Policy for `aida intake` — the headless advisor pass that reads open\n\
+     # specs and proposes approve/reject/park/queue dispositions (propose-only\n\
+     # by default; `--apply` executes). Every knob has a safe default, so this\n\
+     # whole section is optional — uncomment a line only to change a default.\n\
+     #\n\
+     # disposition_bias — how aggressively the agent proposes approve:\n\
+     #   approve-eligible  — (default) propose approve for every eligible\n\
+     #                       spec; the propose-mode review is the filter\n\
+     #   park-aligned      — approve only when a spec is BOTH eligible AND\n\
+     #                       clearly aligned with project priorities; else\n\
+     #                       park for a human\n\
+     #   park-conservative — park whenever unsure\n\
+     #\n\
+     # do_not_approve_classes — requirement types the agent can NEVER propose\n\
+     # approve for; they are fenced out of its candidate set entirely. The\n\
+     # default is the strategic + knowledge-graph types. An empty list opens\n\
+     # the gate (the propose-mode review still applies).\n\
+     #\n\
+     # on_apply — what `--apply` does after queuing approved specs:\n\
+     #   queue — (default) stop at queuing; draining stays a separate,\n\
+     #           explicit command\n\
+     #   drain — chain straight into an implementer drain after queuing\n\
+     #\n\
+     # [intake]\n\
+     # disposition_bias = \"approve-eligible\"\n\
+     # do_not_approve_classes = [\"vision\", \"epic\", \"principle\", \"constraint\", \"decision\", \"term\"]\n\
+     # on_apply = \"queue\"\n"
+}
+
+#[cfg(test)]
+mod task_760_intake_config_section_tests {
+    use super::*;
+
+    /// The scaffolded `[intake]` block is fully commented-out: written to a
+    /// config.toml as-is it changes nothing (loads pure defaults).
+    /// trace:TASK-760 | ai:claude
+    #[test]
+    fn scaffolded_intake_block_is_fully_commented() {
+        let section = init_intake_config_section();
+        assert!(section.contains("# [intake]"));
+        // Every non-empty line is a comment — nothing takes effect as-is.
+        for line in section.lines().filter(|l| !l.trim().is_empty()) {
+            assert!(
+                line.trim_start().starts_with('#'),
+                "uncommented line in scaffolded [intake] block: {line:?}"
+            );
+        }
+        assert_eq!(
+            intake::IntakeConfig::from_toml_str(section),
+            intake::IntakeConfig::default()
+        );
+    }
+
+    /// Uncommenting the example lines yields exactly the built-in defaults —
+    /// the documented values match what the parser actually accepts.
+    /// trace:TASK-760 | ai:claude
+    #[test]
+    fn uncommented_intake_example_matches_defaults() {
+        let section = init_intake_config_section();
+        // The example lines are the trailing group beginning at `# [intake]`.
+        let start = section
+            .lines()
+            .position(|l| l.trim_start() == "# [intake]")
+            .expect("scaffolded block carries a `# [intake]` example header");
+        let uncommented: String = section
+            .lines()
+            .skip(start)
+            .map(|l| l.trim_start().trim_start_matches("# ").to_string() + "\n")
+            .collect();
+        assert!(uncommented.starts_with("[intake]"));
+        assert_eq!(
+            intake::IntakeConfig::from_toml_str(&uncommented),
+            intake::IntakeConfig::default()
+        );
+    }
+}
+
 #[cfg(test)]
 mod task_304_ultraplan_cadence_tests {
     use super::*;
@@ -17667,6 +17753,9 @@ fn handle_init_distributed_worktree(
     let config_content = config_content + &forge::init_forge_config_section(&cwd);
     // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
     let config_content = config_content + init_ultraplan_config_section();
+    // Commented [intake] example block (defaults are safe; discoverability only).
+    // trace:TASK-760 | ai:claude
+    let config_content = config_content + init_intake_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // STORY-511: surface the auto-detected forge so the operator sees the
@@ -17834,6 +17923,9 @@ fn handle_init_post_clone(
     let config_content = config_content + &forge::init_forge_config_section(cwd);
     // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
     let config_content = config_content + init_ultraplan_config_section();
+    // Commented [intake] example block (defaults are safe; discoverability only).
+    // trace:TASK-760 | ai:claude
+    let config_content = config_content + init_intake_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
     println!(
         "  {} {}",
@@ -18225,6 +18317,9 @@ fn handle_init_distributed_sibling(
          #   auto_claim_size = 200\n";
     // TASK-304: scaffold the [ultraplan] cadence block (mode = on-demand).
     let config_content = config_content.to_string() + init_ultraplan_config_section();
+    // Commented [intake] example block (defaults are safe; discoverability only).
+    // trace:TASK-760 | ai:claude
+    let config_content = config_content + init_intake_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
