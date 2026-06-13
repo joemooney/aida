@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:13:54.051680503Z
-modified_at: 2026-06-13T19:13:54.051680503Z
+modified_at: 2026-06-13T19:14:01.521719582Z
 req_type: Task
 tags:
 - aida:config
@@ -16,3 +16,6 @@ tags:
 - discoverability
 - relates:BUG-533
 - tech-debt
+deferred: true
+deferred_at: 2026-06-13T19:14:01.521719582Z
+deferred_until: config show drifts again, or the next config knob is added without it appearing
