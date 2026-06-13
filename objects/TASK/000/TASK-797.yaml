@@ -1,0 +1,18 @@
+id: 019ec33e-73d0-7e62-b04e-553293741bb2
+spec_id: TASK-797
+agreed_id: TASK-797
+title: 'Doc: clarify [contained] allowed_hosts = [] means ''no restriction'' not ''deny all'''
+description: 'Review finding on STORY-605 (#862): an empty allowed_hosts list reads like ''deny everything'' but actually means ''no egress restriction'' (opt-in: empty = unchanged behavior). Add a one-line note where [contained] allowed_hosts is documented (docs/cli/03-work-autonomy.md) so operators don''t read [] as a lockdown. trace:relates:STORY-605 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T23:08:30.544990905Z
+modified_at: 2026-06-13T23:08:30.544990905Z
+req_type: Task
+tags:
+- aida:contained
+- docs
+- from-friction
+- papercut
+- relates:STORY-605
