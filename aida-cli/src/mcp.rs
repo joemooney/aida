@@ -2055,6 +2055,8 @@ impl<'a> McpServer<'a> {
                 .map(str::to_string),
             body: body.to_string(),
             urgent,
+            retracted: false,
+            deleted: false,
         };
         crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
         Ok(format!("Message sent: {id} (thread {thread_id})"))

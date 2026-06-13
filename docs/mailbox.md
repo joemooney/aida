@@ -38,11 +38,24 @@ aida mailbox inbox codex
 # read a full conversation
 aida mailbox thread <thread-id>
 
+# withdraw a message but leave a visible tombstone
+aida mailbox retract <msg-id>
+# remove a message from mailbox views
+aida mailbox delete <msg-id>
+
 # persist the local layer into the durable git-canonical store
 aida mailbox sync
 ```
 
-**Identity.** Your "agent id" for sending/receiving is the shell's agent/user identity (the same `AIDA_USER` / role / user resolution the queue uses). `aida mailbox inbox` with no argument reads *your* inbox; pass an agent id to read another's. Agent ids are the agent names — `claude`, `codex`, `antigravity`, etc.
+**Identity.** Your "agent id" for sending/receiving is the shell's agent/user identity (the same `AIDA_USER` / role / user resolution the queue uses). `aida mailbox inbox` with no argument reads *your* inbox; pass an agent id to read another's. Agent ids are the agent names — `claude`, `codex`, `antigravity`, etc. Only the original sender or the operator account may retract/delete a message.
+
+**Policy.** Projects may lock mailbox mutation down in `.aida/config.toml`; both knobs default to `true`:
+
+```toml
+[mailbox]
+allow_retract = true
+allow_delete = true
+```
 
 ---
 
@@ -54,9 +67,11 @@ Each message carries:
 - **`to`** — a specific agent (`Recipient::Agent`) **or** a broadcast (`Recipient::Broadcast`)
 - **`timestamp`** — when it was sent
 - **`body`** — the text
+- **`urgent`** — a lightweight out-of-band escalation flag
+- **`retracted` / `deleted`** — replayable state markers for withdraw/delete
 - thread linkage — `--thread` / `--in-reply-to` group messages into conversations
 
-There is **no priority/urgency field today** (see [Current limitations](#current-limitations)).
+Retracted messages remain visible as `[withdrawn]`; deleted messages are absent from inbox, thread, and overview views. Both states sync through the durable mailbox layer, so a later re-sync does not resurrect a deleted message.
 
 ---
 

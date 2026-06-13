@@ -23401,6 +23401,8 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 in_reply_to: in_reply_to.clone(),
                 body: body.clone(),
                 urgent: *urgent,
+                retracted: false,
+                deleted: false,
             };
             mailbox_store::write_message(project_root, &msg)?;
             let flag = if *urgent {
@@ -23424,7 +23426,7 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
 
             // Operator-wide read-only view: every message across all agents.
             if *all {
-                let mut msgs: Vec<&Message> = merged.iter().collect();
+                let mut msgs: Vec<&Message> = merged.iter().filter(|m| !m.deleted).collect();
                 msgs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
                 if msgs.is_empty() {
                     println!("{} no messages", "✉".dimmed());
@@ -23508,6 +23510,48 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             }
             Ok(())
         }
+        MailboxCommand::Retract { message_id } => {
+            let policy = mailbox_policy(project_root);
+            if !policy.allow_retract {
+                anyhow::bail!("mailbox retract is disabled by [mailbox] allow_retract = false");
+            }
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let merged = merge_dedup(&local, &canonical);
+            let msg = resolve_mailbox_message(&merged, message_id)?;
+            if msg.deleted {
+                anyhow::bail!("message {} is deleted", message_id);
+            }
+            ensure_mailbox_mutation_allowed(msg)?;
+            let marker = Message {
+                retracted: true,
+                body: String::new(),
+                ..msg.clone()
+            };
+            mailbox_store::write_message_marker(project_root, &marker)?;
+            println!("{} retracted {}", "✉".green(), msg.id.cyan());
+            Ok(())
+        }
+        MailboxCommand::Delete { message_id } => {
+            let policy = mailbox_policy(project_root);
+            if !policy.allow_delete {
+                anyhow::bail!("mailbox delete is disabled by [mailbox] allow_delete = false");
+            }
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let merged = merge_dedup(&local, &canonical);
+            let msg = resolve_mailbox_message(&merged, message_id)?;
+            ensure_mailbox_mutation_allowed(msg)?;
+            let marker = Message {
+                deleted: true,
+                retracted: false,
+                body: String::new(),
+                ..msg.clone()
+            };
+            mailbox_store::write_message_marker(project_root, &marker)?;
+            println!("{} deleted {}", "✉".green(), msg.id.cyan());
+            Ok(())
+        }
         MailboxCommand::Thread { thread_id } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -23558,6 +23602,78 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
     }
 }
 
+// trace:STORY-583 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MailboxPolicy {
+    allow_retract: bool,
+    allow_delete: bool,
+}
+
+// trace:STORY-583 | ai:codex
+fn mailbox_policy(project_root: &std::path::Path) -> MailboxPolicy {
+    let mut policy = MailboxPolicy {
+        allow_retract: true,
+        allow_delete: true,
+    };
+    let Ok(body) = std::fs::read_to_string(project_root.join(".aida").join("config.toml")) else {
+        return policy;
+    };
+    let Ok(value) = body.parse::<toml::Value>() else {
+        return policy;
+    };
+    let Some(mailbox) = value.get("mailbox") else {
+        return policy;
+    };
+    if let Some(v) = mailbox.get("allow_retract").and_then(|v| v.as_bool()) {
+        policy.allow_retract = v;
+    }
+    if let Some(v) = mailbox.get("allow_delete").and_then(|v| v.as_bool()) {
+        policy.allow_delete = v;
+    }
+    policy
+}
+
+// trace:STORY-583 | ai:codex
+fn resolve_mailbox_message<'a>(
+    messages: &'a [aida_core::mailbox::Message],
+    query: &str,
+) -> Result<&'a aida_core::mailbox::Message> {
+    let matches: Vec<_> = messages
+        .iter()
+        .filter(|m| m.id == query || m.id.starts_with(query))
+        .collect();
+    match matches.as_slice() {
+        [msg] => Ok(*msg),
+        [] => anyhow::bail!("message not found: {query}"),
+        _ => anyhow::bail!("message id prefix is ambiguous: {query}"),
+    }
+}
+
+// trace:STORY-583 | ai:codex
+fn ensure_mailbox_mutation_allowed(msg: &aida_core::mailbox::Message) -> Result<()> {
+    let actor = current_user_id(None);
+    if mailbox_mutation_allowed(msg, &actor, &mailbox_operator_id()) {
+        return Ok(());
+    }
+    anyhow::bail!("only the sender or operator may modify this mailbox message")
+}
+
+// trace:STORY-583 | ai:codex
+fn mailbox_mutation_allowed(
+    msg: &aida_core::mailbox::Message,
+    actor: &str,
+    operator: &str,
+) -> bool {
+    actor == msg.from || actor == operator
+}
+
+// trace:STORY-583 | ai:codex
+fn mailbox_operator_id() -> String {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "default".to_string())
+}
+
 /// One mailbox message as a compact line: short-id, urgency flag, originator →
 /// recipient, local time, body. trace:STORY-539 | ai:claude
 fn print_mailbox_line(m: &aida_core::mailbox::Message) {
@@ -23579,6 +23695,11 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     } else {
         String::new()
     };
+    let body = if m.retracted {
+        "[withdrawn]".dimmed().to_string()
+    } else {
+        m.body.clone()
+    };
     println!(
         "  {}{} {} → {}  {}  {}",
         flag,
@@ -23586,7 +23707,7 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
         m.from.cyan(),
         to.yellow(),
         when.dimmed(),
-        m.body
+        body
     );
 }
 
@@ -55327,6 +55448,53 @@ mod bug_231_findings_promote_tests {
         assert_eq!(current_user_id(Some("alice")), "alice");
     }
 
+    // trace:STORY-583 | ai:codex
+    #[test]
+    fn mailbox_policy_defaults_allowed_and_reads_false_overrides() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            mailbox_policy(dir.path()),
+            MailboxPolicy {
+                allow_retract: true,
+                allow_delete: true,
+            }
+        );
+
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[mailbox]\nallow_retract = false\nallow_delete = false\n",
+        )
+        .unwrap();
+        assert_eq!(
+            mailbox_policy(dir.path()),
+            MailboxPolicy {
+                allow_retract: false,
+                allow_delete: false,
+            }
+        );
+    }
+
+    // trace:STORY-583 | ai:codex
+    #[test]
+    fn mailbox_mutation_allowed_for_sender_or_operator_only() {
+        let msg = aida_core::mailbox::Message {
+            id: "m1".into(),
+            thread_id: "t1".into(),
+            from: "codex".into(),
+            to: aida_core::mailbox::Recipient::Agent("claude".into()),
+            timestamp: 1,
+            in_reply_to: None,
+            body: "hi".into(),
+            urgent: false,
+            retracted: false,
+            deleted: false,
+        };
+        assert!(mailbox_mutation_allowed(&msg, "codex", "joe"));
+        assert!(mailbox_mutation_allowed(&msg, "joe", "joe"));
+        assert!(!mailbox_mutation_allowed(&msg, "other", "joe"));
+    }
+
     // ---- TASK-754: `aida add --queue` eligibility gate ----
 
     /// AC1/AC2: an Approved spec (the file-approve-and-queue happy path) is
@@ -73667,6 +73835,8 @@ mod mailbox_digest_autotrigger_tests {
             in_reply_to: None,
             body: format!("body-{id}"),
             urgent: false,
+            retracted: false,
+            deleted: false,
         }
     }
 
