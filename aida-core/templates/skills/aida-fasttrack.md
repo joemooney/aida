@@ -25,10 +25,11 @@ gating, still integrity-gated.
 
 1. Read `$ARGUMENTS` as the change description. Pick a `--type` that fits
    (`bug` for a papercut/defect, `task` for a chore/doc).
-2. File + queue it in one shot, tagged for the lane, and capture the SPEC-ID:
+2. File + queue it in one shot, and capture the SPEC-ID — the `aida fasttrack`
+   verb owns the lane's filing convention (Approved + queued + `batch:fasttrack`
+   + `lifecycle:no-review`), so the tags live in one place, not in this prose:
    ```
-   aida add "<description>" --status approved --queue \
-     --batch fasttrack --tags lifecycle:no-review --type <type>
+   aida fasttrack "<description>" --type <type>
    ```
 3. Implement the change in a fresh worktree/branch off latest `origin/main`.
    Add a `// trace:<SPEC-ID>` comment if it's code.
