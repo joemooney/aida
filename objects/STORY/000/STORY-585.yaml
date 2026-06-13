@@ -15,12 +15,12 @@ description: |-
   5. Scope the surfacing to the session's role identity (advisor/implementer/reviewer), same identity the statusline uses.
 
   Why HIGH: pairs with STORY-569 (High). Briefs already have a notice path (--notify + aida status); raw mailbox messages do not — this closes that asymmetry. Relates: STORY-569 (write half), STORY-583 (retract — so stale msgs don't nag forever), the statusline mail counter (same data, different consumer), [[feedback_substrate_as_bouncer_not_rules]].
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:09:45.946450558Z
-modified_at: 2026-06-13T03:12:55.804822725Z
+modified_at: 2026-06-13T15:18:23.390793172Z
 req_type: Story
 tags:
 - agent-context
