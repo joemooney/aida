@@ -8,12 +8,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:30:09.715046374Z
-modified_at: 2026-06-13T02:28:31.609170247Z
+modified_at: 2026-06-13T02:28:33.342225545Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019eb6d7-2d9a-74e0-8cc3-f038c1c46b28
   created_at: 2026-06-12T20:30:20.618002989Z
+comments:
+- id: 019ebecf-3dbe-7392-826a-295126e1b95a
+  author: joe
+  content: 'Rejected: verbatim duplicate of TASK-746 (Completed) — the ''aida human predicate + vector'' was implemented + merged by claude under TASK-746/STORY-563. PR #804 ''completed'' this only by renaming claude''s trace comments to ai:codex (provenance rewrite, reverted). No new work. trace dup.'
+  created_at: 2026-06-13T02:28:33.342225545Z
+  modified_at: 2026-06-13T02:28:33.342225545Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-13T02:14:41.423604614Z
