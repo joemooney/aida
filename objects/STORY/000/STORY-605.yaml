@@ -1,0 +1,26 @@
+id: 019ec26d-4714-7511-81d8-ee8708fe5063
+spec_id: STORY-605
+agreed_id: STORY-605
+title: 'Sandbox slice 1: harden the existing contained posture with a default-deny network-egress allowlist'
+description: |-
+  Actionable output of SPIKE-61 (research doc: docs/competitive-analysis/2026-06-13-sandbox-execution.md; operator approved 2026-06-13). Build on STORY-567's SHIPPED 'contained' posture (--contained / [agents] contained, aida-cli/src/cli.rs — strict Bash sandboxing via Claude Code's bubblewrap). Slice 1 adds the single most differentiated competitor capability the research found missing: a DEFAULT-DENY NETWORK-EGRESS ALLOWLIST for contained/headless drains.
+
+  SCOPE (slice 1, ~1 day per research): config under [sandbox] (or extend [agents]) for an egress allowlist (e.g. allowed_hosts = ['github.com','api.anthropic.com', crates.io/registry mirrors, npm registry]); default-deny when contained is on. Engine = bubblewrap (already in the stack; zero cargo-build overhead, rootless) — NOT Podman (research overturned it: rootless-net/UID-map friction). Honor the faithful-launcher principle: native default, one explicit opt-in.
+
+  OUT OF SCOPE (slice 2, separate spec): an OS boundary around the WHOLE 'claude -p' process (contained only sandboxes Bash, not Edit/Write/MCP) and the Firecracker-microVM strong-isolation profile for unattended drains (gVisor fallback). File slice 2 after slice 1 lands.
+
+  POSTURE: keystone-adjacent (sandboxing the autonomy keystone) → implement at the KEYBOARD, advisor-watched, never an unsupervised drain. ACCEPTANCE: with contained on + an egress allowlist set, a drain's network is default-deny except the allowlisted hosts; off/unset = today's behavior unchanged. trace:relates:SPIKE-61 trace:relates:STORY-567
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-13T19:20:02.068423845Z
+modified_at: 2026-06-13T19:20:02.068423845Z
+req_type: Story
+tags:
+- agent-execution
+- competitive-hole
+- from-strategic
+- parent:SPIKE-61
+- sandbox
+- security
