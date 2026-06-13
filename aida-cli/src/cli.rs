@@ -6907,6 +6907,17 @@ pub enum Command {
     // trace:TASK-756 | ai:claude
     Presence,
 
+    /// Print the caller identity AIDA resolved — role, agent-type, agent-name,
+    /// user-id, headless flag, ai-tool, and active session/scope — each line
+    /// annotated with where the value came from (env var vs fallback vs
+    /// default). Read-only: it runs the SAME resolvers the gating/queue/
+    /// provenance code uses, so it answers "why did this refuse?" (role
+    /// resolved to a default, not advisor, tripping the advisor-gate) and
+    /// "why is my queue empty?" (your user/role identity differs from what
+    /// queued the items). No project store is loaded; no state is written.
+    // trace:TASK-784
+    Whoami,
+
     /// (internal) Background fetch worker spawned by `aida statusline`.
     /// Fetches `origin/<branch>` for the orphan store at <store-path>,
     /// updates `~/.aida/cache/last-fetch.toml`, and removes the
