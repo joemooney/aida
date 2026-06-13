@@ -879,6 +879,56 @@ pub fn claude_contained_flags() -> Vec<String> {
 }
 
 fn claude_contained_settings_json() -> String {
+    // Egress allowlist is strictly opt-in via `[sandbox] allowed_hosts`. When
+    // the project root or config can't be resolved we fall back to an empty
+    // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
+    let allowed_hosts = crate::find_project_root()
+        .ok()
+        .map(|root| contained_allowed_hosts(&root))
+        .unwrap_or_default();
+    contained_settings_json(&allowed_hosts)
+}
+
+/// Read `[contained] allowed_hosts` (a string array) from the project config.
+/// Empty when unset, absent, or malformed — the network-egress restriction is
+/// strictly OPT-IN, so an absent/typo'd key never silently restricts a drain.
+/// Section is `[contained]` (not `[sandbox]`) to avoid colliding with the
+/// `aida sandbox` throwaway-store command's vocabulary. trace:STORY-605 | ai:claude
+fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<String> {
+    let cfg = crate::read_project_config_value(project_root);
+    crate::config_lookup(cfg.as_ref(), "contained", "allowed_hosts")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Build the contained-mode `--settings` JSON. With a NON-EMPTY `allowed_hosts`
+/// egress allowlist, a `sandbox.network.allowedDomains` key is added so Claude
+/// Code's own sandbox (bubblewrap + an out-of-sandbox proxy on Linux) default-
+/// denies network egress except to those hosts (STORY-605, SPIKE-61). With an
+/// EMPTY allowlist the `network` key is OMITTED entirely — the output is the
+/// same shape as the pre-STORY-605 contained settings, so the posture is
+/// unchanged unless the operator opts in via `[contained] allowed_hosts`.
+///
+/// NOTE (slice-1 limitation): a non-allowlisted domain PROMPTS for approval by
+/// default; a headless `claude -p` drain can't answer that prompt. True block-
+/// without-prompt needs `network.allowManagedDomainsOnly` via MANAGED settings
+/// (not this project `--settings`) and is a follow-up — see STORY-605. Pure +
+/// total so the "empty → unchanged" invariant is unit-tested. trace:STORY-605
+pub(crate) fn contained_settings_json(allowed_hosts: &[String]) -> String {
+    let mut sandbox = serde_json::json!({
+        "enabled": true,
+        "failIfUnavailable": true,
+        "autoAllowBashIfSandboxed": true,
+        "allowUnsandboxedCommands": false
+    });
+    if !allowed_hosts.is_empty() {
+        sandbox["network"] = serde_json::json!({ "allowedDomains": allowed_hosts });
+    }
     serde_json::json!({
         "permissions": {
             "allow": [
@@ -886,12 +936,7 @@ fn claude_contained_settings_json() -> String {
             ],
             "deny": destructive_command_deny_rules()
         },
-        "sandbox": {
-            "enabled": true,
-            "failIfUnavailable": true,
-            "autoAllowBashIfSandboxed": true,
-            "allowUnsandboxedCommands": false
-        }
+        "sandbox": sandbox
     })
     .to_string()
 }
@@ -1996,6 +2041,60 @@ pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>, contained: bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // STORY-605: an EMPTY egress allowlist must leave the contained settings
+    // unchanged — the network-egress restriction is strictly opt-in. The
+    // parsed sandbox object must carry exactly the four pre-STORY-605 keys and
+    // NO `network` key. (If this fails, the default contained posture changed.)
+    // trace:STORY-605 | ai:claude
+    #[test]
+    fn empty_egress_allowlist_omits_network_key_unchanged() {
+        let json = contained_settings_json(&[]);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let sandbox = v.get("sandbox").and_then(|s| s.as_object()).unwrap();
+        assert!(
+            sandbox.get("network").is_none(),
+            "empty allowlist must omit the network key (unchanged posture): {json}"
+        );
+        assert_eq!(sandbox.get("enabled"), Some(&serde_json::json!(true)));
+        assert_eq!(
+            sandbox.get("allowUnsandboxedCommands"),
+            Some(&serde_json::json!(false))
+        );
+        // The unchanged set is exactly these four keys.
+        let mut keys: Vec<&String> = sandbox.keys().collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                "allowUnsandboxedCommands",
+                "autoAllowBashIfSandboxed",
+                "enabled",
+                "failIfUnavailable",
+            ]
+        );
+    }
+
+    // STORY-605: a non-empty allowlist adds `sandbox.network.allowedDomains`
+    // (Claude Code's verified egress schema) with the given hosts, leaving the
+    // base sandbox keys intact. trace:STORY-605 | ai:claude
+    #[test]
+    fn nonempty_egress_allowlist_adds_allowed_domains() {
+        let hosts = vec!["github.com".to_string(), "*.crates.io".to_string()];
+        let json = contained_settings_json(&hosts);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let domains = v
+            .pointer("/sandbox/network/allowedDomains")
+            .and_then(|d| d.as_array())
+            .expect("network.allowedDomains present");
+        let got: Vec<&str> = domains.iter().filter_map(|d| d.as_str()).collect();
+        assert_eq!(got, vec!["github.com", "*.crates.io"]);
+        // Base sandbox keys still intact.
+        assert_eq!(
+            v.pointer("/sandbox/enabled"),
+            Some(&serde_json::json!(true))
+        );
+    }
 
     // TASK-402 (friction #2): a session JSONL that echoed the deprecated
     // `dialog` alias must report the canonical `advisor` role in
