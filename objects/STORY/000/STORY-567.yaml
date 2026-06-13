@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T15:02:23.538240541Z
-modified_at: 2026-06-12T17:41:40.102949003Z
+modified_at: 2026-06-13T02:21:01.454847996Z
 req_type: Story
 tags:
 - agent-config
@@ -46,3 +46,9 @@ tags:
 - needs-supervised-build
 - safety
 - substrate-as-bouncer
+comments:
+- id: 019ebec8-588e-7a72-b5ac-264bb6f9755d
+  author: mcp
+  content: 'Codex implementation opened PR #807. Spike finding: Claude Code native settings/deny rules plus Bash sandbox cover the v1 contained posture, so the implementation configures native sandboxing at launch and does not add OS-container infrastructure. CLI-facing changes: added `--sandbox` on Claude launch surfaces and `[agents] contained = true` as the opt-in contained posture; contained is mutually exclusive with bypass and uses the session lease worktree as the write boundary. Verification passed: `cargo build -p aida-cli`; `cargo fmt --all -- --check`; `cargo clippy -p aida-cli -- -D clippy::correctness`; `env -u AIDA_SESSION_ROLE cargo test -p aida-cli`.'
+  created_at: 2026-06-13T02:21:01.454819229Z
+  modified_at: 2026-06-13T02:21:01.454819229Z
