@@ -122,6 +122,10 @@ pub(crate) fn classify(c: &BurndownCandidate) -> Pickability {
     if c.has_unsatisfied_blocker {
         return Pickability::Parked("blocked by an unsatisfied dependency (BlockedBy)".to_string());
     }
+    // trace:BUG-514 | ai:codex
+    if let Some(tag) = parking_tag(&c.tags) {
+        return Pickability::Parked(format!("tagged `{tag}`"));
+    }
     // STORY-568: a spike is never an implementer-fan-out candidate (no PR
     // lifecycle), but name the precise lane instead of the old flat "human-
     // only" — agent-able research is dispatched, not human-gated.
@@ -136,9 +140,6 @@ pub(crate) fn classify(c: &BurndownCandidate) -> Pickability {
             }
             SpikeLane::HumanOnly => "spike (human-only) — human analysis required".to_string(),
         });
-    }
-    if let Some(tag) = parking_tag(&c.tags) {
-        return Pickability::Parked(format!("tagged `{tag}`"));
     }
     Pickability::Ready
 }
@@ -1203,6 +1204,25 @@ mod tests {
     fn needs_decision_spike_parks_as_decision_lane() {
         match classify(&cand("SPIKE-2", "spike", &["needs-decision"], false, false)) {
             Pickability::Parked(r) => assert!(r.contains("needs-decision"), "got {r:?}"),
+            other => panic!("expected Parked, got {other:?}"),
+        }
+    }
+
+    // trace:BUG-514 | ai:codex
+    #[test]
+    fn deferred_spike_reports_parking_tag_before_research_lane() {
+        match classify(&cand(
+            "SPIKE-4",
+            "spike",
+            &["deferred:stabilization-first"],
+            false,
+            false,
+        )) {
+            Pickability::Parked(r) => {
+                assert!(r.contains("deferred:stabilization-first"), "got {r:?}");
+                assert!(!r.contains("research-lane"), "got {r:?}");
+                assert!(!r.contains("aida research"), "got {r:?}");
+            }
             other => panic!("expected Parked, got {other:?}"),
         }
     }
