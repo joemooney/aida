@@ -3,12 +3,12 @@ spec_id: BUG-538
 agreed_id: BUG-538
 title: burndown run / queue work --auto-complete has no concurrency guard — a second drain double-drives the same tree
 description: 'Operator+advisor hit (2026-06-13): the advisor kicked ''aida burndown run'' (background) and the operator was about to run it again — a second drain would double-drive the SAME repo tree (two integrators merging to main, two sets of worktrees, racing git ops + shared target/ builds). Nothing prevents it; the ''one drain at a time'' invariant relies on humans remembering. Substrate-as-bouncer fix: a drain-instance LOCK. On launch, handle_burndown_run writes .aida/burndown.lock with {pid, started_at, selector}; before launching, if a live lock exists (PID still alive) REFUSE with ''a drain is already running (pid N, started T) — wait for it or kill it'', else (stale PID) reclaim. Clean the lock on exit (and on the headless claude -p child''s exit). Reuse the existing lock pattern (bg_fetch_lock_path, main.rs:51320). Same guard belongs on ''queue work --auto-complete'' (single-spec orchestrator) since it also integrates on main. Keep a --force/--allow-concurrent escape for the rare intentional case. Keystone-adjacent (the drain launcher) → implement at the keyboard. trace:from-friction trace:substrate-as-bouncer'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:38:48.809235306Z
-modified_at: 2026-06-14T05:15:00.942586902Z
+modified_at: 2026-06-14T06:18:52.496626146Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -49,7 +49,23 @@ comments:
   content: Commit 543389bac references this requirement
   created_at: 2026-06-14T05:14:17.004914572Z
   modified_at: 2026-06-14T05:14:17.004914572Z
+history:
+- id: 019ec4c8-76cb-76e1-9b90-7369aa3051ac
+  author: aida-auto-bump
+  timestamp: 2026-06-14T06:18:52.492004057Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec4c8-76d0-7601-ac9c-55cf7acf713a
+  timestamp: 2026-06-14T06:18:52.496625661Z
+  agent: implementer
+  commit_sha: 17a2de04719ec4663e253cc8a9261dde605e203b
+  summary: Completed via merge 17a2de04
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T05:15:00.942586902Z
   implemented_by: joe
+  completed_at: 2026-06-14T06:18:52.337312250Z
+  completion_sha: 17a2de04719ec4663e253cc8a9261dde605e203b
