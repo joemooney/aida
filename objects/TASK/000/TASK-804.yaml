@@ -3,12 +3,12 @@ spec_id: TASK-804
 agreed_id: TASK-804
 title: 'burndown run --verbose: stream-json tee + live per-event progress (facet a of STORY-604)'
 description: 'Facet (a) of STORY-604 (live progress). ''aida burndown run --verbose'' keeps the headless ''claude -p'' launch (AUTO-PROCEED preserved — --verbose only adds visibility, never changes control flow) but launches with ''--output-format stream-json --verbose --include-partial-messages'', tees the JSONL to .aida/burndown/<drain-id>.jsonl, and renders a human-readable progress line per event to the terminal. Default (no --verbose) stays quiet. The teed .jsonl is the machine-readable substrate for future ''aida burndown status/watch'' tooling. Operator decision (2026-06-13): ship Option B as primary; Option A (--attached) deferred pending SPIKE. Independent of BUG-538.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T04:53:01.115604097Z
-modified_at: 2026-06-14T05:09:25.222101774Z
+modified_at: 2026-06-14T06:17:20.939445099Z
 req_type: Task
 tags:
 - aida:burndown
@@ -26,3 +26,21 @@ comments:
   content: Commit d6cdc1797 references this requirement
   created_at: 2026-06-14T05:09:20.635996438Z
   modified_at: 2026-06-14T05:09:20.635996438Z
+history:
+- id: 019ec4c7-1126-7263-9026-9a21b5ff2355
+  author: aida-auto-bump
+  timestamp: 2026-06-14T06:17:20.934694230Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec4c7-112b-7293-b61a-2d2645d55a62
+  timestamp: 2026-06-14T06:17:20.939443736Z
+  agent: aida
+  commit_sha: c5cc1e7a0a32d589a62771606e22055abf91b057
+  summary: Completed via merge c5cc1e7a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T06:17:20.777915852Z
+  completion_sha: c5cc1e7a0a32d589a62771606e22055abf91b057
