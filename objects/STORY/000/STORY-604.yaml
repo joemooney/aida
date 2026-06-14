@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-14T00:26:32.687557148Z
+modified_at: 2026-06-14T01:12:11.547960754Z
 req_type: Story
 tags:
 - agent-context
@@ -64,3 +64,8 @@ comments:
   content: 'OPERATOR ASK (2026-06-13), sharpens facet (b): ''aida queue list'' and ''aida burndown plan'' should DETECT a running drain and explicitly mark its specs — Scheduled (claimed by the drain''s blessed set, not yet picked up) vs InProgress (actively leased/being worked). Today the signal is only IMPLICIT: an actively-worked spec flips to In Progress (queue work leases it) so it leaves the ''ready'' set + shows in ''aida list --status in-progress'' / ''aida session leases''; queue list has ''Done — awaiting merge''. Missing: an explicit ''a drain is running (pid N); ⟳ scheduled: …, ▶ in-flight: …'' banner/markers in queue list + burndown plan. DATA SOURCE: the BUG-538 drain-lock (pid + claimed selector/set) gives ''what this drain plans to process'' (Scheduled); session leases give ''actively being worked'' (InProgress). So this composes with BUG-538 (lock = the claimed set) + the lease layer. Without it, the operator can''t tell from queue list/burndown plan that work is mid-flight — they look idle while a drain churns. trace:STORY-604 trace:relates:BUG-538'
   created_at: 2026-06-14T00:26:32.687557148Z
   modified_at: 2026-06-14T00:26:32.687557148Z
+- id: 019ec3af-b01b-7a91-b7ad-73d239547bde
+  author: joe
+  content: 'OPERATOR ASK #3 (2026-06-13) — add an explicit ''aida burndown status'' subcommand. The operator has now hit the drain-observability gap from THREE angles, all the same missing surface: (1) live progress, (2) in-flight/scheduled marking in queue list/plan, (3) ''is a drain even running? I can''t tell.'' Today the only signals are ''pgrep -af aida-burndown'' + ''aida session leases'' — clunky + non-obvious. ''aida burndown status'' should answer in one command: is a drain running (pid, started_at, selector — from BUG-538''s drain-lock), what specs are in-flight/leased (from session leases), what''s shipped this run + what''s left, and a pointer to the live log (STORY-604 stream-tee). This is the read-side companion to ''burndown run'' and the natural home for the whole observability story. Bumping demand signal: 3 separate operator asks → high priority. trace:STORY-604 trace:relates:BUG-538'
+  created_at: 2026-06-14T01:12:11.547960754Z
+  modified_at: 2026-06-14T01:12:11.547960754Z
