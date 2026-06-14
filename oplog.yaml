@@ -17921,5 +17921,13 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-14, operator decision via `aida questions answer`): Unify under [contained] — enable joins the allowlist: accept [contained] enable as an alias of [agents] contained, so an operator writes one [contained] block in config.toml. Pulls 'enable' out of the agents.toml launch-posture model.
-clock: 1773
+- id: 019ec41c-e25d-7e51-8e68-d872839bf8be
+  target_id: 019ec419-1f20-76f3-8d39-12c372ff47c3
+  author: aida
+  node_id: '1'
+  lamport: 1774
+  timestamp: 2026-06-14T03:11:27.837079710Z
+  kind: !SetStatus
+    status: Approved
+clock: 1774
 node_id: '1'
