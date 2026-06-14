@@ -9,11 +9,11 @@ description: |-
 
   (b) EXPECTED / IN-FLIGHT MARKING — a spec the drain plans to process (blessed + in its run-set) should be visibly distinguishable in 'aida list' / 'aida show' / 'aida queue list' from a merely-queued spec: 'queued (not started)' vs 'a drain is expected to reach it' vs 'actively leased now'. Extends the existing in-flight/lease concept (queue list --in-flight, session leases, 'Done — awaiting merge') to cover the 'claimed by a running drain plan' state that today has no marker. trace:from-friction
 status: Approved
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-14T01:12:11.547960754Z
+modified_at: 2026-06-14T01:12:30.994688073Z
 req_type: Story
 tags:
 - agent-context
