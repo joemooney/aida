@@ -8,9 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T02:28:57.332266845Z
-modified_at: 2026-06-14T02:28:57.332266845Z
+modified_at: 2026-06-14T02:29:20.475007742Z
 req_type: Bug
 tags:
 - aida:burndown
 - autonomy
 - from-friction
+- supervised
