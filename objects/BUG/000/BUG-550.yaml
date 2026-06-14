@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T02:38:32.168204943Z
-modified_at: 2026-06-14T02:38:32.168204943Z
+modified_at: 2026-06-14T03:38:14.606384956Z
 req_type: Bug
 tags:
 - aida:human
@@ -20,3 +20,18 @@ tags:
 - relates:STORY-611
 - reviews-bucket
 - supervised
+decision_request:
+  question: The reviews bucket in aida human only lists Done-status specs, so an open PR whose spec is still Approved/In-Progress is invisible. How should it find open PRs more completely without making aida human slow?
+  choices:
+  - label: Local linkage, widen candidate set
+    consequence: include non-Done specs that have an open-PR linkage via the existing LOCAL git detection. Keeps aida human fast + offline; may miss a PR if local linkage is stale.
+    resolution: noop
+  - label: Query the forge live
+    consequence: enumerate open PRs via the forge (gh pr list) and resolve each to its spec. Fully complete (ground truth) but adds a network call + offline degradation to a hot command.
+    resolution: noop
+  - label: Config [human] reviews_source = local
+    consequence: forge (default local)
+    resolution: 'tunable: default to the fast local path, let a user opt into the authoritative forge query.|noop'
+  recommended: 0
+  rationale: aida human is a hot, frequently-run command that should stay fast and work offline; a network gh pr list in its path is a real cost. The local-linkage widening closes the reported gap (Approved-spec PRs now show) while preserving speed. A forge-query mode can be a later opt-in if local linkage proves insufficient.
+  asked_at: 2026-06-14T03:38:14.606384956Z
