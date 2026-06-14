@@ -54,8 +54,54 @@ Contained mode is mutually exclusive with `bypass`. It launches Claude with
 Claude Code's native Bash sandbox enabled, hard-fails if the sandbox is
 unavailable, disables unsandboxed command retry, auto-allows project-relative
 edits only, and denies known destructive Bash commands. AIDA uses the session
-lease worktree as the write boundary; v1 does not build OS-container
-infrastructure.
+lease worktree as the write boundary.
+
+### OS-boundary wrapper — `[contained] os_wrap` (STORY-612)
+
+Contained mode sandboxes only Claude's *Bash* tool; Edit/Write/MCP run
+unconfined and there is no OS boundary around the `claude` process itself. The
+opt-in `os_wrap` posture closes that gap by wrapping the **whole headless
+`claude -p` process** in [bubblewrap](https://github.com/containers/bubblewrap):
+
+```toml
+[contained]
+os_wrap = true
+# allowed_hosts = ["github.com", "static.crates.io", "registry.npmjs.org"]  # slice-1 egress allowlist
+```
+
+**Write-confinement model.** `bwrap --ro-bind / /` makes the whole filesystem
+**readable but read-only**, then rw-binds *only* the code worktree, the
+`.aida-store` worktree, and the build/auth caches (`~/.cargo`, `~/.npm`,
+`~/.claude`, `~/.claude.json`). So every OS-level *write* by Edit/Write/MCP/Bash
+is confined to the worktree — a rogue or prompt-injected drain cannot `rm -rf ~`,
+tamper with `~/.ssh`, or scribble outside its tree. **Network stays shared**
+(bwrap never `--unshare-net`; `claude` itself must reach `api.anthropic.com`), so
+egress is bounded by the slice-1 `[contained] allowed_hosts` allowlist, **not** by
+this filesystem confinement.
+
+**Limitation:** reads stay broad — read-exfiltration of host credentials is
+bounded by the egress allowlist, not the FS boundary. Strict read-confinement
+(a default-absent bind-allowlist) is a tracked follow-up.
+
+**Scope:** wraps the three *headless* (`claude -p`) spawn paths only — interactive
+sessions (a human is present) are not wrapped.
+
+**Prerequisite — unprivileged user namespaces.** `bwrap` needs to create an
+unprivileged user namespace. On Ubuntu 23.10+/24.04 the AppArmor
+`apparmor_restrict_unprivileged_userns` knob blocks this for unprofiled binaries.
+`os_wrap` is **fail-closed**: if `bwrap` is missing, or the self-test that
+confirms userns works fails, the launch errors with remediation rather than
+running unconfined. Remediate with **one** of:
+
+```bash
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0   # host-wide
+# or install an AppArmor profile granting bwrap userns (see /etc/apparmor.d)
+```
+
+`os_wrap` can combine with `[contained] enable`, but note that running Claude
+Code's own Bash bubblewrap *inside* the outer bwrap nests user namespaces, which
+some hardened kernels disallow — `os_wrap` alone already provides the broader OS
+boundary.
 
 When `bypass = true` (and the launch has no more-specific override), each
 launcher injects that tool's appropriate bypass flag:
