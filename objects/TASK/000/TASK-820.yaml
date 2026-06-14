@@ -1,0 +1,12 @@
+id: 019ec7b8-3fdb-7480-a2a5-708dcace451e
+spec_id: TASK-820
+agreed_id: TASK-820
+title: Land the EPIC-35 gh-to-glab forge wiring-gap inventory (2026-06-14 GitLab Tier-2 audit)
+description: 'Tier-2 GitLab evaluation produced a classified inventory of all gh call sites in aida-cli/src/main.rs via a 6-way parallel audit + synthesis. Headline: the often-cited ~113 gh sites overstate the work; the honest runtime gap is ~20-25 spawns across ~18 functions, gated behind one foundation (resolve_glab_binary + forge-keyed dispatch). Land the synthesized report as a dated planning artifact under docs/plans/. Findings are delegated-audit + spot-checked against code (resolve_glab_binary confirmed missing; queue-recover gh pr create at 106412/106455; delegated-review gh api check-runs at 112134; Forge::merge_change exists). Feeds EPIC-35 slicing.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T20:00:01.499500156Z
+modified_at: 2026-06-14T20:00:01.499500156Z
+req_type: Task
