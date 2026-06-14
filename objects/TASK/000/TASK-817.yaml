@@ -14,10 +14,10 @@ description: |-
   - Non-TTY / piped-stdin safety: inquire::Select needs a TTY, so the non-interactive path must still work for scripted launches — honor an explicit --role flag and fall back gracefully (default role or a clear error with guidance) when there is no TTY. Do not make agent new hang or fail in headless/scripted use.
 
   Out of scope: changing the role taxonomy or the role descriptions; this is input-mechanism only.
-status: Draft
-priority: Medium
+status: Approved
+priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:10:17.205484158Z
-modified_at: 2026-06-14T19:10:17.205484158Z
+modified_at: 2026-06-14T20:13:14.880191249Z
 req_type: Task
