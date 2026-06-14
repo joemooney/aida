@@ -3,12 +3,12 @@ spec_id: STORY-624
 agreed_id: STORY-624
 title: 'aida solo: enter/indicate solo-mode work state + surface it in the statusline'
 description: 'Operator request 2026-06-14: formalize solo mode as a visible work state. (1) aida solo — a command to enter/indicate the solo-mode session state (advisor+integrator working the safe backlog end-to-end with maximum discretion, per EPIC-43 / docs/solo-mode.md), mirroring how aida away / aida home / role enter set session state. (2) Surface it in the statusline (the same statusline that shows role / queue depth / mail) so the operator sees at a glance that a session is in solo mode. Decide: is solo mode a presence-style flag (~/.aida or .aida state) the statusline reads, plus an autonomy posture the drains honor? Relates to EPIC-43 (solo mode), the three-mode autonomy taxonomy, and the presence/away-home model. Parent EPIC-43.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T22:08:59.221967722Z
-modified_at: 2026-06-14T22:08:59.221967722Z
+modified_at: 2026-06-14T22:34:42.045121948Z
 req_type: Story
 tags:
 - from-product
@@ -16,3 +16,21 @@ tags:
 - solo-mode
 - statusline
 - ux
+history:
+- id: 019ec845-dbf8-7d82-8c83-5b9aacc0295d
+  author: aida-auto-bump
+  timestamp: 2026-06-14T22:34:42.040712620Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec845-dbfd-7123-aed0-d9fa71a28eff
+  timestamp: 2026-06-14T22:34:42.045121234Z
+  agent: aida
+  commit_sha: 1c4c57bde71b1b791ff58c048b18c9c5da851045
+  summary: Completed via merge 1c4c57bd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T22:34:41.880307652Z
+  completion_sha: 1c4c57bde71b1b791ff58c048b18c9c5da851045
