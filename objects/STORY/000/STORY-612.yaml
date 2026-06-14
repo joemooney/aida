@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:08:20.133582563Z
-modified_at: 2026-06-14T06:29:20.738028582Z
+modified_at: 2026-06-14T06:56:10.937497826Z
 req_type: Story
 tags:
 - agent-execution
@@ -18,3 +18,8 @@ tags:
 - sandbox
 - security
 - supervised
+relationships:
+- rel_type: Parent
+  target_id: 019ec4e8-985c-7701-933d-fffdcd8e8baa
+  created_at: 2026-06-14T06:56:10.937493435Z
+  created_by: joe
