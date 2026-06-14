@@ -44,6 +44,12 @@ pub(crate) struct IntegrationCandidate {
     /// must not treat "couldn't tell" as "no PR" — it skips and reports, so a
     /// flaky probe never silently strands a mergeable spec. trace:STORY-520
     pub pr_lookup_inconclusive: bool,
+    /// TASK-813: the spec is keystone work the human must review — tagged
+    /// `supervised` (excluded from the drain) or `review:draft-only`. The
+    /// integrator PARKS it (leaves the PR for the operator) instead of
+    /// auto-merging, so solo mode works the SAFE backlog and never ships
+    /// keystone/security unattended. trace:TASK-813 | ai:claude
+    pub held_for_human: bool,
 }
 
 /// What the integrator should do with one candidate. trace:STORY-520 | ai:claude
@@ -62,6 +68,10 @@ pub(crate) enum CandidateVerdict {
     /// The PR probe was inconclusive (gh missing / auth / network). Skip and
     /// surface, never guess. trace:STORY-520 | ai:claude
     SkipProbeInconclusive,
+    /// TASK-813: keystone work (`supervised` / `review:draft-only`) — PARK it
+    /// for the operator's review; the integrator never auto-merges keystone.
+    /// trace:TASK-813 | ai:claude
+    SkipHeldForHuman,
 }
 
 /// The pure heart of the integrator: classify ONE candidate from probed facts.
@@ -81,6 +91,13 @@ pub(crate) fn classify_candidate(c: &IntegrationCandidate) -> CandidateVerdict {
     }
     if c.pr_merged {
         return CandidateVerdict::SkipAlreadyMerged;
+    }
+    // TASK-813: keystone work is parked for the human BEFORE the integrate gate
+    // — a supervised / review:draft-only spec is never auto-merged, even with a
+    // clean open PR. Checked after `pr_merged` so an already-landed one still
+    // reports SkipAlreadyMerged. trace:TASK-813 | ai:claude
+    if c.held_for_human {
+        return CandidateVerdict::SkipHeldForHuman;
     }
     if c.has_open_pr {
         return CandidateVerdict::Integrate;
@@ -278,7 +295,29 @@ mod tests {
             has_open_pr,
             pr_merged,
             pr_lookup_inconclusive: inconclusive,
+            held_for_human: false,
         }
+    }
+
+    // TASK-813: a keystone spec (supervised / review:draft-only) with a clean
+    // open PR is PARKED, not integrated — even though it's Done + open +
+    // unmerged. An already-merged keystone spec still reports SkipAlreadyMerged
+    // (the held check is after the merged check).
+    #[test]
+    fn held_for_human_keystone_is_parked_not_integrated() {
+        let mut c = candidate("STORY-1", true, true, false, false);
+        // baseline: without the flag it would integrate.
+        assert_eq!(classify_candidate(&c), CandidateVerdict::Integrate);
+        c.held_for_human = true;
+        assert_eq!(classify_candidate(&c), CandidateVerdict::SkipHeldForHuman);
+        // held + already-merged → still SkipAlreadyMerged (merged check first).
+        c.pr_merged = true;
+        assert_eq!(classify_candidate(&c), CandidateVerdict::SkipAlreadyMerged);
+        // held is not in the ready set.
+        let held = candidate("STORY-2", true, true, false, false);
+        let mut held = held;
+        held.held_for_human = true;
+        assert!(ready_for_integration(std::slice::from_ref(&held)).is_empty());
     }
 
     #[test]
