@@ -3,14 +3,32 @@ spec_id: BUG-557
 agreed_id: BUG-557
 title: aida mailbox send --in-reply-to is accepted but doesn't thread the reply (opens a new thread)
 description: 'Found live (mailbox demo 2026-06-14): ''aida mailbox send --to joe --in-reply-to <orig-id> ...'' is ACCEPTED (no error) but the reply opens a NEW thread instead of attaching under <orig-id>. ''aida mailbox thread <orig-id>'' shows only the original message (count 1); the reply (f1173ad2) is in its own thread. Expected: --in-reply-to attaches the reply to the original''s thread so ''aida mailbox thread <id>'' shows the full exchange. Repro: send A→B msg M; B replies with --in-reply-to M; ''aida mailbox thread M'' should show 2 messages but shows 1. Distinct from BUG-555 (unread/seen/re-deliver) — this is threading specifically.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T18:31:18.131157302Z
-modified_at: 2026-06-14T19:00:58.136680275Z
+modified_at: 2026-06-14T19:19:01.332278999Z
 req_type: Bug
 tags:
 - aida:mailbox
 - from-self-test
 - papercut
+history:
+- id: 019ec792-b5cf-75e2-acd7-504052e721b1
+  author: aida-auto-bump
+  timestamp: 2026-06-14T19:19:01.327771549Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec792-b5d4-7a60-99e9-20aad05f6052
+  timestamp: 2026-06-14T19:19:01.332277988Z
+  agent: aida
+  commit_sha: c28a2725ac91eb1a4f35c15262c3d1a540ed7121
+  summary: Completed via merge c28a2725
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T19:19:01.177116896Z
+  completion_sha: c28a2725ac91eb1a4f35c15262c3d1a540ed7121
