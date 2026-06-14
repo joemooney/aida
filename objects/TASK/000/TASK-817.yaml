@@ -1,0 +1,23 @@
+id: 019ec78a-b675-7d03-a795-04442f475378
+spec_id: TASK-817
+agreed_id: TASK-817
+title: 'Role picker: arrow-key navigation (up/down to move selection), not numeric-only'
+description: |-
+  Operator request 2026-06-14: in the aida agent new role-selection prompt, up/down arrows should move the highlighted selection and Enter should choose it. Today the picker (main.rs ~26260-26512, the shared role-picker render used by agent new and role enter) is a hand-rolled numeric read_line: it shows a marker on the default but only accepts a typed number / blank / q.
+
+  Reuse the widget already in the binary: inquire::Select gives arrow-key navigation and is already a dependency, used for the Type/Priority/Status/"What now?" pickers (main.rs:12042, 21362, 21386, 94675, 97542, 113615). The role picker is the odd-one-out. Convert it to inquire::Select rather than adding a new TUI lib.
+
+  Acceptance:
+  - Up/Down arrows move the selection in the role picker; Enter selects the highlighted role.
+  - The offered default role is pre-highlighted on open (matches the current blank=default behavior, e.g. implementer).
+  - Preserve the existing affordances and markers: the active-shell-role marker, the offered-default marker semantics, cancel (q / Esc), and the narrow-terminal scannability delivered by TASK-713 (Completed).
+  - Non-TTY / piped-stdin safety: inquire::Select needs a TTY, so the non-interactive path must still work for scripted launches — honor an explicit --role flag and fall back gracefully (default role or a clear error with guidance) when there is no TTY. Do not make agent new hang or fail in headless/scripted use.
+
+  Out of scope: changing the role taxonomy or the role descriptions; this is input-mechanism only.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T19:10:17.205484158Z
+modified_at: 2026-06-14T19:10:17.205484158Z
+req_type: Task
