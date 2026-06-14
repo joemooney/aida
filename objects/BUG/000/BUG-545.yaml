@@ -1,0 +1,18 @@
+id: 019ec37d-b3b8-7af2-812f-b044000a853d
+spec_id: BUG-545
+agreed_id: BUG-545
+title: aida edit --tags REPLACES all tags instead of adding — silent clobber (no --add-tag/--remove-tag)
+description: 'Advisor hit (2026-06-13): ran ''aida edit BUG-530 --tags supervised'' to add one tag; it REPLACED the entire tag set (BUG-530''s 6 tags → just ''supervised''), silently clobbering provenance/routing tags. CLAUDE.md''s ''aida edit <id> --tags batch:NAME'' reads like an add, but it''s a full replace. Footgun: any single-tag edit wipes the rest. Fix: add ''--add-tag <t>'' / ''--remove-tag <t>'' (additive/subtractive) and/or make ''--tags'' WARN that it replaces (or require ''--replace-tags'' for the destructive form). At minimum, document the replace semantics loudly. trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T00:17:35.672072119Z
+modified_at: 2026-06-14T00:17:35.672072119Z
+req_type: Bug
+tags:
+- aida:edit
+- cli-consistency
+- from-friction
+- papercut
+- safety
