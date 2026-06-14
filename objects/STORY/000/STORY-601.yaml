@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:31:35.301243821Z
-modified_at: 2026-06-14T02:17:38.346283938Z
+modified_at: 2026-06-14T18:25:16.694090382Z
 req_type: Story
 tags:
 - aida-tutor
@@ -26,3 +26,6 @@ comments:
   content: Commit 408002887 references this requirement
   created_at: 2026-06-14T02:17:38.346283938Z
   modified_at: 2026-06-14T02:17:38.346283938Z
+deferred: true
+deferred_at: 2026-06-14T18:25:16.694090382Z
+deferred_until: 'post-stabilization: aida-tutor consumes the manual; revisit when the CLI surface settles and tutorial-generation is in scope'
