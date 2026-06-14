@@ -1,0 +1,18 @@
+id: 019ec6e6-fff5-73d0-98b4-9e4298949490
+spec_id: TASK-812
+agreed_id: TASK-812
+title: aida queue integrate acquires the BUG-538 drain lock (no double-drive with burndown run / a second integrate) — safe to leave --watch running
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T16:11:28.117867377Z
+modified_at: 2026-06-14T16:11:28.117867377Z
+req_type: Task
+tags:
+- autonomy
+- drain-lock
+- from-strategic
+- integrator
+- solo-mode
