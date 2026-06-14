@@ -1,0 +1,19 @@
+id: 019ec825-0d44-7cc2-8913-d5b9d20f62b6
+spec_id: TASK-826
+agreed_id: TASK-826
+title: 'Canonical cutover: repoint origin to gitlab + [forge] provider=gitlab + verify drain end-to-end'
+description: 'EPIC-44 Phase 2 (the actual flip — DRAFT/gated, do NOT execute until STORY-621 forge wiring + the .gitlab-ci.yml land and in-flight github PRs are finished). Steps: (1) repoint remotes so gitlab.joemooney.com is the canonical two-leg sync target (rename gitlab->origin, github->github-mirror, OR equivalent), keeping the all dual-push; (2) set .aida/config.toml [forge] provider = gitlab so aida own dogfooding uses the GitLab forge; (3) confirm every agent has gitlab.joemooney.com SSH (port 2222) access; (4) VERIFY a full aida queue work --auto-complete drain runs end-to-end on GitLab (MR create -> CI -> review -> merge -> pull auto-bump) before declaring cutover. BlockedBy STORY-621 + the gitlab-ci task. Parent EPIC-44.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T21:58:51.972669614Z
+modified_at: 2026-06-14T21:58:51.972669614Z
+req_type: Task
+tags:
+- batch:gitlab-canonical
+- canonical-hub
+- from-product
+- gitlab
+- needs-human
+- parent:EPIC-44
