@@ -6108,12 +6108,23 @@ pub enum Command {
         artifact_dir: String,
     },
 
-    /// Manage the live-advisor registration the `--no-human=both` orchestrator
-    /// reads to decide whether to fork the live advisor (full in-flight
-    /// context) or cold-boot a fresh headless advisor.
-    // trace:STORY-360 | ai:claude
-    #[clap(subcommand)]
-    Advisor(AdvisorCommand),
+    /// The advisor seat. Bare `aida advisor` prints the advisor's actionable
+    /// worklist — the mirror of bare `aida human`, but grouped by ADVISOR
+    /// action (groom drafts, distill decisions, triage findings, bless the
+    /// queue, close delivered epics). Subcommands manage the live-advisor
+    /// registration the `--no-human=both` orchestrator reads, the dashboard,
+    /// and scheduling.
+    // trace:STORY-360 trace:STORY-618 | ai:claude
+    Advisor {
+        /// Bare spec-ids from the worklist, one per line — usable in `$(...)` /
+        /// xargs (mirrors `aida human --short`). Ignored when a subcommand is
+        /// given.
+        // trace:STORY-618 | ai:claude
+        #[clap(long)]
+        short: bool,
+        #[clap(subcommand)]
+        command: Option<AdvisorCommand>,
+    },
 
     /// Punt a spec to Needs Attention — pause it with a structured reason
     /// instead of guessing past a design-fork. The safety net an autonomous

@@ -1533,23 +1533,31 @@ fn run() -> Result<()> {
     // falls through to the post-storage-init dispatch. Only the
     // store-less registration subcommands run early.
     // trace:STORY-262 | ai:claude
-    if let Command::Advisor(advisor_cmd) = &cli.command {
+    if let Command::Advisor { command, .. } = &cli.command {
         // STORY-559: `advisor status` (default = dashboard) aggregates the
         // requirement store (burndown / backlog / queue / leases), so it must
         // fall through to the post-storage dispatch. The narrow
         // `--registration` view reads only `~/.aida/advisor.toml` and stays in
         // this store-less early handler so it still works outside a project.
-        // trace:STORY-559 | ai:claude
-        let needs_store = matches!(advisor_cmd, AdvisorCommand::Schedule(_))
-            || matches!(
-                advisor_cmd,
-                AdvisorCommand::Status {
-                    registration: false,
-                    ..
-                }
-            );
+        // STORY-618: bare `aida advisor` (command = None) IS the worklist, which
+        // reads the store, so it also falls through. trace:STORY-559 STORY-618
+        let needs_store = match command {
+            None => true,
+            Some(c) => {
+                matches!(c, AdvisorCommand::Schedule(_))
+                    || matches!(
+                        c,
+                        AdvisorCommand::Status {
+                            registration: false,
+                            ..
+                        }
+                    )
+            }
+        };
         if !needs_store {
-            return handle_advisor_command(advisor_cmd);
+            if let Some(c) = command {
+                return handle_advisor_command(c);
+            }
         }
     }
 
@@ -2411,14 +2419,14 @@ fn run() -> Result<()> {
                  deprecated --centralized backend)"
             );
         }
-        Command::Advisor(_) => {
+        Command::Advisor { .. } => {
             // STORY-360: `aida advisor` (register/unregister/status) dispatches
             // before storage resolution. STORY-262's `advisor schedule`
             // dispatches in `handle_git_backend_command` (it needs the store).
             // This legacy-SQLite arm is unreachable for both. The schedule
-            // subcommand additionally requires the git-canonical store, so a
-            // legacy project never reaches it.
-            // trace:STORY-360 trace:STORY-262 | ai:claude
+            // subcommand and the STORY-618 bare worklist additionally require
+            // the git-canonical store, so a legacy project never reaches it.
+            // trace:STORY-360 trace:STORY-262 trace:STORY-618 | ai:claude
             unreachable!("Command::Advisor dispatched before legacy storage init");
         }
         Command::Questions { .. } => {
@@ -10969,25 +10977,31 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Agent(agent_cmd) => {
             return handle_agent_command(agent_cmd);
         }
-        Command::Advisor(advisor_cmd) => {
+        Command::Advisor { short, command } => {
             // STORY-262 / STORY-559: two advisor subcommands reach storage init
             // — `schedule` (files TASKs) and the default `advisor status`
-            // dashboard (aggregates the store). The narrow `advisor status
-            // --registration` view and register/unregister dispatch before
-            // storage init and never reach here.
-            // trace:STORY-262 trace:STORY-559 | ai:claude
-            match advisor_cmd {
-                AdvisorCommand::Schedule(sched_cmd) => {
+            // dashboard (aggregates the store). STORY-618: bare `aida advisor`
+            // (command = None) reaches here too — it IS the advisor worklist.
+            // The narrow `advisor status --registration` view and
+            // register/unregister dispatch before storage init and never reach
+            // here. trace:STORY-262 trace:STORY-559 trace:STORY-618 | ai:claude
+            match command {
+                // STORY-618: bare `aida advisor` → the advisor's actionable
+                // worklist (the mirror of bare `aida human`).
+                None => {
+                    return handle_advisor_worklist(*short, &backend, store_path);
+                }
+                Some(AdvisorCommand::Schedule(sched_cmd)) => {
                     let project_root = store_path
                         .parent()
                         .map(|p| p.to_path_buf())
                         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
                     return handle_schedule_command(sched_cmd, &project_root, store_path);
                 }
-                AdvisorCommand::Status {
+                Some(AdvisorCommand::Status {
                     json,
                     registration: false,
-                } => {
+                }) => {
                     return handle_advisor_dashboard(*json, &backend, store_path);
                 }
                 _ => unreachable!("non-dashboard/schedule advisor subcommands dispatch early"),
@@ -74877,12 +74891,15 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
             let (bucket, reasons) = burndown::explain_reasons(&f);
             (f, bucket, reasons)
         })
-        .filter(|(f, _, _)| burndown::human_required(f, false))
-        // STORY-611: drop the derived `AwaitingDecision` rows — the first-class
-        // "decisions-awaiting" bucket (richer: the actual choices) supersedes
-        // them, so they must not also count toward `classified` (double-count
-        // in the total + double-list). trace:STORY-611
-        .filter(|(_, bucket, _)| *bucket != burndown::OpenBucket::AwaitingDecision)
+        // STORY-618: keep only the OPERATOR-seat derived buckets. The
+        // advisor-seat buckets (ungroomed drafts to GROOM, childless umbrellas
+        // to DECOMPOSE, fully-delivered epics to CLOSE) are routine advisor
+        // dispositions — they belong on `aida advisor`, not the operator's
+        // list. (`operator_seat` also excludes `AwaitingDecision`, which the
+        // first-class "decisions-awaiting" bucket below renders richer — the
+        // same de-dup STORY-611 introduced.) This is the seat-separation that
+        // stops grooming work leaking onto the operator. trace:STORY-618
+        .filter(|(_, bucket, _)| bucket.operator_seat())
         .collect();
 
     // TASK-747: the explicitly-routed members the derived classification did
@@ -75049,16 +75066,11 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     // double-list every pending decision, exactly the conflation the
     // REFINEMENT comment warns against. trace:STORY-611
     use burndown::OpenBucket::*;
-    // BUG-543: ReadyToClose leads — a fully-delivered epic is the cheapest win
-    // (one confirmed close), so it surfaces above the slower review/build/groom
-    // buckets.
-    let order = [
-        ReadyToClose,
-        HeldForReview,
-        BuildSupervised,
-        Ungroomed,
-        Umbrella,
-    ];
+    // STORY-618: only the OPERATOR-seat derived buckets render here — review
+    // surfaces and keystone builds that genuinely need the operator. The
+    // advisor-seat buckets (ReadyToClose / Ungroomed / Umbrella) moved to
+    // `aida advisor`. trace:STORY-618 (was BUG-543's ReadyToClose-leads order)
+    let order = [HeldForReview, BuildSupervised];
     for bucket in order {
         let rows: Vec<&(
             burndown::OpenFacts,
@@ -75153,6 +75165,219 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     // trace:STORY-562 trace:STORY-611
     println!(
         "\n  {} full decision inbox: `aida questions list` · all findings: `aida findings list`",
+        "↳".dimmed()
+    );
+    // STORY-618: grooming/decompose/close are advisor work — point at the
+    // advisor's own worklist so the operator knows where it went (and so a solo
+    // operator wearing both hats knows the second list to check).
+    println!(
+        "  {} advisor work (groom · distill · triage · bless · close): `aida advisor`",
+        "↳".dimmed()
+    );
+    Ok(())
+}
+
+/// STORY-618: bare `aida advisor` — the advisor's actionable worklist, the
+/// mirror of bare `aida human` but grouped by ADVISOR action. The seat
+/// complement of [`handle_list_human`]: the routine dispositions that need
+/// cross-spec awareness + product judgment (not the operator's strategic
+/// sign-off). Five buckets, each pointing at its canonical verb:
+///   GROOM    — ungroomed drafts awaiting approve/defer/reject
+///   DECOMPOSE/CLOSE — umbrella epics to decompose or close (advisor_seat)
+///   DISTILL  — under-specified specs to turn into pre-recorded questions
+///   TRIAGE   — findings awaiting triage
+///   BLESS    — approved-but-unqueued backlog ready to groom onto the queue
+/// Read-only; writes nothing. trace:STORY-618 | ai:claude
+fn handle_advisor_worklist(
+    short: bool,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+
+    // Shared id→title cell (same construction as `aida human`). trace:BUG-535
+    let titles: std::collections::HashMap<String, String> = store
+        .requirements
+        .iter()
+        .filter_map(|req| {
+            let id = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| req.id.to_string());
+            (!req.title.is_empty()).then(|| (id, req.title.clone()))
+        })
+        .collect();
+
+    // GROOM / DECOMPOSE / CLOSE come from the SAME open-facts classifier the
+    // human view uses — we just keep the advisor_seat buckets instead of the
+    // operator_seat ones. trace:STORY-618
+    let in_flight_role_map = in_flight_lease_role_map(&project_root);
+    let advisor_rows: Vec<(
+        burndown::OpenFacts,
+        burndown::OpenBucket,
+        Vec<burndown::Reason>,
+    )> = collect_open_facts(&store, &in_flight_role_map)
+        .into_iter()
+        .map(|f| {
+            let (bucket, reasons) = burndown::explain_reasons(&f);
+            (f, bucket, reasons)
+        })
+        .filter(|(_, bucket, _)| bucket.advisor_seat())
+        .collect();
+
+    // DISTILL — under-specified specs the sweep would flag (minus live leases /
+    // BUG-495 exclusions). Reuses the exact set `aida clarify` resolves.
+    let distill = clarify_default_specs(backend).unwrap_or_default();
+
+    // TRIAGE — findings still awaiting triage (draft + finding tag), distinct.
+    let triage = collect_findings_by_spec(&store)
+        .values()
+        .flat_map(|ids| ids.iter())
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+
+    // BLESS — approved, unblocked, unqueued, not-in-flight specs the advisor
+    // could groom onto the queue (queueing IS the ADR-3 sign-off).
+    let queued_ids = all_queued_requirement_ids(&project_root);
+    let in_flight_scopes = in_flight_lease_scopes(&project_root);
+    let bless: Vec<String> = store
+        .requirements
+        .iter()
+        .filter(|r| !r.archived && !r.deferred)
+        .filter(|r| matches!(r.status, RequirementStatus::Approved))
+        .filter(|r| !queued_ids.contains(&r.id))
+        .filter(|r| !findings::is_finding(&r.tags.iter().cloned().collect::<Vec<_>>()))
+        .filter(|r| !aida_core::pickability::blocked_by_incomplete(r, &store))
+        .filter(|r| {
+            let live = !in_flight_scopes.is_empty()
+                && [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|s| in_flight_scopes.contains(&s.to_ascii_lowercase()));
+            !live
+        })
+        .map(|r| r.display_id())
+        .collect();
+
+    // `--short`: bare IDs of the actionable groom/decompose/close specs, one
+    // per line (mirrors `aida human --short`). The pointer buckets
+    // (distill/triage/bless) are summaries, not part of the id stream.
+    if short {
+        for (f, _, _) in &advisor_rows {
+            println!("{}", f.id);
+        }
+        for id in &bless {
+            println!("{id}");
+        }
+        return Ok(());
+    }
+
+    println!("{} the advisor's worklist", "▸".cyan().bold());
+    let nothing = advisor_rows.is_empty() && distill.is_empty() && triage == 0 && bless.is_empty();
+    if nothing {
+        println!(
+            "  {}",
+            "Nothing on the advisor's plate — no ungroomed drafts, no findings to \
+             triage, no backlog to bless, nothing to close."
+                .dimmed()
+        );
+        return Ok(());
+    }
+
+    // GROOM / DECOMPOSE / CLOSE buckets — full id+title lists (the real work),
+    // most-actionable-first (CLOSE leads: a delivered epic is the cheapest win).
+    use burndown::OpenBucket::*;
+    let groups = [
+        (
+            ReadyToClose,
+            "close",
+            "mark the delivered epic Completed (`aida edit <id> --status completed`)",
+        ),
+        (
+            Ungroomed,
+            "groom",
+            "approve / defer / reject the draft (`aida edit <id> --status approved`)",
+        ),
+        (
+            Umbrella,
+            "decompose",
+            "decompose into children or complete them",
+        ),
+    ];
+    for (bucket, key, action) in groups {
+        let rows: Vec<&(
+            burndown::OpenFacts,
+            burndown::OpenBucket,
+            Vec<burndown::Reason>,
+        )> = advisor_rows
+            .iter()
+            .filter(|(_, b, _)| *b == bucket)
+            .collect();
+        if rows.is_empty() {
+            continue;
+        }
+        println!("\n{} {} — {}", "●".yellow(), key.bold(), action.dimmed());
+        for (f, _, _) in rows {
+            println!("    {}{}", f.id.cyan(), spec_title_cell(&titles, &f.id));
+        }
+    }
+
+    // DISTILL / TRIAGE / BLESS — pointer + live count, each with its verb (the
+    // accepted shape for "go act over there" buckets; full lists live in their
+    // own commands). trace:STORY-618
+    if !distill.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "●".yellow(),
+            "distill".bold(),
+            format!(
+                "{} spec{} under-specified — pose a question: `aida questions sweep` / `aida clarify`",
+                distill.len(),
+                if distill.len() == 1 { "" } else { "s" }
+            )
+            .dimmed()
+        );
+    }
+    if triage > 0 {
+        println!(
+            "\n{} {} — {}",
+            "●".magenta(),
+            "triage".bold(),
+            format!(
+                "{} finding{} awaiting triage — `aida findings list`",
+                triage,
+                if triage == 1 { "" } else { "s" }
+            )
+            .dimmed()
+        );
+    }
+    if !bless.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "●".green(),
+            "bless".bold(),
+            format!(
+                "{} approved spec{} not yet queued — `aida backlog groom --pickable` to queue (sign-off)",
+                bless.len(),
+                if bless.len() == 1 { "" } else { "s" }
+            )
+            .dimmed()
+        );
+    }
+
+    println!(
+        "\n  {} operator decisions / reviews live on `aida human` · full dashboard: `aida advisor status`",
         "↳".dimmed()
     );
     Ok(())
