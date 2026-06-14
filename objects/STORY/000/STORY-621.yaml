@@ -1,0 +1,19 @@
+id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
+spec_id: STORY-621
+agreed_id: STORY-621
+title: Complete the gh-to-forge call-site migration (GitLab wiring EPIC-35 deferred)
+description: |-
+  EPIC-35 shipped the forge abstraction (Forge trait + GitHubForge/GitLabForge/PureGitForge) but is marked Completed while the call-site migration it deferred to follow-on commits never finished. The 2026-06-14 Tier-2 audit (docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md) found ~20-25 runtime gh spawns across ~18 functions still bypassing the trait, so GitLab breaks on the forge layer (PR/MR create, CI watch, merge, reviewer pre-flight, delegated-review poll). Foundation + 5 slices in the inventory, smallest-valuable-first:
+  - Slice 0: resolve_glab_binary() + forge-keyed binary dispatch (confirmed-missing foundation; unblocks all).
+  - Slice 1: route-only PR create/merge/open-PR-for-branch (~5 sites; trait methods already exist).
+  - Slice 2: Forge::change_metadata + view/list consolidation (~9 sites; drain reconcile + reviewer phases).
+  - Slice 3: CI status/watch abstraction incl. the delegated-review gh api check-runs poll (~6 sites; unblocks unattended --auto-complete on GitLab; deepest).
+  - Slice 4: user-facing text derived from ForgeKind (cosmetic, ~40 strings).
+  Acceptance (fold in on grooming): each slice is its own child; Slice 0 lands first; GitHub behavior byte-for-byte preserved; a GitLab repo can run pr ship + the --auto-complete drain end-to-end. Also correct EPIC-35 status to reflect deferred wiring. STRATEGIC/TIMING is an operator call: this is the GitLab-primary unblocker but a multi-slice feature push that currently sits behind the stabilization-before-features phase. Relates to BUG-559 (Tier-1 substrate bug), TASK-820 (inventory), EPIC-35.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T20:01:42.458630605Z
+modified_at: 2026-06-14T20:01:42.458630605Z
+req_type: Story
