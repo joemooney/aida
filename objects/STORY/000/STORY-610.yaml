@@ -10,12 +10,12 @@ description: |-
   (2) BURNDOWN PLAN MISLABELS (operator Q): the 'Awaiting advisor sign-off' bucket is really just 'Approved but not queued' and flattens THREE distinct states: (a) genuinely untriaged, (b) advisor-DECIDED-keyboard (the advisor HAS signed off — work via 'queue work', not drain), (c) should-be-deferred. Fix: partition the output into 'Ready (drain)' / 'Supervised — queue work these' (the marker set) / 'Awaiting triage' / 'Deferred' / 'Parked'. This is the operator's request: 'a list of specs I should queue work instead.' Relabel (b) away from 'awaiting sign-off' since the advisor already signed off as supervised.
 
   trace:relates:BUG-530 trace:from-friction
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:22:58.886139281Z
-modified_at: 2026-06-14T02:07:13.506051708Z
+modified_at: 2026-06-14T06:27:47.560667402Z
 req_type: Story
 tags:
 - aida:burndown
@@ -46,3 +46,21 @@ comments:
   content: 'VERB (operator, 2026-06-13): add ''aida advisor signoff <id>'' (or /aida-advisor-signoff) = the SUPERVISED sign-off — queue a spec so ''aida queue work'' can pick it up (keyboard) while the supervised-marker EXCLUDES it from ''burndown run'' (drain). Distinct from plain ''aida queue add'' (which blesses for the drain). This is the clean answer to ''how do I bless keystone work for keyboard pickup without exposing it to an unsupervised drain'' — the gap that''s bitten repeatedly this session (de-queuing keystone specs by hand after every auto-queue path). ''aida advisor signoff'' applies the supervised-marker + queues; ''aida queue work <id>'' then picks it up; ''burndown run'' never sees it. Lives in EPIC-42''s ''aida advisor'' namespace, uses this story''s marker. trace:STORY-610 trace:relates:EPIC-42'
   created_at: 2026-06-14T00:09:34.849731401Z
   modified_at: 2026-06-14T00:09:34.849731401Z
+history:
+- id: 019ec4d0-a0e0-7a90-95f5-4993398bc980
+  author: aida-auto-bump
+  timestamp: 2026-06-14T06:27:47.552840844Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec4d0-a0e8-76b2-bd4d-899b00e4f768
+  timestamp: 2026-06-14T06:27:47.560666823Z
+  agent: aida
+  commit_sha: 9c4f6924dd239174350524e9b9e9e83f3030e1ef
+  summary: Completed via merge 9c4f6924
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T06:27:47.393525180Z
+  completion_sha: 9c4f6924dd239174350524e9b9e9e83f3030e1ef
