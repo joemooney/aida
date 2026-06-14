@@ -1,0 +1,18 @@
+id: 019ec423-6c68-7ed0-be81-da65002a70fd
+spec_id: TASK-803
+agreed_id: TASK-803
+title: Extract resolve_burndown_sets per-spec classification into a pure, unit-testable helper
+description: 'resolve_burndown_sets (aida-cli/src/main.rs) is the core of ''aida burndown plan'': it runs the archived/deferred/status/tag/batch filters, the supervised collection, the BlockedBy/decision pickability gate, and the sign-off split — all in one store-dependent function with ZERO unit coverage. Reviewers of BUG-551 (#881) and BUG-549-class changes both noted new logic lands here untested because the function needs a live store. As the function accretes branches (supervised partition was BUG-551; sign-off split was STORY-546) the untested surface grows. Extract the per-spec classification (given a spec''s status/tags/deferred/archived/relationships + the queued set → which bucket: ready-candidate / supervised / skip) into a PURE helper in the burndown module (like burndown::split_by_signoff already is), and unit-test the bucket decisions directly. Keyboard/review (touches the burndown plan core). trace:from-review:PR-881'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T03:18:36.392671054Z
+modified_at: 2026-06-14T03:18:36.392671054Z
+req_type: Task
+tags:
+- aida:burndown
+- from-review:PR-881
+- supervised
+- tech-debt
+- testability
