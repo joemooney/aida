@@ -74651,58 +74651,21 @@ fn resolve_burndown_sets(
     // STORY-610: supervised specs collected for the keyboard-pickup section.
     let mut supervised: Vec<String> = Vec::new();
     for req in &store.requirements {
-        // Archived specs are out of active scope — never fan them out (matches
-        // `aida list`'s default non-archived view). trace:STORY-527
-        if req.archived {
-            continue;
-        }
-        // Deferred specs are parked/conditional work — hidden from the default
-        // active view (STORY-584), so they must not pollute the burndown
-        // ready/awaiting/parked sets either. Without this, a `aida defer`d spec
-        // (deferred:true in its YAML) still showed up under "awaiting advisor
-        // sign-off" in `burndown plan` — the archived filter above had no defer
-        // sibling. trace:BUG-537 | ai:claude
-        if req.deferred {
-            continue;
-        }
-        if norm(&req.status.to_string()) != want_status {
-            continue;
-        }
+        // TASK-803: the per-spec filter/bucket decision now lives in the pure,
+        // unit-tested `burndown::classify_spec`. The caller computes the probed
+        // inputs (display id, normalized status, blocker satisfaction, pending
+        // decision) and the helper applies the load-bearing filter order
+        // (archived → deferred → status → tag → batch → supervised → candidate).
+        // Inputs are computed eagerly for every spec; behavior is identical to
+        // the prior inline loop (the skipped specs just never reach the title /
+        // queued / candidate collections). trace:TASK-803 | ai:claude
+        let status_norm = norm(&req.status.to_string());
         let tags: Vec<String> = req.tags.iter().cloned().collect();
-        if let Some(t) = tag {
-            if !tags.iter().any(|x| x.eq_ignore_ascii_case(t)) {
-                continue;
-            }
-        }
-        if let Some(bt) = &batch_tag {
-            if !tags.iter().any(|x| x.eq_ignore_ascii_case(bt)) {
-                continue;
-            }
-        }
-        // STORY-610: a `supervised` spec is signed off for KEYBOARD pickup
-        // (`aida queue work`) but EXPLICITLY EXCLUDED from the unattended drain
-        // — the structural fix for keystone work leaking into `burndown run`.
-        // Collected HERE, after the status/tag/batch filters, so only ACTIONABLE
-        // (matching-selector, Approved by default) supervised work surfaces: a
-        // Done supervised spec is awaiting review/merge (it's in the reviews
-        // bucket, not "work this"), and a Completed one is shipped. The
-        // unconditional `continue` keeps them out of the ready/awaiting/parked
-        // sets; they get their own `burndown plan` section so the route per spec
-        // (`queue work` vs drain) is visible. trace:STORY-610 trace:BUG-551
-        if req
-            .tags
-            .iter()
-            .any(|t| t.eq_ignore_ascii_case("supervised"))
-        {
-            let disp = req
-                .agreed_id
-                .clone()
-                .or_else(|| req.spec_id.clone())
-                .unwrap_or_else(|| req.id.to_string());
-            titles.insert(disp.clone(), req.title.clone());
-            supervised.push(disp);
-            continue;
-        }
+        let disp = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
         // A BlockedBy edge is unsatisfied unless its target is Completed; a
         // dangling target (not in the store) is treated as unsatisfied so we
         // never fan out a spec whose blocker we can't verify.
@@ -74713,26 +74676,39 @@ fn resolve_burndown_sets(
                     .map(|s| *s != aida_core::RequirementStatus::Completed)
                     .unwrap_or(true)
         });
-        let disp = req
-            .agreed_id
-            .clone()
-            .or_else(|| req.spec_id.clone())
-            .unwrap_or_else(|| req.id.to_string());
-        if queued_ids.contains(&req.id) {
-            queued_disp.insert(disp.clone());
-        }
-        titles.insert(disp.clone(), req.title.clone());
-        candidates.push(burndown::BurndownCandidate {
-            id: disp,
-            req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
-            tags,
+        let has_pending_decision = req
+            .decision_request
+            .as_ref()
+            .map(|d| d.is_pending())
+            .unwrap_or(false);
+        let req_type = format!("{:?}", req.req_type).to_ascii_lowercase();
+        let input = burndown::SpecClassifyInput {
+            archived: req.archived,
+            deferred: req.deferred,
+            status_norm: &status_norm,
+            want_status: &want_status,
+            tags: &tags,
+            tag_filter: tag,
+            batch_tag: batch_tag.as_deref(),
+            disp: &disp,
+            req_type: &req_type,
             has_unsatisfied_blocker,
-            has_pending_decision: req
-                .decision_request
-                .as_ref()
-                .map(|d| d.is_pending())
-                .unwrap_or(false),
-        });
+            has_pending_decision,
+        };
+        match burndown::classify_spec(&input) {
+            burndown::SpecDisposition::Skip => {}
+            burndown::SpecDisposition::Supervised => {
+                titles.insert(disp.clone(), req.title.clone());
+                supervised.push(disp);
+            }
+            burndown::SpecDisposition::Candidate(candidate) => {
+                if queued_ids.contains(&req.id) {
+                    queued_disp.insert(disp.clone());
+                }
+                titles.insert(disp.clone(), req.title.clone());
+                candidates.push(candidate);
+            }
+        }
     }
 
     let (pickable, parked) = burndown::partition(&candidates);
