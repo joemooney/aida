@@ -1,0 +1,12 @@
+id: 019ec7b0-7178-7ed3-9f31-69988e323578
+spec_id: TASK-819
+agreed_id: TASK-819
+title: 'Doc drift: CLAUDE.md says aida history --spec <id>, actual flag is --id'
+description: 'Found 2026-06-14 during GitLab Tier-1 testing. CLAUDE.md (Storage model section) states: "aida history --events and --spec <id> read from it". The CLI rejects --spec ("unexpected argument --spec found"); the actual per-requirement filter is --id (confirmed via aida history --help: "inspecting one requirement closely with --id"). One-token fix in CLAUDE.md: --spec -> --id. Low priority, but CLAUDE.md is the project source-of-truth instructions so an invented flag misleads agents.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T19:51:29.912815697Z
+modified_at: 2026-06-14T19:51:29.912815697Z
+req_type: Task
