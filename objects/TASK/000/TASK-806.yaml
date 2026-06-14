@@ -1,0 +1,18 @@
+id: 019ec47a-3818-7f73-b4dc-897cdcfad4a7
+spec_id: TASK-806
+agreed_id: TASK-806
+title: 'aida burndown status subcommand: is a drain running + in-flight/shipped/left + log pointer (ask #3 of STORY-604)'
+description: 'Operator ask #3 of STORY-604. Add ''aida burndown status'': one command answering — is a drain running (pid, started_at, selector — from BUG-538''s drain-lock + pid_is_alive), what specs are in-flight/leased (session leases), what shipped this run + what''s left, and a pointer to the live log (.aida/burndown/<drain-id>.jsonl from TASK-804). Read-side companion to ''burndown run''. BLOCKED ON BUG-538 — status = read the lock (pid/started/scope) + pid liveness (advisor note 2026-06-14).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T04:53:24.632366722Z
+modified_at: 2026-06-14T04:53:24.632366722Z
+req_type: Task
+tags:
+- aida:burndown
+- from-friction
+- observability
+- supervised
+- ux
