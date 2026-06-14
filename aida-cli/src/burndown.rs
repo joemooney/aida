@@ -23,7 +23,7 @@ pub(crate) enum Pickability {
 
 /// Already-probed facts about one candidate spec. Built in `main.rs` from the
 /// store + graph; consumed by the pure [`classify`]. trace:STORY-527
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BurndownCandidate {
     /// Display SPEC-ID (e.g. `TASK-702`).
     pub id: String,
@@ -36,6 +36,86 @@ pub(crate) struct BurndownCandidate {
     /// True when the spec carries a pending `DecisionRequest` (an open
     /// human-decision question via `aida questions`).
     pub has_pending_decision: bool,
+}
+
+/// The per-spec verdict of the burndown selector's first pass: should this spec
+/// be discarded, collected into the keyboard-only `supervised` section, or
+/// carried forward as a drain candidate? Extracted from the inline loop in
+/// `resolve_burndown_sets` so the filter/bucket ordering — the load-bearing
+/// invariant behind BUG-537 (deferred), BUG-551 (supervised AFTER the status
+/// filter), and the selector semantics — is unit-testable without a live store.
+/// trace:TASK-803 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SpecDisposition {
+    /// Out of scope for this selector — drop it entirely.
+    Skip,
+    /// `supervised`-tagged + in scope: keyboard pickup, excluded from the drain.
+    Supervised,
+    /// A drain candidate (still subject to the pickability gate downstream).
+    Candidate(BurndownCandidate),
+}
+
+/// Already-probed inputs for [`classify_spec`]. All status strings are expected
+/// pre-normalized (alphanumeric-lowercase) by the caller so comparison is a
+/// plain `==`. trace:TASK-803
+pub(crate) struct SpecClassifyInput<'a> {
+    pub archived: bool,
+    pub deferred: bool,
+    /// Normalized status of the spec.
+    pub status_norm: &'a str,
+    /// Normalized selector status (what `--status` asked for).
+    pub want_status: &'a str,
+    pub tags: &'a [String],
+    /// Optional `--tag` filter (matched case-insensitively).
+    pub tag_filter: Option<&'a str>,
+    /// Optional `batch:<name>` tag filter (matched case-insensitively).
+    pub batch_tag: Option<&'a str>,
+    pub disp: &'a str,
+    pub req_type: &'a str,
+    pub has_unsatisfied_blocker: bool,
+    pub has_pending_decision: bool,
+}
+
+/// Classify ONE spec for the burndown selector. The filter order is load-bearing
+/// and mirrors the historical inline loop EXACTLY:
+///   archived → deferred → status → tag → batch → supervised → candidate.
+/// The `supervised` check sits AFTER the status/tag/batch filters (BUG-551), so a
+/// Done/Completed supervised spec fails the status guard and is `Skip`ped before
+/// it can reach the supervised bucket. trace:TASK-803 trace:BUG-551 trace:BUG-537
+pub(crate) fn classify_spec(input: &SpecClassifyInput) -> SpecDisposition {
+    if input.archived {
+        return SpecDisposition::Skip;
+    }
+    if input.deferred {
+        return SpecDisposition::Skip;
+    }
+    if input.status_norm != input.want_status {
+        return SpecDisposition::Skip;
+    }
+    if let Some(t) = input.tag_filter {
+        if !input.tags.iter().any(|x| x.eq_ignore_ascii_case(t)) {
+            return SpecDisposition::Skip;
+        }
+    }
+    if let Some(bt) = input.batch_tag {
+        if !input.tags.iter().any(|x| x.eq_ignore_ascii_case(bt)) {
+            return SpecDisposition::Skip;
+        }
+    }
+    if input
+        .tags
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case("supervised"))
+    {
+        return SpecDisposition::Supervised;
+    }
+    SpecDisposition::Candidate(BurndownCandidate {
+        id: input.disp.to_string(),
+        req_type: input.req_type.to_string(),
+        tags: input.tags.to_vec(),
+        has_unsatisfied_blocker: input.has_unsatisfied_blocker,
+        has_pending_decision: input.has_pending_decision,
+    })
 }
 
 /// A tag that marks a spec as not-autonomously-pickable — a human decision, a
@@ -1094,6 +1174,202 @@ mod tests {
             tags: tags.iter().map(|s| s.to_string()).collect(),
             has_unsatisfied_blocker: blocked,
             has_pending_decision: decision,
+        }
+    }
+
+    // TASK-803: the per-spec classifier — the filter/bucket ordering that was
+    // previously inline (and untested) in `resolve_burndown_sets`.
+    fn classify_case(
+        archived: bool,
+        deferred: bool,
+        status: &str,
+        want: &str,
+        tags: &[&str],
+        tag_filter: Option<&str>,
+        batch_tag: Option<&str>,
+    ) -> SpecDisposition {
+        let tags: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+        classify_spec(&SpecClassifyInput {
+            archived,
+            deferred,
+            status_norm: status,
+            want_status: want,
+            tags: &tags,
+            tag_filter,
+            batch_tag,
+            disp: "TASK-1",
+            req_type: "task",
+            has_unsatisfied_blocker: false,
+            has_pending_decision: false,
+        })
+    }
+
+    #[test]
+    fn classify_skips_archived_deferred_and_status_mismatch() {
+        assert_eq!(
+            classify_case(true, false, "approved", "approved", &[], None, None),
+            SpecDisposition::Skip
+        );
+        assert_eq!(
+            classify_case(false, true, "approved", "approved", &[], None, None),
+            SpecDisposition::Skip
+        );
+        assert_eq!(
+            classify_case(false, false, "done", "approved", &[], None, None),
+            SpecDisposition::Skip
+        );
+    }
+
+    #[test]
+    fn classify_supervised_only_when_status_matches() {
+        // BUG-551: the supervised check runs AFTER the status filter, so a
+        // supervised spec only buckets as Supervised when it matches want_status.
+        assert_eq!(
+            classify_case(
+                false,
+                false,
+                "approved",
+                "approved",
+                &["supervised"],
+                None,
+                None
+            ),
+            SpecDisposition::Supervised
+        );
+        // Done / Completed supervised specs fail the status guard first → Skip
+        // (they belong in the reviews bucket / are shipped, not "work this").
+        assert_eq!(
+            classify_case(
+                false,
+                false,
+                "done",
+                "approved",
+                &["supervised"],
+                None,
+                None
+            ),
+            SpecDisposition::Skip
+        );
+        assert_eq!(
+            classify_case(
+                false,
+                false,
+                "completed",
+                "approved",
+                &["supervised"],
+                None,
+                None
+            ),
+            SpecDisposition::Skip
+        );
+        // Tag match is case-insensitive.
+        assert_eq!(
+            classify_case(
+                false,
+                false,
+                "approved",
+                "approved",
+                &["Supervised"],
+                None,
+                None
+            ),
+            SpecDisposition::Supervised
+        );
+    }
+
+    #[test]
+    fn classify_honors_tag_and_batch_filters_before_supervised() {
+        // --tag mismatch → Skip even if otherwise in scope.
+        assert_eq!(
+            classify_case(
+                false,
+                false,
+                "approved",
+                "approved",
+                &["foo"],
+                Some("bar"),
+                None
+            ),
+            SpecDisposition::Skip
+        );
+        assert!(matches!(
+            classify_case(
+                false,
+                false,
+                "approved",
+                "approved",
+                &["bar"],
+                Some("bar"),
+                None
+            ),
+            SpecDisposition::Candidate(_)
+        ));
+        // --batch mismatch → Skip; match → Candidate.
+        assert_eq!(
+            classify_case(
+                false,
+                false,
+                "approved",
+                "approved",
+                &["batch:other"],
+                None,
+                Some("batch:x")
+            ),
+            SpecDisposition::Skip
+        );
+        assert!(matches!(
+            classify_case(
+                false,
+                false,
+                "approved",
+                "approved",
+                &["batch:x"],
+                None,
+                Some("batch:x")
+            ),
+            SpecDisposition::Candidate(_)
+        ));
+        // A supervised spec that fails the --tag filter is Skipped, not
+        // Supervised — the filter precedes the supervised bucket.
+        assert_eq!(
+            classify_case(
+                false,
+                false,
+                "approved",
+                "approved",
+                &["supervised"],
+                Some("bar"),
+                None
+            ),
+            SpecDisposition::Skip
+        );
+    }
+
+    #[test]
+    fn classify_plain_matching_spec_is_candidate_carrying_probed_fields() {
+        let tags = vec!["papercut".to_string()];
+        let d = classify_spec(&SpecClassifyInput {
+            archived: false,
+            deferred: false,
+            status_norm: "approved",
+            want_status: "approved",
+            tags: &tags,
+            tag_filter: None,
+            batch_tag: None,
+            disp: "TASK-9",
+            req_type: "task",
+            has_unsatisfied_blocker: true,
+            has_pending_decision: true,
+        });
+        match d {
+            SpecDisposition::Candidate(c) => {
+                assert_eq!(c.id, "TASK-9");
+                assert_eq!(c.req_type, "task");
+                assert!(c.has_unsatisfied_blocker);
+                assert!(c.has_pending_decision);
+                assert_eq!(c.tags, vec!["papercut".to_string()]);
+            }
+            other => panic!("expected Candidate, got {other:?}"),
         }
     }
 
