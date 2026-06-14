@@ -3,12 +3,12 @@ spec_id: TASK-812
 agreed_id: TASK-812
 title: aida queue integrate acquires the BUG-538 drain lock (no double-drive with burndown run / a second integrate) — safe to leave --watch running
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T16:11:28.117867377Z
-modified_at: 2026-06-14T16:11:28.117867377Z
+modified_at: 2026-06-14T16:32:19.458114234Z
 req_type: Task
 tags:
 - autonomy
@@ -20,3 +20,21 @@ relationships:
 - rel_type: Child
   target_id: 019ec6c3-bca4-72a2-87aa-e9d798292208
   created_at: 2026-06-14T16:11:33.738649696Z
+history:
+- id: 019ec6fa-17fd-7751-b0bc-4c192697e3f7
+  author: aida-auto-bump
+  timestamp: 2026-06-14T16:32:19.453599837Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec6fa-1802-72e3-a798-9184d78f52ab
+  timestamp: 2026-06-14T16:32:19.458113198Z
+  agent: aida
+  commit_sha: c06aa523d88366fb5fbf17ccee92cbee9fecbc65
+  summary: Completed via merge c06aa523
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T16:32:19.298600395Z
+  completion_sha: c06aa523d88366fb5fbf17ccee92cbee9fecbc65
