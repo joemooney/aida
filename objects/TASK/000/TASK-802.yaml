@@ -1,0 +1,17 @@
+id: 019ec403-3120-79a1-af96-4c42221a3798
+spec_id: TASK-802
+agreed_id: TASK-802
+title: 'aida config show: surface the [contained] posture block (enable + allowed_hosts)'
+description: 'render_effective_policy (aida config show) renders [agents] posture, mailbox, advisor, archive, telemetry, intake, presence — but NOT the [contained] block. After TASK-798 unified the contained posture under [contained] (enable alias + allowed_hosts), config show still shows nothing for it. Add a [contained] section: ''enable'' (resolved bool + source: [contained] enable / legacy [agents] contained / default false) and ''allowed_hosts'' (the egress allowlist, empty = no egress restriction). Mirrors the BUG-533 per-section row pattern. trace:relates:TASK-798'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T02:43:24.064561563Z
+modified_at: 2026-06-14T02:43:24.064561563Z
+req_type: Task
+tags:
+- aida:config
+- from-friction
+- relates:BUG-533
+- relates:TASK-798
