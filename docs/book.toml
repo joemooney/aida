@@ -35,6 +35,13 @@ limit-results = 25
 enable = true
 level = 1
 
+# mdBook renames README.md → index.html but rewrites links to README.md as
+# README.html (which doesn't exist). These redirects catch the broken URLs —
+# in the sidebar nav, in cross-links, and when typed by hand.
+[output.html.redirect]
+"/README.html" = "/index.html"
+"/cli/README.html" = "/cli/index.html"
+
 [preprocessor]
 
 [preprocessor.mermaid]
