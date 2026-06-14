@@ -1,0 +1,28 @@
+id: 019ec419-1f20-76f3-8d39-12c372ff47c3
+spec_id: BUG-552
+agreed_id: BUG-552
+title: 'git-guardrails: short ''-f'' trailing AFTER the refspec bypasses the force-push guard (e.g. ''git push origin main -f'')'
+description: |
+  The force-push detection in aida-git-guardrails.sh catches a trailing long `--force` (the `git\s+push\b.*--force` branch is unanchored), but the short-flag branch `git\s+push\s+-[a-zA-Z]*f\b` is anchored immediately after `push\s+`. So a `-f` placed AFTER the refspec slips through:
+
+      git push origin main -f        # NOT blocked
+      git push origin main --force   # blocked (caught by the .*--force branch)
+
+  PRE-EXISTING — the hook on `main` before PR-882 has the same gap; PR-882 (BUG-548) closed the `--force-with-lease`-to-protected exemption and did not change short-flag anchoring, so this is orthogonal, not a regression. But it leaves a hole in the protected-branch guarantee BUG-548 set out to make airtight: a force-push to main via trailing `-f` still gets through.
+
+  Fix: make the short-flag detection unanchored too (e.g. detect a `-...f` token anywhere in the `git push` argv), mirroring the `.*--force` branch. Mind false positives against unrelated `-f`-bearing tokens.
+
+  Raised in review of PR-882 (BUG-548): https://github.com/joemooney/aida/pull/882
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T03:07:21.248186391Z
+modified_at: 2026-06-14T03:07:21.248186391Z
+req_type: Bug
+tags:
+- from-review:PR-882
+- git-guardrails
+- relates:BUG-548
+- safety
+- severity:minor
