@@ -1,0 +1,21 @@
+id: 019ec4e1-1a99-7fe0-adbe-829197f93634
+spec_id: BUG-553
+agreed_id: BUG-553
+title: aida human reviews bucket attributes a spec to the WRONG branch when its commit is reachable from multiple branches (stacked/reused-worktree)
+description: |-
+  Observed 2026-06-14: `aida human` showed 'TASK-806 ... [branch task-805]' but TASK-806's actual PR is #891 on branch task-806. Root cause: a sequential agent reused the task-806 worktree and created local branch task-805 pointing AT TASK-806's commit (d5f04d9) without resetting to main, so that commit is reachable from BOTH task-805 and task-806. The reviews-bucket branch-resolution (collect_git_linkage_opts → branch containing the spec's newest commit, BUG-550 path) then picks ambiguously and reports the wrong branch (task-805).
+
+  FIX: when resolving a spec's review surface, prefer the branch that has an OPEN PR referencing the spec (TASK-806's PR #891 → branch task-806) over any other branch merely containing the commit. The PR linkage is the authoritative disambiguator; 'branch --contains' alone is ambiguous once branches get stacked/reused. Defensive — pairs with the workflow fix (agents must reset to origin/main before the next sequential spec). trace:relates:BUG-550
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T06:45:47.289373727Z
+modified_at: 2026-06-14T06:45:47.289373727Z
+req_type: Bug
+tags:
+- aida:human
+- from-friction
+- linkage
+- relates:BUG-550
+- reviews-bucket
