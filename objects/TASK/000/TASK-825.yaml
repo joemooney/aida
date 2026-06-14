@@ -1,0 +1,18 @@
+id: 019ec824-f383-7310-8b55-8d18a5b0620e
+spec_id: TASK-825
+agreed_id: TASK-825
+title: Add .gitlab-ci.yml mirroring the GitHub CI gates (Build + fmt --check + clippy correctness + mcp stdio suite)
+description: 'EPIC-44 Phase 1: GitLab MRs need a CI gate equivalent to .github/workflows/ci.yml. Add .gitlab-ci.yml running the same gates the PR CI enforces: cargo build -p aida-cli, cargo fmt --all -- --check, cargo clippy -p aida-cli -- -D clippy::correctness, env -u AIDA_SESSION_ROLE cargo test -p aida-cli, and bash tests/test_mcp_stdio.sh. Keep it Linux-only for cycle time (cross-platform stays the nightly matrix). Needed before gitlab can gate MRs as canonical. Parent EPIC-44.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T21:58:45.379117685Z
+modified_at: 2026-06-14T21:58:45.379117685Z
+req_type: Task
+tags:
+- batch:gitlab-canonical
+- ci
+- from-product
+- gitlab
+- parent:EPIC-44
