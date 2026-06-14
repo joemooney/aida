@@ -58,6 +58,7 @@ mod rules_sync;
 // trace:STORY-262 | ai:claude
 mod schedule;
 mod schema;
+mod seats;
 mod session;
 mod session_manifest;
 mod stacks;
@@ -21987,6 +21988,8 @@ enum PolicySource {
     ProjectConfig,
     /// Set in the global `~/.aida/agents.toml` (agent permission posture).
     GlobalAgents,
+    /// Set in the global `~/.aida/config.toml` (user-wide default). STORY-620.
+    GlobalConfig,
     /// Overridden by an environment variable (named).
     Env(&'static str),
 }
@@ -21997,6 +22000,7 @@ impl PolicySource {
             PolicySource::Default => "default".dimmed().to_string(),
             PolicySource::ProjectConfig => ".aida/config.toml".dimmed().to_string(),
             PolicySource::GlobalAgents => "~/.aida/agents.toml".dimmed().to_string(),
+            PolicySource::GlobalConfig => "~/.aida/config.toml".dimmed().to_string(),
             PolicySource::Env(name) => format!("{name} (env)").yellow().to_string(),
         }
     }
@@ -22339,6 +22343,37 @@ fn render_effective_policy(project_root: &std::path::Path) {
             source,
         }
         .print();
+    }
+
+    // --- Seat policy: which configurable buckets show on the operator vs the
+    // advisor worklist. trace:STORY-620 ---
+    println!();
+    println!(
+        "{}",
+        "[seats] — operator (aida human) vs advisor (aida advisor) worklist".bold()
+    );
+    {
+        let project_cfg = project_root.join(".aida/config.toml");
+        let global_cfg = aida_home_dir().map(|h| h.join(".aida/config.toml"));
+        for &key in seats::CONFIGURABLE_KEYS {
+            // Re-derive the source by precedence (project > user-global >
+            // default) so the row shows where the effective value came from.
+            let project = seats::seat_in_file(&project_cfg, key);
+            let global = global_cfg
+                .as_deref()
+                .and_then(|p| seats::seat_in_file(p, key));
+            let (seat, source) = match (project, global) {
+                (Some(s), _) => (s, PolicySource::ProjectConfig),
+                (None, Some(s)) => (s, PolicySource::GlobalConfig),
+                (None, None) => (seats::default_seat(key), PolicySource::Default),
+            };
+            PolicyRow {
+                key,
+                value: seat.as_str().to_string(),
+                source,
+            }
+            .print();
+        }
     }
 
     println!();
@@ -74892,6 +74927,10 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     })?;
     let in_flight_scopes = in_flight_lease_role_map(&project_root);
     let facts = collect_open_facts(&store, &in_flight_scopes);
+    // STORY-620: the operator/advisor seat split is a resolved policy now — the
+    // configurable buckets (to-groom/decompose/ready-to-close/triage) show here
+    // only when assigned to the operator. trace:STORY-620
+    let seat_policy = seats::SeatPolicy::load(&project_root);
 
     // trace:BUG-535 — display-id → title, built from the SAME store load the
     // facts came from (no extra scan, no N+1), so every bucket can render the
@@ -74935,15 +74974,18 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
             let (bucket, reasons) = burndown::explain_reasons(&f);
             (f, bucket, reasons)
         })
-        // STORY-618: keep only the OPERATOR-seat derived buckets. The
-        // advisor-seat buckets (ungroomed drafts to GROOM, childless umbrellas
-        // to DECOMPOSE, fully-delivered epics to CLOSE) are routine advisor
-        // dispositions — they belong on `aida advisor`, not the operator's
-        // list. (`operator_seat` also excludes `AwaitingDecision`, which the
-        // first-class "decisions-awaiting" bucket below renders richer — the
-        // same de-dup STORY-611 introduced.) This is the seat-separation that
-        // stops grooming work leaking onto the operator. trace:STORY-618
-        .filter(|(_, bucket, _)| bucket.operator_seat())
+        // STORY-618/620: keep the derived buckets assigned to the OPERATOR
+        // seat. The fixed-operator buckets (held-for-review, build-supervised)
+        // always qualify; the configurable buckets (to-groom / decompose /
+        // ready-to-close) qualify only when the seat policy assigns them to the
+        // operator (default: advisor → they show on `aida advisor`, not here).
+        // `operator_seat` also excludes `AwaitingDecision`, rendered richer by
+        // the first-class "decisions-awaiting" bucket below. trace:STORY-620
+        .filter(|(_, bucket, _)| {
+            bucket.operator_seat()
+                || (seats::CONFIGURABLE_KEYS.contains(&bucket.key())
+                    && seat_policy.seat_of(bucket.key()) == seats::Seat::Operator)
+        })
         .collect();
 
     // TASK-747: the explicitly-routed members the derived classification did
@@ -74976,12 +75018,19 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     let (awaiting_merge, awaiting_review): (Vec<&ReviewAwaiting>, Vec<&ReviewAwaiting>) =
         reviews_all.iter().partition(|r| r.reviewed);
     // Findings stay a pointer + live count (cheap, no recompute): open findings
-    // targeting an open spec. trace:STORY-611
-    let open_findings = collect_findings_by_spec(&store)
-        .values()
-        .flat_map(|ids| ids.iter())
-        .collect::<std::collections::HashSet<_>>()
-        .len();
+    // targeting an open spec. STORY-620: triage is a configurable seat; it only
+    // counts toward (and renders on) the operator's list when the policy
+    // assigns `triage` to the operator (default: advisor → `aida advisor`).
+    // trace:STORY-611 trace:STORY-620
+    let open_findings = if seat_policy.seat_of("triage") == seats::Seat::Operator {
+        collect_findings_by_spec(&store)
+            .values()
+            .flat_map(|ids| ids.iter())
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    } else {
+        0
+    };
 
     // `--short`: bare IDs, one per line — usable in `$(...)` / xargs. No
     // header, footer, color, or grouping (mirrors `aida list --short`).
@@ -75110,11 +75159,19 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     // double-list every pending decision, exactly the conflation the
     // REFINEMENT comment warns against. trace:STORY-611
     use burndown::OpenBucket::*;
-    // STORY-618: only the OPERATOR-seat derived buckets render here — review
-    // surfaces and keystone builds that genuinely need the operator. The
-    // advisor-seat buckets (ReadyToClose / Ungroomed / Umbrella) moved to
-    // `aida advisor`. trace:STORY-618 (was BUG-543's ReadyToClose-leads order)
-    let order = [HeldForReview, BuildSupervised];
+    // STORY-618/620: render order for the derived buckets. The fixed-operator
+    // buckets (held-for-review, build-supervised) always belong here; the
+    // configurable ones (ready-to-close / to-groom / decompose) appear only when
+    // the seat policy moved them to the operator — the `classified` filter above
+    // already dropped the rest, so listing them here just sets their order.
+    // trace:STORY-620 (was BUG-543's ReadyToClose-leads order)
+    let order = [
+        ReadyToClose,
+        HeldForReview,
+        BuildSupervised,
+        Ungroomed,
+        Umbrella,
+    ];
     for bucket in order {
         let rows: Vec<&(
             burndown::OpenFacts,
@@ -75263,9 +75320,14 @@ fn handle_advisor_worklist(
         })
         .collect();
 
+    // STORY-620: the configurable buckets (to-groom/decompose/ready-to-close/
+    // triage) appear here only when the seat policy assigns them to the advisor
+    // (the default).
+    let seat_policy = seats::SeatPolicy::load(&project_root);
+
     // GROOM / DECOMPOSE / CLOSE come from the SAME open-facts classifier the
-    // human view uses — we just keep the advisor_seat buckets instead of the
-    // operator_seat ones. trace:STORY-618
+    // human view uses — keep the advisor_seat buckets the policy assigns to the
+    // advisor. trace:STORY-618 trace:STORY-620
     let in_flight_role_map = in_flight_lease_role_map(&project_root);
     let advisor_rows: Vec<(
         burndown::OpenFacts,
@@ -75277,7 +75339,9 @@ fn handle_advisor_worklist(
             let (bucket, reasons) = burndown::explain_reasons(&f);
             (f, bucket, reasons)
         })
-        .filter(|(_, bucket, _)| bucket.advisor_seat())
+        .filter(|(_, bucket, _)| {
+            bucket.advisor_seat() && seat_policy.seat_of(bucket.key()) == seats::Seat::Advisor
+        })
         .collect();
 
     // DISTILL — under-specified specs the sweep would flag (minus live leases /
@@ -75285,11 +75349,16 @@ fn handle_advisor_worklist(
     let distill = clarify_default_specs(backend).unwrap_or_default();
 
     // TRIAGE — findings still awaiting triage (draft + finding tag), distinct.
-    let triage = collect_findings_by_spec(&store)
-        .values()
-        .flat_map(|ids| ids.iter())
-        .collect::<std::collections::HashSet<_>>()
-        .len();
+    // STORY-620: only when `triage` is assigned to the advisor (the default).
+    let triage = if seat_policy.seat_of("triage") == seats::Seat::Advisor {
+        collect_findings_by_spec(&store)
+            .values()
+            .flat_map(|ids| ids.iter())
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    } else {
+        0
+    };
 
     // BLESS — approved, unblocked, unqueued, not-in-flight specs the advisor
     // could groom onto the queue (queueing IS the ADR-3 sign-off).

@@ -30,6 +30,23 @@ passive routing layer, and it is **not** a code-implementer.
    identified gaps into actionable tasks in the product backlog.
 
 
+## The advisor's worklist (`aida advisor`)
+
+Bare `aida advisor` prints the advisor's actionable worklist — the mirror of
+bare `aida human`, grouped by *advisor* action: **groom** ungroomed drafts,
+**distill** under-specified specs into questions, **triage** findings, **bless**
+the approved-but-unqueued backlog onto the queue, **close** delivered epics.
+This is the seat-separation: ungroomed drafts and routine dispositions belong on
+the advisor's list, not the operator's — `aida human` shows only what genuinely
+needs the operator (reviews, posed decisions, keystone builds).
+
+The split is a resolved policy. Four buckets are configurable in
+`.aida/config.toml` `[seats]` (or `~/.aida/config.toml` for a user-wide
+default): `to-groom`, `decompose`, `ready-to-close`, `triage` — each defaults to
+the advisor, settable to `operator` to surface it on `aida human` instead. The
+rest are seat-bound (reviews/decisions/merge/keystone-build are the operator's;
+distill/bless are the advisor's). `aida config show` prints the effective seats.
+
 ## The periodic garden pass
 
 Between conversations — and on every fork-from-live tick of `aida advisor
