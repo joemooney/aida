@@ -1,0 +1,16 @@
+id: 019ec3f5-f774-7390-8887-d0521f755e6e
+spec_id: BUG-549
+agreed_id: BUG-549
+title: burndown subagents never run 'aida queue done' — specs land at Approved, normal Done→Completed auto-bump never fires
+description: 'Observed in the 2026-06-13 drain wave (#872-877): the /aida-burndown implementer subagents commit + open their PR but never call ''aida queue done'', so each spec stays at Approved through merge and the normal Done→Completed auto-bump (the aida pull / db sync path) never fires. The orchestrator papered over it by completing all 6 manually post-merge. Two problems: (1) the spec lifecycle skips Done entirely (Approved→manually-Completed), so the real merge-driven auto-bump code path goes UNEXERCISED — a regression there would be invisible; (2) manual completion is orchestrator work that shouldn''t be needed. Fix: drive ''aida queue done <spec>'' in the burndown subagent prompt (.claude/skills/aida-burndown.md) after the PR opens, so the spec reaches Done and the auto-bump promotes it on merge like a normal keyboard ship. Keystone (autonomy machinery) → keyboard/review, not unsupervised drain.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T02:28:57.332266845Z
+modified_at: 2026-06-14T02:28:57.332266845Z
+req_type: Bug
+tags:
+- aida:burndown
+- autonomy
+- from-friction
