@@ -3,12 +3,12 @@ spec_id: TASK-814
 agreed_id: TASK-814
 title: 'serialize-group wave MVP: /aida-burndown fans at most one spec per serialize:<group> tag per wave'
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T16:41:26.084208906Z
-modified_at: 2026-06-14T16:41:26.084208906Z
+modified_at: 2026-06-14T16:54:24.270814027Z
 req_type: Task
 tags:
 - aida:burndown
@@ -18,3 +18,21 @@ relationships:
 - rel_type: Child
   target_id: 019ec47f-a287-7512-b6c2-60ba31173696
   created_at: 2026-06-14T16:41:35.019688475Z
+history:
+- id: 019ec70e-4f07-75f1-9601-2a62c96a0e15
+  author: aida-auto-bump
+  timestamp: 2026-06-14T16:54:24.263596256Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec70e-4f0e-7040-aa17-31591b4ec3fe
+  timestamp: 2026-06-14T16:54:24.270812949Z
+  agent: aida
+  commit_sha: a5e8216a686b81c5aad59cb41ada05f8eed092d5
+  summary: Completed via merge a5e8216a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T16:54:24.103113007Z
+  completion_sha: a5e8216a686b81c5aad59cb41ada05f8eed092d5
