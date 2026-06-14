@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:43:28.549415650Z
-modified_at: 2026-06-13T20:43:28.549415650Z
+modified_at: 2026-06-14T07:09:11.570642072Z
 req_type: Task
 tags:
 - docs
 - parent:EPIC-40
 - parent:STORY-603
+comments:
+- id: 019ec4f6-8812-7fe0-a36b-cfa38f5e9c09
+  author: joe
+  content: Commit 7631a143d references this requirement
+  created_at: 2026-06-14T07:09:11.570642072Z
+  modified_at: 2026-06-14T07:09:11.570642072Z
