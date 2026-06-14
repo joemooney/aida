@@ -1,0 +1,17 @@
+id: 019ec70e-80c8-7683-a3d5-bb83df018b8b
+spec_id: TASK-815
+agreed_id: TASK-815
+title: 'Solo-mode MVP: docs/solo-mode.md runbook composing intake --apply --then-drain → queue integrate --watch (lock + keystone-park + mailbox escalation)'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T16:54:37.000363128Z
+modified_at: 2026-06-14T16:54:37.000363128Z
+req_type: Task
+tags:
+- autonomy
+- docs
+- from-strategic
+- solo-mode
