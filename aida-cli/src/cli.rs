@@ -1562,6 +1562,19 @@ pub enum BurndownCommand {
         #[clap(long)]
         verbose: bool,
     },
+    /// Is a drain running, and what is it doing? The read-side companion to
+    /// `burndown run`. Reads the global drain lock — pid, start time, the
+    /// launching command, host — and corroborates it against a PID-liveness
+    /// probe (running vs a crashed/stale lock). Also lists the in-flight leased
+    /// worktrees (the implementers fanned out under the drain) and points at the
+    /// live event log (`.aida/burndown/<drain-id>.jsonl`) you can tail.
+    /// Read-only; exits 0 whether or not a drain is running.
+    // trace:TASK-806 | ai:claude (lock = BUG-538, event log = TASK-804)
+    Status {
+        /// Machine-readable JSON (`{drain:{running,pid,…}, in_flight:[…], log}`).
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// of an in-repo build, running dev servers, installing shell helpers).
