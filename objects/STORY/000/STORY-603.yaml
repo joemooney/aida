@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:57:56.276099391Z
-modified_at: 2026-06-13T20:56:19.572574016Z
+modified_at: 2026-06-14T07:21:34.177181602Z
 req_type: Story
 tags:
 - aida:cli
@@ -25,6 +25,12 @@ tags:
 - intent
 - parent:EPIC-40
 - relates:STORY-542
+comments:
+- id: 019ec501-dce1-7080-959c-3ad2be1754a0
+  author: joe
+  content: Commit c8fa53fed references this requirement
+  created_at: 2026-06-14T07:21:34.177181602Z
+  modified_at: 2026-06-14T07:21:34.177181602Z
 history:
 - id: 019ec2c5-6f70-74a0-adf1-4e60ba9d7d0b
   author: aida-auto-bump
