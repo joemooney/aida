@@ -8,12 +8,12 @@ description: |-
   (a) LIVE PROGRESS — surface what the drain is doing without tailing a raw log. Options to weigh: 'aida burndown run' streams a phase line per spec ('2/4 BUG-528: reviewer phase'); and/or a companion 'aida burndown status' / 'watch' that reads the drain's log + queue + lease state and renders plan position / current phase / done-so-far. Headless claude -p output already lands in a log under .aida/ — the status surface can read that + the lease/queue state.
 
   (b) EXPECTED / IN-FLIGHT MARKING — a spec the drain plans to process (blessed + in its run-set) should be visibly distinguishable in 'aida list' / 'aida show' / 'aida queue list' from a merely-queued spec: 'queued (not started)' vs 'a drain is expected to reach it' vs 'actively leased now'. Extends the existing in-flight/lease concept (queue list --in-flight, session leases, 'Done — awaiting merge') to cover the 'claimed by a running drain plan' state that today has no marker. trace:from-friction
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-14T04:01:06.056270078Z
+modified_at: 2026-06-14T04:50:03.607815619Z
 req_type: Story
 tags:
 - agent-context
