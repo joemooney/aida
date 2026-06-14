@@ -2,13 +2,18 @@ id: 019ec362-e8a3-79d3-bb46-a59af43f4070
 spec_id: BUG-543
 agreed_id: BUG-543
 title: Epics don't auto-complete (or surface) when their rollup hits all-children-completed — fully-delivered epics linger as Draft
-description: 'Operator hit (2026-06-13): EPIC-41 showed Draft while the documenter (correctly) claimed it delivered — all 4 children (STORY-606/607/608/609) were Completed/merged. The rollup data EXISTS (''aida graph --tree EPIC-41'' prints ''Rollup: 4 total · 4 completed · 0 remaining'') but nothing acts on it, so the epic stays Draft and clutters the ''umbrella'' bucket in ''aida human'' looking undone. Contrast EPIC-40 (11/14, 3 remaining) which is correctly open. Fix (pick one): (a) on ''aida pull'' (or a rollup pass), AUTO-complete an epic once its rollup is all-children-Completed (mirrors the Done→Completed auto-bump; pairs with BUG-536''s squash-merge child-completion); OR (b) SURFACE ''epics ready to close (rollup complete)'' in the advisor worklist (EPIC-42''s ''aida advisor'') for one-click completion — safer if rollup-miscount is a worry. Advisor lean: (b) surface-then-confirm (auto-completing on a possibly-miscounted rollup is riskier than a one-click advisor action). Either way, a fully-delivered epic should not read as Draft. trace:relates:BUG-536 trace:relates:EPIC-42 trace:from-friction'
+description: |
+  Operator hit (2026-06-13): EPIC-41 showed Draft while the documenter (correctly) claimed it delivered — all 4 children (STORY-606/607/608/609) were Completed/merged. The rollup data EXISTS ('aida graph --tree EPIC-41' prints 'Rollup: 4 total · 4 completed · 0 remaining') but nothing acts on it, so the epic stays Draft and clutters the 'umbrella' bucket in 'aida human' looking undone. Contrast EPIC-40 (11/14, 3 remaining) which is correctly open. Fix (pick one): (a) on 'aida pull' (or a rollup pass), AUTO-complete an epic once its rollup is all-children-Completed (mirrors the Done→Completed auto-bump; pairs with BUG-536's squash-merge child-completion); OR (b) SURFACE 'epics ready to close (rollup complete)' in the advisor worklist (EPIC-42's 'aida advisor') for one-click completion — safer if rollup-miscount is a worry. Advisor lean: (b) surface-then-confirm (auto-completing on a possibly-miscounted rollup is riskier than a one-click advisor action). Either way, a fully-delivered epic should not read as Draft. trace:relates:BUG-536 trace:relates:EPIC-42 trace:from-friction
+
+  ## Acceptance
+
+  - Resolved (2026-06-14, operator decision via `aida questions answer`): Config policy [lifecycle] epic_rollup = surface — auto
 status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:48:19.747028159Z
-modified_at: 2026-06-14T04:49:33.089240404Z
+modified_at: 2026-06-14T04:53:24.904578018Z
 req_type: Bug
 tags:
 - auto-bump
@@ -32,4 +37,6 @@ decision_request:
     resolution: 'off (default surface)|tunable: projects choose auto vs surface; safe default = surface. Matches the configurable-policy-with-default preference.|noop'
   recommended: 2
   rationale: 'Config policy (default surface) gives the safe behavior out of the box while letting a project opt into auto-complete — consistent with your preference for a tunable [section] policy + safe default over hardcoding one. Surface is the right floor: epic completion can involve judgment the rollup can''t see.'
+  answered: 2
   asked_at: 2026-06-14T03:38:13.466960945Z
+  answered_at: 2026-06-14T04:53:24.904570699Z
