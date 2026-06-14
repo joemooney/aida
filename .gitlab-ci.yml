@@ -1,0 +1,73 @@
+# GitLab CI — mirrors the core merge-gates of .github/workflows/ci.yml so that
+# merge requests on the canonical GitLab hub (EPIC-44) gate on the same quality
+# bar as the GitHub PR CI. GitHub ignores this file entirely (it only reads
+# .github/workflows/), so adding it here is inert on GitHub and active only on
+# GitLab — zero regression risk to the current pipeline.
+#
+# Linux-only for cycle time (cross-platform stays the nightly matrix, as on
+# GitHub). The GitHub pull_request-only gates (trace gate / coverage / doc-intent
+# — STORY-498/499/603) depend on PR-event vars + an aida-store fetch and are a
+# follow-up here: adapt them to CI_MERGE_REQUEST_* + `git fetch origin
+# aida-store` once a GitLab runner is wired.
+#
+# NOTE: requires a Linux GitLab runner with the docker executor. The live bwrap
+# confinement gate needs unprivileged user namespaces, which a locked-down
+# runner may deny — it is `allow_failure: true` here (reported, not blocking)
+# until the runner's capabilities are confirmed; promote it to a hard gate then.
+# trace:TASK-825 | ai:claude
+
+stages:
+  - verify
+
+variables:
+  CARGO_TERM_COLOR: "always"
+  # Keep cargo's registry + build artifacts inside the project dir so the
+  # cache: block below can persist them across runs.
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+
+default:
+  image: rust:latest
+  cache:
+    key: "cargo-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cargo/registry/
+      - target/
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends
+        protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+        libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap
+    - rustup component add clippy rustfmt
+
+# Single verify job mirroring the GitHub `build` job's always-run gates. Runs on
+# merge requests and on pushes to the default branch.
+verify:
+  stage: verify
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - cargo build --workspace --release
+    # Unset AIDA_SESSION_ROLE so role-gated queue/mcp tests don't false-fail.
+    - env -u AIDA_SESSION_ROLE cargo test --workspace
+    - bash tests/test_mcp_stdio.sh
+    - bash tests/test_mcp_doc_consistency.sh
+    - cargo fmt --all -- --check
+    # Deny-by-default CORRECTNESS lints; style/pedantic stay warnings (matches
+    # the GitHub gate — no -D warnings on a floating stable toolchain).
+    - cargo clippy -p aida-cli -- -D clippy::correctness
+
+# STORY-612 live OS-wrap confinement gate. Security boundary — proves
+# write-inside-OK / write-outside-blocked under a real bubblewrap run. Needs
+# unprivileged userns; `allow_failure` until the runner's capabilities are
+# confirmed (then make it a hard gate, mirroring GitHub).
+bwrap-confinement:
+  stage: verify
+  allow_failure: true
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+    - AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --bin aida
+        bwrap_write_confinement_live_or_fail_closed -- --nocapture
