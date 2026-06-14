@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T00:35:55.809413721Z
-modified_at: 2026-06-14T01:57:42.558071980Z
+modified_at: 2026-06-14T01:59:25.873924544Z
 req_type: Bug
 tags:
 - aida:human
@@ -23,3 +23,8 @@ comments:
   content: '2ND BITE (2026-06-13): now blocks ''aida review'' itself, not just the aida-human bucket. ''aida review TASK-800'' reports ''built locally, never pushed (no commits reference this spec)'' — but PR #869 IS open for TASK-800; its branch is ''story-610-supervised-marker'' (names parent STORY-610) and the commit trailers TASK-800 (unmerged). So review surface-detection (branch-name + merged-commit scan) misses an open PR whose branch names a different spec than the commit trailers. This blocks the operator from reviewing a real PR. Confirms the fix urgency: resolve spec↔PR via OPEN-PR commit trailers, not branch-name. Bumping priority.'
   created_at: 2026-06-14T01:57:42.047729949Z
   modified_at: 2026-06-14T01:57:42.047729949Z
+- id: 019ec3da-efb1-76d2-855d-23fd76d1bd31
+  author: joe
+  content: '3RD DATA POINT: ''aida review STORY-610'' ALSO fails (''no commits reference this spec''), so surface-detection is NOT branch-name based — it parses the (SPEC-ID) COMMIT TRAILER. #869''s commit trailer is the non-standard ''(TASK-800 / STORY-610 slice 1a)'' (two specs + prose in one paren) instead of a clean ''(TASK-800)'', so the parser extracts NEITHER. So the fix has TWO parts: (a) resolve open-PR↔spec via the ''trace:SPEC-ID'' lines too (not only the (SPEC-ID) paren), and (b) parse multi-spec/parenthetical-with-prose trailers robustly. Operator workaround today: review/merge the PR directly via gh. Advisor commit-discipline lesson: use a CLEAN single ''(SPEC-ID)'' trailer, not ''(A / B slice 1a)''. trace:relates:STORY-553'
+  created_at: 2026-06-14T01:59:25.873924544Z
+  modified_at: 2026-06-14T01:59:25.873924544Z
