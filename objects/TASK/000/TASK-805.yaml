@@ -1,0 +1,18 @@
+id: 019ec47a-1bcf-7fb1-8b87-53d886c3d32a
+spec_id: TASK-805
+agreed_id: TASK-805
+title: In-flight/Scheduled marking in queue list + burndown plan (facet b of STORY-604)
+description: 'Facet (b) of STORY-604. ''aida queue list'' and ''aida burndown plan'' should DETECT a running drain and explicitly mark its specs: Scheduled (claimed by the drain''s blessed set, not yet picked up) vs InProgress (actively leased). Banner: ''a drain is running (pid N); scheduled: ..., in-flight: ...''. DATA SOURCE: the BUG-538 drain-lock (pid + claimed selector/set) gives Scheduled; session leases give InProgress. BLOCKED ON BUG-538 — must read the same .aida/drain.lock that BUG-538 introduces, not invent a parallel liveness probe (advisor note 2026-06-14).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T04:53:17.391377720Z
+modified_at: 2026-06-14T04:53:17.391377720Z
+req_type: Task
+tags:
+- aida:burndown
+- from-friction
+- observability
+- supervised
+- ux
