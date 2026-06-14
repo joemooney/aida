@@ -10341,10 +10341,77 @@ fn try_attach_store_worktree(project_root: &std::path::Path) -> Result<std::path
     use aida_core::git_ops;
     let worktree_dir = ".aida-store";
     let branch = "aida-store";
+    // BUG-559 (substrate slice): on a fresh clone of an AIDA-on-GitLab repo the
+    // working tree can land ON the orphan `aida-store` branch — GitLab's
+    // push-to-create adopts the first-pushed branch as the project default, so a
+    // clone checks out the internal YAML store as if it were the code. In that
+    // state `git fetch origin aida-store:aida-store` refuses ("refusing to fetch
+    // into branch refs/heads/aida-store checked out at <clone>") and the raw git
+    // error is useless to a first user. Detect it and return actionable guidance
+    // instead of the cryptic failure. (The source-side prevention — making the
+    // GitLab default branch `main` at init — is tracked under BUG-559 itself.)
+    // trace:TASK-821 trace:BUG-559 | ai:claude
+    if git_ops::current_branch(project_root).ok().as_deref() == Some("aida-store") {
+        anyhow::bail!(
+            "this clone has the internal AIDA store branch `aida-store` checked out as your \
+             working tree (a GitLab default-branch quirk — the orphan store became the repo \
+             default). Switch to your code branch first, then re-run:\n    \
+             git checkout main   # or your default code branch\n\
+             AIDA will then attach the store automatically."
+        );
+    }
     // Create the local tracking branch from origin/<branch> (network fetch;
     // fails closed → caller drops to the explicit `aida init` guidance).
     git_ops::fetch_branch_into_local(project_root, "origin", branch)?;
     git_ops::create_store_worktree(project_root, worktree_dir, branch)
+}
+
+#[cfg(test)]
+mod bug_559_clone_guidance_tests {
+    use super::*;
+    use std::process::Command;
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let ok = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .expect("git spawn")
+            .status
+            .success();
+        assert!(ok, "git {args:?} failed");
+    }
+
+    /// Regression for the BUG-559 substrate slice (TASK-821): when the working
+    /// tree is ON the `aida-store` branch (the GitLab fresh-clone state),
+    /// auto-attach returns actionable guidance naming the fix, not the raw
+    /// "refusing to fetch into branch ... checked out" git error.
+    #[test]
+    fn try_attach_guides_when_aida_store_is_checked_out() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let p = tmp.path();
+        git(p, &["init", "-q"]);
+        git(p, &["config", "user.email", "t@example.com"]);
+        git(p, &["config", "user.name", "t"]);
+        git(p, &["commit", "--allow-empty", "-qm", "init"]);
+        // Simulate the fresh-clone-of-GitLab state: HEAD is on aida-store.
+        git(p, &["checkout", "-q", "-b", "aida-store"]);
+        let err = try_attach_store_worktree(p).unwrap_err().to_string();
+        assert!(
+            err.contains("git checkout main"),
+            "guidance must name the fix; got: {err}"
+        );
+        assert!(
+            err.contains("aida-store"),
+            "guidance must name the branch; got: {err}"
+        );
+        // Must NOT leak the raw git plumbing error.
+        assert!(
+            !err.contains("refusing to fetch"),
+            "should not surface the raw git error; got: {err}"
+        );
+    }
 }
 
 /// Walk-up resolver split out from `detect_distributed_store` so the search
