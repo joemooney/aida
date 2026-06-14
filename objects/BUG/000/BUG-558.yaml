@@ -3,12 +3,12 @@ spec_id: BUG-558
 agreed_id: BUG-558
 title: 'aida agent new does not set AIDA_USER: launched agents read the human''s mailbox, not their own'
 description: "Repro (verified 2026-06-14): launching via \"aida agent new codex\" sets AIDA_AGENT_NAME (stable name, e.g. codex-implementer-1) and AIDA_SESSION_ROLE, but NOT AIDA_USER (main.rs ~33739-33754 / 34672-34687 list every .env() override; AIDA_USER is absent). Per BUG-89 the mailbox/queue identity resolves shell USER/AIDA_USER, so the spawned agent reads the LAUNCHING HUMAN inbox. Proof: env -u AIDA_USER AIDA_AGENT_NAME=codex-implementer-1 AIDA_AGENT_TYPE=codex aida mailbox inbox prints \"Inbox for joe + product\", not a codex inbox.\n\nImpact: inter-agent mailbox addressing is broken for launched agents. A coordinator that sends --to codex (or --to the stable name) is invisible to the agent, which is reading joe inbox. Briefs route by agent-NAME (.aida/agent-briefs/codex/) while mailbox routes by shell-USER, so the two coordination surfaces disagree about who the agent is. Workaround today: prefix the launch (or the agent inbox poll) with AIDA_USER=<handle>.\n\nThree identifiers are in play and only the first two are surfaced: (1) stable name codex-implementer-1 for process control; (2) context token 019ec771... per-spawn snapshot; (3) mailbox/queue identity, which silently defaults to the human. \n\nProposed fix: the launcher should export AIDA_USER set to the agent coordination handle so mailbox + briefs agree. Open design point for disposition: handle = stable name (unique per instance, no shared-inbox collision when two codex agents run, but briefs route by short name) vs short agent name codex (matches brief routing, but multiple instances share one inbox and mark-seen races). Recommend stable name as the addressable identity with the short name as a routing alias. Then the launch banner should print that addressable handle on its own line (operator question that surfaced this)."
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T18:46:26.416282442Z
-modified_at: 2026-06-14T19:00:59.024490141Z
+modified_at: 2026-06-14T19:30:53.078304231Z
 req_type: Bug
 comments:
 - id: 019ec775-dff2-7451-b08f-69162361f678
@@ -25,3 +25,21 @@ comments:
     So: mailbox identity should be the unique stable name; keep type/role as group aliases for fan-out. Acceptance (fold in on approval): (a) launcher exports AIDA_USER=<stable name>; (b) aida mailbox send --to <stable name> reaches the agent; (c) --broadcast and briefs-by-type still fan out to all instances of a type/role; (d) launch banner prints the addressable stable name on its own line.
   created_at: 2026-06-14T18:47:31.570380482Z
   modified_at: 2026-06-14T18:47:31.570380482Z
+history:
+- id: 019ec79d-920e-74b1-a14c-55c9515b8cb4
+  author: aida-auto-bump
+  timestamp: 2026-06-14T19:30:53.070986627Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec79d-9216-72a0-80fa-5e0309b4601d
+  timestamp: 2026-06-14T19:30:53.078299503Z
+  agent: aida
+  commit_sha: bea1d85c61e51b98eaaa8eed15cc0d1d3d184b36
+  summary: Completed via merge bea1d85c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T19:30:52.915952713Z
+  completion_sha: bea1d85c61e51b98eaaa8eed15cc0d1d3d184b36
