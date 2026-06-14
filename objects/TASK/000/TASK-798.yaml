@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-14, operator decision via `aida questions answer`): Unify under [contained] — enable joins the allowlist: accept [contained] enable as an alias of [agents] contained, so an operator writes one [contained] block in config.toml. Pulls 'enable' out of the agents.toml launch-posture model.
-status: Approved
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:09:16.701019716Z
-modified_at: 2026-06-14T02:32:43.583568448Z
+modified_at: 2026-06-14T02:43:16.252458936Z
 req_type: Task
 tags:
 - aida:contained
@@ -21,6 +21,10 @@ tags:
 - config-coherence
 - from-friction
 - relates:STORY-605
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-14T02:43:16.252458936Z
+  implemented_by: joe
 decision_request:
   question: The 'contained' agent posture has its enable toggle at [agents] contained (agents.toml, machine-global, next to bypass) but its egress allowlist at [contained] allowed_hosts (project config.toml) — two sections for one feature. How should they be unified? (Feature is default-off; no operator configs exist yet, so any choice is non-breaking.)
   choices:
