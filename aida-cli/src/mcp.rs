@@ -2045,11 +2045,24 @@ impl<'a> McpServer<'a> {
             .map(str::to_string)
             .unwrap_or_else(|| crate::current_user_id(None));
         let id = uuid::Uuid::new_v4().to_string();
-        let thread_id = args
-            .get("thread")
+        // BUG-557: mirror the CLI fix — `in_reply_to` must attach the reply to
+        // the target's thread, not open a new one. Precedence: explicit
+        // `thread` > the reply target's thread > a fresh thread. Resolved
+        // against the local layer (the same set `read_inbox` reads); a dangling
+        // reference falls back to a fresh thread. trace:BUG-557 | ai:claude
+        let in_reply_to = args
+            .get("in_reply_to")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| id.clone());
+            .map(str::to_string);
+        let thread_id = if let Some(t) = args.get("thread").and_then(|v| v.as_str()) {
+            t.to_string()
+        } else if let Some(target) = in_reply_to.as_deref() {
+            let local = crate::mailbox_store::read_local_messages(&self.project_root)
+                .map_err(|e| e.to_string())?;
+            aida_core::mailbox::reply_target_thread(target, &local).unwrap_or_else(|| id.clone())
+        } else {
+            id.clone()
+        };
         // STORY-539: light urgency flag, mirroring the CLI `--urgent`.
         let urgent = args
             .get("urgent")
@@ -2069,10 +2082,7 @@ impl<'a> McpServer<'a> {
             from,
             to: recipient,
             timestamp: chrono::Utc::now().timestamp_millis(),
-            in_reply_to: args
-                .get("in_reply_to")
-                .and_then(|v| v.as_str())
-                .map(str::to_string),
+            in_reply_to,
             body: body.to_string(),
             urgent,
             intent,
