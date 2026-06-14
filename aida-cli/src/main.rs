@@ -1535,6 +1535,11 @@ fn run() -> Result<()> {
         Command::Away => return handle_away_command(),
         Command::Home => return handle_home_command(),
         Command::Presence => return handle_presence_command(),
+        // STORY-624: solo-mode flag — machine-global ~/.aida/solo.toml, no
+        // requirement store needed (mirrors the away/home early dispatch).
+        Command::Solo { off, status, ttl } => {
+            return handle_solo_command(*off, *status, ttl.as_deref());
+        }
         // TASK-784: pure read of the caller-identity resolvers (env vars +
         // current_user_id + detect_agent_type). No project store needed, so
         // it dispatches here alongside the other env-only commands.
@@ -2225,8 +2230,8 @@ fn run() -> Result<()> {
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
-        Command::Away | Command::Home | Command::Presence => {
-            unreachable!("presence commands are dispatched before storage init")
+        Command::Away | Command::Home | Command::Presence | Command::Solo { .. } => {
+            unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
@@ -11353,8 +11358,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
-        Command::Away | Command::Home | Command::Presence => {
-            unreachable!("presence commands are dispatched before storage init")
+        Command::Away | Command::Home | Command::Presence | Command::Solo { .. } => {
+            unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
@@ -52057,6 +52062,41 @@ fn handle_presence_command() -> Result<()> {
     Ok(())
 }
 
+/// `aida solo [--off | --status | --ttl <DURATION>]` — enter/exit/show solo
+/// mode, the visible work-state flag for advisor+integrator running the safe
+/// backlog end-to-end (EPIC-43). State lives in `~/.aida/solo.toml` with a
+/// safety TTL; the statusline surfaces it. trace:STORY-624 | ai:claude
+fn handle_solo_command(off: bool, status: bool, ttl: Option<&str>) -> Result<()> {
+    let now = chrono::Utc::now();
+    if status {
+        if presence::current_solo(now) {
+            println!("{} solo mode {}", "🤖", "ON".green().bold());
+        } else {
+            println!("solo mode {}", "off".dimmed());
+        }
+        return Ok(());
+    }
+    if off {
+        presence::clear_solo()?;
+        println!("solo mode {}", "off".bold());
+        return Ok(());
+    }
+    let ttl_secs = match ttl {
+        Some(s) => presence::parse_duration_secs(s)
+            .ok_or_else(|| anyhow::anyhow!("invalid --ttl '{s}'; use e.g. 8h, 30m, 2h30m"))?,
+        None => presence::DEFAULT_SOLO_TTL_SECS,
+    };
+    presence::set_solo(ttl_secs)?;
+    println!(
+        "{} solo mode {} — advisor+integrator working the safe backlog end-to-end; \
+         keystone/architecture is parked for the operator. `{}` to exit.",
+        "🤖",
+        "ON".green().bold(),
+        "aida solo --off".cyan()
+    );
+    Ok(())
+}
+
 /// Pure source-label resolver for `aida whoami`'s user-id line. Mirrors
 /// `current_user_id`'s resolution order (`AIDA_USER` → `USER` → `USERNAME` →
 /// default) over already-read env values, so the printed source label can never
@@ -65779,6 +65819,11 @@ fn handle_statusline_command(color: &str) -> Result<()> {
                 .bold()
                 .to_string(),
         );
+    }
+    // STORY-624: solo-mode segment — surfaced only while active (off is the
+    // quiet default, matching the away segment). trace:STORY-624 | ai:claude
+    if let Some(marker) = presence::statusline_solo_marker(chrono::Utc::now()) {
+        parts.push(marker.magenta().bold().to_string());
     }
     println!("{}", parts.join(&separator));
     Ok(())
