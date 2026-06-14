@@ -2,8 +2,9 @@
 """Documenter: assemble an intent-bearing manual-entry draft from the SPEC GRAPH.
 
 # trace:TASK-794
+# trace:TASK-795
 
-STORY-603 part 2. The overnight manual was verified against `--help` (the WHAT)
+STORY-603 part 2 (+ part 3 backlink, TASK-795). The overnight manual was verified against `--help` (the WHAT)
 but did NOT consume spec INTENT (the WHY) — a "blind redetermination," not
 intent-bearing docs. This documenter fixes that by deriving each draft entry
 from THREE sources, not one:
@@ -261,11 +262,20 @@ def render_markdown(entry):
     )
     lines.append("")
 
-    # Provenance (machine-only; SPEC-IDs live ONLY in this HTML comment, never in
-    # the rendered prose — the verify-manual leak check skips HTML comments).
+    # Backlink to the shaping spec(s) — machine-readable, NON-LEAKING (TASK-795).
+    # SPEC-IDs live ONLY inside these HTML-comment markers, never in the rendered
+    # prose; the verify-manual leak check ALLOWS SPEC-IDs inside the recognized
+    # `doc-intent` / `trace` marker forms (and still hard-fails on bare IDs in
+    # visible text). A reader/agent holding the requirement graph is then ONE HOP
+    # from intent: parse the `trace:` token, `aida show <id>` the shaping spec.
+    # Two complementary forms — a human-narrative provenance line and a terse,
+    # grep-friendly `trace:` token that matches AIDA's code-trace convention.
+    # trace:TASK-795
     if specs:
         ids = ", ".join(s["id"] for s in specs)
+        trace_ids = ",".join(s["id"] for s in specs)
         lines.append(f"<!-- doc-intent: shaped by {ids} -->")
+        lines.append(f"<!-- trace:{trace_ids} -->")
     else:
         lines.append("<!-- doc-intent: no shaping spec found via interface_changes -->")
 
