@@ -1,0 +1,413 @@
+//! Drain-instance lock (BUG-538) — `.aida/drain.lock`.
+//!
+//! # The problem
+//!
+//! `aida burndown run` and `aida queue work --auto-complete` both INTEGRATE on
+//! `main`: they merge PRs, push, create/remove worktrees, and share the same
+//! `target/` build dir. Two of them running against the same repo tree at once
+//! double-drive it — two integrators racing git ops, two sets of worktrees,
+//! corrupted builds. Nothing prevented it; the "one drain at a time" invariant
+//! relied on a human remembering which drains were live.
+//!
+//! # The lock (substrate-as-bouncer)
+//!
+//! On launch, every drain entry point acquires a GLOBAL lock — one drain per
+//! repo, regardless of which command started it (a `burndown run` and a
+//! `queue work --auto-complete` are mutually exclusive against each other, not
+//! just against their own kind). The lock is a single JSON file at
+//! `.aida/drain.lock` carrying the holder's `pid`, `started_at_utc`, the
+//! `command` that launched it, and the `host`. A second launch reads it and:
+//!
+//! - **live + fresh** → REFUSE with the holder's pid / start / command.
+//! - **stale** (pid dead, or older than [`stale_secs`]) → reclaim and proceed.
+//! - **`AIDA_DRAIN_FORCE=1`** → bypass the check entirely (the rare intentional
+//!   concurrent case, or a known-dead holder whose pid was recycled).
+//!
+//! Release is RAII: [`DrainGuard`]'s `Drop` removes the file on a clean exit.
+//! Drain handlers that terminate via `std::process::exit` skip `Drop`, but that
+//! is harmless — their pid is dead the instant they exit, so the next launch
+//! stale-reclaims. The age backstop ([`AIDA_DRAIN_LOCK_STALE_SECS`], default
+//! 1800s) catches the pathological pid-recycle case.
+//!
+//! # Granularity (out of scope)
+//!
+//! Per-scope parallel drains on non-overlapping batches are explicitly NOT
+//! supported — the lock is global because that matches how drains are run
+//! today. Revisit if real demand for concurrent non-overlapping drains appears.
+//!
+//! trace:BUG-538 | ai:claude
+
+use std::path::{Path, PathBuf};
+
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+use crate::process_probe;
+
+/// File name under `.aida/` holding the live drain's lock. Gitignored by the
+/// deny-by-default `.aida/*` rule — pure per-clone runtime state.
+const DRAIN_LOCK_FILE: &str = "drain.lock";
+
+/// Env override: any non-empty / truthy value bypasses the concurrency check.
+const FORCE_ENV: &str = "AIDA_DRAIN_FORCE";
+
+/// Env override: age (seconds) past which a still-claimed lock is treated as
+/// stale even if its pid happens to be alive (pid-recycle backstop).
+const STALE_SECS_ENV: &str = "AIDA_DRAIN_LOCK_STALE_SECS";
+
+/// Default staleness horizon: a lock older than this is reclaimable regardless
+/// of pid liveness. 30 minutes — comfortably longer than any single phase, far
+/// shorter than a wedged drain a human would want auto-cleared.
+const DEFAULT_STALE_SECS: u64 = 1800;
+
+/// Path of the drain lock under `project_root`.
+pub(crate) fn drain_lock_path(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join(DRAIN_LOCK_FILE)
+}
+
+/// On-disk lock record. Serialized as JSON via [`aida_core::write_atomic`] so a
+/// concurrent reader never sees a torn file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct DrainLock {
+    /// PID of the drain process holding the lock.
+    pub(crate) pid: u32,
+    /// RFC3339 UTC timestamp of when the lock was taken.
+    pub(crate) started_at_utc: String,
+    /// The command that launched the drain (e.g. `burndown run --status approved`).
+    pub(crate) command: String,
+    /// Host the drain runs on — informational, for cross-machine shared clones.
+    pub(crate) host: String,
+}
+
+impl DrainLock {
+    /// Age in seconds relative to `now`, parsed from [`Self::started_at_utc`].
+    /// An unparseable timestamp returns `None` (treated as "age unknown" — the
+    /// pid-liveness check then decides staleness on its own).
+    fn age_secs(&self, now: DateTime<Utc>) -> Option<u64> {
+        let started = DateTime::parse_from_rfc3339(&self.started_at_utc)
+            .ok()?
+            .with_timezone(&Utc);
+        let secs = now.signed_duration_since(started).num_seconds();
+        Some(secs.max(0) as u64)
+    }
+}
+
+/// The pure decision: given the lock currently on disk (if any), should a new
+/// drain ACQUIRE (write its own, possibly reclaiming a stale one) or be
+/// REFUSED? Liveness is injected as a predicate so the three paths
+/// (no-lock / live-refuse / stale-reclaim) are unit-testable without spawning
+/// real processes — mirrors `triage_lease::live_leases_reaping`.
+/// trace:BUG-538 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum LockDecision {
+    /// No live lock stands in the way — write ours.
+    Acquire,
+    /// A live, non-stale drain holds the lock — refuse, surfacing the holder.
+    Refuse(DrainLock),
+}
+
+/// Decide ACQUIRE vs REFUSE. `force` short-circuits to ACQUIRE (the
+/// `AIDA_DRAIN_FORCE=1` escape). An absent / unparseable on-disk lock is always
+/// ACQUIRE. A present lock is reclaimable (→ ACQUIRE) when forced, when its pid
+/// is dead, or when it is older than `stale_secs`; otherwise REFUSE.
+pub(crate) fn decide_lock(
+    existing: Option<DrainLock>,
+    now: DateTime<Utc>,
+    stale_secs: u64,
+    force: bool,
+    is_alive: impl Fn(u32) -> bool,
+) -> LockDecision {
+    if force {
+        return LockDecision::Acquire;
+    }
+    let Some(lock) = existing else {
+        return LockDecision::Acquire;
+    };
+    let pid_dead = !is_alive(lock.pid);
+    let aged_out = lock.age_secs(now).map(|a| a > stale_secs).unwrap_or(false);
+    if pid_dead || aged_out {
+        LockDecision::Acquire
+    } else {
+        LockDecision::Refuse(lock)
+    }
+}
+
+/// Read + parse the on-disk lock, if present and well-formed. A missing file or
+/// a parse error both yield `None` — a corrupt lock must never wedge a drain
+/// (it is treated as "no lock", i.e. reclaimable).
+fn read_lock(path: &Path) -> Option<DrainLock> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+/// Resolve the staleness horizon from `AIDA_DRAIN_LOCK_STALE_SECS`, falling
+/// back to [`DEFAULT_STALE_SECS`]. A non-numeric value falls back too.
+fn stale_secs() -> u64 {
+    std::env::var(STALE_SECS_ENV)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_STALE_SECS)
+}
+
+/// Is the `AIDA_DRAIN_FORCE` escape set to a truthy value?
+fn force_requested() -> bool {
+    std::env::var(FORCE_ENV)
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+/// Acquire the global drain lock for `project_root`, launched as `command`.
+///
+/// On success returns a [`DrainGuard`] that removes the lock on `Drop`. On a
+/// live, non-stale conflict returns an `Err` whose message names the holder and
+/// the recovery paths (wait, remove the file, or `AIDA_DRAIN_FORCE=1`).
+///
+/// Both drain entry points (`aida burndown run` and `aida queue work
+/// --auto-complete`) call this at the top so they are mutually exclusive
+/// against each other — see the module docs. trace:BUG-538 | ai:claude
+pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<DrainGuard> {
+    let path = drain_lock_path(project_root);
+    let existing = read_lock(&path);
+    let forced = force_requested();
+
+    match decide_lock(
+        existing.clone(),
+        Utc::now(),
+        stale_secs(),
+        forced,
+        process_probe::pid_is_alive,
+    ) {
+        LockDecision::Refuse(holder) => {
+            anyhow::bail!(
+                "a drain is already running (pid {}, started {}, cmd `{}`{}).\n  \
+                 Wait for it to finish, or — if you're certain it's dead — remove {} \
+                 or set AIDA_DRAIN_FORCE=1 to override.",
+                holder.pid,
+                holder.started_at_utc,
+                holder.command,
+                if holder.host.is_empty() {
+                    String::new()
+                } else {
+                    format!(", host {}", holder.host)
+                },
+                path.display(),
+            );
+        }
+        LockDecision::Acquire => {
+            // A reclaim (stale lock present) is worth a one-line note so a fast
+            // re-run after a crash isn't silently surprising. Forced runs say so
+            // too. trace:BUG-538 | ai:claude
+            if forced && existing.is_some() {
+                eprintln!(
+                    "  ⚠ AIDA_DRAIN_FORCE=1 — overriding the existing drain lock at {}",
+                    path.display()
+                );
+            } else if let Some(stale) = &existing {
+                eprintln!(
+                    "  ℹ reclaiming a stale drain lock (pid {}, started {} — not running)",
+                    stale.pid, stale.started_at_utc
+                );
+            }
+
+            // Best-effort parent-dir create — the `.aida/` dir normally already
+            // exists, but a freshly-attached clone might be racing it.
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let record = DrainLock {
+                pid: std::process::id(),
+                started_at_utc: Utc::now().to_rfc3339(),
+                command: command.to_string(),
+                host: hostname(),
+            };
+            let json = serde_json::to_string_pretty(&record).unwrap_or_else(|_| "{}".to_string());
+            aida_core::write_atomic(&path, json).map_err(|e| {
+                anyhow::anyhow!("could not write drain lock {}: {e}", path.display())
+            })?;
+            Ok(DrainGuard {
+                path,
+                pid: record.pid,
+            })
+        }
+    }
+}
+
+/// Best-effort host name for the lock record (informational only).
+fn hostname() -> String {
+    sysinfo::System::host_name().unwrap_or_default()
+}
+
+/// RAII handle: while held, this process owns the global drain lock. `Drop`
+/// removes the lock file — but ONLY if it still records THIS process's pid, so
+/// a guard that outlives a stale-reclaim by a successor never deletes the
+/// successor's live lock. trace:BUG-538 | ai:claude
+#[derive(Debug)]
+pub(crate) struct DrainGuard {
+    path: PathBuf,
+    pid: u32,
+}
+
+impl Drop for DrainGuard {
+    fn drop(&mut self) {
+        // Only remove the file if it's still ours. A different drain may have
+        // reclaimed it (e.g. our pid was wrongly judged stale); deleting its
+        // lock would reopen the double-drive hole.
+        if read_lock(&self.path).map(|l| l.pid) == Some(self.pid) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lock(pid: u32, started_at_utc: &str) -> DrainLock {
+        DrainLock {
+            pid,
+            started_at_utc: started_at_utc.to_string(),
+            command: "queue work --auto-complete".to_string(),
+            host: "testhost".to_string(),
+        }
+    }
+
+    fn now() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-06-14T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    #[test]
+    fn no_existing_lock_acquires() {
+        let d = decide_lock(None, now(), 1800, false, |_| true);
+        assert_eq!(d, LockDecision::Acquire);
+    }
+
+    #[test]
+    fn live_fresh_lock_refuses() {
+        // started 60s ago, pid alive → refuse.
+        let l = lock(4242, "2026-06-14T11:59:00Z");
+        let d = decide_lock(Some(l.clone()), now(), 1800, false, |_| true);
+        assert_eq!(d, LockDecision::Refuse(l));
+    }
+
+    #[test]
+    fn dead_pid_lock_reclaims() {
+        // pid dead → reclaim even though it's fresh.
+        let l = lock(4242, "2026-06-14T11:59:30Z");
+        let d = decide_lock(Some(l), now(), 1800, false, |_| false);
+        assert_eq!(d, LockDecision::Acquire);
+    }
+
+    #[test]
+    fn aged_out_lock_reclaims_even_when_pid_alive() {
+        // started 3600s ago > 1800 horizon, pid alive → reclaim (pid-recycle backstop).
+        let l = lock(4242, "2026-06-14T11:00:00Z");
+        let d = decide_lock(Some(l), now(), 1800, false, |_| true);
+        assert_eq!(d, LockDecision::Acquire);
+    }
+
+    #[test]
+    fn force_overrides_a_live_fresh_lock() {
+        let l = lock(4242, "2026-06-14T11:59:00Z");
+        let d = decide_lock(Some(l), now(), 1800, true, |_| true);
+        assert_eq!(d, LockDecision::Acquire);
+    }
+
+    #[test]
+    fn unparseable_timestamp_falls_back_to_pid_liveness() {
+        // age unknown → only pid liveness decides. Alive → refuse.
+        let l = lock(4242, "not-a-timestamp");
+        let alive = decide_lock(Some(l.clone()), now(), 1800, false, |_| true);
+        assert_eq!(alive, LockDecision::Refuse(l));
+        // Dead → reclaim.
+        let l2 = lock(4242, "not-a-timestamp");
+        let dead = decide_lock(Some(l2), now(), 1800, false, |_| false);
+        assert_eq!(dead, LockDecision::Acquire);
+    }
+
+    #[test]
+    fn age_secs_clamps_future_timestamps_to_zero() {
+        let l = lock(1, "2026-06-14T13:00:00Z"); // 1h in the future vs now()
+        assert_eq!(l.age_secs(now()), Some(0));
+    }
+
+    // ── acquire_drain_lock / DrainGuard round-trip (real fs + real pid) ──
+
+    #[test]
+    fn acquire_writes_lock_and_guard_drop_removes_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = drain_lock_path(root);
+        {
+            let _guard = acquire_drain_lock(root, "burndown run (test)").unwrap();
+            assert!(path.exists(), "lock file should exist while held");
+            let on_disk = read_lock(&path).expect("a parseable lock");
+            assert_eq!(on_disk.pid, std::process::id());
+            assert_eq!(on_disk.command, "burndown run (test)");
+        }
+        // Guard dropped → file removed (it still recorded our pid).
+        assert!(
+            !path.exists(),
+            "lock file should be gone after the guard drops"
+        );
+    }
+
+    #[test]
+    fn second_acquire_refuses_while_our_live_pid_holds_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let _held = acquire_drain_lock(root, "first drain").unwrap();
+        // A second acquire sees a fresh lock recording THIS (alive) pid → refuse.
+        let err = acquire_drain_lock(root, "second drain")
+            .expect_err("a live lock must refuse the second drain");
+        let msg = err.to_string();
+        assert!(msg.contains("a drain is already running"), "msg was: {msg}");
+        assert!(
+            msg.contains("AIDA_DRAIN_FORCE"),
+            "msg should name the override: {msg}"
+        );
+    }
+
+    #[test]
+    fn acquire_reclaims_a_dead_pid_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = drain_lock_path(root);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // A lock recording a pid that is not alive, written "just now".
+        let dead = DrainLock {
+            pid: 999_999_999,
+            started_at_utc: Utc::now().to_rfc3339(),
+            command: "crashed drain".to_string(),
+            host: "ghost".to_string(),
+        };
+        std::fs::write(&path, serde_json::to_string(&dead).unwrap()).unwrap();
+        // Reclaim succeeds and rewrites the file with OUR pid.
+        let _guard = acquire_drain_lock(root, "fresh drain").unwrap();
+        assert_eq!(read_lock(&path).unwrap().pid, std::process::id());
+    }
+
+    #[test]
+    fn guard_drop_leaves_a_successor_lock_intact() {
+        // If our guard's file was reclaimed by another drain (different pid),
+        // Drop must NOT delete the successor's live lock.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = drain_lock_path(root);
+        let guard = acquire_drain_lock(root, "ours").unwrap();
+        // Simulate a successor stomping the file with a different pid.
+        let successor = DrainLock {
+            pid: std::process::id().wrapping_add(1),
+            started_at_utc: Utc::now().to_rfc3339(),
+            command: "successor".to_string(),
+            host: "h".to_string(),
+        };
+        std::fs::write(&path, serde_json::to_string(&successor).unwrap()).unwrap();
+        drop(guard);
+        // The successor's lock survives our Drop.
+        let on_disk = read_lock(&path).expect("successor lock should remain");
+        assert_eq!(on_disk.command, "successor");
+    }
+}
