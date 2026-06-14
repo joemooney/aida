@@ -3,12 +3,12 @@ spec_id: STORY-620
 agreed_id: STORY-620
 title: 'Seat policy: make the operator/advisor worklist partition configurable via [seats] in config.toml'
 description: 'STORY-618 hardcoded the operator/advisor seat split in OpenBucket::operator_seat/advisor_seat. Make it a resolved policy with built-in defaults, overridable per-project in .aida/config.toml [seats] and per-user in ~/.aida/config.toml [seats] (resolution: project > user-global > built-in default). Scope: the four SHARED buckets that BOTH worklists can render are configurable (no rendering holes) — to-groom, decompose, ready-to-close, triage — each defaulting to advisor, settable to operator. The intrinsically seat-bound buckets stay fixed: reviews-awaiting / decisions-awaiting / awaiting-merge / held-for-review / build-supervised are operator (a human reviews/decides/merges/keystone-builds); distill / bless are advisor (authoring questions / queue sign-off). aida config show surfaces the effective [seats] block (value + whether overridden). Acceptance: a project setting [seats] triage = operator makes findings-triage appear on aida human and drop from aida advisor; an unset key uses the default; aida config show prints the resolved seats; both worklists consult the policy.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:42:45.250883648Z
-modified_at: 2026-06-14T19:42:45.250883648Z
+modified_at: 2026-06-14T20:01:19.173731904Z
 req_type: Story
 tags:
 - aida:advisor
@@ -17,3 +17,21 @@ tags:
 - from-product
 - parent:EPIC-42
 - seat-separation
+history:
+- id: 019ec7b9-6f41-7153-b078-3b970b08f810
+  author: aida-auto-bump
+  timestamp: 2026-06-14T20:01:19.169145681Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec7b9-6f45-7f00-b430-1fa2789aa0bb
+  timestamp: 2026-06-14T20:01:19.173730799Z
+  agent: aida
+  commit_sha: 392045235fa0014926d0db1d1e72fd6e474404df
+  summary: Completed via merge 39204523
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T20:01:19.011656805Z
+  completion_sha: 392045235fa0014926d0db1d1e72fd6e474404df
