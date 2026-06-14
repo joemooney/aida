@@ -1,0 +1,32 @@
+id: 019ec7af-4bac-7ce2-88ca-c7e12f5256d2
+spec_id: BUG-559
+agreed_id: BUG-559
+title: 'GitLab: aida init push-to-create makes orphan aida-store the default branch, breaking fresh-clone auto-attach'
+description: |-
+  Found 2026-06-14 during Tier-1 GitLab substrate validation against a self-hosted gitlab.joemooney.com.
+
+  Repro:
+  1. git init a new repo, add an SSH remote to a non-existent GitLab project, aida init.
+  2. aida init push-to-creates the project by pushing the orphan aida-store branch FIRST (before main). GitLab sets the projects DEFAULT BRANCH to the first branch it receives = aida-store.
+  3. A fresh git clone of that project therefore checks out aida-store (the internal YAML store) as the working tree.
+  4. First store-read (aida list) tries to auto-attach via "git fetch origin aida-store:aida-store" and fails: "fatal: refusing to fetch into branch refs/heads/aida-store checked out at <clone>". The user is left with the orphan store as their working copy and a failed attach.
+
+  Confirmed root cause: git remote show origin reports "HEAD branch: aida-store" on the GitLab project. On GitHub this does not occur because the repo-create flow sets main as the default branch; GitLabs push-to-create adopts the first-pushed branch.
+
+  Recovery (manual, works): in the clone, git checkout main, then aida init — it detects the existing origin/aida-store, fetches it, attaches the .aida-store worktree, rebuilds the cache, and the store reads back correctly (verified: filed spec + its draft->approved transition both survived).
+
+  Impact: a teammate/CI/second-machine cloning an AIDA-on-GitLab repo gets the internal store checked out as code and a broken auto-attach — a bad first-clone experience on the exact path were validating for primary-repo use. The substrate data itself is intact; this is a default-branch + auto-attach ergonomics bug.
+
+  Fix options (for disposition):
+  (a) During init push-to-create, push the code/main branch FIRST (or both with main as the pushed HEAD) so GitLab adopts main as default; and/or explicitly set the remote default branch to main via the forge API (glab) after create.
+  (b) Harden the auto-attach path (TASK-621) to handle the case where aida-store is the checked-out branch: detect it, check out the code branch (or a detached temp) before fetching aida-store into the local ref, instead of erroring.
+  (c) At minimum, when aida-store is detected as the default/checked-out branch, the guidance message should say "git checkout main first" rather than just "run aida init".
+
+  Recommend (a)+(b): make init never let the orphan branch become default, and make auto-attach resilient if it already did. Relates to TASK-621 (auto-attach), EPIC-35 (forge wiring), and BUG-558/STORY-619 (other launched/clone GitLab-surfaced gaps). This is the first concrete substrate-layer GitLab bug; the forge layer (Tier 2) has many more (~251 un-migrated gh sites).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T19:50:14.700945231Z
+modified_at: 2026-06-14T19:50:14.700945231Z
+req_type: Bug
