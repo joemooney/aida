@@ -899,11 +899,16 @@ fn claude_contained_settings_json() -> String {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
-    let allowed_hosts = crate::find_project_root()
-        .ok()
-        .map(|root| contained_allowed_hosts(&root))
+    let root = crate::find_project_root().ok();
+    let allowed_hosts = root
+        .as_ref()
+        .map(|r| contained_allowed_hosts(r))
         .unwrap_or_default();
-    contained_settings_json(&allowed_hosts)
+    let managed_only = root
+        .as_ref()
+        .map(|r| contained_managed_domains_only(r))
+        .unwrap_or(false);
+    contained_settings_json(&allowed_hosts, managed_only)
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -923,6 +928,21 @@ pub(crate) fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<Str
         .unwrap_or_default()
 }
 
+/// STORY-615: read `[contained] managed_domains_only` (bool, default false).
+/// When true, the contained settings add `sandbox.network.allowManagedDomainsOnly`
+/// so a HEADLESS drain default-DENIES egress (to the managed set + any
+/// `allowed_hosts`) WITHOUT the approval prompt the allowlist-only path (STORY-605)
+/// hits — which a `claude -p` drain can't answer. Default OFF so a building drain
+/// that needs crates.io / github.com / npm isn't silently cut off; opt in only
+/// when the drain's egress is fully covered by the managed set + allowed_hosts.
+/// trace:STORY-615 | ai:claude
+pub(crate) fn contained_managed_domains_only(project_root: &std::path::Path) -> bool {
+    let cfg = crate::read_project_config_value(project_root);
+    crate::config_lookup(cfg.as_ref(), "contained", "managed_domains_only")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
 /// Build the contained-mode `--settings` JSON. With a NON-EMPTY `allowed_hosts`
 /// egress allowlist, a `sandbox.network.allowedDomains` key is added so Claude
 /// Code's own sandbox (bubblewrap + an out-of-sandbox proxy on Linux) default-
@@ -936,15 +956,34 @@ pub(crate) fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<Str
 /// without-prompt needs `network.allowManagedDomainsOnly` via MANAGED settings
 /// (not this project `--settings`) and is a follow-up — see STORY-605. Pure +
 /// total so the "empty → unchanged" invariant is unit-tested. trace:STORY-605
-pub(crate) fn contained_settings_json(allowed_hosts: &[String]) -> String {
+pub(crate) fn contained_settings_json(
+    allowed_hosts: &[String],
+    managed_domains_only: bool,
+) -> String {
     let mut sandbox = serde_json::json!({
         "enabled": true,
         "failIfUnavailable": true,
         "autoAllowBashIfSandboxed": true,
         "allowUnsandboxedCommands": false
     });
-    if !allowed_hosts.is_empty() {
-        sandbox["network"] = serde_json::json!({ "allowedDomains": allowed_hosts });
+    // STORY-615: the `network` key is added when EITHER an allowlist is set OR
+    // managed-domains-only is on; with neither it's omitted entirely so the
+    // posture is unchanged (the pre-STORY-605 shape). trace:STORY-615
+    if !allowed_hosts.is_empty() || managed_domains_only {
+        let mut network = serde_json::Map::new();
+        if !allowed_hosts.is_empty() {
+            network.insert(
+                "allowedDomains".to_string(),
+                serde_json::json!(allowed_hosts),
+            );
+        }
+        if managed_domains_only {
+            network.insert(
+                "allowManagedDomainsOnly".to_string(),
+                serde_json::json!(true),
+            );
+        }
+        sandbox["network"] = serde_json::Value::Object(network);
     }
     serde_json::json!({
         "permissions": {
@@ -2250,7 +2289,7 @@ mod tests {
     // trace:STORY-605 | ai:claude
     #[test]
     fn empty_egress_allowlist_omits_network_key_unchanged() {
-        let json = contained_settings_json(&[]);
+        let json = contained_settings_json(&[], false);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         let sandbox = v.get("sandbox").and_then(|s| s.as_object()).unwrap();
         assert!(
@@ -2276,13 +2315,44 @@ mod tests {
         );
     }
 
+    // STORY-615: managed_domains_only=true adds
+    // `sandbox.network.allowManagedDomainsOnly`; composes with the allowlist;
+    // default (false) + empty allowlist still omits the network key entirely.
+    // trace:STORY-615 | ai:claude
+    #[test]
+    fn managed_domains_only_adds_allow_managed_flag() {
+        // managed-only with NO allowlist → network carries only the flag.
+        let json = contained_settings_json(&[], true);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            v.pointer("/sandbox/network/allowManagedDomainsOnly"),
+            Some(&serde_json::json!(true))
+        );
+        assert!(
+            v.pointer("/sandbox/network/allowedDomains").is_none(),
+            "no allowlist → no allowedDomains key: {json}"
+        );
+        // composes with an allowlist (both keys present).
+        let json = contained_settings_json(&["github.com".to_string()], true);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            v.pointer("/sandbox/network/allowManagedDomainsOnly"),
+            Some(&serde_json::json!(true))
+        );
+        assert!(v.pointer("/sandbox/network/allowedDomains").is_some());
+        // default off + empty allowlist → network omitted (unchanged posture).
+        let json = contained_settings_json(&[], false);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(v.pointer("/sandbox/network").is_none());
+    }
+
     // STORY-605: a non-empty allowlist adds `sandbox.network.allowedDomains`
     // (Claude Code's verified egress schema) with the given hosts, leaving the
     // base sandbox keys intact. trace:STORY-605 | ai:claude
     #[test]
     fn nonempty_egress_allowlist_adds_allowed_domains() {
         let hosts = vec!["github.com".to_string(), "*.crates.io".to_string()];
-        let json = contained_settings_json(&hosts);
+        let json = contained_settings_json(&hosts, false);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         let domains = v
             .pointer("/sandbox/network/allowedDomains")
