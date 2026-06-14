@@ -106216,6 +106216,24 @@ fn handle_queue_integrate(
 ) -> Result<()> {
     let project_root = find_project_root()?;
 
+    // TASK-812: take the global drain lock so an integrate run (especially
+    // `--watch`, which a solo operator leaves running) can't double-drive the
+    // tree against a `burndown run` / `queue work --auto-complete` / a second
+    // `integrate` — they ALL merge into the shared default branch, so there can
+    // be only one merge authority at a time. Held for the whole run, including
+    // the `--watch` loop; a crashed watcher's lock is stale-reclaimed by the
+    // next launch (BUG-538). `--dry-run` drives nothing, so it skips the lock.
+    // The guard frees on return (this fn returns Result, never `process::exit`).
+    // trace:TASK-812 | ai:claude
+    let _drain_guard = if dry_run {
+        None
+    } else {
+        Some(drain_lock::acquire_drain_lock(
+            &project_root,
+            "queue integrate",
+        )?)
+    };
+
     // TASK-691: resolve the accumulation strategy — the --strategy flag wins,
     // else the project default (`[integrate] strategy` in .aida/config.toml),
     // else `per-item`. trace:TASK-691 | ai:claude
