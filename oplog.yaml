@@ -18051,5 +18051,23 @@ operations:
   timestamp: 2026-06-14T17:15:00.568926104Z
   kind: !SetStatus
     status: Completed
-clock: 1784
+- id: 019ec759-90ed-7d00-adce-075585dda4a6
+  target_id: 019ebf9e-5f67-7311-a188-c718502712d3
+  author: aida
+  node_id: '1'
+  lamport: 1785
+  timestamp: 2026-06-14T18:16:36.333431592Z
+  kind: !SetDescription
+    description: |-
+      Harden the existing drift-guard (docs/cli/verify-manual.py — already on main, the bootstrap) into an ENFORCING CI gate for the CLI manual (ADR-5). Scope is the MANUAL drift-guard only:
+
+      1. AUTHORITY = clap command tree (complete source), NOT 'aida help-all' (curatable — omits rules/doctor/defer per BUG-520). Switch verify-manual.py from parsing help-all to the clap tree so no command can silently escape the guard.
+      2. CI WIRING: a PR adding/renaming a command fails CI unless it has a manual entry. Substrate-as-bouncer for doc-drift.
+      3. FIX the subcommand blind-spot: today it only checks flags against the PARENT --help, producing false-positive WARNs for subcommand flags; descend into 'aida <cmd> <sub> --help'.
+      4. KEEP the SPEC-ID-leak check (already added).
+
+      RECONCILED (advisor grooming 2026-06-14): the original clause #5 (interface_changes-vs-docs reflection) is now covered by STORY-603 (Completed — the doc-intent gate). Dropped from this spec to avoid duplicate work. Branch note corrected: the original 'cli-manual' branch is merged; do this on a fresh branch off main.
+
+      Acceptance: CI fails on an undocumented clap command (clap-derived, not help-all); no false-positive subcommand WARNs; SPEC-ID-leak still fails the build.
+clock: 1785
 node_id: '1'
