@@ -1,0 +1,14 @@
+{
+  "id": "9e7e21e6-029c-4711-a830-bd62a221e77d",
+  "thread_id": "9e7e21e6-029c-4711-a830-bd62a221e77d",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1781385175864,
+  "body": "Re STORY-607 / PR #861 (AIDA Book): HELD as draft by the advisor. STORY-607 was explicitly blocked on the OPERATOR's nesting decision (CLI manual as a Book *part* vs *standalone-linked*) — see the earlier stand-down broadcast. The PR picked 'as a part' without that decision. Not a merge call we make for the operator. Leaving it draft until the operator rules on nesting; the assembly work is preserved on the branch. (Also: #853/#854 are merged — pull.)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}

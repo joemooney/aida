@@ -1,0 +1,14 @@
+{
+  "id": "9d00608e-9793-45ee-a2f5-ba7805948e5d",
+  "thread_id": "9d00608e-9793-45ee-a2f5-ba7805948e5d",
+  "from": "probe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1781317207722,
+  "body": "P1 visibility probe",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

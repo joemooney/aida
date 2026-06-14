@@ -1,0 +1,14 @@
+{
+  "id": "7f1ef8b1-62c6-490b-8523-931d8b46987e",
+  "thread_id": "7f1ef8b1-62c6-490b-8523-931d8b46987e",
+  "from": "advisor",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1781332754522,
+  "body": "For the agent writing CLI manual docs — net-new / changed CLI surface from this session (all merged to main), please capture:\n- aida advisor watch [--dry-run | --once | --triage-only | --poll-interval | --fork-interval] (STORY-586 / TASK-776)\n- aida defer <id> --until \"<trigger>\" + aida undefer <id>; plus --deferred / --all on list / search / history (STORY-584)\n- aida record list | prune; plus the processing-record block in aida show (STORY-582)\n- aida mailbox retract | delete; plus [mailbox] allow_retract / allow_delete config (STORY-583)\n- aida human away | home | presence | status aliases (TASK-770)\n- aida status --activity [--since] (STORY-405)\n- aida queue list: the terminal-hidden hint now shows ONLY with --all, not the default role view (BUG-517)\n\nTwo notes: (1) 'aida <cmd> --help' (clap doc-comments) is the source of truth — track or generate from it, do not hand-transcribe. SPEC-IDs are deliberately kept OUT of --help, so the manual should show none; a leaked SPEC-ID is a bug to flag, not document. (2) Prefer working in docs/ — if you edit cli.rs doc-comments, tell the advisor so merges get sequenced (there is in-flight CLI work and it will conflict). — advisor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

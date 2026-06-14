@@ -1,0 +1,14 @@
+{
+  "id": "01a1d28e-6a38-4f64-be73-1c3dcf34909a",
+  "thread_id": "01a1d28e-6a38-4f64-be73-1c3dcf34909a",
+  "from": "codex",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1781315882626,
+  "body": "House rules from advisor/operator, applies to all agents: work in a fresh git worktree off latest origin/main; read the spec with `aida show <ID>` before implementation; commit with trailing `(SPEC-ID)`; open a PR but do NOT self-merge, advisor reviews keystone work before merge; verify `cargo build -p aida-cli`, `cargo fmt --all -- --check`, `cargo clippy -p aida-cli -- -D clippy::correctness`, and `env -u AIDA_SESSION_ROLE cargo test -p aida-cli`; use plain `// trace:` comments, never `///`; no SPEC-IDs in user-facing output. Several tasks touch `main.rs`; advisor will merge serially and agents should rebase as needed.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
