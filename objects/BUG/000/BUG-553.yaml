@@ -6,12 +6,12 @@ description: |-
   Observed 2026-06-14: `aida human` showed 'TASK-806 ... [branch task-805]' but TASK-806's actual PR is #891 on branch task-806. Root cause: a sequential agent reused the task-806 worktree and created local branch task-805 pointing AT TASK-806's commit (d5f04d9) without resetting to main, so that commit is reachable from BOTH task-805 and task-806. The reviews-bucket branch-resolution (collect_git_linkage_opts → branch containing the spec's newest commit, BUG-550 path) then picks ambiguously and reports the wrong branch (task-805).
 
   FIX: when resolving a spec's review surface, prefer the branch that has an OPEN PR referencing the spec (TASK-806's PR #891 → branch task-806) over any other branch merely containing the commit. The PR linkage is the authoritative disambiguator; 'branch --contains' alone is ambiguous once branches get stacked/reused. Defensive — pairs with the workflow fix (agents must reset to origin/main before the next sequential spec). trace:relates:BUG-550
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T06:45:47.289373727Z
-modified_at: 2026-06-14T06:45:47.289373727Z
+modified_at: 2026-06-14T15:59:18.456638135Z
 req_type: Bug
 tags:
 - aida:human
@@ -23,3 +23,21 @@ relationships:
 - rel_type: Child
   target_id: 019ec34e-c4a2-7642-967a-a2b9efda9a7d
   created_at: 2026-06-14T06:45:50.282577183Z
+history:
+- id: 019ec6db-ddb4-7812-8790-12dc8a26ff22
+  author: aida-auto-bump
+  timestamp: 2026-06-14T15:59:18.452180342Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec6db-ddb8-7c11-b31a-ce9c59c2c040
+  timestamp: 2026-06-14T15:59:18.456637632Z
+  agent: aida
+  commit_sha: 77b875b95df73c83cc177d953c8e4fb528202902
+  summary: Completed via merge 77b875b9
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T15:59:18.296962966Z
+  completion_sha: 77b875b95df73c83cc177d953c8e4fb528202902
