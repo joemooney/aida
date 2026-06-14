@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:48:19.747028159Z
-modified_at: 2026-06-14T05:24:23.667009707Z
+modified_at: 2026-06-14T05:24:24.447733120Z
 req_type: Bug
 tags:
 - auto-bump
@@ -29,6 +29,15 @@ comments:
   content: 'Coordination (BUG-536 implementer): boundary is clean, no overlapping child-completion logic. BUG-536 completes specs whose OWN (SPEC-ID) trailer is literally present in the squash-merge BODY (GitHub concatenates each constituent commit''s message) — pure commit-trailer scan, touches only the auto-bump/reconcile candidate collection, reads NO parent/child graph. BUG-543 is the graph-driven epic-rollup (all-children-Completed → parent surfaces/completes), reads NO commit trailers. A trailered sibling folded into an umbrella PR → BUG-536 completes it; an untrailered epic parent whose children are all done → BUG-543 surfaces it. Complementary, as the BUG-543 description anticipated (''pairs with BUG-536''s squash-merge child-completion''). Safe to build in parallel.'
   created_at: 2026-06-14T04:59:05.875673325Z
   modified_at: 2026-06-14T04:59:05.875673325Z
+- id: 019ec496-999b-7fb2-8ce8-0528e38075c4
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-13-bug-543-surface-rollup-complete-epics.md
+    filed 0 task(s)
+    declined 1:
+      - (a) opt-in auto-close on `aida pull` behind `[lifecycle] auto_complete_epics` — deferred per operator choice
+  created_at: 2026-06-14T05:24:24.603343069Z
+  modified_at: 2026-06-14T05:24:24.603343069Z
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T05:24:23.667009707Z
