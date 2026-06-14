@@ -315,9 +315,13 @@ impl OpenBucket {
         }
     }
 
-    /// True for the buckets that genuinely need a human nudge (vs. those that
-    /// will resolve themselves through normal flow). Drives the explainer's
-    /// "needs you" grouping. trace:STORY-547
+    /// True for the buckets that genuinely need a person's nudge (vs. those
+    /// that will resolve themselves through normal flow). This is the UNION
+    /// across both seats — drives the explainer's "needs you" grouping. The
+    /// per-seat split (operator vs advisor) is layered on top by
+    /// [`OpenBucket::advisor_seat`] / [`OpenBucket::operator_seat`], so the two
+    /// worklist views (`aida human` / `aida advisor`) partition this union
+    /// without changing what "needs a person" means. trace:STORY-547
     pub(crate) fn needs_human(self) -> bool {
         matches!(
             self,
@@ -327,6 +331,33 @@ impl OpenBucket {
                 | OpenBucket::Ungroomed
                 | OpenBucket::Umbrella
                 | OpenBucket::ReadyToClose
+        )
+    }
+
+    /// STORY-618: the "needs a person" buckets that are ADVISOR work — routine
+    /// dispositions that require cross-spec awareness + product judgment but NOT
+    /// the operator's strategic sign-off. These belong on `aida advisor`'s
+    /// worklist (GROOM ungroomed drafts, DECOMPOSE childless umbrellas, CLOSE
+    /// fully-delivered epics), NOT on `aida human` — leaking them onto the
+    /// operator's list is the seat-confusion EPIC-42 fixes. trace:STORY-618
+    pub(crate) fn advisor_seat(self) -> bool {
+        matches!(
+            self,
+            OpenBucket::Ungroomed | OpenBucket::Umbrella | OpenBucket::ReadyToClose
+        )
+    }
+
+    /// STORY-618: the "needs a person" buckets that are genuinely OPERATOR work
+    /// — they require the human's strategic/keystone judgment the advisor can't
+    /// make unilaterally (review a PR, decide a posed fork, drive a keystone
+    /// build). The complement of [`advisor_seat`] within [`needs_human`].
+    /// (`AwaitingDecision` is operator work too, but the human view renders it
+    /// as its own first-class "decisions-awaiting" bucket, so it is excluded
+    /// from the derived-bucket grouping here.) trace:STORY-618
+    pub(crate) fn operator_seat(self) -> bool {
+        matches!(
+            self,
+            OpenBucket::HeldForReview | OpenBucket::BuildSupervised
         )
     }
 }
@@ -1255,6 +1286,55 @@ mod tests {
             has_unsatisfied_blocker: false,
             has_pending_decision: false,
         })
+    }
+
+    /// STORY-618: the operator/advisor seat split must be a clean partition of
+    /// the `needs_human` union — every needs-human bucket belongs to exactly
+    /// one seat (or is `AwaitingDecision`, which the human view renders as its
+    /// own first-class bucket), and the two seats never overlap.
+    #[test]
+    fn seat_split_partitions_needs_human() {
+        use OpenBucket::*;
+        let all = [
+            HeldForReview,
+            InFlight,
+            AwaitingDecision,
+            BuildSupervised,
+            Deferred,
+            Blocked,
+            Umbrella,
+            ReadyToClose,
+            LongLived,
+            Ungroomed,
+            AwaitingMerge,
+            InProgress,
+            Actionable,
+        ];
+        for b in all {
+            // Seats never overlap.
+            assert!(
+                !(b.advisor_seat() && b.operator_seat()),
+                "{b:?} is in both seats"
+            );
+            // A seated bucket always needs a human.
+            if b.advisor_seat() || b.operator_seat() {
+                assert!(b.needs_human(), "{b:?} is seated but not needs_human");
+            }
+            // Every needs-human bucket is seated, except AwaitingDecision (its
+            // own first-class human-view bucket).
+            if b.needs_human() && b != AwaitingDecision {
+                assert!(
+                    b.advisor_seat() ^ b.operator_seat(),
+                    "{b:?} needs a human but isn't in exactly one seat"
+                );
+            }
+        }
+        // Spot-check the seat assignments the user complaint hinges on.
+        assert!(Ungroomed.advisor_seat(), "drafts groom on the advisor seat");
+        assert!(ReadyToClose.advisor_seat());
+        assert!(Umbrella.advisor_seat());
+        assert!(HeldForReview.operator_seat());
+        assert!(BuildSupervised.operator_seat());
     }
 
     #[test]
