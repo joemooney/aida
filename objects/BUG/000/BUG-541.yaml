@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:29:39.262777325Z
-modified_at: 2026-06-13T23:29:39.262777325Z
+modified_at: 2026-06-14T00:06:09.555251847Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -16,3 +16,9 @@ tags:
 - from-friction
 - relates:EPIC-28
 - reliability
+comments:
+- id: 019ec373-3b93-73d3-b085-3f9689e12d67
+  author: joe
+  content: 'ESCALATION (2026-06-13): the drain abandoned ALL THREE of its PRs this run (#866/#867/#868 all left OPEN+unmerged on exit), not just the last one. So the pattern is worse than ''exits before the last PR''s CI'' — this drain exited before integrating ANY of its fanned-out PRs (the advisor merged all 3 as backup). Likely the integrate phase didn''t run / exited before CI went green on the wave. Strengthen the fix: the integrator MUST poll its full fanned-out PR set to terminal CI + merge before declaring complete; and the handoff MUST list every un-merged PR. Bumping priority — silent multi-PR abandonment means a ''completed'' drain leaves real work stranded.'
+  created_at: 2026-06-14T00:06:09.555251847Z
+  modified_at: 2026-06-14T00:06:09.555251847Z
