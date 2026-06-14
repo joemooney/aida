@@ -13378,12 +13378,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 changed = true;
             }
             if let Some(t) = tags {
+                // BUG-545: `--tags` REPLACES the whole set — a frequent footgun
+                // when someone means "add one tag". Warn loudly (stderr) showing
+                // old→new so a silent clobber of provenance/routing tags is
+                // visible. `--add-tag` / `--remove-tag` are the incremental forms
+                // (kept mutually exclusive with `--tags` by clap's conflicts_with).
+                // trace:BUG-545 | ai:claude
+                let old_tags = req.tags.clone();
                 req.tags.clear();
                 for tag in t.split(',') {
                     let trimmed = tag.trim();
                     if !trimmed.is_empty() {
                         req.tags.insert(trimmed.to_string());
                     }
+                }
+                if let Some(msg) = tags_replace_warning(&old_tags, &req.tags) {
+                    eprintln!("  {} {}", "⚠".yellow().bold(), msg);
                 }
                 changed = true;
             }
@@ -20480,6 +20490,37 @@ pub(crate) fn apply_tag_deltas(
     changed
 }
 
+/// Build the loud-on-clobber warning shown when `aida edit --tags` REPLACES the
+/// whole tag set. `--tags` is a full replace (other scripts depend on that), so
+/// we don't change its semantics — we surface the old→new diff so the caller
+/// sees that provenance/routing tags were dropped, and point at the incremental
+/// `--add-tag` / `--remove-tag` forms. Returns `None` when the set is unchanged
+/// (no warning needed). The returned string is sorted for deterministic output.
+/// trace:BUG-545 | ai:claude
+pub(crate) fn tags_replace_warning(
+    old_tags: &HashSet<String>,
+    new_tags: &HashSet<String>,
+) -> Option<String> {
+    if old_tags == new_tags {
+        return None;
+    }
+    let fmt_set = |s: &HashSet<String>| -> String {
+        if s.is_empty() {
+            "(none)".to_string()
+        } else {
+            let mut v: Vec<&String> = s.iter().collect();
+            v.sort();
+            v.iter().map(|t| t.as_str()).collect::<Vec<_>>().join(",")
+        }
+    };
+    Some(format!(
+        "--tags REPLACES all tags (was: {} → now: {}). \
+         Use --add-tag/--remove-tag to modify incrementally.",
+        fmt_set(old_tags),
+        fmt_set(new_tags)
+    ))
+}
+
 /// Handler for `aida graph <SPEC>` — query the cross-spec relationship graph
 /// (blocked-by / blocks chains, epic rollup, reverse impact) on top of the
 /// cycle-safe `graph_walk` primitive (TASK-594). Read-only; the flagship
@@ -20904,6 +20945,91 @@ mod apply_tag_deltas_tests {
         let changed = apply_tag_deltas(&mut tags, &vec(&["x"]), &vec(&["x"]));
         assert!(changed); // x was inserted then removed — both ops registered changes
         assert_eq!(tags, set(&["a"]));
+    }
+
+    // BUG-545: `--add-tag` preserves the existing set (the regression the bug
+    // describes: a single-tag edit must NOT clobber provenance/routing tags).
+    // trace:BUG-545 | ai:claude
+    #[test]
+    fn add_tag_preserves_existing_provenance_tags() {
+        let mut tags = set(&["from-friction", "papercut", "safety", "aida:edit"]);
+        let changed = apply_tag_deltas(&mut tags, &vec(&["supervised"]), &[]);
+        assert!(changed);
+        // All five present — the original four survive the add.
+        assert_eq!(
+            tags,
+            set(&[
+                "from-friction",
+                "papercut",
+                "safety",
+                "aida:edit",
+                "supervised"
+            ])
+        );
+    }
+
+    // BUG-545: `--remove-tag` drops only the named tag, leaving the rest intact.
+    // trace:BUG-545 | ai:claude
+    #[test]
+    fn remove_tag_drops_only_named_tag() {
+        let mut tags = set(&["from-friction", "papercut", "safety", "supervised"]);
+        let changed = apply_tag_deltas(&mut tags, &[], &vec(&["supervised"]));
+        assert!(changed);
+        assert_eq!(tags, set(&["from-friction", "papercut", "safety"]));
+    }
+}
+
+#[cfg(test)]
+mod tags_replace_warning_tests {
+    use super::tags_replace_warning;
+    use std::collections::HashSet;
+
+    fn set(items: &[&str]) -> HashSet<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    // BUG-545: the loud-on-clobber warning fires when `--tags` shrinks a
+    // multi-tag set down to one, and shows the old→new diff (sorted).
+    // trace:BUG-545 | ai:claude
+    #[test]
+    fn warns_with_sorted_old_and_new_on_clobber() {
+        let old = set(&["papercut", "from-friction", "safety", "aida:edit"]);
+        let new = set(&["supervised"]);
+        let msg = tags_replace_warning(&old, &new).expect("clobber should warn");
+        assert!(
+            msg.contains("was: aida:edit,from-friction,papercut,safety"),
+            "old set should be listed sorted: {msg}"
+        );
+        assert!(
+            msg.contains("now: supervised"),
+            "new set should be listed: {msg}"
+        );
+        assert!(
+            msg.contains("--add-tag/--remove-tag"),
+            "warning should point at the incremental flags: {msg}"
+        );
+    }
+
+    // BUG-545: no warning when the replace is a true no-op (same set).
+    // trace:BUG-545 | ai:claude
+    #[test]
+    fn no_warning_when_set_unchanged() {
+        let old = set(&["a", "b"]);
+        let new = set(&["b", "a"]);
+        assert!(tags_replace_warning(&old, &new).is_none());
+    }
+
+    // BUG-545: clearing all tags renders the new set as `(none)`.
+    // trace:BUG-545 | ai:claude
+    #[test]
+    fn empty_new_set_renders_none() {
+        let old = set(&["a"]);
+        let new: HashSet<String> = HashSet::new();
+        let msg = tags_replace_warning(&old, &new).expect("clearing should warn");
+        assert!(
+            msg.contains("now: (none)"),
+            "empty new set is (none): {msg}"
+        );
     }
 }
 
