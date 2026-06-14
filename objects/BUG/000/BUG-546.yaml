@@ -1,0 +1,19 @@
+id: 019ec38e-7d21-78e2-8e1c-b3f09deb6b25
+spec_id: BUG-546
+agreed_id: BUG-546
+title: aida human reviews-bucket (+ PR linkage) resolves spec↔PR by BRANCH NAME — misses PRs whose branch is named for a different spec than the commit trailers
+description: 'Operator hit (2026-06-13): BUG-530 (#865, branch bug-530-…) shows in ''aida human'' reviews-awaiting [PR-865], but TASK-800 (#869) does NOT — even though both are Done and both have open PRs. Cause: the reviews bucket matches open PRs to specs via the BRANCH NAME, and #869''s branch is ''story-610-supervised-marker'' (matches the PARENT STORY-610, which is Draft) while the COMMIT trailers the child TASK-800. So a Done spec with an open PR is invisible to review when the branch is named for a different spec. Fix: resolve spec↔PR via the authoritative COMMIT TRAILERS (''(SPEC-ID)'' + ''trace:SPEC-ID'' in the PR''s commits), not (only) the branch name — branch-name is a fragile heuristic. The ''aida review <SPEC>'' surface-detection should use the same trailer-based resolution. trace:relates:STORY-611 trace:relates:TASK-241 trace:from-friction'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T00:35:55.809413721Z
+modified_at: 2026-06-14T00:35:55.809413721Z
+req_type: Bug
+tags:
+- aida:human
+- aida:review
+- cli-consistency
+- from-friction
+- git-linkage
+- relates:STORY-611
