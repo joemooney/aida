@@ -87,6 +87,19 @@ Worktree isolation means parallel agents never collide on files.
 
 ### 3. Integrate (you are the integrator — do NOT implement)
 
+**Wait for each fanned-out PR's CI to reach a TERMINAL state before deciding its
+fate — and never exit the drain while any PR is still pending (BUG-541).** A
+PR's CI lags the implementer's push by minutes, so the LAST wave's PRs are
+routinely still running when their implementer returns; treating "checks
+pending" as "skip it" silently orphans the final PR (observed 2×: #852, #864
+were stranded open+unmerged for the advisor to back-merge). For each returned
+PR, poll `gh pr checks <n>` (or `gh pr view <n> --json statusCheckRollup`) until
+it is **conclusive** — every required check SUCCESS or any FAILURE, not PENDING
+— *before* merging or holding it. Do **not** declare the drain complete until
+every PR it opened has reached a terminal state and been merged, held, or
+explicitly listed as a straggler (step 6). The last PR is the one this bug
+strands — give it the same wait every other PR got.
+
 For each returned PR: if all checks pass and it's mergeable + clean, merge it
 (`--squash --delete-branch`) and pull — the spec was marked **Done** by its
 implementer (step 2), so the merge-driven auto-bump promotes it to **Completed**
@@ -182,9 +195,16 @@ channels** — they reach different audiences and neither replaces the other:
    Completed: <SPEC + PR url per landed spec>
    Caveats / verifications worth noting: <e.g. 'TASK-X passed CI but the integrated-main build was only a compile check'>
    Held / awaiting sign-off: <review:draft-only PRs left for the operator>
+   Left for manual merge: <un-merged PRs — CI not yet terminal at exit, or an unresolved conflict; 'none' if the step-3 wait drained them all (BUG-541)>
    Parked (with reason): <spec + why, from the gate's parked set + any punt-and-continue parks>
    Worktrees not pruned: <flagged + skipped paths from step 3, if any>"
    ```
+
+   **Any un-merged PR MUST appear on the `Left for manual merge` line in BOTH
+   channels (BUG-541).** If step 3 waited correctly this is normally `none`; but
+   if a PR's CI was still pending at `--max`, or a conflict blocked the merge,
+   name it explicitly (`#N <url>`) — silence reads as "all merged" and the PR is
+   silently orphaned.
 
    - Use `--intent handoff` for a normal completion report. Use
      `--intent request` instead if the summary contains something that needs an
