@@ -3,12 +3,12 @@ spec_id: TASK-813
 agreed_id: TASK-813
 title: aida queue integrate parks supervised / review:draft-only specs (keystone-exclusion) instead of auto-merging — solo mode works the SAFE backlog
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T16:21:10.639140925Z
-modified_at: 2026-06-14T16:21:10.639140925Z
+modified_at: 2026-06-14T16:39:40.851851909Z
 req_type: Task
 tags:
 - autonomy
@@ -20,3 +20,21 @@ relationships:
 - rel_type: Child
   target_id: 019ec6c3-bca4-72a2-87aa-e9d798292208
   created_at: 2026-06-14T16:21:16.968426046Z
+history:
+- id: 019ec700-d42f-7350-b8ef-a74369eae24a
+  author: aida-auto-bump
+  timestamp: 2026-06-14T16:39:40.847393384Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec700-d433-7900-b907-b03ff77f3fd4
+  timestamp: 2026-06-14T16:39:40.851851297Z
+  agent: aida
+  commit_sha: 771352761db6a8fe052636e672db0cac45364673
+  summary: Completed via merge 77135276
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T16:39:40.690279674Z
+  completion_sha: 771352761db6a8fe052636e672db0cac45364673
