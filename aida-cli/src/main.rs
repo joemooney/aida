@@ -75261,20 +75261,41 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
         );
     }
 
-    // The full decision inbox (incl. answered) lives in `aida questions list`;
-    // pending decisions already surfaced as their own bucket above.
-    // trace:STORY-562 trace:STORY-611
-    println!(
-        "\n  {} full decision inbox: `aida questions list` · all findings: `aida findings list`",
-        "↳".dimmed()
-    );
-    // STORY-618: grooming/decompose/close are advisor work — point at the
-    // advisor's own worklist so the operator knows where it went (and so a solo
-    // operator wearing both hats knows the second list to check).
-    println!(
-        "  {} advisor work (groom · distill · triage · bless · close): `aida advisor`",
-        "↳".dimmed()
-    );
+    // TASK-823: only print pointers that lead somewhere actionable — an
+    // unconditional "see `aida questions list` / `aida findings list`" footer is
+    // noise when those views are empty (and `questions list` shows only ANSWERED
+    // decisions, so pointing at it as an "inbox" misleads). Build the footer from
+    // the parts that actually have content. trace:TASK-823 | ai:claude
+    let mut hints: Vec<String> = Vec::new();
+    // Pending decisions already render as their own bucket above; the pointer is
+    // only useful as "the rest of the inbox, incl. answered" — show it only when
+    // there's a decision history to browse.
+    if !pending_decisions.is_empty() {
+        hints.push("answered decisions: `aida questions list`".to_string());
+    }
+    if open_findings > 0 {
+        hints.push("all findings: `aida findings list`".to_string());
+    }
+    // STORY-618/622: cross-link the advisor worklist only when it has work — an
+    // ungroomed draft to groom, or a finding to triage. (Cheap store scan; the
+    // full set is `aida advisor`.) A solo operator wearing both hats then knows
+    // the second list to check; when there's no advisor work, no noise.
+    let has_ungroomed_draft = store.requirements.iter().any(|r| {
+        !r.archived
+            && !r.deferred
+            && matches!(r.status, RequirementStatus::Draft)
+            && !findings::is_finding(&r.tags.iter().cloned().collect::<Vec<_>>())
+    });
+    let has_triage = collect_findings_by_spec(&store)
+        .values()
+        .any(|ids| !ids.is_empty());
+    let advisor_has_work = has_ungroomed_draft || has_triage;
+    if advisor_has_work {
+        hints.push("advisor work: `aida advisor`".to_string());
+    }
+    if !hints.is_empty() {
+        println!("\n  {} {}", "↳".dimmed(), hints.join(" · ").dimmed());
+    }
     Ok(())
 }
 
@@ -75420,7 +75441,8 @@ fn handle_advisor_worklist(
         (
             Ungroomed,
             "groom",
-            "approve / defer / reject the draft (`aida edit <id> --status approved`)",
+            "weigh against the graph (overlap / staleness / scope), then dispose: \
+             `aida edit <id> --status approved|rejected` · `aida defer <id> --until <trigger>` · or refine",
         ),
         (
             Umbrella,
