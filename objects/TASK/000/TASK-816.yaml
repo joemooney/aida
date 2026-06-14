@@ -3,12 +3,12 @@ spec_id: TASK-816
 agreed_id: TASK-816
 title: Capture cross-vendor mailbox demo (Claude/Codex/Antigravity) as dated positioning evidence
 description: 'On 2026-06-14 the operator ran a live demo proving AIDA inter-agent mailbox works across three vendors on one git-canonical substrate: a hello-world routed Claude (demo-bot), Codex, and Antigravity (agy) each detected the message, acted (wrote a proof file), and replied back to the sender. This is exactly the empirical validation the "Multi-vendor is the strongest, truest claim" thesis should cite. Capture it as a new dated artifact under docs/competitive-analysis/ (immutable-dated-artifact convention: new file, do NOT rewrite the 2026-05-31 thesis snapshot). Note the one caveat surfaced: BUG-558 (aida agent new omits AIDA_USER, so launched agents need an AIDA_USER prefix to read their own inbox) — the demo used that workaround. Reproducible recipe + the three round-trip message ids + proof-file contents should be in the artifact so the claim is backed by a re-runnable demo, not an assertion.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:04:20.349494283Z
-modified_at: 2026-06-14T19:05:40.659238139Z
+modified_at: 2026-06-14T19:48:37.662413069Z
 req_type: Task
 comments:
 - id: 019ec786-7e33-7653-b3c7-6a7443bc7237
@@ -16,3 +16,23 @@ comments:
   content: Commit dd2d54e7e references this requirement
   created_at: 2026-06-14T19:05:40.659238139Z
   modified_at: 2026-06-14T19:05:40.659238139Z
+history:
+- id: 019ec7ad-d097-7232-b1f3-8f7713df0252
+  author: aida-auto-bump
+  timestamp: 2026-06-14T19:48:37.655501514Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec7ad-d09e-7d41-bd95-8b45009ae7ba
+  timestamp: 2026-06-14T19:48:37.662410168Z
+  agent: reviewer
+  commit_sha: a1b6bfeaeea8a7edd2de1421b6f12e28e221eea8
+  pr: 909
+  summary: Docs-only dated evidence artifact; immutability honored (thesis untouched), BUG-558 caveat + reproducible recipe present, all CLI commands verified real, CI CLEAN
+  review_verdict: Approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T19:48:37.485527682Z
+  completion_sha: a1b6bfeaeea8a7edd2de1421b6f12e28e221eea8
