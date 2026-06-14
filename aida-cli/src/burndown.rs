@@ -305,10 +305,10 @@ impl OpenBucket {
             OpenBucket::BuildSupervised => "build-supervised",
             OpenBucket::Deferred => "deferred",
             OpenBucket::Blocked => "blocked",
-            OpenBucket::Umbrella => "umbrella",
+            OpenBucket::Umbrella => "decompose",
             OpenBucket::ReadyToClose => "ready-to-close",
             OpenBucket::LongLived => "long-lived",
-            OpenBucket::Ungroomed => "ungroomed",
+            OpenBucket::Ungroomed => "to-groom",
             OpenBucket::AwaitingMerge => "awaiting-merge",
             OpenBucket::InProgress => "in-progress",
             OpenBucket::Actionable => "actionable",
@@ -526,10 +526,22 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
                 );
             }
         }
-        return (
-            OpenBucket::Umbrella,
-            "umbrella epic — driven by its children; decompose or complete them".to_string(),
-        );
+        // TASK-808: only an epic that NEEDS a human belongs in `aida human`.
+        // A childless epic needs decomposition (actionable). An epic with
+        // in-flight children is SELF-DRIVING — it resolves as its children
+        // land, so it's not a human action and drops out of the human view
+        // (InProgress is not a needs_human bucket). Rollup-complete is the
+        // ReadyToClose case handled above. trace:TASK-808 | ai:claude
+        return match f.epic_rollup {
+            Some((_, total)) if total > 0 => (
+                OpenBucket::InProgress,
+                "epic in progress — driven by its children; nothing for you until they all finish (then it shows as ready to close)".to_string(),
+            ),
+            _ => (
+                OpenBucket::Umbrella,
+                "an epic with no children yet — break it into child specs (`aida add --parent <id> ...`) or close it".to_string(),
+            ),
+        };
     }
     if f.req_type.eq_ignore_ascii_case("vision") || f.req_type.eq_ignore_ascii_case("principle") {
         return (
@@ -544,7 +556,7 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
         ),
         "draft" => (
             OpenBucket::Ungroomed,
-            "draft — awaiting advisor grooming/approval before it can be picked up".to_string(),
+            "a draft awaiting YOUR review — you're the advisor: approve it (`aida edit <id> --status approved`), reject, or refine".to_string(),
         ),
         "done" => (
             OpenBucket::AwaitingMerge,
@@ -1789,15 +1801,25 @@ mod tests {
             "ready-to-close needs operator confirm"
         );
 
-        // A child still open → generic umbrella, NOT ready to close.
+        // TASK-808: a child still open → epic is SELF-DRIVING → InProgress, and
+        // it must NOT need a human (it drops out of `aida human`).
         f.epic_rollup = Some((3, 4));
-        assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
+        assert_eq!(explain_open(&f).0, OpenBucket::InProgress);
+        assert!(
+            !explain_open(&f).0.needs_human(),
+            "an in-flight epic is driven by its children — not a human action"
+        );
 
-        // No rollup info (e.g. a childless epic) → generic umbrella.
+        // No rollup info (a childless epic) → needs decomposition → Umbrella
+        // (still a human action: break it into children).
         f.epic_rollup = None;
         assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
+        assert!(
+            explain_open(&f).0.needs_human(),
+            "a childless epic needs decomposition"
+        );
 
-        // A zero-total rollup must not divide-by/false-positive → umbrella.
+        // A zero-total rollup (no children) is the same childless case → Umbrella.
         f.epic_rollup = Some((0, 0));
         assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
     }
