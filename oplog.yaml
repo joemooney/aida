@@ -17944,5 +17944,18 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-14, operator decision via `aida questions answer`): Local linkage, widen candidate set — include non-Done specs that have an open-PR linkage via the existing LOCAL git detection. Keeps aida human fast + offline; may miss a PR if local linkage is stale.
-clock: 1775
+- id: 019ec47a-393d-71c1-9fda-a799affba243
+  target_id: 019ec362-e8a3-79d3-bb46-a59af43f4070
+  author: aida
+  node_id: '1'
+  lamport: 1776
+  timestamp: 2026-06-14T04:53:24.925672662Z
+  kind: !SetDescription
+    description: |
+      Operator hit (2026-06-13): EPIC-41 showed Draft while the documenter (correctly) claimed it delivered — all 4 children (STORY-606/607/608/609) were Completed/merged. The rollup data EXISTS ('aida graph --tree EPIC-41' prints 'Rollup: 4 total · 4 completed · 0 remaining') but nothing acts on it, so the epic stays Draft and clutters the 'umbrella' bucket in 'aida human' looking undone. Contrast EPIC-40 (11/14, 3 remaining) which is correctly open. Fix (pick one): (a) on 'aida pull' (or a rollup pass), AUTO-complete an epic once its rollup is all-children-Completed (mirrors the Done→Completed auto-bump; pairs with BUG-536's squash-merge child-completion); OR (b) SURFACE 'epics ready to close (rollup complete)' in the advisor worklist (EPIC-42's 'aida advisor') for one-click completion — safer if rollup-miscount is a worry. Advisor lean: (b) surface-then-confirm (auto-completing on a possibly-miscounted rollup is riskier than a one-click advisor action). Either way, a fully-delivered epic should not read as Draft. trace:relates:BUG-536 trace:relates:EPIC-42 trace:from-friction
+
+      ## Acceptance
+
+      - Resolved (2026-06-14, operator decision via `aida questions answer`): Config policy [lifecycle] epic_rollup = surface — auto
+clock: 1776
 node_id: '1'
