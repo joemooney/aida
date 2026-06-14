@@ -3,12 +3,12 @@ spec_id: TASK-801
 agreed_id: TASK-801
 title: 'burndown plan: Supervised section (slice 1b) — show supervised specs as their own queue-work block'
 description: resolve_burndown_sets returns a 5th 'supervised' set; handle_burndown_plan renders a 'Supervised — work these at the keyboard (`aida queue work <id>`)' section + count in the summary line + JSON payload, and the empty-ready footer routes to queue work when supervised work exists. Ends the recurring 'how do I make progress on these?' confusion by showing the route per spec. Slice 1a (TASK-800) added the drain exclusion; this slice adds the visibility.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T02:17:46.473077156Z
-modified_at: 2026-06-14T02:17:46.473077156Z
+modified_at: 2026-06-14T02:47:40.957445634Z
 req_type: Task
 tags:
 - aida:burndown
@@ -17,3 +17,21 @@ relationships:
 - rel_type: Child
   target_id: 019ec2a6-e846-7ad3-b792-b9f4010d159c
   created_at: 2026-06-14T02:17:56.843452245Z
+history:
+- id: 019ec407-1c99-7493-869e-a30857a0e572
+  author: aida-reconcile
+  timestamp: 2026-06-14T02:47:40.953148983Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec407-1c9d-7370-b8d9-47d41fdcf5ca
+  timestamp: 2026-06-14T02:47:40.957445147Z
+  agent: aida
+  commit_sha: ff8ba7ecc4c7c69ee93f6d07e018367b3500e1a9
+  summary: Completed via merge ff8ba7ec
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T02:47:40.804061340Z
+  completion_sha: ff8ba7ecc4c7c69ee93f6d07e018367b3500e1a9
