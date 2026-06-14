@@ -1090,6 +1090,82 @@ Print exactly one block — don't dump both templates.
 (Don't call `aida session end` from inside the skill — the user runs it from
 outside the worktree so their shell's cwd doesn't go stale.)
 
+### 11a. Hand the outcome to the advisor via the substrate — close the cut-n-paste loop — trace:STORY-613
+
+When this interactive review finishes with a verdict, flagged findings, or
+leftover "want me to X?" questions, the operator should NOT have to cut-n-paste
+the outcome to the advisor session. That hand-off is what the **substrate** is
+for — the reviewer-side analog of the burn-down's drain→advisor mailbox
+hand-off (`/aida-burndown` step 6, TASK-792). Post it once, from here, and the
+advisor sees it in its inbox/findings and acts. trace:relates:TASK-792
+
+**This step is for the interactive standalone review.** The headless paths
+already feed the advisor through their own channels — skip 11a when either:
+
+```bash
+echo "${AIDA_HEADLESS:-}"   # `1` → headless: step 7b already filed findings; the
+                            #        orchestrator/advisor consumes the verdict file. Skip 11a.
+aida orchestrator status    # `orchestrated` → the orchestrator owns the hand-off. Skip 11a.
+```
+
+Otherwise (interactive standalone), do BOTH of the following on finish:
+
+**(1) Post the outcome to the advisor mailbox.** Carry the verdict, any flagged
+findings, and any leftover questions in one message. Use `--intent request`
+when there is a "want me to X?" question the advisor must decide; use
+`--intent fyi` for a clean APPROVE/merge with nothing outstanding:
+
+```bash
+aida mailbox send --to advisor --intent request "Review of PR-<N> finished — verdict: <Approved|RequestChanges|Rejected>.
+
+Covered specs: <SPEC-IDS + per-spec PASS/PARTIAL/FAIL>
+Flagged findings: <one line each — what, where (file:line), severity; or 'none'>
+Leftover questions: <e.g. 'want me to file slice 2 of STORY-X?' / housekeeping; or 'none'>
+PR: <PR URL>"
+```
+
+- `--intent fyi` instead of `request` when there is **nothing** the advisor must
+  decide — a clean merge with no flagged findings and no leftover questions.
+  Add `--urgent` only if the verdict surfaced something the advisor must see
+  out-of-band (e.g. a `main`-breaking concern).
+- Keep the body to the lines above — verdict, covered specs, flagged findings,
+  leftover questions, the PR URL. Omit a heading that has nothing under it.
+  One message per finished review.
+
+**(2) File actionable items as findings** so they're triageable rather than
+trapped in chat. For each non-blocking follow-up the review surfaced (a ⚠️
+PARTIAL row, a step-4 deep-pass observation, or a "want me to X?" that is really
+a deferrable work item), file a finding the advisor picks up via
+`aida findings list`:
+
+```bash
+aida findings add --note - --severity <major|minor|cosmetic> --linked-specs <SPEC-ID> \
+  --tags "from-review:PR-<N>" <<'EOF'
+<full finding text — what, where (file:line), why it matters>
+
+Raised in review of PR-<N>: <PR URL>
+EOF
+```
+
+- **Idempotency.** A re-review of the same PR must not double-file. Probe first
+  and skip the `aida findings add` calls when this PR already has findings:
+
+  ```bash
+  existing=$(aida list --tags "from-review:PR-<N>" --all | grep -cE '^[A-Z]+-[0-9]+' || true)
+  ```
+
+  If `existing` is non-zero, the findings were filed on an earlier review — post
+  the mailbox message (1) but skip the `aida findings add` calls. This shares
+  the `from-review:PR-<N>` surface with step 7b's headless filer, so the two
+  paths never double-up on the same PR.
+- **Severity rubric** (same as step 7b): `cosmetic` = fmt/clippy/comment nits;
+  `minor` = a real but small bug or gap; `major` = a design concern worth a
+  conversation. When unsure, round down — the advisor re-grades on triage.
+
+**Best-effort.** A failed `mailbox send` or `findings add` must **never**
+retroactively fail an otherwise-complete review — note it and continue. The
+merge has already landed; the hand-off is the courier-replacement, not a gate.
+
 ## Composes With
 
 - `/aida-pr` (STORY-80) — sister skill on the implementer side; same authoring style
@@ -1097,6 +1173,7 @@ outside the worktree so their shell's cwd doesn't go stale.)
 - STORY-66 (auto-queue PR review item) — once `/aida-pr` runs, a `Review PR-N` queue item lands for the reviewer; `/aida-pickup` surfaces it, this skill drives it
 - TASK-61 (pre-flight `cargo fmt --check` in `/aida-pr`) — once shipped on the implementer side, fmt drift never reaches review; step 5 has less to fix-forward
 - `/aida-code-review` — orthogonal exhaustive audit, NOT a substitute. Run it before a release; run `/aida-review` per PR.
+- `/aida-burndown` (TASK-792) — sister drain→advisor mailbox hand-off on the burn-down side; step 11a here is its reviewer-side analog (STORY-613). Same substrate-handoff principle: post the outcome, don't make the operator the courier.
 
 ## Modes
 
