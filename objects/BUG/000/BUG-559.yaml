@@ -28,8 +28,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:50:14.700945231Z
-modified_at: 2026-06-14T20:13:14.328011376Z
+modified_at: 2026-06-14T20:14:26.446405774Z
 req_type: Bug
+tags:
+- batch:gitlab-store-now
 comments:
 - id: 019ec7c4-58d8-7d11-8dbb-184f91e62e29
   author: joe
