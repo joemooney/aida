@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T04:53:24.632366722Z
-modified_at: 2026-06-14T04:53:24.632366722Z
+modified_at: 2026-06-14T04:53:52.395898Z
 req_type: Task
 tags:
 - aida:burndown
@@ -20,3 +20,7 @@ relationships:
 - rel_type: Child
   target_id: 019ec218-3b51-7390-8132-7fa05609a8c4
   created_at: 2026-06-14T04:53:28.225098141Z
+- rel_type: BlockedBy
+  target_id: 019ec2b5-66e9-7520-891e-a2d0d25c8375
+  created_at: 2026-06-14T04:53:52.395891874Z
+  created_by: joe
