@@ -3,12 +3,12 @@ spec_id: TASK-796
 agreed_id: TASK-796
 title: 'Doc-intent part 4: drift-guard asserts surface-changing specs'' interface_changes are REFLECTED in the docs'
 description: 'Part 4 of STORY-603. Extend verify-manual.py beyond ''every command documented'' to ''every surface-changing spec''s interface_changes is reflected in the manual''. Builds on the part-1 gate (PR #858) which already resolves interface_changes per spec from the aida-store branch. Deferred from PR #858.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:43:41.458619693Z
-modified_at: 2026-06-14T07:22:34.734810121Z
+modified_at: 2026-06-14T07:28:50.819861656Z
 req_type: Task
 tags:
 - docs
@@ -20,7 +20,23 @@ comments:
   content: Commit c8fa53fed references this requirement
   created_at: 2026-06-14T07:21:46.739930371Z
   modified_at: 2026-06-14T07:21:46.739930371Z
+history:
+- id: 019ec508-862c-7820-9fb8-cc13c2ba76cc
+  author: aida-auto-bump
+  timestamp: 2026-06-14T07:28:50.732948379Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec508-8683-74d0-ae9c-cb27aa0f0320
+  timestamp: 2026-06-14T07:28:50.819855629Z
+  agent: aida
+  commit_sha: b87e496cb4fe09ca939f5ebfdd7a88f692854043
+  summary: Completed via merge b87e496c
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T07:22:34.734810121Z
   implemented_by: joe
+  completed_at: 2026-06-14T07:28:49.838421269Z
+  completion_sha: b87e496cb4fe09ca939f5ebfdd7a88f692854043
