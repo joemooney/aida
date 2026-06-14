@@ -92868,9 +92868,10 @@ fn handle_review_spec(
         match pr_number {
             Some(n) => {
                 println!("  {} {}", "→".green(), format!("gh pr diff {n}").cyan());
+                // trace:BUG-540 — gh has no global -C flag (unlike git); set the
+                // working dir via current_dir so the invocation matches the display.
                 let _ = std::process::Command::new("gh")
-                    .arg("-C")
-                    .arg(project_root)
+                    .current_dir(project_root)
                     .args(["pr", "diff", &n.to_string()])
                     .status();
             }
