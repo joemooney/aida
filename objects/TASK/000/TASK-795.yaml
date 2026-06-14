@@ -3,12 +3,12 @@ spec_id: TASK-795
 agreed_id: TASK-795
 title: 'Doc-intent part 3: each manual entry backlinks to its shaping spec(s) via a machine-readable convention'
 description: 'Part 3 of STORY-603. A reader/agent should be one hop from intent. Non-trivial: the user-facing manual carries NO SPEC-IDs (verify-manual.py hard-fails on SPEC-ID leaks), so the backlink needs a machine-readable, non-leaking convention (e.g. HTML-comment trace markers) + reconciliation with the leak check. Deferred from PR #858.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:43:28.549415650Z
-modified_at: 2026-06-14T07:09:49.871735731Z
+modified_at: 2026-06-14T07:15:32.340535918Z
 req_type: Task
 tags:
 - docs
@@ -20,7 +20,23 @@ comments:
   content: Commit 7631a143d references this requirement
   created_at: 2026-06-14T07:09:11.570642072Z
   modified_at: 2026-06-14T07:09:11.570642072Z
+history:
+- id: 019ec4fc-5724-71d0-a08e-f36a137d8e48
+  author: aida-auto-bump
+  timestamp: 2026-06-14T07:15:32.260109580Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec4fc-5774-7822-a9ce-8073943777d5
+  timestamp: 2026-06-14T07:15:32.340529643Z
+  agent: aida
+  commit_sha: 9146827a6103569f7386c392f70dc5ce3b2411d8
+  summary: Completed via merge 9146827a
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T07:09:49.871735731Z
   implemented_by: joe
+  completed_at: 2026-06-14T07:15:31.388942780Z
+  completion_sha: 9146827a6103569f7386c392f70dc5ce3b2411d8
