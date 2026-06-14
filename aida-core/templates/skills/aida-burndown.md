@@ -79,15 +79,20 @@ flows through), else `N ≈ 4` — or scale to budget:
 > implement to acceptance, add `// trace:<SPEC>` (plain `//`, never `///`),
 > `cargo build` + `cargo test` + `cargo fmt --all -- --check` (check the exit
 > code), commit `[AI:claude] type(scope): … (<SPEC>)` + the co-author trailer,
-> push, open a PR, and reply ONLY the PR URL or `BLOCKED: <reason>`.
+> push, open a PR, then mark the spec done (`aida queue done <SPEC>`) so it
+> reaches **Done** and the normal merge-driven Done→Completed auto-bump fires on
+> integration, and reply ONLY the PR URL or `BLOCKED: <reason>`.
 
 Worktree isolation means parallel agents never collide on files.
 
 ### 3. Integrate (you are the integrator — do NOT implement)
 
 For each returned PR: if all checks pass and it's mergeable + clean, merge it
-(`--squash --delete-branch`), `aida db reconcile-status --spec <SPEC>` to bump
-it Completed, and pull. **Hold (do not merge) any PR whose spec is
+(`--squash --delete-branch`) and pull — the spec was marked **Done** by its
+implementer (step 2), so the merge-driven auto-bump promotes it to **Completed**
+on pull. As a fallback (e.g. the implementer skipped `queue done`, or the
+auto-bump missed), run `aida db reconcile-status --spec <SPEC>` to force the
+Completed bump. **Hold (do not merge) any PR whose spec is
 `review:draft-only`** — leave it a draft for the operator. On a merge conflict,
 have the agent rebase (`git merge origin/main`, resolve, push).
 
