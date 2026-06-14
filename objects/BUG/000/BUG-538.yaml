@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:38:48.809235306Z
-modified_at: 2026-06-13T20:38:48.809235306Z
+modified_at: 2026-06-14T02:07:07.721824239Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -16,3 +16,4 @@ tags:
 - reliability
 - safety
 - substrate-as-bouncer
+- supervised
