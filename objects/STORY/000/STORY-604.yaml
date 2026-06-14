@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-14T02:07:10.056991665Z
+modified_at: 2026-06-14T04:01:06.056270078Z
 req_type: Story
 tags:
 - agent-context
@@ -70,3 +70,8 @@ comments:
   content: 'OPERATOR ASK #3 (2026-06-13) — add an explicit ''aida burndown status'' subcommand. The operator has now hit the drain-observability gap from THREE angles, all the same missing surface: (1) live progress, (2) in-flight/scheduled marking in queue list/plan, (3) ''is a drain even running? I can''t tell.'' Today the only signals are ''pgrep -af aida-burndown'' + ''aida session leases'' — clunky + non-obvious. ''aida burndown status'' should answer in one command: is a drain running (pid, started_at, selector — from BUG-538''s drain-lock), what specs are in-flight/leased (from session leases), what''s shipped this run + what''s left, and a pointer to the live log (STORY-604 stream-tee). This is the read-side companion to ''burndown run'' and the natural home for the whole observability story. Bumping demand signal: 3 separate operator asks → high priority. trace:STORY-604 trace:relates:BUG-538'
   created_at: 2026-06-14T01:12:11.547960754Z
   modified_at: 2026-06-14T01:12:11.547960754Z
+- id: 019ec44a-5408-70e0-b8c8-eda3c967f154
+  author: joe
+  content: 'Dependency note (advisor, 2026-06-14): the ''is a drain running?'' half of this (the aida burndown status command the operator asked for) should read the same .aida/drain.lock that BUG-538''s concurrency guard introduces — status = read the lock (pid/started/scope) + pid_is_alive. So sequence STORY-604 AFTER BUG-538 (sketched on that spec) so status reads the lock rather than inventing a parallel liveness probe. The ''live progress'' half (per-spec wave state) is separate and can layer on the drain loop independently.'
+  created_at: 2026-06-14T04:01:06.056270078Z
+  modified_at: 2026-06-14T04:01:06.056270078Z
