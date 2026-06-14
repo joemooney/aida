@@ -1,0 +1,19 @@
+id: 019ec7a8-7002-7640-adc5-69b329a3f16d
+spec_id: STORY-620
+agreed_id: STORY-620
+title: 'Seat policy: make the operator/advisor worklist partition configurable via [seats] in config.toml'
+description: 'STORY-618 hardcoded the operator/advisor seat split in OpenBucket::operator_seat/advisor_seat. Make it a resolved policy with built-in defaults, overridable per-project in .aida/config.toml [seats] and per-user in ~/.aida/config.toml [seats] (resolution: project > user-global > built-in default). Scope: the four SHARED buckets that BOTH worklists can render are configurable (no rendering holes) — to-groom, decompose, ready-to-close, triage — each defaulting to advisor, settable to operator. The intrinsically seat-bound buckets stay fixed: reviews-awaiting / decisions-awaiting / awaiting-merge / held-for-review / build-supervised are operator (a human reviews/decides/merges/keystone-builds); distill / bless are advisor (authoring questions / queue sign-off). aida config show surfaces the effective [seats] block (value + whether overridden). Acceptance: a project setting [seats] triage = operator makes findings-triage appear on aida human and drop from aida advisor; an unset key uses the default; aida config show prints the resolved seats; both worklists consult the policy.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T19:42:45.250883648Z
+modified_at: 2026-06-14T19:42:45.250883648Z
+req_type: Story
+tags:
+- aida:advisor
+- aida:human
+- config
+- from-product
+- parent:EPIC-42
+- seat-separation
