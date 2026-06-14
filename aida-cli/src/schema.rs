@@ -152,6 +152,21 @@ pub fn catalog_json() -> Value {
     json!({ "objects": objects })
 }
 
+/// The **full dump** as the JSON value `aida schema --all --json` and the
+/// field-included no-arg `aida schema --json` emit: the catalog with each
+/// object's reflection-derived `fields` array (and `note`, and — for
+/// Requirement — its controlled-vocabulary `enums`) inlined, in catalog order.
+/// A true one-fetch full dump for the CLI manual generator, aida-tutor, and MCP
+/// consumers. Reuses the same per-object projection [`object_json`] builds — no
+/// reimplementation. trace:TASK-799 | ai:claude
+pub fn full_dump_json() -> Value {
+    let objects: Vec<Value> = CATALOG
+        .iter()
+        .map(|e| object_json(e.name).expect("catalog kind has object_json detail"))
+        .collect();
+    json!({ "objects": objects })
+}
+
 /// The per-object detail as the JSON value the `aida schema <object> --json`
 /// CLI surface and the `aida://schema/{object}` MCP resource / `schema` MCP
 /// tool emit. Every catalog kind renders its reflection-derived field table
@@ -462,6 +477,37 @@ pub fn print_catalog(json_out: bool) {
         "\nField detail for any kind: `aida schema <object>` \
          (e.g. `aida schema requirement`, `aida schema punt`)."
     );
+}
+
+/// `aida schema --all` (and the field-included no-arg `aida schema --json`) —
+/// the full dump in one pass: the catalog followed by every object's
+/// reflection-derived field detail, in catalog order. Reuses the existing
+/// per-object renderers ([`full_dump_json`] / [`print_requirement`] /
+/// [`print_object`]) — no field assembly is reimplemented here.
+/// trace:TASK-799 | ai:claude
+pub fn print_all(json_out: bool) {
+    if json_out {
+        // Single source: the same per-object projection `aida schema <object>`
+        // and the MCP schema surface build. trace:TASK-799 | ai:claude
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&full_dump_json()).unwrap()
+        );
+        return;
+    }
+
+    print_catalog(false);
+    println!("\n{}\n", "=".repeat(60));
+    for (i, e) in CATALOG.iter().enumerate() {
+        if i > 0 {
+            println!("\n{}\n", "-".repeat(60));
+        }
+        if e.name.eq_ignore_ascii_case("Requirement") {
+            print_requirement(false);
+        } else {
+            print_object(e.name, false);
+        }
+    }
 }
 
 /// Look up a catalog entry by case-insensitive name. trace:TASK-714
@@ -776,5 +822,62 @@ mod tests {
             print_object(entry.name, false);
             print_object(entry.name, true);
         }
+    }
+
+    /// TASK-799: the no-arg full dump (`aida schema --all --json` / the
+    /// field-included no-arg `--json`) must carry one detail object per catalog
+    /// kind, each with a non-empty `fields` array — unlike the field-less
+    /// catalog. Requirement additionally carries its `enums` block.
+    #[test]
+    fn full_dump_includes_fields_for_every_kind() {
+        let dump = full_dump_json();
+        let objects = dump
+            .get("objects")
+            .and_then(|v| v.as_array())
+            .expect("full dump has an objects array");
+        assert_eq!(
+            objects.len(),
+            CATALOG.len(),
+            "full dump must cover every catalog kind"
+        );
+        for obj in objects {
+            let name = obj
+                .get("object")
+                .and_then(|v| v.as_str())
+                .expect("each full-dump entry names its object");
+            let fields = obj
+                .get("fields")
+                .and_then(|v| v.as_array())
+                .unwrap_or_else(|| panic!("full-dump entry `{name}` is missing its fields array"));
+            assert!(
+                !fields.is_empty(),
+                "full-dump entry `{name}` has an empty fields array"
+            );
+        }
+        // The catalog form (no fields) must remain field-less, so the two
+        // surfaces stay distinct.
+        let catalog = catalog_json();
+        let first = &catalog["objects"][0];
+        assert!(
+            first.get("fields").is_none(),
+            "the bare catalog must NOT carry per-object fields"
+        );
+        // Requirement carries its controlled-vocabulary enums in the dump.
+        let req = objects
+            .iter()
+            .find(|o| o["object"] == json!("Requirement"))
+            .expect("full dump includes Requirement");
+        assert!(
+            req.get("enums").is_some(),
+            "Requirement detail in the full dump must carry its enums block"
+        );
+    }
+
+    /// Smoke: `print_all` runs in both text and JSON modes without panicking.
+    /// trace:TASK-799
+    #[test]
+    fn print_all_runs_in_both_modes() {
+        print_all(false);
+        print_all(true);
     }
 }
