@@ -1,0 +1,18 @@
+id: 019ec80d-1690-75a3-ae3d-19d832fb5e95
+spec_id: TASK-823
+agreed_id: TASK-823
+title: 'aida human/advisor worklist UX: conditional footer (drop empty/misleading pointers) + reframe groom guidance away from blind-approve'
+description: 'Operator friction 2026-06-14: (1) aida human prints an unconditional footer pointing at ''aida questions list'' (which shows only ANSWERED decisions — misleading as an inbox) and ''aida findings list'' even when empty — noise. Make footer hints conditional: answered-decisions pointer only when there are pending decisions; findings pointer only when findings>0; advisor cross-link only when the advisor actually has work (ungroomed draft or finding). (2) The ungroomed/to-groom guidance led with ''approve it (aida edit --status approved)'' — the blind-approve anti-pattern. Reframe (in burndown.rs Ungroomed description + the aida advisor groom action) to: weigh against the graph (overlap/staleness/scope), THEN dispose (approve/reject/defer/refine). Grooming is advisor analysis, not a rubber stamp. Companion to STORY-622 (the doctor audit).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T21:32:41.488246965Z
+modified_at: 2026-06-14T21:32:41.488246965Z
+req_type: Task
+tags:
+- aida:advisor
+- aida:human
+- from-product
+- papercut
+- ux
