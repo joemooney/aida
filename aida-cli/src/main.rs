@@ -33656,6 +33656,15 @@ fn agent_new_with_config(
     if let Some(role) = &plan.role {
         eprintln!("  {}: {}", "role".bold(), role.cyan());
     }
+    // BUG-558: surface the agent's addressable identity — the stable name is now
+    // its mailbox/queue handle (AIDA_USER), so a coordinator reaches it with
+    // `aida mailbox send --to <name>` / `aida queue add --for <name>`.
+    eprintln!(
+        "  {}: {} (e.g. `aida mailbox send --to {}`)",
+        "address".bold(),
+        plan.name.cyan(),
+        plan.name
+    );
     let launch_context = prepare_agent_launch_context(&config, &plan, context)?;
     if let Some(ctx) = &launch_context {
         eprintln!(
@@ -33776,6 +33785,13 @@ fn agent_new_bg_dispatch(
         .args(&prompt_args)
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
+        // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
+        // it from AIDA_USER → USER) must be the agent's OWN stable name, not the
+        // launching human's shell USER — otherwise the agent reads the human's
+        // inbox and a coordinator's `--to <agent>` is invisible. Export
+        // AIDA_USER = the stable name so mailbox + queue agree with the
+        // registry/brief identity. trace:BUG-558 | ai:claude
+        .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
@@ -34709,6 +34725,10 @@ fn run_tracked_agent(
         .args(prompt_args)
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
+        // BUG-558: export AIDA_USER = the stable name so the spawned agent's
+        // mailbox/queue identity is its own, not the launching human's shell
+        // USER (see the bg-dispatch block above). trace:BUG-558 | ai:claude
+        .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
