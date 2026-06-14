@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:29:39.262777325Z
-modified_at: 2026-06-14T00:06:09.555251847Z
+modified_at: 2026-06-14T02:07:06.052162934Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -16,6 +16,7 @@ tags:
 - from-friction
 - relates:EPIC-28
 - reliability
+- supervised
 comments:
 - id: 019ec373-3b93-73d3-b085-3f9689e12d67
   author: joe
