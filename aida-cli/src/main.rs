@@ -33927,6 +33927,17 @@ fn load_agents_contained(project_root: &std::path::Path) -> Result<bool> {
     {
         contained = v;
     }
+    // TASK-798: accept `[contained] enable` in the project `.aida/config.toml`
+    // as an alias of `[agents] contained`, so the whole contained posture
+    // (enable + `[contained] allowed_hosts`) can live in one `[contained]`
+    // block instead of being split across agents.toml and config.toml. Operator
+    // decision (2026-06-14): unify under `[contained]`. Last-wins: the unified
+    // location overrides the legacy `[agents] contained` when explicitly set, so
+    // a migrated config takes effect. trace:TASK-798 | ai:claude
+    let cfg = read_project_config_value(project_root);
+    if let Some(v) = config_lookup(cfg.as_ref(), "contained", "enable").and_then(|v| v.as_bool()) {
+        contained = v;
+    }
     Ok(contained)
 }
 
@@ -35435,6 +35446,46 @@ mod agent_launcher_tests {
         std::fs::write(
             project.join(".aida/agents.toml"),
             "[agents]\ncontained = false\n",
+        )
+        .unwrap();
+        assert!(!load_agents_contained(&project).unwrap());
+    }
+
+    /// TASK-798: `[contained] enable` in the project config.toml is an alias of
+    /// `[agents] contained`, and wins last so a config migrated to the unified
+    /// `[contained]` block takes effect over the legacy `[agents] contained`.
+    /// trace:TASK-798 | ai:claude
+    #[test]
+    fn contained_enable_alias_in_config_toml() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+        // Alias alone enables the posture (no [agents] contained anywhere).
+        assert!(!load_agents_contained(&project).unwrap());
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[contained]\nenable = true\n",
+        )
+        .unwrap();
+        assert!(load_agents_contained(&project).unwrap());
+
+        // Last-wins: the unified [contained] enable overrides a legacy
+        // [agents] contained = false (migration takes effect).
+        std::fs::write(
+            project.join(".aida/agents.toml"),
+            "[agents]\ncontained = false\n",
+        )
+        .unwrap();
+        assert!(load_agents_contained(&project).unwrap());
+
+        // And [contained] enable = false turns it back off.
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[contained]\nenable = false\n",
         )
         .unwrap();
         assert!(!load_agents_contained(&project).unwrap());
