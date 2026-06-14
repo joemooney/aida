@@ -13,12 +13,12 @@ description: |
   Fix: make the short-flag detection unanchored too (e.g. detect a `-...f` token anywhere in the `git push` argv), mirroring the `.*--force` branch. Mind false positives against unrelated `-f`-bearing tokens.
 
   Raised in review of PR-882 (BUG-548): https://github.com/joemooney/aida/pull/882
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T03:07:21.248186391Z
-modified_at: 2026-06-14T03:07:21.248186391Z
+modified_at: 2026-06-14T03:11:27.813933435Z
 req_type: Bug
 tags:
 - from-review:PR-882
@@ -26,3 +26,4 @@ tags:
 - relates:BUG-548
 - safety
 - severity:minor
+- supervised
