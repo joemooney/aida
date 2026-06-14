@@ -1,0 +1,12 @@
+id: 019ec6ac-a9ed-7dc2-8868-48eddca3d648
+spec_id: TASK-809
+agreed_id: TASK-809
+title: STORY-615 — headless default-deny egress via managed-settings `allowManagedDomainsOnly`
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T15:07:45.005048165Z
+modified_at: 2026-06-14T15:07:45.005048165Z
+req_type: Task
