@@ -5,7 +5,8 @@
 # - git reset --hard (discards uncommitted work)
 # - git clean -f (deletes untracked files)
 # - git checkout -- . (discards all changes)
-# - git push --force (overwrites remote history)
+# - git push --force / -f / --force-with-lease to a protected branch
+#   (main/master/develop/aida-store); plain --force/-f to any branch
 # - git branch -D (force-deletes branches)
 # - git stash drop (permanently drops stashed work)
 # - git rebase without confirmation context
@@ -52,18 +53,53 @@ check_destructive() {
         return 1
     fi
 
-    # git push --force or -f (not --force-with-lease)
-    if echo "$cmd" | grep -qE 'git\s+push\s+.*--force'; then
+    # Force-push handling (BUG-548).
+    # A force-push of ANY form — --force, -f, AND --force-with-lease — to a
+    # PROTECTED branch is blocked outright. --force-with-lease is NOT safe here:
+    # the lease only checks the ref you last fetched, so once you (or a sibling
+    # worktree) have fetched a newer main, the lease passes and the push can
+    # still clobber commits merged after that fetch (e.g. a merged PR). This is
+    # exactly the 2026-06-13 incident: `git push --force-with-lease origin main`
+    # off a failed `cd` dropped a merged PR from main. --force-with-lease to a
+    # feature branch stays allowed — that's the legitimate post-rebase path.
+    local is_force_push=0
+    if echo "$cmd" | grep -qE 'git\s+push\b.*--force'; then
+        is_force_push=1
+    elif echo "$cmd" | grep -qE 'git\s+push\s+-[a-zA-Z]*f\b'; then
+        is_force_push=1
+    fi
+    if [ "$is_force_push" = "1" ]; then
+        # Protected = the shared branches that must only move forward via normal
+        # push / merge. Match the branch as a distinct push argument or refspec
+        # component (`origin main`, `HEAD:main`) — NOT as a substring of a
+        # feature name (`story-610-main-fix` must not trip it).
+        local protected_re='(^|[[:space:]:/])(main|master|develop|aida-store)([[:space:]]|$)'
+        local target_protected=0
+        if echo "$cmd" | grep -qE "$protected_re"; then
+            target_protected=1
+        else
+            # No protected branch named — best-effort: is the current branch
+            # itself protected (a bare `git push -f` / `--force-with-lease`)?
+            local cur
+            cur=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+            if [ -n "$cur" ] && echo " $cur " | grep -qE "$protected_re"; then
+                target_protected=1
+            fi
+        fi
+        if [ "$target_protected" = "1" ]; then
+            echo "BLOCKED: force-push to a protected branch (main/master/develop/aida-store)."
+            echo "This includes --force-with-lease — the lease only checks the ref you last"
+            echo "fetched, so it can still clobber commits merged after that fetch (a merged PR)."
+            echo "Protected branches advance only via normal push / merge — never a force-push."
+            return 1
+        fi
+        # Not a protected target: a plain --force/-f (no lease) can still
+        # overwrite a feature branch's history — keep nudging toward the lease.
         if ! echo "$cmd" | grep -qF -- '--force-with-lease'; then
             echo "BLOCKED: 'git push --force' can overwrite remote history."
             echo "Alternative: 'git push --force-with-lease' is safer (checks remote hasn't changed)."
             return 1
         fi
-    fi
-    if echo "$cmd" | grep -qE 'git\s+push\s+-[a-zA-Z]*f\b'; then
-        echo "BLOCKED: 'git push -f' can overwrite remote history."
-        echo "Alternative: 'git push --force-with-lease' is safer."
-        return 1
     fi
 
     # git branch -D — force-deletes a branch regardless of merge status
