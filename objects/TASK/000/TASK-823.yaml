@@ -3,12 +3,12 @@ spec_id: TASK-823
 agreed_id: TASK-823
 title: 'aida human/advisor worklist UX: conditional footer (drop empty/misleading pointers) + reframe groom guidance away from blind-approve'
 description: 'Operator friction 2026-06-14: (1) aida human prints an unconditional footer pointing at ''aida questions list'' (which shows only ANSWERED decisions — misleading as an inbox) and ''aida findings list'' even when empty — noise. Make footer hints conditional: answered-decisions pointer only when there are pending decisions; findings pointer only when findings>0; advisor cross-link only when the advisor actually has work (ungroomed draft or finding). (2) The ungroomed/to-groom guidance led with ''approve it (aida edit --status approved)'' — the blind-approve anti-pattern. Reframe (in burndown.rs Ungroomed description + the aida advisor groom action) to: weigh against the graph (overlap/staleness/scope), THEN dispose (approve/reject/defer/refine). Grooming is advisor analysis, not a rubber stamp. Companion to STORY-622 (the doctor audit).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:32:41.488246965Z
-modified_at: 2026-06-14T21:32:41.488246965Z
+modified_at: 2026-06-14T21:44:11.072275981Z
 req_type: Task
 tags:
 - aida:advisor
@@ -16,3 +16,21 @@ tags:
 - from-product
 - papercut
 - ux
+history:
+- id: 019ec817-9c3b-77c1-b50c-35bcda74a8e5
+  author: aida-auto-bump
+  timestamp: 2026-06-14T21:44:11.067845816Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec817-9c40-7f32-adfa-ba7232171290
+  timestamp: 2026-06-14T21:44:11.072275546Z
+  agent: aida
+  commit_sha: eae3a03a58afb1b358432a2d055b3268e9a92679
+  summary: Completed via merge eae3a03a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T21:44:10.908284362Z
+  completion_sha: eae3a03a58afb1b358432a2d055b3268e9a92679
