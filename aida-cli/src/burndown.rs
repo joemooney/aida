@@ -587,7 +587,9 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
         ),
         "draft" => (
             OpenBucket::Ungroomed,
-            "a draft awaiting YOUR review — you're the advisor: approve it (`aida edit <id> --status approved`), reject, or refine".to_string(),
+            "an ungroomed draft — groom it: weigh it against the graph (overlap / staleness / scope), \
+             then dispose — `aida edit <id> --status approved|rejected`, `aida defer <id> --until <trigger>`, or refine the spec"
+                .to_string(),
         ),
         "done" => (
             OpenBucket::AwaitingMerge,
