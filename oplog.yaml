@@ -17957,5 +17957,25 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-14, operator decision via `aida questions answer`): Config policy [lifecycle] epic_rollup = surface — auto
-clock: 1776
+- id: 019ec480-2cd8-7ac0-9e53-f57d4bce0d6a
+  target_id: 019ec47f-a287-7512-b6c2-60ba31173696
+  author: aida
+  node_id: '1'
+  lamport: 1777
+  timestamp: 2026-06-14T04:59:54.968640830Z
+  kind: !SetDescription
+    description: |-
+      PROBLEM: specs that touch the SAME files but don't block each other are not expressible today. BlockedBy is a hard ordering dependency (X must complete before Y starts); there is NO symmetric "these collide — never run them concurrently, any order is fine" constraint. So when a drain fans them into one parallel wave they each pass CI alone but conflict at merge (or break combined main). Live examples this session: TASK-794/795/796 share the documenter + verify-manual.py; the 5 keystone agents (BUG-536/538/543/550/604) all touch main.rs. Today the only guard is the advisor REMEMBERING to say "drain these sequentially" — a rule, not a gate.
+
+      PROPOSED: encode the constraint in the substrate so the burndown wave-builder enforces it, not the advisor's memory. Two candidate shapes (design fork to resolve at grooming):
+        (a) A new SYMMETRIC RelationshipType — ConflictsWith / SerializeWith (aida-core/src/models.rs) — the graph-native expression the drain already reads (it walks BlockedBy edges in resolve_burndown_sets). Pairwise (N*(N-1)/2 edges per group).
+        (b) A shared mutex/serialize tag (one tag per member, like the batch:NAME convention) — composes, O(N), matches AIDA's tag conventions. Lighter.
+      Operator framed it as a "relationship", so (a) is the lean; (b) is the lighter alternative.
+
+      ENFORCEMENT: the /aida-burndown wave-builder (and resolve_burndown_sets' candidate set) picks AT MOST ONE spec per conflict-group per wave — the rest drain in successive waves. burndown plan surfaces the groups.
+
+      RELATION: distinct from BUG-538 — that is RUNTIME mutual exclusion of whole DRAINS (one drain per repo via drain.lock); this is SCHEDULER mutual exclusion of SPECS within a drain. Complementary.
+
+      MVP SLICE (smallest valuable): the tag/edge + the wave-builder respecting it. Extensions (future): aida queue work warns when starting two conflicting specs in parallel; aida graph shows conflict groups; auto-derive conflict edges from shared trace:/file overlap. trace:from-friction
+clock: 1777
 node_id: '1'
