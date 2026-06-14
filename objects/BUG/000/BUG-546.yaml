@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T00:35:55.809413721Z
-modified_at: 2026-06-14T01:59:25.873924544Z
+modified_at: 2026-06-14T02:00:57.892129698Z
 req_type: Bug
 tags:
 - aida:human
@@ -28,3 +28,8 @@ comments:
   content: '3RD DATA POINT: ''aida review STORY-610'' ALSO fails (''no commits reference this spec''), so surface-detection is NOT branch-name based — it parses the (SPEC-ID) COMMIT TRAILER. #869''s commit trailer is the non-standard ''(TASK-800 / STORY-610 slice 1a)'' (two specs + prose in one paren) instead of a clean ''(TASK-800)'', so the parser extracts NEITHER. So the fix has TWO parts: (a) resolve open-PR↔spec via the ''trace:SPEC-ID'' lines too (not only the (SPEC-ID) paren), and (b) parse multi-spec/parenthetical-with-prose trailers robustly. Operator workaround today: review/merge the PR directly via gh. Advisor commit-discipline lesson: use a CLEAN single ''(SPEC-ID)'' trailer, not ''(A / B slice 1a)''. trace:relates:STORY-553'
   created_at: 2026-06-14T01:59:25.873924544Z
   modified_at: 2026-06-14T01:59:25.873924544Z
+- id: 019ec3dc-5724-7940-9a93-2d401a3fc50e
+  author: joe
+  content: '4TH BITE: the messy ''(TASK-800 / STORY-610 slice 1a)'' trailer ALSO broke ''aida pull'' AUTO-BUMP — TASK-800 stayed Done after #869 merged (the scan couldn''t extract the SPEC-ID), needed manual completion. So one non-standard trailer broke: aida review surface-detection, the aida-human reviews bucket, AND the Done→Completed auto-bump. All three share the same brittle ''(SPEC-ID)''-paren parser. Fix robustly (trace: lines + multi-spec/prose-paren parsing). Advisor discipline reinforced: ALWAYS a clean single ''(SPEC-ID)'' trailer. trace:relates:STORY-86'
+  created_at: 2026-06-14T02:00:57.892129698Z
+  modified_at: 2026-06-14T02:00:57.892129698Z
