@@ -3,15 +3,33 @@ spec_id: TASK-822
 agreed_id: TASK-822
 title: 'aida list queue: alias for aida queue list (parallels aida list open)'
 description: 'Operator request 2026-06-14: make ''aida list queue'' an alias/shortcut for ''aida queue list'', so the queue reads like the other list views (aida list open, aida list human). Route the ''queue'' list-target through the existing queue-list handler (same output/flags). Small CLI-surface add.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:29:13.676332059Z
-modified_at: 2026-06-14T21:29:13.676332059Z
+modified_at: 2026-06-14T22:07:55.199686925Z
 req_type: Task
 tags:
 - aida:list
 - aida:queue
 - from-product
 - ux
+history:
+- id: 019ec82d-573b-7542-a801-b8e579c37563
+  author: aida-auto-bump
+  timestamp: 2026-06-14T22:07:55.195257764Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec82d-573f-7652-93cc-1023f3d147bc
+  timestamp: 2026-06-14T22:07:55.199685800Z
+  agent: aida
+  commit_sha: 0dfce0ae5de024ceb646ffdde1c264f4ca6af6ee
+  summary: Completed via merge 0dfce0ae
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T22:07:55.032158049Z
+  completion_sha: 0dfce0ae5de024ceb646ffdde1c264f4ca6af6ee
