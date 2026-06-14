@@ -83,7 +83,21 @@ flows through), else `N ≈ 4` — or scale to budget:
 > reaches **Done** and the normal merge-driven Done→Completed auto-bump fires on
 > integration, and reply ONLY the PR URL or `BLOCKED: <reason>`.
 
-Worktree isolation means parallel agents never collide on files.
+Worktree isolation means parallel agents never collide on files *mid-flight* —
+but two specs that touch the SAME files still **conflict at MERGE time** (the
+stacked / duplicate-edit hazard).
+
+**Never co-fan a serialize-group (STORY-614).** Specs that must not run
+concurrently carry a shared `serialize:<group>` tag (e.g. `serialize:docs`,
+`serialize:burndown-display`). When selecting the N specs for a wave, check each
+ready spec's tags and include **AT MOST ONE** spec per `serialize:<group>` value;
+the rest of that group drain in **successive** waves, after the first one lands
+and merges. Independent specs still fan out in parallel — only the tagged
+collision-set is serialized. This is the operator marking known file-overlap
+("these touch the same code") so the drain enforces the ordering instead of
+relying on someone remembering `--concurrency 1`. (A typed `ConflictsWith` edge
+enforced in `resolve_burndown_sets` is the substrate-v2 follow-up — STORY-614;
+the tag is the working slice.)
 
 ### 3. Integrate (you are the integrator — do NOT implement)
 
