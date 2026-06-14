@@ -84061,6 +84061,11 @@ enum GhStatus {
     Missing,
     Failed(String),
     Skipped,
+    /// BUG-560: the remote isn't GitHub, so `gh` is the wrong tool — we never
+    /// spawned it. Carries the detected forge so the section can name the right
+    /// CLI (`glab`) / degrade cleanly instead of leaking gh's "known GitHub
+    /// host" auth error to a GitLab/pure-git user. trace:BUG-560 | ai:claude
+    NotGitHub(forge::ForgeKind),
 }
 
 #[derive(Debug, Clone)]
@@ -84360,6 +84365,23 @@ fn upstream_ref_for(project_root: &std::path::Path, _branch: &str) -> Option<Str
 }
 
 fn collect_pr_facts(project_root: &std::path::Path, branch: &str) -> PrFacts {
+    // BUG-560: `gh` is GitHub-only. On a GitLab / pure-git remote it fails with
+    // a raw "none of the git remotes ... point to a known GitHub host" auth
+    // error that we used to surface verbatim — telling a corporate GitLab
+    // first-user to `gh auth login` a CLI they don't use. Detect the forge and
+    // skip the spawn entirely for anything but GitHub; the section then renders
+    // a clean forge-aware line. trace:BUG-560 | ai:claude
+    let forge_kind = forge::resolve_forge_kind(project_root);
+    if forge_kind != forge::ForgeKind::GitHub {
+        return PrFacts {
+            number: 0,
+            title: String::new(),
+            url: String::new(),
+            state: String::new(),
+            ci_rollup: None,
+            gh_status: GhStatus::NotGitHub(forge_kind),
+        };
+    }
     let gh_bin = match resolve_gh_binary() {
         Some(p) => p,
         None => {
@@ -84755,6 +84777,23 @@ fn print_status_pr_section(ctx: &UserStatusContext, focused: bool) {
         GhStatus::Skipped => {
             println!("  (skipped via --no-ci)");
         }
+        // BUG-560: non-GitHub remote — name the right forge, never `gh`.
+        GhStatus::NotGitHub(forge::ForgeKind::GitLab) => {
+            println!(
+                "  {}",
+                "(GitLab remote — PR/CI status via `glab` is pending forge \
+                 integration; the requirement store works fully)"
+                    .dimmed()
+            );
+        }
+        GhStatus::NotGitHub(_) => {
+            println!(
+                "  {}",
+                "(no GitHub remote — the PR/CI section is GitHub-only today; \
+                 the requirement store works fully)"
+                    .dimmed()
+            );
+        }
         GhStatus::Ok if pr.state == "none" || pr.number == 0 => {
             println!("  (no open PR for this branch)");
         }
@@ -85117,6 +85156,11 @@ fn print_status_json(
         GhStatus::Missing => json!({ "error": "gh-missing" }),
         GhStatus::Failed(r) => json!({ "error": "gh-failed", "reason": r }),
         GhStatus::Skipped => json!({ "skipped": true }),
+        // BUG-560: non-GitHub remote — report the forge, not a gh error.
+        GhStatus::NotGitHub(kind) => json!({
+            "forge": kind.config_token(),
+            "note": "PR/CI section is GitHub-only today; the requirement store works fully",
+        }),
     });
     let head_json = |r: &QueueRow| {
         let mut obj = json!({
@@ -85394,6 +85438,55 @@ fn claude_code_status_json() -> Option<serde_json::Value> {
         "interactive_shells_in_root": shells,
         "drift_in_worktree": drift,
     }))
+}
+
+#[cfg(test)]
+mod bug_560_status_forge_tests {
+    use super::*;
+
+    /// Regression for BUG-560: on a non-GitHub forge, `collect_pr_facts` must
+    /// return `NotGitHub` WITHOUT spawning `gh` — otherwise a GitLab/pure-git
+    /// user gets gh's raw "known GitHub host" auth error in `aida status`.
+    /// Uses the `[forge] provider` config path so the test needs no git remote
+    /// or `gh` binary (deterministic).
+    #[test]
+    fn collect_pr_facts_skips_gh_on_gitlab_forge() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"gitlab\"\n",
+        )
+        .unwrap();
+        let facts = collect_pr_facts(tmp.path(), "feature-branch");
+        assert!(
+            matches!(
+                facts.gh_status,
+                GhStatus::NotGitHub(forge::ForgeKind::GitLab)
+            ),
+            "GitLab forge must yield NotGitHub(GitLab), got {:?}",
+            facts.gh_status
+        );
+        assert_eq!(facts.number, 0);
+    }
+
+    /// A pure-git / unknown remote also skips gh (no leak), reported as the
+    /// `None` forge. trace:BUG-560
+    #[test]
+    fn collect_pr_facts_skips_gh_on_pure_git() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"none\"\n",
+        )
+        .unwrap();
+        let facts = collect_pr_facts(tmp.path(), "feature-branch");
+        assert!(matches!(
+            facts.gh_status,
+            GhStatus::NotGitHub(forge::ForgeKind::None)
+        ));
+    }
 }
 
 #[cfg(test)]
