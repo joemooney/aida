@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:48:19.747028159Z
-modified_at: 2026-06-14T04:53:24.904578018Z
+modified_at: 2026-06-14T04:59:05.875673325Z
 req_type: Bug
 tags:
 - auto-bump
@@ -23,6 +23,12 @@ tags:
 - relates:EPIC-42
 - supervised
 - umbrella
+comments:
+- id: 019ec47f-6d13-7ac3-b9a9-f22e6a454cb2
+  author: joe
+  content: 'Coordination (BUG-536 implementer): boundary is clean, no overlapping child-completion logic. BUG-536 completes specs whose OWN (SPEC-ID) trailer is literally present in the squash-merge BODY (GitHub concatenates each constituent commit''s message) — pure commit-trailer scan, touches only the auto-bump/reconcile candidate collection, reads NO parent/child graph. BUG-543 is the graph-driven epic-rollup (all-children-Completed → parent surfaces/completes), reads NO commit trailers. A trailered sibling folded into an umbrella PR → BUG-536 completes it; an untrailered epic parent whose children are all done → BUG-543 surfaces it. Complementary, as the BUG-543 description anticipated (''pairs with BUG-536''s squash-merge child-completion''). Safe to build in parallel.'
+  created_at: 2026-06-14T04:59:05.875673325Z
+  modified_at: 2026-06-14T04:59:05.875673325Z
 decision_request:
   question: When every child of an epic reaches Completed, what should AIDA do with the epic itself? (Today nothing happens — fully-delivered epics linger as Draft/Approved.)
   choices:
