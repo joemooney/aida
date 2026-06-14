@@ -3,12 +3,12 @@ spec_id: TASK-802
 agreed_id: TASK-802
 title: 'aida config show: surface the [contained] posture block (enable + allowed_hosts)'
 description: 'render_effective_policy (aida config show) renders [agents] posture, mailbox, advisor, archive, telemetry, intake, presence — but NOT the [contained] block. After TASK-798 unified the contained posture under [contained] (enable alias + allowed_hosts), config show still shows nothing for it. Add a [contained] section: ''enable'' (resolved bool + source: [contained] enable / legacy [agents] contained / default false) and ''allowed_hosts'' (the egress allowlist, empty = no egress restriction). Mirrors the BUG-533 per-section row pattern. trace:relates:TASK-798'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T02:43:24.064561563Z
-modified_at: 2026-06-14T06:43:35.682928810Z
+modified_at: 2026-06-14T06:49:31.191907739Z
 req_type: Task
 tags:
 - aida:config
@@ -25,7 +25,23 @@ comments:
   content: Commit 08e5123bb references this requirement
   created_at: 2026-06-14T06:42:56.974612064Z
   modified_at: 2026-06-14T06:42:56.974612064Z
+history:
+- id: 019ec4e4-84ea-76c2-8811-1b244c5bdc68
+  author: aida-auto-bump
+  timestamp: 2026-06-14T06:49:31.114934294Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec4e4-8537-7490-ae21-0dc1bf5d9d17
+  timestamp: 2026-06-14T06:49:31.191901866Z
+  agent: aida
+  commit_sha: ade3c2baa6a25f455f4b11bd9aa9a045683b9a7c
+  summary: Completed via merge ade3c2ba
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T06:43:35.682928810Z
   implemented_by: joe
+  completed_at: 2026-06-14T06:49:30.244252168Z
+  completion_sha: ade3c2baa6a25f455f4b11bd9aa9a045683b9a7c
