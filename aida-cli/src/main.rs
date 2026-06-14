@@ -106279,6 +106279,12 @@ fn handle_queue_integrate(
                 has_open_pr: pr.is_some(),
                 pr_merged: facts.pr_merged,
                 pr_lookup_inconclusive: inconclusive,
+                // TASK-813: keystone work the integrator must NOT auto-merge.
+                held_for_human: req.tags.iter().any(|t| {
+                    let t = t.trim();
+                    t.eq_ignore_ascii_case("supervised")
+                        || t.eq_ignore_ascii_case("review:draft-only")
+                }),
             });
         }
 
@@ -106320,6 +106326,13 @@ fn handle_queue_integrate(
                     println!(
                         "  {} {} — PR probe inconclusive (gh missing/auth/network); skipping, not guessing",
                         "⚠".yellow(),
+                        c.id
+                    );
+                }
+                integrate::CandidateVerdict::SkipHeldForHuman => {
+                    println!(
+                        "  {} {} — keystone (supervised / review:draft-only): parked for your review, not auto-merged",
+                        "⏸".yellow(),
                         c.id
                     );
                 }
