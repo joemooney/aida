@@ -1,0 +1,25 @@
+id: 019ec6a8-3ba5-7262-86ea-93589d4680e3
+spec_id: BUG-555
+agreed_id: BUG-555
+title: 'Inter-agent mailbox is unreliable: unread count won''t clear / seen-ack doesn''t stick / handoffs re-deliver — blocks brief-driven autonomous integrator'
+description: |-
+  Observed continuously this session (2026-06-14): the UserPromptSubmit hook flagged "N unread mailbox messages" every turn, and reading via `aida mailbox inbox` (which is documented to mark seen/ack) did NOT clear it — the same handoffs ("Burn-down complete...") kept re-appearing as unread across many turns, and the count grew (1 → 2) as new drains added handoffs without the old ones clearing. So seen/ack is not sticking and/or messages re-deliver (phantom unread).
+
+  WHY IT MATTERS: AIDA already has the INTEGRATOR role built (STORY-460/520: `aida queue integrate` + the `aida-integrate` skill, producer/consumer split, --strategy stacked, --dry-run conflict forecast). The missing piece for it (and any seat-to-seat handoff) to run AUTONOMOUSLY — advisor briefs the integrator, integrator integrates + reports/escalates back — is a RELIABLE channel. An integrator that can't reliably receive a brief or whose report doesn't reliably land is not trustworthy. This bug is the foundation under the whole brief-driven multi-agent pattern the operator wants.
+
+  REPRO/INVESTIGATE: send a mailbox message; `aida mailbox inbox` to read; confirm the unread count clears and stays cleared on the next hook fire. It currently doesn't. Check: does `inbox` actually persist the seen/ack? does the hook's unread query match the seen-marking write (same store/key)? are handoffs idempotent (re-send vs re-deliver)?
+
+  FIX: make seen/ack durable + the unread query consistent with it; ensure read = stays read; de-dupe re-delivery. Then the advisor->integrator brief loop (and the drain's completion handoffs) become trustworthy. Relates EPIC-42 (seats), STORY-460/520 (integrator). trace:from-friction
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T15:02:54.629900379Z
+modified_at: 2026-06-14T15:02:54.629900379Z
+req_type: Bug
+tags:
+- blocks-integrator
+- from-friction
+- inter-agent
+- mailbox
+- reliability
