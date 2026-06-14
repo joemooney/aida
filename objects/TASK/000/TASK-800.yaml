@@ -3,12 +3,12 @@ spec_id: TASK-800
 agreed_id: TASK-800
 title: 'Supervised-marker exclusion: burndown ready-set excludes specs tagged ''supervised'' (STORY-610 slice 1a)'
 description: 'Core mechanism of STORY-610: resolve_burndown_sets excludes specs tagged ''supervised'' from the burndown blessed/awaiting/parked sets (mirroring the archived/deferred filters), so a keystone/keyboard spec can be queued for ''aida queue work'' pickup WITHOUT becoming drain-eligible. This is the structural fix for keystone work leaking into the unattended drain (BUG-530/541/538/543 all hand-de-queued for lack of it; auto-queue-on-answer also leaked them). Usage today: ''aida edit <id> --tags supervised'' (+ queue) → keyboard-only. Remaining STORY-610 slices (kept open): the ''aida advisor signoff'' verb (1b — queue+mark in one), the burndown-plan ''supervised'' section + relabel, and the EPIC-42 seat-separation. trace:STORY-610 trace:relates:EPIC-42'
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T00:18:29.658889115Z
-modified_at: 2026-06-14T00:18:29.658889115Z
+modified_at: 2026-06-14T00:34:24.751467120Z
 req_type: Task
 tags:
 - aida:burndown
