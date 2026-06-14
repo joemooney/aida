@@ -6869,8 +6869,16 @@ fn handle_advisor_dashboard(
         .count();
 
     // --- Burndown readiness (reuses the exact `aida burndown plan` resolver)
-    let (ready, awaiting_signoff, parked, _titles) = resolve_burndown_sets("approved", None, None)
-        .unwrap_or_else(|_| (Vec::new(), Vec::new(), Vec::new(), Default::default()));
+    let (ready, awaiting_signoff, parked, _supervised, _titles) =
+        resolve_burndown_sets("approved", None, None).unwrap_or_else(|_| {
+            (
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Default::default(),
+            )
+        });
 
     // --- Queue depth + in-flight (Done-awaiting-merge) ---------------------
     let queue_depth = backend
@@ -72870,7 +72878,8 @@ fn handle_burndown_run(
         }
     }
 
-    let (ready, awaiting_signoff, parked, _titles) = resolve_burndown_sets(status, tag, batch)?;
+    let (ready, awaiting_signoff, parked, _supervised, _titles) =
+        resolve_burndown_sets(status, tag, batch)?;
 
     println!("{} burndown run", "▸".cyan().bold());
     println!(
@@ -74184,10 +74193,15 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
 // trace:BUG-532 — the title map (display-id → title) is built from the SAME
 // single store load the set resolution already does, so `burndown plan`'s text
 // output can show id+title with no extra store scan (no N+1 lookup).
+// (ready, awaiting_signoff, parked, supervised, titles)
+// `supervised` (STORY-610): specs tagged `supervised` — signed off for KEYBOARD
+// pickup but excluded from the unattended drain. Surfaced as its own section in
+// `burndown plan` so the route per spec (`queue work` vs drain) is visible.
 type BurndownSets = (
     Vec<String>,
     Vec<String>,
     Vec<(String, String)>,
+    Vec<String>,
     std::collections::HashMap<String, String>,
 );
 
@@ -74237,6 +74251,8 @@ fn resolve_burndown_sets(
     // trace:BUG-532 — display-id → title, populated from this same scan so the
     // text plan output can show id+title without re-loading the store.
     let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    // STORY-610: supervised specs collected for the keyboard-pickup section.
+    let mut supervised: Vec<String> = Vec::new();
     for req in &store.requirements {
         // Archived specs are out of active scope — never fan them out (matches
         // `aida list`'s default non-archived view). trace:STORY-527
@@ -74257,13 +74273,22 @@ fn resolve_burndown_sets(
         // from the unattended drain. This is the structural fix for keystone
         // work leaking into `burndown run` — BUG-530/541/538 were all
         // hand-de-queued for lack of it. Marked specs stay pickable via the
-        // queue; they just never appear in the burndown blessed/awaiting sets.
-        // trace:STORY-610 | ai:claude
+        // queue; they never enter the burndown ready/awaiting/parked sets — they
+        // surface in their own `burndown plan` section so the route per spec
+        // (`queue work` vs drain) is visible, ending the recurring "how do I make
+        // progress on these?" confusion. trace:STORY-610 | ai:claude
         if req
             .tags
             .iter()
             .any(|t| t.eq_ignore_ascii_case("supervised"))
         {
+            let disp = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| req.id.to_string());
+            titles.insert(disp.clone(), req.title.clone());
+            supervised.push(disp);
             continue;
         }
         if norm(&req.status.to_string()) != want_status {
@@ -74317,7 +74342,8 @@ fn resolve_burndown_sets(
     // `ready` = blessed + drainable; `awaiting_signoff` = pickable but the
     // advisor hasn't queued it yet (the `--candidates` curation list).
     let (ready, awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
-    Ok((ready, awaiting_signoff, parked, titles))
+    supervised.sort();
+    Ok((ready, awaiting_signoff, parked, supervised, titles))
 }
 
 /// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
@@ -74337,7 +74363,8 @@ fn handle_burndown_plan(
     candidates_view: bool,
     json: bool,
 ) -> Result<()> {
-    let (ready, awaiting_signoff, parked, titles) = resolve_burndown_sets(status, tag, batch)?;
+    let (ready, awaiting_signoff, parked, supervised, titles) =
+        resolve_burndown_sets(status, tag, batch)?;
 
     // trace:BUG-532 — render the spec's (truncated) title beside its id so the
     // plan reads as a scannable decision surface, via the shared
@@ -74349,6 +74376,7 @@ fn handle_burndown_plan(
             "selector": { "status": status, "tag": tag, "batch": batch },
             "ready": ready,
             "awaiting_signoff": awaiting_signoff,
+            "supervised": supervised,
             "parked": parked.iter().map(|(id, reason)| serde_json::json!({ "spec": id, "reason": reason })).collect::<Vec<_>>(),
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
@@ -74395,10 +74423,11 @@ fn handle_burndown_plan(
         burndown::selector_summary(status, tag, batch).dimmed()
     );
     println!(
-        "  {} {} ready to fan out, {} awaiting sign-off, {} parked",
+        "  {} {} ready to fan out, {} awaiting sign-off, {} supervised, {} parked",
         "→".green(),
         ready.len(),
         awaiting_signoff.len(),
+        supervised.len(),
         parked.len()
     );
     if !ready.is_empty() {
@@ -74423,6 +74452,20 @@ fn handle_burndown_plan(
             println!("  {} {}{}", "+".yellow(), id, title_cell(id));
         }
     }
+    // STORY-610: the supervised section — the structural answer to the recurring
+    // "how do I make progress on these?" question. These specs are signed off
+    // for keyboard pickup but excluded from the unattended drain; the route per
+    // spec is `aida queue work <id>` (advisor-watched), NOT `burndown run`.
+    if !supervised.is_empty() {
+        println!(
+            "\n{}",
+            "Supervised — work these at the keyboard (excluded from the drain; `aida queue work <id>`):"
+                .bold()
+        );
+        for id in &supervised {
+            println!("  {} {}{}", "▸".magenta(), id.cyan(), title_cell(id));
+        }
+    }
     if !parked.is_empty() {
         println!("\n{}", "Parked:".bold());
         for (id, reason) in &parked {
@@ -74444,14 +74487,22 @@ fn handle_burndown_plan(
     // ready.
     // trace:STORY-544 trace:BUG-494
     if ready.is_empty() {
-        if awaiting_signoff.is_empty() {
+        if !awaiting_signoff.is_empty() {
             println!(
-                "\n{} Nothing ready to fan out — adjust the selector above or unblock parked specs.",
+                "\n{} Nothing blessed yet — queue a candidate above (`aida queue add <id>`) to make it drainable.",
                 "·".dimmed()
+            );
+        } else if !supervised.is_empty() {
+            // STORY-610: nothing to drain, but supervised work IS actionable —
+            // route the operator to the keyboard path rather than a dead end.
+            println!(
+                "\n{} Nothing for the drain, but {} supervised spec(s) above are ready to work at the keyboard — `aida queue work <id>`.",
+                "·".dimmed(),
+                supervised.len()
             );
         } else {
             println!(
-                "\n{} Nothing blessed yet — queue a candidate above (`aida queue add <id>`) to make it drainable.",
+                "\n{} Nothing ready to fan out — adjust the selector above or unblock parked specs.",
                 "·".dimmed()
             );
         }
