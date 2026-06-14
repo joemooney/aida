@@ -52,8 +52,11 @@ Three cross-cutting truths the tree assumes:
 **Key options / subcommands (rationale only).**
 - `queue work <SPEC> --auto-complete` — the drain. Add `nextN` (e.g. `next5`) to drain several; `--batch NAME` to drain a tagged cluster; `--no-human=both` to run it fully headless.
 - `queue list` — merges your local (per-project) queue with your active role's *global* queue, tagging cross-project entries with `[origin:<project>]`. The `--global` / `--local` flags scope it when the merge is noise.
+- `queue advance` — walk the whole queue and push each item to its *next* step: autonomous items drain, human-required ones (review / `--zen` / decision) get dispatched interactively. Where `queue work` picks up *one* head, `advance` processes the queue to a resolution and never silently hides work it can't auto-handle.
 - `queue done` — mark work finished on a branch (→ **Done**). The precise verb the lifecycle wants (vs the newcomer `aida done`).
 - `queue rework` — send a spec back (also reachable as the top-level `aida rework`, see [Ch4](04-git-lifecycle.md#aida-rework)).
+- `queue integrate` — the *consumer* half of a producer/consumer split: parallel implementers finish work, flip a spec Done, and leave an open PR but never merge; `integrate` is the single serial authority that watches for the **Done + open-PR** pair and drives the remaining phases (reviewer → CI → merge → pull → build) one spec at a time. The handoff is the substrate itself — it polls for that state, no message bus. Reach for it to drain a backlog of finished-but-unmerged work.
+- `queue recover` — an interactive wizard for a spec stuck after a **failed phase-1 implementer session** (a provider 529, commit-and-exit without a PR, an external crash, partial work). It inspects the spec's git/lease/PR state, recommends a recovery path, and steps through it — a front-end over the same lease/PR probes the orchestrator uses, not new mechanism.
 
 **Gotchas.** The queue's identity is your **shell user** (`$USER` / `$AIDA_USER`), *not* your AIDA node or role. If `queue list` is unexpectedly empty, check `echo $USER` and `echo $AIDA_USER` first — the queue is keyed off whichever the shell sees.
 
@@ -223,7 +226,7 @@ This injects `sandbox.network.allowedDomains` into the contained `--settings` (t
 
 > **`allowed_hosts = []` (or omitted) means *no restriction*, not "deny all".** An empty list reads like a lockdown but is the unrestricted default — full egress, current behavior. You only restrict egress when the list is **non-empty**, in which case **only** those hosts are allowed.
 
-**Slice-1 limitation:** a non-allowlisted domain *prompts* for approval — fine interactively, but a **headless** `claude -p` drain can't answer the prompt. True block-without-prompt for headless drains needs `network.allowManagedDomainsOnly` via *managed* settings; that's a follow-up. Don't rely on `allowed_hosts` alone to hard-contain a `--no-human` drain yet. (trace:STORY-605, SPIKE-61)
+**Slice-1 limitation:** a non-allowlisted domain *prompts* for approval — fine interactively, but a **headless** `claude -p` drain can't answer the prompt. True block-without-prompt for headless drains needs `network.allowManagedDomainsOnly` via *managed* settings; that's a follow-up. Don't rely on `allowed_hosts` alone to hard-contain a `--no-human` drain yet.
 
 ---
 
