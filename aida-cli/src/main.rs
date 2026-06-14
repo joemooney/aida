@@ -54209,6 +54209,72 @@ mod statusline_tests {
         assert!(extract_spec_ids_from_commit(msg).is_empty());
     }
 
+    // BUG-546: the non-standard `(TASK-800 / STORY-610 slice 1a)` trailer that
+    // broke `aida review` surface-detection, the `aida human` reviews bucket,
+    // and the `aida pull` Done→Completed auto-bump — all three share the
+    // `(SPEC-ID)`-paren parser, which previously extracted NEITHER spec from a
+    // multi-spec-plus-prose paren. After the fix it must harvest BOTH ids while
+    // the prose / separators are ignored. Single clean trailers and the
+    // prose-rejecting guard must still behave.
+    // trace:BUG-546
+    #[test]
+    fn extract_spec_ids_robust_multi_spec_prose_trailer() {
+        // The real PR #869 shape: two specs + a `/` separator + prose, with a
+        // `(#NN)` PR-number suffix. Both ids resolve, in subject order.
+        let msg = "[AI:claude] feat(burndown): exclude supervised specs \
+            (TASK-800 / STORY-610 slice 1a) (#869)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["TASK-800".to_string(), "STORY-610".to_string()]
+        );
+        // Prose-led paren still contributes nothing (release-note guard).
+        let msg = "release: stuff (foo BUG-23)\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+        // A `(scope)` conventional-commit group still stops the walk.
+        let msg = "feat(api): add endpoint\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+        // Comma + prose tail after a leading id: ids harvested, prose dropped.
+        let msg = "fix: thing (BUG-1, BUG-2 follow-up)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-1".to_string(), "BUG-2".to_string()]
+        );
+    }
+
+    // BUG-546: a commit whose ONLY spec linkage is `trace:SPEC-ID` lines in the
+    // body (no usable subject trailer) must still resolve — `collect_git_linkage`
+    // and the review surfaces use this to link an open PR to its spec when the
+    // subject paren is unusable. trace:BUG-546
+    #[test]
+    fn extract_trace_line_spec_ids_resolves_body_trace_markers() {
+        // The PR #869 body carried `trace:TASK-800 trace:STORY-610`.
+        let msg = "[AI:claude] feat: something\n\n\
+            Body prose.\n\ntrace:TASK-800 trace:STORY-610\n";
+        let ids = extract_trace_line_spec_ids(msg);
+        assert!(ids.contains(&"TASK-800".to_string()), "{ids:?}");
+        assert!(ids.contains(&"STORY-610".to_string()), "{ids:?}");
+        // A `| ai:claude` provenance suffix doesn't get mined as a spec.
+        let msg = "fix: x\n\ntrace:BUG-546 | ai:claude\n";
+        assert_eq!(
+            extract_trace_line_spec_ids(msg),
+            vec!["BUG-546".to_string()]
+        );
+        // `trace:relates:STORY-611` qualifier form → take the final segment.
+        let msg = "fix: x\n\ntrace:relates:STORY-611\n";
+        assert_eq!(
+            extract_trace_line_spec_ids(msg),
+            vec!["STORY-611".to_string()]
+        );
+        // Comma-separated run after a single `trace:`.
+        let msg = "fix: x\n\ntrace:BUG-1,BUG-2\n";
+        assert_eq!(
+            extract_trace_line_spec_ids(msg),
+            vec!["BUG-1".to_string(), "BUG-2".to_string()]
+        );
+        // No trace lines → empty.
+        assert!(extract_trace_line_spec_ids("chore: bump\n").is_empty());
+    }
+
     // STORY-498: pure validity-gate core. A resolver maps id → resolution; the
     // gate must flag nonexistent + rejected references, pass live ones, and
     // honour the no-trailer / plan-commit exemptions. trace:STORY-498 | ai:claude
@@ -69115,31 +69181,56 @@ pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]
     };
 
     // ---- Commits referencing the spec (across all refs) ----
-    // Match the AIDA commit format `(SPEC-ID)` as a fixed string: the
-    // parens exclude the orphan `aida-store` branch's bookkeeping
-    // commits ("update TASK-92"), which mention the bare id.
-    let patterns: Vec<String> = ids.iter().map(|id| format!("({})", id)).collect();
+    // BUG-546: grep the BARE id across all refs, then keep only commits whose
+    // FULL message resolves to the wanted id through the same robust parser
+    // the auto-bump / reconcile surfaces use (`(SPEC-ID)` trailers — including
+    // multi-spec / prose parens like `(TASK-800 / STORY-610 slice 1a)` — plus
+    // `trace:SPEC-ID` lines in the body). The old approach grepped the fixed
+    // string `(SPEC-ID)`, so a real PR whose subject paren named the spec
+    // alongside prose was invisible to `aida review <spec>` and the `aida
+    // human` reviews bucket. The post-grep resolver replaces the parens-only
+    // filter that previously excluded the orphan `aida-store` bookkeeping
+    // commits ("update TASK-92"): those carry the bare id but neither a
+    // trailer nor a `trace:` line, so the resolver drops them. trace:BUG-546
+    let wanted_lc: HashSet<String> = ids.iter().map(|s| s.to_ascii_uppercase()).collect();
     let mut args: Vec<&str> = vec![
         "log",
         "--all",
         "-F",
         "--date-order",
-        "--pretty=format:%H\u{1f}%h\u{1f}%s",
+        "--pretty=format:%H\u{1f}%h\u{1f}%s\u{1f}%B%x1e",
     ];
-    for p in &patterns {
+    for id in ids {
         args.push("--grep");
-        args.push(p.as_str());
+        args.push(id.as_str());
     }
     let log = git(&args).unwrap_or_default();
     let commits: Vec<(String, String, String)> = log
-        .lines()
-        .filter_map(|l| {
-            let mut p = l.splitn(3, '\u{1f}');
-            Some((
-                p.next()?.to_string(),
-                p.next()?.to_string(),
-                p.next()?.to_string(),
-            ))
+        .split('\u{1e}')
+        .filter_map(|record| {
+            let record = record.trim_start_matches(['\n', '\r']);
+            if record.is_empty() {
+                return None;
+            }
+            let mut p = record.splitn(4, '\u{1f}');
+            let full = p.next()?.to_string();
+            let short = p.next()?.to_string();
+            let subject = p.next()?.to_string();
+            let body = p.next().unwrap_or("");
+            // Resolve the commit's full message and keep it only when it
+            // actually references one of the wanted ids via a trailer or a
+            // `trace:` line — not just a bare mention. trace:BUG-546
+            let mut resolved = extract_spec_ids_from_commit(body);
+            resolved.extend(extract_referenced_spec_ids_from_commit(body));
+            resolved.extend(extract_trace_line_spec_ids(body));
+            if resolved
+                .iter()
+                .any(|r| wanted_lc.contains(&r.to_ascii_uppercase()))
+            {
+                Some((full, short, subject))
+            } else {
+                None
+            }
         })
         .collect();
 
@@ -91642,6 +91733,41 @@ fn body_line_is_code_like(line: &str) -> bool {
     KW.iter().any(|k| t.starts_with(k))
 }
 
+/// BUG-546: harvest every spec-id named in a `trace:SPEC-ID` token anywhere in
+/// a commit message — the authoritative provenance marker AIDA writes in code
+/// comments and commit bodies. The `(SPEC-ID)` paren parser misses these; when
+/// a PR's subject paren is non-standard (`(A / B slice 1a)`) the body's
+/// `trace:` lines are the reliable spec↔PR link. Handles `trace:` and
+/// `trace: ` (with/without a space), comma/whitespace-separated runs
+/// (`trace:TASK-800 trace:STORY-610` or `trace:TASK-800,STORY-610`), and the
+/// `relates:`/`blocks:` qualifier forms (`trace:relates:STORY-611`) — the
+/// trailing `<ALPHA>-<DIGITS>` token is taken in each case. trace:BUG-546
+pub(crate) fn extract_trace_line_spec_ids(message: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in message.split("trace:").skip(1) {
+        // Consume consecutive spec-id-shaped tokens after this `trace:`,
+        // tolerating `relates:`/`blocks:`/etc. qualifier prefixes whose final
+        // colon-segment is the id.
+        for tok in raw.split(|c: char| c.is_whitespace() || c == ',') {
+            let tok = tok.trim().trim_end_matches([')', '.', ';', ':']);
+            // A qualifier like `relates:STORY-611` → take the last segment.
+            let candidate = tok.rsplit(':').next().unwrap_or(tok);
+            if looks_like_spec_id(candidate) {
+                if !out.iter().any(|x| x.eq_ignore_ascii_case(candidate)) {
+                    out.push(candidate.to_string());
+                }
+            } else if tok.is_empty() {
+                continue;
+            } else {
+                // First non-id token after a `trace:` ends this run — the rest
+                // is prose (`trace:BUG-546 | ai:claude` stops at `|`).
+                break;
+            }
+        }
+    }
+    out
+}
+
 pub(crate) fn extract_referenced_spec_ids_from_commit(message: &str) -> Vec<String> {
     let delivered = extract_spec_ids_from_commit(message);
     let mut lines = message.lines();
@@ -91702,23 +91828,34 @@ fn push_paren_spec_ids_from_line(line: &str, out: &mut Vec<String>) {
             tail = tail[..open_at].trim_end();
             continue;
         }
-        // Parse this group: every token must be spec-id-shaped, else the
-        // group contributes nothing and the walk stops.
+        // Parse this group. BUG-546: a real trailer may carry MULTIPLE specs
+        // plus prose — `(TASK-800 / STORY-610 slice 1a)` — and the old
+        // all-tokens-must-be-ids rule extracted NEITHER spec, stranding the
+        // auto-bump / reconcile / review surfaces that share this parser. The
+        // discriminator that still rejects release-note prose like
+        // `(foo BUG-23)` or `(scope)`: the group must START with a spec-id
+        // token (the `(SPEC-ID …)` trailer convention). When it does, harvest
+        // EVERY spec-id-shaped token and skip the separators / prose
+        // (`/`, `slice`, `1a`, …); when it doesn't, the group contributes
+        // nothing and the walk stops, exactly as before. trace:BUG-546
         let mut group: Vec<String> = Vec::new();
-        let mut all_ids = true;
-        for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+        let mut first_token_is_id: Option<bool> = None;
+        for tok in inner.split(|c: char| c == ',' || c == '/' || c.is_whitespace()) {
             let tok = tok.trim();
             if tok.is_empty() {
                 continue;
             }
-            if looks_like_spec_id(tok) {
+            let is_id = looks_like_spec_id(tok);
+            if first_token_is_id.is_none() {
+                first_token_is_id = Some(is_id);
+            }
+            if is_id {
                 group.push(tok.to_string());
-            } else {
-                all_ids = false;
-                break;
             }
         }
-        if !all_ids || group.is_empty() {
+        // Reject the group unless it led with a spec-id (so `(foo BUG-23)`,
+        // `(scope)`, `(1.2.3)` still contribute nothing and stop the walk).
+        if first_token_is_id != Some(true) || group.is_empty() {
             break;
         }
         // Prepend: we walk right-to-left, but `out` keeps subject order.
