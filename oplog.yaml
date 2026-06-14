@@ -18016,5 +18016,24 @@ operations:
       ## Acceptance
 
       - Resolved (2026-06-14, operator decision via `aida questions answer`): Local linkage, widen candidate set — include non-Done specs that have an open-PR linkage via the existing LOCAL git detection. Keeps aida human fast + offline; may miss a PR if local linkage is stale.
-clock: 1781
+- id: 019ec4ea-e4a7-7490-a251-6833ff1d3700
+  target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
+  author: aida
+  node_id: '1'
+  lamport: 1782
+  timestamp: 2026-06-14T06:56:28.839513543Z
+  kind: !SetDescription
+    description: |-
+      Sandbox slice 2 (RE-SCOPED 2026-06-13): an OS boundary around the WHOLE headless 'claude -p' process via bubblewrap. The contained posture (STORY-567/605) only sandboxes Claude's Bash tool; Edit/Write/MCP run unconfined and there is no OS boundary around the claude process itself. This wraps the three headless spawn paths (spawn_claude_headless / exec_claude_headless / spawn_claude_headless_resume in aida-cli/src/session.rs) in bwrap when [contained] os_wrap = true.
+
+      WRITE-confinement model (operator decision): --ro-bind / / makes the whole filesystem readable but read-only, then rw-binds ONLY the code worktree, the .aida-store worktree, and the build/auth caches (~/.cargo, ~/.npm, ~/.claude, ~/.claude.json). Every OS-level WRITE by Edit/Write/MCP/Bash is confined to the worktree. Network stays SHARED (never --unshare-net; claude needs api.anthropic.com). Opt-in; FAIL-CLOSED with a clear remediation error if bwrap is missing OR the host blocks the unprivileged user namespace (Ubuntu 23.10+/24.04 AppArmor apparmor_restrict_unprivileged_userns - SPIKE-61 section 7.7) - never runs unconfined silently.
+
+      LIMITATION (documented): reads stay broad, so read-exfil is bounded by the [contained] allowed_hosts egress allowlist (slice 1), NOT by FS confinement. Strict read-confinement is the STORY-617 follow-up.
+
+      PREREQUISITE: bubblewrap installed AND unprivileged user namespaces permitted. On userns-restricted hosts, remediate with: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0, or install an AppArmor profile granting bwrap userns.
+
+      Keystone-adjacent -> keyboard, advisor-reviewed before merge; merge also blocked on the CI live-confinement test passing on a userns-enabled runner. See docs/competitive-analysis/2026-06-13-sandbox-execution.md slice 2.
+
+      Follow-ups split from the original bundle: STORY-615 (managed-settings network.allowManagedDomainsOnly headless default-deny), STORY-616 (Firecracker microVM slice 3, PARKED per research), STORY-617 (strict read-confinement hardening). trace:relates:SPIKE-61 trace:relates:STORY-605
+clock: 1782
 node_id: '1'
