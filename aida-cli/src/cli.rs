@@ -7037,6 +7037,25 @@ pub enum Command {
     // trace:TASK-756 | ai:claude
     Presence,
 
+    /// Enter solo mode — mark this session as the advisor+integrator working the
+    /// SAFE backlog end-to-end with maximum discretion (groom → implement →
+    /// integrate → repeat), parking keystone/architecture for you. A timestamped
+    /// flag (~/.aida/solo.toml, 24h safety TTL) the statusline surfaces. `--off`
+    /// exits; `--status` prints current state; `--ttl <DURATION>` overrides the
+    /// 24h cap (e.g. 8h, 2h30m).
+    // trace:STORY-624 | ai:claude
+    Solo {
+        /// Exit solo mode.
+        #[clap(long)]
+        off: bool,
+        /// Print whether solo mode is active, without changing it.
+        #[clap(long)]
+        status: bool,
+        /// Safety TTL for the solo flag (default 24h); accepts 8h / 30m / 2h30m.
+        #[clap(long, value_name = "DURATION")]
+        ttl: Option<String>,
+    },
+
     /// Print the caller identity AIDA resolved — role, agent-type, agent-name,
     /// user-id, headless flag, ai-tool, and active session/scope — each line
     /// annotated with where the value came from (env var vs fallback vs

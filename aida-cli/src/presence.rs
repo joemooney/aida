@@ -209,6 +209,111 @@ pub(crate) fn statusline_away_remaining(now: DateTime<Utc>) -> Option<String> {
     current_away_remaining_secs(now).map(|secs| humanize_secs(secs as i64))
 }
 
+// ---------------------------------------------------------------------------
+// Solo mode (STORY-624) — a visible work-state flag, sibling to presence.
+//
+// `aida solo` marks this session as advisor+integrator working the SAFE backlog
+// end-to-end with maximum discretion (EPIC-43 / docs/solo-mode.md). Like
+// presence it is a timestamped `~/.aida/solo.toml` file (no daemon) and is
+// COMPUTED through a TTL so a forgotten solo flag self-clears — a solo session
+// should not run forever. The statusline surfaces it; honoring it as a drain
+// autonomy posture is a deferred follow-up (this slice is the visible state).
+// trace:STORY-624 | ai:claude
+// ---------------------------------------------------------------------------
+
+/// Filename under `~/.aida/`.
+const SOLO_FILENAME: &str = "solo.toml";
+
+/// Default solo TTL when none is given: 24h (the operator's stated shelf-life
+/// for unattended work). A solo flag older than this reads as off.
+pub(crate) const DEFAULT_SOLO_TTL_SECS: u64 = 24 * 60 * 60;
+
+/// On-disk solo record. `active` is the stored intent; effective solo folds in
+/// the TTL the same way presence does.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct SoloFile {
+    pub active: bool,
+    pub set_at: String,
+    pub ttl_secs: u64,
+}
+
+/// `~/.aida/solo.toml`, sibling to `presence.toml` (reuses its home resolution).
+fn solo_path() -> Option<PathBuf> {
+    presence_path().map(|p| p.with_file_name(SOLO_FILENAME))
+}
+
+pub(crate) fn read_solo_file() -> Option<SoloFile> {
+    let path = solo_path()?;
+    toml::from_str(&std::fs::read_to_string(&path).ok()?).ok()
+}
+
+fn write_solo_file(file: &SoloFile) -> Result<()> {
+    let path = solo_path().context("cannot resolve home directory for solo file")?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    std::fs::write(
+        &path,
+        toml::to_string_pretty(file).context("serializing solo file")?,
+    )
+    .with_context(|| format!("writing {}", path.display()))?;
+    Ok(())
+}
+
+/// Enter solo mode with the given TTL (seconds).
+pub(crate) fn set_solo(ttl_secs: u64) -> Result<()> {
+    write_solo_file(&SoloFile {
+        active: true,
+        set_at: Utc::now().to_rfc3339(),
+        ttl_secs,
+    })
+}
+
+/// Exit solo mode.
+pub(crate) fn clear_solo() -> Result<()> {
+    write_solo_file(&SoloFile {
+        active: false,
+        set_at: Utc::now().to_rfc3339(),
+        ttl_secs: 0,
+    })
+}
+
+/// PURE: effective solo state — active AND still within its TTL window. An
+/// expired flag (or `active = false`, or no file) reads as off. trace:STORY-624
+pub(crate) fn effective_solo(
+    active: bool,
+    set_at: DateTime<Utc>,
+    ttl_secs: u64,
+    now: DateTime<Utc>,
+) -> bool {
+    if !active {
+        return false;
+    }
+    let elapsed = (now - set_at).num_seconds();
+    elapsed < 0 || (elapsed as u64) < ttl_secs
+}
+
+/// Effective solo state right now (folds the stored flag through its TTL).
+pub(crate) fn current_solo(now: DateTime<Utc>) -> bool {
+    match read_solo_file() {
+        Some(f) => {
+            let set_at = DateTime::parse_from_rfc3339(&f.set_at)
+                .ok()
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or(now);
+            effective_solo(f.active, set_at, f.ttl_secs, now)
+        }
+        None => false,
+    }
+}
+
+/// Compact statusline marker when solo is active, else `None` (off is the quiet
+/// default, matching the away-segment contract). trace:STORY-624
+pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
+    current_solo(now).then(|| "🤖 solo".to_string())
+}
+
 /// Read `[presence] away_ttl` from a project's `.aida/config.toml`, falling
 /// back to the 8h default. Accepts an integer (seconds) or a humantime-ish
 /// string (`"8h"`, `"30m"`, `"2h30m"`). Unparseable / absent → default.
@@ -533,6 +638,23 @@ mod tests {
         DateTime::parse_from_rfc3339("2026-06-11T12:00:00Z")
             .unwrap()
             .with_timezone(&Utc)
+    }
+
+    /// STORY-624: effective solo is active-AND-within-TTL; inactive or expired
+    /// reads as off (so a forgotten solo flag self-clears).
+    #[test]
+    fn effective_solo_folds_active_through_ttl() {
+        let now = t0();
+        // Active, just set → on.
+        assert!(effective_solo(true, now, 3600, now));
+        // Active, within TTL → on.
+        assert!(effective_solo(true, now - Duration::minutes(30), 3600, now));
+        // Active, past TTL → off (self-clears).
+        assert!(!effective_solo(true, now - Duration::hours(2), 3600, now));
+        // Inactive → off regardless of TTL.
+        assert!(!effective_solo(false, now, 3600, now));
+        // Clock skew (set_at in the future) → still on within window.
+        assert!(effective_solo(true, now + Duration::minutes(5), 3600, now));
     }
 
     #[test]
