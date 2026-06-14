@@ -16,6 +16,7 @@ mod complexity_calibration;
 mod deep_link;
 mod digest;
 mod docs;
+mod drain_lock;
 mod drain_resume;
 mod drain_state;
 mod effort_calibration;
@@ -73199,6 +73200,20 @@ fn handle_burndown_run(
         return Ok(());
     }
 
+    // BUG-538: take the global drain lock before launching. A second drain
+    // (another `burndown run`, or a `queue work --auto-complete`) against the
+    // same tree would double-drive it — two integrators racing on main. The
+    // guard's Drop frees the lock on the Ok path below; the non-success
+    // `std::process::exit` path drops it explicitly. trace:BUG-538 | ai:claude
+    let drain_lock_command = format!(
+        "burndown run ({})",
+        burndown::selector_summary(status, tag, batch)
+    );
+    let _drain_guard = {
+        let project_root = find_main_worktree_root()?;
+        drain_lock::acquire_drain_lock(&project_root, &drain_lock_command)?
+    };
+
     // The default posture is faithful to the operator's walk-away intent: a
     // headless drain that pushes/merges/fans-out can't stall on prompts, so
     // default to bypassed permissions — but say so loudly and let `--permission-mode`
@@ -73246,6 +73261,10 @@ fn handle_burndown_run(
         Ok(())
     } else {
         let code = status_code.code().unwrap_or(1);
+        // `std::process::exit` skips destructors — free the drain lock
+        // explicitly so a non-zero (e.g. shelved-work, exit-2) drain still
+        // leaves a clean lock for the next launch. trace:BUG-538 | ai:claude
+        drop(_drain_guard);
         std::process::exit(code);
     }
 }
@@ -99451,6 +99470,43 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if *with_plan {
                     std::env::set_var("AIDA_WITH_PLAN", "1");
                 }
+                // BUG-538: take the global drain lock before dispatching to ANY
+                // of the auto-complete routes (single / batch / batches / nextN /
+                // --drain / --from-pr / --resume-drain). This drain integrates on
+                // main; a second one (here or via `aida burndown run`) would
+                // double-drive the tree. The guard is held for the rest of this
+                // arm — the route handlers terminate via `std::process::exit`, so
+                // Drop won't fire, but a dead pid is stale-reclaimed by the next
+                // launch (see drain_lock module docs). The `--resume-dry-run`
+                // preview drives nothing, so it skips the lock. A real
+                // `--resume-drain` re-entry correctly reclaims the crashed
+                // drain's now-dead lock (or refuses if its pid is somehow alive).
+                // trace:BUG-538 | ai:claude
+                let _drain_guard = if *resume_dry_run {
+                    None
+                } else {
+                    let drain_lock_command = {
+                        let mut c = String::from("queue work --auto-complete");
+                        if let Some(b) = effective_batches.as_deref() {
+                            c.push_str(&format!(" --batches {}", b.join(",")));
+                        } else if let Some(b) = effective_batch {
+                            c.push_str(&format!(" --batch {b}"));
+                        } else if let NextKeyword::Count(n) = next_kw {
+                            if n > 1 {
+                                c.push_str(&format!(" next{n}"));
+                            }
+                        } else if let Some(s) = effective_id {
+                            c.push(' ');
+                            c.push_str(s);
+                        }
+                        c
+                    };
+                    let project_root = find_main_worktree_root()?;
+                    Some(drain_lock::acquire_drain_lock(
+                        &project_root,
+                        &drain_lock_command,
+                    )?)
+                };
                 // STORY-492: `--resume-drain` is its own entry — read the crashed
                 // drain-state, gate on PID-liveness, reconcile from reality, and
                 // re-enter (or `--dry-run` preview). It never returns. Routed
