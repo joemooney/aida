@@ -4701,7 +4701,12 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty());
+        // `all: true` (with no `object`) is the full dump — the catalog with
+        // each kind's field/enum detail inlined, mirroring `aida schema --all
+        // --json`. trace:TASK-799 | ai:claude
+        let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
         let value = match object {
+            None if all => crate::schema::full_dump_json(),
             None => crate::schema::catalog_json(),
             Some(name) => crate::schema::object_json(name).ok_or_else(|| {
                 format!(
@@ -7065,7 +7070,7 @@ fn workflow_tool_descriptors() -> Value {
         {
             "name": "schema",
             // trace:TASK-715 | ai:claude
-            "description": "Introspect AIDA's storable substrate, mirroring `aida schema [<object>] --json`. With no `object`, returns the catalog of storable object kinds. With `object` (e.g. `requirement`), returns that object's detail — for Requirement, the reflection-derived field table plus the four controlled-vocabulary enums (status/type/priority/relationship) in their on-the-wire token form (a paste-ready cheat-sheet for `--status` / `--type` / `--priority` / relationship-type arguments). The same data is also addressable as the `aida://schema` / `aida://schema/{object}` resources. Reflection-derived — never hand-maintained — so it can't drift from `models.rs`.",
+            "description": "Introspect AIDA's storable substrate, mirroring `aida schema [<object>] --json`. With no `object`, returns the catalog of storable object kinds; set `all: true` for the full dump — the catalog with every kind's field/enum detail inlined (mirrors `aida schema --all --json`). With `object` (e.g. `requirement`), returns that object's detail — for Requirement, the reflection-derived field table plus the four controlled-vocabulary enums (status/type/priority/relationship) in their on-the-wire token form (a paste-ready cheat-sheet for `--status` / `--type` / `--priority` / relationship-type arguments). The same data is also addressable as the `aida://schema` / `aida://schema/{object}` resources. Reflection-derived — never hand-maintained — so it can't drift from `models.rs`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -7073,11 +7078,17 @@ fn workflow_tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Optional storable-object kind to detail (e.g. `requirement`). Omit for the catalog of kinds. Case-insensitive.",
                         "example": "requirement"
+                    },
+                    "all": {
+                        "type": "boolean",
+                        "description": "With no `object`, return the full dump: the catalog with each kind's field/enum detail inlined (mirrors `aida schema --all --json`).",
+                        "default": false,
+                        "example": true
                     }
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON. Catalog form: `{ objects: [{ name, description }] }`. Requirement detail: `{ object: \"Requirement\", fields: [{ name, type, optional }], enums: { status, type, priority, relationship } }`. Other catalog kinds: `{ object, fields: [{ name, type, optional }], note? }` (reflection-derived, no enums block)."
+                "pretty-printed JSON. Catalog form: `{ objects: [{ name, description }] }`. Full dump (`all: true`): `{ objects: [<per-object detail>] }`. Requirement detail: `{ object: \"Requirement\", fields: [{ name, type, optional }], enums: { status, type, priority, relationship } }`. Other catalog kinds: `{ object, fields: [{ name, type, optional }], note? }` (reflection-derived, no enums block)."
             )
         }
     ])

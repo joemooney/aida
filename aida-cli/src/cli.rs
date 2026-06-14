@@ -7083,6 +7083,12 @@ pub enum Command {
         /// storable-object catalog.
         object: Option<String>,
 
+        /// Dump every object's full field detail in one pass: the catalog
+        /// followed by each kind's field table, in catalog order.
+        // trace:TASK-799
+        #[clap(long, conflicts_with = "object")]
+        all: bool,
+
         /// Emit machine-readable JSON instead of the human table.
         #[clap(long)]
         json: bool,
