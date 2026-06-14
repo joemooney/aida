@@ -73603,6 +73603,16 @@ fn collect_open_facts(
             .iter()
             .filter_map(|c| burndown::parse_why_open_comment(&c.content))
             .collect();
+        // BUG-543: for an epic, compute its child rollup (the same walk + tally
+        // `aida graph --tree` prints) so `explain_open` can surface a fully-
+        // delivered epic ("N/N children Completed") as ready-to-close rather
+        // than the generic umbrella. `None` for non-epics and childless epics.
+        let epic_rollup = if matches!(req.req_type, aida_core::RequirementType::Epic) {
+            let r = aida_core::graph_walk::child_status_rollup(store, req.id);
+            (r.total > 0).then_some((r.completed, r.total))
+        } else {
+            None
+        };
         facts.push(burndown::OpenFacts {
             id,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
@@ -73618,6 +73628,7 @@ fn collect_open_facts(
             in_flight_role,
             findings,
             residual_notes,
+            epic_rollup,
         });
     }
     facts
@@ -73758,6 +73769,7 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
     let order = [
         HeldForReview,
         AwaitingDecision,
+        ReadyToClose,
         BuildSupervised,
         Ungroomed,
         Umbrella,
@@ -74429,7 +74441,16 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     // double-list every pending decision, exactly the conflation the
     // REFINEMENT comment warns against. trace:STORY-611
     use burndown::OpenBucket::*;
-    let order = [HeldForReview, BuildSupervised, Ungroomed, Umbrella];
+    // BUG-543: ReadyToClose leads — a fully-delivered epic is the cheapest win
+    // (one confirmed close), so it surfaces above the slower review/build/groom
+    // buckets.
+    let order = [
+        ReadyToClose,
+        HeldForReview,
+        BuildSupervised,
+        Ungroomed,
+        Umbrella,
+    ];
     for bucket in order {
         let rows: Vec<&(
             burndown::OpenFacts,
@@ -96865,6 +96886,60 @@ fn advance_dispatch(
             } else {
                 println!("  {} left parked.", "↳".dimmed());
             }
+        }
+        AdvanceAction::Close => {
+            // BUG-543: a fully-delivered epic (all children Completed). Offer to
+            // close it (status → Completed) — operator-confirmed, never silent.
+            let do_close = if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                inquire::Confirm::new(&format!(
+                    "Close {display}? (all children completed → status completed)"
+                ))
+                .with_default(true)
+                .prompt()
+                .unwrap_or(false)
+            } else {
+                false
+            };
+            if !do_close {
+                println!("  {} left open.", "↳".dimmed());
+                return Ok(());
+            }
+            let backend = advance_backend(store_path)?;
+            let mut req = backend
+                .get_requirement_by_spec_id(display)?
+                .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
+            // Completing is an advisor-authority act (same gate as approve/
+            // reject); an interactive operator clears it via the TTY branch of
+            // `has_advisor_authority`. trace:BUG-543
+            let new_status = RequirementStatus::Completed;
+            if status_advance_requires_advisor_authority(&req.status, &new_status)
+                && !has_advisor_authority()
+            {
+                println!(
+                    "  {} closing {} needs the advisor role (or an interactive terminal). \
+                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.",
+                    "⚠".yellow(),
+                    display.bold()
+                );
+                return Ok(());
+            }
+            let old = req.status.to_string();
+            req.set_status_from_str("Completed");
+            req.record_change(
+                current_user_id(None),
+                vec![aida_core::Requirement::field_change(
+                    "status",
+                    old,
+                    "Completed".to_string(),
+                )],
+            );
+            req.modified_at = chrono::Utc::now();
+            backend.update_requirement(&req)?;
+            println!(
+                "  {} closed {} — all children were completed.",
+                "✓".green(),
+                display.bold()
+            );
         }
         AdvanceAction::None => {
             println!(

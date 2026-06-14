@@ -278,6 +278,11 @@ pub(crate) enum OpenBucket {
     Blocked,
     /// An umbrella epic — driven by its children, not directly pickable.
     Umbrella,
+    /// BUG-543: an umbrella epic whose child rollup is fully delivered (every
+    /// child Completed) but the epic itself is still open — a fully-delivered
+    /// epic reading as Draft/open. Surfaced for a one-click close (detection
+    /// only; the operator confirms — a rollup miscount must never auto-close).
+    ReadyToClose,
     /// A vision/principle — no terminal state by design.
     LongLived,
     /// Draft, not yet advisor-approved.
@@ -301,6 +306,7 @@ impl OpenBucket {
             OpenBucket::Deferred => "deferred",
             OpenBucket::Blocked => "blocked",
             OpenBucket::Umbrella => "umbrella",
+            OpenBucket::ReadyToClose => "ready-to-close",
             OpenBucket::LongLived => "long-lived",
             OpenBucket::Ungroomed => "ungroomed",
             OpenBucket::AwaitingMerge => "awaiting-merge",
@@ -320,6 +326,7 @@ impl OpenBucket {
                 | OpenBucket::BuildSupervised
                 | OpenBucket::Ungroomed
                 | OpenBucket::Umbrella
+                | OpenBucket::ReadyToClose
         )
     }
 }
@@ -356,6 +363,13 @@ pub(crate) struct OpenFacts {
     /// `why-open:<reason>` prefixed comments. Folded in verbatim; derivable
     /// state is NEVER written here (staleness trap).
     pub residual_notes: Vec<String>,
+    /// BUG-543: for an EPIC, its child rollup as `(completed, total)` over the
+    /// hierarchy subtree (the same numbers `aida graph --tree` prints). `None`
+    /// for non-epics and for epics with no children (`total == 0`). When
+    /// `total > 0 && completed == total` the epic is fully delivered and
+    /// surfaces as `ReadyToClose` rather than the generic umbrella reason. The
+    /// caller computes it (it needs the store); `OpenFacts` stays pure.
+    pub epic_rollup: Option<(usize, usize)>,
 }
 
 /// TASK-723: prefix marking a comment as a non-derivable residual openness
@@ -496,6 +510,22 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
         );
     }
     if f.req_type.eq_ignore_ascii_case("epic") {
+        // BUG-543: a fully-delivered epic (every child Completed) should NOT
+        // read as a generic umbrella — surface it for a one-click close. Strict
+        // `completed == total` (a Rejected/remaining child keeps it umbrella):
+        // detection-only, so under-flagging is the safe direction.
+        if let Some((completed, total)) = f.epic_rollup {
+            if total > 0 && completed == total {
+                return (
+                    OpenBucket::ReadyToClose,
+                    format!(
+                        "ready to close — all {total} children Completed; \
+                         close with `aida edit {} --status completed`",
+                        f.id
+                    ),
+                );
+            }
+        }
         return (
             OpenBucket::Umbrella,
             "umbrella epic — driven by its children; decompose or complete them".to_string(),
@@ -1038,6 +1068,10 @@ pub(crate) enum AdvanceAction {
     Approve,
     /// Resolve it out — set status → Rejected (or leave parked).
     Reject,
+    /// BUG-543: close a fully-delivered umbrella epic — set status → Completed
+    /// (or leave open). Confirmed by the operator, never auto-taken under
+    /// `--yes` (a rollup miscount must not silently close an epic).
+    Close,
     /// Nothing to do here — the bucket resolves itself through normal flow
     /// (in-flight, awaiting-merge, in-progress).
     None,
@@ -1066,10 +1100,13 @@ pub(crate) fn advance_action(bucket: OpenBucket) -> AdvanceAction {
         OpenBucket::Actionable => AdvanceAction::Drain,
         OpenBucket::Ungroomed => AdvanceAction::Approve,
         OpenBucket::Deferred | OpenBucket::Blocked => AdvanceAction::Reject,
-        // Vision/principle have no terminal state by design, and an epic is
-        // driven by its children — neither is rejectable/processable directly
-        // here. In-flight / awaiting-merge / in-progress resolve through normal
-        // flow. Nothing for the operator to do on these directly.
+        // BUG-543: a fully-delivered epic — close it (operator-confirmed).
+        OpenBucket::ReadyToClose => AdvanceAction::Close,
+        // Vision/principle have no terminal state by design, and a not-yet-
+        // delivered epic is driven by its children — neither is
+        // rejectable/processable directly here. In-flight / awaiting-merge /
+        // in-progress resolve through normal flow. Nothing for the operator to
+        // do on these directly.
         OpenBucket::LongLived
         | OpenBucket::Umbrella
         | OpenBucket::InFlight
@@ -1088,6 +1125,7 @@ pub(crate) fn advance_action_label(bucket: OpenBucket) -> &'static str {
         AdvanceAction::Drain => "Drain it now (queue work)",
         AdvanceAction::Approve => "Approve it (makes it drainable)",
         AdvanceAction::Reject => "Reject (resolve it out)",
+        AdvanceAction::Close => "Close it (all children completed → status completed)",
         AdvanceAction::None => "Nothing to do — resolves through normal flow",
     }
 }
@@ -1108,6 +1146,9 @@ fn advance_action_sentence(bucket: OpenBucket, id: &str) -> String {
         AdvanceAction::Drain => format!("drain it (`aida queue work {id}`)"),
         AdvanceAction::Approve => format!("approve it (`aida edit {id} --status approved`)"),
         AdvanceAction::Reject => format!("resolve it out (`aida edit {id} --status rejected`)"),
+        AdvanceAction::Close => {
+            format!("close it — all children completed (`aida edit {id} --status completed`)")
+        }
         AdvanceAction::None => "resolves through normal flow — nothing to do".to_string(),
     }
 }
@@ -1593,6 +1634,7 @@ mod tests {
             in_flight_role: None,
             findings: Vec::new(),
             residual_notes: Vec::new(),
+            epic_rollup: None,
         }
     }
 
@@ -1723,6 +1765,41 @@ mod tests {
             false,
         ));
         assert_eq!(bucket, OpenBucket::AwaitingDecision);
+    }
+
+    // BUG-543: a fully-delivered epic (rollup completed == total) surfaces as
+    // ReadyToClose with the one-click close command naming its own id; a
+    // partial rollup (or no rollup) stays the generic Umbrella.
+    #[test]
+    fn explain_open_epic_ready_to_close_when_rollup_complete() {
+        let mut f = open("epic", "draft", &[], false, false, false);
+        f.id = "EPIC-41".to_string();
+
+        // All children Completed → ready to close.
+        f.epic_rollup = Some((4, 4));
+        let (bucket, reason) = explain_open(&f);
+        assert_eq!(bucket, OpenBucket::ReadyToClose);
+        assert!(reason.contains("ready to close"), "{reason}");
+        assert!(
+            reason.contains("aida edit EPIC-41 --status completed"),
+            "names the close command with its own id: {reason}"
+        );
+        assert!(
+            bucket.needs_human(),
+            "ready-to-close needs operator confirm"
+        );
+
+        // A child still open → generic umbrella, NOT ready to close.
+        f.epic_rollup = Some((3, 4));
+        assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
+
+        // No rollup info (e.g. a childless epic) → generic umbrella.
+        f.epic_rollup = None;
+        assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
+
+        // A zero-total rollup must not divide-by/false-positive → umbrella.
+        f.epic_rollup = Some((0, 0));
+        assert_eq!(explain_open(&f).0, OpenBucket::Umbrella);
     }
 
     /// TASK-744: the split `needs-human` umbrella routes to distinct buckets —
@@ -2458,6 +2535,7 @@ mod tests {
             (Ungroomed, AdvanceAction::Approve),
             (Deferred, AdvanceAction::Reject),
             (Blocked, AdvanceAction::Reject),
+            (ReadyToClose, AdvanceAction::Close),
             (LongLived, AdvanceAction::None),
             (Umbrella, AdvanceAction::None),
             (InFlight, AdvanceAction::None),
@@ -2485,6 +2563,7 @@ mod tests {
             AdvanceAction::SupervisedBuild,
             AdvanceAction::Decision,
             AdvanceAction::Reject,
+            AdvanceAction::Close,
             AdvanceAction::None,
         ] {
             assert!(

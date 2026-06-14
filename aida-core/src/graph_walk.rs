@@ -204,6 +204,31 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
     r
 }
 
+/// BUG-543: the status rollup over a spec's child subtree — the SAME walk +
+/// rollup `aida graph --tree` prints, exposed as a reusable primitive. We
+/// deliberately reuse the tree walk's OUTGOING `Child`+`Parent` union rather than
+/// invent a new "downward-only" traversal: the hierarchy edge is stored
+/// inconsistently across conventions (canonically `epic --Parent--> child`
+/// post-TASK-679; legacy `epic --Child--> child`; some stores also carry the
+/// reciprocal `child --Parent--> epic`), and the union resolves the children
+/// whichever form was written. Matching the tree walk also guarantees this
+/// detector AGREES with the rollup numbers an operator sees in `aida graph
+/// --tree <epic>` — the contract BUG-543 references ("Rollup: 4 total · 4
+/// completed").
+///
+/// Drives the "epic ready to close" surface: an epic whose rollup has
+/// `total > 0 && completed == total` is fully delivered and can be closed. The
+/// root itself is excluded from the count (the walk excludes the root).
+/// trace:BUG-543 | ai:claude
+pub fn child_status_rollup(store: &RequirementsStore, root: Uuid) -> StatusRollup {
+    let specs = [(
+        vec![RelationshipType::Child, RelationshipType::Parent],
+        Direction::Outgoing,
+    )];
+    let result = walk_union(store, root, &specs, None);
+    status_rollup(store, &result.nodes)
+}
+
 /// Lay the walked graph out as a depth-annotated hierarchy for the `--tree`
 /// render, so parents, children, and siblings are visually distinct instead of
 /// a flat list (BUG-534).
@@ -452,6 +477,62 @@ mod tests {
         assert_eq!(r.in_progress, 1);
         assert_eq!(r.shelved, 1);
         assert_eq!(r.remaining, 1);
+    }
+
+    // BUG-543: the "epic ready to close" detector's rollup. Mirrors the real
+    // store's reciprocal storage (epic carries `Child→story`, story carries
+    // `Parent→epic`) and confirms the helper agrees with the tree rollup and
+    // excludes the root.
+    #[test]
+    fn child_status_rollup_counts_an_epics_children() {
+        let mut epic = make_req("EPIC-X", RequirementStatus::Draft);
+        let mut s1 = make_req("STORY-1", RequirementStatus::Completed);
+        let mut s2 = make_req("STORY-2", RequirementStatus::Completed);
+        let mut s3 = make_req("STORY-3", RequirementStatus::InProgress);
+        for s in [&mut s1, &mut s2, &mut s3] {
+            link(&mut epic, RelationshipType::Child, s.id);
+            link(s, RelationshipType::Parent, epic.id);
+        }
+        let eid = epic.id;
+        let store = store_with(vec![epic, s1, s2, s3]);
+
+        let r = child_status_rollup(&store, eid);
+        // Three children counted; the epic (root) is NOT in the rollup.
+        assert_eq!(r.total, 3);
+        assert_eq!(r.completed, 2);
+        assert_eq!(r.in_progress, 1);
+    }
+
+    // BUG-543: a fully-delivered epic — every child Completed — is the
+    // `total>0 && completed==total` case the surface keys off.
+    #[test]
+    fn child_status_rollup_all_completed_is_ready_to_close() {
+        let mut epic = make_req("EPIC-X", RequirementStatus::Draft);
+        let s1 = make_req("STORY-1", RequirementStatus::Completed);
+        let s2 = make_req("STORY-2", RequirementStatus::Completed);
+        // Canonical post-TASK-679 leg too (epic --Parent--> child): the helper
+        // must resolve children whichever orientation was written.
+        link(&mut epic, RelationshipType::Child, s1.id);
+        link(&mut epic, RelationshipType::Parent, s2.id);
+        let eid = epic.id;
+        let store = store_with(vec![epic, s1, s2]);
+
+        let r = child_status_rollup(&store, eid);
+        assert_eq!(r.total, 2);
+        assert_eq!(r.completed, 2);
+        assert!(r.total > 0 && r.completed == r.total);
+    }
+
+    // BUG-543: an epic with no children has an empty rollup — NOT ready to close
+    // (nothing delivered), so the `total > 0` guard excludes it.
+    #[test]
+    fn child_status_rollup_empty_for_childless_epic() {
+        let epic = make_req("EPIC-X", RequirementStatus::Draft);
+        let eid = epic.id;
+        let store = store_with(vec![epic]);
+
+        let r = child_status_rollup(&store, eid);
+        assert_eq!(r.total, 0);
     }
 
     // trace:BUG-534 | ai:claude
