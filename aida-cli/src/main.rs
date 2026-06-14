@@ -1098,8 +1098,14 @@ fn run() -> Result<()> {
     // `aida schema` is a pure reflection read — it touches no store, so
     // dispatch it before storage resolution (like `memories`/`dev`).
     // trace:STORY-538 | ai:claude
-    if let Command::Schema { object, json } = &cli.command {
+    if let Command::Schema { object, all, json } = &cli.command {
         match object.as_deref().map(str::to_lowercase).as_deref() {
+            // `--all` (human) and no-arg `--json` are both a full dump: the
+            // catalog plus every object's reflection-derived field detail in
+            // catalog order. For JSON we always include the per-object fields
+            // (a no-arg `--json` was field-less before), so the machine surface
+            // is a true one-fetch full dump. trace:TASK-799 | ai:claude
+            None if *all || *json => schema::print_all(*json),
             None => schema::print_catalog(*json),
             Some("requirement") | Some("requirements") | Some("req") => {
                 schema::print_requirement(*json)
