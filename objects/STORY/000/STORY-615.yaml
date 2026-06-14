@@ -3,12 +3,12 @@ spec_id: STORY-615
 agreed_id: STORY-615
 title: 'Sandbox: headless default-deny egress via managed-settings network.allowManagedDomainsOnly'
 description: Split out of STORY-612's original bundle. Slice 1 (STORY-605) added a [contained] allowed_hosts egress allowlist, but a non-allowlisted domain PROMPTS for approval; a headless claude -p drain has no human to answer, so egress is not truly default-deny. True block-without-prompt needs network.allowManagedDomainsOnly delivered via MANAGED settings (not the project --settings claude_contained_settings_json emits). Wire a managed-settings path so contained/os_wrap headless drains get hard default-deny egress to the allowlist. See docs/competitive-analysis/2026-06-13-sandbox-execution.md. relates SPIKE-61, STORY-605, STORY-612.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T06:53:58.236495410Z
-modified_at: 2026-06-14T06:56:09.977070581Z
+modified_at: 2026-06-14T16:10:20.404149166Z
 req_type: Story
 tags:
 - competitive-hole
@@ -21,3 +21,21 @@ relationships:
   target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
   created_at: 2026-06-14T06:56:09.977056468Z
   created_by: joe
+history:
+- id: 019ec6e5-f76f-7040-a3c9-8119f58e3534
+  author: aida-auto-bump
+  timestamp: 2026-06-14T16:10:20.399655994Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec6e5-f774-7e70-9e74-01c9d7dd80f3
+  timestamp: 2026-06-14T16:10:20.404148685Z
+  agent: aida
+  commit_sha: 0dd706ae6df1057b1bac2313b15d470dd0b0e8c8
+  summary: Completed via merge 0dd706ae
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T16:10:20.244033234Z
+  completion_sha: 0dd706ae6df1057b1bac2313b15d470dd0b0e8c8
