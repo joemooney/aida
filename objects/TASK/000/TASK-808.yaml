@@ -1,0 +1,24 @@
+id: 019ec4de-049c-72e2-9c2d-6d647d942528
+spec_id: TASK-808
+agreed_id: TASK-808
+title: 'aida human ''umbrella'' bucket: only surface epics that NEED action (decompose if childless/thin, ready-to-close via BUG-543) — drop merely-in-flight epics as noise'
+description: |-
+  Operator friction (2026-06-14): the 'umbrella — driven by its children; decompose or complete them' bucket lists epics (EPIC-40, EPIC-42) in `aida human` ('what needs a human') even when their children are already in flight — so there is NO discrete action for the human. An epic is a container, not a task; listing in-flight epics dilutes the precise 'what needs ME now' surface the operator repeatedly asks for.
+
+  FIX: only surface an epic when it genuinely needs the human:
+    - NO children yet / thin → needs DECOMPOSITION (real action).
+    - ALL children Completed → ready to close (already surfaced by BUG-543's ReadyToClose — so the umbrella bucket should DEFER to that, not double-list).
+    - children in flight / partially done → DROP from the bucket (nothing to do; it's driven by its children).
+  Net: the umbrella bucket becomes 'epics that need decomposition' (the only umbrella state that needs a human), with ready-to-close handled by BUG-543. Reduces noise on the what-needs-me surface. trace:relates:BUG-543
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T06:42:25.052012190Z
+modified_at: 2026-06-14T06:42:25.052012190Z
+req_type: Task
+tags:
+- aida:human
+- from-friction
+- signal-vs-noise
+- ux
