@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:22:58.886139281Z
-modified_at: 2026-06-13T23:42:36.269249441Z
+modified_at: 2026-06-14T00:09:34.849731401Z
 req_type: Story
 tags:
 - aida:burndown
@@ -30,3 +30,8 @@ comments:
   content: 'MORE EVIDENCE (2026-06-13): answering BUG-530''s DecisionRequest AUTO-QUEUED it (BUG-526''s auto-queue-on-answer) — which put a KEYSTONE spec (the burndown selector, being hand-implemented) into the drain-eligible set. Caught it in a ''burndown run --dry-run'' (BUG-530 + BUG-541 both appeared) and de-queued manually. This is a THIRD path that leaks keystone work into the drain (after: advisor mis-queue, and the queue being a single pool). The supervised-only marker this story proposes is the structural fix — auto-queue (at filing, at answer) and burndown-run alike would all exclude marked specs. Until it exists, every auto-queue path needs manual keystone de-queuing. trace:STORY-610'
   created_at: 2026-06-13T23:42:36.269249441Z
   modified_at: 2026-06-13T23:42:36.269249441Z
+- id: 019ec376-5d81-7523-a54f-f72272584fb0
+  author: joe
+  content: 'VERB (operator, 2026-06-13): add ''aida advisor signoff <id>'' (or /aida-advisor-signoff) = the SUPERVISED sign-off — queue a spec so ''aida queue work'' can pick it up (keyboard) while the supervised-marker EXCLUDES it from ''burndown run'' (drain). Distinct from plain ''aida queue add'' (which blesses for the drain). This is the clean answer to ''how do I bless keystone work for keyboard pickup without exposing it to an unsupervised drain'' — the gap that''s bitten repeatedly this session (de-queuing keystone specs by hand after every auto-queue path). ''aida advisor signoff'' applies the supervised-marker + queues; ''aida queue work <id>'' then picks it up; ''burndown run'' never sees it. Lives in EPIC-42''s ''aida advisor'' namespace, uses this story''s marker. trace:STORY-610 trace:relates:EPIC-42'
+  created_at: 2026-06-14T00:09:34.849731401Z
+  modified_at: 2026-06-14T00:09:34.849731401Z
