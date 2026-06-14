@@ -3,12 +3,12 @@ spec_id: BUG-548
 agreed_id: BUG-548
 title: aida-git-guardrails.sh allows force-push to main via --force-with-lease — should block ANY force-push to protected branches
 description: 'Incident (2026-06-14): a session ran ''git push --force-with-lease origin main'' (off a failed cd that left git-ops on main) and REWROTE main''s history (clobbered #868''s commit message; recovered manually). The guardrail hook BLOCKS bare ''git push --force'' (line 56) but explicitly EXEMPTS ''--force-with-lease'' (line 57) — so the breach slipped straight through. --force-with-lease is the safe form for FEATURE branches but is NEVER acceptable for main (it still rewrites shared history; the lease only guards against a stale remote, not against the act of rewriting main). Fix (substrate-as-bouncer): add a PROTECTED-BRANCH rule — block ANY force-push (--force AND --force-with-lease) when the target is a protected branch (main/master, configurable). Target detection: explicit ''origin main'' in the cmd OR the current branch is main when no refspec is given. Keep allowing --force-with-lease to non-protected (feature) branches. This hook would have prevented the incident outright. trace:relates:BUG-538 trace:from-friction'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T00:54:04.458027575Z
-modified_at: 2026-06-14T02:56:56.848645565Z
+modified_at: 2026-06-14T03:09:32.039017486Z
 req_type: Bug
 tags:
 - from-friction
@@ -18,7 +18,27 @@ tags:
 - safety
 - substrate-as-bouncer
 - supervised
+history:
+- id: 019ec41b-1e02-7b51-b92c-7a7b4ae8167d
+  author: aida-auto-bump
+  timestamp: 2026-06-14T03:09:32.034774325Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec41b-1e07-73e0-8f79-545c072828da
+  timestamp: 2026-06-14T03:09:32.039013637Z
+  agent: reviewer
+  commit_sha: 6aae18dcbe458ebafca8ba6a1a3cf11eacecf1f1
+  pr: 882
+  summary: 'BUG-548 fully met: force-push (incl --force-with-lease) to protected branches now blocked; incident case verified; CI green. Two non-blocking deep-pass notes (one pre-existing, one conservative false-positive).'
+  punted:
+  - 'follow-up: BUG-552'
+  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:56:56.848645565Z
   implemented_by: joe
+  completed_at: 2026-06-14T03:09:31.887066951Z
+  completion_sha: 6aae18dcbe458ebafca8ba6a1a3cf11eacecf1f1
