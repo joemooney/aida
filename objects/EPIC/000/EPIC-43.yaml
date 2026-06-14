@@ -1,0 +1,32 @@
+id: 019ec6c3-bca4-72a2-87aa-e9d798292208
+spec_id: EPIC-43
+agreed_id: EPIC-43
+title: Solo mode — advisor+integrator works the SAFE backlog end-to-end unattended (groom → implement → integrate → repeat), parking keystone/architecture for the human
+description: |-
+  VISION (operator, 2026-06-14): a mode where the agent has full control to work through the backlog WITHOUT per-step operator input — "work through the night." The frustration that prompted it: the advisor keeps STOPPING (filing without completing, handing checklists, idling) instead of driving end-to-end.
+
+  MOSTLY COMPOSABLE FROM EXISTING PIECES:
+  - `aida intake --apply --then-drain` — a cold-boot advisor grooms every open spec (approve/reject/park/queue) then chains a burndown drain. = autonomous GROOM + IMPLEMENT.
+  - `aida queue integrate --watch` (STORY-460/520) — the single serial integrator merges Done+open-PR work via substrate-polling. = autonomous INTEGRATE.
+  - EPIC-30 (queue worker executor) + EPIC-33 (orchestrator correctness floor) already built.
+  So a "solo loop" ≈ intake --apply --then-drain  +  integrate --watch, running headless, on repeat.
+
+  GAP TO TRUSTWORTHY-UNATTENDED (this is the real roadmap; tonight surfaced most of it):
+  1. RELIABILITY FLOOR: BUG-538 concurrency guard (DONE); BUG-554 (agents stop stacking branches → no rebase conflicts / mis-attribution); BUG-555 (reliable mailbox for escalations); integrator presence + double-drive guard (so the pieces don't collide).
+  2. KEYSTONE EXCLUSION: solo mode must NOT auto-ship security / architecture / keystone (e.g. STORY-612 sandbox, ADR-5, the drain machinery itself). The `supervised` tag already excludes from burndown — extend that exclusion to the solo loop AND the integrator's auto-merge, so solo works the SAFE backlog and PARKS keystone for the human.
+  3. ESCALATION-ON-STUCK: when the loop hits something it can't self-resolve (a real merge conflict, a design fork), it must PARK + escalate (the punt → advisor → human cascade exists; wire it into the solo loop) rather than stop silently or guess.
+  4. STOP STOPPING: the behavioral root — complete simple things inline, escalate the rest, never idle on completable work.
+
+  MVP SLICE: a documented `aida solo` (or a one-line composed loop) = intake --apply --then-drain + integrate --watch, with the supervised-exclusion respected and escalation-on-stuck, gated on the reliability floor. Children: BUG-554, BUG-555, the integrator-presence spec, the keystone-exclusion-for-integrator spec.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T15:32:57.124926969Z
+modified_at: 2026-06-14T15:32:57.124926969Z
+req_type: Epic
+tags:
+- autonomy
+- from-strategic
+- solo-mode
+- vision
