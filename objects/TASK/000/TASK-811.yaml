@@ -1,0 +1,12 @@
+id: 019ec6ac-e3a9-7c13-805d-1c100348f0fe
+spec_id: TASK-811
+agreed_id: TASK-811
+title: STORY-617 — strict read-confinement hardening (default-absent FS bind-allowlist)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T15:07:59.785020619Z
+modified_at: 2026-06-14T15:07:59.785020619Z
+req_type: Task
