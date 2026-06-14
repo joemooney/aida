@@ -3,15 +3,33 @@ spec_id: TASK-824
 agreed_id: TASK-824
 title: 'aida list why: bulk per-spec why-open report (alias/surfacing of burndown explain) under the aida list lens family'
 description: 'Operator request 2026-06-14: ''aida list why'' reports, for every OPEN spec, why it is in its current state — no LLM, purely the recorded assessment + state-derived reason. This is the bulk form of ''aida why <spec>'' and overlaps the existing ''aida burndown explain'' (collect_open_facts + explain_reasons: bucket + derived reason + any recorded why-open: assessment + finding links). Surface it under the consistent ''aida list <lens>'' family (open / queue / human / why) so it''s discoverable. Per spec: show the recorded advisor assessment if present (why-open: comment / processing record), else the state-based reason (e.g. ''ungroomed draft — not yet assessed by the advisor''). Operator''s mental model: the advisor ASSESSES before approving (distinct verb from review). Consider whether ''assessment'' should become a first-class recorded field vs the current why-open: comment convention. Relates to TASK-822 (aida list queue alias), the aida list lens family, and burndown explain.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:34:54.264265805Z
-modified_at: 2026-06-14T21:34:54.264265805Z
+modified_at: 2026-06-14T22:07:55.204051877Z
 req_type: Task
 tags:
 - aida:list
 - aida:why
 - from-product
 - ux
+history:
+- id: 019ec82d-573f-7652-93cc-103421bdb08a
+  author: aida-auto-bump
+  timestamp: 2026-06-14T22:07:55.199723594Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec82d-5744-7423-aaeb-f59040f28d9f
+  timestamp: 2026-06-14T22:07:55.204050768Z
+  agent: aida
+  commit_sha: 0dfce0ae5de024ceb646ffdde1c264f4ca6af6ee
+  summary: Completed via merge 0dfce0ae
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T22:07:55.032158049Z
+  completion_sha: 0dfce0ae5de024ceb646ffdde1c264f4ca6af6ee
