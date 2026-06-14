@@ -1,0 +1,15 @@
+id: 019ec3eb-bae9-7362-ac46-5da578de7594
+spec_id: TASK-801
+agreed_id: TASK-801
+title: 'burndown plan: Supervised section (slice 1b) — show supervised specs as their own queue-work block'
+description: resolve_burndown_sets returns a 5th 'supervised' set; handle_burndown_plan renders a 'Supervised — work these at the keyboard (`aida queue work <id>`)' section + count in the summary line + JSON payload, and the empty-ready footer routes to queue work when supervised work exists. Ends the recurring 'how do I make progress on these?' confusion by showing the route per spec. Slice 1a (TASK-800) added the drain exclusion; this slice adds the visibility.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T02:17:46.473077156Z
+modified_at: 2026-06-14T02:17:46.473077156Z
+req_type: Task
+tags:
+- aida:burndown
+- supervised-marker
