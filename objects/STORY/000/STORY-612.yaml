@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:08:20.133582563Z
-modified_at: 2026-06-14T15:07:42.489977816Z
+modified_at: 2026-06-14T15:08:06.276098740Z
 req_type: Story
 tags:
 - agent-execution
@@ -62,6 +62,13 @@ comments:
   content: Commit 356f87c75 references this requirement
   created_at: 2026-06-14T07:05:50.100167575Z
   modified_at: 2026-06-14T07:05:50.100167575Z
+- id: 019ec6ac-fdaa-7722-9946-f450f7fc94f2
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-06-13-story-612-os-wrap-bwrap.md
+    filed 3 task(s): TASK-809, TASK-810, TASK-811
+  created_at: 2026-06-14T15:08:06.442663880Z
+  modified_at: 2026-06-14T15:08:06.442663880Z
 history:
 - id: 019ec6ac-a014-7c62-b1e9-0cc76f59547d
   author: aida-auto-bump
