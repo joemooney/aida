@@ -17977,5 +17977,13 @@ operations:
       RELATION: distinct from BUG-538 — that is RUNTIME mutual exclusion of whole DRAINS (one drain per repo via drain.lock); this is SCHEDULER mutual exclusion of SPECS within a drain. Complementary.
 
       MVP SLICE (smallest valuable): the tag/edge + the wave-builder respecting it. Extensions (future): aida queue work warns when starting two conflicting specs in parallel; aida graph shows conflict groups; auto-derive conflict edges from shared trace:/file overlap. trace:from-friction
-clock: 1777
+- id: 019ec488-e082-7320-ad3b-39906114e36e
+  target_id: 019ec479-dc3b-74d2-b476-1787c38571ff
+  author: aida
+  node_id: '1'
+  lamport: 1778
+  timestamp: 2026-06-14T05:09:25.250665386Z
+  kind: !SetStatus
+    status: Done
+clock: 1778
 node_id: '1'
