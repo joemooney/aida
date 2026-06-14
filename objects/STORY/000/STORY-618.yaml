@@ -1,0 +1,44 @@
+id: 019ec75f-3226-7222-804c-25f3b8a96053
+spec_id: STORY-618
+agreed_id: STORY-618
+title: Bare 'aida advisor' = the advisor's bottleneck worklist (mirror of 'aida human') — the self-service half of EPIC-42
+description: |-
+  Operator proposal (2026-06-14): bare 'aida human' gives the operator a synopsis of what needs them; bare 'aida advisor' just prints command help. Make bare 'aida advisor' behave like bare 'aida human' — a synopsis of work in the ADVISOR's realm. This is EPIC-42's promised 'advisor self-service' half (the children TASK-807/808 only built the aida human/operator side).
+
+  ## Shape — mirror 'aida human', grouped by ADVISOR action (not a counts dashboard)
+
+  Bare 'aida advisor' lists the advisor's actionable worklist in buckets, each with the canonical command to act:
+  - GROOM — ungroomed drafts awaiting disposition (approve/defer/reject). THESE are what currently leak onto 'aida human'; routing them here fixes the seat-leak (see EPIC-42 comment 2026-06-14).
+  - DISTILL — needs-human / decision-bearing specs to convert into pre-recorded questions ('aida questions sweep' candidates).
+  - TRIAGE — findings awaiting triage ('aida findings list').
+  - BLESS — approved-but-not-queued backlog ready to groom onto the queue ('aida backlog list').
+  - CLOSE — epics whose children are all done (ready to mark Completed).
+
+  ## Relationship to 'aida advisor status'
+
+  'aida advisor status' (STORY-559) stays the full read-only DASHBOARD (counts + live-advisor readiness + queue depth + live sessions). Bare 'aida advisor' is the focused ACTIONABLE worklist (the 'what needs me now, and the command to do it'). Decide whether bare delegates to a trimmed 'status' or is its own view — but bare must NOT print help (follow the 'aida human' / 'aida questions' bare-does-something-useful pattern).
+
+  ## Why it matters
+
+  Completes the seat separation: after the advisor runs its pass off 'aida advisor', the operator's 'aida human' shows ONLY genuine operator decisions (strategy/keystone/priority), never un-triaged drafts. The advisor gets a first-class 'what's mine' surface symmetric with the operator's.
+
+  ## Acceptance
+
+  - [ ] Bare 'aida advisor' (no subcommand) prints the advisor bottleneck worklist (grouped buckets + per-bucket action command), NOT clap help.
+  - [ ] Buckets cover at least: ungroomed drafts (groom), decision candidates (distill/sweep), findings (triage), approved-not-queued (bless), completable epics (close).
+  - [ ] Ungroomed drafts appear HERE, and EPIC-42's 'aida human' ungroomed bucket is correspondingly narrowed to operator-residual only (the two views partition cleanly — no double-listing).
+  - [ ] 'aida advisor <subcommand>' (register/watch/status/...) unchanged; only the bare form gains the synopsis.
+  - [ ] Empty state reads cleanly ('nothing needs advisor action').
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T18:22:45.286929065Z
+modified_at: 2026-06-14T18:22:45.286929065Z
+req_type: Story
+tags:
+- aida:advisor
+- from-product
+- parent:EPIC-42
+- seat-separation
+- ux
