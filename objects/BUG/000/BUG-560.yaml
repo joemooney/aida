@@ -3,12 +3,12 @@ spec_id: BUG-560
 agreed_id: BUG-560
 title: aida status leaks raw gh GitHub-auth error on a GitLab remote (PR row); should degrade cleanly for non-GitHub forges
 description: 'Found 2026-06-14 during GitLab first-user smoke test (product seat). On a GitLab remote, aida status PR row shells to gh, which fails and the raw error is surfaced verbatim: ''(gh failed: none of the git remotes configured for this repository point to a known GitHub host. To tell gh about a new GitHub host, please use gh auth login)''. A corporate GitLab first-user runs aida status on day one and is told to auth a GitHub CLI they do not use — a functional papercut, not just wording. Site: aida-cli/src/main.rs ~84753 (println gh failed) via state_snapshot.rs PrRow::GhFailed. Fix (Tier-1, week-one): detect a non-GitHub remote (forge detection) and either skip the PR row or show a clean ''PR: (GitLab — forge integration pending)'' instead of the raw gh GitHub-host error. Companion to BUG-559 — both are first-run substrate cleanliness, bug-class, GitLab-store-now track. NOT the deep forge wiring (STORY-621).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T20:14:20.352955534Z
-modified_at: 2026-06-14T20:14:20.352955534Z
+modified_at: 2026-06-14T20:39:34.191311182Z
 req_type: Bug
 tags:
 - aida:status
@@ -16,3 +16,21 @@ tags:
 - first-user-papercut
 - from-self-test
 - gitlab
+history:
+- id: 019ec7dc-742a-7be0-a715-fe61fff19ff6
+  author: aida-auto-bump
+  timestamp: 2026-06-14T20:39:34.186815523Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec7dc-742f-7981-9cf8-1f73e4217259
+  timestamp: 2026-06-14T20:39:34.191310315Z
+  agent: aida
+  commit_sha: d8a6871f3783c32091090eef037f1ce22cd061af
+  summary: Completed via merge d8a6871f
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T20:39:34.034094775Z
+  completion_sha: d8a6871f3783c32091090eef037f1ce22cd061af
