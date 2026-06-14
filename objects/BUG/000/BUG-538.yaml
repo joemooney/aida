@@ -3,12 +3,12 @@ spec_id: BUG-538
 agreed_id: BUG-538
 title: burndown run / queue work --auto-complete has no concurrency guard — a second drain double-drives the same tree
 description: 'Operator+advisor hit (2026-06-13): the advisor kicked ''aida burndown run'' (background) and the operator was about to run it again — a second drain would double-drive the SAME repo tree (two integrators merging to main, two sets of worktrees, racing git ops + shared target/ builds). Nothing prevents it; the ''one drain at a time'' invariant relies on humans remembering. Substrate-as-bouncer fix: a drain-instance LOCK. On launch, handle_burndown_run writes .aida/burndown.lock with {pid, started_at, selector}; before launching, if a live lock exists (PID still alive) REFUSE with ''a drain is already running (pid N, started T) — wait for it or kill it'', else (stale PID) reclaim. Clean the lock on exit (and on the headless claude -p child''s exit). Reuse the existing lock pattern (bg_fetch_lock_path, main.rs:51320). Same guard belongs on ''queue work --auto-complete'' (single-spec orchestrator) since it also integrates on main. Keep a --force/--allow-concurrent escape for the rare intentional case. Keystone-adjacent (the drain launcher) → implement at the keyboard. trace:from-friction trace:substrate-as-bouncer'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:38:48.809235306Z
-modified_at: 2026-06-14T03:56:02.905489144Z
+modified_at: 2026-06-14T04:49:17.217121566Z
 req_type: Bug
 tags:
 - aida:burndown
