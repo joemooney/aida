@@ -62,10 +62,14 @@ check_destructive() {
     # exactly the 2026-06-13 incident: `git push --force-with-lease origin main`
     # off a failed `cd` dropped a merged PR from main. --force-with-lease to a
     # feature branch stays allowed — that's the legitimate post-rebase path.
+    # BUG-552: match the short `-f` ANYWHERE in the push command, not just
+    # immediately after `push` — `git push origin main -f` (trailing flag) must
+    # be caught too. The `\s` before the dash keeps a branch name containing a
+    # hyphen (`feat-f`) from tripping it (a flag is always space-separated).
     local is_force_push=0
     if echo "$cmd" | grep -qE 'git\s+push\b.*--force'; then
         is_force_push=1
-    elif echo "$cmd" | grep -qE 'git\s+push\s+-[a-zA-Z]*f\b'; then
+    elif echo "$cmd" | grep -qE 'git\s+push\b.*\s-[a-zA-Z]*f\b'; then
         is_force_push=1
     fi
     if [ "$is_force_push" = "1" ]; then
