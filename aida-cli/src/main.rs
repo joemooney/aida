@@ -74614,29 +74614,6 @@ fn resolve_burndown_sets(
         if req.deferred {
             continue;
         }
-        // STORY-610: a `supervised` spec is signed off for KEYBOARD pickup
-        // (`aida queue work` / `aida advisor signoff`) but EXPLICITLY EXCLUDED
-        // from the unattended drain. This is the structural fix for keystone
-        // work leaking into `burndown run` — BUG-530/541/538 were all
-        // hand-de-queued for lack of it. Marked specs stay pickable via the
-        // queue; they never enter the burndown ready/awaiting/parked sets — they
-        // surface in their own `burndown plan` section so the route per spec
-        // (`queue work` vs drain) is visible, ending the recurring "how do I make
-        // progress on these?" confusion. trace:STORY-610 | ai:claude
-        if req
-            .tags
-            .iter()
-            .any(|t| t.eq_ignore_ascii_case("supervised"))
-        {
-            let disp = req
-                .agreed_id
-                .clone()
-                .or_else(|| req.spec_id.clone())
-                .unwrap_or_else(|| req.id.to_string());
-            titles.insert(disp.clone(), req.title.clone());
-            supervised.push(disp);
-            continue;
-        }
         if norm(&req.status.to_string()) != want_status {
             continue;
         }
@@ -74650,6 +74627,30 @@ fn resolve_burndown_sets(
             if !tags.iter().any(|x| x.eq_ignore_ascii_case(bt)) {
                 continue;
             }
+        }
+        // STORY-610: a `supervised` spec is signed off for KEYBOARD pickup
+        // (`aida queue work`) but EXPLICITLY EXCLUDED from the unattended drain
+        // — the structural fix for keystone work leaking into `burndown run`.
+        // Collected HERE, after the status/tag/batch filters, so only ACTIONABLE
+        // (matching-selector, Approved by default) supervised work surfaces: a
+        // Done supervised spec is awaiting review/merge (it's in the reviews
+        // bucket, not "work this"), and a Completed one is shipped. The
+        // unconditional `continue` keeps them out of the ready/awaiting/parked
+        // sets; they get their own `burndown plan` section so the route per spec
+        // (`queue work` vs drain) is visible. trace:STORY-610 trace:BUG-551
+        if req
+            .tags
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case("supervised"))
+        {
+            let disp = req
+                .agreed_id
+                .clone()
+                .or_else(|| req.spec_id.clone())
+                .unwrap_or_else(|| req.id.to_string());
+            titles.insert(disp.clone(), req.title.clone());
+            supervised.push(disp);
+            continue;
         }
         // A BlockedBy edge is unsatisfied unless its target is Completed; a
         // dangling target (not in the store) is treated as unsatisfied so we
