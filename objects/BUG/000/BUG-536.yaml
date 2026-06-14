@@ -3,12 +3,12 @@ spec_id: BUG-536
 agreed_id: BUG-536
 title: Squash-merge of an umbrella PR leaves child specs stuck (Draft/Done) — auto-bump only sees the one trailered spec
 description: 'Operator+advisor hit repeatedly (2026-06-13): when one PR implements many specs but is SQUASH-merged with only ONE trailer (the epic or lead spec), every OTHER spec it covered is left stuck — Draft or Done — because ''aida pull'' auto-bump scans commit-message trailers and the squash commit names only one. Observed 3x today: BUG-525 (fix folded into #832/STORY-585 squash), STORY-606 (#854), and the 10 CLI-manual chapter STORYs (#853/EPIC-40) — all needed MANUAL completion. This is the root cause of much of the ''ungroomed/stuck'' noise in ''aida human''. Fix options: (a) auto-bump also completes a spec when ITS code is on main even without a trailer (e.g. detect via the spec''s worktree branch having merged); (b) at merge time, expand the squash trailer to include all specs the PR''s commits trailered; (c) ''aida done <ids>'' / a ''complete-subsumed'' verb for umbrella merges. Pick the least-magic reliable one. trace:from-friction trace:relates:STORY-86'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:12:36.217360198Z
-modified_at: 2026-06-14T04:59:08.654825167Z
+modified_at: 2026-06-14T04:59:44.547414121Z
 req_type: Bug
 tags:
 - aida:pull
@@ -24,3 +24,7 @@ comments:
   content: 'Scope confirmed narrow per operator: trailer-driven sibling/child completion via squash-body scan ONLY. Epic-rollup (BUG-543) is separate graph-driven path; no shared logic. See coordination note on BUG-543.'
   created_at: 2026-06-14T04:59:08.654825167Z
   modified_at: 2026-06-14T04:59:08.654825167Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-14T04:59:44.547414121Z
+  implemented_by: joe
