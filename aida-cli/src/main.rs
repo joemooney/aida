@@ -74243,7 +74243,11 @@ fn resolve_burndown_sets(
         // hand-de-queued for lack of it. Marked specs stay pickable via the
         // queue; they just never appear in the burndown blessed/awaiting sets.
         // trace:STORY-610 | ai:claude
-        if req.tags.iter().any(|t| t.eq_ignore_ascii_case("supervised")) {
+        if req
+            .tags
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case("supervised"))
+        {
             continue;
         }
         if norm(&req.status.to_string()) != want_status {
