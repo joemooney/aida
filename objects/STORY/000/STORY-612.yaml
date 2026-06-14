@@ -1,7 +1,7 @@
 id: 019ec33e-4b25-7943-8f59-17493a80e8dd
 spec_id: STORY-612
 agreed_id: STORY-612
-title: 'Sandbox slice 2: OS boundary around the whole claude -p process + Firecracker microVM strong-isolation profile'
+title: 'Sandbox slice 2: OS boundary (bubblewrap) around the whole headless claude -p process'
 description: |-
   Sandbox slice 2 (RE-SCOPED 2026-06-13): an OS boundary around the WHOLE headless 'claude -p' process via bubblewrap. The contained posture (STORY-567/605) only sandboxes Claude's Bash tool; Edit/Write/MCP run unconfined and there is no OS boundary around the claude process itself. This wraps the three headless spawn paths (spawn_claude_headless / exec_claude_headless / spawn_claude_headless_resume in aida-cli/src/session.rs) in bwrap when [contained] os_wrap = true.
 
@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:08:20.133582563Z
-modified_at: 2026-06-14T07:05:50.100167575Z
+modified_at: 2026-06-14T07:18:10.658414906Z
 req_type: Story
 tags:
 - agent-execution

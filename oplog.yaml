@@ -18035,5 +18035,13 @@ operations:
       Keystone-adjacent -> keyboard, advisor-reviewed before merge; merge also blocked on the CI live-confinement test passing on a userns-enabled runner. See docs/competitive-analysis/2026-06-13-sandbox-execution.md slice 2.
 
       Follow-ups split from the original bundle: STORY-615 (managed-settings network.allowManagedDomainsOnly headless default-deny), STORY-616 (Firecracker microVM slice 3, PARKED per research), STORY-617 (strict read-confinement hardening). trace:relates:SPIKE-61 trace:relates:STORY-605
-clock: 1782
+- id: 019ec4fe-c1fc-7790-a85b-d16d69bf146b
+  target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
+  author: aida
+  node_id: '1'
+  lamport: 1783
+  timestamp: 2026-06-14T07:18:10.684034008Z
+  kind: !SetTitle
+    title: 'Sandbox slice 2: OS boundary (bubblewrap) around the whole headless claude -p process'
+clock: 1783
 node_id: '1'
