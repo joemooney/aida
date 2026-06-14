@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:26:19.810200300Z
-modified_at: 2026-06-13T23:26:19.810200300Z
+modified_at: 2026-06-14T18:16:38.084342302Z
 req_type: Epic
 tags:
 - advisor-seat
@@ -45,3 +45,9 @@ relationships:
 - rel_type: Parent
   target_id: 019ec6a8-3ba5-7262-86ea-93589d4680e3
   created_at: 2026-06-14T15:02:58.669761520Z
+comments:
+- id: 019ec759-97c4-7f30-91ef-0260a3e56c60
+  author: joe
+  content: 'SEAT-LEAK observed (operator-caught 2026-06-14): ''aida human'' surfaced STORY-597 — an UNGROOMED draft — on the OPERATOR''s list under ''awaiting advisor grooming/approval''. But grooming (cross-spec reconciliation: it overlapped the now-Completed STORY-603, had a stale merged-branch ref, and part was already built) requires advisor knowledge the operator can''t derive from the spec. Surfacing ungroomed drafts to the operator shifts ADVISOR labor onto them. The fix EPIC-42 should encode: ungroomed drafts route to ''aida advisor'' (grooming worklist); ''aida human'' shows ONLY the post-grooming residual that needs operator-specific judgment (strategic/keystone/priority). TASK-807 (relabel) and TASK-808 (umbrella-only-if-actionable) are partial; the ungroomed-draft bucket is the remaining leak.'
+  created_at: 2026-06-14T18:16:38.084342302Z
+  modified_at: 2026-06-14T18:16:38.084342302Z
