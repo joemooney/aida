@@ -1,0 +1,18 @@
+id: 019ec395-5f1b-7132-a465-5d0e02693176
+spec_id: BUG-547
+agreed_id: BUG-547
+title: 'AIDA Book nav 404: mdBook rewrites README.md links to README.html but outputs index.html'
+description: 'Operator-found 2026-06-13: http://localhost:5001/cli/README.html → 404. mdBook renames README.md → index.html but rewrites LINKS to README.md as README.html (nonexistent) — breaks the CLI-Reference sidebar nav + typed URLs. Fix: [output.html.redirect] in docs/book.toml mapping /README.html → /index.html and /cli/README.html → /cli/index.html. (Retroactively filed: PR #870 already carries the fix; this BUG gives it a backing spec per requirement-first discipline — the fix was wrongly done un-spec''d + in the shared main worktree.)'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T00:43:26.875831563Z
+modified_at: 2026-06-14T00:43:26.875831563Z
+req_type: Bug
+tags:
+- aida-book
+- docs
+- from-user-friction
+- mdbook
+- parent-epic:docbook
