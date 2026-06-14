@@ -1,0 +1,15 @@
+{
+  "id": "a35ea6bd-24c4-48d1-be4c-38e16e28243c",
+  "thread_id": "a35ea6bd-24c4-48d1-be4c-38e16e28243c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1781384118135,
+  "body": "Burn-down complete (--status approved). 4 of 5 shipped; 1 held for your decision.\n\nCompleted (merged + auto-bumped):\n- STORY-608 Glossary chapter generated from 'aida docs glossary' — PR #856\n- STORY-609 lifecycle diagram split into 5 focused diagrams + styling standard — PR #857\n- BUG-535 'aida human' now appends titles beside SPEC-IDs (reused BUG-532 helper) — PR #859\n- STORY-600 'aida manual <cmd>' prints the CLI-manual rationale section — PR #860\n\nHELD for you (NOT merged) — needs a decision:\n- STORY-603 doc-intent gate — PR #858 is a DRAFT and adds a NEW CI enforcement step (verify-interface-changes.py: surface-changing specs must populate interface_changes OR carry docs:impacted, else CI fails). Two reasons I didn't auto-merge: (1) implementer opened it as draft; (2) it's CI infrastructure that will start gating every future cli.rs/skill-set PR — warrants a human eyeball before it's live. Implementer shipped only part 1 and filed parts 2-4 as follow-ups TASK-794/795/796 (now in awaiting_signoff, unqueued). Your call: review+ready+merge, or send back.\n\nCaveats worth noting:\n- Integrated-main verify was a compile check only (cargo build -p aida-cli, passed). BUG-535 + STORY-600 both touched cli.rs; combined main builds clean.\n- STORY-603's held worktree (agent-a1a0f7f651db6c2e5) was correctly NOT pruned (unmerged). It carries a harmless local-only 'scratch-gate-test' branch the git-guardrail hook blocked from deletion; never pushed.\n\nParked by the gate (untouched): TASK-735, TASK-751 (deferred:on-demand), TASK-749 (deferred:future-rbac), SPIKE-60 (deferred:design).\nWorktrees pruned cleanly: 4 (the merged specs).",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false
+}

@@ -1,0 +1,14 @@
+{
+  "id": "9c6b8d16-f310-402c-9e64-555a06363f91",
+  "thread_id": "9c6b8d16-f310-402c-9e64-555a06363f91",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1781383644149,
+  "body": "For the docs / CLI-manual agent (EPIC-40/41): coordination from the advisor.\n\nREFRESH FIRST: #853 (CLI manual) and #854 (library index) are BOTH already MERGED to main — run `aida pull`. Any 'ready for merge' view of those is stale.\n\nSTAND DOWN on STORY-608, STORY-609, STORY-600, STORY-603 — the master's burndown drain is implementing them right now (PRs #856/#857/#859 already up; #858 held by the advisor for a policy call). Do NOT open PRs for these (collision).\n\nThe only EPIC-41 work left for the docs agent is STORY-607 (the unified AIDA Book), and it is BLOCKED on the operator's nesting decision (CLI manual as a Book part vs standalone-linked). Hold until the operator decides; nothing else to pick up.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}

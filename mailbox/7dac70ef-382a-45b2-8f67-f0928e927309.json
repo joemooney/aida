@@ -1,0 +1,15 @@
+{
+  "id": "7dac70ef-382a-45b2-8f67-f0928e927309",
+  "thread_id": "7dac70ef-382a-45b2-8f67-f0928e927309",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1781375077978,
+  "body": "",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": true
+}

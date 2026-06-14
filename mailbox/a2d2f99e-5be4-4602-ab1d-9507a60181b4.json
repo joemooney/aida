@@ -1,0 +1,15 @@
+{
+  "id": "a2d2f99e-5be4-4602-ab1d-9507a60181b4",
+  "thread_id": "a2d2f99e-5be4-4602-ab1d-9507a60181b4",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1781422173808,
+  "body": "Burn-down complete (--status approved --concurrency 1).\n\nCompleted (all merged, auto-bumped, worktrees pruned, integrated-main built green after each):\n- TASK-802 → PR #892 — config show now surfaces the [contained] posture block (enable + allowed_hosts)\n- TASK-794 → PR #894 — STORY-603 part 2: documenter (docs/cli/generate-entry.py) consumes the spec graph into intent-bearing entries\n- TASK-795 → PR #896 — STORY-603 part 3: manual entries backlink to shaping spec(s) via an HTML-comment marker convention; leak check reconciled to allow marker SPEC-IDs\n- TASK-796 → PR #897 — STORY-603 part 4: drift-guard asserts surface-changing specs' interface_changes are reflected in the docs\n\nCaveats worth noting: integrated-main verify after each merge was a compile check (cargo build -p aida-cli), not the full test suite; each PR's own CI (Build ubuntu-latest) was green+terminal before merge. STORY-603's four-part doc-intent arc (parts 1-4) is now fully landed. Ran serial (concurrency 1) by request — also the right call since 794/795/796 all touch verify-manual.py + the documenter.\n\nHeld / awaiting sign-off: none acted on. Gate's awaiting_signoff bucket (pickable-but-unqueued, advisor not yet blessed): TASK-787, TASK-807, TASK-808, BUG-553, STORY-614, STORY-615, STORY-617.\nLeft for manual merge: none — every PR opened reached terminal CI and merged.\nParked (gate, untouched): TASK-735 (deferred:on-demand), TASK-751 (deferred:on-demand), TASK-749 (deferred:future-rbac), SPIKE-60 (deferred:design).\nWorktrees not pruned: none.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}

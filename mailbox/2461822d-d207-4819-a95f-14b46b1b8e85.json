@@ -1,0 +1,15 @@
+{
+  "id": "2461822d-d207-4819-a95f-14b46b1b8e85",
+  "thread_id": "2461822d-d207-4819-a95f-14b46b1b8e85",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1781403931397,
+  "body": "Burn-down complete (--status approved).\n\nCompleted (all 6 ready specs, merged to main):\n  BUG-542  schema [OBJECT] help text — PR #872\n  TASK-789 CLI manual catch-up — PR #873\n  BUG-544  aida human findings count = awaiting-triage predicate — PR #875\n  BUG-545  aida edit --add-tag/--remove-tag + --tags replace warning — PR #874\n  BUG-546  spec↔PR resolution via trace: lines + robust multi-spec trailer parse — PR #876\n  TASK-799 aida schema --all full-detail dump + --json fields — PR #877\n\nCaveats worth noting:\n  - Integrated-main verify was a compile-only check (cargo build -p aida-cli, green). Per-PR CI passed but ran against the pre-merge base; combined build is clean.\n  - Implementers committed+PR'd but did NOT transition specs through the queue, so all 6 landed at Approved and the Done->Completed auto-bump did not fire. I completed each manually via 'aida edit --status completed' post-merge. Worth a look if the burndown subagent prompt should run 'aida queue done' so the normal auto-bump path exercises.\n  - BUG-546's fix was prompted by the messy '(TASK-800 / STORY-610 slice 1a)' trailer that broke review/human/auto-bump; the new parser handles trace: lines + multi-spec/prose parens, with a regression test.\n\nHeld / awaiting sign-off: none acted on. burndown plan still lists 6 awaiting_signoff (pickable-but-unqueued) for advisor blessing.\nParked (gate, untouched): TASK-735, TASK-751 (deferred:on-demand), TASK-749 (deferred:future-rbac), SPIKE-60 (deferred:design).\nWorktrees not pruned: none — all 6 agent worktrees removed cleanly.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}

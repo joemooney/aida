@@ -1,0 +1,15 @@
+{
+  "id": "a7f74965-03e9-45f9-8fa4-3d4d25a77bf0",
+  "thread_id": "a7f74965-03e9-45f9-8fa4-3d4d25a77bf0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1781378459623,
+  "body": "Burn-down complete (--status approved). Ready set drained.\n\nCompleted (merged → Completed, worktrees pruned):\n- TASK-792 — burndown drain posts completion summary to advisor mailbox (PR #849). This very message is its dogfood.\n- BUG-533 — aida config show now renders full effective policy surface, leading with agent permission posture (PR #850). Smoke-tested: shows bypass posture from ~/.aida/agents.toml + mailbox/advisor/archive/telemetry/intake/presence sections w/ source.\n\nCaveats / worth noting:\n- Integrated-main verify was a compile check (cargo build -p aida-cli), per skill step 3 — not the full test suite. Each PR's own CI was green.\n- BUG-533 slice 2 (central policy registry so new knobs auto-appear in config show — the anti-drift fix) was DEFERRED by the implementer; only slice 1 (MVP rendering) shipped. Renderer is per-section so adding a knob stays ~1 line, but the durable registry that prevents config show silently falling behind again is unbuilt. NO spec filed — flagging for you to decide whether to file the follow-up.\n\nHeld / awaiting sign-off (pickable but unqueued — your call to bless): TASK-787, TASK-769, TASK-793, BUG-534, BUG-530, STORY-605, STORY-604, STORY-603.\n\nParked (gate held, reason): TASK-735/TASK-751 deferred:on-demand, TASK-749 deferred:future-rbac, SPIKE-60 deferred:design, SPIKE-61 research-lane spike.\n\nWorktrees: both pruned cleanly. Note: this integrator session started on branch spike-61-sandbox-execution (1 pre-existing pushed SPIKE-61 docs commit) + 4 pre-existing untracked files (aida-integrate skill/command, AIDA_IN_MY_OWN_WORDS.md, lifecycle.html); switched to main to integrate, left that branch + files untouched.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
