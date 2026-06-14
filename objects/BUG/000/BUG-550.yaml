@@ -6,12 +6,12 @@ description: |-
   reviews_awaiting_human (main.rs:73725) builds its candidate set from Done-status specs ONLY (line 73732: r.status == Done), then runs classify_review_surface on each. So an open PR whose spec is still Approved/In-Progress is INVISIBLE in 'aida human' — the surface silently depends on someone having run 'aida queue done' after opening the PR. Observed 2026-06-14: PR #879 (BUG-549) didn't appear in 'aida human' because I opened it at the keyboard without marking the spec Done; marking it Done surfaced it instantly. This is the same Done-marker-not-set gap BUG-549 fixes for the DRAIN, but it bites keyboard PRs too AND the reviews surface compounds it by gating on Done.
 
   ROOT CAUSE: the candidate set is 'Done specs' rather than 'specs with an open review surface'. PROPOSED FIX: widen the candidate set to also include non-Done specs that have an open PR via git linkage (or enumerate open PRs directly via the forge + resolve to spec via the BUG-546 trace/trailer linkage), so the bucket reads ground truth (open PRs) not a manually-maintained status flag (substrate-as-bouncer: don't depend on a human/agent remembering 'queue done'). CAVEAT/decision: enumerating open PRs directly is a network call (gh pr list) vs the current local store read — weigh completeness vs 'aida human' staying fast/offline; may want a local-linkage path. Keystone (the what-needs-me completeness surface) → keyboard/review, not unsupervised drain. trace:relates:STORY-611 trace:relates:BUG-549 trace:from-friction
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T02:38:32.168204943Z
-modified_at: 2026-06-14T04:49:50.215807591Z
+modified_at: 2026-06-14T05:07:10.623287993Z
 req_type: Bug
 tags:
 - aida:human
@@ -20,6 +20,10 @@ tags:
 - relates:STORY-611
 - reviews-bucket
 - supervised
+implementation_info:
+  implemented: true
+  implemented_at: 2026-06-14T05:07:10.623287993Z
+  implemented_by: joe
 decision_request:
   question: The reviews bucket in aida human only lists Done-status specs, so an open PR whose spec is still Approved/In-Progress is invisible. How should it find open PRs more completely without making aida human slow?
   choices:
