@@ -3,15 +3,33 @@ spec_id: BUG-556
 agreed_id: BUG-556
 title: aida human / burndown explain still list structurally-deferred specs (aida defer flag); collect_open_facts skips archived but not the deferred view-flag
 description: 'aida defer <ID> (STORY-584) sets the structural deferred view-flag (req.deferred + deferred_until), which means hidden from default views. But collect_open_facts (the source for aida human and burndown explain) only skips req.archived and terminal statuses, not req.deferred. So a deferred spec still appears on the human worklist as ungroomed/umbrella. Observed 2026-06-14: deferred STORY-597, STORY-601, EPIC-40 still showed on aida human. explain_open recognizes the LEGACY deferred: tag (OpenBucket::Deferred) but not the structural flag. Fix: skip req.deferred in collect_open_facts, parallel to req.archived (deferred = hidden from default views, same treatment).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T18:26:50.841360319Z
-modified_at: 2026-06-14T18:26:50.841360319Z
+modified_at: 2026-06-14T18:37:33.749893506Z
 req_type: Bug
 tags:
 - aida:human
 - deferred-view
 - from-friction
 - parent:EPIC-42
+history:
+- id: 019ec76c-c0b1-7af0-9632-6327e8bc5817
+  author: aida-auto-bump
+  timestamp: 2026-06-14T18:37:33.745432523Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec76c-c0b5-7962-9c47-cdcca20b5771
+  timestamp: 2026-06-14T18:37:33.749892806Z
+  agent: aida
+  commit_sha: 389c71e0d69ca0aa5a751098bbead97b3af4169c
+  summary: Completed via merge 389c71e0
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T18:37:33.589821090Z
+  completion_sha: 389c71e0d69ca0aa5a751098bbead97b3af4169c
