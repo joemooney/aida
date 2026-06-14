@@ -69632,12 +69632,32 @@ pub(crate) fn collect_git_linkage_opts(
                 "--format=%(refname:short)",
             ])
             .unwrap_or_default();
-            branch = contains
+            // BUG-553: a commit can be reachable from MULTIPLE branches when a
+            // later spec's branch was stacked on this one's unmerged commit
+            // (the BUG-554 anti-pattern). Picking the first arbitrarily then
+            // mis-attributes the spec to a sibling's branch (e.g. TASK-806
+            // shown on `task-805`). Prefer the branch whose name matches one of
+            // the spec ids being resolved (the spec's OWN branch, `TASK-806` →
+            // `task-806`); fall back to the first only when none matches.
+            // trace:BUG-553 | ai:claude
+            let candidates: Vec<String> = contains
                 .lines()
                 .map(|b| b.trim().trim_start_matches("origin/"))
                 .filter(|b| !b.is_empty() && *b != "HEAD" && *b != "main" && *b != "master")
                 .map(|b| b.to_string())
-                .next();
+                .collect();
+            let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
+            branch = candidates
+                .iter()
+                .find(|b| {
+                    let bl = b.to_ascii_lowercase();
+                    ids.iter().any(|id| {
+                        let nid = norm_id(id);
+                        !nid.is_empty() && (bl == nid || bl.contains(&nid))
+                    })
+                })
+                .cloned()
+                .or_else(|| candidates.into_iter().next());
             if let (Some(b), Some(wt)) =
                 (branch.as_deref(), git(&["worktree", "list", "--porcelain"]))
             {
