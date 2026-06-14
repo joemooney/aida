@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:48:19.747028159Z
-modified_at: 2026-06-14T02:07:08.712179002Z
+modified_at: 2026-06-14T03:38:13.466960945Z
 req_type: Bug
 tags:
 - auto-bump
@@ -18,3 +18,18 @@ tags:
 - relates:EPIC-42
 - supervised
 - umbrella
+decision_request:
+  question: When every child of an epic reaches Completed, what should AIDA do with the epic itself? (Today nothing happens — fully-delivered epics linger as Draft/Approved.)
+  choices:
+  - label: Surface for advisor confirmation
+    consequence: list fully-delivered epics in aida human / a notice; advisor completes them explicitly. Safe — epics can carry non-child scope or coarse rollups, so a human confirms.
+    resolution: noop
+  - label: Auto-complete on full child rollup
+    consequence: treat all-children-Completed like the spec auto-bump and flip the epic to Completed automatically. Zero-touch but can surprise when an epic isn't truly done.
+    resolution: noop
+  - label: Config policy [lifecycle] epic_rollup = surface
+    consequence: auto
+    resolution: 'off (default surface)|tunable: projects choose auto vs surface; safe default = surface. Matches the configurable-policy-with-default preference.|noop'
+  recommended: 2
+  rationale: 'Config policy (default surface) gives the safe behavior out of the box while letting a project opt into auto-complete — consistent with your preference for a tunable [section] policy + safe default over hardcoding one. Surface is the right floor: epic completion can involve judgment the rollup can''t see.'
+  asked_at: 2026-06-14T03:38:13.466960945Z
