@@ -1550,6 +1550,17 @@ pub enum BurndownCommand {
         /// would run, then exit without launching.
         #[clap(long)]
         dry_run: bool,
+        /// Stream live per-event progress instead of waiting silently. Launches
+        /// the headless drain with `--output-format stream-json --verbose
+        /// --include-partial-messages`, tees the JSONL to
+        /// `.aida/burndown/<drain-id>.jsonl`, and renders a human-readable
+        /// progress line per event to your terminal. AUTO-PROCEED is unchanged —
+        /// this only adds visibility, never alters the drain's control flow. The
+        /// teed JSONL is also the machine-readable substrate for future drain-
+        /// status tooling.
+        // trace:TASK-804 | ai:claude
+        #[clap(long)]
+        verbose: bool,
     },
 }
 
