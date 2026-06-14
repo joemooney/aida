@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-04T15:14:43.589196772Z
-modified_at: 2026-06-07T04:06:57.656977154Z
+modified_at: 2026-06-14T20:13:16.926675600Z
 req_type: Epic
 tags:
 - collaboration-layer
@@ -70,3 +70,8 @@ comments:
   content: '✅ COMPLETE (2026-06-06): GitLab as a first-class forge delivered — gh-call-site routing (slice 1), GitLabForge open/status/merge/comment/list via glab (STORY-509), GitLab CI (STORY-510), e2e MR linkage + docs (STORY-511). All slices shipped + dogfood-validated.'
   created_at: 2026-06-07T04:06:55.348984419Z
   modified_at: 2026-06-07T04:06:55.348984419Z
+- id: 019ec7c4-62fe-7672-85cc-029977fbe134
+  author: joe
+  content: 'Status correction (advisor, 2026-06-14): EPIC-35 is marked Completed for the forge ABSTRACTION it shipped (Forge trait + GitHub/GitLab/PureGit providers), but the call-site MIGRATION it deferred was never finished — ~20-25 gh spawns still bypass the trait, so GitLab breaks on the forge layer. The remaining wiring is tracked in STORY-621 (inventory: docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md, TASK-820). Leaving EPIC-35 Completed (abstraction delivered) and carrying the wiring forward in STORY-621 rather than status-thrashing a closed epic. trace:STORY-621'
+  created_at: 2026-06-14T20:13:16.926675600Z
+  modified_at: 2026-06-14T20:13:16.926675600Z
