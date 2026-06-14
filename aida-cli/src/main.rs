@@ -73171,6 +73171,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             *dry_run,
             *verbose,
         ),
+        crate::cli::BurndownCommand::Status { json } => handle_burndown_status(*json),
     }
 }
 
@@ -73266,6 +73267,108 @@ mod burndown_run_tests {
             p,
             std::path::PathBuf::from("/repo/.aida/burndown/20260613T120000Z-abcd1234.jsonl")
         );
+    }
+
+    // ── burndown status (read-side, TASK-806) ──
+
+    fn sample_lock(pid: u32) -> crate::drain_lock::DrainLock {
+        crate::drain_lock::DrainLock {
+            pid,
+            started_at_utc: "2026-06-13T21:53:00Z".to_string(),
+            command: "burndown run --status approved".to_string(),
+            host: "devbox".to_string(),
+        }
+    }
+
+    // trace:TASK-806 | ai:claude
+    #[test]
+    fn status_human_no_drain_says_so_and_hints_run() {
+        let out = render_burndown_status_human(&crate::drain_lock::LockStatus::None, &[], None);
+        assert!(out.contains("no drain running"), "out: {out}");
+        assert!(out.contains("aida burndown run"), "out: {out}");
+    }
+
+    // trace:TASK-806 | ai:claude
+    #[test]
+    fn status_human_running_shows_pid_command_and_inflight() {
+        let lock = crate::drain_lock::LockStatus::Running(sample_lock(4242));
+        let in_flight = vec![InFlightLease {
+            scope: "TASK-806".into(),
+            branch: "task-806".into(),
+            role: "implementer".into(),
+            worktree: "/home/joe/ai/aida-task-806".into(),
+        }];
+        let log = std::path::PathBuf::from("/repo/.aida/burndown/20260613T120000Z-abcd1234.jsonl");
+        let out = render_burndown_status_human(&lock, &in_flight, Some(&log));
+        assert!(out.contains("drain running"), "out: {out}");
+        assert!(out.contains("4242"), "out: {out}");
+        assert!(out.contains("burndown run --status approved"), "out: {out}");
+        assert!(out.contains("In-flight (1 leased)"), "out: {out}");
+        assert!(out.contains("TASK-806"), "out: {out}");
+        assert!(out.contains("Live log"), "out: {out}");
+        assert!(out.contains(".jsonl"), "out: {out}");
+    }
+
+    // trace:TASK-806 | ai:claude
+    #[test]
+    fn status_human_stale_lock_flags_crash() {
+        let lock = crate::drain_lock::LockStatus::Stale(sample_lock(999));
+        let out = render_burndown_status_human(&lock, &[], None);
+        assert!(out.contains("stale drain lock"), "out: {out}");
+        assert!(out.contains("999"), "out: {out}");
+        assert!(out.contains("reclaims"), "out: {out}");
+    }
+
+    // trace:TASK-806 | ai:claude
+    #[test]
+    fn status_json_running_carries_drain_inflight_and_log() {
+        let lock = crate::drain_lock::LockStatus::Running(sample_lock(4242));
+        let in_flight = vec![InFlightLease {
+            scope: "TASK-806".into(),
+            branch: "task-806".into(),
+            role: "implementer".into(),
+            worktree: "/wt".into(),
+        }];
+        let log = std::path::PathBuf::from("/repo/.aida/burndown/run.jsonl");
+        let s = render_burndown_status_json(&lock, &in_flight, Some(&log));
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(v["drain"]["running"], serde_json::json!(true));
+        assert_eq!(v["drain"]["pid"], serde_json::json!(4242));
+        assert_eq!(v["drain"]["command"], "burndown run --status approved");
+        assert_eq!(v["in_flight"][0]["spec"], "TASK-806");
+        assert_eq!(v["log"], "/repo/.aida/burndown/run.jsonl");
+    }
+
+    // trace:TASK-806 | ai:claude
+    #[test]
+    fn status_json_none_is_not_running_and_null_log() {
+        let s = render_burndown_status_json(&crate::drain_lock::LockStatus::None, &[], None);
+        let v: serde_json::Value = serde_json::from_str(&s).unwrap();
+        assert_eq!(v["drain"]["running"], serde_json::json!(false));
+        assert_eq!(v["log"], serde_json::Value::Null);
+        assert!(v["in_flight"].as_array().unwrap().is_empty());
+    }
+
+    // trace:TASK-806 | ai:claude
+    #[test]
+    fn latest_burndown_log_picks_newest_by_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let logdir = root.join(".aida").join("burndown");
+        std::fs::create_dir_all(&logdir).unwrap();
+        std::fs::write(logdir.join("20260613T100000Z-aaaa1111.jsonl"), "").unwrap();
+        std::fs::write(logdir.join("20260613T120000Z-bbbb2222.jsonl"), "").unwrap();
+        // A non-jsonl file must be ignored.
+        std::fs::write(logdir.join("notes.txt"), "").unwrap();
+        let got = latest_burndown_log(root).unwrap();
+        assert_eq!(got.file_name().unwrap(), "20260613T120000Z-bbbb2222.jsonl");
+    }
+
+    // trace:TASK-806 | ai:claude
+    #[test]
+    fn latest_burndown_log_none_when_dir_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(latest_burndown_log(dir.path()).is_none());
     }
 }
 
@@ -73477,6 +73580,227 @@ fn burndown_drain_log_path(project_root: &std::path::Path, drain_id: &str) -> st
         .join(".aida")
         .join("burndown")
         .join(format!("{drain_id}.jsonl"))
+}
+
+/// TASK-806: the most recent burndown event log under `.aida/burndown/`, if any.
+/// Drain ids are `%Y%m%dT%H%M%SZ-<uuid8>` (see [`run_burndown_verbose`]), so a
+/// lexicographic sort of the `*.jsonl` file names is chronological — the last
+/// entry is the newest run. The pointer is best-effort: a `--verbose` drain
+/// writes one of these, a quiet drain does not, so absence is normal.
+/// trace:TASK-806 | ai:claude
+fn latest_burndown_log(project_root: &std::path::Path) -> Option<std::path::PathBuf> {
+    let dir = project_root.join(".aida").join("burndown");
+    let mut logs: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("jsonl"))
+        .collect();
+    logs.sort();
+    logs.pop()
+}
+
+/// TASK-806: one in-flight leased worktree the drain has fanned an implementer
+/// into — the read-side answer to "what specs are being worked right now".
+/// Derived from the live session leases (`.aida/sessions/*.toml`).
+/// trace:TASK-806 | ai:claude
+struct InFlightLease {
+    scope: String,
+    branch: String,
+    role: String,
+    worktree: String,
+}
+
+/// TASK-806: `aida burndown status` — the read-side companion to `burndown
+/// run`. Answers, from the substrate alone: is a drain running (the BUG-538
+/// global drain lock + a PID-liveness probe), what is it working (the live
+/// session leases — the fanned-out implementer worktrees), and where is the
+/// live event log (`.aida/burndown/<drain-id>.jsonl`, TASK-804) to tail. Pure
+/// read; exits 0 whether or not a drain is running. trace:TASK-806 | ai:claude
+fn handle_burndown_status(json: bool) -> Result<()> {
+    // Resolve the shared `.aida/` root from any worktree so a child in a sibling
+    // worktree reads the *orchestrator's* lock / leases — mirrors `aida drain
+    // status`. Fails safe to "no drain" on a resolution error.
+    let project_root = find_main_worktree_root()
+        .or_else(|_| std::env::current_dir())
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+    let lock = drain_lock::probe_lock(&project_root);
+
+    // In-flight = the live (non-stale) leases — the implementer worktrees the
+    // drain fanned out. Same liveness classification `aida session leases` uses.
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let in_flight: Vec<InFlightLease> = list_leases(&project_root)
+        .into_iter()
+        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .map(|l| InFlightLease {
+            scope: l.scope.clone(),
+            branch: l.branch.clone(),
+            role: l.role.clone().unwrap_or_else(|| "-".to_string()),
+            worktree: l.worktree_path.display().to_string(),
+        })
+        .collect();
+
+    let log = latest_burndown_log(&project_root);
+
+    if json {
+        println!(
+            "{}",
+            render_burndown_status_json(&lock, &in_flight, log.as_deref())
+        );
+    } else {
+        print!(
+            "{}",
+            render_burndown_status_human(&lock, &in_flight, log.as_deref())
+        );
+    }
+    Ok(())
+}
+
+/// TASK-806: human-readable `burndown status` summary. Pure over its inputs so
+/// the three lock states render identically in tests and at the terminal.
+/// trace:TASK-806 | ai:claude
+fn render_burndown_status_human(
+    lock: &drain_lock::LockStatus,
+    in_flight: &[InFlightLease],
+    log: Option<&std::path::Path>,
+) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    let _ = writeln!(out, "{} burndown status", "▸".cyan().bold());
+    let _ = writeln!(out);
+
+    match lock {
+        drain_lock::LockStatus::None => {
+            let _ = writeln!(out, "  {} no drain running", "○".dimmed());
+            let _ = writeln!(out, "  {}", "start one with: aida burndown run".dimmed());
+        }
+        drain_lock::LockStatus::Running(l) => {
+            let when = burndown_lock_when(&l.started_at_utc);
+            let _ = writeln!(
+                out,
+                "  {} drain running — pid {}, started {}",
+                "●".green().bold(),
+                l.pid,
+                when
+            );
+            let _ = writeln!(out, "    {}", l.command.dimmed());
+            if !l.host.is_empty() {
+                let _ = writeln!(out, "    {}", format!("host: {}", l.host).dimmed());
+            }
+        }
+        drain_lock::LockStatus::Stale(l) => {
+            let when = burndown_lock_when(&l.started_at_utc);
+            let _ = writeln!(
+                out,
+                "  {} stale drain lock — pid {} (started {}) is no longer running",
+                "⚠".yellow(),
+                l.pid,
+                when
+            );
+            let _ = writeln!(out, "    {}", l.command.dimmed());
+            let _ = writeln!(
+                out,
+                "    {}",
+                "the drain crashed or exited without releasing the lock; the next `aida burndown run` reclaims it"
+                    .dimmed()
+            );
+        }
+    }
+
+    // In-flight leased worktrees — what the drain is working right now.
+    if !in_flight.is_empty() {
+        let _ = writeln!(out);
+        let _ = writeln!(
+            out,
+            "  {}",
+            format!("In-flight ({} leased):", in_flight.len()).bold()
+        );
+        for f in in_flight {
+            let _ = writeln!(
+                out,
+                "    {:<20} {:<18} {:<14} {}",
+                truncate(&f.scope, 20),
+                truncate(&f.branch, 18),
+                truncate(&f.role, 14),
+                f.worktree.dimmed()
+            );
+        }
+    }
+
+    // Live log pointer — the TASK-804 event stream to tail.
+    if let Some(path) = log {
+        let _ = writeln!(out);
+        let _ = writeln!(out, "  Live log: {}", path.display().to_string().cyan());
+        let _ = writeln!(
+            out,
+            "    {}",
+            format!("tail -f {}", path.display()).dimmed()
+        );
+    }
+
+    out
+}
+
+/// TASK-806: render the start time as `local-time (Nm ago)`, falling back to the
+/// raw RFC-3339 string if it does not parse. trace:TASK-806 | ai:claude
+fn burndown_lock_when(started_at_utc: &str) -> String {
+    match chrono::DateTime::parse_from_rfc3339(started_at_utc) {
+        Ok(dt) => {
+            let utc = dt.with_timezone(&chrono::Utc);
+            let local = dt
+                .with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string();
+            format!("{local} ({})", humanize_relative(utc))
+        }
+        Err(_) => started_at_utc.to_string(),
+    }
+}
+
+/// TASK-806: machine-readable `burndown status`. trace:TASK-806 | ai:claude
+fn render_burndown_status_json(
+    lock: &drain_lock::LockStatus,
+    in_flight: &[InFlightLease],
+    log: Option<&std::path::Path>,
+) -> String {
+    let drain = match lock {
+        drain_lock::LockStatus::None => serde_json::json!({ "running": false }),
+        drain_lock::LockStatus::Running(l) => serde_json::json!({
+            "running": true,
+            "stale": false,
+            "pid": l.pid,
+            "started_at": l.started_at_utc,
+            "command": l.command,
+            "host": l.host,
+        }),
+        drain_lock::LockStatus::Stale(l) => serde_json::json!({
+            "running": false,
+            "stale": true,
+            "pid": l.pid,
+            "started_at": l.started_at_utc,
+            "command": l.command,
+            "host": l.host,
+        }),
+    };
+    let in_flight_json: Vec<serde_json::Value> = in_flight
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "spec": f.scope,
+                "branch": f.branch,
+                "role": f.role,
+                "worktree": f.worktree,
+            })
+        })
+        .collect();
+    let value = serde_json::json!({
+        "drain": drain,
+        "in_flight": in_flight_json,
+        "log": log.map(|p| p.display().to_string()),
+    });
+    serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string())
 }
 
 /// TASK-804: launch the `--verbose` burndown drain. Same headless `claude -p`

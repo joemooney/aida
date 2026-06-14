@@ -88,15 +88,15 @@ Three cross-cutting truths the tree assumes:
 
 **One line** — the read-only foundation for an autonomous backlog burn-down.
 
-**Mental model.** `burndown plan` resolves which queued specs are **ready to fan out** vs **parked**, applying the *pickability gate* (bounded + unblocked + decision-free + not parking-tagged). It changes nothing — it's the deterministic input the actual run consumes. The **run itself is the `/aida-burndown` skill in Claude Code**, not a CLI subcommand, because the parallel fan-out (one worktree-isolated agent per spec) is a harness capability, not something a plain process does.
+**Mental model.** `burndown plan` resolves which queued specs are **ready to fan out** vs **parked**, applying the *pickability gate* (bounded + unblocked + decision-free + not parking-tagged). It changes nothing — it's the deterministic input the actual run consumes. The **run itself is the `/aida-burndown` skill in Claude Code**, not a CLI subcommand, because the parallel fan-out (one worktree-isolated agent per spec) is a harness capability, not something a plain process does. `burndown status` is the read-side companion to a *running* drain: is one live (the global drain lock — pid, start, launching command — corroborated against a PID-liveness probe, so a crashed run shows as a **stale lock** rather than a phantom), what worktrees are leased in-flight, and a pointer to the live event log (`.aida/burndown/<drain-id>.jsonl`) to tail.
 
-**Reach for it when** — before kicking off a drain, to see what *will* fan out and what's blocked and *why*; or to find groomable candidates (`--candidates` shows approved + pickable + not-yet-queued — what you could bless next).
+**Reach for it when** — before kicking off a drain, to see what *will* fan out and what's blocked and *why* (`plan`); or to find groomable candidates (`--candidates` shows approved + pickable + not-yet-queued — what you could bless next); or, *while* a drain is running, to ask "is one live, what's it working, where's the log?" (`status`).
 
-**Don't reach for it when** — you expect it to *run* the burn-down (it doesn't — that's the skill); or you want to drain one specific spec interactively (`queue work <SPEC>`).
+**Don't reach for it when** — you expect `plan` to *run* the burn-down (it doesn't — that's the skill); or you want to drain one specific spec interactively (`queue work <SPEC>`).
 
-**Gotchas.** `burndown plan`'s default set is the *queued* pickable specs — queue membership is the gate, so an approved-but-unqueued spec won't appear until you groom it. The parked entries each carry a reason; `aida why <spec>` explains any single one.
+**Gotchas.** `burndown plan`'s default set is the *queued* pickable specs — queue membership is the gate, so an approved-but-unqueued spec won't appear until you groom it. The parked entries each carry a reason; `aida why <spec>` explains any single one. `burndown status` reads the headless `burndown run` lock; the in-process `queue work --auto-complete` orchestrator has its own richer window at `aida drain status` (member-by-member phases).
 
-**Chains with** — `backlog groom` (fill the queue) → `burndown plan` (verify the ready set) → `/aida-burndown` (run it) → `drain status` (watch).
+**Chains with** — `backlog groom` (fill the queue) → `burndown plan` (verify the ready set) → `/aida-burndown` (run it) → `burndown status` / `drain status` (watch).
 
 ---
 
