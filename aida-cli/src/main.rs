@@ -73429,6 +73429,64 @@ mod burndown_run_tests {
         let dir = tempfile::tempdir().unwrap();
         assert!(latest_burndown_log(dir.path()).is_none());
     }
+
+    // ── running-drain marking (TASK-805) ──
+
+    fn overlay_with(in_flight: &[&str]) -> DrainOverlay {
+        DrainOverlay {
+            pid: 4242,
+            in_flight: in_flight.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    // trace:TASK-805 | ai:claude
+    #[test]
+    fn overlay_partition_splits_leased_from_scheduled() {
+        let o = overlay_with(&["TASK-2"]);
+        let specs = vec![
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+            "TASK-3".to_string(),
+        ];
+        let (in_flight, scheduled) = o.partition(&specs);
+        assert_eq!(in_flight, vec!["TASK-2"]);
+        // Scheduled is the remainder, sorted.
+        assert_eq!(scheduled, vec!["TASK-1", "TASK-3"]);
+    }
+
+    // trace:TASK-805 | ai:claude
+    #[test]
+    fn overlay_partition_all_scheduled_when_nothing_leased() {
+        let o = overlay_with(&[]);
+        let specs = vec!["TASK-3".to_string(), "TASK-1".to_string()];
+        let (in_flight, scheduled) = o.partition(&specs);
+        assert!(in_flight.is_empty());
+        assert_eq!(scheduled, vec!["TASK-1", "TASK-3"]); // sorted
+    }
+
+    // trace:TASK-805 | ai:claude
+    #[test]
+    fn drain_banner_names_pid_and_both_buckets() {
+        let banner = drain_running_banner(
+            4242,
+            &["TASK-2".to_string()],
+            &["TASK-1".to_string(), "TASK-3".to_string()],
+        );
+        assert!(banner.contains("pid 4242"), "banner: {banner}");
+        assert!(banner.contains("in-flight: TASK-2"), "banner: {banner}");
+        assert!(
+            banner.contains("scheduled: TASK-1, TASK-3"),
+            "banner: {banner}"
+        );
+    }
+
+    // trace:TASK-805 | ai:claude
+    #[test]
+    fn drain_banner_says_none_for_empty_buckets() {
+        let banner = drain_running_banner(7, &[], &["TASK-1".to_string()]);
+        assert!(banner.contains("in-flight: none"), "banner: {banner}");
+        assert!(banner.contains("scheduled: TASK-1"), "banner: {banner}");
+    }
 }
 
 /// STORY-545: `aida burndown run` — kick off and walk away. Preflights the
@@ -73668,6 +73726,83 @@ struct InFlightLease {
     branch: String,
     role: String,
     worktree: String,
+}
+
+/// TASK-805: spec ids with a live (non-stale) session lease — "actively being
+/// worked" (the InProgress half of the running-drain marking). Reuses the same
+/// lease-liveness classification `aida session leases` uses. A lease's `scope`
+/// is the spec id for a single-spec session; epic/batch scopes simply won't
+/// match a spec id, which is the correct (no-mark) outcome. trace:TASK-805
+fn leased_spec_ids(project_root: &std::path::Path) -> std::collections::HashSet<String> {
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    list_leases(project_root)
+        .into_iter()
+        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .map(|l| l.scope)
+        .collect()
+}
+
+/// TASK-805: a LIVE-drain overlay for the read views (`queue list`, `burndown
+/// plan`). When a `burndown run` / `queue work --auto-complete` drain holds the
+/// BUG-538 lock, these views mark the specs it owns: **in-flight** (an
+/// implementer is actively leased on it) vs **scheduled** (claimed by the
+/// drain's blessed/queued set, not yet picked up). Reads the SAME
+/// `.aida/drain.lock` (`drain_lock::probe_lock`) the drain writes — never a
+/// parallel liveness probe (advisor note 2026-06-14). trace:TASK-805
+struct DrainOverlay {
+    pid: u32,
+    /// Spec ids with a live session lease — actively being worked.
+    in_flight: std::collections::HashSet<String>,
+}
+
+impl DrainOverlay {
+    /// Probe the lock + live leases. `Some` only when a drain is ACTIVELY
+    /// running (lock present + pid alive); `None` for no-drain or a stale lock
+    /// — the marking is about a live drain, so a crashed lock adds no overlay
+    /// (a reader who wants the crash signal uses `burndown status`). trace:TASK-805
+    fn probe(project_root: &std::path::Path) -> Option<DrainOverlay> {
+        match drain_lock::probe_lock(project_root) {
+            drain_lock::LockStatus::Running(l) => Some(DrainOverlay {
+                pid: l.pid,
+                in_flight: leased_spec_ids(project_root),
+            }),
+            _ => None,
+        }
+    }
+
+    /// Partition `specs` (a set the caller is displaying) into (in_flight,
+    /// scheduled): in_flight = has a live lease, scheduled = the rest. Both
+    /// sorted for stable output. trace:TASK-805
+    fn partition(&self, specs: &[String]) -> (Vec<String>, Vec<String>) {
+        let (mut in_flight, mut scheduled): (Vec<String>, Vec<String>) = specs
+            .iter()
+            .cloned()
+            .partition(|id| self.in_flight.contains(id));
+        in_flight.sort();
+        scheduled.sort();
+        (in_flight, scheduled)
+    }
+}
+
+/// TASK-805: the "a drain is running" banner shared by `queue list` and
+/// `burndown plan`. Pure over its inputs (the spec ids already partitioned by
+/// the caller from the set it displays) so it renders identically in tests and
+/// at the terminal. trace:TASK-805
+fn drain_running_banner(pid: u32, in_flight: &[String], scheduled: &[String]) -> String {
+    let cell = |label: &str, ids: &[String]| -> String {
+        if ids.is_empty() {
+            format!("{label}: none")
+        } else {
+            format!("{label}: {}", ids.join(", "))
+        }
+    };
+    format!(
+        "{} a drain is running (pid {pid}) — {}; {}",
+        "⚡".yellow().bold(),
+        cell("in-flight", in_flight),
+        cell("scheduled", scheduled),
+    )
 }
 
 /// TASK-806: `aida burndown status` — the read-side companion to `burndown
@@ -75530,13 +75665,37 @@ fn handle_burndown_plan(
     // `spec_title_cell` helper (also used by `aida human`, BUG-535).
     let title_cell = |id: &str| -> String { spec_title_cell(&titles, id) };
 
+    // TASK-805: the running-drain overlay (live lock + leases) also feeds the
+    // JSON payload, so machine consumers polling `--json` see the same
+    // in-flight/scheduled partition the human view shows. Resolve the SHARED
+    // main-worktree root — the drain writes its lock there (see
+    // `handle_burndown_run` → `find_main_worktree_root`), so a sibling worktree
+    // must read the orchestrator's lock, not its own. trace:TASK-805
+    let overlay = find_main_worktree_root()
+        .ok()
+        .and_then(|r| DrainOverlay::probe(&r));
+    let (in_flight_ready, scheduled_ready) = match &overlay {
+        Some(o) => o.partition(&ready),
+        None => (Vec::new(), ready.clone()),
+    };
+
     if json {
+        let drain = match &overlay {
+            Some(o) => serde_json::json!({
+                "running": true,
+                "pid": o.pid,
+                "in_flight": in_flight_ready,
+                "scheduled": scheduled_ready,
+            }),
+            None => serde_json::json!({ "running": false }),
+        };
         let payload = serde_json::json!({
             "selector": { "status": status, "tag": tag, "batch": batch },
             "ready": ready,
             "awaiting_signoff": awaiting_signoff,
             "supervised": supervised,
             "parked": parked.iter().map(|(id, reason)| serde_json::json!({ "spec": id, "reason": reason })).collect::<Vec<_>>(),
+            "drain": drain,
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
@@ -75589,13 +75748,36 @@ fn handle_burndown_plan(
         supervised.len(),
         parked.len()
     );
+
+    // TASK-805: if a drain is actively running, surface it as a banner +
+    // partition the Ready set into in-flight (leased) vs scheduled (claimed,
+    // not yet picked up) so the plan reflects what the drain is mid-way through
+    // rather than reading as a fresh, untouched ready set. The overlay +
+    // partition were computed above (shared with the JSON path). trace:TASK-805
+    if let Some(o) = &overlay {
+        println!(
+            "\n  {}",
+            drain_running_banner(o.pid, &in_flight_ready, &scheduled_ready)
+        );
+    }
+
     if !ready.is_empty() {
         println!(
             "\n{}",
             "Ready (queued + bounded + unblocked + decision-free):".bold()
         );
         for id in &ready {
-            println!("  {} {}{}", "✓".green(), id.cyan(), title_cell(id));
+            // TASK-805: when a drain owns this spec, mark its state: ▶ in-flight
+            // (an implementer is leased on it now) / ◷ scheduled (claimed, not
+            // yet picked up). Falls back to the plain ✓ when no drain is live.
+            let (glyph, suffix) = match &overlay {
+                Some(o) if o.in_flight.contains(id) => {
+                    ("▶".cyan(), format!("  {}", "in-flight".cyan()))
+                }
+                Some(_) => ("◷".yellow(), format!("  {}", "scheduled".yellow())),
+                None => ("✓".green(), String::new()),
+            };
+            println!("  {} {}{}{}", glyph, id.cyan(), title_cell(id), suffix);
         }
     }
     // STORY-546: pickable but not blessed — show them so the advisor knows what
@@ -97730,6 +97912,51 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
 
             let pending_empty = entries.is_empty() && global_entries.is_empty();
+
+            // TASK-805: if a `burndown run` / `queue work --auto-complete` drain
+            // is actively running, lead with a banner so the queue isn't read
+            // as idle pending work when a drain is mid-flight. in-flight = specs
+            // a live lease is working; scheduled = the queued pickable specs the
+            // drain has claimed but not yet picked up. Reads the same
+            // `.aida/drain.lock` (DrainOverlay::probe → drain_lock::probe_lock)
+            // the drain writes — no parallel liveness probe. Resolve the SHARED
+            // main-worktree root (the drain writes its lock there), so a sibling
+            // worktree reads the orchestrator's lock. trace:TASK-805
+            if let Some(o) = find_main_worktree_root()
+                .ok()
+                .and_then(|r| DrainOverlay::probe(&r))
+            {
+                // Display ids of the queued pickable specs (the drain's source
+                // pool — queue membership IS the advisor sign-off).
+                let queued_ids: Vec<String> = entries
+                    .iter()
+                    .filter_map(|e| {
+                        store
+                            .requirements
+                            .iter()
+                            .find(|r| r.id == e.requirement_id)
+                            .map(|r| {
+                                r.agreed_id
+                                    .clone()
+                                    .or_else(|| r.spec_id.clone())
+                                    .unwrap_or_else(|| r.id.to_string())
+                            })
+                    })
+                    .collect();
+                let scheduled: Vec<String> = {
+                    let mut s: Vec<String> = queued_ids
+                        .into_iter()
+                        .filter(|id| !o.in_flight.contains(id))
+                        .collect();
+                    s.sort();
+                    s.dedup();
+                    s
+                };
+                let mut in_flight: Vec<String> = o.in_flight.iter().cloned().collect();
+                in_flight.sort();
+                println!("{}", drain_running_banner(o.pid, &in_flight, &scheduled));
+                println!();
+            }
 
             // Branch matrix:
             //   in_flight_only=true   → skip the regular queue render entirely
