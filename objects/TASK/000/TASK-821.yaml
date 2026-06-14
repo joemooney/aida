@@ -3,12 +3,12 @@ spec_id: TASK-821
 agreed_id: TASK-821
 title: 'BUG-559 substrate slice: actionable guidance when a fresh clone has aida-store checked out (auto-attach resilience)'
 description: 'Substrate-lane slice of BUG-559 (the GitLab-store-now gate). When a fresh clone lands with the orphan aida-store branch checked out as the working tree (GitLab push-to-create adopts the first-pushed branch as default), the auto-attach path (try_attach_store_worktree -> git_ops::fetch_branch_into_local) fails with a raw git error: ''refusing to fetch into branch refs/heads/aida-store checked out at <clone>''. Detect that specific state and return actionable guidance (''this clone has the internal AIDA store branch checked out; run git checkout main, then re-run'') instead of the cryptic git error. Locally verifiable (simulate aida-store checked out). The SOURCE fix (a: init/glab sets the GitLab default branch to main) needs the GitLab env + glab and is coordinated with the forge lane / product seat; this slice is the substrate-side resilience. Parent BUG-559.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:22:17.682822179Z
-modified_at: 2026-06-14T21:22:17.682822179Z
+modified_at: 2026-06-14T21:43:53.049502655Z
 req_type: Task
 tags:
 - aida:init
@@ -16,3 +16,21 @@ tags:
 - from-self-test
 - gitlab
 - parent:BUG-559
+history:
+- id: 019ec817-55d4-70d1-ad80-a6a1b508ecf4
+  author: aida-auto-bump
+  timestamp: 2026-06-14T21:43:53.044804053Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec817-55d9-7983-b4b3-82dc46d299f6
+  timestamp: 2026-06-14T21:43:53.049502026Z
+  agent: aida
+  commit_sha: 8341606d594f75743a1f33736e2fdfdcdf4c7f2f
+  summary: Completed via merge 8341606d
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T21:43:52.877483020Z
+  completion_sha: 8341606d594f75743a1f33736e2fdfdcdf4c7f2f
