@@ -1,0 +1,18 @@
+id: 019ec6ef-e36f-7533-871c-ac30238efeef
+spec_id: TASK-813
+agreed_id: TASK-813
+title: aida queue integrate parks supervised / review:draft-only specs (keystone-exclusion) instead of auto-merging — solo mode works the SAFE backlog
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T16:21:10.639140925Z
+modified_at: 2026-06-14T16:21:10.639140925Z
+req_type: Task
+tags:
+- autonomy
+- from-strategic
+- integrator
+- keystone-exclusion
+- solo-mode
