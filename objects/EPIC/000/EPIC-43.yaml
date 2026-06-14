@@ -18,12 +18,12 @@ description: |-
   4. STOP STOPPING: the behavioral root — complete simple things inline, escalate the rest, never idle on completable work.
 
   MVP SLICE: a documented `aida solo` (or a one-line composed loop) = intake --apply --then-drain + integrate --watch, with the supervised-exclusion respected and escalation-on-stuck, gated on the reliability floor. Children: BUG-554, BUG-555, the integrator-presence spec, the keystone-exclusion-for-integrator spec.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T15:32:57.124926969Z
-modified_at: 2026-06-14T15:32:57.124926969Z
+modified_at: 2026-06-14T18:25:14.452561651Z
 req_type: Epic
 tags:
 - autonomy

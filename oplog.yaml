@@ -18069,5 +18069,13 @@ operations:
       RECONCILED (advisor grooming 2026-06-14): the original clause #5 (interface_changes-vs-docs reflection) is now covered by STORY-603 (Completed — the doc-intent gate). Dropped from this spec to avoid duplicate work. Branch note corrected: the original 'cli-manual' branch is merged; do this on a fresh branch off main.
 
       Acceptance: CI fails on an undocumented clap command (clap-derived, not help-all); no false-positive subcommand WARNs; SPEC-ID-leak still fails the build.
-clock: 1785
+- id: 019ec761-78ec-7db2-a5f7-5467ea88834e
+  target_id: 019ec6c3-bca4-72a2-87aa-e9d798292208
+  author: aida
+  node_id: '1'
+  lamport: 1786
+  timestamp: 2026-06-14T18:25:14.476226907Z
+  kind: !SetStatus
+    status: Completed
+clock: 1786
 node_id: '1'
