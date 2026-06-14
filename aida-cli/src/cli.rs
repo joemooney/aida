@@ -7079,8 +7079,10 @@ pub enum Command {
     /// and the controlled-vocabulary tokens (status/type/priority/relationship)
     // trace:STORY-538 | ai:claude
     Schema {
-        /// Optional object to detail (currently: `requirement`). Omit for the
+        /// Optional object to detail (any catalog object: requirement,
+        /// finding, punt, lease, brief, directive, comment, …). Omit for the
         /// storable-object catalog.
+        // trace:BUG-542
         object: Option<String>,
 
         /// Emit machine-readable JSON instead of the human table.
