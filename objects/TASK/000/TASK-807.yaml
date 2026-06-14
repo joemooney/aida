@@ -1,0 +1,20 @@
+id: 019ec4dd-d511-7713-8c78-7f5b8783f503
+spec_id: TASK-807
+agreed_id: TASK-807
+title: 'aida human ''ungroomed'' bucket: relabel second-person/action-oriented — ''awaiting advisor'' reads as a third party when the operator IS the advisor'
+description: |-
+  Operator friction (2026-06-14): the 'ungroomed — awaiting advisor grooming/approval' bucket in `aida human` is confusing — 'awaiting advisor' reads like it's waiting on someone ELSE, but the operator's own session role IS advisor, so it's waiting on THEM. The bucket is correctly placed (grooming is an advisor-seat judgment = a human action), but the wording fails the 'what needs YOU' framing.
+
+  FIX: relabel action-oriented + second-person. e.g. 'Drafts for you to groom — approve (`aida edit <ID> --status approved`), reject, or refine' instead of 'awaiting advisor grooming/approval'. Make the advisor=you mapping explicit (the operator does not intuitively connect their advisor role to advisor-labelled work — same class as 'undefined state is confusion not simplicity'). Mirror the action-hint style the decisions/reviews buckets already use ('answer with...', 'review with...').
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T06:42:12.881807007Z
+modified_at: 2026-06-14T06:42:12.881807007Z
+req_type: Task
+tags:
+- aida:human
+- cli-consistency
+- from-friction
+- ux
