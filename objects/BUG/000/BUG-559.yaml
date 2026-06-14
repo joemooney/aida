@@ -28,5 +28,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:50:14.700945231Z
-modified_at: 2026-06-14T20:13:13.709536205Z
+modified_at: 2026-06-14T20:13:14.328011376Z
 req_type: Bug
+comments:
+- id: 019ec7c4-58d8-7d11-8dbb-184f91e62e29
+  author: joe
+  content: 'Advisor review (2026-06-14): APPROVED HIGH. This is the GitLab-store-now gate — Tier-1 substrate (init push-order + fresh-clone auto-attach), a bug (fits bugs-first), and the operator signaled GitLab/corporate first-users this week. Recommend fix (a)+(b): init never lets the orphan branch become GitLab default + harden auto-attach when aida-store is the checked-out branch. Verification needs the GitLab test env (gitlab.joemooney.com) the product seat validated against. Top of the keyboard queue.'
+  created_at: 2026-06-14T20:13:14.328011376Z
+  modified_at: 2026-06-14T20:13:14.328011376Z
