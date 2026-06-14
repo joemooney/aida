@@ -17908,5 +17908,18 @@ operations:
   timestamp: 2026-06-14T02:24:19.122469801Z
   kind: !SetStatus
     status: Completed
-clock: 1772
+- id: 019ec3f9-6b5e-77c2-b26c-a47bf9a5eae2
+  target_id: 019ec33f-281d-7431-a1de-0250c4e7eeec
+  author: aida
+  node_id: '1'
+  lamport: 1773
+  timestamp: 2026-06-14T02:32:43.614780336Z
+  kind: !SetDescription
+    description: |
+      Review finding on STORY-605 (#862): the contained posture's enable toggle lives at [agents] contained (and bypass at [agents] bypass, in ~/.aida/agents.toml), but the egress allowlist I added lives at [contained] allowed_hosts (project .aida/config.toml). Two files/sections for one feature — could bite operators writing configs. ADVISOR REC: unify under [contained] (matches the --contained posture name, keeps the containment config together, avoids the [agents]-spans-agents.toml-vs-config.toml ambiguity) — i.e. also accept [contained] enable as an alias of [agents] contained. Low priority: the feature is default-off so no operator configs exist yet. Config-interface decision → keyboard/review, not an unsupervised drain. trace:relates:STORY-605 trace:from-friction
+
+      ## Acceptance
+
+      - Resolved (2026-06-14, operator decision via `aida questions answer`): Unify under [contained] — enable joins the allowlist: accept [contained] enable as an alias of [agents] contained, so an operator writes one [contained] block in config.toml. Pulls 'enable' out of the agents.toml launch-posture model.
+clock: 1773
 node_id: '1'
