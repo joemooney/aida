@@ -13,12 +13,12 @@ description: |
   Fix: make the short-flag detection unanchored too (e.g. detect a `-...f` token anywhere in the `git push` argv), mirroring the `.*--force` branch. Mind false positives against unrelated `-f`-bearing tokens.
 
   Raised in review of PR-882 (BUG-548): https://github.com/joemooney/aida/pull/882
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T03:07:21.248186391Z
-modified_at: 2026-06-14T03:26:31.293941268Z
+modified_at: 2026-06-14T03:32:50.784321929Z
 req_type: Bug
 tags:
 - from-review:PR-882
@@ -27,7 +27,23 @@ tags:
 - safety
 - severity:minor
 - supervised
+history:
+- id: 019ec430-75db-7580-97cf-0f232e81ca69
+  author: aida-auto-bump
+  timestamp: 2026-06-14T03:32:50.779969767Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec430-75e0-7231-b416-e2b6c7abeeb1
+  timestamp: 2026-06-14T03:32:50.784321353Z
+  agent: aida
+  commit_sha: 0bc6b063def57a16a551f6921e4bc08211782192
+  summary: Completed via merge 0bc6b063
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T03:26:31.293941268Z
   implemented_by: joe
+  completed_at: 2026-06-14T03:32:50.630658473Z
+  completion_sha: 0bc6b063def57a16a551f6921e4bc08211782192
