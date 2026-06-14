@@ -1,0 +1,17 @@
+id: 019ec824-8b71-7b73-a74a-27b973fb441f
+spec_id: EPIC-44
+agreed_id: EPIC-44
+title: Make gitlab.joemooney.com the canonical hub; github becomes a private mirror
+description: "Operator direction 2026-06-14: gitlab.joemooney.com (self-hosted, ssh port 2222, ai/aida) becomes the CANONICAL hub; github.com/joemooney/aida goes PRIVATE (kept as a dual-push mirror via the all remote). Drives the GitLab-first-user strategy (corporate first-users are on GitLab).\n\nPHASED PLAN (sequencing matters — do NOT flip the dev loop before the forge layer + CI are ready, or the orchestrator/drain, which is gh-based, breaks):\n\nPhase 0 (DONE / safe now): gitlab is a current mirror (main + aida-store + tags pushed 2026-06-14). github can be made PRIVATE at any time independently — a private repo keeps working for authed agents + Actions CI, and the all remote keeps mirroring. No code dependency.\n\nPhase 1 (UNBLOCKER): land STORY-621 forge wiring (Slice 0 resolve_glab_binary + Slice 1 MR create/merge/open-PR) so aida pr ship / queue work drain / CI watch / merge work on GitLab. PLUS a new .gitlab-ci.yml mirroring .github/workflows/ci.yml (Build + fmt --check + clippy correctness + the mcp stdio suite) so MRs gate. glab MR create is already proven token-free against gitlab.joemooney.com.\n\nPhase 2 (CUTOVER): repoint remotes so gitlab is origin (or the canonical two-leg sync target), set .aida/config.toml [forge] provider = gitlab so AIDAs own dogfooding uses the GitLab forge, confirm every agent (codex/AGY/...) has gitlab.joemooney.com SSH access, and verify a full queue work --auto-complete drain runs end-to-end on GitLab before declaring the cutover. Finish in-flight github PRs first.\n\nPhase 3: github is a pure private mirror (dual-push via all). \n\nRisks: BUG-559 (init default-branch) + BUG-560 (status gh-leak, fixed) are the substrate gates; the forge layer is the dev-loop gate. Do not strand in-flight work across the cutover. Children: STORY-621 (forge wiring), + new tasks for .gitlab-ci.yml and the cutover checklist."
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T21:58:18.737322494Z
+modified_at: 2026-06-14T21:58:18.737322494Z
+req_type: Epic
+tags:
+- canonical-hub
+- from-product
+- gitlab
+- strategic
