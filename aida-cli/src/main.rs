@@ -25272,53 +25272,73 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 return Ok(());
             }
 
-            let who = agent.clone().unwrap_or_else(|| current_user_id(None));
-            // `--unread` filters to messages past this agent's watermark; the
-            // newest-timestamp for the seen-mark is still the full inbox's
-            // newest (reading a filtered view must not under-advance the
-            // watermark and resurrect older-but-still-unread items).
-            let full_inbox = inbox_for(&who, &merged);
-            let watermark = mailbox_store::read_watermark(project_root, &who);
-            let inbox: Vec<&Message> = if *unread {
-                let mark = watermark.unwrap_or(i64::MIN);
-                full_inbox
-                    .iter()
-                    .copied()
-                    .filter(|m| m.timestamp > mark)
-                    .collect()
-            } else {
-                full_inbox.clone()
+            // BUG-555: with no explicit --agent, read across the SAME identity
+            // set the notice/hook spans (`inbox_identities()` = shell user +
+            // session role), not just the shell user. Role-addressed mail (e.g.
+            // a handoff to `advisor`) lands in the role's inbox, invisible to
+            // the shell user — so the old shell-user-only read never SHOWED nor
+            // marked-seen role mail, and the unread nag never cleared. We now
+            // union every identity's inbox (dedup by id) and advance EACH
+            // identity's watermark, so reading clears exactly what the notice
+            // surfaces. trace:BUG-555 | ai:claude
+            let who_list: Vec<String> = match agent {
+                Some(a) => vec![a.clone()],
+                None => inbox_identities(),
             };
+            let mut seen_ids = std::collections::HashSet::new();
+            let mut inbox: Vec<&Message> = Vec::new();
+            for who in &who_list {
+                let wm = mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
+                for m in inbox_for(who, &merged) {
+                    // `--unread` filters to messages past THIS identity's
+                    // watermark; the seen-mark below still advances to each
+                    // identity's full-inbox newest (a filtered read must not
+                    // under-advance + resurrect older-but-unread items).
+                    if *unread && m.timestamp <= wm {
+                        continue;
+                    }
+                    if seen_ids.insert(m.id.clone()) {
+                        inbox.push(m);
+                    }
+                }
+            }
+            inbox.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+            let who_label = who_list.join(" + ");
             if inbox.is_empty() {
                 let label = if *unread {
                     "no unread mail for"
                 } else {
                     "inbox empty for"
                 };
-                println!("{} {} {}", "✉".dimmed(), label, who.cyan());
+                println!("{} {} {}", "✉".dimmed(), label, who_label.cyan());
                 return Ok(());
             }
             let header = if *unread { "Unread for" } else { "Inbox for" };
             println!(
                 "{} {}",
-                format!("{header} {who}").bold(),
+                format!("{header} {who_label}").bold(),
                 format!("({})", inbox.len()).dimmed()
             );
             for m in &inbox {
                 print_mailbox_line(m);
             }
-            // Reading marks this agent's inbox seen up to its newest message,
-            // so unread / urgent-unread surfacing clears (STORY-539) — UNLESS
-            // `--peek`, which surfaces without consuming so a hook or a glance
-            // doesn't clear the unread flag (STORY-585 acceptance #1/#4). The
-            // mark advances to the FULL inbox's newest, not the filtered view's.
+            // Reading marks each identity's inbox seen up to its newest message,
+            // so the unread / urgent surfacing clears (STORY-539) — UNLESS
+            // `--peek`, which surfaces without consuming (STORY-585 #1/#4). Each
+            // mark advances to that identity's FULL inbox newest, not the
+            // filtered view's. trace:BUG-555 | ai:claude
             if *peek {
                 println!(
                     "{}",
                     "  (peek — not marked seen; `aida mailbox inbox` to read + ack)".dimmed()
                 );
-            } else if let Some(newest) = full_inbox.iter().map(|m| m.timestamp).max() {
-                let _ = mailbox_store::set_watermark(project_root, &who, newest);
+            } else {
+                for who in &who_list {
+                    if let Some(newest) = inbox_for(who, &merged).iter().map(|m| m.timestamp).max()
+                    {
+                        let _ = mailbox_store::set_watermark(project_root, who, newest);
+                    }
+                }
             }
             Ok(())
         }
