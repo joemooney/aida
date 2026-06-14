@@ -22070,6 +22070,65 @@ fn render_effective_policy(project_root: &std::path::Path) {
         .print();
     }
 
+    // --- Contained posture (sandbox enable + egress allowlist). After TASK-798
+    // unified the posture under `[contained]` (`enable` alias of legacy
+    // `[agents] contained`, plus `allowed_hosts`), surface both rows here so
+    // `aida config show` reflects the resolved sandbox/egress stance. Reuses the
+    // existing resolution helpers rather than re-deriving. trace:TASK-802 | ai:claude
+    println!();
+    println!("{}", "[contained] — sandbox + egress posture".bold());
+    {
+        // `enable`: resolve the source by precedence (last-wins, mirroring
+        // load_agents_contained): unified `[contained] enable` overrides legacy
+        // `[agents] contained` (project, then global); else default false.
+        let unified = config_lookup(cfg.as_ref(), "contained", "enable").and_then(|v| v.as_bool());
+        let project_agents = project_root.join(".aida/agents.toml");
+        let project_legacy = read_agents_bool_from_file(&project_agents, "contained")
+            .ok()
+            .flatten();
+        let global_legacy = aida_home_dir()
+            .and_then(|h| {
+                read_agents_bool_from_file(&h.join(".aida/agents.toml"), "contained").ok()
+            })
+            .flatten();
+        let effective = load_agents_contained(project_root).unwrap_or(false);
+        let source = if unified.is_some() || project_legacy.is_some() {
+            PolicySource::ProjectConfig
+        } else if global_legacy.is_some() {
+            PolicySource::GlobalAgents
+        } else {
+            PolicySource::Default
+        };
+        let rendered = if effective {
+            format!("{} (agents run sandboxed)", "enabled".green())
+        } else {
+            format!("{} (agents run unsandboxed)", "disabled".dimmed())
+        };
+        PolicyRow {
+            key: "enable",
+            value: rendered,
+            source,
+        }
+        .print();
+
+        // `allowed_hosts`: the egress allowlist; empty = no egress restriction.
+        let hosts = crate::session::contained_allowed_hosts(project_root);
+        let (value, source) = if hosts.is_empty() {
+            (
+                "(none — no egress restriction)".dimmed().to_string(),
+                PolicySource::Default,
+            )
+        } else {
+            (hosts.join(", "), PolicySource::ProjectConfig)
+        };
+        PolicyRow {
+            key: "allowed_hosts",
+            value,
+            source,
+        }
+        .print();
+    }
+
     // --- Mailbox act-on-mail policy. trace:TASK-782 ---
     println!();
     println!("{}", "[mailbox]".bold());
