@@ -11,6 +11,13 @@ Two checks against the live binary:
 Exit non-zero on a completeness omission (hard); print WARN for flag mismatches (soft,
 since some `--flag` mentions are cross-references to other commands).
 
+# trace:TASK-795
+
+The SPEC-ID leak check (1b below) hard-fails on bare SPEC-IDs in the user-facing
+manual, with ONE narrow carve-out (TASK-795): SPEC-IDs inside a recognized
+`doc-intent` / `trace` HTML-comment backlink marker are ALLOWED, so a manual entry
+can backlink to its shaping spec(s) without the breadcrumb leaking into visible text.
+
 Usage: python3 docs/cli/verify-manual.py            # all chapters
        python3 docs/cli/verify-manual.py 04-git*.md # one chapter
 """
@@ -91,11 +98,30 @@ def main():
 
     # 1b. SPEC-ID leakage — the user-facing manual must carry no STORY-x/TASK-x
     # noise (same convention that keeps SPEC-IDs out of --help). Hard fail.
+    #
+    # EXCEPTION (TASK-795): a manual entry backlinks to its shaping spec(s) via a
+    # MACHINE-READABLE, NON-LEAKING marker so a reader/agent is one hop from intent
+    # without the user-facing prose carrying the breadcrumb. The convention is an
+    # HTML-comment `doc-intent` marker (emitted by generate-entry.py):
+    #
+    #     <!-- doc-intent: shaped by TASK-795, STORY-603 -->
+    #     <!-- trace:TASK-795 -->
+    #
+    # A human reader never sees it; the leak check ALLOWS SPEC-IDs that appear ONLY
+    # inside this marker. We blank the marker spans BEFORE scanning so the IDs in
+    # them are exempt — but a bare SPEC-ID anywhere in visible text (or inside any
+    # OTHER comment form) still hard-fails. This is the deliberately-narrow carve-out
+    # that reconciles the part-3 backlink convention with the part-1 leak gate.
+    backlink = re.compile(
+        r"<!--\s*(?:doc-intent:[^>]*?|trace:[^>]*?)-->", re.I
+    )
     specid = re.compile(r"\b(STORY|TASK|BUG|EPIC|SPIKE|ADR|FR|PRIN|VIS|CON|TERM|CR)-[0-9]+")
     leaks = []
     for f in files:
         for i, line in enumerate(open(f), 1):
-            for m in specid.finditer(line):
+            # blank out recognized backlink markers; their SPEC-IDs are exempt
+            scan = backlink.sub("", line)
+            for m in specid.finditer(scan):
                 leaks.append(f"{os.path.basename(f)}:{i} {m.group(0)}")
     if leaks:
         hard_fail = True
