@@ -779,16 +779,33 @@ pub fn spawn_claude_headless(
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
-    let status = Command::new("claude")
-        .args(claude_headless_args_with_posture(
-            prompt, session_id, contained,
-        ))
+    // STORY-612: apply the opt-in OS-boundary wrapper (`bwrap`) around the whole
+    // headless process when `[contained] os_wrap` is on. trace:STORY-612 | ai:claude
+    let worktree = headless_worktree_root();
+    let (program, args) = claude_program_and_args(
+        &worktree,
+        claude_headless_args_with_posture(prompt, session_id, contained),
+    )?;
+    let status = Command::new(program)
+        .args(args)
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
         .context("failed to spawn claude")?;
     tee.stop();
     Ok(status)
+}
+
+/// STORY-612: the worktree root a non-resume headless drain runs in — its
+/// `.aida-store` sibling and the worktree itself are the rw surfaces the OS
+/// wrapper binds. Resolve the project root from cwd, falling back to cwd itself
+/// (and `.` if even that fails) so the wrapper never panics on a stray env.
+/// trace:STORY-612 | ai:claude
+fn headless_worktree_root() -> PathBuf {
+    crate::find_project_root()
+        .ok()
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// BUG-226: spawn `claude --resume <id>` and wait — the spawn counterpart
@@ -879,7 +896,7 @@ pub fn claude_contained_flags() -> Vec<String> {
 }
 
 fn claude_contained_settings_json() -> String {
-    // Egress allowlist is strictly opt-in via `[sandbox] allowed_hosts`. When
+    // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
     let allowed_hosts = crate::find_project_root()
@@ -963,6 +980,181 @@ fn destructive_command_deny_rules() -> Vec<&'static str> {
     ]
 }
 
+// ───────────────────────── STORY-612: OS-boundary wrapper ─────────────────────
+//
+// Slice 2 of the sandbox-execution work (SPIKE-61). The `contained` posture
+// (STORY-567/605) turns on Claude Code's *own* Bash sandbox, but Edit/Write/MCP
+// run unconfined and there is no OS boundary around the `claude` process itself.
+// This wraps the headless `claude -p` spawn in **bubblewrap** so the WHOLE
+// process — every tool it drives — is confined at the OS level.
+//
+// Model = WRITE-confinement (operator decision 2026-06-13): `--ro-bind / /`
+// makes the whole filesystem READABLE but read-only, then rw-binds ONLY the code
+// worktree, the `.aida-store` worktree, and the build/auth caches. So every
+// OS-level WRITE by Edit/Write/MCP/Bash lands inside the worktree; a rogue or
+// injected drain cannot `rm -rf ~`, tamper with `~/.ssh`, or scribble outside
+// its tree. Network stays SHARED — we never `--unshare-net`, because `claude`
+// itself must reach `api.anthropic.com`. Egress is therefore bounded by the
+// slice-1 `[contained] allowed_hosts` allowlist (Claude's Bash-sandbox proxy),
+// NOT by this FS confinement; READS stay broad. That read-exfil gap is the
+// documented limitation a slice-3 strict read-confinement follow-up closes.
+//
+// Strictly opt-in via `[contained] os_wrap = true` (the slice-1 allowlist lives
+// in the same `[contained]` block). Fail-CLOSED: if os_wrap is requested but
+// `bwrap` is not on PATH we error rather than silently run unconfined — asking
+// for an OS boundary and not getting one must never pass silently.
+// trace:STORY-612 | ai:claude
+
+/// Resolve the opt-in `[contained] os_wrap` flag from the project config rooted
+/// at `worktree_root`. Defaults to `false` (today's behavior) when unset,
+/// absent, malformed, or the config can't be read — the OS boundary is strictly
+/// opt-in, mirroring the slice-1 `allowed_hosts` rule. trace:STORY-612 | ai:claude
+fn os_wrap_enabled(worktree_root: &Path) -> bool {
+    let cfg = crate::read_project_config_value(worktree_root);
+    crate::config_lookup(cfg.as_ref(), "contained", "os_wrap")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+/// Build the bubblewrap argv that goes BETWEEN the `bwrap` program name and the
+/// wrapped `claude` command — i.e. the confinement flags only. Pure + total so
+/// the write-confinement invariants (ro root, rw worktree, never `--unshare-net`)
+/// are unit-tested without spawning anything.
+///
+/// `rw_paths` are additional read-WRITE bind-mounts (the store worktree, cargo /
+/// npm caches, the `~/.claude` auth dir + `~/.claude.json`). They use the
+/// `--bind-try` form so a missing path is skipped rather than erroring — only
+/// the worktree itself is a hard `--bind` (it always exists; the drain runs in
+/// it). trace:STORY-612 | ai:claude
+pub(crate) fn bwrap_confinement_args(worktree: &Path, rw_paths: &[PathBuf]) -> Vec<String> {
+    let wt = worktree.to_string_lossy().into_owned();
+    let mut args: Vec<String> = vec![
+        // Whole filesystem readable but READ-ONLY — the write-confinement base.
+        "--ro-bind".into(),
+        "/".into(),
+        "/".into(),
+        // Fresh /dev, /proc, writable /tmp so toolchains have a sane env.
+        "--dev".into(),
+        "/dev".into(),
+        "--proc".into(),
+        "/proc".into(),
+        "--tmpfs".into(),
+        "/tmp".into(),
+        // The code worktree is the one always-present rw surface.
+        "--bind".into(),
+        wt.clone(),
+        wt.clone(),
+    ];
+    for p in rw_paths {
+        // `--bind-try`: skip silently if the path is absent (caches/auth dirs
+        // may not exist on a fresh machine) rather than aborting the launch.
+        args.push("--bind-try".into());
+        let s = p.to_string_lossy().into_owned();
+        args.push(s.clone());
+        args.push(s);
+    }
+    // Run inside the worktree (the parent's cwd may differ, e.g. resume), and
+    // tear the sandbox down with the parent so a killed drain leaves nothing.
+    args.push("--chdir".into());
+    args.push(wt);
+    args.push("--die-with-parent".into());
+    args
+}
+
+/// Compose the program + argv to actually exec for a headless `claude` launch,
+/// applying the STORY-612 OS-boundary wrapper when `[contained] os_wrap` is on.
+///
+/// - os_wrap OFF (default) → `("claude", claude_args)` unchanged.
+/// - os_wrap ON  → `("bwrap", [confinement-flags…, "claude", claude_args…])`,
+///   binding the worktree + store + cargo/npm/claude caches rw, everything else
+///   ro. Errors (fail-closed) if `bwrap` is not on PATH.
+///
+/// `worktree_root` is the code worktree the drain runs in (its `.aida-store`
+/// sibling is bound rw). trace:STORY-612 | ai:claude
+fn claude_program_and_args(
+    worktree_root: &Path,
+    claude_args: Vec<String>,
+) -> Result<(String, Vec<String>)> {
+    if !os_wrap_enabled(worktree_root) {
+        return Ok(("claude".to_string(), claude_args));
+    }
+    if which_on_path("bwrap").is_none() {
+        anyhow::bail!(
+            "[contained] os_wrap is enabled but `bwrap` (bubblewrap) was not found on PATH — \
+             install bubblewrap or unset os_wrap. Refusing to launch the drain unconfined."
+        );
+    }
+    // Fail-closed preflight: `bwrap` can be installed yet unable to set up a user
+    // namespace (the Ubuntu 23.10+/24.04 AppArmor `apparmor_restrict_unprivileged_userns`
+    // restriction — SPIKE-61 §7.7). Catch it here with an actionable message
+    // instead of letting the drain die on a cryptic `uid map: Permission denied`.
+    bwrap_preflight()?;
+    let store = worktree_root.join(".aida-store");
+    let mut rw_paths = vec![store];
+    if let Some(home) = dirs::home_dir() {
+        // Cargo/npm registry + build caches must stay writable or cargo/npm fail
+        // mid-build; `~/.claude` + `~/.claude.json` hold Claude Code's session
+        // state and auth, which it writes during a run.
+        let cargo_home = std::env::var_os("CARGO_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".cargo"));
+        rw_paths.push(cargo_home);
+        rw_paths.push(home.join(".npm"));
+        rw_paths.push(home.join(".claude"));
+        rw_paths.push(home.join(".claude.json"));
+    }
+    let mut full = bwrap_confinement_args(worktree_root, &rw_paths);
+    full.push("claude".to_string());
+    full.extend(claude_args);
+    Ok(("bwrap".to_string(), full))
+}
+
+/// Run a trivial `bwrap … true` to confirm bubblewrap can actually create the
+/// user namespace + uid map on this host BEFORE wrapping the real drain. On
+/// failure (typically the AppArmor unprivileged-userns restriction) bail with
+/// the remediation rather than letting the drain hit a cryptic bwrap error —
+/// and never fall through to an unconfined launch. trace:STORY-612 | ai:claude
+fn bwrap_preflight() -> Result<()> {
+    use std::process::{Command, Stdio};
+    let ran = Command::new("bwrap")
+        .args([
+            "--ro-bind",
+            "/",
+            "/",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--tmpfs",
+            "/tmp",
+            "true",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    match ran {
+        Ok(s) if s.success() => Ok(()),
+        _ => anyhow::bail!(
+            "[contained] os_wrap is enabled and `bwrap` is installed, but a sandbox self-test \
+             failed — the kernel is refusing the unprivileged user namespace bwrap needs. On \
+             Ubuntu 23.10+/24.04 this is AppArmor's unprivileged-userns restriction. Remediate \
+             with ONE of:\n  \
+             - sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0   (host-wide)\n  \
+             - install an AppArmor profile granting bwrap userns (see /etc/apparmor.d)\n\
+             Refusing to launch the drain unconfined — unset [contained] os_wrap to opt out."
+        ),
+    }
+}
+
+/// Minimal PATH lookup for an executable name (avoids pulling in a `which`
+/// crate). Returns the first matching path, or `None`. trace:STORY-612 | ai:claude
+fn which_on_path(exe: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(exe))
+        .find(|candidate| candidate.is_file())
+}
+
 /// STORY-263: replace this process with a headless `claude -p` run — the
 /// launch path behind `aida queue work --no-human` (the `--auto-complete`
 /// orchestrator's reviewer phase). Claude's stream-json stdout is redirected
@@ -999,10 +1191,14 @@ pub fn exec_claude_headless(
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
-    let status = Command::new("claude")
-        .args(claude_headless_args_with_posture(
-            prompt, session_id, contained,
-        ))
+    // STORY-612: OS-boundary wrapper, same as spawn_claude_headless.
+    let worktree = headless_worktree_root();
+    let (program, args) = claude_program_and_args(
+        &worktree,
+        claude_headless_args_with_posture(prompt, session_id, contained),
+    )?;
+    let status = Command::new(program)
+        .args(args)
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
@@ -1087,11 +1283,16 @@ pub fn spawn_claude_headless_resume(
     let log = std::fs::File::create(log_path)
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
-    let status = Command::new("claude")
+    // STORY-612: OS-boundary wrapper. The resume path runs in `cwd` (the
+    // original implementer's worktree), so that is the rw bind scope.
+    // trace:STORY-612 | ai:claude
+    let (program, args) = claude_program_and_args(
+        cwd,
+        claude_headless_resume_args_with_posture(prompt, session_id, contained),
+    )?;
+    let status = Command::new(program)
         .current_dir(cwd)
-        .args(claude_headless_resume_args_with_posture(
-            prompt, session_id, contained,
-        ))
+        .args(args)
         .env("AIDA_HEADLESS", "1")
         .stdout(Stdio::from(log))
         .status()
@@ -2643,6 +2844,188 @@ mod tests {
                     Some("proceed")
                 },
                 "[{label}] prompt must remain the trailing positional: {args:?}",
+            );
+        }
+    }
+
+    // STORY-612: the write-confinement bwrap flags must (a) make the root
+    // read-only, (b) rw-bind the worktree, (c) chdir into it, and crucially
+    // (d) NEVER `--unshare-net` — `claude` needs api.anthropic.com.
+    // trace:STORY-612 | ai:claude
+    #[test]
+    fn bwrap_confinement_is_ro_root_rw_worktree_shared_net() {
+        let wt = Path::new("/home/joe/ai/aida-story-612");
+        let store = wt.join(".aida-store");
+        let flags = bwrap_confinement_args(wt, std::slice::from_ref(&store));
+
+        // (a) read-only root: the tokens "--ro-bind", "/", "/" appear in order.
+        let ro = flags
+            .windows(3)
+            .position(|w| w == ["--ro-bind", "/", "/"])
+            .expect("must --ro-bind / / (read-only root)");
+        assert_eq!(
+            ro, 0,
+            "ro-root bind must come first so later binds override"
+        );
+
+        // (b) the worktree is hard-bound rw.
+        let wt_s = wt.to_string_lossy().to_string();
+        assert!(
+            flags
+                .windows(3)
+                .any(|w| w[0] == "--bind" && w[1] == wt_s && w[2] == wt_s),
+            "worktree must be rw --bind: {flags:?}"
+        );
+        // store is rw via --bind-try (skipped if absent).
+        let store_s = store.to_string_lossy().to_string();
+        assert!(
+            flags
+                .windows(3)
+                .any(|w| w[0] == "--bind-try" && w[1] == store_s && w[2] == store_s),
+            "store must be rw --bind-try: {flags:?}"
+        );
+
+        // (c) chdir into the worktree.
+        let chdir = flags.iter().position(|a| a == "--chdir").expect("--chdir");
+        assert_eq!(
+            flags.get(chdir + 1).map(String::as_str),
+            Some(wt_s.as_str())
+        );
+
+        // (d) network is SHARED — no net unshare anywhere.
+        assert!(
+            !flags.iter().any(|a| a == "--unshare-net"),
+            "must NOT unshare net (claude needs the API): {flags:?}"
+        );
+        // tears down with the parent.
+        assert!(flags.iter().any(|a| a == "--die-with-parent"), "{flags:?}");
+    }
+
+    // STORY-612: when os_wrap is OFF (the default — no `[contained] os_wrap`
+    // in this repo's config), the launch is the bare `claude` argv, byte-for-
+    // byte unchanged. This is the "unchanged posture" invariant mirroring the
+    // slice-1 empty-allowlist test. trace:STORY-612 | ai:claude
+    #[test]
+    fn os_wrap_off_leaves_launch_unwrapped() {
+        // A project root with no `[contained] os_wrap` (here: an empty temp dir
+        // with no config at all) must return ("claude", <args unchanged>).
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(!os_wrap_enabled(tmp.path()), "absent config => os_wrap off");
+        let claude_args = claude_headless_args("/aida-review", "sid");
+        let (program, args) = claude_program_and_args(tmp.path(), claude_args.clone())
+            .expect("unwrapped launch never errors");
+        assert_eq!(
+            program, "claude",
+            "default posture must exec claude directly"
+        );
+        assert_eq!(
+            args, claude_args,
+            "argv must be unchanged when os_wrap is off"
+        );
+    }
+
+    /// STORY-612 — the automated live-verify gate. Adapts to the host:
+    ///
+    /// - On a host where bubblewrap CAN create an unprivileged user namespace
+    ///   (e.g. GitHub `ubuntu-latest` runners), this spawns `bwrap` with the
+    ///   EXACT confinement flags the launcher emits and proves the write-
+    ///   confinement property live: a write INSIDE the worktree succeeds and a
+    ///   write OUTSIDE (the read-only root) is blocked. If `claude` is on PATH
+    ///   it also runs `claude --version` inside the wrapper (best-effort — the
+    ///   binary is absent on CI runners). This is the live gate the PR's merge
+    ///   is blocked on.
+    /// - On a userns-RESTRICTED host (this dev box; or any non-Linux where
+    ///   `bwrap` is absent) it instead asserts the FAIL-CLOSED contract: an
+    ///   os_wrap-enabled launch returns an Err carrying the remediation, and
+    ///   never silently falls through to an unconfined run.
+    ///
+    /// trace:STORY-612 | ai:claude
+    #[test]
+    fn bwrap_write_confinement_live_or_fail_closed() {
+        // A worktree with `[contained] os_wrap = true`.
+        let tmp = tempfile::tempdir().unwrap();
+        let wt = tmp.path();
+        std::fs::create_dir_all(wt.join(".aida")).unwrap();
+        std::fs::write(
+            wt.join(".aida/config.toml"),
+            "[contained]\nos_wrap = true\n",
+        )
+        .unwrap();
+        assert!(os_wrap_enabled(wt), "config must enable os_wrap");
+
+        let dummy = claude_headless_args("/aida-review", "sid");
+
+        // Can bubblewrap actually set up a userns on this host?
+        if bwrap_preflight().is_err() {
+            // CI sets AIDA_REQUIRE_BWRAP_LIVE=1 to force the live arm so a green
+            // check can never come from the fail-closed branch silently. If the
+            // runner can't create a userns, that is a CI-environment failure, not
+            // a pass. trace:STORY-612 | ai:claude
+            assert!(
+                std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+                "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot create an unprivileged user \
+                 namespace here — the live-confinement gate could not run. Install bubblewrap \
+                 and/or `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`."
+            );
+            // Restricted host (no force): the launch MUST fail closed with remediation.
+            let err = claude_program_and_args(wt, dummy)
+                .expect_err("userns-restricted host must NOT yield a runnable wrapped command");
+            let msg = format!("{err:#}");
+            assert!(
+                msg.contains("Refusing to launch the drain unconfined"),
+                "fail-closed error must spell out it won't run unconfined: {msg}"
+            );
+            return;
+        }
+
+        // Live path: the launcher wraps with bwrap…
+        let (program, _args) = claude_program_and_args(wt, dummy).expect("wrapped launch builds");
+        assert_eq!(program, "bwrap", "userns-capable host must wrap with bwrap");
+
+        // …and the EXACT flags it emits actually confine writes. Probe inside
+        // the worktree (rw bind → succeeds) vs. a path on the read-only root
+        // (blocked). Pass paths via env; bwrap forwards the environment.
+        let inside = wt.join("probe_in");
+        let outside = format!("/aida-oswrap-probe-out-{}", std::process::id());
+        let flags = bwrap_confinement_args(wt, &[]);
+        let probe = "touch \"$AIDA_PROBE_IN\" && \
+             (touch \"$AIDA_PROBE_OUT\" 2>/dev/null && echo LEAK || echo BLOCKED)";
+        let out = std::process::Command::new("bwrap")
+            .args(&flags)
+            .args(["sh", "-c", probe])
+            .env("AIDA_PROBE_IN", &inside)
+            .env("AIDA_PROBE_OUT", &outside)
+            .output()
+            .expect("spawn bwrap probe");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains("BLOCKED") && !stdout.contains("LEAK"),
+            "write to the read-only root must be blocked: stdout={stdout:?} stderr={:?}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(
+            inside.exists(),
+            "write inside the rw-bound worktree must persist to the host"
+        );
+        assert!(
+            !Path::new(&outside).exists(),
+            "the blocked outside write must not have leaked onto the host"
+        );
+
+        // Best-effort: if claude is installed, confirm it launches inside the
+        // wrapper (auth dir bound, binary resolves). Skipped on CI runners.
+        if which_on_path("claude").is_some() {
+            let mut full = bwrap_confinement_args(wt, &[]);
+            full.push("claude".into());
+            full.push("--version".into());
+            let st = std::process::Command::new("bwrap")
+                .args(&full)
+                .output()
+                .expect("spawn claude --version under bwrap");
+            assert!(
+                st.status.success(),
+                "claude --version must run inside the wrapper: {:?}",
+                String::from_utf8_lossy(&st.stderr)
             );
         }
     }
