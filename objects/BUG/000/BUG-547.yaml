@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T00:43:26.875831563Z
-modified_at: 2026-06-14T00:43:26.875831563Z
+modified_at: 2026-06-14T00:44:36.818669473Z
 req_type: Bug
 tags:
 - aida-book
@@ -16,3 +16,9 @@ tags:
 - from-user-friction
 - mdbook
 - parent-epic:docbook
+comments:
+- id: 019ec396-7052-7a53-89a1-f537f1909772
+  author: joe
+  content: Commit 1fb6b0080 references this requirement
+  created_at: 2026-06-14T00:44:36.818669473Z
+  modified_at: 2026-06-14T00:44:36.818669473Z
