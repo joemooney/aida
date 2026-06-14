@@ -3,12 +3,12 @@ spec_id: BUG-551
 agreed_id: BUG-551
 title: burndown plan Supervised section lists non-actionable statuses (Done/Completed) — supervised check runs before the status filter
 description: 'Defect in STORY-610 slice 1b (TASK-801, #878): in resolve_burndown_sets the supervised-tag check runs BEFORE the status filter, so the ''Supervised — work these at the keyboard'' section collects supervised-tagged specs of ANY status. Observed: BUG-530 (Completed) and BUG-549 (Done, open PR) both appear in the keyboard section though neither is actionable-at-keyboard (Completed=shipped; Done=awaiting review/merge, already in the reviews bucket). Fix: collect supervised specs AFTER the status/tag/batch filters so only actionable (matching-selector, Approved by default) supervised work surfaces; keep the unconditional continue so they stay out of ready/awaiting/parked. trace:STORY-610'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T02:47:34.482774823Z
-modified_at: 2026-06-14T02:50:48.069955885Z
+modified_at: 2026-06-14T03:15:25.622379133Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -18,7 +18,25 @@ relationships:
 - rel_type: Child
   target_id: 019ec2a6-e846-7ad3-b792-b9f4010d159c
   created_at: 2026-06-14T02:47:38.138758542Z
+history:
+- id: 019ec420-8331-7e51-aa24-8339acfd5d60
+  author: aida-auto-bump
+  timestamp: 2026-06-14T03:15:25.617296018Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec420-8336-7e31-89fe-7c5afc21c4d2
+  timestamp: 2026-06-14T03:15:25.622377523Z
+  agent: reviewer
+  commit_sha: 7f69f82a29aa288cc5c65be72e01b4efc3ef4f3b
+  pr: 881
+  summary: 'BUG-551 PASS: supervised collection moved after status/tag/batch filters so Done/Completed supervised specs no longer leak into the keyboard section; CI green, mergeStateStatus CLEAN'
+  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:50:48.069955885Z
   implemented_by: joe
+  completed_at: 2026-06-14T03:15:25.440610057Z
+  completion_sha: 7f69f82a29aa288cc5c65be72e01b4efc3ef4f3b
