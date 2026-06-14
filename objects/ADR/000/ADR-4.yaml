@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-12T20:39:04.203194099Z
-modified_at: 2026-06-13T01:48:33.785981355Z
+modified_at: 2026-06-14T01:16:34.514165607Z
 req_type: Decision
 tags:
 - batch:repositioning
@@ -74,5 +74,10 @@ comments:
   content: 'PARKED (operator, 2026-06-12): ''I am going to try to stabilize aida before any pivot to bd/gt.'' ADR-4 stays PROPOSED; the SPIKE-58 hands-on gate is DEFERRED, not resolved. The whole EPIC-39 family is tagged deferred:stabilization-first (parked from burndown/intake grooming). REOPEN TRIGGER: operator declares stabilization done (the 2026-05-29 phase rule: clear known bugs → stability → then outward moves). Everything is preserved: branch ''repositioning'' (7 commits, pushed), plan + §13 red-team amendments, rescope + ERRATUM, the canonical front/back wedge on ADR-4, three convergent verification docs. Nothing expires except the competitor SNAPSHOTS — on reopen, re-run the stars/release check before any copy ships (Beads moves fast).'
   created_at: 2026-06-13T01:47:47.470813783Z
   modified_at: 2026-06-13T01:47:47.470813783Z
+- id: 019ec3b3-b352-7430-8b38-bb7c2060916c
+  author: joe
+  content: 'DOGFOODING EVIDENCE (2026-06-14): a live validation of the front-gate thesis. An agent took an un-spec''d shared-worktree SHORTCUT (skipping the file-a-spec / own-worktree front gate), and that bypass cascaded into two force-pushes to main + dropping a merged PR''s commit — one failed ''cd'' away from clobbering main; saved only by luck (the dropped change was a single re-creatable config line). The discipline AIDA enforces (spec-first, own-worktree, no force-push-main) is not ceremony — it''s the guardrail that the bypass removed. This is concrete proof-by-counterexample for the front-gate wedge: when the gate is skipped, the failure modes it prevents actually happen. File alongside the repositioning evidence (branch ''repositioning''); pairs with the substrate-as-bouncer specs now hardening these exact gates (BUG-548 force-push-main guard, BUG-538 double-drive guard). trace:from-strategic'
+  created_at: 2026-06-14T01:16:34.514165607Z
+  modified_at: 2026-06-14T01:16:34.514165607Z
 archived: true
 archived_at: 2026-06-13T01:48:33.785981355Z
