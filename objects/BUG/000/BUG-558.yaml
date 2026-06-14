@@ -8,5 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T18:46:26.416282442Z
-modified_at: 2026-06-14T18:46:26.416282442Z
+modified_at: 2026-06-14T18:47:31.570380482Z
 req_type: Bug
+comments:
+- id: 019ec775-dff2-7451-b08f-69162361f678
+  author: joe
+  content: |-
+    Design resolution (operator Q 2026-06-14 "should any live agent name be unique?"): two namespaces, not one.
+
+    1. UNIQUE per-instance IDENTITY = the stable name (codex-implementer-1, -2, ...). Already unique — the launcher suffixes -N. This is the private-inbox owner AND the process handle (aida agent stop <name>). REQUIRED unique because both ops are 1:1. Fix: set AIDA_USER = stable name so the mailbox inbox is owned by this exact agent.
+
+    2. NON-UNIQUE group aliases = type (codex) and role (implementer). Deliberately shared — drive --broadcast, role-queues, briefs-by-type, any-of routing. These SHOULD collide.
+
+    Failure mode if the 1:1 name is NOT unique: two live codex agents share one inbox -> mark-seen race (first reader clears unread, second never sees it); ambiguous aida agent stop codex; ambiguous directed --to. Uniqueness is mandatory exactly where semantics are this-one.
+
+    So: mailbox identity should be the unique stable name; keep type/role as group aliases for fan-out. Acceptance (fold in on approval): (a) launcher exports AIDA_USER=<stable name>; (b) aida mailbox send --to <stable name> reaches the agent; (c) --broadcast and briefs-by-type still fan out to all instances of a type/role; (d) launch banner prints the addressable stable name on its own line.
+  created_at: 2026-06-14T18:47:31.570380482Z
+  modified_at: 2026-06-14T18:47:31.570380482Z
