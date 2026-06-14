@@ -3,12 +3,12 @@ spec_id: STORY-613
 agreed_id: STORY-613
 title: aida review (and sub-sessions) hand findings/leftover-questions to the advisor via mailbox/findings on finish — close the cut-n-paste loop
 description: 'Operator asked (2026-06-13) what the protocol is when a sub-session (e.g. ''aida review'') finishes with findings + leftover questions (''want me to file slice 2?'', housekeeping notes): cut-n-paste to the advisor is easiest but clunky — AND redundant (the advisor had already done both items). PROTOCOL (advisor rec): the sub-session posts its outcome to the advisor via the SUBSTRATE, not the operator''s clipboard — the reviewer-side analog of TASK-792 (drain→advisor mailbox handoff). On finish, ''aida review'' should: (1) post verdict + flagged findings + any ''want me to X?'' questions to the advisor mailbox (''aida mailbox send --to advisor --intent request|fyi …''); (2) file actionable items as findings (''aida findings add'') so they''re triageable. The operator stops being the courier; the advisor sees them in its inbox/findings and acts (or notes already-done, as happened here). Generalize the pattern across review/implement/drain so handoff is consistent. trace:relates:TASK-792 trace:relates:STORY-585 trace:from-friction'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:21:13.144327303Z
-modified_at: 2026-06-13T23:21:13.144327303Z
+modified_at: 2026-06-14T00:05:29.022240407Z
 req_type: Story
 tags:
 - agent-context
@@ -17,3 +17,21 @@ tags:
 - from-friction
 - handoff-loop
 - relates:TASK-792
+history:
+- id: 019ec372-9d3a-7ba2-bb4e-5ce5d8e76c23
+  author: aida-auto-bump
+  timestamp: 2026-06-14T00:05:29.018042206Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec372-9d3e-7b62-a3e6-8d6a1757e5bc
+  timestamp: 2026-06-14T00:05:29.022239657Z
+  agent: aida
+  commit_sha: 3ab39180a05a3d7c599ab647b58648544a3b16c0
+  summary: Completed via merge 3ab39180
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T00:05:28.860000133Z
+  completion_sha: 3ab39180a05a3d7c599ab647b58648544a3b16c0

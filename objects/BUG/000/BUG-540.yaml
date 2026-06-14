@@ -3,12 +3,12 @@ spec_id: BUG-540
 agreed_id: BUG-540
 title: aida review 'Open the diff' runs invalid 'gh -C <dir> pr diff' — gh has no -C flag, so the option errors
 description: 'Operator hit (2026-06-13): picked ''Open the diff myself'' in ''aida review STORY-605''; it printed ''→ gh pr diff 862'' but executed it with a -C working-dir flag → ''unknown shorthand flag: C in -C''. gh (unlike git) has NO global -C flag. Fix: drop ''-C <dir>''; set the working dir via Command::current_dir(repo) (gh respects cwd) or cd into the repo first. The displayed command (''gh pr diff 862'') is correct — only the actual invocation injects the bad -C. trace:relates:STORY-553 trace:from-friction'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:21:05.570024214Z
-modified_at: 2026-06-13T23:21:05.570024214Z
+modified_at: 2026-06-14T00:05:29.018009661Z
 req_type: Bug
 tags:
 - aida:review
@@ -17,3 +17,21 @@ tags:
 - from-friction
 - papercut
 - relates:STORY-553
+history:
+- id: 019ec372-9d35-77d3-9183-158c0db69c3f
+  author: aida-auto-bump
+  timestamp: 2026-06-14T00:05:29.013724944Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec372-9d3a-7ba2-bb4e-5cd7172bdaee
+  timestamp: 2026-06-14T00:05:29.018009137Z
+  agent: aida
+  commit_sha: 07c1516a6f685ed6dc6e3e19afcaa7ef32153141
+  summary: Completed via merge 07c1516a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T00:05:28.860000133Z
+  completion_sha: 07c1516a6f685ed6dc6e3e19afcaa7ef32153141

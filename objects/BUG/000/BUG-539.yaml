@@ -3,12 +3,12 @@ spec_id: BUG-539
 agreed_id: BUG-539
 title: aida review re-reviews already-Completed/merged specs + offers a stale review→merge menu (should short-circuit)
 description: 'Operator hit (2026-06-13): ran ''aida review STORY-605'' after STORY-605 was already Completed (#862 merged, commit a47727d2e on main). The review session re-reviewed the merged work, reached APPROVE, and presented the ''Approve → print the merge command / Request changes / Defer'' menu — offering to merge something already merged + risking a Request-changes rework of Completed work. It confused the operator into thinking the merge hadn''t happened. Fix: ''aida review <SPEC>'' should detect a spec already in a terminal/merged state (Completed, or its PR state=MERGED) and short-circuit with ''already merged/completed — nothing to review (commit <sha>, #<pr>)'' instead of running a full review + offering Approve/Request-changes. At most offer a read-only ''show the merged diff''. trace:relates:STORY-553 trace:from-friction'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:15:14.772835845Z
-modified_at: 2026-06-13T23:50:06.054105499Z
+modified_at: 2026-06-14T00:05:29.013693608Z
 req_type: Bug
 tags:
 - aida:review
@@ -27,3 +27,21 @@ comments:
   content: Commit 803cf2db6 references this requirement
   created_at: 2026-06-13T23:50:06.054105499Z
   modified_at: 2026-06-13T23:50:06.054105499Z
+history:
+- id: 019ec372-9d31-73c1-96d0-b931355fb8c1
+  author: aida-auto-bump
+  timestamp: 2026-06-14T00:05:29.009379146Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec372-9d35-77d3-9183-1571c9ce18c9
+  timestamp: 2026-06-14T00:05:29.013693084Z
+  agent: aida
+  commit_sha: 600f2d3b54493d7dff821f07e8aee45072c4625b
+  summary: Completed via merge 600f2d3b
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T00:05:28.860000133Z
+  completion_sha: 600f2d3b54493d7dff821f07e8aee45072c4625b
