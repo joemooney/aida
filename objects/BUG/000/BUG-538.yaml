@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T20:38:48.809235306Z
-modified_at: 2026-06-14T02:07:07.721824239Z
+modified_at: 2026-06-14T03:56:02.905489144Z
 req_type: Bug
 tags:
 - aida:burndown
@@ -17,3 +17,30 @@ tags:
 - safety
 - substrate-as-bouncer
 - supervised
+comments:
+- id: 019ec445-b3d9-7b72-a166-e5f082de8cce
+  author: joe
+  content: |-
+    DESIGN SKETCH (advisor, 2026-06-14, while operator away) — implement at the keyboard with advisor watching per the keystone-not-unsupervised rule; this is the autonomy keystone itself, so it is NOT shipped unsupervised.
+
+    MECHANISM — a global drain lock:
+    - File: .aida/drain.lock (JSON: {pid, started_at_utc, command, host}).
+    - Acquire at the START of every drain entry point; release via an RAII guard (Drop removes the file) so a clean exit always frees it.
+    - Liveness/stale: reuse process_probe::pid_is_alive. A lock is stale (reclaimable) if its pid is dead OR its age > AIDA_DRAIN_LOCK_STALE_SECS (default 1800). Stale → overwrite and proceed.
+    - Live + non-stale → REFUSE: "a drain is already running (pid X, started Y, cmd Z). Wait for it, or remove .aida/drain.lock / set AIDA_DRAIN_FORCE=1 if you're certain it's dead."
+
+    ENTRY POINTS (both must guard, or the hole stays open via the other):
+    1. handle_burndown_run (aida-cli/src/main.rs:73130) — `aida burndown run`.
+    2. the `queue work --auto-complete` drain path (the handler around main.rs:75770) — `aida queue work --auto-complete`.
+    Put acquisition in ONE shared helper acquire_drain_lock(project_root) -> Result<DrainGuard> and call it at the top of both.
+
+    INTERACTIONS:
+    - --resume-drain: the crashed drain's lock has a dead pid → stale-reclaim lets resume proceed; if the original is somehow alive, resume correctly refuses.
+    - Override: AIDA_DRAIN_FORCE=1 (add a row to docs/environment-variables.md in the same change).
+    - Granularity: GLOBAL (one drain per repo). Per-scope parallel drains on non-overlapping batches are explicitly OUT of scope (no demand; global matches how the operator runs drains today).
+
+    TESTABILITY: mirror triage_lease::live_leases_reaping — take the pid-liveness predicate as a parameter so acquire/refuse/stale-reclaim are unit-testable without real processes.
+
+    EFFORT: ~M (lock struct + RAII guard + 2 entry points + env override + env-var doc + tests). No contentious fork (global+stale-reclaim is the clear design), so ready to implement on your go-ahead — best done --zen --auto-complete with the advisor watching, since it changes the drain itself.
+  created_at: 2026-06-14T03:56:02.905489144Z
+  modified_at: 2026-06-14T03:56:02.905489144Z
