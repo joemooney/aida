@@ -238,6 +238,49 @@ fn hostname() -> String {
     sysinfo::System::host_name().unwrap_or_default()
 }
 
+/// Liveness-corroborated read of the drain lock for read-side tooling
+/// (`aida burndown status`, TASK-806). Mirrors [`crate::drain_state::probe`]:
+/// the on-disk lock is classified against a PID-liveness probe so callers can
+/// tell a live drain from a crashed one without re-implementing the read.
+/// trace:TASK-806 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum LockStatus {
+    /// No lock file — no drain is (or recently was) running.
+    None,
+    /// The lock is present and its `pid` is alive — a drain is running.
+    Running(DrainLock),
+    /// The lock is present but its `pid` is dead — a drain crashed or exited
+    /// without releasing it. The next `burndown run` / `queue work
+    /// --auto-complete` stale-reclaims it.
+    Stale(DrainLock),
+}
+
+/// Read `.aida/drain.lock` and corroborate the recorded `pid` against a
+/// liveness probe. A missing or corrupt lock is [`LockStatus::None`] — the same
+/// fail-safe `read_lock` applies on the acquire path. trace:TASK-806 | ai:claude
+pub(crate) fn probe_lock(project_root: &Path) -> LockStatus {
+    classify_lock(
+        read_lock(&drain_lock_path(project_root)),
+        process_probe::pid_is_alive,
+    )
+}
+
+/// Pure classifier: split from [`probe_lock`] so the three paths
+/// (none / running / stale) are unit-testable without a real lock or pid.
+/// trace:TASK-806 | ai:claude
+fn classify_lock(existing: Option<DrainLock>, is_alive: impl Fn(u32) -> bool) -> LockStatus {
+    match existing {
+        None => LockStatus::None,
+        Some(lock) => {
+            if is_alive(lock.pid) {
+                LockStatus::Running(lock)
+            } else {
+                LockStatus::Stale(lock)
+            }
+        }
+    }
+}
+
 /// RAII handle: while held, this process owns the global drain lock. `Drop`
 /// removes the lock file — but ONLY if it still records THIS process's pid, so
 /// a guard that outlives a stale-reclaim by a successor never deletes the
@@ -409,5 +452,51 @@ mod tests {
         // The successor's lock survives our Drop.
         let on_disk = read_lock(&path).expect("successor lock should remain");
         assert_eq!(on_disk.command, "successor");
+    }
+
+    // ── probe_lock / classify_lock (read-side, TASK-806) ──
+
+    #[test]
+    fn classify_lock_none_when_no_file() {
+        assert_eq!(classify_lock(None, |_| true), LockStatus::None);
+    }
+
+    #[test]
+    fn classify_lock_running_when_pid_alive() {
+        let l = lock(4242, "2026-06-14T11:59:00Z");
+        assert_eq!(
+            classify_lock(Some(l.clone()), |_| true),
+            LockStatus::Running(l)
+        );
+    }
+
+    #[test]
+    fn classify_lock_stale_when_pid_dead() {
+        let l = lock(4242, "2026-06-14T11:59:00Z");
+        assert_eq!(
+            classify_lock(Some(l.clone()), |_| false),
+            LockStatus::Stale(l)
+        );
+    }
+
+    #[test]
+    fn probe_lock_reads_a_just_written_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // A live lock recording OUR pid round-trips through probe_lock as Running.
+        let _guard = acquire_drain_lock(root, "burndown run --status approved").unwrap();
+        match probe_lock(root) {
+            LockStatus::Running(l) => {
+                assert_eq!(l.pid, std::process::id());
+                assert_eq!(l.command, "burndown run --status approved");
+            }
+            other => panic!("expected Running, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn probe_lock_none_on_empty_root() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(probe_lock(dir.path()), LockStatus::None);
     }
 }
