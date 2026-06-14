@@ -3,19 +3,37 @@ spec_id: BUG-549
 agreed_id: BUG-549
 title: burndown subagents never run 'aida queue done' — specs land at Approved, normal Done→Completed auto-bump never fires
 description: 'Observed in the 2026-06-13 drain wave (#872-877): the /aida-burndown implementer subagents commit + open their PR but never call ''aida queue done'', so each spec stays at Approved through merge and the normal Done→Completed auto-bump (the aida pull / db sync path) never fires. The orchestrator papered over it by completing all 6 manually post-merge. Two problems: (1) the spec lifecycle skips Done entirely (Approved→manually-Completed), so the real merge-driven auto-bump code path goes UNEXERCISED — a regression there would be invisible; (2) manual completion is orchestrator work that shouldn''t be needed. Fix: drive ''aida queue done <spec>'' in the burndown subagent prompt (.claude/skills/aida-burndown.md) after the PR opens, so the spec reaches Done and the auto-bump promotes it on merge like a normal keyboard ship. Keystone (autonomy machinery) → keyboard/review, not unsupervised drain.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T02:28:57.332266845Z
-modified_at: 2026-06-14T02:37:22.661924639Z
+modified_at: 2026-06-14T02:51:48.460263596Z
 req_type: Bug
 tags:
 - aida:burndown
 - autonomy
 - from-friction
 - supervised
+history:
+- id: 019ec40a-e368-70c1-87e6-f9824555eaa5
+  author: aida-auto-bump
+  timestamp: 2026-06-14T02:51:48.456043903Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec40a-e36c-71a3-b039-b743b0363c0f
+  timestamp: 2026-06-14T02:51:48.460262366Z
+  agent: reviewer
+  commit_sha: 57a71a2c15fc662ba37080345e9d35cf96f7f042
+  pr: 879
+  summary: 'BUG-549 PASS: implementer subagent now runs aida queue done after PR (step 2) so the Done->Completed auto-bump fires; reconcile-status reframed as fallback (step 3). Skill-prose only, edits master template, CI green.'
+  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:37:22.661924639Z
   implemented_by: joe
+  completed_at: 2026-06-14T02:51:48.306737795Z
+  completion_sha: 57a71a2c15fc662ba37080345e9d35cf96f7f042
