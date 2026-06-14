@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-13, operator decision via `aida questions answer`): Reuse maybe_sync_pull (fetch+rebase) before the preflight — Proven, never-fails; ~1 network pull per 'burndown run' (not a hot loop)
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-14T00:17:35.286328275Z
+modified_at: 2026-06-14T00:34:22.998488020Z
 req_type: Bug
 tags:
 - aida:burndown
