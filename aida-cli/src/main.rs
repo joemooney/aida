@@ -56333,6 +56333,58 @@ reason = "reserved by docs build"
         );
     }
 
+    /// BUG-536: a squash-merge of an umbrella PR names only ONE spec in its
+    /// subject trailer, but GitHub's default squash body concatenates every
+    /// constituent commit's message — each with its own `(SPEC-ID)` completion
+    /// trailer. The auto-bump / reconcile candidate scan must read that body
+    /// (gated on a `(#N)` squash/merge subject) so the folded child specs
+    /// complete instead of stranding. Mirrors the exact composition the scan
+    /// now performs: subject trailers ∪ (squash-gated) body trailers.
+    /// trace:BUG-536 | ai:claude
+    #[test]
+    fn squash_body_yields_folded_child_completion_trailers() {
+        // Realistic GitHub squash body (the #832 shape): subject trailers
+        // STORY-585, body bullets carry STORY-585 again AND the folded
+        // BUG-525 fix that single-trailer squash-merges strand.
+        let msg = "[AI:claude] feat(mailbox): surface unread mail (STORY-585) (#832)\n\n\
+            * [AI:claude] feat(mailbox): surface unread mail (STORY-585)\n\n\
+            The read/notice half of the inter-agent mailbox.\n\n\
+            * [AI:claude] fix(show): char-boundary-safe prefix check (BUG-525)\n\n\
+            format_review_story_display byte-sliced the title.\n";
+
+        // Reproduce the scan's candidate collection: subject trailers always,
+        // plus body trailers when the subject is a `(#N)` squash/merge.
+        let subject = msg.lines().find(|l| !l.trim().is_empty()).unwrap().trim();
+        let mut ids: Vec<String> = extract_spec_ids_from_commit(subject);
+        assert!(
+            extract_pr_number_from_commit_subject(subject).is_some(),
+            "subject must be recognised as a squash/merge (#N) commit"
+        );
+        for id in extract_referenced_spec_ids_from_commit(msg) {
+            if !ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                ids.push(id);
+            }
+        }
+
+        assert!(
+            ids.iter().any(|x| x == "STORY-585"),
+            "lead spec from subject trailer present: {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|x| x == "BUG-525"),
+            "folded child from squash body MUST be a completion candidate: {ids:?}"
+        );
+
+        // Gate check: the SAME body on a non-squash commit (no `(#N)` suffix)
+        // must NOT contribute body trailers as completion candidates — only the
+        // squash/merge body is a trusted concatenation of ship signals.
+        let non_squash = "[AI:claude] feat(mailbox): surface unread mail (STORY-585)";
+        assert!(
+            extract_pr_number_from_commit_subject(non_squash).is_none(),
+            "non-squash subject must not parse a (#N) PR number"
+        );
+    }
+
     #[test]
     fn body_line_is_code_like_classifies() {
         assert!(body_line_is_code_like("enum Status { Ok = (STATUS-200) }"));
@@ -79382,7 +79434,19 @@ fn auto_bump_done_to_completed(
     // instead, which degrades gracefully when history is shorter. The
     // eligibility guard inside step 4 keeps over-broad windows from
     // double-firing.
-    let mut log_args: Vec<String> = vec!["log".to_string(), "--pretty=format:%H%x09%s".to_string()];
+    // BUG-536: read the full commit message (`%B`), not just the subject
+    // (`%s`). A squash-merge of an umbrella PR carries only ONE `(SPEC-ID)`
+    // trailer in its subject, but GitHub's default squash body concatenates
+    // every constituent commit's full message — each with its own completion
+    // trailer — so the body is where the folded child specs' ship signals
+    // live. `%B` spans newlines, so switch to `-z` (NUL between commits) and a
+    // `%x1f` (unit-separator) field split, keeping the parse unambiguous even
+    // when a body contains tabs/newlines. trace:BUG-536 | ai:claude
+    let mut log_args: Vec<String> = vec![
+        "log".to_string(),
+        "-z".to_string(),
+        "--pretty=format:%H%x1f%B".to_string(),
+    ];
     match pre_sha {
         Some(pre) => log_args.push(format!("{}..HEAD", pre)),
         None => {
@@ -79413,10 +79477,17 @@ fn auto_bump_done_to_completed(
     // by /aida-pr's auto-queue (their spec IDs are NEVER in commit
     // subjects, so the `candidates` scan above can't see them).
     let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
-    for line in log_str.lines() {
-        let mut parts = line.splitn(2, '\t');
+    for record in log_str.split('\0') {
+        let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
-        let subject = parts.next().unwrap_or("").trim();
+        let message = parts.next().unwrap_or("");
+        // The subject is the first non-empty line of `%B`; the helpers below all
+        // re-derive it the same way, but compute it once for the empty-guard.
+        let subject = message
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("")
+            .trim();
         if sha.is_empty() || subject.is_empty() {
             continue;
         }
@@ -79435,6 +79506,24 @@ fn auto_bump_done_to_completed(
         if !is_plan_commit_subject(subject) {
             for spec_id in extract_spec_ids_from_commit(subject) {
                 candidates.entry(spec_id).or_insert_with(|| sha.to_string());
+            }
+            // BUG-536: also harvest the completion trailers GitHub preserves in
+            // a squash-merge BODY. When an umbrella PR is squash-merged, only
+            // the lead spec reaches the subject trailer; every other spec it
+            // covered is left stranded at Done/Approved until a manual edit
+            // (observed 3× in one day). The squash body concatenates each
+            // constituent commit's message, so its trailing `(SPEC-ID)` groups
+            // ARE authoritative ship signals — the same body references that
+            // `/aida-pr`'s covers chain (BUG-106) already trusts to complete
+            // folded specs, here made to work WITHOUT a pre-recorded review
+            // story. Gated on a `(#N)` squash/merge subject so a regular
+            // commit's prose body can't mine false completions; the extractor's
+            // BUG-412 code-like-line guard and the Step-4 eligibility guard are
+            // the backstops. trace:BUG-536 | ai:claude
+            if extract_pr_number_from_commit_subject(subject).is_some() {
+                for spec_id in extract_referenced_spec_ids_from_commit(message) {
+                    candidates.entry(spec_id).or_insert_with(|| sha.to_string());
+                }
             }
         }
         if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
@@ -79884,7 +79973,16 @@ fn handle_db_reconcile_status(
         );
     }
 
-    let mut log_args: Vec<String> = vec!["log".to_string(), "--pretty=format:%H%x09%s".to_string()];
+    // BUG-536: full-message (`%B`) scan, NUL-record-separated, so the manual
+    // replay sees the same squash-body completion trailers the live auto-bump
+    // now reads — otherwise `reconcile-status` couldn't recover the umbrella
+    // children that prompted this fix (their trailer is only in a merge BODY).
+    // trace:BUG-536 | ai:claude
+    let mut log_args: Vec<String> = vec![
+        "log".to_string(),
+        "-z".to_string(),
+        "--pretty=format:%H%x1f%B".to_string(),
+    ];
     match since {
         Some(s) => log_args.push(format!("{}..HEAD", s)),
         None => {
@@ -79910,10 +80008,15 @@ fn handle_db_reconcile_status(
     let mut candidates: std::collections::BTreeMap<String, String> =
         std::collections::BTreeMap::new();
     let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
-    for line in log.lines() {
-        let mut parts = line.splitn(2, '\t');
+    for record in log.split('\0') {
+        let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
-        let subject = parts.next().unwrap_or("").trim();
+        let message = parts.next().unwrap_or("");
+        let subject = message
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("")
+            .trim();
         if sha.is_empty() || subject.is_empty() {
             continue;
         }
@@ -79924,6 +80027,15 @@ fn handle_db_reconcile_status(
         if !is_plan_commit_subject(subject) {
             for id in extract_spec_ids_from_commit(subject) {
                 candidates.entry(id).or_insert_with(|| sha.to_string());
+            }
+            // BUG-536: harvest the squash-body completion trailers too (gated on
+            // a `(#N)` squash/merge subject), mirroring the live auto-bump scan
+            // so a manual replay recovers umbrella children stranded by a
+            // single-trailer squash. trace:BUG-536 | ai:claude
+            if extract_pr_number_from_commit_subject(subject).is_some() {
+                for id in extract_referenced_spec_ids_from_commit(message) {
+                    candidates.entry(id).or_insert_with(|| sha.to_string());
+                }
             }
         }
         if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
