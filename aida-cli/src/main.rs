@@ -73052,6 +73052,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             concurrency,
             permission_mode,
             dry_run,
+            verbose,
         } => handle_burndown_run(
             status,
             tag.as_deref(),
@@ -73060,6 +73061,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             *concurrency,
             permission_mode.as_deref(),
             *dry_run,
+            *verbose,
         ),
     }
 }
@@ -73119,6 +73121,44 @@ mod burndown_run_tests {
             "/aida-burndown --status approved --concurrency 3"
         );
     }
+
+    // trace:TASK-804 | ai:claude
+    #[test]
+    fn verbose_args_carry_the_stream_json_flags_and_passthrough_mode() {
+        let args = burndown_verbose_claude_args("/aida-burndown --status approved", "acceptEdits");
+        // The mandatory stream-json trio so the tee can render live events.
+        assert!(args.contains(&"--output-format".to_string()));
+        assert!(args.contains(&"stream-json".to_string()));
+        assert!(args.contains(&"--verbose".to_string()));
+        assert!(args.contains(&"--include-partial-messages".to_string()));
+        // Permission mode is caller-controlled — `--verbose` must not force
+        // bypassPermissions over an explicit operator choice.
+        let mode_pos = args.iter().position(|a| a == "--permission-mode").unwrap();
+        assert_eq!(args[mode_pos + 1], "acceptEdits");
+        // The prompt stays the trailing positional.
+        assert_eq!(args.last().unwrap(), "/aida-burndown --status approved");
+    }
+
+    // trace:TASK-804 | ai:claude
+    #[test]
+    fn verbose_args_default_mode_is_passed_through_verbatim() {
+        // The launcher resolves the default to `bypassPermissions` before
+        // calling this builder; the builder itself just threads whatever it's
+        // handed, never injecting a posture of its own.
+        let args = burndown_verbose_claude_args("/aida-burndown", "bypassPermissions");
+        let mode_pos = args.iter().position(|a| a == "--permission-mode").unwrap();
+        assert_eq!(args[mode_pos + 1], "bypassPermissions");
+    }
+
+    // trace:TASK-804 | ai:claude
+    #[test]
+    fn drain_log_path_is_under_aida_burndown() {
+        let p = burndown_drain_log_path(std::path::Path::new("/repo"), "20260613T120000Z-abcd1234");
+        assert_eq!(
+            p,
+            std::path::PathBuf::from("/repo/.aida/burndown/20260613T120000Z-abcd1234.jsonl")
+        );
+    }
 }
 
 /// STORY-545: `aida burndown run` — kick off and walk away. Preflights the
@@ -73127,6 +73167,7 @@ mod burndown_run_tests {
 /// worktree-isolated implementers, integrates PRs, and loops until drained.
 /// Strategy B (SPIKE-51): reuse the proven skill fan-out, don't reimplement it.
 /// trace:STORY-545 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn handle_burndown_run(
     status: &str,
     tag: Option<&str>,
@@ -73135,6 +73176,11 @@ fn handle_burndown_run(
     concurrency: Option<usize>,
     permission_mode: Option<&str>,
     dry_run: bool,
+    // TASK-804 (facet a of STORY-604): stream live per-event progress. When set,
+    // the headless drain is launched with stream-json flags and its events are
+    // teed to `.aida/burndown/<drain-id>.jsonl` + rendered live. Control flow is
+    // identical to the quiet launch — visibility only. trace:TASK-804 | ai:claude
+    verbose: bool,
 ) -> Result<()> {
     // BUG-530: sync the orphan store before computing the blessed set. The
     // preflight reads the local `.aida-store/` worktree (via
@@ -73195,7 +73241,23 @@ fn handle_burndown_run(
 
     if dry_run {
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
-        println!("  claude -p {:?} --permission-mode {}", prompt, mode.cyan());
+        if verbose {
+            // Mirror the quiet path's `{:?}` quoting of the prompt positional so
+            // the previewed command is copy-paste-safe.
+            println!(
+                "  claude -p {:?} --permission-mode {} {}",
+                prompt,
+                mode.cyan(),
+                "--output-format stream-json --verbose --include-partial-messages".dimmed()
+            );
+            println!(
+                "  {} live progress would stream to {}",
+                "→".dimmed(),
+                ".aida/burndown/<drain-id>.jsonl".cyan()
+            );
+        } else {
+            println!("  claude -p {:?} --permission-mode {}", prompt, mode.cyan());
+        }
         return Ok(());
     }
 
@@ -73223,24 +73285,33 @@ fn handle_burndown_run(
     );
     println!();
 
-    // Inherit stdio so the drain streams live; propagate its exit code so
-    // scripts can branch on success/parked (the skill exits non-zero when it
-    // shelves work, mirroring the orchestrator drain's exit-2 convention).
-    // `claude` is resolved off PATH (matching every other launch site); a
-    // missing binary surfaces as a guided error, not a raw ENOENT.
-    let status_code = std::process::Command::new("claude")
-        .arg("-p")
-        .arg(&prompt)
-        .arg("--permission-mode")
-        .arg(mode)
-        .status()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "failed to launch `claude -p` ({e}) — the headless drain needs the Claude Code \
-                 CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
-                 orchestrator drain) instead."
-            )
-        })?;
+    // Propagate the drain's exit code either way so scripts can branch on
+    // success/parked (the skill exits non-zero when it shelves work, mirroring
+    // the orchestrator drain's exit-2 convention). `claude` is resolved off
+    // PATH (matching every other launch site); a missing binary surfaces as a
+    // guided error, not a raw ENOENT.
+    let status_code = if verbose {
+        // TASK-804: stream-json + tee path. Redirect the drain's JSONL to a
+        // discoverable log and render a live human progress line per event.
+        run_burndown_verbose(&prompt, mode)?
+    } else {
+        // Inherit stdio so the drain streams live (the quiet default: `claude
+        // -p` without stream-json buffers until completion, so the operator
+        // sees the final summary).
+        std::process::Command::new("claude")
+            .arg("-p")
+            .arg(&prompt)
+            .arg("--permission-mode")
+            .arg(mode)
+            .status()
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
+                     Code CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
+                     orchestrator drain) instead."
+                )
+            })?
+    };
 
     if status_code.success() {
         Ok(())
@@ -73248,6 +73319,100 @@ fn handle_burndown_run(
         let code = status_code.code().unwrap_or(1);
         std::process::exit(code);
     }
+}
+
+/// TASK-804 (facet a of STORY-604): build the argv (after the `claude` program
+/// name) for the `--verbose` burndown drain. Identical base to the quiet launch
+/// (`-p <prompt> --permission-mode <mode>`) PLUS the stream-json flags so the
+/// drain's events can be teed and rendered live. The permission mode stays
+/// CALLER-controlled (not the headless helper's baked-in `bypassPermissions`)
+/// because `--verbose` must only add visibility — it must never change the
+/// drain's permission posture or control flow. The prompt stays the trailing
+/// positional. Pure + unit-tested. trace:TASK-804 | ai:claude
+fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<String> {
+    vec![
+        "-p".to_string(),
+        "--permission-mode".to_string(),
+        mode.to_string(),
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--include-partial-messages".to_string(),
+        prompt.to_string(),
+    ]
+}
+
+/// TASK-804: the discoverable JSONL log path for a `--verbose` burndown drain:
+/// `.aida/burndown/<drain-id>.jsonl`. Gitignored by the deny-by-default
+/// `.aida/*` rule — pure per-clone runtime state. This is the path future
+/// drain-status tooling (TASK-806) will read. trace:TASK-804 | ai:claude
+fn burndown_drain_log_path(project_root: &std::path::Path, drain_id: &str) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join("burndown")
+        .join(format!("{drain_id}.jsonl"))
+}
+
+/// TASK-804: launch the `--verbose` burndown drain. Same headless `claude -p`
+/// drain as the quiet path (same auto-proceed, same exit-code semantics), but
+/// the stream-json stdout is redirected to `.aida/burndown/<drain-id>.jsonl`
+/// and a background tee renders a human-readable progress line per event to
+/// stderr — so a long drain shows live progress instead of a silent terminal.
+/// Reuses the proven `headless_tee` machinery (TASK-307) rather than rolling a
+/// new renderer. trace:TASK-804 | ai:claude
+fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitStatus> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // Time-prefixed id so logs sort chronologically and are easy to tail; the
+    // short uuid suffix disambiguates two drains started in the same second.
+    let drain_id = format!(
+        "{}-{}",
+        chrono::Utc::now().format("%Y%m%dT%H%M%SZ"),
+        &uuid::Uuid::now_v7().to_string()[..8]
+    );
+    let log_path = burndown_drain_log_path(&project_root, &drain_id);
+    if let Some(dir) = log_path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| {
+            anyhow::anyhow!(
+                "could not create the burndown log dir {} ({e})",
+                dir.display()
+            )
+        })?;
+    }
+    let log = std::fs::File::create(&log_path).map_err(|e| {
+        anyhow::anyhow!(
+            "could not create the burndown log {} ({e})",
+            log_path.display()
+        )
+    })?;
+
+    println!(
+        "  {} live progress → {} (tail it live, or read it after)",
+        "→".green(),
+        log_path.display().to_string().cyan()
+    );
+    println!();
+
+    // Tee the JSONL to stderr as human-readable lines. `from_env_and_flag(false)`
+    // keeps the routine chatter on by default (the operator asked for `--verbose`),
+    // while `AIDA_TEE_HEADLESS=0` can quiet it — errors/denials still surface loud.
+    let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false).with_label("burndown");
+    let tee_handle = headless_tee::start_tee(&log_path, &tee_opts);
+
+    let status_code = std::process::Command::new("claude")
+        .args(burndown_verbose_claude_args(prompt, mode))
+        .stdout(std::process::Stdio::from(log))
+        .status()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "failed to launch `claude -p` ({e}) — the headless drain needs the Claude Code \
+                 CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
+                 orchestrator drain) instead."
+            )
+        });
+    // Always stop the tee, even on spawn failure, so the background thread exits.
+    tee_handle.stop();
+    status_code
 }
 
 /// STORY-547: build the [`burndown::OpenFacts`] for every OPEN spec in the store
