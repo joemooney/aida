@@ -2957,7 +2957,17 @@ mod tests {
 
         // Can bubblewrap actually set up a userns on this host?
         if bwrap_preflight().is_err() {
-            // Restricted host: the launch MUST fail closed with remediation.
+            // CI sets AIDA_REQUIRE_BWRAP_LIVE=1 to force the live arm so a green
+            // check can never come from the fail-closed branch silently. If the
+            // runner can't create a userns, that is a CI-environment failure, not
+            // a pass. trace:STORY-612 | ai:claude
+            assert!(
+                std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+                "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot create an unprivileged user \
+                 namespace here — the live-confinement gate could not run. Install bubblewrap \
+                 and/or `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`."
+            );
+            // Restricted host (no force): the launch MUST fail closed with remediation.
             let err = claude_program_and_args(wt, dummy)
                 .expect_err("userns-restricted host must NOT yield a runnable wrapped command");
             let msg = format!("{err:#}");
