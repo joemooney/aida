@@ -1,0 +1,18 @@
+id: 019ec4ea-5f3b-75a3-a831-11c7bc1e5ad7
+spec_id: STORY-617
+agreed_id: STORY-617
+title: 'Sandbox: strict read-confinement hardening for os_wrap (default-absent FS bind-allowlist)'
+description: 'Follow-up hardening on STORY-612''s bwrap OS-wrapper. STORY-612 ships WRITE-confinement: --ro-bind / / leaves the whole filesystem READABLE, rw only the worktree/store/caches. So a rogue drain cannot WRITE outside its tree, but it CAN still read host credentials (~/.ssh, ~/.aws, browser cookies) and exfiltrate within the egress allowlist. This spec tightens to a default-ABSENT filesystem: bind only the worktree + toolchain + certs/resolv.conf + the claude auth dir, everything else not present. Stronger but fragile (must enumerate every path claude/node/cargo need or they break), needs live tuning on the deploy distro. relates SPIKE-61, STORY-612.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T06:55:54.683241326Z
+modified_at: 2026-06-14T06:55:54.683241326Z
+req_type: Story
+tags:
+- competitive-hole
+- from-strategic
+- parent:SPIKE-61
+- sandbox
+- security
