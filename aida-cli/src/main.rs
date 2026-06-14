@@ -62859,6 +62859,37 @@ mod in_flight_linkage_integration_tests {
         assert_eq!(l.branch.as_deref(), Some("feature/y"));
     }
 
+    /// BUG-550: `collect_git_linkage_opts(.., false)` — the path the widened
+    /// `aida human` reviews bucket uses — must still resolve the commit/branch/
+    /// shipped state (the only fields the review-surface classifier reads) while
+    /// SKIPPING the source-tree walk that populates `files`. That skip is what
+    /// keeps the now-wider candidate set fast on this hot command.
+    #[test]
+    fn linkage_opts_no_scan_keeps_review_state_drops_files() {
+        let (_tmp, root) = init_repo();
+        std::fs::write(root.join("touched.rs"), "// trace:TASK-807\nfn ship() {}\n").unwrap();
+        commit(
+            &root,
+            "touched.rs",
+            "// trace:TASK-807\nfn ship() {}\n",
+            "feat: ship it (TASK-807) (#43)",
+        );
+
+        // With the tree scan ON, the trace comment is found (control).
+        let scanned = collect_git_linkage_opts(&root, &["TASK-807".to_string()], true);
+        assert_eq!(scanned.files.len(), 1, "scan ON finds the trace comment");
+
+        // With it OFF, commit/shipped state is identical but `files` is empty.
+        let lean = collect_git_linkage_opts(&root, &["TASK-807".to_string()], false);
+        assert_eq!(lean.commits.len(), 1, "commit still resolved without scan");
+        assert!(lean.shipped, "shipped state still computed without scan");
+        assert_eq!(lean.shipped_pr, Some(43), "PR number still parsed");
+        assert!(
+            lean.files.is_empty(),
+            "scan OFF skips the source-tree walk, so files stays empty"
+        );
+    }
+
     /// A fresh repo with `--initial-branch=<name>` and one initial
     /// commit — used for the BUG-380 master-default coverage.
     fn init_repo_on(branch: &str) -> (tempfile::TempDir, std::path::PathBuf) {
@@ -69345,6 +69376,23 @@ pub(crate) struct GitLinkage {
 /// open-PR lookup happens later, in [`print_git_linkage`].
 /// trace:TASK-241 | ai:claude
 pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]) -> GitLinkage {
+    collect_git_linkage_opts(project_root, ids, true)
+}
+
+/// BUG-550: variant of [`collect_git_linkage`] with the full source-tree walk
+/// (`scan_trace_graph`, which populates `GitLinkage::files`) gated behind
+/// `scan_trace`. Surfaces that classify a spec's *review state* — the `aida
+/// human` reviews bucket runs this once per candidate spec — only read
+/// `commits`/`branch`/`shipped`/`shipped_pr`, never `files`, so they pass
+/// `false` to skip the per-spec tree scan. That scan reads every source file
+/// in the repo; multiplying it by a widened candidate set is the dominant
+/// cost on this hot, offline command. With `scan_trace = false`, `files` is
+/// always empty. trace:BUG-550 | ai:claude
+pub(crate) fn collect_git_linkage_opts(
+    project_root: &std::path::Path,
+    ids: &[String],
+    scan_trace: bool,
+) -> GitLinkage {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<String> {
@@ -69426,15 +69474,22 @@ pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]
         .collect();
 
     // ---- Files carrying trace comments for the spec ----
-    let wanted: HashSet<String> = ids.iter().cloned().collect();
-    let trace_hits = scan_trace_graph(project_root, &wanted);
-    let mut files: Vec<(String, Option<String>)> = trace_hits
-        .values()
-        .flatten()
-        .map(|h| (h.file.clone(), h.symbol.clone()))
-        .collect();
-    files.sort();
-    files.dedup();
+    // BUG-550: gated — the per-spec source-tree walk only matters to callers
+    // that render `files`; the reviews-bucket classifier skips it.
+    let files: Vec<(String, Option<String>)> = if scan_trace {
+        let wanted: HashSet<String> = ids.iter().cloned().collect();
+        let trace_hits = scan_trace_graph(project_root, &wanted);
+        let mut f: Vec<(String, Option<String>)> = trace_hits
+            .values()
+            .flatten()
+            .map(|h| (h.file.clone(), h.symbol.clone()))
+            .collect();
+        f.sort();
+        f.dedup();
+        f
+    } else {
+        Vec::new()
+    };
 
     // ---- Branch / worktree / shipped state (anchored on newest commit) ----
     let mut shipped = false;
@@ -73763,34 +73818,124 @@ fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bo
     )
 }
 
+/// BUG-550: the set of SPEC-IDs referenced by commits that exist on some ref
+/// but are NOT yet reachable from the default branch — i.e. specs with an
+/// in-flight (unmerged) review surface. This is the cheap prefilter that lets
+/// the reviews bucket widen its candidate set past the Done specs WITHOUT a
+/// regression: one `git log --all --not <default>` pass replaces N per-spec
+/// `git log --all --grep` history scans, and the full per-spec linkage probe
+/// then runs only for this small set (the handful with open work) rather than
+/// every active spec. A spec whose commits are all on the default branch is
+/// merged (Shipped) and correctly absent — no false negatives for a genuinely
+/// open surface; the at-worst false positive (local default behind origin)
+/// is harmless, since the per-spec classifier re-checks and drops it. Ids are
+/// resolved through the same trailer / `trace:` parsers `collect_git_linkage`
+/// uses, so membership matches what the classifier later confirms.
+/// trace:BUG-550 | ai:claude
+fn specs_with_unmerged_commits(
+    project_root: &std::path::Path,
+) -> std::collections::HashSet<String> {
+    use std::process::Command as PCmd;
+    let mut out = std::collections::HashSet::new();
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return out;
+    };
+    let log = PCmd::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "log",
+            "--all",
+            "--not",
+            &default_ref,
+            "--pretty=format:%B%x1e",
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    for record in log.split('\u{1e}') {
+        let body = record.trim();
+        if body.is_empty() {
+            continue;
+        }
+        let mut resolved = extract_spec_ids_from_commit(body);
+        resolved.extend(extract_referenced_spec_ids_from_commit(body));
+        resolved.extend(extract_trace_line_spec_ids(body));
+        for r in resolved {
+            out.insert(r.to_ascii_uppercase());
+        }
+    }
+    out
+}
+
 /// STORY-611: enumerate the specs that have a code-review surface awaiting the
-/// human — Done-on-branch / open-PR specs not yet merged, the SAME surface
-/// `aida review <SPEC>` locates. Candidate set = `Done`-status specs (work
-/// finished on a branch, awaiting review/merge); for each we run the exact
-/// surface-detection `handle_review_spec` uses (`collect_git_linkage` +
-/// `change_lookup_for_branch` + `classify_review_surface`) and keep only the
-/// `OpenChange` / `BranchNoChange` surfaces. `Shipped` (already merged) and
-/// `Local` (never pushed) are dropped. Each row is tagged `reviewed` so the
-/// caller can split awaiting-review from the awaiting-MERGE micro-state (the
-/// REFINEMENT comment's case 3). trace:STORY-611 | ai:claude
+/// human — branch / open-PR specs not yet merged, the SAME surface `aida
+/// review <SPEC>` locates. Candidate set (BUG-550) = every non-archived spec
+/// that isn't `Completed` (merged) or `Rejected` (abandoned) — work that could
+/// still carry an open PR, regardless of whether someone ran `aida queue
+/// done`. For each we run the exact surface-detection `handle_review_spec`
+/// uses (`collect_git_linkage_opts` + `change_lookup_for_branch` +
+/// `classify_review_surface`) and keep only the `OpenChange` / `BranchNoChange`
+/// surfaces; `Shipped` (already merged) and `Local` (never pushed) are dropped,
+/// so the open-PR linkage — not the Done flag — is the real gate. Each row is
+/// tagged `reviewed` so the caller can split awaiting-review from the
+/// awaiting-MERGE micro-state (the REFINEMENT comment's case 3).
+/// trace:STORY-611 trace:BUG-550 | ai:claude
 fn reviews_awaiting_human(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
 ) -> Vec<ReviewAwaiting> {
-    let dones: Vec<aida_core::Requirement> = match backend.list_requirements(false) {
+    // BUG-550: the candidate set is "specs that could have an OPEN review
+    // surface", NOT "specs someone remembered to mark Done". Gating on
+    // `status == Done` made an open PR invisible whenever the PR was opened at
+    // the keyboard without a `queue done` (observed: PR #879 / BUG-549 stayed
+    // Approved). Substrate-as-bouncer: let the open-PR linkage be the gate
+    // (`classify_review_surface` drops merged/never-pushed specs), not a
+    // manually-maintained status flag.
+    //
+    // We still exclude Completed (merged ⇒ classifies as `Shipped` ⇒ dropped
+    // anyway) and Rejected (abandoned, not headed to merge) purely to bound
+    // cost — those are the bulk of a mature store. The remaining set
+    // (Draft/Approved/Planned/InProgress/Done/NeedsAttention) is "active,
+    // not-yet-shipped" work.
+    //
+    // To keep this hot, offline command fast even with the wider set, a single
+    // `git log` (`specs_with_unmerged_commits`) names the specs that actually
+    // have unmerged commits; the per-spec linkage probe — and its skip of the
+    // source-tree walk via `collect_git_linkage_opts(.., false)` — then runs
+    // ONLY for those. Active specs with nothing in flight cost nothing beyond
+    // the one shared log pass. trace:BUG-550 | ai:claude
+    let candidates: Vec<aida_core::Requirement> = match backend.list_requirements(false) {
         Ok(reqs) => reqs
             .into_iter()
-            .filter(|r| !r.archived && r.status == aida_core::RequirementStatus::Done)
+            .filter(|r| {
+                !r.archived
+                    && !matches!(
+                        r.status,
+                        aida_core::RequirementStatus::Completed
+                            | aida_core::RequirementStatus::Rejected
+                    )
+            })
             .collect(),
         Err(_) => return Vec::new(),
     };
+    let unmerged = specs_with_unmerged_commits(project_root);
     let mut out = Vec::new();
-    for req in &dones {
+    for req in &candidates {
         let Some(spec_id) = req.spec_id.clone().or_else(|| req.agreed_id.clone()) else {
             continue;
         };
+        // BUG-550: skip the per-spec history scan for specs with no unmerged
+        // commit — they can only classify as Shipped/Local and be dropped, so
+        // probing them is pure cost. This is what keeps the widened candidate
+        // set from regressing `aida human`'s latency. trace:BUG-550 | ai:claude
+        if !unmerged.contains(&spec_id.to_ascii_uppercase()) {
+            continue;
+        }
         let ids = vec![spec_id.clone()];
-        let linkage = collect_git_linkage(project_root, &ids);
+        let linkage = collect_git_linkage_opts(project_root, &ids, false);
         let change = linkage
             .branch
             .as_deref()
