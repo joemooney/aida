@@ -3,12 +3,12 @@ spec_id: TASK-825
 agreed_id: TASK-825
 title: Add .gitlab-ci.yml mirroring the GitHub CI gates (Build + fmt --check + clippy correctness + mcp stdio suite)
 description: 'EPIC-44 Phase 1: GitLab MRs need a CI gate equivalent to .github/workflows/ci.yml. Add .gitlab-ci.yml running the same gates the PR CI enforces: cargo build -p aida-cli, cargo fmt --all -- --check, cargo clippy -p aida-cli -- -D clippy::correctness, env -u AIDA_SESSION_ROLE cargo test -p aida-cli, and bash tests/test_mcp_stdio.sh. Keep it Linux-only for cycle time (cross-platform stays the nightly matrix). Needed before gitlab can gate MRs as canonical. Parent EPIC-44.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:45.379117685Z
-modified_at: 2026-06-14T21:58:45.379117685Z
+modified_at: 2026-06-14T22:08:02.090185667Z
 req_type: Task
 tags:
 - batch:gitlab-canonical
@@ -16,3 +16,21 @@ tags:
 - from-product
 - gitlab
 - parent:EPIC-44
+history:
+- id: 019ec82d-7225-7a52-80df-c071453ddb47
+  author: aida-auto-bump
+  timestamp: 2026-06-14T22:08:02.085746213Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec82d-722a-7692-9b39-2091341f8d3d
+  timestamp: 2026-06-14T22:08:02.090184462Z
+  agent: aida
+  commit_sha: 040fded4d898e8cef93426c0992574968bf7cb45
+  summary: Completed via merge 040fded4
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-14T22:08:01.919279862Z
+  completion_sha: 040fded4d898e8cef93426c0992574968bf7cb45
