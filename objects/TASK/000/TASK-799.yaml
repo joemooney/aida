@@ -10,12 +10,12 @@ description: |-
   2. `aida schema --json` with NO object argument should include a `fields` array per object (currently it omits them), so the machine surface is a true full dump in one fetch — useful for the CLI manual generator and aida-tutor (STORY-601) and MCP consumers (TASK-715 exposed schema over MCP).
 
   Contained change in handle_schema_command, which already assembles per-object detail. Mirror onto the MCP schema resource/tool for parity (STORY-82/TASK-715). trace:STORY-538. Surfaced writing the CLI manual (EPIC-40).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:44:29.408822888Z
-modified_at: 2026-06-14T02:17:39.580336018Z
+modified_at: 2026-06-14T02:24:19.098883503Z
 req_type: Task
 tags:
 - aida:schema
