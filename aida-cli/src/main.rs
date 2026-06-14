@@ -623,6 +623,35 @@ mod story_423_asciinema_tests {
     use chrono::TimeZone;
     use clap::Parser;
 
+    /// TASK-822 / TASK-824: the `aida list <lens>` aliases rewrite to their
+    /// canonical commands (flags pass through), and unmatched input is unchanged.
+    #[test]
+    fn list_lens_aliases_rewrite_to_canonical_commands() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+        // aida list queue [flags] → aida queue list [flags]
+        let out = rewrite_list_alias(&s(&["aida", "list", "queue", "--batch", "X"]));
+        assert_eq!(out, s(&["aida", "queue", "list", "--batch", "X"]));
+        assert!(matches!(
+            Cli::try_parse_from(out).unwrap().command,
+            Command::Queue(QueueCommand::List { .. })
+        ));
+
+        // aida list why [--json] → aida burndown explain [--json]
+        let out = rewrite_list_alias(&s(&["aida", "list", "why", "--json"]));
+        assert_eq!(out, s(&["aida", "burndown", "explain", "--json"]));
+
+        // Unmatched: plain `aida list open` and a bare `aida list` are untouched.
+        assert_eq!(
+            rewrite_list_alias(&s(&["aida", "list", "open"])),
+            s(&["aida", "list", "open"])
+        );
+        assert_eq!(
+            rewrite_list_alias(&s(&["aida", "list"])),
+            s(&["aida", "list"])
+        );
+    }
+
     #[test]
     fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
         let cli = Cli::try_parse_from([
@@ -898,6 +927,30 @@ mod story_423_asciinema_tests {
     }
 }
 
+/// TASK-822 / TASK-824: rewrite the `aida list <lens>` discoverability aliases
+/// into their canonical commands before clap parses, so the list family
+/// (`open` / `human` / `queue` / `why`) reads uniformly while each alias is a
+/// pure passthrough of the target command's flags. Unmatched input is returned
+/// unchanged. `args[0]` is the binary name. trace:TASK-822 trace:TASK-824
+fn rewrite_list_alias(args: &[String]) -> Vec<String> {
+    if args.len() >= 3 && args[1] == "list" {
+        let target: Option<[&str; 2]> = match args[2].as_str() {
+            "queue" => Some(["queue", "list"]),
+            "why" => Some(["burndown", "explain"]),
+            _ => None,
+        };
+        if let Some([a, b]) = target {
+            let mut out = Vec::with_capacity(args.len());
+            out.push(args[0].clone());
+            out.push(a.to_string());
+            out.push(b.to_string());
+            out.extend_from_slice(&args[3..]);
+            return out;
+        }
+    }
+    args.to_vec()
+}
+
 fn run() -> Result<()> {
     let raw_args: Vec<String> = std::env::args().collect();
     // Intercept --version / -V before clap so we can include the build-time
@@ -936,7 +989,13 @@ fn run() -> Result<()> {
         }
     }
 
-    let mut cli = Cli::parse();
+    // TASK-822 / TASK-824: `aida list <lens>` aliases so the list family reads
+    // uniformly (open / human / queue / why). A pure argv rewrite before clap,
+    // so every downstream flag passes through unchanged:
+    //   aida list queue [args]  →  aida queue list [args]
+    //   aida list why   [args]  →  aida burndown explain [args]
+    // trace:TASK-822 trace:TASK-824 | ai:claude
+    let mut cli = Cli::parse_from(rewrite_list_alias(&raw_args));
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
         if let Some(exit_code) = maybe_run_asciinema_wrapper(&raw_args, &cli)? {
