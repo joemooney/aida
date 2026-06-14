@@ -17929,5 +17929,20 @@ operations:
   timestamp: 2026-06-14T03:11:27.837079710Z
   kind: !SetStatus
     status: Approved
-clock: 1774
+- id: 019ec47a-205e-71b3-8547-adaeb1efc086
+  target_id: 019ec3fe-bce8-78d0-a272-4575ff7884f7
+  author: aida
+  node_id: '1'
+  lamport: 1775
+  timestamp: 2026-06-14T04:53:18.558115893Z
+  kind: !SetDescription
+    description: |
+      reviews_awaiting_human (main.rs:73725) builds its candidate set from Done-status specs ONLY (line 73732: r.status == Done), then runs classify_review_surface on each. So an open PR whose spec is still Approved/In-Progress is INVISIBLE in 'aida human' — the surface silently depends on someone having run 'aida queue done' after opening the PR. Observed 2026-06-14: PR #879 (BUG-549) didn't appear in 'aida human' because I opened it at the keyboard without marking the spec Done; marking it Done surfaced it instantly. This is the same Done-marker-not-set gap BUG-549 fixes for the DRAIN, but it bites keyboard PRs too AND the reviews surface compounds it by gating on Done.
+
+      ROOT CAUSE: the candidate set is 'Done specs' rather than 'specs with an open review surface'. PROPOSED FIX: widen the candidate set to also include non-Done specs that have an open PR via git linkage (or enumerate open PRs directly via the forge + resolve to spec via the BUG-546 trace/trailer linkage), so the bucket reads ground truth (open PRs) not a manually-maintained status flag (substrate-as-bouncer: don't depend on a human/agent remembering 'queue done'). CAVEAT/decision: enumerating open PRs directly is a network call (gh pr list) vs the current local store read — weigh completeness vs 'aida human' staying fast/offline; may want a local-linkage path. Keystone (the what-needs-me completeness surface) → keyboard/review, not unsupervised drain. trace:relates:STORY-611 trace:relates:BUG-549 trace:from-friction
+
+      ## Acceptance
+
+      - Resolved (2026-06-14, operator decision via `aida questions answer`): Local linkage, widen candidate set — include non-Done specs that have an open-PR linkage via the existing LOCAL git detection. Keeps aida human fast + offline; may miss a PR if local linkage is stale.
+clock: 1775
 node_id: '1'
