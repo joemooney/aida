@@ -204,6 +204,18 @@ pub fn inbox_for<'a>(agent: &str, messages: &'a [Message]) -> Vec<&'a Message> {
     out
 }
 
+/// BUG-557: the thread a reply joins when sent `--in-reply-to <target>`: the
+/// target message's own `thread_id`, or `None` when no message with that id is
+/// known among `messages` (a dangling reference — the caller starts a fresh
+/// thread and warns). Without this the send path ignored `--in-reply-to` and
+/// every reply opened a new thread. trace:BUG-557 | ai:claude
+pub fn reply_target_thread(target: &str, messages: &[Message]) -> Option<String> {
+    messages
+        .iter()
+        .find(|m| m.id == target)
+        .map(|m| m.thread_id.clone())
+}
+
 /// All messages in a thread, ordered oldest-first. The whole conversation
 /// (every participant), not filtered by recipient. trace:P3
 pub fn thread<'a>(thread_id: &str, messages: &'a [Message]) -> Vec<&'a Message> {
@@ -537,6 +549,41 @@ mod tests {
             urgent: true,
             ..msg(id, thread, from, to, ts)
         }
+    }
+
+    /// BUG-557: a reply `--in-reply-to <orig>` resolves to the original's
+    /// thread (so the exchange chains), and a dangling reference resolves to
+    /// `None` so the caller can start a fresh thread.
+    #[test]
+    fn reply_target_thread_resolves_original_thread_or_none() {
+        let msgs = vec![
+            msg(
+                "orig",
+                "thread-A",
+                "alice",
+                Recipient::Agent("bob".into()),
+                10,
+            ),
+            msg(
+                "other",
+                "thread-B",
+                "carol",
+                Recipient::Agent("bob".into()),
+                20,
+            ),
+        ];
+        // Reply to "orig" joins its thread, not a new one.
+        assert_eq!(
+            reply_target_thread("orig", &msgs),
+            Some("thread-A".to_string())
+        );
+        // A reply to a message in another thread joins THAT thread.
+        assert_eq!(
+            reply_target_thread("other", &msgs),
+            Some("thread-B".to_string())
+        );
+        // Dangling --in-reply-to → None (caller starts a fresh thread + warns).
+        assert_eq!(reply_target_thread("does-not-exist", &msgs), None);
     }
 
     #[test]

@@ -618,7 +618,14 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
 /// `human_only` is passed separately because it lives on the [`crate`]-level
 /// `Requirement`, not on the pure [`OpenFacts`] this module classifies — keeping
 /// `OpenFacts` free of the marker preserves its exhaustive testability.
-/// trace:TASK-746 | ai:claude
+///
+/// STORY-618 split the `aida human` view onto the per-seat
+/// [`OpenBucket::operator_seat`] predicate, so this union predicate no longer
+/// has a production caller — it is retained (and still tested) because it
+/// folds in the orthogonal `human_only` marker that the seat predicates do not,
+/// which the deferred SPIKE-57 human_only view phase will need.
+/// trace:TASK-746 trace:STORY-618 | ai:claude
+#[allow(dead_code)]
 pub(crate) fn human_required(f: &OpenFacts, human_only: bool) -> bool {
     let (bucket, _) = explain_open(f);
     bucket.needs_human() || human_only

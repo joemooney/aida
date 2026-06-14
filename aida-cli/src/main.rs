@@ -25220,8 +25220,32 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             })?;
             let sender = from.clone().unwrap_or_else(|| current_user_id(None));
             let id = uuid::Uuid::new_v4().to_string();
-            // A message with no explicit thread starts its own thread (id == thread).
-            let thread_id = thread.clone().unwrap_or_else(|| id.clone());
+            // BUG-557: a reply must attach to the ORIGINAL message's thread, not
+            // open a new one. Precedence: an explicit `--thread` wins; else
+            // `--in-reply-to <id>` resolves to that target's thread so the
+            // exchange chains under one `aida mailbox thread <id>`; else the
+            // message starts its own thread (id == thread_id). A dangling
+            // `--in-reply-to` (target not found) warns and falls back to a new
+            // thread rather than silently mis-threading. trace:BUG-557 | ai:claude
+            let thread_id = if let Some(t) = thread.clone() {
+                t
+            } else if let Some(reply_target) = in_reply_to.as_deref() {
+                let local = mailbox_store::read_local_messages(project_root)?;
+                let canonical = mailbox_store::read_canonical_messages(store_root)?;
+                let merged = merge_dedup(&local, &canonical);
+                aida_core::mailbox::reply_target_thread(reply_target, &merged).unwrap_or_else(
+                    || {
+                        eprintln!(
+                            "{} --in-reply-to '{}' matches no known message; starting a new thread",
+                            "warning:".yellow(),
+                            reply_target
+                        );
+                        id.clone()
+                    },
+                )
+            } else {
+                id.clone()
+            };
             let msg = Message {
                 id: id.clone(),
                 thread_id: thread_id.clone(),
