@@ -1,0 +1,18 @@
+id: 019ec4ea-1e5e-7202-9226-f19e95def282
+spec_id: STORY-616
+agreed_id: STORY-616
+title: 'Sandbox slice 3: Firecracker microVM strong-isolation profile for unattended drains (gVisor fallback)'
+description: 'Split out of STORY-612''s bundle. SPIKE-61 research explicitly says PARK this, do not build yet. The genuinely-differentiated no-local-competitor-ships-it capability: a true KVM kernel boundary (Firecracker microVM) for --no-human drains running with bypassed perms, with gVisor as the no-/dev/kvm fallback. Host-side TAP egress allowlist reuses the [contained] allowed_hosts data. Carries rootfs-build + ops cost; waits until slices 1-2 (egress allowlist + bwrap OS-wrapper) prove the seam and there is demand. See docs/competitive-analysis/2026-06-13-sandbox-execution.md slice 3. relates SPIKE-61, STORY-612.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T06:55:38.078577329Z
+modified_at: 2026-06-14T06:55:38.078577329Z
+req_type: Story
+tags:
+- competitive-hole
+- from-strategic
+- parent:SPIKE-61
+- sandbox
+- security
