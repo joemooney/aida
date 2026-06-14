@@ -1,0 +1,24 @@
+id: 019ec788-2c38-7791-a01e-47bdcf05ff02
+spec_id: STORY-619
+agreed_id: STORY-619
+title: Launched agents have no cross-vendor mailbox-delivery awareness (only Claude gets a prompt-bound hook)
+description: |-
+  Verified 2026-06-14 during the cross-vendor mailbox demo. Newly-launched agents do not autonomously or periodically check the mailbox; there is no polling loop for any vendor.
+
+  Current state:
+  - Claude Code agents: the aida-mail-notice.sh UserPromptSubmit hook surfaces unread mail into context, but it is PROMPT-TRIGGERED (not periodic; a heads-down agent or a headless one-shot misses mail between prompt boundaries) and CLAUDE-ONLY (lives in .claude/settings.json, which only Claude Code reads).
+  - Codex / Antigravity agents: nothing automatic. No hook.
+  - The launch context (main.rs ~34510) says only a generic "keep polling AIDA"; it does NOT name the mailbox, give the inbox command, or include an unread-mail snapshot. The agent-facing mail-notice renderer (main.rs ~25672) is NOT wired into the launch context. Role files carry no mailbox guidance. brief-polling.md is briefs-only and a soft instruction.
+
+  Consequence: in the demo, Codex and Antigravity checked mail only because we explicitly prompted them. A mailbox nobody is nudged to check is a dead-drop — this directly limits the cross-vendor coordination thesis (send/receive is vendor-neutral, but delivery-awareness is not). Per substrate-as-bouncer, a "please poll" instruction does not guarantee delivery; a mechanism does.
+
+  Smallest valuable slice (cheap, all-vendor, just context text): the launch context should (a) include the current unread-mail snapshot by wiring in the existing renderer at main.rs ~25672, and (b) add an explicit instruction naming the mailbox + the exact poll command (aida mailbox inbox), and the cadence to re-check. This works for every vendor because it is just text the agent reads at launch.
+
+  Revisit trigger for a bigger slice: if launch-context text proves insufficient (agents still miss mid-session mail), consider a vendor-neutral periodic delivery mechanism (a watch/poll loop or harness-level check) rather than relying on per-vendor hooks. Relates to BUG-558 (the other launched-agent/mailbox gap: identity) and the brief-polling discipline.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T19:07:30.744263881Z
+modified_at: 2026-06-14T19:07:30.744263881Z
+req_type: Story
