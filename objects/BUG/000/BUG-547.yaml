@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T00:43:26.875831563Z
-modified_at: 2026-06-14T00:44:36.818669473Z
+modified_at: 2026-06-14T00:51:28.400291076Z
 req_type: Bug
 tags:
 - aida-book
@@ -22,3 +22,8 @@ comments:
   content: Commit 1fb6b0080 references this requirement
   created_at: 2026-06-14T00:44:36.818669473Z
   modified_at: 2026-06-14T00:44:36.818669473Z
+- id: 019ec39c-b810-7322-a113-be28c8cf3444
+  author: joe
+  content: Commit 07c1516a6 references this requirement
+  created_at: 2026-06-14T00:51:28.400291076Z
+  modified_at: 2026-06-14T00:51:28.400291076Z
