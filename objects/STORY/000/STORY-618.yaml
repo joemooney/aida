@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T18:22:45.286929065Z
-modified_at: 2026-06-14T18:22:45.286929065Z
+modified_at: 2026-06-14T18:23:02.072762638Z
 req_type: Story
 tags:
 - aida:advisor
@@ -42,3 +42,8 @@ tags:
 - parent:EPIC-42
 - seat-separation
 - ux
+relationships:
+- rel_type: Parent
+  target_id: 019ec34e-c4a2-7642-967a-a2b9efda9a7d
+  created_at: 2026-06-14T18:23:02.072756731Z
+  created_by: joe
