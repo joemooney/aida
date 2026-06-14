@@ -8,12 +8,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-06-14, operator decision via `aida questions answer`): Unify under [contained] — enable joins the allowlist: accept [contained] enable as an alias of [agents] contained, so an operator writes one [contained] block in config.toml. Pulls 'enable' out of the agents.toml launch-posture model.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T23:09:16.701019716Z
-modified_at: 2026-06-14T02:43:16.252458936Z
+modified_at: 2026-06-14T03:24:01.755198909Z
 req_type: Task
 tags:
 - aida:contained
@@ -21,10 +21,28 @@ tags:
 - config-coherence
 - from-friction
 - relates:STORY-605
+history:
+- id: 019ec428-6356-7932-a3cb-27d9930a73e0
+  author: aida-reconcile
+  timestamp: 2026-06-14T03:24:01.750896440Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019ec428-635b-7282-a09a-6f8837d73e41
+  timestamp: 2026-06-14T03:24:01.755197949Z
+  agent: reviewer
+  commit_sha: 5bf24fae2b9bbd9ab9850e3997a65c9814a6aebb
+  pr: 880
+  summary: 'TASK-798 PASS: [contained] enable accepted as last-wins alias of [agents] contained; test green, fmt/clippy clean, CI CLEAN'
+  review_verdict: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-06-14T02:43:16.252458936Z
   implemented_by: joe
+  completed_at: 2026-06-14T03:24:01.600952725Z
+  completion_sha: 5bf24fae2b9bbd9ab9850e3997a65c9814a6aebb
 decision_request:
   question: The 'contained' agent posture has its enable toggle at [agents] contained (agents.toml, machine-global, next to bypass) but its egress allowlist at [contained] allowed_hosts (project config.toml) — two sections for one feature. How should they be unified? (Feature is default-off; no operator configs exist yet, so any choice is non-breaking.)
   choices:
