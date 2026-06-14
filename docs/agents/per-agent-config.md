@@ -67,7 +67,16 @@ opt-in `os_wrap` posture closes that gap by wrapping the **whole headless
 [contained]
 os_wrap = true
 # allowed_hosts = ["github.com", "static.crates.io", "registry.npmjs.org"]  # slice-1 egress allowlist
+# managed_domains_only = true  # STORY-615: headless default-DENY egress (managed set + allowed_hosts), no approval prompt — default false
 ```
+
+**Headless default-deny (`managed_domains_only`, STORY-615).** The `allowed_hosts`
+allowlist alone *prompts* for a non-listed domain, which a headless `claude -p`
+drain can't answer. Set `managed_domains_only = true` to add
+`sandbox.network.allowManagedDomainsOnly` so egress is **denied without a prompt**
+except to the managed set plus `allowed_hosts`. Default **false** — turn it on
+only when the drain's egress is fully covered (else a build that needs
+crates.io / github.com / npm is cut off; add those to `allowed_hosts`).
 
 **Write-confinement model.** `bwrap --ro-bind / /` makes the whole filesystem
 **readable but read-only**, then rw-binds *only* the code worktree, the
