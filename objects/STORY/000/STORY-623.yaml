@@ -1,0 +1,19 @@
+id: 019ec819-b8a4-7310-b352-65d9b7b30644
+spec_id: STORY-623
+agreed_id: STORY-623
+title: Rename aida intake → aida assess (alias for aida advisor assess); establish ASSESS vs REVIEW vocabulary
+description: 'Operator request 2026-06-14: formalize ASSESS as the advisor''s verb for deciding whether a draft moves to approved/rejected/parked — distinct from REVIEW (code review of a PR). ''aida intake'' (the headless cold-boot advisor disposition pass) and ''/aida-intake'' are exactly assessment, so rename: canonical ''aida advisor assess'', top-level alias ''aida assess'', and ''/aida-assess'' skill. Keep ''aida intake'' + ''/aida-intake'' as DEPRECATED aliases (silently accepted, normalized — same back-compat pattern as dialog→advisor) so nothing breaks. Open design points to settle on grooming: (1) the [intake] config section — keep the token as a deprecated alias, prefer [assess]; (2) whether to also add a per-spec ''aida assess <spec>'' (assess one draft) and record the assessment as a first-class field surfaced by ''aida why'' / TASK-824 ''aida list why'' (the operator''s ''advisor assesses before approving'' model); (3) AIDA_INTAKE_* env vars → AIDA_ASSESS_* with alias. Relates to TASK-824 (aida list why), STORY-622 (human worklist audit), the aida list lens family, and the advisor-role discipline doc (assess vs review).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T21:46:29.412558309Z
+modified_at: 2026-06-14T21:46:29.412558309Z
+req_type: Story
+tags:
+- advisor
+- aida:assess
+- aida:intake
+- from-product
+- ux
+- vocabulary
