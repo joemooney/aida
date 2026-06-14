@@ -74236,6 +74236,16 @@ fn resolve_burndown_sets(
         if req.deferred {
             continue;
         }
+        // STORY-610: a `supervised` spec is signed off for KEYBOARD pickup
+        // (`aida queue work` / `aida advisor signoff`) but EXPLICITLY EXCLUDED
+        // from the unattended drain. This is the structural fix for keystone
+        // work leaking into `burndown run` — BUG-530/541/538 were all
+        // hand-de-queued for lack of it. Marked specs stay pickable via the
+        // queue; they just never appear in the burndown blessed/awaiting sets.
+        // trace:STORY-610 | ai:claude
+        if req.tags.iter().any(|t| t.eq_ignore_ascii_case("supervised")) {
+            continue;
+        }
         if norm(&req.status.to_string()) != want_status {
             continue;
         }
