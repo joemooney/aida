@@ -1,0 +1,16 @@
+id: 019ec841-1005-70d1-8296-a8404d17d116
+spec_id: TASK-827
+agreed_id: TASK-827
+title: 'Solo mode as a drain autonomy posture: drains honor the solo flag (maximum-discretion safe-backlog mode)'
+description: 'Follow-up to STORY-624 (which shipped the visible solo-state flag + statusline). Wire solo as an autonomy posture the drains/orchestrator HONOR: when solo is active, the advisor+integrator works the SAFE backlog end-to-end with maximum discretion (groom -> implement -> integrate -> repeat), parking keystone/architecture for the human, per EPIC-43 / docs/solo-mode.md. Read presence::current_solo where the drain decides escalate-vs-proceed. Parent EPIC-43.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T22:29:27.685196417Z
+modified_at: 2026-06-14T22:29:27.685196417Z
+req_type: Task
+tags:
+- autonomy
+- parent:EPIC-43
+- solo-mode
