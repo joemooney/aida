@@ -13,15 +13,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:29.100804187Z
-modified_at: 2026-06-13T23:41:49.545030509Z
+modified_at: 2026-06-14T00:16:55.136047772Z
 req_type: Bug
 tags:
-- aida:burndown
-- burndown
-- from-friction
-- queue-routing
-- relates:BUG-528
-- reliability
+- supervised
 comments:
 - id: 019ec238-c2d3-7932-8f02-e77c5089e59b
   author: joe
