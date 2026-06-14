@@ -894,7 +894,7 @@ fn claude_contained_settings_json() -> String {
 /// strictly OPT-IN, so an absent/typo'd key never silently restricts a drain.
 /// Section is `[contained]` (not `[sandbox]`) to avoid colliding with the
 /// `aida sandbox` throwaway-store command's vocabulary. trace:STORY-605 | ai:claude
-fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<String> {
+pub(crate) fn contained_allowed_hosts(project_root: &std::path::Path) -> Vec<String> {
     let cfg = crate::read_project_config_value(project_root);
     crate::config_lookup(cfg.as_ref(), "contained", "allowed_hosts")
         .and_then(|v| v.as_array())
