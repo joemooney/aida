@@ -3,12 +3,12 @@ spec_id: BUG-558
 agreed_id: BUG-558
 title: 'aida agent new does not set AIDA_USER: launched agents read the human''s mailbox, not their own'
 description: "Repro (verified 2026-06-14): launching via \"aida agent new codex\" sets AIDA_AGENT_NAME (stable name, e.g. codex-implementer-1) and AIDA_SESSION_ROLE, but NOT AIDA_USER (main.rs ~33739-33754 / 34672-34687 list every .env() override; AIDA_USER is absent). Per BUG-89 the mailbox/queue identity resolves shell USER/AIDA_USER, so the spawned agent reads the LAUNCHING HUMAN inbox. Proof: env -u AIDA_USER AIDA_AGENT_NAME=codex-implementer-1 AIDA_AGENT_TYPE=codex aida mailbox inbox prints \"Inbox for joe + product\", not a codex inbox.\n\nImpact: inter-agent mailbox addressing is broken for launched agents. A coordinator that sends --to codex (or --to the stable name) is invisible to the agent, which is reading joe inbox. Briefs route by agent-NAME (.aida/agent-briefs/codex/) while mailbox routes by shell-USER, so the two coordination surfaces disagree about who the agent is. Workaround today: prefix the launch (or the agent inbox poll) with AIDA_USER=<handle>.\n\nThree identifiers are in play and only the first two are surfaced: (1) stable name codex-implementer-1 for process control; (2) context token 019ec771... per-spawn snapshot; (3) mailbox/queue identity, which silently defaults to the human. \n\nProposed fix: the launcher should export AIDA_USER set to the agent coordination handle so mailbox + briefs agree. Open design point for disposition: handle = stable name (unique per instance, no shared-inbox collision when two codex agents run, but briefs route by short name) vs short agent name codex (matches brief routing, but multiple instances share one inbox and mark-seen races). Recommend stable name as the addressable identity with the short name as a routing alias. Then the launch banner should print that addressable handle on its own line (operator question that surfaced this)."
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T18:46:26.416282442Z
-modified_at: 2026-06-14T18:47:31.570380482Z
+modified_at: 2026-06-14T19:00:59.024490141Z
 req_type: Bug
 comments:
 - id: 019ec775-dff2-7451-b08f-69162361f678
