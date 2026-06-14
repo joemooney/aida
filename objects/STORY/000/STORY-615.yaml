@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T06:53:58.236495410Z
-modified_at: 2026-06-14T06:53:58.236495410Z
+modified_at: 2026-06-14T06:56:09.977070581Z
 req_type: Story
 tags:
 - competitive-hole
@@ -16,3 +16,8 @@ tags:
 - parent:SPIKE-61
 - sandbox
 - security
+relationships:
+- rel_type: Child
+  target_id: 019ec33e-4b25-7943-8f59-17493a80e8dd
+  created_at: 2026-06-14T06:56:09.977056468Z
+  created_by: joe
