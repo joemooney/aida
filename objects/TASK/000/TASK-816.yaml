@@ -1,0 +1,12 @@
+id: 019ec785-447d-77e0-9822-88f9ca1dc7f1
+spec_id: TASK-816
+agreed_id: TASK-816
+title: Capture cross-vendor mailbox demo (Claude/Codex/Antigravity) as dated positioning evidence
+description: 'On 2026-06-14 the operator ran a live demo proving AIDA inter-agent mailbox works across three vendors on one git-canonical substrate: a hello-world routed Claude (demo-bot), Codex, and Antigravity (agy) each detected the message, acted (wrote a proof file), and replied back to the sender. This is exactly the empirical validation the "Multi-vendor is the strongest, truest claim" thesis should cite. Capture it as a new dated artifact under docs/competitive-analysis/ (immutable-dated-artifact convention: new file, do NOT rewrite the 2026-05-31 thesis snapshot). Note the one caveat surfaced: BUG-558 (aida agent new omits AIDA_USER, so launched agents need an AIDA_USER prefix to read their own inbox) — the demo used that workaround. Reproducible recipe + the three round-trip message ids + proof-file contents should be in the artifact so the claim is backed by a re-runnable demo, not an assertion.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-14T19:04:20.349494283Z
+modified_at: 2026-06-14T19:04:20.349494283Z
+req_type: Task
