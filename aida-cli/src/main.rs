@@ -43886,30 +43886,40 @@ pub(crate) enum PrLookup {
     GhUnreachable(String),
 }
 
-/// Look up a single open PR for `branch` via `gh`. Never panics; never
 /// Walk PATH (plus a handful of common install locations) looking for a
-/// real, executable `gh` binary. Returns the resolved path or None.
+/// real, executable forge CLI binary (`exe_base`, e.g. `gh` or `glab`).
+/// Returns the resolved path or None.
 ///
 /// The original code (pre-BUG-74) used `Command::new("gh")` and trusted
 /// `ErrorKind::NotFound` to flag "gh isn't installed." That trust
 /// produced false-negatives when the spawned Rust process inherited a
-/// PATH that didn't include the user's gh install dir — a common
-/// outcome when shell helpers mutate PATH only inside the shell and
-/// non-login process launches see a stripped environment.
+/// PATH that didn't include the user's install dir — a common outcome
+/// when shell helpers mutate PATH only inside the shell and non-login
+/// process launches see a stripped environment.
 ///
-/// AIDA_DEBUG_GH=1 prints the search trace to stderr so the user can see
-/// exactly what was looked at. trace:BUG-74 | ai:claude
-fn resolve_gh_binary() -> Option<std::path::PathBuf> {
-    if let Ok(test_path) = std::env::var("AIDA_TEST_GH_BINARY") {
+/// `debug_env`=1 (AIDA_DEBUG_GH / AIDA_DEBUG_GLAB) prints the search trace
+/// to stderr; `test_env` (AIDA_TEST_GH_BINARY / AIDA_TEST_GLAB_BINARY)
+/// overrides resolution in tests. trace:BUG-74 trace:STORY-621 | ai:claude
+fn resolve_forge_binary(
+    exe_base: &str,
+    test_env: &str,
+    debug_env: &str,
+) -> Option<std::path::PathBuf> {
+    if let Ok(test_path) = std::env::var(test_env) {
         return Some(std::path::PathBuf::from(test_path));
     }
-    let debug = std::env::var("AIDA_DEBUG_GH")
+    let debug = std::env::var(debug_env)
         .map(|v| !v.is_empty() && v != "0")
         .unwrap_or(false);
+    let dbg_label = format!("{debug_env}:");
     let mut tried: Vec<std::path::PathBuf> = Vec::new();
     let mut spawn_failures: Vec<(std::path::PathBuf, String)> = Vec::new();
 
-    let exe_name = if cfg!(windows) { "gh.exe" } else { "gh" };
+    let exe_name = if cfg!(windows) {
+        format!("{exe_base}.exe")
+    } else {
+        exe_base.to_string()
+    };
 
     // BUG-79: closure that checks `is_executable` AND a sanity-spawn of
     // `gh --version`. The metadata check is necessary but not sufficient:
@@ -43931,8 +43941,9 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
                 Ok(o) if o.status.success() => {
                     if debug {
                         eprintln!(
-                            "{} found gh {} at {}",
-                            "AIDA_DEBUG_GH:".dimmed(),
+                            "{} found {} {} at {}",
+                            dbg_label.dimmed(),
+                            exe_base,
                             source,
                             candidate.display()
                         );
@@ -43948,7 +43959,7 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
                     if debug {
                         eprintln!(
                             "{} is_executable({}) ok but `--version` reported {} — falling back",
-                            "AIDA_DEBUG_GH:".dimmed(),
+                            dbg_label.dimmed(),
                             candidate.display(),
                             reason
                         );
@@ -43961,7 +43972,7 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
                     if debug {
                         eprintln!(
                             "{} is_executable({}) ok but spawn failed: {} — falling back",
-                            "AIDA_DEBUG_GH:".dimmed(),
+                            dbg_label.dimmed(),
                             candidate.display(),
                             reason
                         );
@@ -43979,7 +43990,7 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
             if dir.is_empty() {
                 continue;
             }
-            let candidate = std::path::PathBuf::from(dir).join(exe_name);
+            let candidate = std::path::PathBuf::from(dir).join(&exe_name);
             if let Some(p) = check_candidate(&candidate, "on PATH") {
                 return Some(p);
             }
@@ -43992,14 +44003,14 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
     // or distros.
     let fallbacks: Vec<std::path::PathBuf> = {
         let mut v = vec![
-            std::path::PathBuf::from("/usr/bin").join(exe_name),
-            std::path::PathBuf::from("/usr/local/bin").join(exe_name),
-            std::path::PathBuf::from("/opt/homebrew/bin").join(exe_name),
-            std::path::PathBuf::from("/snap/bin").join(exe_name),
+            std::path::PathBuf::from("/usr/bin").join(&exe_name),
+            std::path::PathBuf::from("/usr/local/bin").join(&exe_name),
+            std::path::PathBuf::from("/opt/homebrew/bin").join(&exe_name),
+            std::path::PathBuf::from("/snap/bin").join(&exe_name),
         ];
         if let Some(home) = dirs::home_dir() {
-            v.push(home.join(".local").join("bin").join(exe_name));
-            v.push(home.join("bin").join(exe_name));
+            v.push(home.join(".local").join("bin").join(&exe_name));
+            v.push(home.join("bin").join(&exe_name));
         }
         v
     };
@@ -44011,13 +44022,14 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
 
     if debug {
         eprintln!(
-            "{} gh not found after searching {} location(s):",
-            "AIDA_DEBUG_GH:".dimmed(),
+            "{} {} not found after searching {} location(s):",
+            dbg_label.dimmed(),
+            exe_base,
             tried.len()
         );
         eprintln!(
             "{} PATH = {}",
-            "AIDA_DEBUG_GH:".dimmed(),
+            dbg_label.dimmed(),
             std::env::var("PATH").unwrap_or_default()
         );
         for p in &tried {
@@ -44026,7 +44038,7 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         if !spawn_failures.is_empty() {
             eprintln!(
                 "{} {} candidate(s) passed is_executable but failed to spawn:",
-                "AIDA_DEBUG_GH:".dimmed(),
+                dbg_label.dimmed(),
                 spawn_failures.len()
             );
             for (p, reason) in &spawn_failures {
@@ -44035,6 +44047,69 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         }
     }
     None
+}
+
+/// Resolve the `gh` (GitHub CLI) binary — thin wrapper over the
+/// forge-generic resolver, preserving pre-Slice-0 behavior byte-for-byte.
+/// trace:BUG-74 trace:STORY-621 | ai:claude
+fn resolve_gh_binary() -> Option<std::path::PathBuf> {
+    resolve_forge_binary("gh", "AIDA_TEST_GH_BINARY", "AIDA_DEBUG_GH")
+}
+
+/// Resolve the `glab` (GitLab CLI) binary, mirroring `resolve_gh_binary`'s
+/// PATH-walk + sanity-spawn (BUG-74/79). Wired into the forge call sites in
+/// follow-on STORY-621 slices. trace:STORY-621 | ai:claude
+#[allow(dead_code)] // wired into call sites in follow-on STORY-621 slices
+fn resolve_glab_binary() -> Option<std::path::PathBuf> {
+    resolve_forge_binary("glab", "AIDA_TEST_GLAB_BINARY", "AIDA_DEBUG_GLAB")
+}
+
+/// Forge-keyed CLI binary dispatch: GitHub → `gh`, GitLab → `glab`. `None`
+/// (pure-git) names no forge CLI. The foundation for routing the main.rs gh
+/// call sites through the configured forge. trace:STORY-621 | ai:claude
+#[allow(dead_code)] // wired into call sites in follow-on STORY-621 slices
+fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::path::PathBuf> {
+    use crate::forge::ForgeKind;
+    match kind {
+        ForgeKind::GitHub => resolve_gh_binary(),
+        ForgeKind::GitLab => resolve_glab_binary(),
+        ForgeKind::None => None,
+    }
+}
+
+#[cfg(test)]
+mod forge_binary_resolution_tests {
+    use super::{resolve_forge_cli, resolve_glab_binary};
+    use crate::forge::ForgeKind;
+    use std::path::PathBuf;
+
+    #[test]
+    fn glab_binary_honors_test_override() {
+        let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GLAB_BINARY", "/tmp/fake-glab");
+        assert_eq!(resolve_glab_binary(), Some(PathBuf::from("/tmp/fake-glab")));
+    }
+
+    #[test]
+    fn forge_cli_dispatches_by_kind() {
+        // EnvVarGuard holds a process-global lock for its whole lifetime, so
+        // each guard must drop before the next is constructed — two live at
+        // once would deadlock the second set() on the same thread. Scope them.
+        {
+            let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", "/tmp/fake-gh");
+            assert_eq!(
+                resolve_forge_cli(ForgeKind::GitHub),
+                Some(PathBuf::from("/tmp/fake-gh"))
+            );
+        }
+        {
+            let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GLAB_BINARY", "/tmp/fake-glab");
+            assert_eq!(
+                resolve_forge_cli(ForgeKind::GitLab),
+                Some(PathBuf::from("/tmp/fake-glab"))
+            );
+        }
+        assert_eq!(resolve_forge_cli(ForgeKind::None), None);
+    }
 }
 
 /// True when `path` exists as a file and is executable by the current
