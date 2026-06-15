@@ -75679,17 +75679,20 @@ fn handle_advisor_worklist(
         );
     }
     if !bless.is_empty() {
+        // STORY-622: LIST the bless candidates (not just a count) — these are the
+        // approved-but-unqueued specs the advisor drives next, the actionable
+        // backlog. A bare count hid the work and made the worklist read "empty"
+        // next to `aida list open`. trace:STORY-622 | ai:claude
         println!(
             "\n{} {} — {}",
             "●".green(),
             "bless".bold(),
-            format!(
-                "{} approved spec{} not yet queued — `aida backlog groom --pickable` to queue (sign-off)",
-                bless.len(),
-                if bless.len() == 1 { "" } else { "s" }
-            )
-            .dimmed()
+            "approved but not queued — `aida backlog groom --pickable` to queue (advisor sign-off)"
+                .dimmed()
         );
+        for id in &bless {
+            println!("    {}{}", id.cyan(), spec_title_cell(&titles, id));
+        }
     }
 
     println!(
