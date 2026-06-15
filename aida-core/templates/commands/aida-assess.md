@@ -1,4 +1,4 @@
-# AIDA Intake
+# AIDA Assess
 
 Headless advisor INTAKE pass: a cold-boot advisor agent reads all open specs,
 applies worth-doing judgment, and proposes approve/reject/park/queue per spec.

@@ -356,15 +356,15 @@ pub fn select_intake_candidates(
     (eligible, fenced)
 }
 
-/// Build the `/aida-intake` slash-command string the headless session runs.
+/// Build the `/aida-assess` slash-command string the headless session runs.
 /// Propose-by-default; `--apply` executes. Pure + unit-testable. The policy and
 /// the bounded candidate fence are passed via env (`AIDA_INTAKE_*`), not the
 /// prompt, so the prompt stays the human-facing surface. trace:STORY-560
 pub fn intake_skill_prompt(apply: bool) -> String {
     if apply {
-        "/aida-intake --apply".to_string()
+        "/aida-assess --apply".to_string()
     } else {
-        "/aida-intake".to_string()
+        "/aida-assess".to_string()
     }
 }
 
@@ -502,7 +502,7 @@ workflow_hints = true
 
     #[test]
     fn skill_prompt_propose_vs_apply() {
-        assert_eq!(intake_skill_prompt(false), "/aida-intake");
-        assert_eq!(intake_skill_prompt(true), "/aida-intake --apply");
+        assert_eq!(intake_skill_prompt(false), "/aida-assess");
+        assert_eq!(intake_skill_prompt(true), "/aida-assess --apply");
     }
 }

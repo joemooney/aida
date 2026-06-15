@@ -6723,18 +6723,22 @@ pub enum Command {
     #[clap(subcommand)]
     Burndown(BurndownCommand),
 
-    // trace:STORY-560 | ai:claude
-    /// Headless advisor INTAKE pass: fire a cold-boot advisor agent that reads
-    /// all open specs, applies worth-doing judgment, and proposes
-    /// approve/reject/park/queue per spec. PROPOSE-MODE BY DEFAULT — writes
-    /// NOTHING until `--apply`. The advisor-side analog of `aida burndown run`
-    /// (which fires implementer agents). Policy knobs live under `[intake]` in
-    /// `.aida/config.toml`; the safe defaults work with zero config.
+    // trace:STORY-560 trace:STORY-623 | ai:claude
+    /// ASSESS the open specs: fire a cold-boot advisor agent that reads all open
+    /// specs, applies worth-doing judgment, and proposes approve/reject/park/
+    /// queue per spec. ASSESS is the advisor's verb for deciding a draft's fate
+    /// (distinct from REVIEW, which is code review of a PR). PROPOSE-MODE BY
+    /// DEFAULT — writes NOTHING until `--apply`. The advisor-side analog of
+    /// `aida burndown run` (which fires implementer agents). Policy knobs live
+    /// under `[intake]` in `.aida/config.toml`; the safe defaults work with zero
+    /// config. Also reachable as `aida advisor assess`; `aida intake` is the
+    /// retained (deprecated) alias.
     ///
     /// Caveat: the headless advisor is a COLD-BOOT `claude -p`, not your live
     /// session — same model, less context. Autonomy-eligible is not the same as
     /// worth-doing; keep the propose-mode review load-bearing before `--apply`.
-    Intake {
+    #[command(visible_alias = "intake")]
+    Assess {
         /// Execute the proposed approvals + queue groom. Without it, `intake`
         /// is propose-only (the value judgment stays reviewable). Even with
         /// `--apply`, the do-not-approve classes and `needs-human`/`strategic`

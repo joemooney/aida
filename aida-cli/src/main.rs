@@ -670,6 +670,39 @@ mod story_423_asciinema_tests {
         );
     }
 
+    /// STORY-623: `aida assess` is canonical, `aida intake` is the clap alias,
+    /// and `aida advisor assess` rewrites to `aida assess` — all three reach the
+    /// same Assess command with flags passed through.
+    #[test]
+    fn assess_intake_and_advisor_assess_all_reach_assess() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+        // canonical
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "assess", "--apply"])
+                .unwrap()
+                .command,
+            Command::Assess { apply: true, .. }
+        ));
+        // clap visible alias
+        assert!(matches!(
+            Cli::try_parse_from(["aida", "intake"]).unwrap().command,
+            Command::Assess { .. }
+        ));
+        // advisor-seat spelling rewrites to the top-level assess
+        let out = rewrite_advisor_assess(&s(&["aida", "advisor", "assess", "--dry-run"]));
+        assert_eq!(out, s(&["aida", "assess", "--dry-run"]));
+        assert!(matches!(
+            Cli::try_parse_from(out).unwrap().command,
+            Command::Assess { dry_run: true, .. }
+        ));
+        // unrelated advisor subcommands untouched
+        assert_eq!(
+            rewrite_advisor_assess(&s(&["aida", "advisor", "status"])),
+            s(&["aida", "advisor", "status"])
+        );
+    }
+
     #[test]
     fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
         let cli = Cli::try_parse_from([
@@ -952,6 +985,21 @@ mod story_423_asciinema_tests {
 /// target may be one token (`aida advisor`) or two (`aida queue list`). Unmatched
 /// input is returned unchanged. `args[0]` is the binary name.
 /// trace:TASK-822 trace:TASK-824 trace:TASK-828 trace:TASK-831
+/// STORY-623: rewrite `aida advisor assess [args]` → `aida assess [args]` before
+/// clap, so the advisor's draft-disposition verb is reachable under its seat
+/// while the implementation stays the single `assess` (aka `intake`) command.
+/// Unmatched input is returned unchanged. trace:STORY-623 | ai:claude
+fn rewrite_advisor_assess(args: &[String]) -> Vec<String> {
+    if args.len() >= 3 && args[1] == "advisor" && args[2] == "assess" {
+        let mut out = Vec::with_capacity(args.len() - 1);
+        out.push(args[0].clone());
+        out.push("assess".to_string());
+        out.extend_from_slice(&args[3..]);
+        return out;
+    }
+    args.to_vec()
+}
+
 fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "list" {
         let target: Option<&[&str]> = match args[2].as_str() {
@@ -1011,13 +1059,13 @@ fn run() -> Result<()> {
         }
     }
 
-    // TASK-822 / TASK-824: `aida list <lens>` aliases so the list family reads
-    // uniformly (open / human / queue / why). A pure argv rewrite before clap,
-    // so every downstream flag passes through unchanged:
-    //   aida list queue [args]  →  aida queue list [args]
-    //   aida list why   [args]  →  aida burndown explain [args]
-    // trace:TASK-822 trace:TASK-824 | ai:claude
-    let mut cli = Cli::parse_from(rewrite_list_alias(&raw_args));
+    // TASK-822 / TASK-824 / STORY-623: pre-clap argv rewrites so aliases pass
+    // every downstream flag through unchanged. `aida list <lens>` → its command
+    // (queue/why/advisor/inflight); `aida advisor assess` → `aida assess` (the
+    // advisor's verb spelled under its seat). `aida assess` itself + the `intake`
+    // alias are handled by clap's visible_alias on the Assess variant.
+    // trace:TASK-822 trace:TASK-824 trace:STORY-623 | ai:claude
+    let mut cli = Cli::parse_from(rewrite_list_alias(&rewrite_advisor_assess(&raw_args)));
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
         if let Some(exit_code) = maybe_run_asciinema_wrapper(&raw_args, &cli)? {
@@ -1285,7 +1333,7 @@ fn run() -> Result<()> {
     // STORY-560: `aida intake` self-loads the store to compute its candidate
     // fence and then launches a headless `claude -p` — no shared storage handle
     // needed. Dispatch early, like burndown. trace:STORY-560 | ai:claude
-    if let Command::Intake {
+    if let Command::Assess {
         apply,
         max_approvals,
         only_tag,
@@ -2238,7 +2286,7 @@ fn run() -> Result<()> {
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
-        Command::Intake { .. } => unreachable!("intake is dispatched before storage init"),
+        Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -11366,7 +11414,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
-        Command::Intake { .. } => unreachable!("intake is dispatched before storage init"),
+        Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
@@ -73465,7 +73513,7 @@ fn preview_next_version(current: &str, bump: &str) -> Option<String> {
 /// flag overrides, self-load the store, compute the BOUNDED candidate fence
 /// (the do-not-approve classes + `needs-human`/`strategic` specs are excluded
 /// HERE, programmatically — the agent never sees them as actionable), then
-/// launch a headless `claude -p "/aida-intake [--apply]"` that reads the fenced
+/// launch a headless `claude -p "/aida-assess [--apply]"` that reads the fenced
 /// set, proposes dispositions, and (under `--apply`) approves within the fence
 /// and grooms the queue. Propose-mode is the ultimate gate.
 /// trace:STORY-560 | ai:claude
