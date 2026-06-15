@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:18.737322494Z
-modified_at: 2026-06-14T22:18:58.590118609Z
+modified_at: 2026-06-15T05:04:40.018561689Z
 req_type: Epic
 tags:
 - canonical-hub
 - from-product
 - gitlab
 - strategic
+comments:
+- id: 019ec9aa-e252-77a3-8ebd-709b7170058d
+  author: joe
+  content: 'Corporate-boundary constraint CONFIRMED (2026-06-14): at the operator corporate network, gitlab.joemooney.com is blocked by the corporate web filter — verified via the git clone 302 to corp-firewall.example NewUnblockRequest page (reasoncode=CATEGORY_DENIED, category "Miscellaneous or Unknown", policy group REDACTED-POLICY-GROUP). Cloudflare WAF + free Bot Fight Mode were a SECONDARY blocker (now fixed: skip-rule on .git/ paths + Bot Fight Mode off; curl reaches GitLab and gets a clean 401). The real wall is the corporate proxy, upstream of Cloudflare, and it is a policy-governed security control (not engineered around). Implication for EPIC-44: the "one canonical hub reachable everywhere" assumption does NOT hold at the corporate boundary unless corporate IT allowlists the domain. Operator will submit the unblock request 2026-06-15. Until approved, model = personal gitlab (home/canonical) + corporate-sanctioned infra at work, bridged where policy permits. Revisit the hub-everywhere assumption after the whitelist decision lands.'
+  created_at: 2026-06-15T05:04:40.018561689Z
+  modified_at: 2026-06-15T05:04:40.018561689Z
