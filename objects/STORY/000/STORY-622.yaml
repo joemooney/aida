@@ -3,12 +3,12 @@ spec_id: STORY-622
 agreed_id: STORY-622
 title: 'aida doctor / garden pass: audit the human worklist for false-positive (non-operator) items'
 description: 'Operator observation 2026-06-14: aida human sometimes surfaces items that aren''t genuine operator actions (e.g. a to-groom draft that is advisor work, or a deferred item leaking on a stale binary). Add a check — in aida doctor and/or the advisor garden pass — that re-derives the human worklist and flags any item whose effective seat is NOT operator (a seat-leak regression), plus any item with no concrete human action (only a blind-approve CTA). Goal: aida human stays TRUE — only things a human must decide/review/act on. Substrate-as-bouncer for the operator''s primary surface. Relates to STORY-618/620 (seat policy), BUG-556 (deferred exclusion). Design: read-only audit, report findings; never auto-mutate the worklist.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:29:21.579783239Z
-modified_at: 2026-06-15T16:48:46.307669552Z
+modified_at: 2026-06-15T16:54:36.882363895Z
 req_type: Story
 tags:
 - aida:doctor
@@ -16,3 +16,21 @@ tags:
 - from-product
 - needs-human
 - seat-separation
+history:
+- id: 019ecc34-dc4d-7561-8929-f84c0e7bcaed
+  author: aida-reconcile
+  timestamp: 2026-06-15T16:54:36.877963930Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecc34-dc52-7a42-b269-a7bf84a0648b
+  timestamp: 2026-06-15T16:54:36.882363274Z
+  agent: aida
+  commit_sha: b53b398e60388c47c4a5554f173168bf887383bb
+  summary: Completed via merge b53b398e
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T16:54:36.719979757Z
+  completion_sha: b53b398e60388c47c4a5554f173168bf887383bb
