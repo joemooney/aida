@@ -226,7 +226,34 @@ This injects `sandbox.network.allowedDomains` into the contained `--settings` (t
 
 > **`allowed_hosts = []` (or omitted) means *no restriction*, not "deny all".** An empty list reads like a lockdown but is the unrestricted default — full egress, current behavior. You only restrict egress when the list is **non-empty**, in which case **only** those hosts are allowed.
 
-**Slice-1 limitation:** a non-allowlisted domain *prompts* for approval — fine interactively, but a **headless** `claude -p` drain can't answer the prompt. True block-without-prompt for headless drains needs `network.allowManagedDomainsOnly` via *managed* settings; that's a follow-up. Don't rely on `allowed_hosts` alone to hard-contain a `--no-human` drain yet.
+**Slice-1 limitation:** a non-allowlisted domain *prompts* for approval — fine interactively, but a **headless** `claude -p` drain can't answer the prompt. True block-without-prompt for headless drains needs `network.allowManagedDomainsOnly` via *managed* settings — see the next section.
+
+### Headless hard default-deny egress — `[contained] managed_domains_only`
+
+`allowed_hosts` alone only *prompts* on a non-allowlisted domain, which a headless `--no-human` drain can't answer. To get a **hard** default-deny (block without prompt) on the headless path, opt in:
+
+```toml
+# .aida/config.toml
+[contained]
+os_wrap = true              # the bwrap OS-wrapper this rides on
+managed_domains_only = true
+allowed_hosts = ["github.com", "api.anthropic.com", "static.crates.io", "registry.npmjs.org"]
+```
+
+Claude Code only enforces `sandbox.network.allowManagedDomainsOnly` (deny-without-prompt) when it arrives via the **managed-settings** tier, not the project `--settings`. When `managed_domains_only` is on, the os_wrap launcher generates that managed-settings document (mirroring your `allowed_hosts` into the managed `allowedDomains`, since managed-only honors *only* the managed allowlist) and bind-mounts it read-only over the wrapped process's `/etc/claude-code/managed-settings.json` **inside the bwrap namespace** — so the host `/etc` is never touched and the policy can't be overridden from inside the sandbox. It is **strictly opt-in** and **fail-closed**: with the flag unset the launch is byte-unchanged; with it set, if the bind can't be established the launch errors rather than running egress un-hard-blocked. Requires `os_wrap = true` (it's delivered through the bwrap wrapper).
+
+### Strict read-confinement — `[contained] read_allowlist`
+
+By default the os_wrap bwrap wrapper makes the **whole filesystem readable** (read-only) — write-confinement only. So a rogue drain can't *write* outside its tree but can still *read* host secrets (`~/.ssh`, `~/.aws`, browser cookies) and exfiltrate within the egress allowlist. To tighten reads to a default-**absent** filesystem, opt in with an allowlist of extra readable paths:
+
+```toml
+# .aida/config.toml
+[contained]
+os_wrap = true
+read_allowlist = ["/data/shared", "/home/me/.config/some-tool"]
+```
+
+When `read_allowlist` is **non-empty**, the wrapper replaces the broad `--ro-bind / /` with an enumerated set: the essential system/toolchain paths (`/usr`, `/lib*`, `/etc`, `/nix`, `/opt`, `/run`, `/var`, …) needed for `claude`/`node`/`cargo` to run, **plus** your allowlist, **plus** the worktree (still read-write). Everything else — including host credential dirs — is simply **not present** in the sandbox. **Strictly opt-in:** with the key absent (the default), behavior is byte-for-byte unchanged. Listed paths use a try-bind, so a listed-but-absent path is skipped rather than aborting the launch. **Stronger but more fragile** — if a toolchain needs a path you didn't enumerate it will break, so tune it live on your deploy distro. Requires `os_wrap = true`.
 
 ---
 
