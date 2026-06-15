@@ -251,6 +251,56 @@ pub(crate) fn split_by_signoff(
     pickable.into_iter().partition(|id| queued.contains(id))
 }
 
+/// Extract the `serialize:<group>` group names from a spec's tags (case-
+/// insensitive prefix, lowercased group key). A spec may belong to several
+/// serialize groups; each is returned. trace:STORY-614
+pub(crate) fn serialize_groups(tags: &[String]) -> Vec<String> {
+    tags.iter()
+        .filter_map(|t| {
+            t.trim()
+                .strip_prefix("serialize:")
+                .or_else(|| t.trim().strip_prefix("Serialize:"))
+                .map(|g| g.trim().to_ascii_lowercase())
+        })
+        .filter(|g| !g.is_empty())
+        .collect()
+}
+
+/// STORY-614: substrate-enforce the `serialize:<group>` convention. Given the
+/// READY fan-out set (display ids, in deterministic order) and a lookup from
+/// display id → its serialize groups, collapse the set so that AT MOST ONE spec
+/// per distinct group survives in this wave. The held-back members are returned
+/// separately (NOT dropped) so the caller can fold them into the "awaiting" set
+/// — they drain in successive waves.
+///
+/// Pick is deterministic: the FIRST id (in the supplied order) claims each
+/// group; later members sharing any already-claimed group are held. The caller
+/// supplies `ready` sorted (lowest id first) so the pick is stable across runs.
+/// Specs with no serialize tag are never held — they all stay parallel. Pure +
+/// order-preserving so the gate is unit-testable without a live store.
+/// trace:STORY-614 | ai:claude
+pub(crate) fn collapse_serialize_groups(
+    ready: Vec<String>,
+    groups_by_id: &std::collections::HashMap<String, Vec<String>>,
+) -> (Vec<String>, Vec<String>) {
+    let mut kept = Vec::new();
+    let mut held = Vec::new();
+    let mut claimed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for id in ready {
+        let groups = groups_by_id.get(&id).cloned().unwrap_or_default();
+        // A spec is held if ANY of its groups is already claimed this wave.
+        if groups.iter().any(|g| claimed.contains(g)) {
+            held.push(id);
+        } else {
+            for g in groups {
+                claimed.insert(g);
+            }
+            kept.push(id);
+        }
+    }
+    (kept, held)
+}
+
 /// STORY-547: the broader "why is this open spec *still open*?" classifier.
 /// Where [`classify`] answers the narrow pickability question for the candidate
 /// set (the approved+queued specs a burndown would fan out), `explain_open`
@@ -2682,5 +2732,73 @@ mod tests {
                 "{a:?} must NOT be auto-taken under --yes"
             );
         }
+    }
+
+    /// STORY-614: the wave-builder must never fan more than one spec per
+    /// `serialize:<group>` into one wave. Given 3 ready specs where 2 share
+    /// `serialize:docs`, the kept set has exactly one of the two + the
+    /// independent one (2 total); the held one is preserved (not lost) so it
+    /// drains in a later wave.
+    #[test]
+    fn collapse_serialize_groups_holds_all_but_one_per_group() {
+        let mut groups: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        groups.insert("TASK-1".to_string(), vec!["docs".to_string()]);
+        groups.insert("TASK-2".to_string(), vec!["docs".to_string()]);
+        groups.insert("TASK-3".to_string(), vec![]); // independent — no serialize tag
+
+        let ready = vec![
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+            "TASK-3".to_string(),
+        ];
+        let (kept, held) = collapse_serialize_groups(ready, &groups);
+
+        // Exactly one of the docs-group pair + the independent spec survive.
+        assert_eq!(kept, vec!["TASK-1".to_string(), "TASK-3".to_string()]);
+        // The held member is preserved, not dropped.
+        assert_eq!(held, vec!["TASK-2".to_string()]);
+        // Nothing is lost across the split.
+        assert_eq!(kept.len() + held.len(), 3);
+    }
+
+    /// STORY-614: specs with NO serialize tag all stay parallel — the collapse
+    /// is a no-op for the untagged set.
+    #[test]
+    fn collapse_serialize_groups_keeps_all_untagged() {
+        let groups: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        let ready = vec!["A".to_string(), "B".to_string(), "C".to_string()];
+        let (kept, held) = collapse_serialize_groups(ready.clone(), &groups);
+        assert_eq!(kept, ready);
+        assert!(held.is_empty());
+    }
+
+    /// STORY-614: distinct groups don't collide — one spec per DISTINCT group
+    /// survives, not one spec overall.
+    #[test]
+    fn collapse_serialize_groups_independent_groups_coexist() {
+        let mut groups: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        groups.insert("X".to_string(), vec!["docs".to_string()]);
+        groups.insert("Y".to_string(), vec!["core".to_string()]);
+        let ready = vec!["X".to_string(), "Y".to_string()];
+        let (kept, held) = collapse_serialize_groups(ready, &groups);
+        assert_eq!(kept, vec!["X".to_string(), "Y".to_string()]);
+        assert!(held.is_empty());
+    }
+
+    /// STORY-614: the tag parser lowercases the group and strips the prefix.
+    #[test]
+    fn serialize_groups_parses_prefix_case_insensitive() {
+        let tags = vec![
+            "serialize:Docs".to_string(),
+            "batch:foo".to_string(),
+            "Serialize:CORE".to_string(),
+            "serialize:".to_string(), // empty group — ignored
+        ];
+        let mut g = serialize_groups(&tags);
+        g.sort();
+        assert_eq!(g, vec!["core".to_string(), "docs".to_string()]);
     }
 }
