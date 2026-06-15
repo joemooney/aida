@@ -19,6 +19,10 @@ modified_at: 2026-06-14T22:18:59.246669943Z
 req_type: Story
 tags:
 - parent:EPIC-44
+relationships:
+- rel_type: Parent
+  target_id: 019ec9f5-ffdb-7642-bfd7-312f1bc6c725
+  created_at: 2026-06-15T06:26:58.878430680Z
 comments:
 - id: 019ec824-3c8c-7d91-afde-8801eb0a6532
   author: joe
