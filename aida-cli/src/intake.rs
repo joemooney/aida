@@ -368,6 +368,38 @@ pub fn intake_skill_prompt(apply: bool) -> String {
     }
 }
 
+/// Relative path (under the project root) of the live advisor's context-seed
+/// file. The LIVE advisor maintains this file directly; the cold-boot launcher
+/// reads it and prepends it to the `/aida-assess` prompt. `.aida/*` is
+/// gitignored deny-by-default, so this is per-clone runtime state.
+/// trace:STORY-626 | ai:claude
+pub const ADVISOR_CONTEXT_SEED_REL: &str = ".aida/advisor-context.md";
+
+/// Build the cold-boot `/aida-assess` prompt, seeded with the live advisor's
+/// context file when one is present and non-empty. The headless cold-boot
+/// advisor otherwise starts context-poor and re-derives priorities every run;
+/// prepending the seed lets unattended assess decisions match the live session.
+///
+/// When `.aida/advisor-context.md` exists and has non-whitespace content the
+/// returned prompt is the seed wrapped in a `## Live advisor context (seed …)`
+/// heading, a `---` rule, then the bare `/aida-assess [--apply]`. With no seed
+/// (or an empty file) it returns the bare `intake_skill_prompt(apply)` form.
+/// trace:STORY-626 | ai:claude
+pub fn seeded_assess_prompt(project_root: &std::path::Path, apply: bool) -> String {
+    let bare = intake_skill_prompt(apply);
+    let seed_path = project_root.join(ADVISOR_CONTEXT_SEED_REL);
+    let seed = match std::fs::read_to_string(&seed_path) {
+        Ok(contents) if !contents.trim().is_empty() => contents,
+        _ => return bare,
+    };
+    format!(
+        "## Live advisor context (seed — current ground-truth from the live advisor)\n\n\
+         {}\n\n---\n\n{}",
+        seed.trim_end(),
+        bare
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,5 +536,46 @@ workflow_hints = true
     fn skill_prompt_propose_vs_apply() {
         assert_eq!(intake_skill_prompt(false), "/aida-assess");
         assert_eq!(intake_skill_prompt(true), "/aida-assess --apply");
+    }
+
+    #[test]
+    fn seeded_prompt_no_file_is_bare() {
+        let dir = std::env::temp_dir().join(format!("aida-seed-none-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // No .aida/advisor-context.md present.
+        assert_eq!(seeded_assess_prompt(&dir, false), "/aida-assess");
+        assert_eq!(seeded_assess_prompt(&dir, true), "/aida-assess --apply");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn seeded_prompt_empty_file_is_bare() {
+        let dir = std::env::temp_dir().join(format!("aida-seed-empty-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(".aida")).unwrap();
+        std::fs::write(dir.join(ADVISOR_CONTEXT_SEED_REL), "   \n\n").unwrap();
+        assert_eq!(seeded_assess_prompt(&dir, false), "/aida-assess");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn seeded_prompt_prepends_content() {
+        let dir = std::env::temp_dir().join(format!("aida-seed-full-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(".aida")).unwrap();
+        let body = "Phase: stabilization-first.\nPriority: clear bugs before features.";
+        std::fs::write(dir.join(ADVISOR_CONTEXT_SEED_REL), body).unwrap();
+
+        let out = seeded_assess_prompt(&dir, false);
+        assert!(out.starts_with(
+            "## Live advisor context (seed — current ground-truth from the live advisor)"
+        ));
+        assert!(out.contains(body));
+        assert!(out.contains("\n---\n"));
+        assert!(out.ends_with("/aida-assess"));
+
+        let out_apply = seeded_assess_prompt(&dir, true);
+        assert!(out_apply.ends_with("/aida-assess --apply"));
+        assert!(out_apply.contains(body));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

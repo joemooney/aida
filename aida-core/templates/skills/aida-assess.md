@@ -39,6 +39,13 @@ completable quietly *undoes* the operator's curation. So:
   approve it. A parked spec costs the operator a glance; a wrongly-blessed spec
   pollutes the queue and may get built.
 
+> **If a `## Live advisor context (seed …)` block precedes this skill**, treat
+> it as current ground-truth from the live advisor — weigh it **over** cold
+> re-derivation. It reflects the latest session's priorities, phase, and
+> decisions (the live advisor maintains `.aida/advisor-context.md` and the
+> launcher prepends it to close the cold-boot gap). When the seed and your own
+> fresh inference disagree, the seed wins.
+
 ## What the launcher passes you (env)
 
 ```bash
