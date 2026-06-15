@@ -1,0 +1,18 @@
+id: 019ecbfd-559b-7cb0-83a4-6a149db7cd10
+spec_id: STORY-626
+agreed_id: STORY-626
+title: 'Cold-boot context seeding: live advisor maintains .aida/advisor-context.md; the assess/burndown cold-boot prepends it'
+description: 'Operator insight 2026-06-15: the headless cold-boot advisor (the claude -p that aida assess / solo --watch / the burndown advisor tier launch) is context-poor vs the live session — it re-derives priorities/phase/decisions every time (the headless-advisor-is-cold-boot gap; SPIKE-11 fork-from-live in a simpler substrate form). Fix: the LIVE advisor maintains a context-seed file at .aida/advisor-context.md (gitignored per-clone runtime) capturing current ground-truth — phase/priorities, in-flight direction, lane split, recent decisions, conventions. The cold-boot launcher (aida-cli/src/intake.rs, where the /aida-assess claude -p prompt is built; and the burndown advisor tier) reads it if present and PREPENDS it to the cold-boot prompt as "## Live advisor context (seed — current ground-truth from the live advisor)". The /aida-assess + /aida-advise skills note: if a seed is present, weigh it as current ground-truth over cold re-derivation. MVP: the file + the prepend wiring; the live advisor writes/refreshes the file (a later aida advisor context set command can formalize it). Closes the cold-boot gap so unattended assess/drain decisions match the live session better.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-15T15:53:57.915492777Z
+modified_at: 2026-06-15T15:53:57.915492777Z
+req_type: Story
+tags:
+- advisor
+- autonomy
+- cold-boot
+- from-product
+- relates:SPIKE-11
