@@ -3,15 +3,33 @@ spec_id: TASK-833
 agreed_id: TASK-833
 title: 'aida list inflight / burndown status: show OPEN PRs (work-in-flight, any source) — the signal leases miss'
 description: 'Operator ask 2026-06-15: aida list inflight (= burndown status) only shows session LEASES + the recent-completions heartbeat, so work that does not register a lease — keyboard agents, the Agent-tool worktree fan-out, manual PRs — is invisible mid-flight (only shows after merge via the heartbeat). Add an OPEN PRs section: list open PRs (number, title, head branch) via the forge (gh pr list / glab), labeled as work-in-flight awaiting merge. This is the UNIVERSAL "work in flight, any source" signal that leases miss. Keep it best-effort (skip silently if gh/glab unavailable or not a forge repo, like the BUG-560 forge-aware degrade). Pairs with TASK-829 (the completions heartbeat).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T15:53:46.340132022Z
-modified_at: 2026-06-15T15:53:46.340132022Z
+modified_at: 2026-06-15T16:09:44.613099178Z
 req_type: Task
 tags:
 - aida:burndown
 - aida:list
 - from-product
 - observability
+history:
+- id: 019ecc0b-c7a0-7b12-99ba-09d471235ba3
+  author: aida-auto-bump
+  timestamp: 2026-06-15T16:09:44.608760038Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecc0b-c7a5-7882-a6eb-db8c044ac8ea
+  timestamp: 2026-06-15T16:09:44.613098336Z
+  agent: aida
+  commit_sha: 4de891bfa6779af29cf9cc34229da253519c0dcc
+  summary: Completed via merge 4de891bf
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T16:09:44.446808294Z
+  completion_sha: 4de891bfa6779af29cf9cc34229da253519c0dcc
