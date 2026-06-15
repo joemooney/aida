@@ -943,6 +943,59 @@ pub(crate) fn contained_managed_domains_only(project_root: &std::path::Path) -> 
         .unwrap_or(false)
 }
 
+/// STORY-617: read `[contained] read_allowlist` (a string array of absolute
+/// paths) from the project config. EMPTY when unset, absent, or malformed — the
+/// strict read-confinement is strictly OPT-IN (default-ABSENT key), so an
+/// absent/typo'd key never silently narrows the readable filesystem. Mirrors the
+/// slice-1 `allowed_hosts` rule. When non-empty the os_wrap path binds ONLY
+/// these paths (+ the essential system/toolchain paths + the worktree) ro,
+/// instead of `--ro-bind / /`. trace:STORY-617 | ai:claude
+pub(crate) fn contained_read_allowlist(project_root: &std::path::Path) -> Vec<String> {
+    let cfg = crate::read_project_config_value(project_root);
+    crate::config_lookup(cfg.as_ref(), "contained", "read_allowlist")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// TASK-809: build the Claude Code MANAGED-settings JSON for a headless drain.
+/// STORY-615 already emits `sandbox.network.allowManagedDomainsOnly` in the
+/// project `--settings` JSON, but Claude Code only HARD-BLOCKS (deny without a
+/// prompt) when that flag arrives via the MANAGED settings tier — the project /
+/// `--settings` tier still PROMPTS for a non-allowlisted domain, which a headless
+/// `claude -p` drain cannot answer. This is the remaining slice: a managed-tier
+/// settings document (delivered by bind-mounting it over the wrapped process's
+/// `/etc/claude-code/managed-settings.json` inside the bwrap namespace — no host
+/// root, no host pollution) so the headless drain's egress is truly default-deny.
+///
+/// Per Claude Code's docs, when `allowManagedDomainsOnly` is set in managed
+/// settings, ONLY `allowedDomains` from the MANAGED settings are honored — so the
+/// operator's `allowed_hosts` are mirrored here too. Pure + total so the shape is
+/// unit-tested without spawning. trace:TASK-809 | ai:claude
+pub(crate) fn managed_settings_json(allowed_hosts: &[String]) -> String {
+    let mut network = serde_json::Map::new();
+    network.insert(
+        "allowManagedDomainsOnly".to_string(),
+        serde_json::json!(true),
+    );
+    if !allowed_hosts.is_empty() {
+        network.insert(
+            "allowedDomains".to_string(),
+            serde_json::json!(allowed_hosts),
+        );
+    }
+    serde_json::json!({
+        "sandbox": {
+            "network": serde_json::Value::Object(network)
+        }
+    })
+    .to_string()
+}
+
 /// Build the contained-mode `--settings` JSON. With a NON-EMPTY `allowed_hosts`
 /// egress allowlist, a `sandbox.network.allowedDomains` key is added so Claude
 /// Code's own sandbox (bubblewrap + an out-of-sandbox proxy on Linux) default-
@@ -1065,13 +1118,69 @@ fn os_wrap_enabled(worktree_root: &Path) -> bool {
 /// `--bind-try` form so a missing path is skipped rather than erroring — only
 /// the worktree itself is a hard `--bind` (it always exists; the drain runs in
 /// it). trace:STORY-612 | ai:claude
+// STORY-617: the default (no read-allowlist) convenience entry — preserved as
+// the STORY-612 public signature; production now calls the `_inner` variant
+// directly to thread the opt-in allowlist. Still used by the bwrap unit tests.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn bwrap_confinement_args(worktree: &Path, rw_paths: &[PathBuf]) -> Vec<String> {
+    bwrap_confinement_args_inner(worktree, rw_paths, &[])
+}
+
+/// STORY-617: the essential system paths a strict read-confinement allowlist
+/// always binds (read-only) on top of the operator's `read_allowlist`, because
+/// `claude` / `node` / `cargo` cannot run without them. Kept minimal and
+/// READ-ONLY: the toolchains live under `/usr` and `/nix`, dynamic linking +
+/// shared libs under `/lib*`, system config (incl. resolv.conf and the
+/// `/etc/claude-code` managed-settings drop the TASK-809 path mounts over) and
+/// TLS roots under `/etc`. `/dev`, `/proc`, `/tmp` are provided separately by
+/// the bwrap `--dev`/`--proc`/`--tmpfs` flags. trace:STORY-617 | ai:claude
+fn strict_read_essential_paths() -> &'static [&'static str] {
+    &[
+        "/usr", "/bin", "/sbin", "/lib", "/lib64", "/lib32", "/etc", "/opt", "/nix", "/run", "/var",
+    ]
+}
+
+/// Build the bubblewrap confinement argv. STORY-617 adds an OPTIONAL strict
+/// read-confinement allowlist: when `read_allowlist` is NON-EMPTY the whole-
+/// filesystem `--ro-bind / /` base is REPLACED by an enumerated set of ro
+/// binds — the essential system/toolchain paths (`strict_read_essential_paths`)
+/// plus the operator's allowlist plus the worktree — so host secrets outside
+/// the allowlist (`~/.ssh`, `~/.aws`, browser cookies) are simply NOT PRESENT
+/// in the sandbox, not merely read-only. When `read_allowlist` is EMPTY the
+/// output is byte-for-byte the pre-STORY-617 write-confinement base (ro root),
+/// so the default posture is unchanged. The allowlist entries use `--ro-bind-try`
+/// so a listed-but-absent path is skipped rather than aborting the launch.
+/// Pure + total so both arms are unit-tested without spawning. trace:STORY-617
+pub(crate) fn bwrap_confinement_args_inner(
+    worktree: &Path,
+    rw_paths: &[PathBuf],
+    read_allowlist: &[String],
+) -> Vec<String> {
     let wt = worktree.to_string_lossy().into_owned();
-    let mut args: Vec<String> = vec![
-        // Whole filesystem readable but READ-ONLY — the write-confinement base.
-        "--ro-bind".into(),
-        "/".into(),
-        "/".into(),
+    let mut args: Vec<String> = Vec::new();
+    if read_allowlist.is_empty() {
+        // Default (unchanged) posture: whole filesystem readable but READ-ONLY —
+        // the STORY-612 write-confinement base.
+        args.push("--ro-bind".into());
+        args.push("/".into());
+        args.push("/".into());
+    } else {
+        // STORY-617 strict read-confinement: default-ABSENT filesystem. Bind only
+        // the essential system/toolchain paths + the operator allowlist (all ro
+        // via `--ro-bind-try` so a missing path is skipped, not fatal). The
+        // worktree itself is bound rw below.
+        for p in strict_read_essential_paths() {
+            args.push("--ro-bind-try".into());
+            args.push((*p).to_string());
+            args.push((*p).to_string());
+        }
+        for p in read_allowlist {
+            args.push("--ro-bind-try".into());
+            args.push(p.clone());
+            args.push(p.clone());
+        }
+    }
+    args.extend([
         // Fresh /dev, /proc, writable /tmp so toolchains have a sane env.
         "--dev".into(),
         "/dev".into(),
@@ -1083,7 +1192,7 @@ pub(crate) fn bwrap_confinement_args(worktree: &Path, rw_paths: &[PathBuf]) -> V
         "--bind".into(),
         wt.clone(),
         wt.clone(),
-    ];
+    ]);
     for p in rw_paths {
         // `--bind-try`: skip silently if the path is absent (caches/auth dirs
         // may not exist on a fresh machine) rather than aborting the launch.
@@ -1142,7 +1251,42 @@ fn claude_program_and_args(
         rw_paths.push(home.join(".claude"));
         rw_paths.push(home.join(".claude.json"));
     }
-    let mut full = bwrap_confinement_args(worktree_root, &rw_paths);
+    // STORY-617: opt-in strict read-confinement. Default-ABSENT => empty =>
+    // `bwrap_confinement_args_inner` falls back to the unchanged `--ro-bind / /`.
+    let read_allowlist = contained_read_allowlist(worktree_root);
+    let mut full = bwrap_confinement_args_inner(worktree_root, &rw_paths, &read_allowlist);
+    // TASK-809: when `[contained] managed_domains_only` is on, deliver the hard
+    // default-deny egress via the MANAGED-settings tier — Claude Code only
+    // blocks-without-prompt when the flag arrives there, not via the project
+    // `--settings` STORY-615 emits. We write the managed doc under `.aida/`
+    // (gitignored runtime state) and bind it READ-ONLY over the wrapped
+    // process's `/etc/claude-code/managed-settings.json`, so the host's `/etc`
+    // is never touched and the policy can never be overridden from inside the
+    // sandbox. trace:TASK-809 | ai:claude
+    if contained_managed_domains_only(worktree_root) {
+        let allowed_hosts = contained_allowed_hosts(worktree_root);
+        let json = managed_settings_json(&allowed_hosts);
+        let aida_dir = worktree_root.join(".aida");
+        std::fs::create_dir_all(&aida_dir).with_context(|| {
+            format!(
+                "failed to create {} for managed settings",
+                aida_dir.display()
+            )
+        })?;
+        let managed_path = aida_dir.join("contained-managed-settings.json");
+        std::fs::write(&managed_path, &json).with_context(|| {
+            format!(
+                "failed to write contained managed settings {}",
+                managed_path.display()
+            )
+        })?;
+        // `--ro-bind` (hard, not -try): if managed_domains_only is requested we
+        // MUST get the policy in front of claude — fail-closed if the bind can't
+        // be set up rather than silently launching with egress un-hard-blocked.
+        full.push("--ro-bind".to_string());
+        full.push(managed_path.to_string_lossy().into_owned());
+        full.push("/etc/claude-code/managed-settings.json".to_string());
+    }
     full.push("claude".to_string());
     full.extend(claude_args);
     Ok(("bwrap".to_string(), full))
@@ -2344,6 +2488,198 @@ mod tests {
         let json = contained_settings_json(&[], false);
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(v.pointer("/sandbox/network").is_none());
+    }
+
+    // TASK-809: the MANAGED-settings doc carries the hard default-deny flag
+    // `sandbox.network.allowManagedDomainsOnly = true`, and mirrors the operator
+    // `allowed_hosts` into `sandbox.network.allowedDomains` (managed-only honors
+    // only the managed allowedDomains). With an empty allowlist the
+    // allowedDomains key is omitted but the hard-block flag is still present.
+    // trace:TASK-809 | ai:claude
+    #[test]
+    fn managed_settings_json_hard_blocks_and_mirrors_hosts() {
+        // empty allowlist → flag present, no allowedDomains key.
+        let json = managed_settings_json(&[]);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            v.pointer("/sandbox/network/allowManagedDomainsOnly"),
+            Some(&serde_json::json!(true)),
+            "managed doc must hard-block (deny without prompt): {json}"
+        );
+        assert!(
+            v.pointer("/sandbox/network/allowedDomains").is_none(),
+            "no allowlist → no allowedDomains key: {json}"
+        );
+        // non-empty allowlist → mirrored into the MANAGED allowedDomains.
+        let hosts = vec!["github.com".to_string(), "*.crates.io".to_string()];
+        let json = managed_settings_json(&hosts);
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            v.pointer("/sandbox/network/allowManagedDomainsOnly"),
+            Some(&serde_json::json!(true))
+        );
+        let got: Vec<&str> = v
+            .pointer("/sandbox/network/allowedDomains")
+            .and_then(|d| d.as_array())
+            .expect("managed allowedDomains present")
+            .iter()
+            .filter_map(|d| d.as_str())
+            .collect();
+        assert_eq!(got, vec!["github.com", "*.crates.io"]);
+    }
+
+    // TASK-809: the os_wrap launch binds the generated managed-settings doc over
+    // `/etc/claude-code/managed-settings.json` (hard `--ro-bind`) ONLY when
+    // `[contained] managed_domains_only = true`; absent the flag the launch has
+    // no such bind (unchanged STORY-612 posture). trace:TASK-809 | ai:claude
+    #[test]
+    fn os_wrap_binds_managed_settings_only_when_opted_in() {
+        // Helper: build a worktree with the given config, return the bwrap argv
+        // (or None when the host can't create a userns / bwrap is absent — then
+        // the launch fails closed and we can't inspect the argv, so we skip).
+        fn wrapped_args(cfg: &str) -> Option<Vec<String>> {
+            let tmp = tempfile::tempdir().unwrap();
+            let wt = tmp.path();
+            std::fs::create_dir_all(wt.join(".aida")).unwrap();
+            std::fs::write(wt.join(".aida/config.toml"), cfg).unwrap();
+            if which_on_path("bwrap").is_none() || bwrap_preflight().is_err() {
+                return None;
+            }
+            let dummy = claude_headless_args("/aida-review", "sid");
+            let (program, args) =
+                claude_program_and_args(wt, dummy).expect("wrapped launch builds");
+            assert_eq!(program, "bwrap");
+            Some(args)
+        }
+
+        const MANAGED_DEST: &str = "/etc/claude-code/managed-settings.json";
+
+        // managed_domains_only ON → a hard --ro-bind onto the managed dest.
+        if let Some(args) =
+            wrapped_args("[contained]\nos_wrap = true\nmanaged_domains_only = true\n")
+        {
+            let bound = args
+                .windows(3)
+                .any(|w| w[0] == "--ro-bind" && w[2] == MANAGED_DEST);
+            assert!(
+                bound,
+                "managed_domains_only must --ro-bind the managed settings doc: {args:?}"
+            );
+        }
+
+        // os_wrap on but managed_domains_only OFF → NO managed-settings bind.
+        if let Some(args) = wrapped_args("[contained]\nos_wrap = true\n") {
+            assert!(
+                !args.iter().any(|a| a == MANAGED_DEST),
+                "no managed bind without managed_domains_only (unchanged posture): {args:?}"
+            );
+        }
+    }
+
+    // STORY-617: with an EMPTY read_allowlist the confinement args are
+    // byte-for-byte the pre-STORY-617 base — whole-fs `--ro-bind / /`, no
+    // `--ro-bind-try` for system paths. (If this fails the default read posture
+    // changed.) trace:STORY-617 | ai:claude
+    #[test]
+    fn empty_read_allowlist_keeps_ro_root_unchanged() {
+        let wt = Path::new("/home/joe/ai/aida-story-617");
+        let store = wt.join(".aida-store");
+        let with_helper = bwrap_confinement_args(wt, std::slice::from_ref(&store));
+        let with_inner = bwrap_confinement_args_inner(wt, std::slice::from_ref(&store), &[]);
+        assert_eq!(
+            with_helper, with_inner,
+            "empty allowlist must equal the no-allowlist helper output"
+        );
+        // ro-root present, first.
+        let ro = with_inner
+            .windows(3)
+            .position(|w| w == ["--ro-bind", "/", "/"])
+            .expect("must --ro-bind / / when no read_allowlist");
+        assert_eq!(ro, 0, "ro-root must come first: {with_inner:?}");
+        // no enumerated essential-path binds in the unchanged posture.
+        assert!(
+            !with_inner.iter().any(|a| a == "--ro-bind-try"),
+            "default posture must not enumerate system paths: {with_inner:?}"
+        );
+    }
+
+    // STORY-617: a NON-EMPTY read_allowlist replaces `--ro-bind / /` with an
+    // enumerated set — essential system paths + the allowlist (all ro via
+    // --ro-bind-try) — while still rw-binding the worktree and NEVER unsharing
+    // net. Host secrets outside the allowlist are simply absent. trace:STORY-617
+    #[test]
+    fn nonempty_read_allowlist_enumerates_and_drops_ro_root() {
+        let wt = Path::new("/home/joe/ai/aida-story-617");
+        let store = wt.join(".aida-store");
+        let allow = vec![
+            "/home/joe/.config/special".to_string(),
+            "/data/shared".to_string(),
+        ];
+        let flags = bwrap_confinement_args_inner(wt, std::slice::from_ref(&store), &allow);
+
+        // (a) the broad ro-root is GONE — strict default-absent filesystem.
+        assert!(
+            !flags.windows(3).any(|w| w == ["--ro-bind", "/", "/"]),
+            "strict mode must NOT --ro-bind / /: {flags:?}"
+        );
+
+        // (b) each allowlist entry is bound ro via --ro-bind-try (skips if absent).
+        for p in &allow {
+            assert!(
+                flags
+                    .windows(3)
+                    .any(|w| w[0] == "--ro-bind-try" && w[1] == *p && w[2] == *p),
+                "allowlist path {p} must be ro-bind-try'd: {flags:?}"
+            );
+        }
+        // (c) the essential toolchain paths are present (so claude/cargo run).
+        for must in ["/usr", "/etc", "/lib"] {
+            assert!(
+                flags
+                    .windows(3)
+                    .any(|w| w[0] == "--ro-bind-try" && w[1] == must && w[2] == must),
+                "essential path {must} must be bound: {flags:?}"
+            );
+        }
+        // (d) a host-secret path NOT in the allowlist is absent entirely.
+        assert!(
+            !flags.iter().any(|a| a.contains(".ssh")),
+            "non-allowlisted ~/.ssh must not appear: {flags:?}"
+        );
+
+        // worktree still rw-bound; net still shared.
+        let wt_s = wt.to_string_lossy().to_string();
+        assert!(
+            flags
+                .windows(3)
+                .any(|w| w[0] == "--bind" && w[1] == wt_s && w[2] == wt_s),
+            "worktree must stay rw --bind in strict mode: {flags:?}"
+        );
+        assert!(
+            !flags.iter().any(|a| a == "--unshare-net"),
+            "strict read-confinement must NOT unshare net: {flags:?}"
+        );
+    }
+
+    // STORY-617: the config reader is opt-in — absent key => empty => unchanged.
+    // trace:STORY-617 | ai:claude
+    #[test]
+    fn read_allowlist_config_is_opt_in() {
+        let tmp = tempfile::tempdir().unwrap();
+        let wt = tmp.path();
+        // absent config => empty.
+        assert!(contained_read_allowlist(wt).is_empty());
+        // present array => parsed.
+        std::fs::create_dir_all(wt.join(".aida")).unwrap();
+        std::fs::write(
+            wt.join(".aida/config.toml"),
+            "[contained]\nread_allowlist = [\"/data/a\", \"/data/b\"]\n",
+        )
+        .unwrap();
+        assert_eq!(
+            contained_read_allowlist(wt),
+            vec!["/data/a".to_string(), "/data/b".to_string()]
+        );
     }
 
     // STORY-605: a non-empty allowlist adds `sandbox.network.allowedDomains`
