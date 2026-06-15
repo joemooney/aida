@@ -3,12 +3,12 @@ spec_id: STORY-625
 agreed_id: STORY-625
 title: 'Solo mode must be an ACTIVE loop, not just a flag: a supervisor that runs assess→queue→implement→integrate on a cadence'
 description: 'Operator observation 2026-06-14 (the load-bearing one): aida advisor shows a bless pile but NOTHING signals it will be worked without a human — because today nothing does. aida burndown status reads "no drain running"; solo mode (STORY-624) is a visible FLAG, not an engine (TASK-827 drains-honor-solo is deferred); the garden pass does hygiene (doctor/reconcile/sweep/mailbox) but does NOT queue/implement; the drain + intake + integrate are all launch-and-exit, no daemon. So bless IS a static pile unless an agent (e.g. this advisor session) or human launches a drain. To make solo mode REAL: aida solo (or aida solo --watch) starts a SUPERVISED LOOP that, on a cadence, runs the safe-backlog cycle end-to-end — assess/groom ungroomed drafts → bless+queue the pickable approved set (advisor sign-off) → aida burndown run (headless implementers) → aida queue integrate (merge) → repeat — parking keystone/architecture for the human, honoring the EPIC-43 safety floor (drain lock, keystone-park, mailbox escalation). This is the engine that turns the bless pile into an active pipeline. Composes the already-shipped pieces (intake --apply, burndown run, queue integrate --watch, drain lock BUG-538, keystone-park TASK-813). Parent EPIC-43; needs TASK-827 (drains honor solo).'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T03:18:25.433897244Z
-modified_at: 2026-06-15T03:33:51.262150449Z
+modified_at: 2026-06-15T03:42:09.820845704Z
 req_type: Story
 tags:
 - autonomy
@@ -21,3 +21,21 @@ comments:
   content: 'Design decisions (operator, 2026-06-14) folded into acceptance: (1) aida solo --watch is the SINGLE leave-it-running command — it SUBSUMES aida queue integrate --watch (operator runs ONE terminal, not two). (2) Each tick includes a GARDEN PASS (doctor --heal stale-leases + OBE-briefs, reconcile-status, questions sweep) — the stale leases the operator saw were stale because no garden pass runs unattended today; the loop fixes that. (3) integrate --watch has unimplemented strategies — the solo loop must carry the full integrate behavior, not the partial one. (4) Ship --dry-run first (prints the planned cycle + exits one tick) so the loop is verifiable WITHOUT executing a live drain; the live loop is the autonomy keystone, built keyboard-supervised per the reliability-not-unsupervised principle. Slices: (1) loop skeleton + --dry-run + solo/TTL/drain-lock guards; (2) wire the real cycle (garden→assess/queue→burndown→integrate); (3) integrate strategy completeness; (4) advisor pipeline-activity surfacing (TASK-829).'
   created_at: 2026-06-15T03:28:45.880814648Z
   modified_at: 2026-06-15T03:28:45.880814648Z
+history:
+- id: 019ec95f-5998-7772-bd7b-c46c7e0830c3
+  author: aida-auto-bump
+  timestamp: 2026-06-15T03:42:09.816592950Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 019ec95f-599c-7be2-9823-85211ba5e74c
+  timestamp: 2026-06-15T03:42:09.820845086Z
+  agent: aida
+  commit_sha: 32bbbb65dfbed28a8d9c938c4a30c6e503aa82ac
+  summary: Completed via merge 32bbbb65
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T03:42:09.663416255Z
+  completion_sha: 32bbbb65dfbed28a8d9c938c4a30c6e503aa82ac

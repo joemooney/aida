@@ -3,14 +3,32 @@ spec_id: TASK-830
 agreed_id: TASK-830
 title: 'STORY-625 slice 1: aida solo --watch loop skeleton + --dry-run + cycle composition'
 description: 'First slice of the solo loop: aida solo --watch runs the foreground cadence loop composing the existing safe commands (garden: doctor --heal stale-leases/OBE-briefs + reconcile-status; assess+queue: intake --apply; implement: burndown run; integrate: queue integrate), re-checking the solo flag each tick and exiting on --off/TTL/Ctrl-C. --dry-run prints one cycle and exits (verifiable without a live drain). A non-zero step is logged but does not kill the loop. Remaining slices: integrate strategy completeness (the gaps in integrate --watch), and TASK-829 (advisor pipeline-activity surfacing). Parent STORY-625.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T03:33:51.815414585Z
-modified_at: 2026-06-15T03:33:51.815414585Z
+modified_at: 2026-06-15T03:42:09.825030806Z
 req_type: Task
 tags:
 - autonomy
 - parent:STORY-625
 - solo-mode
+history:
+- id: 019ec95f-599c-7be2-9823-8536098d4fff
+  author: aida-auto-bump
+  timestamp: 2026-06-15T03:42:09.820877088Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec95f-59a1-7ae2-83e5-4a2131309f8d
+  timestamp: 2026-06-15T03:42:09.825030297Z
+  agent: aida
+  commit_sha: 32bbbb65dfbed28a8d9c938c4a30c6e503aa82ac
+  summary: Completed via merge 32bbbb65
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T03:42:09.663416255Z
+  completion_sha: 32bbbb65dfbed28a8d9c938c4a30c6e503aa82ac
