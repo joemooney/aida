@@ -74302,6 +74302,39 @@ fn handle_burndown_status(json: bool) -> Result<()> {
             "{}",
             render_burndown_status_human(&lock, &in_flight, log.as_deref())
         );
+        // TASK-833: open-PR section — the universal "work in flight, any source"
+        // signal that leases miss (keyboard agents, Agent-tool fan-out, manual
+        // PRs never register an AIDA lease, so they're invisible mid-flight until
+        // the merge heartbeat). Best-effort: empty (forge-aware degrade) → skip.
+        // trace:TASK-833 | ai:claude
+        let mut open_prs: Vec<status_cleanup::OpenPrItem> = collect_open_prs(&project_root)
+            .by_branch
+            .into_values()
+            .collect();
+        if !open_prs.is_empty() {
+            const PR_CAP: usize = 15;
+            // Stable order: lowest PR number (oldest) first.
+            open_prs.sort_by_key(|pr| pr.number);
+            println!(
+                "\n  {} Open PRs ({}) — awaiting merge:",
+                "◆".cyan().bold(),
+                open_prs.len()
+            );
+            for pr in open_prs.iter().take(PR_CAP) {
+                println!(
+                    "    {} {}  {}",
+                    format!("#{}", pr.number).yellow(),
+                    pr.title,
+                    pr.head_branch.dimmed()
+                );
+            }
+            if open_prs.len() > PR_CAP {
+                println!(
+                    "    {}",
+                    format!("+{} more", open_prs.len() - PR_CAP).dimmed()
+                );
+            }
+        }
         // TASK-829: recent-activity heartbeat. Without this, "no drain running"
         // reads as "nothing is happening" even when an advisor agent is clearing
         // specs at the keyboard (worktree → PR → merge, which never registers a
@@ -85906,6 +85939,38 @@ mod bug_560_status_forge_tests {
             GhStatus::NotGitHub(forge::ForgeKind::None)
         ));
     }
+
+    /// TASK-833: `parse_open_pr_snapshot` turns a `gh pr list --json` payload
+    /// into rows (number / title / head branch) without shelling out — the
+    /// open-PR section of `aida burndown status` / `aida list inflight` rides
+    /// this. trace:TASK-833
+    #[test]
+    fn parse_open_pr_snapshot_parses_number_title_branch() {
+        let json = r#"[
+            {"number": 760, "title": "feat: add open-PR section", "headRefName": "agent-abc"},
+            {"number": 12, "title": "fix: typo", "headRefName": "fix/typo"}
+        ]"#;
+        let snap = parse_open_pr_snapshot(json);
+        assert_eq!(snap.by_branch.len(), 2);
+        let a = snap.by_branch.get("agent-abc").expect("agent-abc row");
+        assert_eq!(a.number, 760);
+        assert_eq!(a.title, "feat: add open-PR section");
+        assert_eq!(a.head_branch, "agent-abc");
+        let b = snap.by_branch.get("fix/typo").expect("fix/typo row");
+        assert_eq!(b.number, 12);
+    }
+
+    /// Empty array → no rows; malformed JSON / missing number → skip silently.
+    /// trace:TASK-833
+    #[test]
+    fn parse_open_pr_snapshot_degrades_on_empty_and_malformed() {
+        assert!(parse_open_pr_snapshot("[]").by_branch.is_empty());
+        assert!(parse_open_pr_snapshot("not json").by_branch.is_empty());
+        assert!(parse_open_pr_snapshot("{}").by_branch.is_empty());
+        // a row missing the required `number` field is skipped, not panicked on
+        let snap = parse_open_pr_snapshot(r#"[{"title": "no number", "headRefName": "b"}]"#);
+        assert!(snap.by_branch.is_empty());
+    }
 }
 
 #[cfg(test)]
@@ -86136,6 +86201,15 @@ struct OpenPrSnapshot {
 }
 
 fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
+    // TASK-833: mirror the `collect_pr_facts` forge-aware degrade (BUG-560) — on
+    // a non-GitHub forge `gh` errors with a raw "not a known GitHub host" auth
+    // message; skip the spawn entirely and degrade to an empty snapshot so every
+    // dependent surface (status-cleanup detectors + the burndown-status open-PR
+    // section) renders nothing rather than leaking that error.
+    // trace:TASK-833 | ai:claude
+    if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
+        return OpenPrSnapshot::default();
+    }
     let gh_bin = match resolve_gh_binary() {
         Some(p) => p,
         None => return OpenPrSnapshot::default(),
@@ -86159,7 +86233,17 @@ fn collect_open_prs(project_root: &std::path::Path) -> OpenPrSnapshot {
     if !out.status.success() {
         return OpenPrSnapshot::default();
     }
-    let parsed: serde_json::Value = match serde_json::from_slice(&out.stdout) {
+    parse_open_pr_snapshot(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// TASK-833: pure parse of a `gh pr list --json
+/// number,title,headRefName,statusCheckRollup,mergeable,reviewDecision` payload
+/// into an `OpenPrSnapshot`. Split out of `collect_open_prs` so it's
+/// unit-testable without shelling out; malformed JSON / a missing `number`
+/// field degrades silently (empty snapshot / skip the row).
+/// trace:TASK-833 | ai:claude
+fn parse_open_pr_snapshot(json: &str) -> OpenPrSnapshot {
+    let parsed: serde_json::Value = match serde_json::from_str(json.trim()) {
         Ok(v) => v,
         Err(_) => return OpenPrSnapshot::default(),
     };
