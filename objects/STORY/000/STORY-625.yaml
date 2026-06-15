@@ -1,0 +1,17 @@
+id: 019ec949-9d99-7890-98fd-fab17fc5b4ba
+spec_id: STORY-625
+agreed_id: STORY-625
+title: 'Solo mode must be an ACTIVE loop, not just a flag: a supervisor that runs assess→queue→implement→integrate on a cadence'
+description: 'Operator observation 2026-06-14 (the load-bearing one): aida advisor shows a bless pile but NOTHING signals it will be worked without a human — because today nothing does. aida burndown status reads "no drain running"; solo mode (STORY-624) is a visible FLAG, not an engine (TASK-827 drains-honor-solo is deferred); the garden pass does hygiene (doctor/reconcile/sweep/mailbox) but does NOT queue/implement; the drain + intake + integrate are all launch-and-exit, no daemon. So bless IS a static pile unless an agent (e.g. this advisor session) or human launches a drain. To make solo mode REAL: aida solo (or aida solo --watch) starts a SUPERVISED LOOP that, on a cadence, runs the safe-backlog cycle end-to-end — assess/groom ungroomed drafts → bless+queue the pickable approved set (advisor sign-off) → aida burndown run (headless implementers) → aida queue integrate (merge) → repeat — parking keystone/architecture for the human, honoring the EPIC-43 safety floor (drain lock, keystone-park, mailbox escalation). This is the engine that turns the bless pile into an active pipeline. Composes the already-shipped pieces (intake --apply, burndown run, queue integrate --watch, drain lock BUG-538, keystone-park TASK-813). Parent EPIC-43; needs TASK-827 (drains honor solo).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-15T03:18:25.433897244Z
+modified_at: 2026-06-15T03:18:25.433897244Z
+req_type: Story
+tags:
+- autonomy
+- from-product
+- parent:EPIC-43
+- solo-mode
