@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:44:06.203846384Z
-modified_at: 2026-06-15T15:00:55.501158882Z
+modified_at: 2026-06-15T17:41:13.817856791Z
 req_type: Task
 tags:
 - aida:cli
@@ -25,4 +25,4 @@ tags:
 - parent:EPIC-40
 deferred: true
 deferred_at: 2026-06-15T15:00:55.501158882Z
-deferred_until: CLI manual (EPIC-40) is deferred post-stabilization; finalize when the manual is prioritized
+deferred_until: CLI-addition burst settles (statusline/identity batch landed) / stabilization declared
