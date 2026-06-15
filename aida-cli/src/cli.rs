@@ -7054,6 +7054,22 @@ pub enum Command {
         /// Safety TTL for the solo flag (default 24h); accepts 8h / 30m / 2h30m.
         #[clap(long, value_name = "DURATION")]
         ttl: Option<String>,
+        /// Run the solo LOOP in the foreground: the single leave-it-running
+        /// command that works the safe backlog end-to-end on a cadence
+        /// (garden → assess/queue → implement → integrate → repeat), keystone
+        /// parked. Subsumes `aida queue integrate --watch`. Stops on `aida solo
+        /// --off`, Ctrl-C, or the TTL.
+        // trace:STORY-625 | ai:claude
+        #[clap(long)]
+        watch: bool,
+        /// With `--watch`: run ONE tick that PRINTS the cycle it would execute,
+        /// then exit — verify the loop without running a live drain.
+        #[clap(long)]
+        dry_run: bool,
+        /// With `--watch`: seconds between cycles (default 300).
+        // trace:STORY-625 | ai:claude
+        #[clap(long, value_name = "SECS", default_value_t = 300)]
+        interval: u64,
     },
 
     /// Print the caller identity AIDA resolved — role, agent-type, agent-name,
