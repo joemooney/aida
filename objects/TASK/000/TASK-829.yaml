@@ -3,12 +3,12 @@ spec_id: TASK-829
 agreed_id: TASK-829
 title: 'aida advisor: surface pipeline activity (drain running? in-flight? last/next pass?) so the worklist reads active-vs-static'
 description: 'Operator observation 2026-06-14: aida advisor shows the bless/groom/distill piles but gives NO signal of whether any mechanism is actively working them — it reads as a static pile. Add a pipeline-status header that reads the existing primitives (the BUG-538 .aida/drain.lock, queue in-flight leases, the solo flag) and shows: ● draining (N in-flight, started Xm ago) / ○ idle — no drain running (start: aida burndown run, or aida solo --watch for the loop). When a solo loop / drain is active, show last-pass + next-pass cadence. Makes "active pipeline vs static pile" visible at a glance. Reuses aida burndown status logic; relates STORY-604 (running-drain observability) and the solo-loop story. Parent EPIC-43.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T03:18:35.085930775Z
-modified_at: 2026-06-15T03:18:35.085930775Z
+modified_at: 2026-06-15T04:40:32.028014584Z
 req_type: Task
 tags:
 - aida:advisor
@@ -16,3 +16,21 @@ tags:
 - observability
 - parent:EPIC-43
 - solo-mode
+history:
+- id: 019ec994-ca17-7f31-9105-4ae43ace1369
+  author: aida-auto-bump
+  timestamp: 2026-06-15T04:40:32.023611661Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec994-ca1c-7223-a5fb-2e2457cb1b5f
+  timestamp: 2026-06-15T04:40:32.028013942Z
+  agent: aida
+  commit_sha: 3d2ce1fcfe1fdacc828513fbb44b6ac48e8de6a8
+  summary: Completed via merge 3d2ce1fc
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T04:40:31.869039348Z
+  completion_sha: 3d2ce1fcfe1fdacc828513fbb44b6ac48e8de6a8
