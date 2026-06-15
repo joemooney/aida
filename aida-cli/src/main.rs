@@ -1547,8 +1547,15 @@ fn run() -> Result<()> {
         Command::Presence => return handle_presence_command(),
         // STORY-624: solo-mode flag — machine-global ~/.aida/solo.toml, no
         // requirement store needed (mirrors the away/home early dispatch).
-        Command::Solo { off, status, ttl } => {
-            return handle_solo_command(*off, *status, ttl.as_deref());
+        Command::Solo {
+            off,
+            status,
+            ttl,
+            watch,
+            dry_run,
+            interval,
+        } => {
+            return handle_solo_command(*off, *status, ttl.as_deref(), *watch, *dry_run, *interval);
         }
         // TASK-784: pure read of the caller-identity resolvers (env vars +
         // current_user_id + detect_agent_type). No project store needed, so
@@ -52072,11 +52079,140 @@ fn handle_presence_command() -> Result<()> {
     Ok(())
 }
 
-/// `aida solo [--off | --status | --ttl <DURATION>]` — enter/exit/show solo
-/// mode, the visible work-state flag for advisor+integrator running the safe
-/// backlog end-to-end (EPIC-43). State lives in `~/.aida/solo.toml` with a
-/// safety TTL; the statusline surfaces it. trace:STORY-624 | ai:claude
-fn handle_solo_command(off: bool, status: bool, ttl: Option<&str>) -> Result<()> {
+/// STORY-625: one cycle of the solo loop — the safe-backlog pipeline, composed
+/// from the existing (individually-safe) commands by shelling out to this same
+/// binary. Order: garden (hygiene) → assess+queue (advisor sign-off, keystone
+/// parked) → implement (headless drain) → integrate (merge Done PRs, keystone
+/// parked). A non-zero step is logged but does NOT kill the loop (a shelved
+/// phase is retried next tick). With `dry_run`, each step is PRINTED, not run.
+/// trace:STORY-625 | ai:claude
+fn solo_cycle(dry_run: bool) -> Result<()> {
+    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    // Each step is (label, args-to-`aida`). Garden first — this is what reaps the
+    // stale leases / OBE briefs the operator otherwise saw pile up unattended.
+    let steps: &[(&str, &[&str])] = &[
+        (
+            "garden — reap stale leases",
+            &["doctor", "--heal", "--category", "stale-leases", "--yes"],
+        ),
+        (
+            "garden — reap OBE briefs",
+            &["doctor", "--heal", "--category", "OBE-briefs", "--yes"],
+        ),
+        (
+            "garden — reconcile Done→Completed",
+            &["db", "reconcile-status"],
+        ),
+        (
+            "assess + queue (advisor sign-off; keystone parked)",
+            &["intake", "--apply"],
+        ),
+        (
+            "implement (headless drain of the queued set)",
+            &["burndown", "run"],
+        ),
+        (
+            "integrate (merge Done PRs; keystone parked)",
+            &["queue", "integrate"],
+        ),
+    ];
+    for (label, args) in steps {
+        if dry_run {
+            println!(
+                "  {} {} — aida {}",
+                "would run:".dimmed(),
+                label,
+                args.join(" ")
+            );
+            continue;
+        }
+        println!(
+            "  {} {} — aida {}",
+            "▸".cyan(),
+            label,
+            args.join(" ").dimmed()
+        );
+        match std::process::Command::new(&exe).args(*args).status() {
+            Ok(s) if s.success() => {}
+            Ok(s) => eprintln!(
+                "    {} step exited {} — continuing (retried next tick)",
+                "note:".yellow(),
+                s.code().unwrap_or(-1)
+            ),
+            Err(e) => eprintln!(
+                "    {} step failed to spawn: {e} — continuing",
+                "note:".yellow()
+            ),
+        }
+    }
+    Ok(())
+}
+
+/// STORY-625: the solo LOOP — the single leave-it-running command that works the
+/// safe backlog end-to-end on a cadence (subsumes `aida queue integrate
+/// --watch`). Sets the solo flag on entry; each tick re-checks it and exits when
+/// it's cleared (`aida solo --off`) or the TTL lapses; Ctrl-C also stops it.
+/// `--dry-run` runs ONE tick that prints the cycle and exits, so the loop is
+/// verifiable without a live drain. trace:STORY-625 | ai:claude
+fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
+    // Entering the loop turns solo on (default TTL) so the flag + statusline
+    // reflect the active pipeline. A dry-run does NOT flip the real flag.
+    if !dry_run && !presence::current_solo(chrono::Utc::now()) {
+        presence::set_solo(presence::DEFAULT_SOLO_TTL_SECS)?;
+    }
+    println!(
+        "{} solo loop {} (interval {}s) — garden → assess/queue → implement → integrate → repeat. \
+         {} to stop.",
+        "🤖",
+        if dry_run {
+            "DRY-RUN".yellow().bold()
+        } else {
+            "running".green().bold()
+        },
+        interval,
+        "Ctrl-C or `aida solo --off`".cyan()
+    );
+    loop {
+        let now = chrono::Utc::now();
+        if !dry_run && !presence::current_solo(now) {
+            println!(
+                "{} solo flag cleared (--off or TTL) — loop stopped.",
+                "■".dimmed()
+            );
+            break;
+        }
+        println!("\n{} cycle @ {}", "──".dimmed(), now.to_rfc3339().dimmed());
+        solo_cycle(dry_run)?;
+        if dry_run {
+            println!("\n{} dry-run: one cycle shown; not looping.", "■".dimmed());
+            break;
+        }
+        println!(
+            "{} cycle complete; sleeping {}s ({} to stop)",
+            "·".dimmed(),
+            interval,
+            "Ctrl-C / `aida solo --off`".cyan()
+        );
+        std::thread::sleep(std::time::Duration::from_secs(interval));
+    }
+    Ok(())
+}
+
+/// `aida solo [--off | --status | --ttl <DURATION> | --watch [--dry-run]]` —
+/// enter/exit/show solo mode (the visible work-state flag, STORY-624) or run the
+/// solo LOOP (STORY-625). State lives in `~/.aida/solo.toml` with a safety TTL;
+/// the statusline surfaces it. trace:STORY-624 trace:STORY-625 | ai:claude
+fn handle_solo_command(
+    off: bool,
+    status: bool,
+    ttl: Option<&str>,
+    watch: bool,
+    dry_run: bool,
+    interval: u64,
+) -> Result<()> {
+    if watch {
+        return run_solo_loop(dry_run, interval);
+    }
     let now = chrono::Utc::now();
     if status {
         if presence::current_solo(now) {
