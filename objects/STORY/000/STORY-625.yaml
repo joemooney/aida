@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T03:18:25.433897244Z
-modified_at: 2026-06-15T03:44:26.845039679Z
+modified_at: 2026-06-15T03:44:27.489137366Z
 req_type: Story
 tags:
 - autonomy
@@ -21,6 +21,11 @@ comments:
   content: 'Design decisions (operator, 2026-06-14) folded into acceptance: (1) aida solo --watch is the SINGLE leave-it-running command — it SUBSUMES aida queue integrate --watch (operator runs ONE terminal, not two). (2) Each tick includes a GARDEN PASS (doctor --heal stale-leases + OBE-briefs, reconcile-status, questions sweep) — the stale leases the operator saw were stale because no garden pass runs unattended today; the loop fixes that. (3) integrate --watch has unimplemented strategies — the solo loop must carry the full integrate behavior, not the partial one. (4) Ship --dry-run first (prints the planned cycle + exits one tick) so the loop is verifiable WITHOUT executing a live drain; the live loop is the autonomy keystone, built keyboard-supervised per the reliability-not-unsupervised principle. Slices: (1) loop skeleton + --dry-run + solo/TTL/drain-lock guards; (2) wire the real cycle (garden→assess/queue→burndown→integrate); (3) integrate strategy completeness; (4) advisor pipeline-activity surfacing (TASK-829).'
   created_at: 2026-06-15T03:28:45.880814648Z
   modified_at: 2026-06-15T03:28:45.880814648Z
+- id: 019ec961-7361-7290-b53a-3c6b6f643116
+  author: joe
+  content: 'Reopened (advisor): the TASK-830 commit subject listed (STORY-625) and auto-completed it on merge, but only SLICE 1 (the loop skeleton + --dry-run) shipped. Remaining: slice 2 (carry the full integrate strategies, not the partial integrate --watch) + slice 4 (TASK-829 advisor pipeline-activity surfacing). Lesson reapplied: trailer only the slice task, never the parent story.'
+  created_at: 2026-06-15T03:44:27.489137366Z
+  modified_at: 2026-06-15T03:44:27.489137366Z
 history:
 - id: 019ec95f-5998-7772-bd7b-c46c7e0830c3
   author: aida-auto-bump
