@@ -3,15 +3,33 @@ spec_id: TASK-828
 agreed_id: TASK-828
 title: 'aida list advisor: alias for aida advisor (round out the list lens family)'
 description: 'Operator request 2026-06-14: make aida list advisor an alias for bare aida advisor (the advisor worklist), completing the aida list <lens> family: open / human / queue / why / advisor. Extend the existing rewrite_list_alias helper (TASK-822/824) with a single-token target. Full flag passthrough (aida list advisor --short -> aida advisor --short).'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T02:15:16.296232415Z
-modified_at: 2026-06-15T02:15:16.296232415Z
+modified_at: 2026-06-15T02:25:21.053234169Z
 req_type: Task
 tags:
 - aida:advisor
 - aida:list
 - from-product
 - ux
+history:
+- id: 019ec919-0698-7a02-aa78-30816b0d7cd0
+  author: aida-auto-bump
+  timestamp: 2026-06-15T02:25:21.048733560Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ec919-069d-7b92-ada9-b2edad8d132c
+  timestamp: 2026-06-15T02:25:21.053233407Z
+  agent: aida
+  commit_sha: 17606783abce03457dc88473665651ba8f08efc8
+  summary: Completed via merge 17606783
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T02:25:20.896198618Z
+  completion_sha: 17606783abce03457dc88473665651ba8f08efc8
