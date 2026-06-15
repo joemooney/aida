@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T06:26:42.779394693Z
-modified_at: 2026-06-15T06:26:42.779394693Z
+modified_at: 2026-06-15T06:27:20.113154025Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019ec7b9-ca3a-72b1-b5e4-6b18bddb1f20
   created_at: 2026-06-15T06:26:58.878430680Z
+comments:
+- id: 019ec9f6-91b1-7f50-b0f5-62111fe29443
+  author: joe
+  content: Commit 3d2ce1fcf references this requirement
+  created_at: 2026-06-15T06:27:20.113154025Z
+  modified_at: 2026-06-15T06:27:20.113154025Z
