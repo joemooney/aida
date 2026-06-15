@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:24:48.476952031Z
-modified_at: 2026-06-14T19:24:48.476952031Z
+modified_at: 2026-06-15T16:48:58.117552595Z
 req_type: Task
 tags:
 - agent-launcher
@@ -16,3 +16,9 @@ tags:
 - from-friction
 - needs-human
 - parent:EPIC-42
+comments:
+- id: 019ecc2f-b105-7490-a295-55fe996c0e7a
+  author: joe
+  content: 'Advisor disposition (assess pass 2026-06-15): concur with the spec''s own recommendation — option (A): union AIDA_AGENT_TYPE (short name) into inbox_identities() so --to <type> reaches the mailbox, matching brief routing. The shared-per-type watermark race is acceptable for the rare multi-instance-same-type case and is reversible. Low priority, not blocking any open work. Holding at Draft pending operator sign-off on the addressing-semantics call.'
+  created_at: 2026-06-15T16:48:58.117552595Z
+  modified_at: 2026-06-15T16:48:58.117552595Z
