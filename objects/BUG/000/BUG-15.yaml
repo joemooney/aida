@@ -8,7 +8,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-12T17:55:41.528538900Z
 created_by: Joe Mooney
-modified_at: 2026-05-31T05:58:11.652490054Z
+modified_at: 2026-06-15T17:41:12.819941063Z
 req_type: Bug
 tags:
 - deferred:needs-repro
@@ -20,4 +20,7 @@ comments:
   content: 'Triaged 2026-05-30 (autonomous backlog sweep): deferred — needs a current-TUI repro. The ''q v'' flow this describes doesn''t map to today''s TUI bindings (grep of aida-tui finds no ''q''→queue-view→''v'' path; ''q'' is bound to quit/close-overlay). The TUI changed substantially since this New-status bug was filed, so it may be stale. Re-verify against the current `aida tui`: reproduce the stuck-popup, capture which keys + which view, then re-file with the current binding path. Not fixable blind.'
   created_at: 2026-05-31T05:58:09.906958789Z
   modified_at: 2026-05-31T05:58:09.906958789Z
+deferred: true
+deferred_at: 2026-06-15T17:41:12.819941063Z
+deferred_until: reproduces on current aida tui build (STORY-137); if not reproducible, reject as stale
 custom_status: New
