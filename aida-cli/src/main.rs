@@ -34748,6 +34748,21 @@ session; if you need the next pickup, start a fresh `aida agent new ... --spec N
         out.push('\n');
     }
 
+    // STORY-619: make the launch snapshot self-describing about the mailbox for
+    // EVERY vendor. Only Claude Code gets the prompt-bound aida-mail-notice.sh
+    // hook; codex/antigravity/etc. get nothing automatic. The launcher already
+    // writes this context file, so embedding the current unread snapshot + the
+    // poll command + cadence here closes the Claude-only delivery-awareness gap
+    // without any background process. The agent's identity is plan.name (the
+    // AIDA_USER the launcher exports for the spawned agent, per BUG-558).
+    // trace:STORY-619 | ai:claude
+    out.push_str("## Mailbox\n\n");
+    out.push_str(&render_launch_mailbox_section(
+        &plan.project_root,
+        &plan.name,
+    ));
+    out.push('\n');
+
     out.push_str("## Queue Snapshot\n\n");
     if plan.current_spec.is_none() {
         if let Some(line) = queue_head_line(&plan.project_root, plan.role.as_deref()) {
@@ -34773,6 +34788,64 @@ session; if you need the next pickup, start a fresh `aida agent new ... --spec N
     }
     out.push_str("- Ship with a trailing-parens spec trailer in the commit subject, then use `aida pr ship`.\n");
     Ok(out)
+}
+
+/// STORY-619: build the launch-context `## Mailbox` body for a spawned agent.
+///
+/// Closes the cross-vendor delivery-awareness gap: only Claude Code gets the
+/// prompt-bound `aida-mail-notice.sh` hook, so codex/antigravity/etc. otherwise
+/// get no mailbox awareness at all. Because the launcher writes the context file
+/// as plain text and EVERY vendor reads it at startup, embedding (a) the current
+/// unread-mail snapshot and (b) the explicit inbox command + poll cadence makes
+/// the snapshot self-describing for any vendor without any background process.
+///
+/// Reuses the existing notice renderer (`render_mailbox_notice`) and the pure
+/// `build_notice` core rather than duplicating inbox logic. `agent_name` is the
+/// spawned agent's stable identity (the `AIDA_USER` the launcher exports, per
+/// BUG-558), so the snapshot is keyed to the agent's own inbox. The guidance
+/// line always renders (even when caught up) so the agent learns the mailbox
+/// exists and how to poll it. trace:STORY-619 | ai:claude
+fn render_launch_mailbox_section(project_root: &std::path::Path, agent_name: &str) -> String {
+    let mut out = String::new();
+
+    // The orphan-store worktree (canonical mailbox layer) lives at
+    // <project_root>/.aida-store; the local layer is <project_root>/.aida/mailbox.
+    // Mirror handle_mailbox_command's derivation. Reads return empty (never
+    // error) when the store/mailbox is absent, so an offline or fresh clone
+    // simply yields the caught-up branch + guidance.
+    let store_root = project_root.join(".aida-store");
+    let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
+    let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
+    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+    let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
+    let identities = [agent_name.to_string()];
+    let summary = aida_core::mailbox::build_notice(
+        identities.iter().map(String::as_str),
+        &merged,
+        &watermarks,
+        aida_core::mailbox::NOTICE_DEFAULT_CAP,
+    );
+
+    if summary.is_empty() {
+        out.push_str(&format!(
+            "- No unread mailbox messages for `{agent_name}` at launch.\n"
+        ));
+    } else {
+        out.push_str(&render_mailbox_notice(&summary, &identities));
+        out.push('\n');
+    }
+
+    // Always include the guidance — only Claude Code gets the auto-hook, so every
+    // other vendor relies on this line to know the mailbox exists and to poll it.
+    out.push_str(
+        "Other agents send you mail here. Only Claude Code auto-surfaces new mail; \
+every other vendor must poll. Check your inbox with `aida mailbox inbox` (reads \
++ acks) or `aida mailbox notice` (ambient, non-marking peek), and re-check \
+periodically — every few prompts and between work items — since nothing nudges \
+you automatically.\n",
+    );
+
+    out
 }
 
 // trace:STORY-436 | ai:codex
@@ -36501,6 +36574,54 @@ mod agent_launcher_tests {
         );
         assert!(
             context.contains("STORY-436 — Role-context auto-injection"),
+            "{context}"
+        );
+        // STORY-619: the snapshot is self-describing about the mailbox for any
+        // vendor — section header, the empty-inbox line for this agent, and the
+        // vendor-neutral poll guidance naming the inbox command.
+        assert!(context.contains("## Mailbox"), "{context}");
+        assert!(
+            context.contains("No unread mailbox messages for `codex-test`"),
+            "{context}"
+        );
+        assert!(context.contains("aida mailbox inbox"), "{context}");
+        assert!(context.contains("re-check"), "{context}");
+    }
+
+    #[test]
+    fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
+        // STORY-619: even with no unread mail, the launch context must name the
+        // inbox command + poll cadence so a non-Claude vendor (which has no
+        // auto-hook) learns the mailbox exists and to poll it.
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        let config = AgentLaunchConfig {
+            agent_type: "antigravity",
+            binary: "antigravity",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+        };
+        let plan = AgentLaunchPlan {
+            project_root: project.clone(),
+            launch_cwd: project,
+            role: Some("implementer".into()),
+            current_spec: None,
+            name: "antigravity-test".to_string(),
+            lease_id: None,
+        };
+
+        let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
+
+        assert!(context.contains("## Mailbox"), "{context}");
+        assert!(context.contains("aida mailbox inbox"), "{context}");
+        assert!(context.contains("aida mailbox notice"), "{context}");
+        assert!(
+            context.contains("Only Claude Code auto-surfaces new mail"),
+            "{context}"
+        );
+        assert!(
+            context.contains("No unread mailbox messages for `antigravity-test`"),
             "{context}"
         );
     }
