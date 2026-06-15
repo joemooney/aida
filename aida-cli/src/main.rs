@@ -74310,8 +74310,62 @@ fn handle_burndown_status(json: bool) -> Result<()> {
             "{}",
             render_burndown_status_human(&lock, &in_flight, log.as_deref())
         );
+        // TASK-829: recent-activity heartbeat. Without this, "no drain running"
+        // reads as "nothing is happening" even when an advisor agent is clearing
+        // specs at the keyboard (worktree → PR → merge, which never registers a
+        // lease). Surfacing recent completions makes the view a liveness signal,
+        // not just a drain-state probe. trace:TASK-829 | ai:claude
+        if let Some(line) = recent_activity_line(&project_root, now) {
+            println!("{line}");
+        }
     }
     Ok(())
+}
+
+/// TASK-829: a one-line recent-activity heartbeat for `aida burndown status` /
+/// `aida list inflight` — specs that reached Completed in the last 24h, read
+/// from the store (`modified_at` is stamped on the status flip, incl. the
+/// auto-bump on merge). Proves the system is making progress even when no drain
+/// or lease is live. `None` only when the store can't be loaded.
+/// trace:TASK-829 | ai:claude
+fn recent_activity_line(
+    project_root: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    let store = load_store_for_lookup(project_root)?;
+    let cutoff = now - chrono::Duration::hours(24);
+    let mut done: Vec<(String, chrono::DateTime<chrono::Utc>)> = store
+        .requirements
+        .iter()
+        .filter(|r| matches!(r.status, aida_core::RequirementStatus::Completed))
+        .filter(|r| r.modified_at >= cutoff)
+        .map(|r| {
+            let id = r
+                .agreed_id
+                .clone()
+                .or_else(|| r.spec_id.clone())
+                .unwrap_or_else(|| r.id.to_string());
+            (id, r.modified_at)
+        })
+        .collect();
+    if done.is_empty() {
+        return Some(format!(
+            "\n  {} no completions in the last 24h · {} for the full feed",
+            "○".dimmed(),
+            "aida history".cyan()
+        ));
+    }
+    done.sort_by(|a, b| b.1.cmp(&a.1));
+    let (last_id, last_t) = &done[0];
+    Some(format!(
+        "\n  {} recent: {} spec{} completed in last 24h — last: {} ({}) · {}",
+        "●".green(),
+        done.len(),
+        if done.len() == 1 { "" } else { "s" },
+        last_id.cyan(),
+        humanize_relative(*last_t),
+        "aida history".cyan()
+    ))
 }
 
 /// TASK-806: human-readable `burndown status` summary. Pure over its inputs so
