@@ -1,0 +1,12 @@
+id: 019ec9f5-ffdb-7642-bfd7-312f1bc6c725
+spec_id: TASK-832
+agreed_id: TASK-832
+title: 'STORY-621 Slice 0: resolve_glab_binary + forge-keyed CLI dispatch (foundation)'
+description: 'Slice 0 of the EPIC-44 Phase-1 forge wiring (STORY-621), the confirmed-missing foundation all later slices depend on. Generalizes resolve_gh_binary into resolve_forge_binary(exe_base, test_env, debug_env); keeps resolve_gh_binary as a thin wrapper so GitHub behavior is byte-for-byte unchanged; adds resolve_glab_binary (GitLab CLI resolver mirroring the BUG-74/79 PATH-walk + sanity-spawn) and resolve_forge_cli(ForgeKind) dispatch (GitHub to gh, GitLab to glab, None to no forge CLI). Adds + documents AIDA_TEST_GLAB_BINARY and AIDA_DEBUG_GLAB. Two unit tests. The dead_code-allowed glab resolver + dispatcher get wired into call sites in follow-on slices (Slice 1: route PR create/merge/open-PR-for-branch through the Forge trait). No GitHub behavior change.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-15T06:26:42.779394693Z
+modified_at: 2026-06-15T06:26:42.779394693Z
+req_type: Task
