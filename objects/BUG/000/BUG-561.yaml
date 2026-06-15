@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T17:24:48.246417605Z
-modified_at: 2026-06-15T17:31:25.933076398Z
+modified_at: 2026-06-15T17:57:39.419242434Z
 req_type: Bug
 tags:
 - aida:intake
 - curation
 - from-advisor-assess
 - substrate-as-bouncer
+comments:
+- id: 019ecc6e-93db-7170-be8e-0de8802e25a0
+  author: joe
+  content: Commit d8b990893 references this requirement
+  created_at: 2026-06-15T17:57:39.419242434Z
+  modified_at: 2026-06-15T17:57:39.419242434Z
