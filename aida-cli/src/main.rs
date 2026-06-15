@@ -76590,11 +76590,30 @@ fn resolve_burndown_sets(
         }
     }
 
+    // STORY-614: id → serialize:<group> lookup, built from the same scan so the
+    // wave-builder can substrate-enforce the serialize convention without a
+    // re-read. trace:STORY-614
+    let groups_by_id: std::collections::HashMap<String, Vec<String>> = candidates
+        .iter()
+        .map(|c| (c.id.clone(), burndown::serialize_groups(&c.tags)))
+        .collect();
+
     let (pickable, parked) = burndown::partition(&candidates);
     // STORY-546: split the pickable set by advisor sign-off (queue membership).
     // `ready` = blessed + drainable; `awaiting_signoff` = pickable but the
     // advisor hasn't queued it yet (the `--candidates` curation list).
-    let (ready, awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
+    let (mut ready, mut awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
+
+    // STORY-614: substrate-enforce the `serialize:<group>` convention — the
+    // fan-out set must never carry more than one spec per group, so a drain that
+    // ignores the skill text still can't co-fan a collision group. Sort the
+    // ready set (lowest id first) so the deterministic "first claims the group"
+    // pick is stable across runs; the held members fold into awaiting (they
+    // drain in successive waves, not dropped). trace:STORY-614 | ai:claude
+    ready.sort();
+    let (kept_ready, held_serialized) = burndown::collapse_serialize_groups(ready, &groups_by_id);
+    ready = kept_ready;
+    awaiting_signoff.extend(held_serialized);
     supervised.sort();
     Ok((ready, awaiting_signoff, parked, supervised, titles))
 }
