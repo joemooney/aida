@@ -3,12 +3,12 @@ spec_id: BUG-561
 agreed_id: BUG-561
 title: aida intake candidate fence does not honor the deferred view-flag (surfaces parked specs as bless candidates)
 description: 'Running /aida-assess (aida intake) on 2026-06-15: the intake fence offered 4 weigh-able approve-candidates (BUG-15, TASK-775, TASK-787, TASK-793) with on_apply=queue. ALL FOUR are on the deferred shelf (aida list --deferred lists every one of them) and are correctly hidden from the operator-facing aida list. So intake surfaces operator-PARKED work as approve-eligible. aida list honors the STORY-584 deferred flag + the deferred:* tag convention and hides those rows; aida intake does NOT. This is a curation-corruption risk: a headless aida intake --apply (the cold-boot advisor that /aida-assess spawns) would re-bless and re-queue the operator deferral shelf, undoing exactly the curation the deferred tier exists to protect. The load-bearing intake rule (propose-mode is the gate; autonomy-eligible is not worth-doing) assumes the fence already excludes parked work. Fix: the intake candidate fence must exclude deferred-flagged AND deferred:*-tagged specs the same way aida list does, listing them under the fenced-out reasons (deferred) rather than as candidates. Acceptance: aida intake --dry-run shows the 4 deferred specs in the fenced-out section with reason deferred, and weighs only genuinely-active drafts/approved. trace:relates:STORY-584'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T17:24:48.246417605Z
-modified_at: 2026-06-15T17:57:39.419242434Z
+modified_at: 2026-06-15T18:05:07.447456581Z
 req_type: Bug
 tags:
 - aida:intake
@@ -21,3 +21,21 @@ comments:
   content: Commit d8b990893 references this requirement
   created_at: 2026-06-15T17:57:39.419242434Z
   modified_at: 2026-06-15T17:57:39.419242434Z
+history:
+- id: 019ecc75-69f3-75a3-9a0b-33b386bcd77a
+  author: aida-auto-bump
+  timestamp: 2026-06-15T18:05:07.443057074Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecc75-69f7-7382-a912-d91b47f7c91b
+  timestamp: 2026-06-15T18:05:07.447456057Z
+  agent: aida
+  commit_sha: c6a5ad26140fa940cbd045a5bb92cfddbb5ea583
+  summary: Completed via merge c6a5ad26
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T18:05:07.290286867Z
+  completion_sha: c6a5ad26140fa940cbd045a5bb92cfddbb5ea583
