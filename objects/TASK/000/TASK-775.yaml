@@ -8,10 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:52:16.705486056Z
-modified_at: 2026-06-13T03:52:16.705486056Z
+modified_at: 2026-06-15T17:41:13.273080637Z
 req_type: Task
 tags:
 - aida:schema
 - deferred:stabilization-first
 - from-user-friction
 - papercut
+deferred: true
+deferred_at: 2026-06-15T17:41:13.273080637Z
+deferred_until: stabilization declared / active backlog cleared
