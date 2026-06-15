@@ -164,6 +164,7 @@ doesn't match.
 | `AIDA_GH_VERIFY_RETRIES` | Retry count for GitHub PR-verification during pull/merge. | `3`. | user | process env |
 | `AIDA_SKIP_XPLAT_CHECK` | Skips the cross-platform pre-release validation gate in `scripts/release.sh`. | unset = gate enforced. Opt-in (truthy). | launch-path (`aida release --dev`) / user | process env |
 | `AIDA_DEBUG_GH` | Traces `gh` binary resolution to stderr (every candidate tried + why rejected). | unset = off. Any non-empty value except `0` enables. | dev | process env |
+| `AIDA_DEBUG_GLAB` | Traces `glab` (GitLab CLI) binary resolution to stderr — the GitLab sibling of `AIDA_DEBUG_GH`. | unset = off. Any non-empty value except `0` enables. | dev | process env |
 | `AIDA_DEBUG_AUTOBUMP` | Traces the auto-bump decision logic during pull (commit counts, SHAs, scan range). | unset = off. Any non-empty value except `0` enables. | dev | process env |
 | `AIDA_INIT_COMMIT_SCAFFOLD` | Whether `aida init` auto-commits scaffolding files. | unset = TTY-dependent (auto on non-TTY, prompt on TTY). Values: `1`/`true`/`yes`/`on` to commit, `0`/`false`/`no`/`off` to never. | user / launch-path | process env |
 
@@ -299,6 +300,7 @@ hits.
 | --- | --- |
 | `AIDA_TEST_HOME` | Overrides the home dir in `#[cfg(test)]` advisor/session isolation. |
 | `AIDA_TEST_GH_BINARY` | Injects a mock `gh` binary path in tests. |
+| `AIDA_TEST_GLAB_BINARY` | Injects a mock `glab` binary path in tests — the GitLab sibling of `AIDA_TEST_GH_BINARY`. |
 | `AIDA_TEST_GUARD_NESTED` / `_RESET` / `_RESTORE` / `_UNSET` | `EnvVarGuard` unit-test fixtures. |
 | `AIDA_TEST_TASK_63_APPLIED` | Fixture for the `apply_session_env_to_process` test. |
 
