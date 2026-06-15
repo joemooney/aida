@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T15:53:57.915492777Z
-modified_at: 2026-06-15T16:13:26.988806085Z
+modified_at: 2026-06-15T16:24:17.153149713Z
 req_type: Story
 tags:
 - advisor
@@ -27,6 +27,11 @@ comments:
   content: 'Reopened (advisor, 2026-06-15): PR #933 shipped the /aida-assess cold-boot seeding cleanly but ONLY that half — the /aida-advise burndown advisor-tier cold-boot (main.rs ~111856) still passes a bare /aida-advise (no seed prepend), and aida-advise.md lacks the seed note. The (STORY-626) trailer auto-completed the story while half its titled scope (''the assess/burndown cold-boot prepends it'') is unbuilt. Caught by an in-flight review I merged over (my merge-gate coordination miss). Follow-up PR completes the burndown-tier half. trace:STORY-626'
   created_at: 2026-06-15T16:13:26.988806085Z
   modified_at: 2026-06-15T16:13:26.988806085Z
+- id: 019ecc19-1801-74b3-b55a-694535a35b1c
+  author: joe
+  content: Commit 23e9ee705 references this requirement
+  created_at: 2026-06-15T16:24:17.153149713Z
+  modified_at: 2026-06-15T16:24:17.153149713Z
 history:
 - id: 019ecc0b-c79c-7ea3-a1b7-685b50a9c9e1
   author: aida-auto-bump
