@@ -1,0 +1,17 @@
+id: 019ec96b-7df5-7fe1-9d63-9d2a8a48ee52
+spec_id: TASK-831
+agreed_id: TASK-831
+title: 'aida list inflight: alias for aida burndown status (active work — leased specs + drain in-flight)'
+description: 'Operator request 2026-06-14: aida list inflight lists specs currently being processed — active session leases (an agent working a spec in a worktree) plus, when a drain is running, its in-flight set + drain status. The aida burndown status command already surfaces exactly this (drain running?/no + the In-flight leased list), so route aida list inflight (and in-flight) to it via the rewrite_list_alias helper — completing the lens family: open / human / queue / why / advisor / inflight. Serves the active-vs-static observability theme (pairs with TASK-829 advisor pipeline header + STORY-604 expected-bucket marking, which enriches the in-flight set further). Full flag passthrough.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-15T03:55:25.557738077Z
+modified_at: 2026-06-15T03:55:25.557738077Z
+req_type: Task
+tags:
+- aida:list
+- from-product
+- observability
+- ux
