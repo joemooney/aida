@@ -3,12 +3,12 @@ spec_id: STORY-626
 agreed_id: STORY-626
 title: 'Cold-boot context seeding: live advisor maintains .aida/advisor-context.md; the assess/burndown cold-boot prepends it'
 description: 'Operator insight 2026-06-15: the headless cold-boot advisor (the claude -p that aida assess / solo --watch / the burndown advisor tier launch) is context-poor vs the live session — it re-derives priorities/phase/decisions every time (the headless-advisor-is-cold-boot gap; SPIKE-11 fork-from-live in a simpler substrate form). Fix: the LIVE advisor maintains a context-seed file at .aida/advisor-context.md (gitignored per-clone runtime) capturing current ground-truth — phase/priorities, in-flight direction, lane split, recent decisions, conventions. The cold-boot launcher (aida-cli/src/intake.rs, where the /aida-assess claude -p prompt is built; and the burndown advisor tier) reads it if present and PREPENDS it to the cold-boot prompt as "## Live advisor context (seed — current ground-truth from the live advisor)". The /aida-assess + /aida-advise skills note: if a seed is present, weigh it as current ground-truth over cold re-derivation. MVP: the file + the prepend wiring; the live advisor writes/refreshes the file (a later aida advisor context set command can formalize it). Closes the cold-boot gap so unattended assess/drain decisions match the live session better.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T15:53:57.915492777Z
-modified_at: 2026-06-15T16:24:17.153149713Z
+modified_at: 2026-06-15T16:26:47.619590639Z
 req_type: Story
 tags:
 - advisor
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 019ecc1b-63bf-76b3-a7d2-b1f6299ecbc8
+  author: aida-auto-bump
+  timestamp: 2026-06-15T16:26:47.615084971Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 019ecc0b-c7a0-7b12-99ba-09c928f79ec4
   timestamp: 2026-06-15T16:09:44.608731348Z
@@ -47,6 +54,12 @@ processing_record:
   commit_sha: fe1118cf182769b16bce11fa13bfea55801d7a00
   summary: The /aida-assess intake cold-boot half is clean, tested, and correct; but the burndown /aida-advise advisor tier cold-boot (main.rs:111856) + aida-advise.md note — both named in the spec title/description — are unaddressed. Merging auto-completes STORY-626 while half its titled scope is unbuilt.
   review_verdict: RequestChanges
+- id: 019ecc1b-63c3-7d73-ba61-da3df367981e
+  timestamp: 2026-06-15T16:26:47.619585612Z
+  agent: reviewer
+  commit_sha: 3e94933d22b6223ad96831aae56df018ff2b1d5b
+  summary: 'Both cold-boot halves now seeded: the /aida-assess intake launcher (original commit) and the burndown /aida-advise advisor tier cold-boot branch (extend commit 23e9ee705). Fork-from-live stays bare (resume carries context). Tests/fmt/clippy green. STORY-626 fully covers its titled scope.'
+  review_verdict: Approved
 implementation_info:
   implemented: false
   completed_at: 2026-06-15T16:09:44.446808294Z
