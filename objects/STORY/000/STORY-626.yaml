@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T15:53:57.915492777Z
-modified_at: 2026-06-15T15:53:57.915492777Z
+modified_at: 2026-06-15T16:01:23.563245627Z
 req_type: Story
 tags:
 - advisor
@@ -16,3 +16,9 @@ tags:
 - cold-boot
 - from-product
 - relates:SPIKE-11
+comments:
+- id: 019ecc04-226b-7dd3-8e23-dde89465c24a
+  author: joe
+  content: Commit 43ce2c47b references this requirement
+  created_at: 2026-06-15T16:01:23.563245627Z
+  modified_at: 2026-06-15T16:01:23.563245627Z
