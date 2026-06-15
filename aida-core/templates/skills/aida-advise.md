@@ -25,6 +25,14 @@ punt and the human: a headless advisor reads the punted fork, and either
 You are the tier that shrinks the human's morning queue. You are **not** the
 tier that replaces the human — see the load-bearing rule below.
 
+> **If a `## Live advisor context (seed …)` block precedes this skill**, treat
+> it as current ground-truth from the live advisor — weigh it **over** cold
+> re-derivation. It reflects the latest session's priorities, phase, and
+> decisions (the live advisor maintains `.aida/advisor-context.md` and the
+> cold-boot launcher prepends it to close the cold-boot gap; the fork branch
+> gets it via `--resume` instead). When the seed and your own fresh inference
+> disagree, the seed wins. trace:STORY-626
+
 ## When this skill runs
 
 Only the `--auto-complete --no-human=both` orchestrator invokes it, headless

@@ -386,11 +386,18 @@ pub const ADVISOR_CONTEXT_SEED_REL: &str = ".aida/advisor-context.md";
 /// (or an empty file) it returns the bare `intake_skill_prompt(apply)` form.
 /// trace:STORY-626 | ai:claude
 pub fn seeded_assess_prompt(project_root: &std::path::Path, apply: bool) -> String {
-    let bare = intake_skill_prompt(apply);
+    seed_skill_prompt(project_root, &intake_skill_prompt(apply))
+}
+
+/// Wrap ANY bare cold-boot skill invocation with the live advisor context seed —
+/// the shared core behind both the assess and the burndown `/aida-advise`
+/// cold-boots (STORY-626). Returns `bare` unchanged when
+/// `.aida/advisor-context.md` is absent or empty. trace:STORY-626 | ai:claude
+pub fn seed_skill_prompt(project_root: &std::path::Path, bare: &str) -> String {
     let seed_path = project_root.join(ADVISOR_CONTEXT_SEED_REL);
     let seed = match std::fs::read_to_string(&seed_path) {
         Ok(contents) if !contents.trim().is_empty() => contents,
-        _ => return bare,
+        _ => return bare.to_string(),
     };
     format!(
         "## Live advisor context (seed — current ground-truth from the live advisor)\n\n\
@@ -398,6 +405,14 @@ pub fn seeded_assess_prompt(project_root: &std::path::Path, apply: bool) -> Stri
         seed.trim_end(),
         bare
     )
+}
+
+/// The cold-boot `/aida-advise` prompt, seeded like the assess prompt. The
+/// burndown advisor tier launches this on a punt cold-boot; the fork branch
+/// gets live context via `--resume`, so only the cold-boot needs the seed.
+/// trace:STORY-626 | ai:claude
+pub fn seeded_advise_prompt(project_root: &std::path::Path) -> String {
+    seed_skill_prompt(project_root, "/aida-advise")
 }
 
 #[cfg(test)]
@@ -575,6 +590,30 @@ workflow_hints = true
         let out_apply = seeded_assess_prompt(&dir, true);
         assert!(out_apply.ends_with("/aida-assess --apply"));
         assert!(out_apply.contains(body));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// STORY-626: the burndown advisor-tier cold-boot is seeded the same way —
+    /// bare `/aida-advise` with no file, prepended when the seed is present.
+    #[test]
+    fn seeded_advise_prompt_seeds_like_assess() {
+        let dir = std::env::temp_dir().join(format!("aida-seed-advise-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".aida")).unwrap();
+
+        // No seed file → bare.
+        assert_eq!(seeded_advise_prompt(&dir), "/aida-advise");
+
+        // Seed present → prepended, ends with the bare /aida-advise.
+        let body = "Phase: clear open items. Lane: advisor = merge gate.";
+        std::fs::write(dir.join(ADVISOR_CONTEXT_SEED_REL), body).unwrap();
+        let out = seeded_advise_prompt(&dir);
+        assert!(out.starts_with(
+            "## Live advisor context (seed — current ground-truth from the live advisor)"
+        ));
+        assert!(out.contains(body));
+        assert!(out.ends_with("/aida-advise"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
