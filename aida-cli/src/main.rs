@@ -649,6 +649,16 @@ mod story_423_asciinema_tests {
             Command::Advisor { .. }
         ));
 
+        // aida list inflight (and in-flight) → aida burndown status
+        assert_eq!(
+            rewrite_list_alias(&s(&["aida", "list", "inflight"])),
+            s(&["aida", "burndown", "status"])
+        );
+        assert_eq!(
+            rewrite_list_alias(&s(&["aida", "list", "in-flight"])),
+            s(&["aida", "burndown", "status"])
+        );
+
         // Unmatched: plain `aida list open` and a bare `aida list` are untouched.
         assert_eq!(
             rewrite_list_alias(&s(&["aida", "list", "open"])),
@@ -935,19 +945,21 @@ mod story_423_asciinema_tests {
     }
 }
 
-/// TASK-822 / TASK-824 / TASK-828: rewrite the `aida list <lens>` discoverability
+/// TASK-822 / 824 / 828 / 831: rewrite the `aida list <lens>` discoverability
 /// aliases into their canonical commands before clap parses, so the list family
-/// (`open` / `human` / `queue` / `why` / `advisor`) reads uniformly while each
-/// alias is a pure passthrough of the target command's flags. The target may be
-/// one token (`aida advisor`) or two (`aida queue list`). Unmatched input is
-/// returned unchanged. `args[0]` is the binary name.
-/// trace:TASK-822 trace:TASK-824 trace:TASK-828
+/// (`open` / `human` / `queue` / `why` / `advisor` / `inflight`) reads uniformly
+/// while each alias is a pure passthrough of the target command's flags. The
+/// target may be one token (`aida advisor`) or two (`aida queue list`). Unmatched
+/// input is returned unchanged. `args[0]` is the binary name.
+/// trace:TASK-822 trace:TASK-824 trace:TASK-828 trace:TASK-831
 fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "list" {
         let target: Option<&[&str]> = match args[2].as_str() {
             "queue" => Some(&["queue", "list"]),
             "why" => Some(&["burndown", "explain"]),
             "advisor" => Some(&["advisor"]),
+            // TASK-831: active work — leased specs + drain in-flight status.
+            "inflight" | "in-flight" => Some(&["burndown", "status"]),
             _ => None,
         };
         if let Some(tokens) = target {
