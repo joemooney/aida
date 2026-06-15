@@ -87,6 +87,21 @@ Worktree isolation means parallel agents never collide on files *mid-flight* —
 but two specs that touch the SAME files still **conflict at MERGE time** (the
 stacked / duplicate-edit hazard).
 
+**Sequential work in one worktree stacks branches (BUG-554).** The fan-out above
+is safe because each subagent gets a FRESH worktree off `origin/main`. The hazard
+is *reuse*: if a single agent (or you) works MORE THAN ONE spec in the SAME
+worktree, branch each spec off `origin/main`, **never** off the current HEAD —
+otherwise spec B's branch stacks on spec A's unmerged commit, which (1) pollutes
+B's PR with A's commit and (2) makes A's commit reachable from two branches, so
+`aida human` / `aida queue list` mis-attribute A to B's branch. Before each next
+spec in a reused worktree: `git reset --hard origin/main` (or a fresh `git
+worktree add -b <branch> <path> origin/main`). `aida session start` already bases
+on `origin/main` and warns when cwd is on a feature branch (BUG-76); raw `git`
+does not — so this rule is on you when you drive `git` directly. Prefer the
+parallel fan-out (one worktree per spec) for independent specs; reserve
+sequential-through-one-worktree for genuinely file-sharing specs, and reset
+between each. trace:BUG-554 | ai:claude
+
 **Never co-fan a serialize-group (STORY-614).** Specs that must not run
 concurrently carry a shared `serialize:<group>` tag (e.g. `serialize:docs`,
 `serialize:burndown-display`). When selecting the N specs for a wave, check each
