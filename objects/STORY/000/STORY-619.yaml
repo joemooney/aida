@@ -15,12 +15,12 @@ description: |-
   Smallest valuable slice (cheap, all-vendor, just context text): the launch context should (a) include the current unread-mail snapshot by wiring in the existing renderer at main.rs ~25672, and (b) add an explicit instruction naming the mailbox + the exact poll command (aida mailbox inbox), and the cadence to re-check. This works for every vendor because it is just text the agent reads at launch.
 
   Revisit trigger for a bigger slice: if launch-context text proves insufficient (agents still miss mid-session mail), consider a vendor-neutral periodic delivery mechanism (a watch/poll loop or harness-level check) rather than relying on per-vendor hooks. Relates to BUG-558 (the other launched-agent/mailbox gap: identity) and the brief-polling discipline.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:07:30.744263881Z
-modified_at: 2026-06-15T15:29:50.716802122Z
+modified_at: 2026-06-15T15:39:48.592404816Z
 req_type: Story
 comments:
 - id: 019ecbe7-407c-7743-962a-d297d867648e
@@ -28,3 +28,21 @@ comments:
   content: Commit 97529380b references this requirement
   created_at: 2026-06-15T15:29:50.716802122Z
   modified_at: 2026-06-15T15:29:50.716802122Z
+history:
+- id: 019ecbf0-5fec-7f22-893e-dd07780f9def
+  author: aida-auto-bump
+  timestamp: 2026-06-15T15:39:48.588032507Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecbf0-5ff0-7d00-bff9-efcc530b17bb
+  timestamp: 2026-06-15T15:39:48.592403984Z
+  agent: aida
+  commit_sha: 837464d4b543e95f15b97a644b3f96b5e9a33f5d
+  summary: Completed via merge 837464d4
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-15T15:39:48.430155206Z
+  completion_sha: 837464d4b543e95f15b97a644b3f96b5e9a33f5d
