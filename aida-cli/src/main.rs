@@ -26519,15 +26519,13 @@ fn handle_role_enter(project_root: &std::path::Path, name: Option<&str>, cd: boo
     Ok(())
 }
 
-// trace:TASK-713
+// trace:TASK-713 trace:TASK-817
 /// One displayable role row in the interactive picker. Decoupled from
-/// `RoleState` so the layout (`format_role_picker_lines`) is pure and testable
-/// without a real TTY read.
+/// `RoleState` so the label layout (`format_role_picker_option`) is pure and
+/// testable without a real TTY read.
 struct RolePickerRow {
     /// `▸` = offered default, `*` = currently-active shell role, ` ` otherwise.
     marker: char,
-    /// 1-based selection number shown to the user.
-    number: usize,
     name: String,
     global: bool,
     /// Pre-humanized recency, e.g. "3h ago".
@@ -26544,95 +26542,6 @@ fn picker_terminal_width() -> usize {
         .and_then(|c| c.trim().parse::<usize>().ok())
         .filter(|w| *w >= 20)
         .unwrap_or(80)
-}
-
-/// TASK-713: whether to colorize the picker. The picker writes to /dev/tty
-/// (or stderr), not stdout, so `colored`'s stdout-isatty auto-detection is
-/// the wrong signal. Honor `NO_COLOR` (and a forced `--color=never`, which
-/// the global handler maps to `set_override(false)`), otherwise colorize when
-/// we hold a real tty handle.
-fn picker_color_enabled(have_tty: bool) -> bool {
-    if std::env::var_os("NO_COLOR").is_some() {
-        return false;
-    }
-    // A `--color=always` override forces color even without a tty handle; a
-    // `--color=never` override forces it off. With no override the crate's
-    // auto-detection is keyed off stdout (wrong surface here), so fall back to
-    // the tty handle we actually opened.
-    if colored::control::SHOULD_COLORIZE.should_colorize() {
-        return true;
-    }
-    have_tty
-}
-
-/// TASK-713: lay out the role picker rows for a terminal `width`, returning
-/// the lines to print (without the leading header). Each role gets a header
-/// line — `<marker> <n>) <name> [global] · <recency>` — with the marker kept
-/// adjacent to the name, then the purpose on indented continuation line(s)
-/// hanging under the name so wrapped text stays associated with its row and
-/// never runs into the next role. Pure: no I/O, fully testable.
-fn format_role_picker_lines(rows: &[RolePickerRow], width: usize, color: bool) -> Vec<String> {
-    // Indentation budget: "  " + marker + " " + number-field + ") ".
-    let num_w = rows
-        .iter()
-        .map(|r| r.number)
-        .max()
-        .unwrap_or(1)
-        .to_string()
-        .len();
-    // Visible columns consumed before the name starts on the header line, and
-    // the matching hanging-indent for continuation lines.
-    let header_prefix_cols = 2 + 1 + 1 + num_w + 2; // "  " M " " NN ") "
-    let cont_indent = " ".repeat(header_prefix_cols);
-
-    let mut out = Vec::with_capacity(rows.len() * 2);
-    for row in rows {
-        let scope = if row.global { " [global]" } else { "" };
-        // Header line: marker stays directly before the name.
-        let (name_disp, scope_disp, recency_disp) = if color {
-            (
-                row.name.bold().cyan().to_string(),
-                scope.dimmed().to_string(),
-                format!("· {}", row.recency).dimmed().to_string(),
-            )
-        } else {
-            (
-                row.name.clone(),
-                scope.to_string(),
-                format!("· {}", row.recency),
-            )
-        };
-        out.push(format!(
-            "  {} {:>nw$}) {}{}  {}",
-            row.marker,
-            row.number,
-            name_disp,
-            scope_disp,
-            recency_disp,
-            nw = num_w,
-        ));
-
-        // Purpose: hang-indented under the name, wrapped to width, bounded to
-        // a few lines so a long description never dominates the picker.
-        if let Some(purpose) = row
-            .purpose
-            .as_deref()
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-        {
-            let avail = width.saturating_sub(header_prefix_cols).max(20);
-            let wrapped = wrap_role_purpose(purpose, avail, 3);
-            for line in wrapped {
-                let body = if color {
-                    line.dimmed().to_string()
-                } else {
-                    line
-                };
-                out.push(format!("{}{}", cont_indent, body));
-            }
-        }
-    }
-    out
 }
 
 /// TASK-713: word-wrap `text` to `width` columns, capped at `max_lines`
@@ -26698,19 +26607,19 @@ fn pick_role_interactively(
     pick_role_with_header(project_root, &header, None)
 }
 
-/// TASK-644/TASK-646: shared role picker. Renders `header` then the role
-/// list over `/dev/tty` (stderr fallback) and reads a numeric selection from
-/// stdin — so callers whose stdout is a captured pipe (`eval "$(...)"`) stay
-/// uncorrupted. `highlight`, when set, marks that role `▸` and is offered as
-/// the default on a blank Enter (rather than cancelling). Returns
+/// TASK-644/TASK-646/TASK-817: shared role picker. Renders `header` then the
+/// role list with arrow-key navigation via `inquire::Select` — up/down move the
+/// highlight, Enter selects, Esc cancels. inquire writes its prompt to stderr
+/// (not stdout), so callers whose stdout is a captured pipe (`eval "$(...)"`)
+/// stay uncorrupted. `highlight`, when set, marks that role `▸` and is
+/// pre-selected (cursor parked on it) when the picker opens. Returns
 /// `Ok(Some(name))` on selection, `Ok(None)` on cancel.
+// trace:TASK-817 | ai:claude
 fn pick_role_with_header(
     project_root: &std::path::Path,
     header: &str,
     highlight: Option<&str>,
 ) -> Result<Option<String>> {
-    use std::io::Write;
-
     let roles = list_roles(project_root)?;
     if roles.is_empty() {
         anyhow::bail!(
@@ -26721,32 +26630,12 @@ fn pick_role_with_header(
         );
     }
 
-    // Prefer a direct /dev/tty handle so the picker is visible even when both
-    // stdout and stderr are redirected (the `eval "$(...)"` case captures
-    // stdout; stderr may also be captured by tooling). Fall back to stderr.
-    let mut tty = std::fs::OpenOptions::new()
-        .write(true)
-        .open("/dev/tty")
-        .ok();
-    macro_rules! ui {
-        ($($arg:tt)*) => {{
-            if let Some(t) = tty.as_mut() {
-                let _ = writeln!(t, $($arg)*);
-            } else {
-                eprintln!($($arg)*);
-            }
-        }};
-    }
-
     let active = std::env::var("AIDA_SESSION_ROLE").ok();
     let highlight_idx = highlight.and_then(|h| roles.iter().position(|r| r.name == h));
 
-    // TASK-713: build the per-role rows then lay them out for the terminal
-    // width so wrapped descriptions stay indented under their role and the
-    // selected-row marker stays adjacent to the name. The picker renders to
-    // /dev/tty (or stderr), which `colored`'s stdout-isatty auto-detection
-    // can't see, so decide color from the tty handle + NO_COLOR explicitly.
-    let color = picker_color_enabled(tty.is_some());
+    // TASK-817: build one scannable single-line label per role from the same
+    // RolePickerRow data the old numeric picker used — name + scope + recency,
+    // with the purpose appended (truncated to keep the option on one line).
     let rows: Vec<RolePickerRow> = roles
         .iter()
         .enumerate()
@@ -26761,7 +26650,6 @@ fn pick_role_with_header(
             };
             RolePickerRow {
                 marker,
-                number: i + 1,
                 name: role.name.clone(),
                 global: role.global,
                 recency: humanize_relative(role.last_active_at),
@@ -26770,59 +26658,58 @@ fn pick_role_with_header(
         })
         .collect();
 
-    ui!("{}", header);
-    for line in format_role_picker_lines(&rows, picker_terminal_width(), color) {
-        ui!("{}", line);
-    }
-    match highlight_idx {
-        Some(_) => ui!(
-            "  Enter a number (blank = {}, q to cancel): ",
-            highlight.unwrap_or("default")
-        ),
-        None => ui!("  Enter a number (or blank/q to cancel): "),
+    let labels: Vec<String> = rows
+        .iter()
+        .map(|r| format_role_picker_option(r, picker_terminal_width()))
+        .collect();
+
+    let mut select = inquire::Select::new(header, labels)
+        .with_help_message("↑↓ to move, type to filter, Enter to select, Esc to cancel");
+    // TASK-817: park the cursor on the offered default so Enter accepts it.
+    if let Some(idx) = highlight_idx {
+        select = select.with_starting_cursor(idx);
     }
 
-    let mut answer = String::new();
-    std::io::stdin().read_line(&mut answer)?;
-    // TASK-646: with a highlighted default, a blank line accepts it instead
-    // of cancelling; `q` still cancels. Without a default, blank cancels.
-    let trimmed = answer.trim();
-    if trimmed.is_empty() {
-        if let Some(idx) = highlight_idx {
-            return Ok(Some(roles[idx].name.clone()));
-        }
-    }
-    match parse_role_selection(&answer, roles.len()) {
-        RoleSelection::Index(i) => Ok(Some(roles[i].name.clone())),
-        RoleSelection::Cancel => Ok(None),
-        RoleSelection::Invalid => {
-            ui!("Not a valid selection: {} — cancelled.", answer.trim());
-            Ok(None)
-        }
+    match select.raw_prompt() {
+        // raw_prompt returns the picked ListOption, whose index maps straight
+        // back to the role list (labels are built in role order).
+        Ok(choice) => Ok(Some(roles[choice.index].name.clone())),
+        // Esc / Ctrl-C cancel → Ok(None), matching the old q/blank behavior.
+        Err(inquire::InquireError::OperationCanceled)
+        | Err(inquire::InquireError::OperationInterrupted) => Ok(None),
+        Err(e) => Err(anyhow::anyhow!("role picker failed: {e}")),
     }
 }
 
-/// TASK-644: outcome of parsing a role-picker selection line. Pure so the
-/// picker's branch logic is testable without a real TTY read.
-#[derive(Debug, PartialEq, Eq)]
-enum RoleSelection {
-    /// Zero-based index into the role list.
-    Index(usize),
-    /// Blank line or `q`/`Q` — user cancelled.
-    Cancel,
-    /// Non-numeric or out-of-range — treated as a cancel, with a notice.
-    Invalid,
-}
+/// TASK-817: format one role as a single-line `inquire::Select` option label
+/// from its `RolePickerRow`. Shows `<marker> <name>[ [global]] · <recency>`
+/// with the purpose appended after `—`, truncated so the whole option stays on
+/// one line within `width`. Pure so the label layout is testable.
+// trace:TASK-817 | ai:claude
+fn format_role_picker_option(row: &RolePickerRow, width: usize) -> String {
+    let scope = if row.global { " [global]" } else { "" };
+    let mut label = format!("{} {}{} · {}", row.marker, row.name, scope, row.recency);
 
-fn parse_role_selection(input: &str, n_roles: usize) -> RoleSelection {
-    let trimmed = input.trim();
-    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("q") {
-        return RoleSelection::Cancel;
+    if let Some(purpose) = row
+        .purpose
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+    {
+        // Reserve room for the current label + " — " separator; truncate the
+        // purpose (with an ellipsis) so the option never wraps the terminal.
+        let used = label.chars().count() + 3;
+        let avail = width.saturating_sub(used);
+        if avail >= 8 {
+            let purpose = wrap_role_purpose(purpose, avail, 1)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| purpose.to_string());
+            label.push_str(" — ");
+            label.push_str(&purpose);
+        }
     }
-    match trimmed.parse::<usize>() {
-        Ok(n) if n >= 1 && n <= n_roles => RoleSelection::Index(n - 1),
-        _ => RoleSelection::Invalid,
-    }
+    label
 }
 
 fn handle_role_add(
@@ -53287,28 +53174,10 @@ mod statusline_tests {
         assert_eq!(humanize_size(1024 * 1024 * 1024), "1.0 GB");
     }
 
-    /// TASK-644: role-picker selection parsing. Blank/`q` cancels, a valid
-    /// 1-based number maps to a 0-based index, anything else is Invalid.
-    #[test]
-    fn role_selection_parse_covers_cancel_index_and_invalid() {
-        use super::{parse_role_selection, RoleSelection};
-        assert_eq!(parse_role_selection("", 3), RoleSelection::Cancel);
-        assert_eq!(parse_role_selection("  \n", 3), RoleSelection::Cancel);
-        assert_eq!(parse_role_selection("q", 3), RoleSelection::Cancel);
-        assert_eq!(parse_role_selection("Q\n", 3), RoleSelection::Cancel);
-        assert_eq!(parse_role_selection("1", 3), RoleSelection::Index(0));
-        assert_eq!(parse_role_selection(" 3 \n", 3), RoleSelection::Index(2));
-        assert_eq!(parse_role_selection("0", 3), RoleSelection::Invalid);
-        assert_eq!(parse_role_selection("4", 3), RoleSelection::Invalid);
-        assert_eq!(parse_role_selection("nope", 3), RoleSelection::Invalid);
-        assert_eq!(parse_role_selection("1x", 3), RoleSelection::Invalid);
-    }
-
-    // ---- TASK-713: scannable role picker layout ----
+    // ---- TASK-817: arrow-key role picker option labels ----
 
     fn picker_row(
         marker: char,
-        number: usize,
         name: &str,
         global: bool,
         recency: &str,
@@ -53316,7 +53185,6 @@ mod statusline_tests {
     ) -> super::RolePickerRow {
         super::RolePickerRow {
             marker,
-            number,
             name: name.to_string(),
             global,
             recency: recency.to_string(),
@@ -53324,200 +53192,80 @@ mod statusline_tests {
         }
     }
 
-    /// TASK-713: a long description wraps to indented continuation lines that
-    /// hang under the role name (never colliding with the marker/number gutter
-    /// or the next role), and the marker stays adjacent to the name.
+    /// TASK-817: a role's option label carries the marker, name, scope tag,
+    /// recency, and (truncated) purpose, all on a single line so
+    /// `inquire::Select` renders one row per role.
     #[test]
-    fn role_picker_wraps_description_with_hanging_indent() {
-        use super::format_role_picker_lines;
-        let rows = vec![
-            picker_row(
-                '▸',
-                1,
-                "advisor",
-                false,
-                "3h ago",
-                Some(
-                    "Persistent strategic and tactical partner that routes work, \
-                     captures friction, and gardens the queue across long sessions.",
-                ),
-            ),
-            picker_row(
-                ' ',
-                2,
-                "implementer",
-                false,
-                "1d ago",
-                Some("Ships bounded work."),
-            ),
-        ];
-        let lines = format_role_picker_lines(&rows, 80, false);
-
-        // Header line: marker directly precedes the name (no metadata between).
-        let advisor_header = &lines[0];
-        assert!(
-            advisor_header.contains("▸ 1) advisor"),
-            "header was {advisor_header:?}"
-        );
-        assert!(advisor_header.contains("· 3h ago"));
-
-        // The hanging indent for continuation lines == the header prefix width:
-        // "  " + marker + " " + "1" + ") " == 6 cols for single-digit numbers.
-        let cont_indent = "      ";
-        // At least one continuation line for the long advisor purpose.
-        let advisor_cont: Vec<&String> = lines
-            .iter()
-            .skip(1)
-            .take_while(|l| !l.contains("implementer"))
-            .collect();
-        assert!(
-            advisor_cont.len() >= 2,
-            "expected the long description to wrap to multiple lines, got {advisor_cont:?}"
-        );
-        for l in &advisor_cont {
-            assert!(
-                l.starts_with(cont_indent),
-                "continuation line must hang-indent under the name: {l:?}"
-            );
-            // No continuation line should reintroduce the marker/number gutter.
-            assert!(!l.trim_start().starts_with("▸"));
-        }
-    }
-
-    /// TASK-713: no continuation line exceeds the terminal width, even in a
-    /// narrow ~50-col terminal; wrapping keeps every row scannable.
-    #[test]
-    fn role_picker_respects_narrow_width() {
-        use super::format_role_picker_lines;
-        let rows = vec![picker_row(
-            ' ',
-            1,
-            "advisor",
-            false,
-            "3h ago",
-            Some(
-                "A fairly long purpose string that absolutely must wrap when the \
-                 terminal is only fifty columns wide so it stays readable.",
-            ),
-        )];
-        let width = 50;
-        let lines = format_role_picker_lines(&rows, width, false);
-        for l in &lines {
-            assert!(
-                l.chars().count() <= width,
-                "line exceeds width {width}: {l:?} ({} cols)",
-                l.chars().count()
-            );
-        }
-    }
-
-    /// TASK-713: very long descriptions are bounded so they don't dominate the
-    /// picker — capped line count with a truncation marker on the last line.
-    #[test]
-    fn role_picker_bounds_long_descriptions() {
-        use super::format_role_picker_lines;
-        let long = "word ".repeat(200);
-        let rows = vec![picker_row(' ', 1, "advisor", false, "now", Some(&long))];
-        let lines = format_role_picker_lines(&rows, 60, false);
-        // 1 header + at most 3 continuation lines.
-        assert!(
-            lines.len() <= 4,
-            "description not bounded: {} lines",
-            lines.len()
-        );
-        assert!(
-            lines.last().unwrap().contains('…'),
-            "bounded description should end with an ellipsis: {:?}",
-            lines.last()
-        );
-    }
-
-    /// TASK-713: the `[global]` scope tag and recency render on the header line
-    /// and a role with no purpose produces exactly one line (no empty
-    /// continuation).
-    #[test]
-    fn role_picker_scope_recency_and_no_purpose() {
-        use super::format_role_picker_lines;
-        let rows = vec![
-            picker_row('*', 1, "advisor", true, "5m ago", None),
-            picker_row(' ', 2, "implementer", false, "2d ago", Some("   ")),
-        ];
-        let lines = format_role_picker_lines(&rows, 80, false);
-        // Two roles, neither has a real purpose → exactly two header lines.
-        assert_eq!(
-            lines.len(),
-            2,
-            "blank/absent purpose should add no lines: {lines:?}"
-        );
-        assert!(lines[0].contains("[global]"));
-        assert!(lines[0].contains("· 5m ago"));
-        assert!(lines[0].contains("* 1) advisor"));
-    }
-
-    /// TASK-713: color path keeps the textual content intact (ANSI codes wrap
-    /// the same words) so colorized and plain output stay equivalent after
-    /// stripping SGR sequences — the no-color contract holds.
-    #[test]
-    fn role_picker_color_preserves_text() {
-        use super::{format_role_picker_lines, strip_ansi_color};
-        let rows = vec![picker_row(
+    fn role_picker_option_shows_name_scope_recency_and_purpose() {
+        use super::format_role_picker_option;
+        let row = picker_row(
             '▸',
-            1,
             "advisor",
             true,
             "3h ago",
             Some("Routes work and gardens the queue."),
-        )];
-        let plain = format_role_picker_lines(&rows, 80, false);
-        // `colored` keys its output off a process-global override; force it on
-        // so the color branch actually emits SGR sequences under `cargo test`
-        // (where stdout isn't a tty). Restore afterward.
-        colored::control::set_override(true);
-        let colored = format_role_picker_lines(&rows, 80, true);
-        colored::control::unset_override();
-        assert_eq!(colored.len(), plain.len());
-        let colored_stripped: Vec<String> = colored.iter().map(|l| strip_ansi_color(l)).collect();
-        assert_eq!(
-            colored_stripped, plain,
-            "stripping color must reproduce plain output"
         );
-        // And the colored form actually carries SGR sequences on the name line.
+        let label = format_role_picker_option(&row, 80);
+        assert!(label.starts_with("▸ advisor"), "label was {label:?}");
+        assert!(label.contains("[global]"), "label was {label:?}");
+        assert!(label.contains("· 3h ago"), "label was {label:?}");
         assert!(
-            colored[0].contains('\u{1b}'),
-            "color path should emit ANSI: {:?}",
-            colored[0]
+            label.contains("Routes work and gardens the queue."),
+            "label was {label:?}"
+        );
+        // Single line — no embedded newlines.
+        assert!(!label.contains('\n'), "label must be one line: {label:?}");
+    }
+
+    /// TASK-817: a role with no purpose renders just the name/scope/recency
+    /// header with no trailing separator.
+    #[test]
+    fn role_picker_option_no_purpose_has_no_separator() {
+        use super::format_role_picker_option;
+        let with_none =
+            format_role_picker_option(&picker_row('*', "advisor", false, "5m ago", None), 80);
+        assert_eq!(with_none, "* advisor · 5m ago");
+        // A whitespace-only purpose is treated as absent.
+        let blank = format_role_picker_option(
+            &picker_row(' ', "implementer", false, "2d ago", Some("   ")),
+            80,
+        );
+        assert_eq!(blank, "  implementer · 2d ago");
+    }
+
+    /// TASK-817: the whole option label stays within the terminal width — a
+    /// long purpose is truncated (ellipsis) rather than wrapping the row.
+    #[test]
+    fn role_picker_option_truncates_to_width() {
+        use super::format_role_picker_option;
+        let long = "word ".repeat(200);
+        let width = 50;
+        let label = format_role_picker_option(
+            &picker_row(' ', "advisor", false, "now", Some(&long)),
+            width,
+        );
+        assert!(
+            label.chars().count() <= width,
+            "label exceeds width {width}: {label:?} ({} cols)",
+            label.chars().count()
+        );
+        assert!(
+            label.contains('…'),
+            "a truncated purpose should end with an ellipsis: {label:?}"
         );
     }
 
-    /// TASK-713: wider numbers (10+ roles) keep the gutter aligned and the
-    /// continuation indent matches the wider prefix.
+    /// TASK-817: when the header (name+scope+recency) already nearly fills the
+    /// width, the purpose is dropped rather than overflowing the row.
     #[test]
-    fn role_picker_aligns_double_digit_numbers() {
-        use super::format_role_picker_lines;
-        let mut rows = Vec::new();
-        for i in 1..=11 {
-            rows.push(picker_row(
-                ' ',
-                i,
-                "role",
-                false,
-                "now",
-                Some("A purpose long enough to wrap onto a second continuation line here please."),
-            ));
-        }
-        let lines = format_role_picker_lines(&rows, 60, false);
-        // Header prefix == "  " + marker + " " + {:>2} + ") ".
-        let header_11 = lines.iter().find(|l| l.contains("11) role")).unwrap();
-        // Single-digit numbers are right-padded to the same field width.
-        let header_1 = lines.iter().find(|l| l.contains(" 1) role")).unwrap();
-        assert!(
-            header_11.starts_with("    11) "),
-            "two-digit header: {header_11:?}"
-        );
-        assert!(
-            header_1.starts_with("     1) "),
-            "padded one-digit header: {header_1:?}"
-        );
+    fn role_picker_option_drops_purpose_when_no_room() {
+        use super::format_role_picker_option;
+        // Width just past the header so <8 cols remain for the purpose.
+        let row = picker_row(' ', "advisor", false, "now", Some("Routes work."));
+        let header_only = "  advisor · now";
+        let width = header_only.chars().count() + 4;
+        let label = format_role_picker_option(&row, width);
+        assert_eq!(label, header_only, "purpose should be dropped: {label:?}");
     }
 
     /// TASK-645: the read-side role default. Unset/blank → implementer
