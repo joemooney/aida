@@ -1,0 +1,18 @@
+id: 019ec949-c34d-7782-8556-8a5859099734
+spec_id: TASK-829
+agreed_id: TASK-829
+title: 'aida advisor: surface pipeline activity (drain running? in-flight? last/next pass?) so the worklist reads active-vs-static'
+description: 'Operator observation 2026-06-14: aida advisor shows the bless/groom/distill piles but gives NO signal of whether any mechanism is actively working them — it reads as a static pile. Add a pipeline-status header that reads the existing primitives (the BUG-538 .aida/drain.lock, queue in-flight leases, the solo flag) and shows: ● draining (N in-flight, started Xm ago) / ○ idle — no drain running (start: aida burndown run, or aida solo --watch for the loop). When a solo loop / drain is active, show last-pass + next-pass cadence. Makes "active pipeline vs static pile" visible at a glance. Reuses aida burndown status logic; relates STORY-604 (running-drain observability) and the solo-loop story. Parent EPIC-43.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-15T03:18:35.085930775Z
+modified_at: 2026-06-15T03:18:35.085930775Z
+req_type: Task
+tags:
+- aida:advisor
+- from-product
+- observability
+- parent:EPIC-43
+- solo-mode
