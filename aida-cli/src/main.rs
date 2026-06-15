@@ -111940,9 +111940,14 @@ impl RealPhaseDriver {
             crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label(tee_label);
         let tee_handle = crate::headless_tee::start_tee(&log_path, &tee_opts);
         let claude_args = if is_fork {
+            // Fork branch already inherits the live advisor's context via --resume.
             session::claude_headless_resume_args("/aida-advise", &advisor_uuid)
         } else {
-            session::claude_headless_args("/aida-advise", &advisor_uuid)
+            // STORY-626: the cold-boot branch is context-poor — seed it with the
+            // live advisor context file (same prepend the assess cold-boot uses),
+            // so unattended punt decisions match the live session. trace:STORY-626
+            let seeded = crate::intake::seeded_advise_prompt(&self.project_root);
+            session::claude_headless_args(&seeded, &advisor_uuid)
         };
         let status = std::process::Command::new("claude")
             .current_dir(&self.project_root)
