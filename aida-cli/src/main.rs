@@ -73512,10 +73512,16 @@ fn handle_intake_command(
             .unwrap_or_else(|| req.id.to_string());
         let has_plan = !find_plan_files_for_spec(&project_root, &disp).is_empty();
         let risk = backlog::classify_risk(req, has_plan);
+        let tags: Vec<String> = req.tags.iter().cloned().collect();
+        // BUG-561: mirror the `aida list` honor-both deferred predicate
+        // (STORY-584) so the operator's deferral shelf is fenced out, not
+        // re-blessed. trace:BUG-561 | ai:claude
+        let deferred = intake::is_deferred(req.deferred, &tags);
         specs.push(intake::IntakeSpec {
             id: disp,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
-            tags: req.tags.iter().cloned().collect(),
+            tags,
+            deferred,
             risk,
         });
     }
@@ -73560,7 +73566,7 @@ fn handle_intake_command(
     );
     if !fenced.is_empty() {
         println!(
-            "  {} {} fenced out (do-not-approve class / needs-human / tag / risk):",
+            "  {} {} fenced out (do-not-approve class / needs-human / deferred / tag / risk):",
             "·".dimmed(),
             fenced.len()
         );

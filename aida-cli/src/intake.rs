@@ -241,9 +241,27 @@ pub struct IntakeSpec {
     pub req_type: String,
     /// The spec's tags (case-insensitive checks).
     pub tags: Vec<String>,
+    /// Whether the spec is in the operator's DEFERRED tier (STORY-584): either
+    /// the deferred view-flag is set OR it carries a legacy `deferred:*` parking
+    /// tag. Deferred specs are fenced out — re-blessing the operator's deferral
+    /// shelf would undo the curation the deferred tier exists to protect.
+    /// Computed by [`is_deferred`] in the launcher (mirrors the `aida list`
+    /// honor-both predicate). trace:BUG-561 | ai:claude
+    pub deferred: bool,
     /// Advisory risk token (`low` / `medium` / `high` / `unknown`) — the same
     /// chip `aida backlog list` shows. Used for the `--risk` ceiling.
     pub risk: crate::backlog::RiskLevel,
+}
+
+/// The canonical "is this spec in the deferred tier?" predicate, shared so the
+/// intake fence matches `aida list` exactly (STORY-584 honor-both): the deferred
+/// view-flag is set, OR the spec carries any legacy `deferred:*` parking tag.
+/// The launcher computes [`IntakeSpec::deferred`] through this. trace:BUG-561 | ai:claude
+pub fn is_deferred(deferred_flag: bool, tags: &[String]) -> bool {
+    deferred_flag
+        || tags
+            .iter()
+            .any(|t| t.trim().to_ascii_lowercase().starts_with("deferred:"))
 }
 
 /// Why a spec was fenced OUT of the agent's actionable set.
@@ -256,6 +274,10 @@ pub enum FenceReason {
     ExcludedTag(String),
     /// `--only-tag` is set and this spec doesn't carry it.
     NotOnlyTag(String),
+    /// In the operator's DEFERRED tier (STORY-584): deferred view-flag set or a
+    /// legacy `deferred:*` parking tag. Re-blessing it would undo the operator's
+    /// deferral curation. trace:BUG-561
+    Deferred,
     /// Risk above the `--risk` ceiling.
     RiskCeiling(crate::backlog::RiskLevel),
 }
@@ -268,6 +290,7 @@ impl FenceReason {
             }
             FenceReason::ExcludedTag(t) => format!("excluded tag `{t}`"),
             FenceReason::NotOnlyTag(t) => format!("missing required tag `{t}`"),
+            FenceReason::Deferred => "deferred".to_string(),
             FenceReason::RiskCeiling(r) => format!("risk above ceiling ({})", r.token()),
         }
     }
@@ -322,6 +345,14 @@ pub fn select_intake_candidates(
                 spec.id.clone(),
                 FenceReason::DoNotApproveClass(spec.req_type.clone()),
             ));
+            continue;
+        }
+        // BUG-561: the operator's DEFERRED tier (STORY-584) is fenced out the
+        // SAME way `aida list` hides it — deferred view-flag OR a `deferred:*`
+        // parking tag. A headless `--apply` must NOT re-bless / re-queue the
+        // operator's deferral shelf. trace:BUG-561 | ai:claude
+        if spec.deferred {
+            fenced.push((spec.id.clone(), FenceReason::Deferred));
             continue;
         }
         // P2 always-on tag exclusions + the per-run --exclude-tag.
@@ -421,10 +452,16 @@ mod tests {
     use crate::backlog::RiskLevel;
 
     fn spec(id: &str, ty: &str, tags: &[&str], risk: RiskLevel) -> IntakeSpec {
+        let tag_vec: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+        // Mirror the launcher: a spec carrying a `deferred:*` tag is deferred
+        // even without the flag (the helper-under-test's honor-both rule). The
+        // flag-only case is set explicitly in the deferred test. trace:BUG-561
+        let deferred = is_deferred(false, &tag_vec);
         IntakeSpec {
             id: id.to_string(),
             req_type: ty.to_string(),
-            tags: tags.iter().map(|s| s.to_string()).collect(),
+            tags: tag_vec,
+            deferred,
             risk,
         }
     }
@@ -508,6 +545,55 @@ workflow_hints = true
         let (eligible, fenced) = select_intake_candidates(&specs, &cfg, &filters);
         assert_eq!(eligible, vec!["STORY-3"]);
         assert_eq!(fenced.len(), 2);
+    }
+
+    /// BUG-561: the operator's DEFERRED tier (STORY-584) must be fenced out the
+    /// same way `aida list` hides it — by the deferred view-flag AND by a legacy
+    /// `deferred:*` parking tag. Without the fix these specs leak into the
+    /// eligible set and a headless `--apply` would re-bless the deferral shelf.
+    #[test]
+    fn select_excludes_deferred_specs() {
+        let cfg = IntakeConfig::default();
+        let filters = IntakeFilters {
+            max_risk: RiskLevel::High,
+            ..Default::default()
+        };
+        // STORY-1 deferred via the view-flag; STORY-2 via a legacy parking tag;
+        // STORY-3 is genuinely active.
+        let mut flagged = spec("STORY-1", "story", &[], RiskLevel::Low);
+        flagged.deferred = true;
+        let specs = vec![
+            flagged,
+            spec(
+                "STORY-2",
+                "story",
+                &["deferred:stabilization-first"],
+                RiskLevel::Low,
+            ),
+            spec("STORY-3", "story", &["ok"], RiskLevel::Low),
+        ];
+        let (eligible, fenced) = select_intake_candidates(&specs, &cfg, &filters);
+        // Only the genuinely-active draft is weighed.
+        assert_eq!(eligible, vec!["STORY-3"]);
+        // Both deferred specs are fenced with reason `deferred`.
+        assert_eq!(fenced.len(), 2);
+        assert!(fenced
+            .iter()
+            .all(|(_, r)| matches!(r, FenceReason::Deferred)));
+        assert!(fenced.iter().any(|(id, _)| id == "STORY-1"));
+        assert!(fenced.iter().any(|(id, _)| id == "STORY-2"));
+        // The acceptance string: reason renders as `deferred`.
+        assert_eq!(fenced[0].1.describe(), "deferred");
+    }
+
+    /// BUG-561: the shared honor-both predicate matches `aida list` (STORY-584).
+    #[test]
+    fn is_deferred_honors_flag_and_tag() {
+        assert!(is_deferred(true, &[]));
+        assert!(is_deferred(false, &["deferred:post-stability".to_string()]));
+        assert!(is_deferred(false, &["DEFERRED:Foo".to_string()])); // case-insensitive
+        assert!(!is_deferred(false, &["deferral".to_string()])); // not the prefix
+        assert!(!is_deferred(false, &["ok".to_string()]));
     }
 
     #[test]
