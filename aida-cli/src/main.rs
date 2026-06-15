@@ -73574,7 +73574,9 @@ fn handle_intake_command(
         }
     }
 
-    let prompt = intake::intake_skill_prompt(apply);
+    // Seed the cold-boot prompt with the live advisor's context file when present,
+    // so the headless advisor doesn't re-derive priorities from scratch. trace:STORY-626
+    let prompt = intake::seeded_assess_prompt(&project_root, apply);
     let mode = permission_mode.unwrap_or("bypassPermissions");
 
     if dry_run {
