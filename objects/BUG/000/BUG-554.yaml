@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T15:00:46.993429824Z
-modified_at: 2026-06-14T15:00:46.993429824Z
+modified_at: 2026-06-15T06:47:11.884915539Z
 req_type: Bug
 tags:
 - agent-launcher
@@ -19,3 +19,9 @@ relationships:
 - rel_type: Child
   target_id: 019ec34e-c4a2-7642-967a-a2b9efda9a7d
   created_at: 2026-06-14T15:00:54.966500212Z
+comments:
+- id: 019eca08-c10c-7923-b43d-ad2eeebbab20
+  author: joe
+  content: 'Resolution (advisor, keyboard burn-down): BUG-554 is closed across three mechanisms — (1) SUBSTRATE: aida session start forks new branches from origin/main + warns when cwd is on a feature branch (BUG-76, main.rs detect_default_branch_ref ~39918); (2) DRAIN: serialize-groups fan ≤1 per serialize:<group> per wave (TASK-814, Completed); (3) GUIDANCE: the burndown skill now spells out the reset-to-origin/main rule for raw-git agents reusing one worktree sequentially (the #893 case) — PR #928. The original stacking bug is prevented at the substrate; the residual raw-git discipline is now documented. trace:BUG-554'
+  created_at: 2026-06-15T06:47:11.884915539Z
+  modified_at: 2026-06-15T06:47:11.884915539Z
