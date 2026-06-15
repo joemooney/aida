@@ -641,6 +641,14 @@ mod story_423_asciinema_tests {
         let out = rewrite_list_alias(&s(&["aida", "list", "why", "--json"]));
         assert_eq!(out, s(&["aida", "burndown", "explain", "--json"]));
 
+        // aida list advisor [--short] → aida advisor [--short] (single-token target)
+        let out = rewrite_list_alias(&s(&["aida", "list", "advisor", "--short"]));
+        assert_eq!(out, s(&["aida", "advisor", "--short"]));
+        assert!(matches!(
+            Cli::try_parse_from(out).unwrap().command,
+            Command::Advisor { .. }
+        ));
+
         // Unmatched: plain `aida list open` and a bare `aida list` are untouched.
         assert_eq!(
             rewrite_list_alias(&s(&["aida", "list", "open"])),
@@ -927,23 +935,25 @@ mod story_423_asciinema_tests {
     }
 }
 
-/// TASK-822 / TASK-824: rewrite the `aida list <lens>` discoverability aliases
-/// into their canonical commands before clap parses, so the list family
-/// (`open` / `human` / `queue` / `why`) reads uniformly while each alias is a
-/// pure passthrough of the target command's flags. Unmatched input is returned
-/// unchanged. `args[0]` is the binary name. trace:TASK-822 trace:TASK-824
+/// TASK-822 / TASK-824 / TASK-828: rewrite the `aida list <lens>` discoverability
+/// aliases into their canonical commands before clap parses, so the list family
+/// (`open` / `human` / `queue` / `why` / `advisor`) reads uniformly while each
+/// alias is a pure passthrough of the target command's flags. The target may be
+/// one token (`aida advisor`) or two (`aida queue list`). Unmatched input is
+/// returned unchanged. `args[0]` is the binary name.
+/// trace:TASK-822 trace:TASK-824 trace:TASK-828
 fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "list" {
-        let target: Option<[&str; 2]> = match args[2].as_str() {
-            "queue" => Some(["queue", "list"]),
-            "why" => Some(["burndown", "explain"]),
+        let target: Option<&[&str]> = match args[2].as_str() {
+            "queue" => Some(&["queue", "list"]),
+            "why" => Some(&["burndown", "explain"]),
+            "advisor" => Some(&["advisor"]),
             _ => None,
         };
-        if let Some([a, b]) = target {
+        if let Some(tokens) = target {
             let mut out = Vec::with_capacity(args.len());
             out.push(args[0].clone());
-            out.push(a.to_string());
-            out.push(b.to_string());
+            out.extend(tokens.iter().map(|s| s.to_string()));
             out.extend_from_slice(&args[3..]);
             return out;
         }
