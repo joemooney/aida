@@ -22,6 +22,16 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     deferred INTEGER NOT NULL DEFAULT 0,   -- STORY-584: view-flag parallel to archived
     deferred_at TEXT,                      -- ISO RFC3339; NULL when not deferred (STORY-584)
     deferred_until TEXT,                   -- free-text revisit trigger; NULL when none (STORY-584)
+    -- STORY-632: deterministic local graph-centrality, computed during cache
+    -- rebuild from the relationship graph — NEVER stored in canonical YAML.
+    -- in_degree  = count of inbound edges (specs that reference/depend-on this);
+    --              high = foundational / load-bearing heft.
+    -- out_degree = count of this spec's own outbound edges; high = coupling.
+    -- heft       = type-weighted combined score (static RelationshipType->weight
+    --              lookup applied to both in + out edges). See cache::edge_weight.
+    in_degree INTEGER NOT NULL DEFAULT 0,
+    out_degree INTEGER NOT NULL DEFAULT 0,
+    heft INTEGER NOT NULL DEFAULT 0,
     yaml_path TEXT NOT NULL                -- relative path within the git store
 );
 
@@ -36,6 +46,8 @@ CREATE INDEX IF NOT EXISTS idx_cache_archived ON requirements_cache(archived);
 CREATE INDEX IF NOT EXISTS idx_cache_archived_at ON requirements_cache(archived_at);
 CREATE INDEX IF NOT EXISTS idx_cache_deferred ON requirements_cache(deferred);
 CREATE INDEX IF NOT EXISTS idx_cache_deferred_at ON requirements_cache(deferred_at);
+-- STORY-632: index heft so `aida list --sort heft` orders without a table scan.
+CREATE INDEX IF NOT EXISTS idx_cache_heft ON requirements_cache(heft);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS requirements_fts USING fts5(
     id UNINDEXED,

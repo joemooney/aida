@@ -5816,6 +5816,13 @@ pub enum Command {
         // trace:STORY-562 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, conflicts_with_all = ["json", "tree", "status"])]
         human: bool,
+
+        /// Order the results. `modified` (default) = freshest first; `heft` =
+        /// most graph-connected first (the deterministic in+out-degree weight),
+        /// so load-bearing specs surface at the top.
+        // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "ORDER", default_value = "modified")]
+        sort: String,
     },
 
     /// Show details for a specific requirement
@@ -5886,6 +5893,13 @@ pub enum Command {
         /// prints a count + a pointer to `aida rel list`.
         #[clap(long = "rels", visible_alias = "relations")]
         rels: bool,
+
+        /// Emit the requirement as a JSON object instead of the human detail
+        /// view. Includes the deterministic in/out-degree centrality + heft
+        /// score so agents can read a spec's load-bearing weight directly.
+        // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, conflicts_with_all = ["tree", "card"])]
+        json: bool,
     },
 
     /// Query the cross-spec relationship graph from a root spec. The default

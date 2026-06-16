@@ -104,6 +104,16 @@ impl CachedGitBackend {
         self.cache.list_summaries(filter)
     }
 
+    /// STORY-632: deterministic local graph-centrality (in/out degree + heft)
+    /// for a single spec, read from the cache. Triggers a stale-check first so
+    /// the inbound axis reflects the latest committed relationship graph (a
+    /// HEAD change since the last rebuild forces a fresh full recompute).
+    /// trace:STORY-632 | ai:claude
+    pub fn degrees(&self, id: &Uuid) -> Result<crate::db::Degrees> {
+        self.ensure_cache_fresh()?;
+        self.cache.degrees_for_id(id)
+    }
+
     /// Cache-backed FTS5 search across spec_id, agreed_id, title, description.
     /// `archive` controls the archive axis (STORY-441); `defer` the defer axis
     /// (STORY-584).

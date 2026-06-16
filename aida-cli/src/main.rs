@@ -11693,6 +11693,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_glyph,
             short,
             human,
+            sort,
             ..
         } => {
             // STORY-562: `aida list human` (positional alias) and `aida list
@@ -11826,6 +11827,19 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             } else {
                 aida_core::DeferFilter::NonDeferredOnly
             };
+            // STORY-632: resolve the --sort order. Unknown values fall back to
+            // the default (freshest-first) with a stderr note rather than
+            // erroring the listing. trace:STORY-632 | ai:claude
+            let sort_order = match sort.to_ascii_lowercase().as_str() {
+                "heft" | "centrality" => aida_core::SortOrder::HeftDesc,
+                "modified" | "" => aida_core::SortOrder::ModifiedDesc,
+                other => {
+                    eprintln!(
+                        "warning: unknown --sort '{other}' (expected 'modified' or 'heft'); using 'modified'"
+                    );
+                    aida_core::SortOrder::ModifiedDesc
+                }
+            };
             let filter = aida_core::ListFilter {
                 status: effective_status.clone(),
                 req_type: r#type.clone(),
@@ -11836,6 +11850,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 tags: effective_tags,
                 archive,
                 defer,
+                sort: sort_order,
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
@@ -13168,6 +13183,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             brief,
             full,
             rels,
+            json,
         } => {
             // trace:TASK-518 | ai:antigravity
             let mut resolved_id = id.clone();
@@ -13228,6 +13244,50 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             match lookup? {
                 Some(req) => {
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
+                    // STORY-632: deterministic local graph-centrality, read from
+                    // the cache (recomputed on rebuild from the relationship
+                    // graph; never stored in YAML). trace:STORY-632 | ai:claude
+                    let degrees = backend.degrees(&req.id).unwrap_or_default();
+                    // STORY-632: `--json` emits the spec as a machine object,
+                    // including the centrality fields, then returns early.
+                    // trace:STORY-632 | ai:claude
+                    if *json {
+                        #[derive(serde::Serialize)]
+                        struct ShowJson<'a> {
+                            id: String,
+                            spec_id: Option<&'a str>,
+                            agreed_id: Option<&'a str>,
+                            title: &'a str,
+                            description: &'a str,
+                            req_type: String,
+                            status: String,
+                            priority: String,
+                            owner: &'a str,
+                            feature: &'a str,
+                            tags: Vec<&'a str>,
+                            in_degree: u32,
+                            out_degree: u32,
+                            heft: u32,
+                        }
+                        let out = ShowJson {
+                            id: req.id.to_string(),
+                            spec_id: req.spec_id.as_deref(),
+                            agreed_id: req.agreed_id.as_deref(),
+                            title: &req.title,
+                            description: &req.description,
+                            req_type: format!("{:?}", req.req_type),
+                            status: format!("{}", req.effective_status()),
+                            priority: format!("{}", req.effective_priority()),
+                            owner: &req.owner,
+                            feature: &req.feature,
+                            tags: req.tags.iter().map(|s| s.as_str()).collect(),
+                            in_degree: degrees.in_degree,
+                            out_degree: degrees.out_degree,
+                            heft: degrees.heft,
+                        };
+                        println!("{}", serde_json::to_string_pretty(&out)?);
+                        return Ok(());
+                    }
                     // TASK-265: --card renders a compact boxed spec card
                     // instead of the linear detail view, so /aida-pickup can
                     // drop the spec's contract into terminal scrollback at
@@ -13420,6 +13480,20 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 spec_label
                             );
                         }
+                    }
+                    // STORY-632: deterministic centrality readout — inbound +
+                    // outbound degree (tracked separately: high inbound =
+                    // load-bearing/foundational, high outbound = coupling) plus
+                    // the type-weighted heft score. Shown only when the spec is
+                    // connected. trace:STORY-632 | ai:claude
+                    if degrees.in_degree > 0 || degrees.out_degree > 0 {
+                        println!(
+                            "{}: {} in / {} out  (heft {})",
+                            "Centrality".bold(),
+                            degrees.in_degree,
+                            degrees.out_degree,
+                            degrees.heft
+                        );
                     }
                     // STORY-446: Blockers section — one line per BlockedBy edge
                     // with the blocker's status + a pickability glyph (✓ when
