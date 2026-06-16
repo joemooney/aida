@@ -24,12 +24,12 @@ description: |-
   - One dimension (repo==component) or two (a repo contains components)?
 
   See also: SPIKE-10 (subsystem advisors), the workspace module, BUG for Tier-1 trap.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:57:46.027513551Z
-modified_at: 2026-06-16T06:58:25.087987899Z
+modified_at: 2026-06-16T07:23:55.342706591Z
 req_type: Spike
 tags:
 - aida:workspace
