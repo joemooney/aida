@@ -33846,76 +33846,18 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
 
 fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
     match cmd {
-        AgentCommand::New(AgentNewCommand::Claude {
-            role,
-            spec,
-            cwd,
-            permission_mode,
-            sandbox,
-            no_context,
-            show_context,
-            prompt,
-            no_prompt,
-            no_default_flags,
-            extra_flags,
-            name,
-            bg,
-        }) => agent_new_claude(
-            role.clone(),
-            spec.clone(),
-            cwd.as_deref(),
-            permission_mode.as_deref(),
-            *sandbox,
-            AgentContextOptions::new(!*no_context, *show_context),
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
-            name.clone(),
-            *bg,
-        ),
-        AgentCommand::New(AgentNewCommand::Codex {
-            role,
-            spec,
-            cwd,
-            bypass_sandbox,
-            no_context,
-            show_context,
-            prompt,
-            no_prompt,
-            no_default_flags,
-            extra_flags,
-            name,
-        }) => agent_new_codex(
-            role.clone(),
-            spec.clone(),
-            cwd.as_deref(),
-            *bypass_sandbox,
-            AgentContextOptions::new(!*no_context, *show_context),
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
-            name.clone(),
-        ),
-        AgentCommand::New(AgentNewCommand::Antigravity {
-            role,
-            spec,
-            cwd,
-            bypass_sandbox,
-            no_context,
-            show_context,
-            prompt,
-            no_prompt,
-            no_default_flags,
-            extra_flags,
-            name,
-        }) => agent_new_antigravity(
-            role.clone(),
-            spec.clone(),
-            cwd.as_deref(),
-            *bypass_sandbox,
-            AgentContextOptions::new(!*no_context, *show_context),
-            AgentPromptOptions::new(prompt.clone(), *no_prompt),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
-            name.clone(),
-        ),
+        // trace:TASK-837 | ai:claude — bare `aida agent new` (no agent-type
+        // subcommand): at a TTY, open an arrow-key picker of the agent types,
+        // then dispatch the chosen type with its default options. Non-TTY keeps
+        // clap's help-on-missing-subcommand behavior (don't block scripts).
+        AgentCommand::New { command } => match command {
+            Some(c) => dispatch_agent_new(c),
+            // Esc/cancel (or non-TTY) → clean no-op exit, same as the role picker.
+            None => match pick_agent_type_interactively()? {
+                Some(c) => dispatch_agent_new(&c),
+                None => Ok(()),
+            },
+        },
         AgentCommand::Register {
             pid,
             agent_type,
@@ -33933,6 +33875,188 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         AgentCommand::Resume { agent } => agent_resume(agent),
         AgentCommand::Stop { name } => agent_stop(name),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
+    }
+}
+
+/// TASK-837: the canonical list of agent types `aida agent new` can launch, in
+/// menu order. Derived from the `AgentNewCommand` variants — keep in sync if a
+/// new launcher variant is added. Each entry is `(label, type-token)`: the
+/// label is what the picker shows, the token is the `agent new <token>` lane.
+// trace:TASK-837 | ai:claude
+fn agent_type_picker_choices() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("Claude", "claude"),
+        ("Codex", "codex"),
+        ("Antigravity", "antigravity"),
+    ]
+}
+
+/// TASK-837: map a picked agent-type token to its default-options
+/// `AgentNewCommand` (the same value clap would build for a bare
+/// `aida agent new <type>` with no extra flags).
+// trace:TASK-837 | ai:claude
+fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
+    match token {
+        "claude" => Some(AgentNewCommand::Claude {
+            role: None,
+            spec: None,
+            cwd: None,
+            permission_mode: None,
+            sandbox: false,
+            no_context: false,
+            show_context: false,
+            prompt: None,
+            no_prompt: false,
+            no_default_flags: false,
+            extra_flags: Vec::new(),
+            name: None,
+            bg: false,
+        }),
+        "codex" => Some(AgentNewCommand::Codex {
+            role: None,
+            spec: None,
+            cwd: None,
+            bypass_sandbox: false,
+            no_context: false,
+            show_context: false,
+            prompt: None,
+            no_prompt: false,
+            no_default_flags: false,
+            extra_flags: Vec::new(),
+            name: None,
+        }),
+        "antigravity" => Some(AgentNewCommand::Antigravity {
+            role: None,
+            spec: None,
+            cwd: None,
+            bypass_sandbox: false,
+            no_context: false,
+            show_context: false,
+            prompt: None,
+            no_prompt: false,
+            no_default_flags: false,
+            extra_flags: Vec::new(),
+            name: None,
+        }),
+        _ => None,
+    }
+}
+
+/// TASK-837: arrow-key agent-type picker for a bare `aida agent new`. Mirrors
+/// the role picker (`pick_role_with_header`): `inquire::Select` writes its
+/// prompt to stderr (so eval-captured stdout stays clean), up/down move, Enter
+/// selects, Esc/Ctrl-C cancels. Returns `Ok(Some(cmd))` on selection,
+/// `Ok(None)` on cancel. Non-interactive stdin → `Ok(None)` so scripts get the
+/// usual clap help/usage instead of a hung prompt.
+// trace:TASK-837 | ai:claude
+fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>> {
+    use clap::CommandFactory;
+    use std::io::IsTerminal;
+    // Non-TTY (piped/headless): don't block on a picker — fall through to the
+    // historical clap-help behavior by re-emitting the help for `agent new`.
+    if !std::io::stdin().is_terminal() {
+        let mut cmd = Cli::command();
+        if let Some(agent) = cmd.find_subcommand_mut("agent") {
+            if let Some(new) = agent.find_subcommand_mut("new") {
+                let _ = new.clone().print_help();
+                println!();
+            }
+        }
+        return Ok(None);
+    }
+
+    let choices = agent_type_picker_choices();
+    let labels: Vec<&str> = choices.iter().map(|(label, _)| *label).collect();
+    let select = inquire::Select::new("Select an agent type to launch:", labels)
+        .with_help_message("↑↓ to move, type to filter, Enter to select, Esc to cancel");
+
+    match select.raw_prompt() {
+        Ok(choice) => {
+            let token = choices[choice.index].1;
+            Ok(agent_new_command_for_type(token))
+        }
+        Err(inquire::InquireError::OperationCanceled)
+        | Err(inquire::InquireError::OperationInterrupted) => Ok(None),
+        Err(e) => Err(anyhow::anyhow!("agent-type picker failed: {e}")),
+    }
+}
+
+/// TASK-837: dispatch a resolved `AgentNewCommand` to its launcher. Factored
+/// out of `handle_agent_command` so both the explicit `aida agent new <type>`
+/// path and the interactive picker share one code path.
+// trace:TASK-837 | ai:claude
+fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
+    match cmd {
+        AgentNewCommand::Claude {
+            role,
+            spec,
+            cwd,
+            permission_mode,
+            sandbox,
+            no_context,
+            show_context,
+            prompt,
+            no_prompt,
+            no_default_flags,
+            extra_flags,
+            name,
+            bg,
+        } => agent_new_claude(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            permission_mode.as_deref(),
+            *sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
+            name.clone(),
+            *bg,
+        ),
+        AgentNewCommand::Codex {
+            role,
+            spec,
+            cwd,
+            bypass_sandbox,
+            no_context,
+            show_context,
+            prompt,
+            no_prompt,
+            no_default_flags,
+            extra_flags,
+            name,
+        } => agent_new_codex(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
+            name.clone(),
+        ),
+        AgentNewCommand::Antigravity {
+            role,
+            spec,
+            cwd,
+            bypass_sandbox,
+            no_context,
+            show_context,
+            prompt,
+            no_prompt,
+            no_default_flags,
+            extra_flags,
+            name,
+        } => agent_new_antigravity(
+            role.clone(),
+            spec.clone(),
+            cwd.as_deref(),
+            *bypass_sandbox,
+            AgentContextOptions::new(!*no_context, *show_context),
+            AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
+            name.clone(),
+        ),
     }
 }
 
@@ -36082,19 +36206,22 @@ mod agent_launcher_tests {
             "--verbose",
         ])
         .unwrap();
-        let Command::Agent(AgentCommand::New(AgentNewCommand::Claude {
-            role,
-            spec,
-            cwd,
-            permission_mode,
-            no_context,
-            show_context,
-            prompt,
-            no_prompt,
-            no_default_flags,
-            extra_flags,
-            ..
-        })) = cli.command
+        let Command::Agent(AgentCommand::New {
+            command:
+                Some(AgentNewCommand::Claude {
+                    role,
+                    spec,
+                    cwd,
+                    permission_mode,
+                    no_context,
+                    show_context,
+                    prompt,
+                    no_prompt,
+                    no_default_flags,
+                    extra_flags,
+                    ..
+                }),
+        }) = cli.command
         else {
             panic!("expected agent new claude command");
         };
@@ -36160,17 +36287,20 @@ mod agent_launcher_tests {
             "--ask-for-approval=never",
         ])
         .unwrap();
-        let Command::Agent(AgentCommand::New(AgentNewCommand::Codex {
-            role,
-            spec,
-            cwd,
-            bypass_sandbox,
-            no_context,
-            show_context,
-            no_prompt,
-            extra_flags,
-            ..
-        })) = cli.command
+        let Command::Agent(AgentCommand::New {
+            command:
+                Some(AgentNewCommand::Codex {
+                    role,
+                    spec,
+                    cwd,
+                    bypass_sandbox,
+                    no_context,
+                    show_context,
+                    no_prompt,
+                    extra_flags,
+                    ..
+                }),
+        }) = cli.command
         else {
             panic!("expected agent new codex command");
         };
@@ -36204,16 +36334,19 @@ mod agent_launcher_tests {
             "fast",
         ])
         .unwrap();
-        let Command::Agent(AgentCommand::New(AgentNewCommand::Antigravity {
-            role,
-            spec,
-            cwd,
-            bypass_sandbox,
-            no_context,
-            show_context,
-            extra_flags,
-            ..
-        })) = cli.command
+        let Command::Agent(AgentCommand::New {
+            command:
+                Some(AgentNewCommand::Antigravity {
+                    role,
+                    spec,
+                    cwd,
+                    bypass_sandbox,
+                    no_context,
+                    show_context,
+                    extra_flags,
+                    ..
+                }),
+        }) = cli.command
         else {
             panic!("expected agent new antigravity command");
         };
@@ -36782,11 +36915,14 @@ mod agent_launcher_tests {
             "--show-context",
         ])
         .unwrap();
-        let Command::Agent(AgentCommand::New(AgentNewCommand::Codex {
-            no_context,
-            show_context,
-            ..
-        })) = cli.command
+        let Command::Agent(AgentCommand::New {
+            command:
+                Some(AgentNewCommand::Codex {
+                    no_context,
+                    show_context,
+                    ..
+                }),
+        }) = cli.command
         else {
             panic!("expected agent new codex command");
         };
@@ -36808,6 +36944,66 @@ mod agent_launcher_tests {
             panic!("expected agent list-roles command");
         };
         assert!(json_opt);
+    }
+
+    // trace:TASK-837 | ai:claude — bare `aida agent new` (no agent-type
+    // subcommand) must parse to `New { command: None }` rather than erroring to
+    // clap help, so the interactive picker can take over at a TTY.
+    #[test]
+    fn parses_bare_agent_new_as_optional_subcommand() {
+        let cli = Cli::try_parse_from(["aida", "agent", "new"]).unwrap();
+        let Command::Agent(AgentCommand::New { command }) = cli.command else {
+            panic!("expected agent new command");
+        };
+        assert!(
+            command.is_none(),
+            "bare `agent new` should carry no subcommand"
+        );
+    }
+
+    // trace:TASK-837 | ai:claude — the picker's labels and type tokens are the
+    // pure, testable surface (mirrors how the role picker label builder is
+    // tested). They must cover exactly the launchable `AgentNewCommand` variants.
+    #[test]
+    fn agent_type_picker_choices_cover_all_launchers() {
+        let choices = agent_type_picker_choices();
+        let labels: Vec<&str> = choices.iter().map(|(l, _)| *l).collect();
+        let tokens: Vec<&str> = choices.iter().map(|(_, t)| *t).collect();
+        assert_eq!(labels, vec!["Claude", "Codex", "Antigravity"]);
+        assert_eq!(tokens, vec!["claude", "codex", "antigravity"]);
+
+        // Every offered token maps to a default-options AgentNewCommand of the
+        // matching variant; an unknown token maps to nothing.
+        assert!(matches!(
+            agent_new_command_for_type("claude"),
+            Some(AgentNewCommand::Claude { .. })
+        ));
+        assert!(matches!(
+            agent_new_command_for_type("codex"),
+            Some(AgentNewCommand::Codex { .. })
+        ));
+        assert!(matches!(
+            agent_new_command_for_type("antigravity"),
+            Some(AgentNewCommand::Antigravity { .. })
+        ));
+        assert!(agent_new_command_for_type("nope").is_none());
+    }
+
+    // trace:TASK-837 | ai:claude — a token picked interactively must produce the
+    // same default-options command as the explicit `aida agent new <type>` lane,
+    // so the two entry points share one launch path.
+    #[test]
+    fn picked_type_matches_explicit_subcommand_defaults() {
+        let cli = Cli::try_parse_from(["aida", "agent", "new", "claude"]).unwrap();
+        let Command::Agent(AgentCommand::New {
+            command: Some(explicit),
+        }) = cli.command
+        else {
+            panic!("expected explicit agent new claude command");
+        };
+        let picked = agent_new_command_for_type("claude").unwrap();
+        // Compare via debug repr: both are the Claude variant with all-default fields.
+        assert_eq!(format!("{explicit:?}"), format!("{picked:?}"));
     }
 
     // trace:TASK-543 | ai:codex
