@@ -5,90 +5,13 @@ store_path = ".aida-store"
 store_type = "worktree"
 branch = "aida-store"
 
-[store.sync]
-# Auto-push store commits after local writes. Values: manual,
-# session-end, per-write, periodic. `periodic` is reserved until
-# aida-worker (EPIC-30) ships.
-auto_push = "manual"
-
 # trace:EPIC-1-052 Phase 2 | ai:claude
 # How `aida add` chooses between agreed-id blocks and node-aware ids:
 #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>
 #   blocks-then-fallback — try block first; fall through silently (default)
 #   blocks-only          — error if no block is allocated for the type
-#
-# counter_scope (FR-271):
-#   global               — single counter shared across all types (default for new projects)
-#                          → FR-1, BUG-2, EPIC-3, ... ids globally unique by number
-#   per-type             — separate counter per type prefix (legacy default)
-#                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh
 [id_format]
 policy = "blocks-then-fallback"
-counter_scope = "global"
 
-# trace:TASK-281 | ai:claude
-# Auto-claim a fresh block when aggregate remaining IDs drop below
-# threshold. On by default (threshold 20, size 100). Opt out with:
-#   [block_allocation]
-#   auto_claim = false
-# Per-type override (e.g. larger BUG blocks):
-#   [block_allocation.bug]
-#   auto_claim_threshold = 50
-#   auto_claim_size = 200
-
-# trace:EPIC-35 | ai:claude
-# Which forge backs the PR/MR + CI lifecycle. Auto-detected from the
-# origin host at init: github.com -> github, gitlab.* -> gitlab,
-# otherwise pure-git (works direct-to-default-branch; merge = git
-# ancestry + (SPEC-ID)-trailer auto-complete, no forge needed).
-[forge]
-provider = "github"
-
-# trace:TASK-304 | ai:claude  (suggest_threshold: trace:TASK-697)
-# Whether AIDA proactively suggests `aida ultraplan <SPEC>` for specs
-# where planning would help. /ultraplan is interactive (claude.ai web
-# approval), so there is no "auto-pull" mode — only:
-#   never      — `aida ultraplan` is disabled (refuses with a message)
-#   on-demand  — current behavior: run `aida ultraplan SPEC` yourself
-#   suggested  — pickup surfaces (/aida-pickup, queue work/list head)
-#                hint when the head spec passes suggest_threshold
-# suggest_threshold only applies in `suggested` mode. Heuristics:
-#   spec-thinness       — (default) suggest when the spec is
-#                         under-specified: no design section (## Proposed
-#                         shape / Design / Approach / ...) yet a
-#                         substantive body. Well-specified specs already
-#                         carry their plan, so they stay quiet (SPIKE-8).
-#   acceptance-bullets>N — (legacy) suggest when the `## Acceptance`
-#                         checkbox count exceeds N. Note: bullet count
-#                         anti-correlates with where planning helps.
-[ultraplan]
-mode = "on-demand"
-suggest_threshold = "spec-thinness"
-
-# Policy for `aida intake` — the headless advisor pass that reads open
-# specs and proposes approve/reject/park/queue dispositions (propose-only
-# by default; `--apply` executes). Every knob has a safe default, so this
-# whole section is optional — uncomment a line only to change a default.
-#
-# disposition_bias — how aggressively the agent proposes approve:
-#   approve-eligible  — (default) propose approve for every eligible
-#                       spec; the propose-mode review is the filter
-#   park-aligned      — approve only when a spec is BOTH eligible AND
-#                       clearly aligned with project priorities; else
-#                       park for a human
-#   park-conservative — park whenever unsure
-#
-# do_not_approve_classes — requirement types the agent can NEVER propose
-# approve for; they are fenced out of its candidate set entirely. The
-# default is the strategic + knowledge-graph types. An empty list opens
-# the gate (the propose-mode review still applies).
-#
-# on_apply — what `--apply` does after queuing approved specs:
-#   queue — (default) stop at queuing; draining stays a separate,
-#           explicit command
-#   drain — chain straight into an implementer drain after queuing
-#
-# [intake]
-# disposition_bias = "approve-eligible"
-# do_not_approve_classes = ["vision", "epic", "principle", "constraint", "decision", "term"]
-# on_apply = "queue"
+[hints]
+workflow_hints = true
