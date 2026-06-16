@@ -9581,6 +9581,49 @@ fn should_auto_commit_scaffold(stdin_is_tty: bool, env_override: Option<&str>) -
     }
 }
 
+/// BUG-565: split scaffold paths into `(to_stage, ignored)` by asking git which
+/// of them the repo's `.gitignore` covers — `git check-ignore <paths...>` prints
+/// exactly the ignored subset (exit 0 = some matched, 1 = none matched, 128 =
+/// error). We do NOT pass `--no-index`: a path that is *already tracked* would
+/// stage fine via `git add`, so it must not be filtered out; we only want to
+/// drop the paths `git add` would actually refuse (untracked + ignored). On any
+/// spawn/other error we fail OPEN (treat nothing as ignored) so a check failure
+/// never silently drops scaffolding — the subsequent stage will surface it.
+/// Order within each bucket follows the input. trace:BUG-565 | ai:claude
+fn partition_scaffold_paths_by_gitignore(
+    root: &std::path::Path,
+    paths: &[String],
+) -> (Vec<String>, Vec<String>) {
+    if paths.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .arg("check-ignore")
+        .args(paths)
+        .output();
+    let ignored: std::collections::HashSet<String> = match output {
+        // exit 128 ⇒ git error (e.g. not a repo): fail open, ignore nothing.
+        Ok(out) if out.status.code() != Some(128) => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
+        _ => std::collections::HashSet::new(),
+    };
+    let mut to_stage = Vec::new();
+    let mut skipped = Vec::new();
+    for p in paths {
+        if ignored.contains(p) {
+            skipped.push(p.clone());
+        } else {
+            to_stage.push(p.clone());
+        }
+    }
+    (to_stage, skipped)
+}
+
 /// After scaffolding is on disk, commit init's OWN created paths so a fresh
 /// clone / session worktree inherits the scaffolding without the operator
 /// having to remember the manual `git add . && git commit` step (BUG-445,
@@ -9629,11 +9672,49 @@ fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
         return Ok(false);
     }
 
-    let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+    // BUG-565: staging used to be a single all-or-nothing `git add` over EVERY
+    // scaffold path. Plain `git add` refuses the WHOLE batch (exit 1) the moment
+    // one path is gitignored — and `.claude/` is a very common local-only
+    // gitignore entry — so init aborted the commit entirely and stranded the
+    // onboarding task, while emitting a dimmed "Note:" that read as informational.
+    // Respect the user's ignore choice: filter OUT the paths their `.gitignore`
+    // covers (rather than force-adding with `-f`), commit the remainder, and
+    // surface each skipped path as a real WARNING so they can decide to un-ignore
+    // and re-add. trace:BUG-565 | ai:claude
+    let (to_stage, ignored) = partition_scaffold_paths_by_gitignore(root, &paths);
+
+    if !ignored.is_empty() {
+        eprintln!(
+            "  {} skipped {} scaffolding path{} your .gitignore covers (not committed):",
+            "Warning:".yellow().bold(),
+            ignored.len(),
+            if ignored.len() == 1 { "" } else { "s" },
+        );
+        for p in &ignored {
+            eprintln!("    {}", p.yellow());
+        }
+        eprintln!(
+            "  {} un-ignore a path and re-stage it manually with `git add -f {}` if you want it tracked.",
+            "→".dimmed(),
+            ignored.join(" "),
+        );
+    }
+
+    if to_stage.is_empty() {
+        // Everything init created is gitignored — nothing to commit. Honest
+        // warning above already told the user which paths and why.
+        eprintln!(
+            "  {} all AIDA scaffolding paths are gitignored — nothing committed.",
+            "Warning:".yellow().bold(),
+        );
+        return Ok(false);
+    }
+
+    let path_refs: Vec<&str> = to_stage.iter().map(|s| s.as_str()).collect();
     if let Err(e) = git_ops::add(root, &path_refs) {
         eprintln!(
             "  {} could not stage scaffolding paths: {}",
-            "Note:".dimmed(),
+            "Warning:".yellow().bold(),
             e
         );
         return Ok(false);
@@ -9646,7 +9727,11 @@ fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
         // Nothing staged was new (already tracked + unchanged). Not an error.
         Ok(false) => Ok(false),
         Err(e) => {
-            eprintln!("  {} could not commit scaffolding: {}", "Note:".dimmed(), e);
+            eprintln!(
+                "  {} could not commit scaffolding: {}",
+                "Warning:".yellow().bold(),
+                e
+            );
             Ok(false)
         }
     }
@@ -10370,6 +10455,102 @@ mod task_631_init_self_commit_tests {
             Some(true)
         );
         assert_eq!(should_auto_commit_scaffold(true, Some("maybe")), None);
+    }
+
+    fn git_in(root: &std::path::Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?} failed to spawn: {e}"));
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// BUG-565: the resilient-staging partition must drop the gitignored path
+    /// and keep the rest — never abort the whole batch on one ignored path.
+    /// `.claude` is the canonical local-only gitignore entry that used to
+    /// strand the onboarding commit. trace:BUG-565 | ai:claude
+    #[test]
+    fn partition_drops_gitignored_paths_keeps_remainder() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        git_in(root, &["init", "-q"]);
+        // The user's .gitignore covers .claude (a very common local-only entry).
+        std::fs::write(root.join(".gitignore"), ".claude/\n").unwrap();
+        std::fs::create_dir_all(root.join(".claude")).unwrap();
+        std::fs::write(root.join(".claude/x"), "x").unwrap();
+        std::fs::write(root.join("CLAUDE.md"), "x").unwrap();
+
+        let paths = vec![
+            ".gitignore".to_string(),
+            "CLAUDE.md".to_string(),
+            ".claude".to_string(),
+        ];
+        let (to_stage, ignored) = partition_scaffold_paths_by_gitignore(root, &paths);
+
+        // The ignored path is filtered out (NOT force-added — respect the
+        // user's ignore choice) and surfaced for a warning.
+        assert_eq!(ignored, vec![".claude".to_string()]);
+        // The remainder is staged, in input order.
+        assert_eq!(
+            to_stage,
+            vec![".gitignore".to_string(), "CLAUDE.md".to_string()]
+        );
+    }
+
+    /// BUG-565 end-to-end: a scaffold set containing one gitignored path must
+    /// still COMMIT the non-ignored remainder (init no longer aborts the whole
+    /// commit on one ignored path) and must NOT commit the ignored path.
+    /// trace:BUG-565 | ai:claude
+    #[test]
+    fn commit_scaffolding_commits_remainder_when_one_path_is_gitignored() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        git_in(root, &["init", "-q"]);
+        git_in(root, &["config", "user.email", "t@t"]);
+        git_in(root, &["config", "user.name", "t"]);
+        git_in(root, &["commit", "--allow-empty", "-q", "-m", "root"]);
+
+        // .gitignore covers .claude; init writes both .claude (ignored) and the
+        // non-ignored scaffolding (.aida/config.toml, CLAUDE.md, .gitignore).
+        std::fs::write(root.join(".gitignore"), ".claude/\n").unwrap();
+        std::fs::write(root.join("CLAUDE.md"), "x").unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".aida/config.toml"), "x").unwrap();
+        std::fs::create_dir_all(root.join(".claude/skills")).unwrap();
+        std::fs::write(root.join(".claude/skills/foo.md"), "x").unwrap();
+
+        // Force the auto-commit branch (env override beats the TTY heuristic).
+        std::env::set_var("AIDA_INIT_COMMIT_SCAFFOLD", "1");
+        let committed = commit_init_scaffolding(root).unwrap();
+        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+
+        // The remainder was committed → onboarding task is de-stranded.
+        assert!(
+            committed,
+            "non-ignored scaffolding must commit even when one path is gitignored"
+        );
+
+        // The committed tree carries the non-ignored paths but NOT .claude.
+        let tree = std::process::Command::new("git")
+            .current_dir(root)
+            .args(["ls-tree", "-r", "--name-only", "HEAD"])
+            .output()
+            .unwrap();
+        let tracked = String::from_utf8_lossy(&tree.stdout);
+        assert!(tracked.contains("CLAUDE.md"), "CLAUDE.md must be committed");
+        assert!(
+            tracked.contains(".aida/config.toml"),
+            ".aida/config.toml must be committed"
+        );
+        assert!(
+            !tracked.contains(".claude"),
+            "the gitignored .claude path must NOT be committed (intent-respecting): {tracked}"
+        );
     }
 }
 
