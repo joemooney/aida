@@ -3,12 +3,12 @@ spec_id: TASK-775
 agreed_id: TASK-775
 title: 'aida schema --all: detail every storable object''s fields in one shot (not one positional at a time)'
 description: 'Today `aida schema` shows the object CATALOG (Requirement/Finding/Brief/Punt/Directive/Comment) and `aida schema <object>` details ONE object''s fields. Operator wants `aida schema --all` to detail EVERY object in one pass — the full storable-substrate field reference without N invocations. Acceptance: `aida schema --all` prints each catalog object with its fields/controlled-vocab (the per-object detail view, concatenated); composes with --json (emit all objects as one JSON map); bare `aida schema` unchanged (catalog only). Small; deferred behind stabilization.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T03:52:16.705486056Z
-modified_at: 2026-06-16T15:43:17.643005576Z
+modified_at: 2026-06-16T16:05:41.630886707Z
 req_type: Task
 tags:
 - aida:schema
