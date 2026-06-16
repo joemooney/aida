@@ -236,11 +236,18 @@ pub fn format_reviewer_summary(
     let failed =
         result.map(|r| r.is_error).unwrap_or(false) || exit_code.map(|c| c != 0).unwrap_or(false);
 
+    // trace:TASK-840 | ai:claude — route the verdict markers through the
+    // registry (resolve the profile once). Default Unicode reproduces the
+    // historical check/cross literals byte-for-byte.
+    let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
+    let check = crate::glyphs::Glyph::Check.render(profile);
+    let cross = crate::glyphs::Glyph::Cross.render(profile);
+
     let mut out = String::new();
     if failed {
         match &metrics {
-            Some(m) => out.push_str(&format!("✗ review failed ({m})\n")),
-            None => out.push_str("✗ review failed\n"),
+            Some(m) => out.push_str(&format!("{cross} review failed ({m})\n")),
+            None => out.push_str(&format!("{cross} review failed\n")),
         }
         // Failure summary: same shape, error reason replaces the verdict.
         let reason = result
@@ -256,8 +263,8 @@ pub fn format_reviewer_summary(
         out.push_str(&format!("  error: {reason}\n"));
     } else {
         match &metrics {
-            Some(m) => out.push_str(&format!("✓ review complete ({m})\n")),
-            None => out.push_str("✓ review complete\n"),
+            Some(m) => out.push_str(&format!("{check} review complete ({m})\n")),
+            None => out.push_str(&format!("{check} review complete\n")),
         }
         match &verdict {
             Some(v) => {
@@ -410,8 +417,10 @@ mod tests {
             Some(&lpath()),
             Some(0),
         );
+        // trace:TASK-840 | ai:claude — expected marker via the registry.
+        let check = crate::glyphs::Glyph::Check.render(crate::glyphs::active_profile(None));
         assert!(
-            s.contains("✓ review complete (4m38s, 25 turns, $1.45)"),
+            s.contains(&format!("{check} review complete (4m38s, 25 turns, $1.45)")),
             "{s}"
         );
         assert!(s.contains("verdict: PASS — all 6 specs pass"), "{s}");
@@ -505,7 +514,8 @@ mod tests {
             None,
             Some(0),
         );
-        assert!(s.starts_with("✓ review complete\n"), "{s}");
+        let check = crate::glyphs::Glyph::Check.render(crate::glyphs::active_profile(None));
+        assert!(s.starts_with(&format!("{check} review complete\n")), "{s}");
         assert!(!s.contains("JSONL log:"), "{s}");
         assert!(s.contains("verdict: PASS"), "{s}");
     }
@@ -515,7 +525,11 @@ mod tests {
         let err_line = r#"{"type":"result","subtype":"error_max_turns","is_error":true,"duration_ms":130000,"num_turns":8,"total_cost_usd":0.40,"result":"hit the turn limit before posting a verdict"}"#;
         let ev = parse_result_event(err_line).unwrap();
         let s = format_reviewer_summary(65, None, Some(&ev), &vpath(), Some(&lpath()), Some(0));
-        assert!(s.contains("✗ review failed (2m10s, 8 turns, $0.40)"), "{s}");
+        let cross = crate::glyphs::Glyph::Cross.render(crate::glyphs::active_profile(None));
+        assert!(
+            s.contains(&format!("{cross} review failed (2m10s, 8 turns, $0.40)")),
+            "{s}"
+        );
         assert!(s.contains("error: hit the turn limit"), "{s}");
         // JSONL log still surfaces so the failure is debuggable.
         assert!(s.contains("JSONL log:"), "{s}");
@@ -525,7 +539,8 @@ mod tests {
     fn summary_failure_on_nonzero_exit() {
         // No result event at all, but `claude` exited non-zero.
         let s = format_reviewer_summary(65, None, None, &vpath(), Some(&lpath()), Some(2));
-        assert!(s.contains("✗ review failed"), "{s}");
+        let cross = crate::glyphs::Glyph::Cross.render(crate::glyphs::active_profile(None));
+        assert!(s.contains(&format!("{cross} review failed")), "{s}");
         assert!(s.contains("claude exited with code 2"), "{s}");
     }
 

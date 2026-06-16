@@ -762,8 +762,13 @@ pub(crate) fn paused_warning_for_target(project_root: &Path, target: &str) -> Op
         .name
         .clone()
         .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
+    // trace:TASK-840 | ai:claude — route the warning marker through the registry.
+    let warn = crate::glyphs::get(
+        crate::glyphs::Glyph::Warning,
+        crate::find_project_root().ok().as_deref(),
+    );
     Some(format!(
-        "⚠ {name} is {view_like} — it may not pick this up until it resumes"
+        "{warn} {name} is {view_like} — it may not pick this up until it resumes"
     ))
 }
 

@@ -199,8 +199,13 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
             // re-run after a crash isn't silently surprising. Forced runs say so
             // too. trace:BUG-538 | ai:claude
             if forced && existing.is_some() {
+                // trace:TASK-840 | ai:claude — route the warning marker through the registry.
+                let warn = crate::glyphs::get(
+                    crate::glyphs::Glyph::Warning,
+                    crate::find_project_root().ok().as_deref(),
+                );
                 eprintln!(
-                    "  ⚠ AIDA_DRAIN_FORCE=1 — overriding the existing drain lock at {}",
+                    "  {warn} AIDA_DRAIN_FORCE=1 — overriding the existing drain lock at {}",
                     path.display()
                 );
             } else if let Some(stale) = &existing {
