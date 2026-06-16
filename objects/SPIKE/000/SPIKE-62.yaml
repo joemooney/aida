@@ -1,0 +1,40 @@
+id: 019ecf38-ca2b-74e2-9e76-4e8e52259392
+spec_id: SPIKE-62
+agreed_id: SPIKE-62
+title: 'Multi-repo → one .aida-store: repo/component dimension + multi-repo-aware git scanning (design)'
+description: |-
+  Operator ask (2026-06-15): review + think deeply about supporting MULTIPLE repos pointing at one .aida-store (a single AIDA view across a group of repos). Floated: a repo-id in the schema, or a subcomponent dimension feeding scope.
+
+  Full review: docs/plans/2026-06-15-multi-repo-one-store-review.md (four code-reading passes, load-bearing claims re-verified).
+
+  ## Findings (grounded)
+  - FOUNDATION STRONG: two store-sharing mechanisms already ship (aida init --sibling; workspace.rs WorkspaceManifest + aida db workspace-init). Store resolution is multi-repo-correct (detect_distributed_store_from, BUG-331 fallback). The HARD part — conflict-free distributed ID allocation across many writers (HLC + node-namespaced dispenser + per-clone rebuildable cache) — is ALREADY solved by design. We are not racing a costly retrofit.
+  - GAP IS THE SCANNING LAYER: auto_bump_done_to_completed (main.rs ~82872), handle_db_reconcile_status (~83339), collect_git_linkage (71149), scan_trace_graph (~69773), forge/PR detection all take a single project_root and structurally cannot see sibling repos. Store layer supports N repos; scanning layer does not.
+  - NO MODEL DIMENSION: Requirement has no repo/component field; ImplementationInfo.completion_sha is a bare SHA; GitLinkage.branch/shipped_pr carry name/number only — all ambiguous across repos.
+
+  ## This SPIKE owns Tiers 2 + 3 (Tier 1 is a separate live-trap BUG)
+  - Tier 2 (schema): optional repo/component field on Requirement; repo-qualify completion_sha/branch/PR. Backward-compatible (None = single-repo). repo-id is the operators first instinct — correct, and it lives here.
+  - Tier 3 (the rabbit hole): a first-class subcomponent/component dimension feeding list/search/queue filtering and forward into SPIKE-10 subsystem-scoped advisors. Touches scope + queue routing + advisor model — design before committing.
+
+  ## Deliverable
+  A recommendation: (a) the field shape (single repo string vs nested component vs reuse feature/tags — argue it), (b) how linkage qualifies SHA/branch/PR by repo, (c) whether subcomponent and repo are the SAME dimension or two, (d) how it feeds scope/queue/advisor, (e) the migration/backward-compat story. GATE Tier 3 build on a real multi-repo project actually in use (operator named it as prospective).
+
+  ## Forks
+  - Is repo identity == node-id (already in spec_id), or an explicit field? (node-id is implicit + machine-scoped, not repo-scoped — likely need explicit.)
+  - One dimension (repo==component) or two (a repo contains components)?
+
+  See also: SPIKE-10 (subsystem advisors), the workspace module, BUG for Tier-1 trap.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T06:57:46.027513551Z
+modified_at: 2026-06-16T06:57:46.027513551Z
+req_type: Spike
+tags:
+- aida:workspace
+- architecture
+- from-operator
+- multi-repo
+- schema
+human_only: true
