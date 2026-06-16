@@ -1,0 +1,46 @@
+id: 019ececf-f0b8-7060-8dab-458c9b6d028b
+spec_id: STORY-631
+agreed_id: STORY-631
+title: 'aida intent <spec>: AI-generated plain-terms comprehension of WHY a spec exists (cached doc, drift-refreshed)'
+description: |-
+  Operator ask (2026-06-15): `aida why <spec>` answers why a spec is still OPEN (deterministic state/blocker classifier). There is a second, often more important axis aligned with AIDAs purpose: WHY does this spec exist — its intent, in plain layman terms, distilled from the tangled web of parents/blockers/decisions/comments/history that a human finds overwhelming but an LLM can comprehend. Meaning and implications drift as the graph changes, so the comprehension needs occasional refresh.
+
+  ## Architectural distinction (load-bearing)
+  Unlike `aida why` (a Rust classifier over store signals), intent-comprehension is necessarily an LLM SYNTHESIS task — it reads the spec + its graph neighborhood and distills reason-for-being into prose. Therefore it must be GENERATED (AI pass), CACHED (cost — never recompute per read), and DRIFT-STAMPED (regenerate when the spec or its neighbors change). This reuses AIDAs existing cache-staleness pattern (HEAD/SHA compare) rather than inventing one.
+
+  ## Surface (operator-chosen: new verb, clean split)
+  - `aida intent <spec>` — print the cached comprehension; generate on first call or when stale.
+  - `aida intent <spec> --audience layman|llm` — layman = prose for a human skimmer; llm = denser/structured comprehension an agent loads BEFORE working the spec (arguably the higher-value consumer). Mirrors `/aida-digest --audience`.
+  - `aida intent <spec> --refresh` — force regeneration.
+  - `aida why` is unchanged (stays the deterministic state classifier). Two verbs, two kinds of computation.
+
+  ## Storage (reuse, do not invent)
+  The generated comprehension is stored as an `aida doc` entry (--about <spec>, provenance = ai) carrying a staleness stamp: the spec modified_at + a hash of its graph-neighborhood at generation time. So it lands in the existing living-docs surface (EPIC-24) and projects into the book/tutorial for free. No new store type. Coherent with ADR-5 (AIDA docs generated from spec intent) and STORY-603 (documenter consumes spec INTENT).
+
+  ## Acceptance (SLICE 1 — single-spec, on-demand)
+  - `aida intent <spec>` generates (via an LLM pass over the spec + immediate graph: parents, blockers, decisions, referenced specs, key comments) a plain-language paragraph answering: why does this exist, what problem/intent does it serve, what changes if it ships. Caches the result as an aida doc --about the spec with provenance ai + staleness stamp.
+  - Second call returns the cached comprehension without regenerating, UNLESS the spec or a graph-neighbor changed since the stamp — then it shows a STALE marker (regen still manual in slice 1 via --refresh).
+  - `--audience layman|llm` toggles register/density; `--refresh` forces regen; `--json` returns {spec, audience, comprehension, generated_at, stale}.
+  - Honest about cost/provenance: output is labeled AI-generated so a reader never mistakes it for hand-authored ground truth.
+
+  ## Open fork for advisor/implementer
+  - Generation mechanism: a Claude Code skill (/aida-intent) shelled out via claude -p, vs an in-binary AI call. Recommend skill/claude -p (reuses SPIKE-51 headless-skill capability; no new in-binary LLM client).
+  - Exact graph-neighborhood hash inputs (which neighbor fields count as drift) — settle before wiring the staleness stamp.
+
+  ## Slicing / follow-up
+  - SLICE 2 (follow-up child): `aida intent sweep` — walk specs with a stale (or absent) comprehension and regenerate in batch, advisor-cadence (same shape as changelog refresh / aida-insights). Do NOT build the sweep first — prove the single-spec comprehension is actually good before automating backlog-wide AI regeneration that costs real tokens on every drift.
+
+  Verify flags with `aida why --help` and `aida doc --help` before coding.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T05:03:14.616702572Z
+modified_at: 2026-06-16T05:03:14.616702572Z
+req_type: Story
+tags:
+- aida:intent
+- from-adr-5
+- from-operator
+- living-docs
+- llm-generated
