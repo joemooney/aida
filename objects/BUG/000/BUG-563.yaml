@@ -12,12 +12,12 @@ description: |-
   FIX (proposed): add a doctor category (e.g. `store-tracked-runtime`) that scans `git ls-files` on the orphan store worktree for any path matching the per-clone runtime set and, when found, safe-heals with `git rm --cached <path>` + appends the canonical gitignore block + commits. Mirror the TASK-752 detector shape (detect_legacy_store_cruft) but scope it to the .aida-store worktree and the per-clone file set. Should self-gate on distributed mode + orphan branch present. Manual recovery today: `cd .aida-store && git rebase --abort; git rm --cached .aida/node.toml .aida/dispenser.toml; gitignore them; commit; push`.
 
   REPRO RISK: any project whose aida-store branch was created (or had node.toml committed) before the EPIC-1-052 Phase 1 gitignore — i.e. multi-machine setups predating the fix. Surfaces as recurring store-sync rebase conflicts that strand the spec at the broken-rebase state and break `aida push`.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:09:53.090081612Z
-modified_at: 2026-06-16T03:30:50.195406266Z
+modified_at: 2026-06-16T03:41:08.619833658Z
 req_type: Bug
 tags:
 - distributed
@@ -31,3 +31,21 @@ comments:
   content: Commit 7c0b5c2c5 references this requirement
   created_at: 2026-06-16T03:30:50.195406266Z
   modified_at: 2026-06-16T03:30:50.195406266Z
+history:
+- id: 019ece84-c684-79b2-b570-1576456a486e
+  author: aida-auto-bump
+  timestamp: 2026-06-16T03:41:08.612595366Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ece84-c68b-77c0-be05-ad49f2f7d696
+  timestamp: 2026-06-16T03:41:08.619832831Z
+  agent: aida
+  commit_sha: ae6c8a1770b7f0ba30c7d9f5b7603845e0a8f552
+  summary: Completed via merge ae6c8a17
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T03:41:08.453829739Z
+  completion_sha: ae6c8a1770b7f0ba30c7d9f5b7603845e0a8f552
