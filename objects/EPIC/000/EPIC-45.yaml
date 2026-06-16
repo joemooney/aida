@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:07:58.679364879Z
-modified_at: 2026-06-16T04:26:29.071932235Z
+modified_at: 2026-06-16T07:23:18.694288634Z
 req_type: Epic
 tags:
 - dx
@@ -47,3 +47,8 @@ comments:
   content: 'Advisor assess (2026-06-15): sound + operator-blessed (your build-both-phases/opt-in-default decision is recorded). Phase 1 (STORY-628: registry + ASCII profile + selector) is the valuable unblocker; Phase 2 (STORY-629: custom override table) layers on it; Phase 3 (TASK-835: migrate ~2568 literals + CI lint) is the large mechanical payoff that makes the registry actually used — it''ll want scripting/incremental slices, not one PR. Approving all four; phases are sequential (2→needs 1, 3→needs 1+2).'
   created_at: 2026-06-16T04:26:29.071932235Z
   modified_at: 2026-06-16T04:26:29.071932235Z
+- id: 019ecf50-2d26-7303-b81f-fc791c546d8a
+  author: joe
+  content: 'Phases 1-4 all Completed (STORY-628/629 + TASK-835 + STORY-633): registry + ASCII profile + selector, per-symbol override table, literal migration + ratcheting CI lint, and the aida config glyph CLI. The config-overridable glyph system is delivered. TASK-840 (long-tail back-migration of the 18 allow-listed files) is tracked mop-up driven by the lint''s ratcheting allow-list. Marking epic Completed. — advisor'
+  created_at: 2026-06-16T07:23:18.694288634Z
+  modified_at: 2026-06-16T07:23:18.694288634Z
