@@ -27064,6 +27064,7 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
 /// is the union both the notice and the statusline urgent counter resolve over,
 /// so the two surfaces agree (STORY-585 acceptance #5). Deduped, role-aliases
 /// normalized (`dialog` → `advisor`). trace:STORY-585 | ai:claude
+// trace:TASK-818 | ai:claude
 fn inbox_identities() -> Vec<String> {
     let mut ids = vec![current_user_id(None)];
     if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
@@ -27073,6 +27074,28 @@ fn inbox_identities() -> Vec<String> {
         let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
         if !ids.iter().any(|i| i == &role) {
             ids.push(role);
+        }
+    }
+    // TASK-818: union the short agent TYPE name (`AIDA_AGENT_TYPE`, e.g.
+    // `codex`) into the inbox identities so a coordinator addressing the type
+    // name (`--to codex`) reaches the mailbox too — matching how briefs already
+    // route by the short type name (`.aida/agent-briefs/codex/`). Post-BUG-558
+    // the stable per-instance name (`AIDA_USER`, e.g. `codex-implementer-1`)
+    // owns mailbox/queue identity; this adds the type as an ADDITIONAL inbox so
+    // both forms of addressing land. Known tradeoff (signed-off, reversible):
+    // multiple instances of the SAME type share the `<type>` inbox and race on
+    // mark-seen because the read watermark is keyed per identity STRING — the
+    // first instance to read a type-addressed message advances the shared
+    // `<type>` watermark and the others won't see it via the type identity
+    // (their stable-name inboxes are unaffected). Acceptable for the rare
+    // multi-instance-same-type case.
+    if let Some(raw) = std::env::var("AIDA_AGENT_TYPE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        let type_name = agent_registry::normalize_agent_type(raw);
+        if !ids.iter().any(|i| i == &type_name) {
+            ids.push(type_name);
         }
     }
     ids
@@ -60690,6 +60713,85 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn current_user_id_override_wins() {
         assert_eq!(current_user_id(Some("alice")), "alice");
+    }
+
+    /// TASK-818: when both the stable per-instance name (`AIDA_USER`) and the
+    /// short agent TYPE name (`AIDA_AGENT_TYPE`) are set, `inbox_identities()`
+    /// returns BOTH — so a coordinator addressing the type (`--to codex`) AND
+    /// one addressing the stable name (`--to codex-implementer-1`) both reach
+    /// the mailbox. (`AIDA_SESSION_ROLE` cleared so it doesn't perturb the set.)
+    #[test]
+    fn inbox_identities_unions_stable_name_and_agent_type() {
+        let _g = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_USER", "codex-implementer-1"),
+            ("AIDA_AGENT_TYPE", "codex"),
+            ("AIDA_SESSION_ROLE", ""),
+        ]);
+        let ids = inbox_identities();
+        assert!(
+            ids.iter().any(|i| i == "codex-implementer-1"),
+            "stable AIDA_USER name must be an inbox identity: {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|i| i == "codex"),
+            "short AIDA_AGENT_TYPE name must be an inbox identity: {ids:?}"
+        );
+    }
+
+    /// TASK-818: with only `AIDA_USER` set (no `AIDA_AGENT_TYPE`), the identity
+    /// set is just the stable name — the type union must not invent an entry.
+    #[test]
+    fn inbox_identities_stable_name_only_when_no_agent_type() {
+        let _g = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_USER", "solo-user"),
+            ("AIDA_AGENT_TYPE", ""),
+            ("AIDA_SESSION_ROLE", ""),
+        ]);
+        let ids = inbox_identities();
+        assert_eq!(
+            ids,
+            vec!["solo-user".to_string()],
+            "no AIDA_AGENT_TYPE must yield only the stable name: {ids:?}"
+        );
+    }
+
+    /// TASK-818: a message addressed to the short TYPE name (`--to codex`) is
+    /// delivered to the agent's inbox, mirroring how brief routing reaches the
+    /// short type name. Exercises the real delivery predicate
+    /// (`build_notice` over the identity union) rather than only the id list.
+    #[test]
+    fn message_to_agent_type_reaches_inbox() {
+        use aida_core::mailbox::{build_notice, Intent, Message, Recipient};
+        let _g = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_USER", "codex-implementer-1"),
+            ("AIDA_AGENT_TYPE", "codex"),
+            ("AIDA_SESSION_ROLE", ""),
+        ]);
+        let identities = inbox_identities();
+        let to_type = Message {
+            id: "m1".to_string(),
+            thread_id: "t1".to_string(),
+            from: "coordinator".to_string(),
+            to: Recipient::Agent("codex".to_string()),
+            timestamp: 100,
+            in_reply_to: None,
+            body: "addressed to the short type name".to_string(),
+            urgent: false,
+            intent: Intent::Request,
+            retracted: false,
+            deleted: false,
+        };
+        let watermarks = std::collections::HashMap::new();
+        let summary = build_notice(
+            identities.iter().map(String::as_str),
+            std::slice::from_ref(&to_type),
+            &watermarks,
+            aida_core::mailbox::NOTICE_DEFAULT_CAP,
+        );
+        assert_eq!(
+            summary.total, 1,
+            "a --to <type> message must be visible to the agent: {summary:?}"
+        );
     }
 
     // trace:STORY-585 | ai:claude
