@@ -1,0 +1,17 @@
+id: 019ece8e-077b-7361-9bc8-6320a078c292
+spec_id: TASK-834
+agreed_id: TASK-834
+title: 'aida list inflight: per-agent activity/stuck indicator (last-commit/mtime; flag alive-but-idle Nm)'
+description: 'Operator 2026-06-15: aida list inflight shows leases as in-flight via a COARSE process-exists check (probe_live_claude_sessions) — it cant tell an agent committing every few seconds from one idle/stuck for 15 min (live example: agent-a15828 committed 15s ago vs agent-a0bf idle 15min, both shown identically as in-flight). Add a per-agent activity signal: for each in-flight lease, show last-activity (the worktree last-commit time / newest file mtime) and flag "alive but idle Nm → possibly stuck" past a threshold. Turns the in-flight view from "a process exists" into "this agent is actually progressing." Builds on TASK-833 (open-PRs in inflight) + the lease liveness classification.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T03:51:15.067566721Z
+modified_at: 2026-06-16T03:51:15.067566721Z
+req_type: Task
+tags:
+- aida:burndown
+- aida:list
+- from-product
+- observability
