@@ -45,3 +45,7 @@ tags:
 - ergonomics
 - from-operator
 - parent:EPIC-45
+relationships:
+- rel_type: Child
+  target_id: 019ece9d-57d7-7e60-9e47-9a69f21809be
+  created_at: 2026-06-16T06:31:58.302364588Z
