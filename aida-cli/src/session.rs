@@ -19,6 +19,12 @@ use colored::Colorize;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+/// Render a registry glyph honoring the active profile. Default Unicode profile
+/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+fn glyph(g: crate::glyphs::Glyph) -> &'static str {
+    crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionMeta {
     pub id: String,
@@ -58,9 +64,10 @@ pub struct SessionMeta {
 /// trace:STORY-59 | ai:claude
 fn liveness_indicator(age_seconds: u64) -> &'static str {
     if age_seconds < 5 * 60 {
-        "●" // live (active in last 5 minutes)
+        "●" // live (active in last 5 minutes) — `●` is not a registry glyph.
     } else if age_seconds < 60 * 60 {
-        "◐" // recent (last hour)
+        // recent (last hour) — route the partial marker through the registry.
+        glyph(crate::glyphs::Glyph::InFlight)
     } else {
         " " // idle
     }
@@ -481,7 +488,7 @@ pub fn new_session(
     };
     eprintln!(
         "{} {} → claude {} (name: {})",
-        "▶".green().bold(),
+        glyph(crate::glyphs::Glyph::FlowActive).green().bold(),
         format!("session new (role:{}, title:{:?})", role, title).dimmed(),
         mode_display,
         name_for_log,
@@ -2031,10 +2038,15 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
         let live = liveness_indicator(s.age_seconds);
         // Color the indicator: bright green when truly live, yellow for
         // recent, dim for idle. Width of the indicator slot is one cell.
-        let live_colored = match live {
-            "●" => live.green().bold().to_string(),
-            "◐" => live.yellow().to_string(),
-            _ => live.dimmed().to_string(),
+        // The "recent" marker routes through the registry, so compare against
+        // its rendered form rather than a hard-coded literal. trace:TASK-840
+        let recent = glyph(crate::glyphs::Glyph::InFlight);
+        let live_colored = if live == "●" {
+            live.green().bold().to_string()
+        } else if live == recent {
+            live.yellow().to_string()
+        } else {
+            live.dimmed().to_string()
         };
         println!(
             "{} {:<id_w$}  {:<age_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
@@ -2115,7 +2127,7 @@ fn pick_interactive(limit: usize) -> Result<String> {
         .collect();
 
     let pick = inquire::Select::new("Resume which session?", labels)
-        .with_help_message("↑↓ to move, type to filter, Enter to resume, Esc to cancel")
+        .with_help_message("arrows to move, type to filter, Enter to resume, Esc to cancel")
         .prompt()
         .context("interactive picker cancelled")?;
 
@@ -2334,13 +2346,13 @@ pub fn forget(id_query: &str, force: bool, dry_run: bool, yes: bool) -> Result<(
     if is_active {
         println!(
             "   {} this is the session running `aida session forget` — --force given",
-            "⚠".yellow()
+            glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
     if in_flight {
         println!(
             "   {} anchor spec is still in flight — forgetting unmerged work metadata, --force given",
-            "⚠".yellow()
+            glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
 
@@ -2390,7 +2402,11 @@ pub fn forget(id_query: &str, force: bool, dry_run: bool, yes: bool) -> Result<(
         }
     }
 
-    println!("{} session {} forgotten", "✓".green(), id8);
+    println!(
+        "{} session {} forgotten",
+        glyph(crate::glyphs::Glyph::Check).green(),
+        id8
+    );
     Ok(())
 }
 
@@ -2930,16 +2946,17 @@ mod tests {
         assert_eq!(sanitize_for_tsv("plain"), "plain");
     }
 
-    /// STORY-59: liveness indicator buckets — `●` live (<5min), `◐`
-    /// recent (<1h), space for idle. The widths are visual; the test
-    /// guards the bucket boundaries.
-    /// trace:STORY-59 | ai:claude
+    /// STORY-59: liveness indicator buckets — `●` live (<5min), a recent
+    /// marker (<1h), space for idle. The widths are visual; the test
+    /// guards the bucket boundaries. The recent marker routes through the
+    /// glyph registry (TASK-840). trace:STORY-59 | ai:claude
     #[test]
     fn liveness_indicator_buckets() {
+        let recent = crate::glyphs::Glyph::InFlight.render(crate::glyphs::active_profile(None));
         assert_eq!(liveness_indicator(0), "●");
         assert_eq!(liveness_indicator(4 * 60 + 59), "●");
-        assert_eq!(liveness_indicator(5 * 60), "◐");
-        assert_eq!(liveness_indicator(59 * 60), "◐");
+        assert_eq!(liveness_indicator(5 * 60), recent);
+        assert_eq!(liveness_indicator(59 * 60), recent);
         assert_eq!(liveness_indicator(60 * 60), " ");
         assert_eq!(liveness_indicator(86_400), " ");
     }

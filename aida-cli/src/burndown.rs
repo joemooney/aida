@@ -1295,16 +1295,21 @@ pub(crate) fn render_path_to_empty(items: &[QueuedItem]) -> Option<String> {
         .filter(|i| i.bucket == OpenBucket::Actionable)
         .count();
 
+    // trace:TASK-840 | ai:claude
+    let bullet = crate::glyphs::get(
+        crate::glyphs::Glyph::Bullet,
+        crate::find_project_root().ok().as_deref(),
+    );
     let mut out = String::from("To empty this queue:");
     if ready > 0 {
         out.push_str(&format!(
-            "\n  • {ready} ready    → `aida burndown run` (does the work)  ·  \
+            "\n  {bullet} {ready} ready    → `aida burndown run` (does the work)  ·  \
              `aida queue clear` (just drops them)"
         ));
     }
     for item in items.iter().filter(|i| i.bucket != OpenBucket::Actionable) {
         out.push_str(&format!(
-            "\n  • {:<10} needs you: {}",
+            "\n  {bullet} {:<10} needs you: {}",
             item.id,
             advance_action_sentence(item.bucket, &item.id)
         ));

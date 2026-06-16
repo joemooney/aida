@@ -219,11 +219,13 @@ fn queue_drained_hint_lines(
     // STORY-508: forge-aware change-request noun ("PR"/"MR"/"change") and CLI
     // hints, so a GitLab/pure-git user isn't told to run `gh`.
     let noun = kind.change_noun();
+    // trace:TASK-840 | ai:claude — route the warning marker through the registry.
+    let warn = crate::glyphs::Glyph::Warning.render(crate::glyphs::active_profile(None));
     let body = match pr {
         // BUG-232: the branch has unshipped commits and the forge confirmed no
         // change exists — the spec is Done-but-unmergeable. Say so pointedly.
         PrState::Absent if commits > 0 => format!(
-            "⚠ No {} is open for {} — the work is committed but unshipped. \
+            "{warn} No {} is open for {} — the work is committed but unshipped. \
              Run `/aida-pr` to ship it, or it sits Done and unmergeable.",
             noun, branch_phrase
         ),
@@ -503,8 +505,8 @@ pub fn after_queue_drained(
 /// Build the post-`session end` PR hint as ready-to-print lines.
 ///
 /// The hint is a SEQUENTIAL step chain (review → merge → pull), so it
-/// renders as a numbered list — `▶` on step 1 (the primary action),
-/// `↓` on the flow-continuation steps — followed by an indented
+/// renders as a numbered list — a primary-action marker on step 1,
+/// a flow-continuation marker on the rest — followed by an indented
 /// self-merge sidebar for solo developers with no separate reviewer.
 /// This is deliberately NOT the Path/Action/Why table format (TASK-260):
 /// that shape is for parallel choices (pick one of N); this is a do-all
@@ -539,10 +541,12 @@ fn session_end_pr_hint_lines(
             pr_number, pr_number, merge_cmd, merge_cmd
         )];
     }
+    // trace:TASK-840 | ai:claude — route the primary-action marker through the registry.
+    let active = crate::glyphs::Glyph::FlowActive.render(crate::glyphs::active_profile(None));
     vec![
         format!("Next steps for PR #{}:", pr_number),
         format!(
-            "  1. ▶ {:<14}   aida queue work PR-{}",
+            "  1. {active} {:<14}   aida queue work PR-{}",
             "Start review", pr_number
         ),
         format!("  2. ↓ {:<14}   {}", "After approval", merge_cmd),
@@ -722,7 +726,8 @@ mod tests {
         // Header + 3 numbered steps + blank + sidebar header + sidebar cmd.
         assert_eq!(lines.len(), 7);
         assert_eq!(lines[0], "Next steps for PR #47:");
-        assert!(lines[1].contains("1. ▶"));
+        let active = crate::glyphs::Glyph::FlowActive.render(crate::glyphs::active_profile(None));
+        assert!(lines[1].contains(&format!("1. {active}")));
         assert!(lines[1].contains("aida queue work PR-47"));
         assert!(lines[2].contains("2. ↓"));
         assert!(lines[2].contains("gh pr merge 47 --squash --delete-branch"));
@@ -773,7 +778,8 @@ mod tests {
         );
         assert!(lines[0].contains("queue is now empty for role:implementer"));
         assert!(lines[0].contains("(1 commit on this branch)"));
-        assert!(lines[1].contains("⚠ No PR is open for `task-264`"));
+        let warn = crate::glyphs::Glyph::Warning.render(crate::glyphs::active_profile(None));
+        assert!(lines[1].contains(&format!("{warn} No PR is open for `task-264`")));
         assert!(lines[1].contains("committed but unshipped"));
         assert!(lines[1].contains("/aida-pr"));
     }
@@ -791,7 +797,8 @@ mod tests {
         );
         assert!(lines[1].contains("PR #97 is already open"));
         assert!(lines[1].contains("gh pr merge 97 --squash"));
-        assert!(!lines[1].contains("⚠"));
+        let warn = crate::glyphs::Glyph::Warning.render(crate::glyphs::active_profile(None));
+        assert!(!lines[1].contains(warn));
     }
 
     // STORY-508: the same hint is forge-aware — GitLab gets MR/glab, pure-git
@@ -849,7 +856,8 @@ mod tests {
             PrState::Unknown,
         );
         assert!(lines[1].contains("Open a PR with `/aida-pr`"));
-        assert!(!lines[1].contains("⚠"));
+        let warn = crate::glyphs::Glyph::Warning.render(crate::glyphs::active_profile(None));
+        assert!(!lines[1].contains(warn));
     }
 
     // No commits ahead → nothing to ship → no warning even when `gh`
@@ -866,7 +874,8 @@ mod tests {
         );
         assert!(!lines[0].contains("commit on this branch"));
         assert!(lines[1].contains("Open a PR with `/aida-pr`"));
-        assert!(!lines[1].contains("⚠"));
+        let warn = crate::glyphs::Glyph::Warning.render(crate::glyphs::active_profile(None));
+        assert!(!lines[1].contains(warn));
     }
 
     // BUG-269: simulates the BUG-249 scenario — branch has commits ahead
