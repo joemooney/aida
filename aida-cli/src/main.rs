@@ -1232,24 +1232,33 @@ fn run() -> Result<()> {
     // `aida schema` is a pure reflection read — it touches no store, so
     // dispatch it before storage resolution (like `memories`/`dev`).
     // trace:STORY-538 | ai:claude
-    if let Command::Schema { object, all, json } = &cli.command {
+    if let Command::Schema {
+        object,
+        all,
+        explain,
+        json,
+    } = &cli.command
+    {
         match object.as_deref().map(str::to_lowercase).as_deref() {
             // `--all` (human) and no-arg `--json` are both a full dump: the
             // catalog plus every object's reflection-derived field detail in
             // catalog order. For JSON we always include the per-object fields
             // (a no-arg `--json` was field-less before), so the machine surface
             // is a true one-fetch full dump. trace:TASK-799 | ai:claude
-            None if *all || *json => schema::print_all(*json),
-            None => schema::print_catalog(*json),
+            None if *all || *json => schema::print_all(*json, *explain),
+            // `aida schema --explain` (no object) adds the lifecycle blocks to
+            // the catalog view. trace:STORY-630 | ai:claude
+            None if *explain => schema::print_catalog(*json, true),
+            None => schema::print_catalog(*json, false),
             Some("requirement") | Some("requirements") | Some("req") => {
-                schema::print_requirement(*json)
+                schema::print_requirement(*json, *explain)
             }
             Some(other) if schema::is_catalog_object(other) => {
                 // A catalog object other than Requirement — render its
                 // reflection-derived field table. STORY-538 shipped Requirement
                 // detail only; TASK-714 extended the reflection registry to
                 // every remaining kind. trace:STORY-538 trace:TASK-714
-                schema::print_object(other, *json)
+                schema::print_object(other, *json, *explain)
             }
             Some(other) => {
                 anyhow::bail!(
