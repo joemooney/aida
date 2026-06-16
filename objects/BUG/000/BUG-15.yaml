@@ -2,13 +2,13 @@ id: cbc2b6b3-a9c3-4f5a-887a-bb4d0ce92d06
 spec_id: BUG-15
 title: '''q v'' opens queue view but the pop-up remains open'
 description: '''q v'' opens queue view but the pop-up remains open'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-12T17:55:41.528538900Z
 created_by: Joe Mooney
-modified_at: 2026-06-16T16:21:59.731206083Z
+modified_at: 2026-06-16T16:22:01.092303027Z
 req_type: Bug
 tags:
 - deferred:needs-repro
@@ -28,4 +28,3 @@ comments:
 deferred: true
 deferred_at: 2026-06-15T17:41:12.819941063Z
 deferred_until: reproduces on current aida tui build (STORY-137); if not reproducible, reject as stale
-custom_status: New
