@@ -125,3 +125,16 @@ docs/book/
 
 # mdbook-mermaid vendored lib (2.6MB — regenerate via `mdbook-mermaid install docs`)
 docs/mermaid.min.js
+
+# Personal Claude Code notes — per-machine, never team-shared.
+# CLAUDE.local.md loads alongside CLAUDE.md at session start but
+# stays out of git so reviewer-feedback dumps + personal-habit
+# reminders stay private. See the scaffolded file's own header
+# for usage guidance.
+CLAUDE.local.md
+
+# Per-user Claude Code overrides — never team-shared.
+# .claude/settings.local.json holds local MCP trust (the aida server
+# pre-approval) and personal settings. Gitignored so a committed
+# pre-approval can't become a clone-attack vector. trace:BUG-484
+.claude/settings.local.json
