@@ -3,12 +3,12 @@ spec_id: STORY-627
 agreed_id: STORY-627
 title: 'aida solo legibility: run/stop/status verbs + responsive stop + .aida/solo.lock pid sentinel + per-step progress heartbeat'
 description: 'Operator friction during the first real overnight aida solo --watch run. Make the solo loop legible + safely controllable: (1) RENAME to verbs — aida solo run / stop / status (keep --watch/--off/--status as deprecated silent aliases). (2) RESPONSIVE STOP — the loop currently polls the solo flag only at each cycle top, so stop/--off takes up to a full cycle+sleep to land; instead poll the flag in short increments DURING the inter-cycle sleep so stop takes effect within seconds. (3) .aida/solo.lock (pid + started_at, mirroring BUG-538 drain.lock) — a true liveness sentinel: a second `aida solo run` refuses while one is live, `aida solo stop` can also signal the live pid (not just flip the flag), and a Ctrl-C-killed loop is detectable (the flag-left-ON-after-Ctrl-C gap, confirmed live 2026-06-15). (4) PROGRESS HEARTBEAT — during the long headless steps (assess/implement, which run claude -p for minutes) print a working…(Nm) line + a "Ctrl-C / aida solo stop to stop" reminder so a watching operator is never staring at silence. Parent STORY-625.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:51:05.819669410Z
-modified_at: 2026-06-16T04:03:56.707708097Z
+modified_at: 2026-06-16T04:11:20.849285344Z
 req_type: Story
 tags:
 - autonomy
@@ -22,3 +22,21 @@ comments:
   content: Commit 0de7c8204 references this requirement
   created_at: 2026-06-16T04:03:56.707708097Z
   modified_at: 2026-06-16T04:03:56.707708097Z
+history:
+- id: 019ecea0-6d8c-7463-85a8-2f4b4a3d6248
+  author: aida-auto-bump
+  timestamp: 2026-06-16T04:11:20.844770021Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecea0-6d91-7550-b1f4-bbc58dbeff43
+  timestamp: 2026-06-16T04:11:20.849284801Z
+  agent: aida
+  commit_sha: d4632d1fbdb0f0bc290c0f1042f4a67921461a0a
+  summary: Completed via merge d4632d1f
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T04:11:20.691111409Z
+  completion_sha: d4632d1fbdb0f0bc290c0f1042f4a67921461a0a
