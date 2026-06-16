@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:03:14.616702572Z
-modified_at: 2026-06-16T05:03:14.616702572Z
+modified_at: 2026-06-16T05:09:01.142651931Z
 req_type: Story
 tags:
 - aida:intent
@@ -44,3 +44,25 @@ tags:
 - from-operator
 - living-docs
 - llm-generated
+comments:
+- id: 019eced5-3a56-7413-860e-66171b73db8e
+  author: joe
+  content: |-
+    STORAGE DECISION (operator, 2026-06-15) — SUPERSEDES the original "store as aida doc" approach. Store the comprehension as a NESTED FIELD on Requirement, not a separate doc:
+
+      intent: Option<SpecIntent>   (skip_serializing_if none — specs without it stay clean)
+      struct SpecIntent { layman: String, llm: String, generated_at: String, source_hash: String, model: String }
+
+    Rationale (code-grounded):
+    - History bloat concern is UNFOUNDED: diff_snapshots (models.rs:6591) is an explicit 7-field allow-list (title/description/status/priority/owner/feature/type). A new intent field generates ZERO history rows unless deliberately wired. So AI regeneration does not spam the audit trail.
+    - Reflection convergence: the field flows through ts-rs reflection -> aida schema requirement shows it automatically (STORY-538) -> STORY-630 --explain documents it -> the schema drift-guard covers it. Field provenance = ai (already in STORY-630s pinned provenance set).
+    - Co-located: aida show / YAML / /aida-pickup (TASK-838) carry it without a join; syncs to every clone via the orphan branch.
+
+    Design calls:
+    - ONE nested struct, not several flat top-level fields (keeps the spec object clean).
+    - stale is COMPUTED at read (stored source_hash vs freshly-computed graph-neighborhood hash), NEVER a stored bool.
+    - TRADEOFF accepted: each regeneration is a git write to the canonical orphan-branch object (heavier than a cache row) — fine because regeneration is drift-GATED, not per-read. aida intent is therefore a substrate writer, not a read-only lens.
+
+    REJECTED alt (separate aida doc): loses schema-reflection discoverability + requires a join; the doc/book projection benefit does not outweigh co-location for an intrinsic spec property.
+  created_at: 2026-06-16T05:09:01.142651931Z
+  modified_at: 2026-06-16T05:09:01.142651931Z
