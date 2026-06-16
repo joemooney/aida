@@ -1,0 +1,15 @@
+id: 019ecf85-268c-76a3-a87c-f4e758c958ef
+spec_id: TASK-843
+agreed_id: TASK-843
+title: 'integrate: multiple open PRs for one spec'
+description: 'Follow-up of TASK-836. detect_open_pr_for_spec_via_forge returns at most one PR per spec; if a spec has MORE than one open PR (e.g. a reopened/duplicate), the integrator silently picks one. Design question: detect the multiple-open-PRs case and park+report (ambiguous which to merge) rather than guess. Currently out of the safe-bounded set because resolving which PR is canonical needs a policy decision.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T08:21:10.412220786Z
+modified_at: 2026-06-16T08:21:10.412220786Z
+req_type: Task
+tags:
+- integrator
+- parent:TASK-836
