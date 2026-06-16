@@ -46224,6 +46224,59 @@ pub(crate) fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str
     gh_pr_list_first(project_root, &["--search", spec, "--state", "open"])
 }
 
+/// TASK-843: list ALL open PRs that reference `spec` (number + head branch),
+/// not just the first. `detect_open_pr_for_spec_via_forge` returns at most one,
+/// so a spec with >1 open PR (a reopened/duplicate) was resolved by a silent,
+/// non-deterministic pick. This surfaces the full candidate set so the pure
+/// [`integrate::select_canonical_pr`] policy can pick the newest-canonical PR
+/// and report the rest. Best-effort: an empty vec when gh is missing/failing or
+/// no PR references the spec — the caller falls back to the single-PR path.
+/// trace:TASK-843 | ai:claude
+fn all_open_prs_for_spec_via_forge(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> Vec<(u64, String)> {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--search",
+            spec,
+            "--state",
+            "open",
+            "--limit",
+            "20",
+            "--json",
+            "number,headRefName",
+            "-q",
+            r#".[] | "\(.number)\t\(.headRefName)""#,
+        ])
+        .output();
+    let Ok(out) = out else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() {
+                return None;
+            }
+            let (num, branch) = line.split_once('\t')?;
+            let number = num.trim().parse::<u64>().ok()?;
+            Some((number, branch.trim().to_string()))
+        })
+        .collect()
+}
+
 /// Look up the head branch of an open PR by number — used by the BUG-223
 /// spec-id fallback to realign the orchestrator's branch after a swap the
 /// worktree-HEAD reconciliation missed, so the CI / merge phases probe the
@@ -109872,6 +109925,42 @@ fn handle_queue_integrate(
             );
         }
 
+        // TASK-842: recognize the full set of specs each ready PR will complete,
+        // and dedupe by PR number across the ready set so a multi-spec cluster PR
+        // — surfaced once per member spec by the Done-spec scan — is driven ONCE,
+        // not N times. The merge-trailer → auto-bump path still completes every
+        // trailered spec; this is recognition + dedupe + reporting only. The
+        // dedupe itself is the pure `integrate::dedupe_pr_completions` over
+        // (pr_number, trailered-spec-ids) rows, so it's unit-tested independently.
+        // trace:TASK-842 | ai:claude
+        let completion_rows: Vec<(u64, Vec<String>)> = ready_ids
+            .iter()
+            .filter_map(|id| {
+                let pr_num = pr_numbers.get(id).and_then(|p| *p)? as u64;
+                // The PR's trailered spec set, from the snapshot title (AIDA PR
+                // titles carry the `(SPEC-ID)` trailers); fall back to the spec
+                // the scan keyed on when the title can't be read.
+                let spec_ids = branches
+                    .get(id)
+                    .and_then(|b| b.as_deref())
+                    .and_then(|b| pr_snapshot.by_branch.get(b))
+                    .map(|it| extract_spec_ids_from_commit(&it.title))
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or_else(|| vec![id.clone()]);
+                Some((pr_num, spec_ids))
+            })
+            .collect();
+        let pr_completions = integrate::dedupe_pr_completions(&completion_rows);
+        let multi_spec_pr: std::collections::HashMap<u64, integrate::PrCompletion> = pr_completions
+            .into_iter()
+            .filter(|c| c.spec_ids.len() > 1)
+            .map(|c| (c.number, c))
+            .collect();
+        // Track which PR numbers we've already driven this pass — so a multi-spec
+        // PR reached again via a sibling spec isn't re-driven. trace:TASK-842
+        let mut integrated_pr_numbers: std::collections::HashSet<u32> =
+            std::collections::HashSet::new();
+
         for id in &ready_ids {
             if max != 0 && integrated_total >= max {
                 println!("{} reached --max {} this run; stopping.", "▸".cyan(), max);
@@ -109903,6 +109992,100 @@ fn handle_queue_integrate(
                     continue;
                 }
                 integrate::IntegrationAction::Merge => {}
+            }
+
+            // TASK-843: a spec may have MORE than one open PR (a reopened /
+            // duplicate). Before driving, list every open PR referencing the spec
+            // and apply the pure newest-canonical policy: pick the newest
+            // mergeable PR, report the rest as ignored-this-pass, or PARK when
+            // none are clean. When only one PR is found this is a no-op (the
+            // common case). The forge list is best-effort — an empty result (gh
+            // missing/failing, or no title/body match) falls back to the existing
+            // single-PR drive path. trace:TASK-843 | ai:claude
+            let multi_prs = all_open_prs_for_spec_via_forge(&project_root, id);
+            if multi_prs.len() > 1 {
+                // Mergeability per candidate from the pass snapshot (CONFLICTING
+                // → not mergeable; anything else admissible — the --from-pr drive
+                // re-gates the irreversible merge).
+                let candidates: Vec<integrate::PrCandidate> = multi_prs
+                    .iter()
+                    .map(|(number, branch)| {
+                        let mergeable = pr_snapshot
+                            .by_branch
+                            .get(branch)
+                            .and_then(|it| it.mergeable.as_deref())
+                            .map(|m| !m.eq_ignore_ascii_case("CONFLICTING"))
+                            .unwrap_or(true);
+                        integrate::PrCandidate {
+                            number: *number,
+                            mergeable,
+                        }
+                    })
+                    .collect();
+                match integrate::select_canonical_pr(&candidates) {
+                    integrate::CanonicalPrDecision::Park { candidates } => {
+                        let list = candidates
+                            .iter()
+                            .map(|n| format!("#{n}"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        println!(
+                            "  {} {} — {} open PRs but none mergeable ({}); parked for triage",
+                            "⏸".yellow(),
+                            id,
+                            candidates.len(),
+                            list
+                        );
+                        any_parked_or_waited = true;
+                        continue;
+                    }
+                    integrate::CanonicalPrDecision::Integrate { chosen, ignored } => {
+                        if !ignored.is_empty() {
+                            let list = ignored
+                                .iter()
+                                .map(|n| format!("#{n}"))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            println!(
+                                "  {} {} — {} open PRs; integrating newest (#{}), ignoring this pass: {}",
+                                "▸".cyan(),
+                                id,
+                                ignored.len() + 1,
+                                chosen,
+                                list
+                            );
+                        }
+                    }
+                    // 0 or 1 candidate is handled by the len()>1 guard above.
+                    integrate::CanonicalPrDecision::NoPr => {}
+                }
+            }
+
+            // TASK-842: dedupe drive + emit the multi-spec completion line. The
+            // recognition + dedupe were computed (purely) before the loop; here
+            // we (a) skip re-driving a PR already driven this pass for a sibling
+            // spec, and (b) emit one legible line naming every spec the merge
+            // completes. trace:TASK-842 | ai:claude
+            if let Some(pr_num) = pr_numbers.get(id).and_then(|p| *p) {
+                if !integrated_pr_numbers.insert(pr_num) {
+                    // Already driven this pass for a sibling spec — the
+                    // merge-trailer → auto-bump completes this spec too; don't
+                    // re-drive the same PR.
+                    println!(
+                        "  {} {} — same PR (#{}) already integrating this pass for a sibling spec (skip re-drive)",
+                        "·".dimmed(),
+                        id,
+                        pr_num
+                    );
+                    continue;
+                }
+                if let Some(completion) = multi_spec_pr.get(&(pr_num as u64)) {
+                    println!(
+                        "  {} {}",
+                        "↩".cyan(),
+                        integrate::describe_pr_completion(completion)
+                    );
+                }
             }
 
             if dry_run {
