@@ -31,12 +31,12 @@ description: |-
   - FEEDS STORY-631 (aida intent): deterministic heft is an input that grounds + accelerates the comprehension.
 
   Verify with `aida graph --help`, `aida cache --help`, `aida show --help` before coding.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:13:48.920418521Z
-modified_at: 2026-06-16T06:44:51.500654189Z
+modified_at: 2026-06-16T06:52:17.266854437Z
 req_type: Story
 tags:
 - aida:cache
@@ -61,3 +61,21 @@ comments:
   content: Commit 3f283b45d references this requirement
   created_at: 2026-06-16T06:44:51.500654189Z
   modified_at: 2026-06-16T06:44:51.500654189Z
+history:
+- id: 019ecf33-c5eb-7123-b5fa-eef189136b6c
+  author: aida-auto-bump
+  timestamp: 2026-06-16T06:52:17.259561339Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecf33-c5f2-7032-afc7-8f17e1010a78
+  timestamp: 2026-06-16T06:52:17.266852871Z
+  agent: aida
+  commit_sha: 54c35ca037cbc6b5763cb2c16cdf688550c5e501
+  summary: Completed via merge 54c35ca0
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T06:52:17.091099028Z
+  completion_sha: 54c35ca037cbc6b5763cb2c16cdf688550c5e501
