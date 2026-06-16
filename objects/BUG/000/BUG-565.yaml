@@ -14,12 +14,12 @@ description: |-
   4. If the scaffolding commit is partial/skipped, the onboarding task should reflect that (or auto-complete on the paths that did land) so a new user isn't left with a stranded High human-only task they can't see in `aida list human`.
 
   IMPACT: first-run onboarding reliability — a new user whose repo gitignores `.claude` (common) silently ends up with uncommitted scaffolding + a stranded onboarding task. Pairs with BUG-564 (the stranded task is also invisible in the human view).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:15:52.518404579Z
-modified_at: 2026-06-16T03:16:08.900186142Z
+modified_at: 2026-06-16T03:42:18.419915197Z
 req_type: Bug
 tags:
 - gitignore
@@ -32,3 +32,21 @@ relationships:
   target_id: 019ece6c-bc59-7793-8e28-a5ec3e86a764
   created_at: 2026-06-16T03:16:08.900183711Z
   created_by: joe
+history:
+- id: 019ece85-d72f-7c93-9480-540e8b701b1a
+  author: aida-auto-bump
+  timestamp: 2026-06-16T03:42:18.415502037Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ece85-d733-7df2-b27e-3e5223b89245
+  timestamp: 2026-06-16T03:42:18.419913785Z
+  agent: aida
+  commit_sha: dba093fd16bdb11a7bf339c60646bee2b735cba1
+  summary: Completed via merge dba093fd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T03:42:18.254455883Z
+  completion_sha: dba093fd16bdb11a7bf339c60646bee2b735cba1
