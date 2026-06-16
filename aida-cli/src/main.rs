@@ -25,6 +25,8 @@ mod external_import_bleed;
 mod findings;
 mod forge;
 mod global_queue;
+// trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
+mod glyph_config;
 mod glyphs;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
 mod headless_tail;
@@ -131,13 +133,13 @@ use crate::cli::{
     AdvisorCommand, AgentCommand, AgentNewCommand, AutonomyCommand, BacklogCommand, BlockCommand,
     BriefCommand, CacheCommand, CalibrationSubcommand, Cli, Command, CommentCommand, ConfigCommand,
     DbCommand, DepsCommand, DevCommand, DocCommand, DocsCommand, DrainCommand, FeatureCommand,
-    FindingsCommand, GitHubCommand, GitLabCommand, HeadlessCommand, JiraCommand, LoadCommand,
-    MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand, PlanCommand,
-    PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelDefCommand, RelationshipCommand,
-    ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
-    ScaffoldCommand, ScheduleCommand, ServerCommand, SessionCommand, SessionManifestCommand,
-    SessionWakeupCommand, SkillCommand, SoloAction, StackCommand, TraceCommand, TriageCommand,
-    TypeCommand, WorkerCommand, ZenCommand,
+    FindingsCommand, GitHubCommand, GitLabCommand, GlyphCommand, HeadlessCommand, JiraCommand,
+    LoadCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand,
+    PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelDefCommand,
+    RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand, SessionCommand,
+    SessionManifestCommand, SessionWakeupCommand, SkillCommand, SoloAction, StackCommand,
+    TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2371,6 +2373,11 @@ fn run() -> Result<()> {
         }
         Command::Comment(comment_cmd) => {
             handle_comment_command(comment_cmd, &storage)?;
+        }
+        // STORY-633: glyph CLI surface — config.toml writer, no store needed.
+        // trace:STORY-633 | ai:claude
+        Command::Config(ConfigCommand::Glyph(glyph_cmd)) => {
+            handle_config_glyph(glyph_cmd)?;
         }
         Command::Config(config_cmd) => {
             handle_config_command(config_cmd, &storage)?;
@@ -15278,6 +15285,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_config_hints(enabled.as_deref(), &storage)?;
         }
+        // STORY-633: `aida config glyph ...` — CLI surface over the glyph
+        // registry, themes, and per-symbol override table. Writes to
+        // .aida/config.toml (or ~/.aida/config.toml with --user), preserving
+        // the rest of the file. trace:STORY-633 | ai:claude
+        Command::Config(ConfigCommand::Glyph(glyph_cmd)) => {
+            handle_config_glyph(glyph_cmd)?;
+        }
         Command::Config(config_cmd) => {
             let storage = Storage::new(store_path);
             handle_config_command(config_cmd, &storage)?;
@@ -22544,6 +22558,12 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
             // trace:STORY-106 | ai:claude
             handle_config_hints(enabled.as_deref(), storage)?;
         }
+        // STORY-633: glyph commands are intercepted before storage init in
+        // both dispatch paths, so they never reach this generic handler.
+        // trace:STORY-633 | ai:claude
+        ConfigCommand::Glyph(_) => {
+            unreachable!("`aida config glyph` is dispatched before handle_config_command")
+        }
     }
 
     Ok(())
@@ -23016,6 +23036,249 @@ fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Handle `aida config glyph ...` — the CLI surface over the glyph registry,
+/// themes, and per-symbol override table (EPIC-45 phase 4). Pure ergonomics +
+/// theme presets + a format-preserving TOML writer on top of the tested
+/// resolution layer in [`crate::glyphs`] / [`crate::glyph_config`]. Adds NO new
+/// resolution logic. trace:STORY-633 | ai:claude
+fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
+    use crate::glyph_config::{self, Scope};
+    use crate::glyphs::{self, Glyph};
+
+    let project_root = find_project_root().ok();
+
+    match cmd {
+        // List every glyph with its currently-resolved rendering + the unicode
+        // registry default — the missing discoverability surface.
+        GlyphCommand::List => {
+            println!("{}", "Glyphs (name | current | unicode default)".bold());
+            println!(
+                "  Resolution: [glyphs] override > [ui] theme > [ui] glyphs profile > default"
+            );
+            if let Some(theme) = glyphs::active_theme(project_root.as_deref()) {
+                println!("  Active theme: {}", theme.name.cyan());
+            }
+            println!();
+            for g in Glyph::ALL {
+                let current = glyphs::resolve_with_theme(g, project_root.as_deref());
+                let default = g.unicode();
+                let changed = current != default;
+                let marker = if changed {
+                    " *".yellow().to_string()
+                } else {
+                    String::new()
+                };
+                println!(
+                    "  {:<14} {:<8} {}{}",
+                    g.name().cyan(),
+                    current,
+                    default.dimmed(),
+                    marker
+                );
+            }
+            println!();
+            println!(
+                "  {} = differs from the unicode default. Customize: `aida config glyph set <name> <value>` or `aida config glyph theme <name>`.",
+                "*".yellow()
+            );
+        }
+
+        // Theme: no NAME (or `list`) → list embedded themes with a preview row.
+        // A NAME → apply that theme (writing a reference, or --expand the bundle).
+        GlyphCommand::Theme { name, expand, user } => {
+            let list_mode = matches!(name.as_deref(), None | Some("list"));
+            if list_mode {
+                println!("{}", "Available glyph themes:".bold());
+                println!();
+                // Implicit default first.
+                println!(
+                    "  {:<12} {}",
+                    "unicode".cyan(),
+                    "Default — full emoji/unicode (no theme set).".dimmed()
+                );
+                for t in glyphs::THEMES {
+                    // One-line preview: a handful of representative glyphs as
+                    // this theme would render them.
+                    let preview: String = [
+                        Glyph::Check,
+                        Glyph::Cross,
+                        Glyph::Arrow,
+                        Glyph::Done,
+                        Glyph::Robot,
+                    ]
+                    .iter()
+                    .map(|g| t.render(*g))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                    println!("  {:<12} {}", t.name.cyan(), preview);
+                    println!("  {:<12} {}", "", t.description.dimmed());
+                }
+                println!();
+                println!(
+                    "  Apply: `aida config glyph theme <name>` (add `--expand` to materialize into [glyphs])."
+                );
+                return Ok(());
+            }
+
+            let raw = name.as_deref().unwrap();
+            let scope = if *user { Scope::User } else { Scope::Project };
+
+            // "unicode" = clear any theme (return to the implicit default).
+            if raw.eq_ignore_ascii_case("unicode") {
+                let path = glyph_config::config_path_for(scope)?;
+                // Clearing = unset the [ui] theme key by setting nothing; we
+                // model it via expand-free path: just drop the reference.
+                clear_theme_reference(&path)?;
+                println!(
+                    "{} cleared theme → unicode default ({})",
+                    "✓".green(),
+                    scope_label(scope, &path)
+                );
+                return Ok(());
+            }
+
+            let theme = glyphs::theme_by_name(raw).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "unknown theme `{}` — valid themes: {} (and `unicode` to reset)",
+                    raw,
+                    glyphs::valid_theme_names()
+                )
+            })?;
+
+            let path = glyph_config::config_path_for(scope)?;
+            if *expand {
+                let base = match theme.base {
+                    glyphs::GlyphProfile::Unicode => "unicode",
+                    glyphs::GlyphProfile::Ascii => "ascii",
+                };
+                let bundle: Vec<(&str, &str)> =
+                    theme.bundle.iter().map(|(g, s)| (g.name(), *s)).collect();
+                glyph_config::expand_theme(&path, base, &bundle)?;
+                println!(
+                    "{} expanded theme `{}` into [glyphs] ({})",
+                    "✓".green(),
+                    theme.name,
+                    scope_label(scope, &path)
+                );
+            } else {
+                glyph_config::set_theme(&path, theme.name)?;
+                println!(
+                    "{} theme = {} ({})",
+                    "✓".green(),
+                    theme.name.cyan(),
+                    scope_label(scope, &path)
+                );
+            }
+        }
+
+        GlyphCommand::Set { name, value, user } => {
+            let glyph = Glyph::from_name(name).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "unknown glyph `{}` — valid names: {}",
+                    name,
+                    valid_glyph_names()
+                )
+            })?;
+            let scope = if *user { Scope::User } else { Scope::Project };
+            let path = glyph_config::config_path_for(scope)?;
+            glyph_config::set_override(&path, glyph.name(), value)?;
+            println!(
+                "{} {} = {} ({})",
+                "✓".green(),
+                glyph.name().cyan(),
+                value,
+                scope_label(scope, &path)
+            );
+        }
+
+        GlyphCommand::Unset { name, user } => {
+            let glyph = Glyph::from_name(name).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "unknown glyph `{}` — valid names: {}",
+                    name,
+                    valid_glyph_names()
+                )
+            })?;
+            let scope = if *user { Scope::User } else { Scope::Project };
+            let path = glyph_config::config_path_for(scope)?;
+            let removed = glyph_config::unset_override(&path, glyph.name())?;
+            if removed {
+                println!(
+                    "{} unset {} ({})",
+                    "✓".green(),
+                    glyph.name().cyan(),
+                    scope_label(scope, &path)
+                );
+            } else {
+                println!(
+                    "{} no override for {} ({})",
+                    "·".dimmed(),
+                    glyph.name(),
+                    scope_label(scope, &path)
+                );
+            }
+        }
+
+        GlyphCommand::Reset { user } => {
+            let scope = if *user { Scope::User } else { Scope::Project };
+            let path = glyph_config::config_path_for(scope)?;
+            let removed = glyph_config::reset_overrides(&path)?;
+            if removed {
+                println!(
+                    "{} cleared all glyph overrides ({})",
+                    "✓".green(),
+                    scope_label(scope, &path)
+                );
+            } else {
+                println!(
+                    "{} no glyph overrides to clear ({})",
+                    "·".dimmed(),
+                    scope_label(scope, &path)
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Drop the `[ui] theme` key, preserving the rest of the file. Used by
+/// `aida config glyph theme unicode` to return to the implicit default.
+/// trace:STORY-633 | ai:claude
+fn clear_theme_reference(path: &std::path::Path) -> Result<()> {
+    use toml_edit::DocumentMut;
+    let body = match std::fs::read_to_string(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut doc: DocumentMut = body.parse()?;
+    if let Some(ui) = doc.get_mut("ui").and_then(|i| i.as_table_mut()) {
+        ui.remove("theme");
+    }
+    aida_core::write_atomic(path, doc.to_string())?;
+    Ok(())
+}
+
+/// The comma-separated valid glyph names, for `set`/`unset` error messages.
+/// trace:STORY-633 | ai:claude
+fn valid_glyph_names() -> String {
+    crate::glyphs::Glyph::ALL
+        .iter()
+        .map(|g| g.name())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// A short "(scope: path)" suffix for glyph-command confirmations.
+/// trace:STORY-633 | ai:claude
+fn scope_label(scope: crate::glyph_config::Scope, path: &std::path::Path) -> String {
+    let which = match scope {
+        crate::glyph_config::Scope::Project => "project",
+        crate::glyph_config::Scope::User => "user",
+    };
+    format!("{}: {}", which, path.display())
 }
 
 /// Handle `aida config user` — show or update `~/.aida/preferences.toml`.

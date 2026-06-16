@@ -41,6 +41,7 @@ dirs = { workspace = true }
 tokio = { workspace = true }
 hostname = "0.4"
 toml = { workspace = true }
+toml_edit = { workspace = true }
 rusqlite = { workspace = true }
 # Cross-platform process inspection for session liveness probe (STORY-69):
 # enumerate live `claude` PIDs + their cwd so AIDA can mark live sessions in
