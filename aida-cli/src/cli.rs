@@ -6805,6 +6805,29 @@ pub enum Command {
         json: bool,
     },
 
+    // trace:STORY-631 | ai:claude
+    /// Show the AI-generated plain-terms comprehension of WHY a spec exists —
+    /// its intent, distilled from the spec + its graph neighborhood. Distinct
+    /// from `aida why` (a deterministic state classifier): this is a cached,
+    /// drift-stamped LLM synthesis. Generated on first call (or `--refresh`),
+    /// printed from cache thereafter; a STALE marker shows when the
+    /// neighborhood drifted since generation.
+    Intent {
+        /// The SPEC-ID to comprehend (any story/task/bug/feature id).
+        id: String,
+        /// Which register to print: `layman` (prose for a human skimmer) or
+        /// `llm` (denser/structured, for an agent loading the spec).
+        #[clap(long, value_parser = ["layman", "llm"], default_value = "layman")]
+        audience: String,
+        /// Force regeneration even if a cached comprehension exists and is fresh.
+        #[clap(long)]
+        refresh: bool,
+        /// Machine-readable JSON
+        /// (`{spec, audience, comprehension, generated_at, model, stale}`).
+        #[clap(long)]
+        json: bool,
+    },
+
     /// AIDA-developer-only commands: activate the in-repo dev binary,
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]

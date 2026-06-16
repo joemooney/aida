@@ -33,6 +33,7 @@ mod health_metrics;
 mod history;
 mod intake;
 mod integrate;
+mod intent;
 mod mailbox_store;
 mod manual;
 mod mcp;
@@ -1374,6 +1375,20 @@ fn run() -> Result<()> {
         return handle_why(id, *json);
     }
 
+    // STORY-631: `aida intent <ID>` self-loads the store (read for cache-print,
+    // read+write for generate), and may shell out to a headless `claude -p`
+    // running `/aida-intent`. Like `aida why` / `aida intake`, it needs no
+    // shared storage handle — dispatch early. trace:STORY-631 | ai:claude
+    if let Command::Intent {
+        id,
+        audience,
+        refresh,
+        json,
+    } = &cli.command
+    {
+        return handle_intent(id, audience, *refresh, *json);
+    }
+
     // STORY-563: `aida human <subcommand>` self-loads the store like `aida why`
     // / `burndown explain`, or delegates to the top-level presence handlers.
     // Dispatch early, no shared storage handle needed.
@@ -2309,6 +2324,7 @@ fn run() -> Result<()> {
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
+        Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -11618,6 +11634,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
+        Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -73027,6 +73044,11 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("usage", "Inspect locally-recorded CLI usage"),
                 ("metrics", "Agent-lift metrics over telemetry"),
                 ("why", "Explain a spec's current state"),
+                // trace:STORY-631 — AI WHY-comprehension, complementary to `why`.
+                (
+                    "intent",
+                    "Plain-terms AI comprehension of why a spec exists",
+                ),
                 ("user-guide", "Open the user guide in the default browser"),
                 // trace:STORY-600 — the CLI manual's when/why beside --help's what.
                 ("manual", "Print a command's CLI-manual rationale section"),
@@ -77542,6 +77564,250 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
         println!("  {}", line.dimmed());
     }
     Ok(())
+}
+
+/// STORY-631: `aida intent <ID>` — the cached, drift-stamped, AI-generated
+/// plain-terms comprehension of WHY a spec exists. Distinct from `aida why`
+/// (the deterministic state classifier): this is an LLM synthesis over the spec
+/// + its graph neighborhood, generated on first call (or `--refresh`), printed
+/// from cache otherwise, and marked STALE when the neighborhood drifted.
+/// trace:STORY-631 | ai:claude
+fn handle_intent(id: &str, audience: &str, refresh: bool, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+
+    let want = id.trim().to_ascii_uppercase();
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| {
+            [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| s.eq_ignore_ascii_case(&want))
+        })
+        .cloned();
+    let Some(req) = req else {
+        anyhow::bail!("no spec found matching `{id}` — check the ID with `aida list`.");
+    };
+    let disp = req.display_id();
+
+    // Compute the fresh neighborhood hash (also the drift comparator).
+    let inputs = build_intent_neighborhood(&req, &store.requirements);
+    let fresh_hash = inputs.source_hash();
+
+    // Decide whether to (re)generate. Slice 1: generate on absent OR --refresh;
+    // a stale cache is REPORTED but not auto-regenerated (manual via --refresh).
+    let need_generate = refresh || req.intent.is_none();
+
+    if need_generate {
+        let intent = generate_intent(&project_root, &req, &disp, &inputs, &fresh_hash)?;
+        // Persist to the canonical store. This is a substrate WRITE — gated on
+        // generation (drift / --refresh), never per-read. trace:STORY-631
+        let Some(store_path) = detect_distributed_store_from(&project_root) else {
+            anyhow::bail!(
+                "aida intent writes the comprehension to the git-canonical store, but no \
+                 distributed store was found — run `aida init` (this verb is not supported on \
+                 the deprecated centralized backend)."
+            );
+        };
+        let dispenser = load_dispenser(&store_path)?;
+        let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+        let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+        let mut to_save = req.clone();
+        to_save.intent = Some(intent.clone());
+        // NOTE: deliberately do NOT bump modified_at or touch any field in the
+        // diff_snapshots allow-list — regeneration must generate ZERO history
+        // rows. trace:STORY-631 | ai:claude
+        backend.update_requirement(&to_save)?;
+
+        // Fresh generation is never stale (hash == fresh_hash by construction).
+        return print_intent(&disp, audience, &intent, false, json);
+    }
+
+    // Cache hit — print without regenerating; mark stale on drift.
+    let intent = req
+        .intent
+        .as_ref()
+        .expect("intent present on cache-hit path");
+    let stale = intent::is_stale(&intent.source_hash, &fresh_hash);
+    print_intent(&disp, audience, intent, stale, json)
+}
+
+/// Assemble the [`intent::NeighborhoodInputs`] for a spec: its own
+/// title/description/status, each immediate neighbor's id+title+status, and the
+/// comment count. trace:STORY-631 | ai:claude
+fn build_intent_neighborhood(req: &Requirement, all: &[Requirement]) -> intent::NeighborhoodInputs {
+    let mut neighbors = Vec::new();
+    for rel in &req.relationships {
+        if let Some(n) = all.iter().find(|r| r.id == rel.target_id) {
+            neighbors.push(intent::NeighborFact {
+                id: n.display_id(),
+                title: n.title.clone(),
+                status: n.status.to_string(),
+            });
+        }
+    }
+    intent::NeighborhoodInputs {
+        spec_id: req.display_id(),
+        title: req.title.clone(),
+        description: req.description.clone(),
+        status: req.status.to_string(),
+        neighbors,
+        comment_count: intent::key_comment_count(req),
+    }
+}
+
+/// Render the intent comprehension — JSON shape or the labelled human view.
+/// The human view ALWAYS labels the prose AI-generated so no reader mistakes it
+/// for hand-authored ground truth. trace:STORY-631 | ai:claude
+fn print_intent(
+    disp: &str,
+    audience: &str,
+    intent: &aida_core::SpecIntent,
+    stale: bool,
+    json: bool,
+) -> Result<()> {
+    if json {
+        let payload = intent::intent_json(disp, audience, intent, stale);
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+    let body = match audience {
+        "llm" => &intent.llm,
+        _ => &intent.layman,
+    };
+    println!(
+        "{} {} — intent ({})",
+        "▸".cyan().bold(),
+        disp.cyan(),
+        audience
+    );
+    println!(
+        "  {}",
+        format!(
+            "AI-generated comprehension · model={} · generated {}{}",
+            intent.model,
+            intent.generated_at,
+            if stale { " · STALE" } else { "" }
+        )
+        .dimmed()
+    );
+    if stale {
+        println!(
+            "  {} the spec or its neighbors changed since this was generated — \
+             re-run with {} to regenerate.",
+            "⚠".yellow(),
+            "--refresh".yellow().bold()
+        );
+    }
+    println!();
+    println!("{body}");
+    Ok(())
+}
+
+/// Run the headless `/aida-intent` skill via `claude -p` over the spec + its
+/// graph neighborhood, parse the sidecar, and fold it into a
+/// [`aida_core::SpecIntent`] stamped with generated_at + source_hash. The spawn
+/// is the integration boundary; the pure transforms are unit-tested in
+/// `intent.rs`. trace:STORY-631 | ai:claude
+fn generate_intent(
+    project_root: &std::path::Path,
+    _req: &Requirement,
+    disp: &str,
+    inputs: &intent::NeighborhoodInputs,
+    source_hash: &str,
+) -> Result<aida_core::SpecIntent> {
+    // The sidecar the skill writes; the launcher reads it back. Lives under
+    // .aida/ (gitignored runtime state). trace:STORY-631
+    let dir = project_root.join(".aida").join("intent");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating intent artifact dir {}", dir.display()))?;
+    let sidecar_path = dir.join(format!("{disp}.json"));
+    let _ = std::fs::remove_file(&sidecar_path);
+
+    // The skill reads the spec + graph from the substrate itself (it has the
+    // MCP/CLI surface); the prompt names the spec + the exact output contract.
+    let prompt = format!(
+        "/aida-intent {disp}\n\n\
+         Write the comprehension as a JSON object to `{}` with keys \
+         `layman` (plain prose for a human skimmer), `llm` (denser/structured, \
+         for an agent loading the spec), and `model` (your model id). Read the \
+         spec and its immediate graph neighborhood (parents, children, blockers, \
+         referenced specs, decisions, key comments) before writing.",
+        sidecar_path.display()
+    );
+
+    // Gate the LIVE spawn behind a TTY / non-headless context, mirroring how
+    // intake fences its `claude -p` launch. Under a non-interactive or already-
+    // headless context the spawn would have no human to authorize tools and no
+    // value, so we refuse with guidance rather than launching a doomed pass.
+    let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let headless = std::env::var("AIDA_HEADLESS").as_deref() == Ok("1");
+    if !interactive || headless {
+        anyhow::bail!(
+            "aida intent generation shells out to `claude -p /aida-intent`, which needs an \
+             interactive (TTY) context — run it from your terminal. (Batch/headless regeneration \
+             is a separate follow-up.)"
+        );
+    }
+
+    println!(
+        "{} {disp} — generating intent comprehension (headless /aida-intent)…",
+        "▸".cyan().bold()
+    );
+
+    let session_id = Uuid::now_v7().to_string();
+    let date = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let log_path = dir.join(format!("{disp}-{date}.log"));
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+        .with_label(format!("intent:{disp}"));
+    let status =
+        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
+            .context("spawning headless /aida-intent agent")?;
+    if !status.success() {
+        anyhow::bail!(
+            "intent agent exited with {} — see log {}",
+            status.code().unwrap_or(-1),
+            log_path.display()
+        );
+    }
+
+    let raw = std::fs::read_to_string(&sidecar_path).with_context(|| {
+        format!(
+            "intent agent did not produce the sidecar at {} — see log {}",
+            sidecar_path.display(),
+            log_path.display()
+        )
+    })?;
+    let sidecar = intent::parse_intent_sidecar(&raw)?;
+    // Clean up the runtime sidecar now that we have folded it in.
+    let _ = std::fs::remove_file(&sidecar_path);
+
+    let model = if sidecar.model.trim().is_empty() {
+        std::env::var("AIDA_INTENT_MODEL").unwrap_or_else(|_| "claude".to_string())
+    } else {
+        sidecar.model.clone()
+    };
+
+    // source_hash is over the same `inputs` the caller already hashed, so a
+    // later read with an unchanged neighborhood reports fresh.
+    let _ = inputs;
+    Ok(aida_core::SpecIntent {
+        layman: sidecar.layman,
+        llm: sidecar.llm,
+        generated_at: chrono::Utc::now().to_rfc3339(),
+        source_hash: source_hash.to_string(),
+        model,
+    })
 }
 
 /// STORY-547: `aida why <ID>` — single-spec drill-down using the same
