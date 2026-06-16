@@ -21,12 +21,12 @@ description: |-
   - A test pins: a spec completed by a commit in repo B is auto-bumped (or loudly flagged) when pulling from repo A in a workspace.
 
   Depends-on / informed-by SPIKE-62 for the repo-identity model, but the loud-failure fallback can ship independently and immediately.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:58:13.791768614Z
-modified_at: 2026-06-16T07:23:54.506795828Z
+modified_at: 2026-06-16T07:38:32.438359228Z
 req_type: Bug
 tags:
 - aida:workspace
@@ -40,3 +40,21 @@ relationships:
   target_id: 019ecf38-ca2b-74e2-9e76-4e8e52259392
   created_at: 2026-06-16T06:58:24.671439819Z
   created_by: joe
+history:
+- id: 019ecf5e-1e6e-79f1-8dc5-9a5771c95480
+  author: aida-auto-bump
+  timestamp: 2026-06-16T07:38:32.430865026Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecf5e-1e76-79d3-9235-47acf845da77
+  timestamp: 2026-06-16T07:38:32.438358398Z
+  agent: aida
+  commit_sha: c3ef32356207a8f23e307497e7362c56e2cb14dc
+  summary: Completed via merge c3ef3235
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T07:38:32.264062274Z
+  completion_sha: c3ef32356207a8f23e307497e7362c56e2cb14dc
