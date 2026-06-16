@@ -2658,6 +2658,66 @@ pub enum ConfigCommand {
         /// current effective value (env-aware).
         enabled: Option<String>,
     },
+
+    /// Inspect and customize the CLI glyph set — list the symbols, apply a
+    /// canned theme, or override an individual glyph. Writes to
+    /// `.aida/config.toml` (or `~/.aida/config.toml` with `--user`),
+    /// preserving the rest of the file.
+    // trace:STORY-633 | ai:claude
+    #[clap(subcommand)]
+    Glyph(GlyphCommand),
+}
+
+/// `aida config glyph ...` — CLI surface over the glyph registry, themes, and
+/// the per-symbol override table.
+// trace:STORY-633 | ai:claude (EPIC-45 phase 4)
+#[derive(Subcommand, Debug)]
+pub enum GlyphCommand {
+    /// List every glyph: name, currently-resolved rendering (honoring the
+    /// active profile + theme + overrides), and the unicode registry default.
+    List,
+
+    /// Inspect or apply glyph themes. With no NAME (or `theme list`), lists the
+    /// embedded themes each with a one-line preview row. With a NAME, applies
+    /// that theme — writes `[ui] theme = "<name>"` (a clean reference).
+    Theme {
+        /// Theme name to apply. Omit (or pass `list`) to list available themes.
+        name: Option<String>,
+        /// Materialize the theme's bundle into `[glyphs]` for hand-tweaking
+        /// instead of writing the named reference.
+        #[clap(long)]
+        expand: bool,
+        /// Write to `~/.aida/config.toml` instead of the project config.
+        #[clap(long)]
+        user: bool,
+    },
+
+    /// Override an individual glyph: writes `[glyphs] <name> = "<value>"`.
+    Set {
+        /// Glyph name (see `aida config glyph list`).
+        name: String,
+        /// Replacement string to render for this glyph.
+        value: String,
+        /// Write to `~/.aida/config.toml` instead of the project config.
+        #[clap(long)]
+        user: bool,
+    },
+
+    /// Drop a single per-symbol override.
+    Unset {
+        /// Glyph name whose override to remove.
+        name: String,
+        /// Operate on `~/.aida/config.toml` instead of the project config.
+        #[clap(long)]
+        user: bool,
+    },
+
+    /// Clear ALL per-symbol overrides (the whole `[glyphs]` table).
+    Reset {
+        /// Operate on `~/.aida/config.toml` instead of the project config.
+        #[clap(long)]
+        user: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
