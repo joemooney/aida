@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T17:47:08.497850686Z
-modified_at: 2026-06-14T05:08:46.027633456Z
+modified_at: 2026-06-16T03:53:04.345737402Z
 req_type: Story
 tags:
 - agent-context
@@ -90,3 +90,8 @@ comments:
   content: 'Implementation split (implementer, 2026-06-13): shipped facet (a) LIVE PROGRESS as TASK-804 — ''aida burndown run --verbose'' launches the headless drain with ''--output-format stream-json --verbose --include-partial-messages'', tees the JSONL to .aida/burndown/<drain-id>.jsonl, and renders a human progress line per event via the proven headless_tee machinery (TASK-307). AUTO-PROCEED is unchanged — verbose only adds visibility; permission-mode stays caller-controlled. The two BUG-538-dependent facets are filed as children blocked on it: TASK-805 (in-flight/Scheduled marking in queue list + burndown plan) and TASK-806 (aida burndown status subcommand). STORY-604 stays In Progress as the umbrella until those land. Operator-confirmed scoping + advisor dependency note (2026-06-14) honored.'
   created_at: 2026-06-14T05:08:46.027633456Z
   modified_at: 2026-06-14T05:08:46.027633456Z
+- id: 019ece8f-b259-7ee1-86e3-3e3990a38e76
+  author: joe
+  content: 'Status reconciliation (advisor, 2026-06-15): all three children — TASK-804 (burndown run --verbose stream-json tee), TASK-805 (in-flight/scheduled marking), TASK-806 (aida burndown status) — are Completed, plus the later TASK-829 (recent-activity heartbeat) / TASK-833 (open-PRs in inflight) extend the same observability. Scope delivered; closing the stale InProgress.'
+  created_at: 2026-06-16T03:53:04.345737402Z
+  modified_at: 2026-06-16T03:53:04.345737402Z
