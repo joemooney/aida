@@ -10864,24 +10864,34 @@ fn try_attach_store_worktree(project_root: &std::path::Path) -> Result<std::path
     use aida_core::git_ops;
     let worktree_dir = ".aida-store";
     let branch = "aida-store";
-    // BUG-559 (substrate slice): on a fresh clone of an AIDA-on-GitLab repo the
-    // working tree can land ON the orphan `aida-store` branch — GitLab's
-    // push-to-create adopts the first-pushed branch as the project default, so a
-    // clone checks out the internal YAML store as if it were the code. In that
-    // state `git fetch origin aida-store:aida-store` refuses ("refusing to fetch
-    // into branch refs/heads/aida-store checked out at <clone>") and the raw git
-    // error is useless to a first user. Detect it and return actionable guidance
-    // instead of the cryptic failure. (The source-side prevention — making the
-    // GitLab default branch `main` at init — is tracked under BUG-559 itself.)
+    // BUG-559: on a fresh clone of an AIDA-on-GitLab repo the working tree can
+    // land ON the orphan `aida-store` branch — GitLab's push-to-create adopts
+    // the first-pushed branch as the project default, so a clone checks out the
+    // internal YAML store as if it were the code. In that state
+    // `git fetch origin aida-store:aida-store` refuses ("refusing to fetch into
+    // branch refs/heads/aida-store checked out at <clone>") because git won't
+    // write into a branch ref that's currently checked out.
+    //
+    // Fix (b) — harden auto-attach: instead of erroring, RECOVER. Switch the
+    // working tree OFF `aida-store` first — to a code branch (`main`/`master`,
+    // local or origin) when one exists, else to a detached HEAD — which frees
+    // the `aida-store` ref so the fetch + worktree-add can proceed exactly as
+    // on a healthy clone. This only fires in the already-failing GitLab state
+    // (`aida-store` is the checked-out branch); a normal clone is untouched, so
+    // it cannot regress the working path. The source-side prevention (making
+    // the GitLab default branch `main` at init) is tracked separately under
+    // BUG-559's follow-up.
     // trace:TASK-821 trace:BUG-559 | ai:claude
-    if git_ops::current_branch(project_root).ok().as_deref() == Some("aida-store") {
-        anyhow::bail!(
-            "this clone has the internal AIDA store branch `aida-store` checked out as your \
-             working tree (a GitLab default-branch quirk — the orphan store became the repo \
-             default). Switch to your code branch first, then re-run:\n    \
-             git checkout main   # or your default code branch\n\
-             AIDA will then attach the store automatically."
-        );
+    if git_ops::current_branch(project_root).ok().as_deref() == Some(branch) {
+        let candidates = local_code_branch_candidates(project_root);
+        match choose_store_attach_recovery(project_root, &candidates) {
+            StoreAttachRecovery::CheckoutCodeBranch(code_branch) => {
+                git_ops::checkout_branch(project_root, &code_branch)?;
+            }
+            StoreAttachRecovery::DetachHead => {
+                git_ops::detach_head(project_root)?;
+            }
+        }
     }
     // Create the local tracking branch from origin/<branch> (network fetch;
     // fails closed → caller drops to the explicit `aida init` guidance).
@@ -10889,8 +10899,57 @@ fn try_attach_store_worktree(project_root: &std::path::Path) -> Result<std::path
     git_ops::create_store_worktree(project_root, worktree_dir, branch)
 }
 
+/// The recovery action chosen when `aida-store` is the checked-out branch on a
+/// fresh clone (the BUG-559 GitLab state). Pure value so the decision is
+/// unit-testable without running git. trace:BUG-559 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StoreAttachRecovery {
+    /// Switch the working tree to this code branch before fetching `aida-store`.
+    CheckoutCodeBranch(String),
+    /// No code branch is available — detach HEAD to free the `aida-store` ref.
+    DetachHead,
+}
+
+/// The conventional code-branch names to prefer when recovering, in priority
+/// order. trace:BUG-559 | ai:claude
+const CODE_BRANCH_PREFERENCE: [&str; 2] = ["main", "master"];
+
+/// Collect the code-branch names available to switch to, in preference order:
+/// a local `main`/`master` if it exists, else an `origin/main`/`origin/master`
+/// (referenced by short name so `git checkout` sets up tracking). Used as input
+/// to [`choose_store_attach_recovery`]; split out so the decision logic stays
+/// pure and testable. trace:BUG-559 | ai:claude
+fn local_code_branch_candidates(project_root: &std::path::Path) -> Vec<String> {
+    use aida_core::git_ops;
+    let mut out = Vec::new();
+    for name in CODE_BRANCH_PREFERENCE {
+        if git_ops::local_branch_exists(project_root, name) {
+            out.push(name.to_string());
+        } else if git_ops::remote_branch_exists(project_root, "origin", name) {
+            // `git checkout main` against `origin/main` creates the local
+            // tracking branch — git's DWIM behaviour.
+            out.push(name.to_string());
+        }
+    }
+    out
+}
+
+/// Decide how to get the working tree off the `aida-store` branch so a fetch
+/// into the `aida-store` ref can succeed: check out the first available code
+/// branch, or detach HEAD when none is available. Pure — given the candidate
+/// list it returns the action, no git side effects. trace:BUG-559 | ai:claude
+fn choose_store_attach_recovery(
+    _project_root: &std::path::Path,
+    code_branch_candidates: &[String],
+) -> StoreAttachRecovery {
+    match code_branch_candidates.first() {
+        Some(branch) => StoreAttachRecovery::CheckoutCodeBranch(branch.clone()),
+        None => StoreAttachRecovery::DetachHead,
+    }
+}
+
 #[cfg(test)]
-mod bug_559_clone_guidance_tests {
+mod bug_559_clone_recovery_tests {
     use super::*;
     use std::process::Command;
 
@@ -10906,33 +10965,119 @@ mod bug_559_clone_guidance_tests {
         assert!(ok, "git {args:?} failed");
     }
 
-    /// Regression for the BUG-559 substrate slice (TASK-821): when the working
-    /// tree is ON the `aida-store` branch (the GitLab fresh-clone state),
-    /// auto-attach returns actionable guidance naming the fix, not the raw
-    /// "refusing to fetch into branch ... checked out" git error.
+    /// Decision logic: a code branch is available → check it out (don't detach,
+    /// so the user lands on real code, not a headless store tree).
     #[test]
-    fn try_attach_guides_when_aida_store_is_checked_out() {
+    fn recovery_prefers_code_branch_when_available() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let chosen = choose_store_attach_recovery(tmp.path(), &["main".to_string()]);
+        assert_eq!(
+            chosen,
+            StoreAttachRecovery::CheckoutCodeBranch("main".to_string())
+        );
+    }
+
+    /// Decision logic: no code branch → detach HEAD to free the `aida-store`
+    /// ref (still recovers; never errors out the way the pre-fix path did).
+    #[test]
+    fn recovery_detaches_when_no_code_branch() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let chosen = choose_store_attach_recovery(tmp.path(), &[]);
+        assert_eq!(chosen, StoreAttachRecovery::DetachHead);
+    }
+
+    /// Decision logic: `main` is preferred over `master` when both are offered.
+    #[test]
+    fn recovery_prefers_main_over_master() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let chosen =
+            choose_store_attach_recovery(tmp.path(), &["main".to_string(), "master".to_string()]);
+        assert_eq!(
+            chosen,
+            StoreAttachRecovery::CheckoutCodeBranch("main".to_string())
+        );
+    }
+
+    /// Sanity: a normal (non-GitLab) checkout — not on `aida-store` — picks no
+    /// recovery candidates from a tree that only has `aida-store`, but the
+    /// candidate collector finds the real `main` when present.
+    #[test]
+    fn candidate_collector_finds_local_main() {
         let tmp = tempfile::TempDir::new().unwrap();
         let p = tmp.path();
-        git(p, &["init", "-q"]);
+        git(p, &["init", "-q", "-b", "main"]);
         git(p, &["config", "user.email", "t@example.com"]);
         git(p, &["config", "user.name", "t"]);
         git(p, &["commit", "--allow-empty", "-qm", "init"]);
-        // Simulate the fresh-clone-of-GitLab state: HEAD is on aida-store.
-        git(p, &["checkout", "-q", "-b", "aida-store"]);
-        let err = try_attach_store_worktree(p).unwrap_err().to_string();
+        let candidates = local_code_branch_candidates(p);
         assert!(
-            err.contains("git checkout main"),
-            "guidance must name the fix; got: {err}"
+            candidates.contains(&"main".to_string()),
+            "expected main among candidates, got {candidates:?}"
         );
-        assert!(
-            err.contains("aida-store"),
-            "guidance must name the branch; got: {err}"
+    }
+
+    /// End-to-end recovery of the exact BUG-559 state: a clone whose default
+    /// branch is `aida-store` (orphan store checked out as the working tree)
+    /// with `origin/main` and `origin/aida-store` present. `try_attach_store_worktree`
+    /// must NOT error — it must switch off `aida-store`, fetch the store ref,
+    /// and attach the `.aida-store` worktree.
+    #[test]
+    fn try_attach_recovers_when_aida_store_is_default_branch() {
+        let base = tempfile::TempDir::new().unwrap();
+        let bare = base.path().join("remote.git");
+        let seed = base.path().join("seed");
+        // Bare "remote".
+        git(
+            base.path(),
+            &["init", "-q", "--bare", bare.to_str().unwrap()],
         );
-        // Must NOT leak the raw git plumbing error.
-        assert!(
-            !err.contains("refusing to fetch"),
-            "should not surface the raw git error; got: {err}"
+        // Seed repo: a code commit on main + an orphan aida-store branch, then
+        // push aida-store FIRST (the GitLab push-to-create order) and main.
+        std::fs::create_dir_all(&seed).unwrap();
+        git(&seed, &["init", "-q", "-b", "main"]);
+        git(&seed, &["config", "user.email", "t@example.com"]);
+        git(&seed, &["config", "user.name", "t"]);
+        git(&seed, &["commit", "--allow-empty", "-qm", "main commit"]);
+        git(&seed, &["checkout", "-q", "--orphan", "aida-store"]);
+        let _ = Command::new("git")
+            .arg("-C")
+            .arg(&seed)
+            .args(["rm", "-rfq", "--cached", "."])
+            .output();
+        git(&seed, &["commit", "--allow-empty", "-qm", "store init"]);
+        git(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        git(&seed, &["push", "-q", "-u", "origin", "aida-store"]);
+        git(&seed, &["push", "-q", "origin", "main"]);
+        // Make aida-store the remote default (the GitLab quirk).
+        git(&bare, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
+
+        // Fresh clone → checks out aida-store as the working tree.
+        let clone = base.path().join("clone");
+        git(
+            base.path(),
+            &[
+                "clone",
+                "-q",
+                bare.to_str().unwrap(),
+                clone.to_str().unwrap(),
+            ],
+        );
+        // Precondition: we really are in the failing state.
+        assert_eq!(
+            aida_core::git_ops::current_branch(&clone).unwrap(),
+            "aida-store"
+        );
+
+        // The fix: recover instead of erroring.
+        let store_path = try_attach_store_worktree(&clone)
+            .expect("recovery should attach the store worktree, not error");
+        assert!(store_path.ends_with(".aida-store"));
+        assert!(store_path.exists(), "store worktree dir should exist");
+        // We must have moved OFF aida-store onto the code branch.
+        assert_ne!(
+            aida_core::git_ops::current_branch(&clone).ok().as_deref(),
+            Some("aida-store"),
+            "working tree should no longer be on aida-store"
         );
     }
 }
@@ -19729,6 +19874,19 @@ fn handle_init_distributed_worktree(
     // silently when there's no origin (single-machine projects) or when
     // the push fails (offline, auth, etc.) — failure isn't fatal here.
     // trace:BUG-23 trace:TASK-421 | ai:claude
+    //
+    // TODO(BUG-559 root-cause prevention): this is the FIRST and (on a
+    // push-to-create empty origin) ONLY branch init pushes, so a forge that
+    // adopts the first-pushed branch as the project default (GitLab) makes the
+    // orphan `aida-store` the default — breaking fresh-clone checkout. Fix (a)
+    // is to push the code/main branch BEFORE this orphan push so the forge
+    // adopts `main` as default. Not done here: init does not currently push the
+    // code branch at all (the user/PR flow does), so pushing it from init is a
+    // behavior change with real blast radius (pushing user code that may not be
+    // ready), and the forge-default effect can only be confirmed against a live
+    // GitHub + GitLab. Tracked as a follow-up TASK needing live verification.
+    // Auto-attach now RECOVERS from this state (fix b above), so first-user pain
+    // is already resolved; this remains belt-and-suspenders. trace:BUG-559 | ai:claude
     if git_ops::has_remote(&cwd, "origin") {
         let push_result = std::process::Command::new("git")
             .arg("-C")

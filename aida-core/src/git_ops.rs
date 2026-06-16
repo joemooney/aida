@@ -303,6 +303,46 @@ pub fn fetch_branch_into_local(repo: &Path, remote: &str, branch: &str) -> Resul
     Ok(())
 }
 
+/// True when a local branch with this exact name exists.
+/// trace:BUG-559 | ai:claude
+pub fn local_branch_exists(repo: &Path, branch: &str) -> bool {
+    git(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
+    .map(|r| r.success)
+    .unwrap_or(false)
+}
+
+/// Check out an existing branch (`git checkout <branch>`). Fails if the branch
+/// doesn't exist or the working tree can't be switched.
+/// trace:BUG-559 | ai:claude
+pub fn checkout_branch(repo: &Path, branch: &str) -> Result<()> {
+    let result = git(repo, &["checkout", branch])?;
+    if !result.success {
+        anyhow::bail!("git checkout {} failed: {}", branch, result.stderr);
+    }
+    Ok(())
+}
+
+/// Detach HEAD at the current commit (`git checkout --detach`). Frees whatever
+/// branch was checked out so a fetch can write into that branch ref. Used by
+/// the fresh-clone auto-attach recovery when `aida-store` is the checked-out
+/// branch (the GitLab default-branch quirk) and no code branch is available to
+/// switch to. trace:BUG-559 | ai:claude
+pub fn detach_head(repo: &Path) -> Result<()> {
+    let result = git(repo, &["checkout", "--detach"])?;
+    if !result.success {
+        anyhow::bail!("git checkout --detach failed: {}", result.stderr);
+    }
+    Ok(())
+}
+
 /// Get a git config value (checks local, then global).
 pub fn git_config_get(key: &str) -> Result<String> {
     let output = Command::new("git").args(["config", key]).output()?;
