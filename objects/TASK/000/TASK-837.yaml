@@ -1,0 +1,35 @@
+id: 019eceaa-2879-7aa0-90a7-c9dd746a9108
+spec_id: TASK-837
+agreed_id: TASK-837
+title: 'aida agent new (no agent type): arrow-key picker of agent types, like the role picker'
+description: |-
+  Operator friction (2026-06-15): running `aida agent new` with no agent type just prints clap help. It should instead offer an arrow-key up/down menu of the available agent types — the same interaction the role picker already gives (TASK-817 pick_role_with_header via inquire::Select).
+
+  Today AgentNewCommand is a clap #[clap(subcommand)] over Claude / Codex / Antigravity, so a bare `aida agent new` falls through to the help text. The operator expects: highlight an agent type, Enter to launch, Esc to cancel — mirroring the role menu they just learned.
+
+  ## Acceptance
+  - At a TTY, `aida agent new` with no agent-type subcommand opens an inquire::Select picker listing the supported agent types (Claude, Codex, Antigravity), arrow-keys to move, type-to-filter, Enter to select, Esc to cancel — reusing the same picker idiom as pick_role_with_header (TASK-817).
+  - Selecting a type proceeds into that agent launcher with its default options (equivalent to `aida agent new <type>` with no extra flags). Picker writes its prompt to stderr so eval-captured stdout stays clean, matching the role picker convention.
+  - Esc / Ctrl-C cancels cleanly (no launch, non-error exit), same as the role picker.
+  - Non-TTY / headless (no interactive stdin): keep current behavior — do NOT block on a picker; print the help/usage as today so scripts are unaffected.
+  - Passing an explicit agent type (`aida agent new claude ...`) is unchanged.
+
+  ## Rationale
+  Two interactive pickers already in the binary (roles at TASK-817, session resume at session.rs) set the expectation that AIDA list-like choices are arrow-key selectable. `aida agent new` is the one launch surface that still dead-ends in clap help. Small, bounded papercut; high consistency payoff.
+
+  ## Open design fork (for the implementer/advisor)
+  After picking a type interactively, do we (a) launch with that type defaults immediately, or (b) chain into the existing role prompt (TASK-646) so the operator picks type THEN role in one flow? Minimal slice = (a); (b) is the richer flow and may be the better default. Decide before implementing.
+
+  Verify CLI flags with `aida agent new --help` before coding.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T04:21:58.521571385Z
+modified_at: 2026-06-16T04:21:58.521571385Z
+req_type: Task
+tags:
+- aida:agent:new
+- from-operator
+- papercut
+- ux
