@@ -46,11 +46,17 @@ impl Presence {
     }
 
     /// Small glyph for the statusline segment (the user likes glyphs).
+    ///
+    /// Routed through the glyph registry (Home / Away) so an
+    /// `[ui] glyphs = "ascii"` / `AIDA_GLYPHS=ascii` profile re-renders it; the
+    /// default Unicode profile reproduces the historical literals byte-for-byte.
+    // trace:TASK-840 | ai:claude
     pub(crate) fn glyph(self) -> &'static str {
-        match self {
-            Presence::Home => "🏠",
-            Presence::Away => "🚶",
-        }
+        let glyph = match self {
+            Presence::Home => crate::glyphs::Glyph::Home,
+            Presence::Away => crate::glyphs::Glyph::Away,
+        };
+        crate::glyphs::get(glyph, crate::find_project_root().ok().as_deref())
     }
 }
 
@@ -311,7 +317,12 @@ pub(crate) fn current_solo(now: DateTime<Utc>) -> bool {
 /// Compact statusline marker when solo is active, else `None` (off is the quiet
 /// default, matching the away-segment contract). trace:STORY-624
 pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
-    current_solo(now).then(|| "🤖 solo".to_string())
+    // trace:TASK-840 | ai:claude — route the solo marker through the registry.
+    let solo = crate::glyphs::get(
+        crate::glyphs::Glyph::Solo,
+        crate::find_project_root().ok().as_deref(),
+    );
+    current_solo(now).then(|| format!("{solo} solo"))
 }
 
 // ---------------------------------------------------------------------------
