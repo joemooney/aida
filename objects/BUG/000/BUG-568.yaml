@@ -21,12 +21,12 @@ description: |-
   - A test pins: a spec completed by a commit in repo B is auto-bumped (or loudly flagged) when pulling from repo A in a workspace.
 
   Depends-on / informed-by SPIKE-62 for the repo-identity model, but the loud-failure fallback can ship independently and immediately.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:58:13.791768614Z
-modified_at: 2026-06-16T06:58:24.671449952Z
+modified_at: 2026-06-16T07:23:54.506795828Z
 req_type: Bug
 tags:
 - aida:workspace
