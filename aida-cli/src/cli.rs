@@ -7185,6 +7185,13 @@ pub enum Command {
         #[clap(long, conflicts_with = "object")]
         all: bool,
 
+        /// Add the explanatory layer: per-field semantics (example value,
+        /// who sets it, when/why) plus each object's lifecycle block. Pure
+        /// opt-in — the default output is unchanged.
+        // trace:STORY-630
+        #[clap(long, visible_alias = "details")]
+        explain: bool,
+
         /// Emit machine-readable JSON instead of the human table.
         #[clap(long)]
         json: bool,
