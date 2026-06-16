@@ -18,10 +18,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:04:37.855659842Z
-modified_at: 2026-06-16T05:04:37.855659842Z
+modified_at: 2026-06-16T05:05:10.255207849Z
 req_type: Task
 tags:
 - aida:intent
 - aida:pickup
 - from-operator
 - living-docs
+relationships:
+- rel_type: BlockedBy
+  target_id: 019ececf-f0b8-7060-8dab-458c9b6d028b
+  created_at: 2026-06-16T05:05:10.255201738Z
+  created_by: joe
