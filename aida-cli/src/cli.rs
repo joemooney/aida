@@ -5224,8 +5224,13 @@ pub enum AgentCommand {
     /// (implementer → CI → reviewer → merge → pull), use
     /// `aida queue work <SPEC> --auto-complete` instead.
     // trace:TASK-626 | ai:claude — plain `//` keeps the marker out of `--help`.
-    #[clap(subcommand)]
-    New(AgentNewCommand),
+    // trace:TASK-837 | ai:claude — the subcommand is optional so a bare
+    // `aida agent new` opens an arrow-key agent-type picker instead of
+    // erroring to clap help (mirrors `aida human`/`aida solo`).
+    New {
+        #[clap(subcommand)]
+        command: Option<AgentNewCommand>,
+    },
 
     /// Register an already-running raw-launched agent process.
     // trace:TASK-543 | ai:codex
