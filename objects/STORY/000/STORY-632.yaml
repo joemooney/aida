@@ -1,0 +1,47 @@
+id: 019eced9-9e78-7d20-bca1-1c52e584a2d7
+spec_id: STORY-632
+agreed_id: STORY-632
+title: Deterministic spec centrality/heft (inbound+outbound degree) in the cache; feeds prioritization + the intent pass
+description: |-
+  Operator ask (2026-06-15): a spec with many inbound/outbound references carries heft. Compute that deterministically and make it available — both as a general importance signal and as a cheap, exact INPUT that grounds + speeds up the aida intent LLM pass (STORY-631), so the model is told "N specs depend on this" rather than inferring it from the whole graph.
+
+  ## Code-grounded starting points
+  - A dormant `weight: Option<f32>` field already exists on Requirement but is NEVER computed or read (always None) — it reads as a placeholder for MANUAL effort/importance weighting. Do NOT repurpose it for centrality; conflating work-size with graph-connectedness muddies both. Centrality is a separate, derived signal.
+  - No centrality/reference-count exists today. `aida graph --impact` walks reverse closure on demand but returns no scalar.
+
+  ## Store-vs-compute decision (DECIDED): compute in the CACHE, not canonical YAML
+  Centrality is a pure function of the relationship graph and CHEAP to compute (count edges) — the opposite cost profile from intent (expensive LLM → cache canonically). Deriving it into canonical YAML would force rewriting both endpoints heft on every edge add/remove (write-amplification on the orphan branch + constant staleness). Therefore: materialize degree/centrality in .aida/cache.db (the rebuildable read-projection — exactly its purpose), recomputed on cache rebuild; surface on read. Never stored in the spec YAML. (Same principle as stale being computed-not-stored in STORY-631.)
+
+  ## Metric (start simple, local, deterministic)
+  - Track in_degree (inbound edges — specs that reference/depend-on this) and out_degree (outbound) SEPARATELY. They mean different things: high inbound = foundational/load-bearing (the real heft); high outbound = complexity/coupling (often just a big epic). Do not collapse them silently.
+  - v1: raw in/out degree, optionally type-weighted (a blocks/blocked-by edge counts more than a references; settle weights as a fork). LOCAL only — NOT transitive. PageRank-style transitive is a noted future option but drifts globally on any edge change; out of scope for v1.
+
+  ## Acceptance (v1)
+  - Cache schema gains per-spec in_degree + out_degree (and a combined heft score if a weighting is agreed), populated during cache rebuild from the relationship graph; recomputed on rebuild, never written to YAML.
+  - A read surface exposes them: at minimum included in `aida show <ID>` and as JSON; ideally a `aida list --sort heft` ordering and/or a scalar on `aida graph <ID>`. (Exact surface = fork.)
+  - STORY-631s intent pass consumes the deterministic heft + the names of the heaviest inbound/outbound neighbors as structured input (the tool-speeds-up-the-LLM link).
+  - The dormant `weight` field is untouched (left for manual weighting / a separate decision).
+
+  ## Open forks for advisor/implementer
+  - Edge-type weights (does blocks outweigh references? does parent/child count?). Settle before computing a combined score.
+  - Read surface shape: show-only vs `aida list --sort heft` vs a dedicated readout.
+  - Whether a combined single heft score is exposed at all in v1, or just the two raw degrees (recommend raw degrees first; combined score once weights are agreed).
+
+  ## Relationship
+  - FEEDS STORY-631 (aida intent): deterministic heft is an input that grounds + accelerates the comprehension.
+
+  Verify with `aida graph --help`, `aida cache --help`, `aida show --help` before coding.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T05:13:48.920418521Z
+modified_at: 2026-06-16T05:13:48.920418521Z
+req_type: Story
+tags:
+- aida:cache
+- aida:graph
+- deterministic
+- feeds:STORY-631
+- from-operator
+- substrate-as-bouncer
