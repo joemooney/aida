@@ -13,6 +13,13 @@
 //!           > default UNICODE.
 //!   3. [`get`] — fetch a glyph honoring the active profile.
 //!
+//! Phase 2 (STORY-629) layers a *custom per-symbol override table* on top: a
+//! `[glyphs]` config section (project `.aida/config.toml` > user
+//! `~/.aida/config.toml`) maps a glyph's name → an arbitrary replacement
+//! string. Full precedence for a rendered glyph: custom `[glyphs]` entry
+//! (project>user) > active profile (unicode|ascii) > registry default. See
+//! [`GlyphOverrides`] / [`get_custom`].
+//!
 //! OPT-IN by design: the default is UNICODE, so `aida` output is byte-for-byte
 //! unchanged unless a user explicitly opts into `ascii`. Nothing
 //! auto-downgrades (operator decision, Joe 2026-06-15).
@@ -25,6 +32,7 @@
 //!
 //! trace:STORY-628 | ai:claude
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// The named set of symbols AIDA prints. Each variant maps to a default
@@ -128,6 +136,62 @@ impl Glyph {
             GlyphProfile::Ascii => self.ascii(),
         }
     }
+
+    /// The canonical name of this glyph — the key used in the `[glyphs]`
+    /// custom-override config table (phase 2 / STORY-629). These match the
+    /// lower-snake-case form of the variant names so a config like
+    /// `[glyphs]\ncheck = "OK"` targets [`Glyph::Check`]. trace:STORY-629
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            Glyph::Check => "check",
+            Glyph::Cross => "cross",
+            Glyph::Pending => "pending",
+            Glyph::InFlight => "in_flight",
+            Glyph::Blocked => "blocked",
+            Glyph::Queued => "queued",
+            Glyph::Arrow => "arrow",
+            Glyph::SubArrow => "sub_arrow",
+            Glyph::Mailbox => "mailbox",
+            Glyph::Warning => "warning",
+            Glyph::Bullet => "bullet",
+            Glyph::Hourglass => "hourglass",
+            Glyph::Home => "home",
+            Glyph::Away => "away",
+            Glyph::Solo => "solo",
+            Glyph::Robot => "robot",
+        }
+    }
+
+    /// Map a `[glyphs]` config key to its [`Glyph`] variant. Accepts the
+    /// canonical name (see [`Glyph::name`]); also tolerates a `-` separator in
+    /// place of `_` (so `sub-arrow` and `in-flight` work). Case-insensitive.
+    /// Unknown key → `None` (silently ignored so a typo or a future glyph name
+    /// in config doesn't error an older binary). trace:STORY-629
+    fn from_name(raw: &str) -> Option<Glyph> {
+        let normalized = raw.trim().to_ascii_lowercase().replace('-', "_");
+        Glyph::ALL.iter().copied().find(|g| g.name() == normalized)
+    }
+
+    /// Every variant, for iteration (name parsing, exhaustive tests).
+    /// trace:STORY-629
+    const ALL: [Glyph; 16] = [
+        Glyph::Check,
+        Glyph::Cross,
+        Glyph::Pending,
+        Glyph::InFlight,
+        Glyph::Blocked,
+        Glyph::Queued,
+        Glyph::Arrow,
+        Glyph::SubArrow,
+        Glyph::Mailbox,
+        Glyph::Warning,
+        Glyph::Bullet,
+        Glyph::Hourglass,
+        Glyph::Home,
+        Glyph::Away,
+        Glyph::Solo,
+        Glyph::Robot,
+    ];
 }
 
 /// Which rendering profile is active.
@@ -199,6 +263,105 @@ pub(crate) fn active_profile(project_root: Option<&Path>) -> GlyphProfile {
 #[allow(dead_code)]
 pub(crate) fn get(glyph: Glyph, project_root: Option<&Path>) -> &'static str {
     glyph.render(active_profile(project_root))
+}
+
+/// A custom per-symbol override table (phase 2 / STORY-629).
+///
+/// Maps a [`Glyph`] to an arbitrary replacement string. Loaded from the
+/// `[glyphs]` section of `config.toml`, project layered over user. An override
+/// for a symbol wins over the active profile's rendering for *that one symbol*;
+/// symbols with no entry fall through to the profile (and then to the registry
+/// default). An empty table = phase-1 behavior unchanged. trace:STORY-629
+#[derive(Debug, Clone, Default)]
+pub(crate) struct GlyphOverrides {
+    map: HashMap<Glyph, String>,
+}
+
+impl GlyphOverrides {
+    /// Resolve the custom override table following the same project>user
+    /// precedence as the profile selector. The user tier is loaded first, then
+    /// the project tier is overlaid on top so a project `[glyphs]` entry wins
+    /// over the user's for the same symbol (while still inheriting the user's
+    /// entries for symbols the project doesn't set). trace:STORY-629
+    pub(crate) fn resolve(project_root: Option<&Path>) -> GlyphOverrides {
+        let mut map: HashMap<Glyph, String> = HashMap::new();
+
+        // 1. User `~/.aida/config.toml [glyphs]` (lowest precedence).
+        if let Some(home) = aida_home_dir() {
+            let path = home.join(".aida").join("config.toml");
+            read_overrides_from_config(&path, &mut map);
+        }
+
+        // 2. Project `.aida/config.toml [glyphs]` overlaid on top — project
+        //    entries replace user entries for the same symbol.
+        if let Some(root) = project_root {
+            let path = root.join(".aida").join("config.toml");
+            read_overrides_from_config(&path, &mut map);
+        }
+
+        GlyphOverrides { map }
+    }
+
+    /// The custom override string for `glyph`, if any. `None` → no override,
+    /// caller falls through to the profile. trace:STORY-629
+    pub(crate) fn get(&self, glyph: Glyph) -> Option<&str> {
+        self.map.get(&glyph).map(String::as_str)
+    }
+
+    /// `true` when no custom overrides are configured (phase-1 behavior).
+    /// trace:STORY-629
+    #[allow(dead_code)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    /// Render `glyph` honoring this override table layered over `profile`:
+    /// a custom `[glyphs]` entry wins; otherwise the profile's rendering.
+    /// trace:STORY-629
+    #[allow(dead_code)]
+    pub(crate) fn render(&self, glyph: Glyph, profile: GlyphProfile) -> String {
+        match self.get(glyph) {
+            Some(custom) => custom.to_string(),
+            None => glyph.render(profile).to_string(),
+        }
+    }
+}
+
+/// Fetch a glyph honoring BOTH the custom `[glyphs]` override table and the
+/// active profile, resolved from `project_root`. Full precedence:
+///
+///   custom `[glyphs]` (project>user) > active profile (unicode|ascii)
+///     > registry default.
+///
+/// Convenience wrapper for one-off sites; for tight loops resolve
+/// [`GlyphOverrides::resolve`] + [`active_profile`] once and call
+/// [`GlyphOverrides::render`] per glyph. trace:STORY-629
+#[allow(dead_code)]
+pub(crate) fn get_custom(glyph: Glyph, project_root: Option<&Path>) -> String {
+    let overrides = GlyphOverrides::resolve(project_root);
+    let profile = active_profile(project_root);
+    overrides.render(glyph, profile)
+}
+
+/// Read the `[glyphs]` table from a `config.toml` into `map`, overwriting any
+/// existing entries for the same symbol (so the caller controls precedence by
+/// load order). Missing file / missing section / non-string values are skipped
+/// cleanly; unknown keys are ignored (forward-compat). trace:STORY-629
+fn read_overrides_from_config(config_path: &Path, map: &mut HashMap<Glyph, String>) {
+    let Ok(body) = std::fs::read_to_string(config_path) else {
+        return;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return;
+    };
+    let Some(table) = value.get("glyphs").and_then(|t| t.as_table()) else {
+        return;
+    };
+    for (key, val) in table {
+        if let (Some(glyph), Some(custom)) = (Glyph::from_name(key), val.as_str()) {
+            map.insert(glyph, custom.to_string());
+        }
+    }
 }
 
 /// Read `[ui] glyphs` from a `config.toml`. Missing file / missing key /
@@ -326,5 +489,153 @@ mod tests {
         std::env::set_var("AIDA_GLYPHS", "unicode");
         assert_eq!(get(Glyph::Check, None), "✓");
         std::env::remove_var("AIDA_GLYPHS");
+    }
+
+    // ----- Phase 2: custom [glyphs] override table (STORY-629) -----
+
+    /// Write a `config.toml` with an explicit `[ui] glyphs` profile plus a
+    /// `[glyphs]` override body (raw TOML lines, e.g. `check = "OK"`).
+    fn write_config_with_glyphs(dir: &Path, profile: &str, glyphs_body: &str) {
+        let aida = dir.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(
+            aida.join("config.toml"),
+            format!("[ui]\nglyphs = \"{profile}\"\n\n[glyphs]\n{glyphs_body}\n"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn from_name_maps_canonical_and_hyphen_forms() {
+        assert_eq!(Glyph::from_name("check"), Some(Glyph::Check));
+        assert_eq!(Glyph::from_name("CHECK"), Some(Glyph::Check));
+        assert_eq!(Glyph::from_name("sub_arrow"), Some(Glyph::SubArrow));
+        assert_eq!(Glyph::from_name("sub-arrow"), Some(Glyph::SubArrow));
+        assert_eq!(Glyph::from_name("in-flight"), Some(Glyph::InFlight));
+        assert_eq!(Glyph::from_name("nonsense"), None);
+    }
+
+    #[test]
+    fn every_glyph_name_round_trips() {
+        for g in Glyph::ALL {
+            assert_eq!(Glyph::from_name(g.name()), Some(g));
+        }
+    }
+
+    #[test]
+    fn override_wins_over_profile() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        // Project on the ASCII profile, but custom-override `check`.
+        let proj = tempfile::tempdir().unwrap();
+        write_config_with_glyphs(proj.path(), "ascii", "check = \"OK\"");
+
+        let overrides = GlyphOverrides::resolve(Some(proj.path()));
+        let profile = active_profile(Some(proj.path()));
+        assert_eq!(profile, GlyphProfile::Ascii);
+        // Override beats the ascii profile rendering ("[x]").
+        assert_eq!(overrides.render(Glyph::Check, profile), "OK");
+        assert_eq!(get_custom(Glyph::Check, Some(proj.path())), "OK");
+
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    #[test]
+    fn unset_symbol_falls_through_to_profile() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        // ASCII profile, override ONLY `check` — `cross` must fall through.
+        let proj = tempfile::tempdir().unwrap();
+        write_config_with_glyphs(proj.path(), "ascii", "check = \"OK\"");
+
+        let overrides = GlyphOverrides::resolve(Some(proj.path()));
+        let profile = active_profile(Some(proj.path()));
+        assert_eq!(overrides.render(Glyph::Check, profile), "OK");
+        // `cross` has no override → ascii profile rendering.
+        assert_eq!(overrides.get(Glyph::Cross), None);
+        assert_eq!(overrides.render(Glyph::Cross, profile), "[ ]");
+        assert_eq!(get_custom(Glyph::Cross, Some(proj.path())), "[ ]");
+
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    #[test]
+    fn unset_symbol_falls_through_to_unicode_default() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        // Default (unicode) profile, override only `check`.
+        let proj = tempfile::tempdir().unwrap();
+        write_config_with_glyphs(proj.path(), "unicode", "check = \"OK\"");
+
+        let overrides = GlyphOverrides::resolve(Some(proj.path()));
+        let profile = active_profile(Some(proj.path()));
+        assert_eq!(profile, GlyphProfile::Unicode);
+        assert_eq!(overrides.render(Glyph::Check, profile), "OK");
+        // Unset `warning` falls through to the unicode default.
+        assert_eq!(overrides.render(Glyph::Warning, profile), "⚠");
+
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    #[test]
+    fn project_override_beats_user_override() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        // User sets check + warning; project overrides ONLY check.
+        let home = tempfile::tempdir().unwrap();
+        write_config_with_glyphs(home.path(), "unicode", "check = \"USER\"\nwarning = \"UW\"");
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let proj = tempfile::tempdir().unwrap();
+        write_config_with_glyphs(proj.path(), "unicode", "check = \"PROJ\"");
+
+        let overrides = GlyphOverrides::resolve(Some(proj.path()));
+        // Project wins for `check`.
+        assert_eq!(overrides.get(Glyph::Check), Some("PROJ"));
+        // User entry survives for a symbol the project didn't override.
+        assert_eq!(overrides.get(Glyph::Warning), Some("UW"));
+
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    #[test]
+    fn absent_glyphs_section_is_phase1_behavior() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        // Only a [ui] section, no [glyphs] — overrides empty, falls to profile.
+        let proj = tempfile::tempdir().unwrap();
+        write_config(proj.path(), "ascii");
+
+        let overrides = GlyphOverrides::resolve(Some(proj.path()));
+        assert!(overrides.is_empty());
+        let profile = active_profile(Some(proj.path()));
+        assert_eq!(overrides.render(Glyph::Check, profile), "[x]");
+        assert_eq!(get_custom(Glyph::Check, Some(proj.path())), "[x]");
+
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    #[test]
+    fn unknown_override_key_is_ignored() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let proj = tempfile::tempdir().unwrap();
+        write_config_with_glyphs(proj.path(), "unicode", "check = \"OK\"\nbogus = \"X\"");
+
+        let overrides = GlyphOverrides::resolve(Some(proj.path()));
+        assert_eq!(overrides.get(Glyph::Check), Some("OK"));
+        // Only the valid key landed.
+        assert_eq!(overrides.map.len(), 1);
+
+        std::env::remove_var("AIDA_TEST_HOME");
     }
 }
