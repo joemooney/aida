@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T16:40:22.934086536Z
-modified_at: 2026-06-13T18:32:52.539829963Z
+modified_at: 2026-06-16T16:22:02.029158583Z
 req_type: Task
 tags:
 - agent-context
@@ -35,9 +35,6 @@ processing_record:
   agent: aida
   commit_sha: bdd5b69459f1abd3a58137278458c3193f1b5630
   summary: Completed via merge bdd5b694
-deferred: true
-deferred_at: 2026-06-13T16:40:35.552311559Z
-deferred_until: STORY-585 notice/read surface (mailbox notice + read-mail skill) merges to main
 implementation_info:
   implemented: false
   completed_at: 2026-06-13T18:32:52.380658942Z
