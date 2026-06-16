@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:13:48.920418521Z
-modified_at: 2026-06-16T06:04:41.331809484Z
+modified_at: 2026-06-16T06:44:51.500654189Z
 req_type: Story
 tags:
 - aida:cache
@@ -56,3 +56,8 @@ comments:
   content: 'Edge-weight fork RESOLVED (operator, 2026-06-15): edge-type weighting is a static LOOKUP TABLE (RelationshipType -> weight), NOT a field on each Relationship. The Relationship struct (models.rs:1938) has no weight field and should not get one for this — type-weighting needs only a small table (e.g. BlockedBy:3, Blocks:3, Parent:2, Child:2, Verifies/VerifiedBy:1, References:1, Duplicate:0, Custom:1 — exact values still to agree). v1 may ship raw in/out degree first and add the type-weighted combined score once the table is agreed. Per-EDGE weight (same-type edges differing in salience) is intentionally OUT — parked separately as deferred.'
   created_at: 2026-06-16T05:15:48.794688938Z
   modified_at: 2026-06-16T05:15:48.794688938Z
+- id: 019ecf2c-f8ac-78d3-96a1-a2ddb665f36b
+  author: joe
+  content: Commit 3f283b45d references this requirement
+  created_at: 2026-06-16T06:44:51.500654189Z
+  modified_at: 2026-06-16T06:44:51.500654189Z
