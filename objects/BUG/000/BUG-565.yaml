@@ -1,0 +1,29 @@
+id: 019ece6d-a446-7ba1-9518-61524ff26f62
+spec_id: BUG-565
+agreed_id: BUG-565
+title: 'aida init: scaffolding auto-commit is all-or-nothing — one gitignored path (.claude) aborts the whole git add, silently stranding the onboarding task'
+description: |-
+  SYMPTOM (observed 2026-06-15, `aida init` in tq): init printed "Note: could not stage scaffolding paths: git add failed: The following paths are ignored by one of your .gitignore files: .claude  hint: Use -f if you really want to add them." It then proceeded ("AIDA initialized") and enqueued TASK-007 (Commit AIDA scaffolding), but NOTHING was committed — the scaffolding-commit was abandoned, so the onboarding task is stranded (and, per BUG-564, invisible in `aida list human`).
+
+  ROOT CAUSE (verified): in the init scaffolding-commit block (aida-cli/src/main.rs ~9631) the staging is a single all-or-nothing `git_ops::add(root, &path_refs)` over EVERY scaffold path (.gitignore, .aida/config.toml, .mcp.json, CLAUDE.md, AGENTS.md, .claude, .codex, .antigravity, docs/...). Plain `git add` (no `-f`) FAILS THE WHOLE BATCH if any one path is gitignored. `.claude/` is a very common user/team .gitignore entry (local agent state), so a perfectly reasonable repo trips this. On failure init emits a DIMMED "Note:" (reads as informational, not a failure) and returns Ok(false), so the user believes init succeeded while the scaffolding is uncommitted and TASK-007 lingers.
+
+  FIX (proposed): make the scaffolding commit resilient and intent-respecting:
+  1. Don't fail the batch on one ignored path — stage paths individually (or `git add --ignore-errors`), committing the ones that succeed.
+  2. RESPECT the user's ignore choice: filter out paths the repo's .gitignore covers rather than force-adding them (force-adding `.claude` would override a deliberate local-only choice). Commit the remainder.
+  3. Report skipped-because-ignored paths as a real WARNING (not a dimmed Note), naming each, so the user can decide to un-ignore + re-add, and make clear which scaffolding did/didn't get committed.
+  4. If the scaffolding commit is partial/skipped, the onboarding task should reflect that (or auto-complete on the paths that did land) so a new user isn't left with a stranded High human-only task they can't see in `aida list human`.
+
+  IMPACT: first-run onboarding reliability — a new user whose repo gitignores `.claude` (common) silently ends up with uncommitted scaffolding + a stranded onboarding task. Pairs with BUG-564 (the stranded task is also invisible in the human view).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T03:15:52.518404579Z
+modified_at: 2026-06-16T03:15:52.518404579Z
+req_type: Bug
+tags:
+- gitignore
+- init
+- onboarding
+- reliability
+- scaffolding
