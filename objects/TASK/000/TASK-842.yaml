@@ -1,0 +1,15 @@
+id: 019ecf85-12a8-7f32-9de6-c0c428b5f45d
+spec_id: TASK-842
+agreed_id: TASK-842
+title: 'integrate: multi-spec PR completion semantics'
+description: 'Follow-up of TASK-836. When a single open PR carries commits for MULTIPLE specs (a cluster PR), the integrator currently drives it once via --from-pr keyed on one spec id; the OTHER specs on the PR are not individually recognized. Design question: how should the integrator (a) detect a PR completes >1 spec, (b) avoid driving the same PR once per member spec, and (c) auto-bump all member specs to Completed on merge? Decide the multi-spec recognition + completion model before implementing.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T08:21:05.320331692Z
+modified_at: 2026-06-16T08:21:05.320331692Z
+req_type: Task
+tags:
+- integrator
+- parent:TASK-836
