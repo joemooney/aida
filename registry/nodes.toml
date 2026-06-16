@@ -28,3 +28,11 @@ hostname = "spock"
 email = "Joe.Mooney@work.example"
 clone_path = "/home/joe.mooney/ai/aida"
 registered = "2026-06-16T19:41:34.377015853Z"
+
+[[nodes]]
+id = "JM"
+user_id = 1
+hostname = "imac"
+email = "joe.mooney@gmail.com"
+clone_path = "/home/joe/ai/aida_dup"
+registered = "2026-06-16T22:02:56.035862116Z"
