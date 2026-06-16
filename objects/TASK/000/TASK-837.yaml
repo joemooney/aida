@@ -26,10 +26,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:21:58.521571385Z
-modified_at: 2026-06-16T04:48:21.109341133Z
+modified_at: 2026-06-16T04:56:31.750741245Z
 req_type: Task
 tags:
 - aida:agent:new
 - from-operator
 - papercut
 - ux
+comments:
+- id: 019ecec9-cb06-7c23-add9-c6a07a5282e1
+  author: joe
+  content: Commit 3019c3352 references this requirement
+  created_at: 2026-06-16T04:56:31.750741245Z
+  modified_at: 2026-06-16T04:56:31.750741245Z
