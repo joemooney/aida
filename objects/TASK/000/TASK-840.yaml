@@ -3,12 +3,12 @@ spec_id: TASK-840
 agreed_id: TASK-840
 title: 'EPIC-45 glyph long-tail: migrate the 18 allow-listed files to the registry, tightening the lint per file'
 description: 'Follow-up to TASK-835 (phase 3 shipped the CI lint + high-traffic surfaces). scripts/glyph-lint.sh ALLOW_LIST is the tracked inventory of remaining raw glyph literals (~865 across 18 files: main.rs, cli.rs, auto_complete.rs, session.rs, mcp.rs, workflow_hints.rs, reviewer_summary.rs, status_cleanup.rs, drain_state.rs, backlog.rs, headless_tee.rs, session_manifest.rs, presence.rs, burndown.rs, orchestrator.rs, drain_lock.rs, client.rs, agent_registry.rs). Migrate file-by-file, deleting each line from ALLOW_LIST as its literals move onto the registry; the lint tightens automatically (substrate-as-bouncer). Incremental, no single giant diff. Default unicode profile output must stay byte-for-byte unchanged per file migrated. Low priority — the forward-guard already prevents NEW raw glyphs; this is cleanup of the pre-existing tail.'
-status: Completed
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:25:40.214576737Z
-modified_at: 2026-06-16T09:38:10.979408501Z
+modified_at: 2026-06-16T09:39:46.164037614Z
 req_type: Task
 tags:
 - aida:glyphs
