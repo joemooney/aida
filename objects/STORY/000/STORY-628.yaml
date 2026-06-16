@@ -1,0 +1,24 @@
+id: 019ece9d-c302-7a63-85aa-ca77b984b333
+spec_id: STORY-628
+agreed_id: STORY-628
+title: 'Phase 1: glyph registry + curated ASCII profile + [ui] glyphs selector (opt-in, default unicode)'
+description: |-
+  Phase 1 of EPIC-45 — the valuable slice. Introduce a central glyph module: a named registry (enum or struct) of every symbol AIDA prints (check, cross, pending, in_flight, blocked, queued, arrow, sub_arrow/return, mailbox, warning, bullet, hourglass, ...), each with a default UNICODE value and a curated ASCII fallback.
+
+  Selector (opt-in; default unicode): resolve in order AIDA_GLYPHS env (values unicode|ascii) > project .aida/config.toml [ui] glyphs > user ~/.aida/config.toml [ui] glyphs > default unicode. Add AIDA_GLYPHS to docs/environment-variables.md in the same change (CLAUDE.md rule).
+
+  Migrate the ~15 highest-frequency glyphs across the highest-traffic files (main.rs, status_display.rs, burndown.rs, presence.rs, cli.rs) to read through the registry. Seed from the existing status->glyph map in status_display.rs. Full migration of the long tail is phase 3 (EPIC-45) — until migrated, a literal stays as-is, so the override only affects migrated glyphs at first (document this).
+
+  ACCEPTANCE: with [ui] glyphs=ascii (or AIDA_GLYPHS=ascii) the migrated output renders ASCII; unset / unicode reproduces today's output byte-for-byte (default unchanged — emoji preserved for capable terminals). TESTS: registry returns ascii vs unicode per active profile; selector precedence (env > project > user > default); an absent config = unicode.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T04:08:26.114566691Z
+modified_at: 2026-06-16T04:08:26.114566691Z
+req_type: Story
+tags:
+- dx
+- glyphs
+- terminal-compat
+- ui
