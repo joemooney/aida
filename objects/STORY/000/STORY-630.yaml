@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:25:09.496245561Z
-modified_at: 2026-06-16T04:50:42.202629004Z
+modified_at: 2026-06-16T04:50:49.344929432Z
 req_type: Story
 tags:
 - aida:schema
@@ -63,3 +63,8 @@ comments:
   content: 'Refinement (operator, same session): each per-field entry should also carry an EXAMPLE VALUE, not just description + provenance + type. A concrete example (spec_id: TASK-837, status: in-progress, priority: high, tags: ["aida:schema","papercut"], created_at: 2026-06-15T...) makes the schema concrete and paste-ready in a way the bare reflected type cannot. So a field row becomes: name | type | example | provenance | description. Example values are hand-curated alongside the prose and fall under the SAME drift-guard (every documented field needs type+example+description). Folding into acceptance now.'
   created_at: 2026-06-16T04:25:28.367201047Z
   modified_at: 2026-06-16T04:25:28.367201047Z
+- id: 019ecec4-9180-7b33-9bed-d0b8a40ed8a0
+  author: joe
+  content: 'Provenance set PINNED into acceptance (operator request, 2026-06-15). Closed 6-token set grounded in real write-paths: system / user / advisor-gated / orchestrator / merge-driven / ai. A field may carry multiple (status spans advisor-gated + orchestrator + merge-driven across its transitions — the canonical motivating example for why provenance beats a bare type). Dropped the earlier "reflection-derived" token — category error: reflection owns the field LIST, not a value write-path. Drift-guard validates tokens against this closed set, so a 7th is a deliberate decision not an ad-hoc add.'
+  created_at: 2026-06-16T04:50:49.344929432Z
+  modified_at: 2026-06-16T04:50:49.344929432Z
