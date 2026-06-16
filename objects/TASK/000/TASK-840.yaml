@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:25:40.214576737Z
-modified_at: 2026-06-16T13:54:09.491945089Z
+modified_at: 2026-06-16T15:32:08.478157675Z
 req_type: Task
 tags:
 - aida:glyphs
@@ -26,6 +26,11 @@ comments:
   content: 'Partial slice shipped via PR #958: 7 smaller files migrated to the glyph registry (drain_lock, client, agent_registry, headless_tee, reviewer_summary, presence, session_manifest), each dropped from the glyph-lint ALLOW_LIST so the guard ratchets. Byte-for-byte default output verified. REMAINS OPEN: 11 files / ~868 literals on the allow-list, dominated by the two giants main.rs + cli.rs (644+) — a dedicated future slice. The (TASK-840) trailer auto-completed it on merge; reopened since the work is incomplete. — advisor'
   created_at: 2026-06-16T09:39:46.959688192Z
   modified_at: 2026-06-16T09:39:46.959688192Z
+- id: 019ed10f-b69e-7b70-a50a-63a2a12d0538
+  author: joe
+  content: Commit 7c4fc7b73 references this requirement
+  created_at: 2026-06-16T15:32:08.478157675Z
+  modified_at: 2026-06-16T15:32:08.478157675Z
 history:
 - id: 019ecfcb-a79e-7043-a70c-c113984fad7e
   author: aida-auto-bump
