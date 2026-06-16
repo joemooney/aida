@@ -53,17 +53,19 @@ pub(crate) fn status_glyph_for_profile(
     profile: crate::glyphs::GlyphProfile,
 ) -> &'static str {
     use crate::glyphs::Glyph;
+    // trace:TASK-835 | ai:claude — Done + the neutral fallback now have registry
+    // entries, so every canonical status routes through the profile.
     let glyph = match normalize(status).as_str() {
         "draft" => Glyph::Pending,
         "approved" => Glyph::Arrow,
         "planned" => Glyph::Queued,
         "inprogress" => Glyph::InFlight,
+        "done" => Glyph::Done,
         "completed" => Glyph::Check,
         "rejected" => Glyph::Cross,
         "needsattention" => Glyph::Blocked,
-        // "done" (◉) and unmapped/custom statuses have no registry entry yet
-        // (the long tail is phase 3 / TASK-835) — keep the literal behaviour.
-        _ => return status_glyph_literal(status),
+        // Unmapped/custom statuses get the neutral bullet (also profile-aware).
+        _ => Glyph::Neutral,
     };
     glyph.render(profile)
 }
@@ -180,13 +182,21 @@ pub(crate) fn status_cell_no_glyph(status: &str, width: usize) -> String {
 /// - `↑` queued — present in a role queue, not yet started.
 ///
 /// trace:TASK-670 | ai:claude
+///
+/// Profile-aware (TASK-835): the three routing markers route through the glyph
+/// registry so `[ui] glyphs = "ascii"` / `AIDA_GLYPHS=ascii` / a custom
+/// `[glyphs]` override applies here too. The default Unicode profile reproduces
+/// the historical literals (▶ / ⊘ / ↑) byte-for-byte; idle stays a bare space.
+/// trace:TASK-835 | ai:claude
 pub(crate) fn flow_glyph(in_flight: bool, blocked: bool, queued: bool) -> &'static str {
+    use crate::glyphs::Glyph;
+    let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
     if in_flight {
-        "▶"
+        Glyph::FlowActive.render(profile)
     } else if blocked {
-        "⊘"
+        Glyph::FlowBlocked.render(profile)
     } else if queued {
-        "↑"
+        Glyph::FlowQueued.render(profile)
     } else {
         " "
     }
@@ -217,10 +227,19 @@ mod tests {
             status_glyph_for_profile("Approved", GlyphProfile::Ascii),
             "->"
         );
-        // Unmapped status (Done has no registry entry yet) keeps its literal
-        // under either profile.
-        assert_eq!(status_glyph_for_profile("Done", GlyphProfile::Ascii), "◉");
+        // Done now routes through the registry (TASK-835): Unicode reproduces
+        // the historical ◉ byte-for-byte; ASCII downgrades.
         assert_eq!(status_glyph_for_profile("Done", GlyphProfile::Unicode), "◉");
+        assert_eq!(status_glyph_for_profile("Done", GlyphProfile::Ascii), "[*]");
+        // An unmapped/custom status renders the neutral bullet, profile-aware.
+        assert_eq!(
+            status_glyph_for_profile("Frobnicate", GlyphProfile::Unicode),
+            "·"
+        );
+        assert_eq!(
+            status_glyph_for_profile("Frobnicate", GlyphProfile::Ascii),
+            "."
+        );
     }
 
     #[test]

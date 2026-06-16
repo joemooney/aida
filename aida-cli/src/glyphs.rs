@@ -80,6 +80,20 @@ pub(crate) enum Glyph {
     Solo,
     /// Generic robot / agent (🤖).
     Robot,
+    /// Done — work finished on a branch, not yet merged (◉). The bright-green
+    /// bold status in [`crate::status_display`]. trace:TASK-835
+    Done,
+    /// Neutral / unknown-status bullet (·) — the fallback marker for a custom or
+    /// unmapped status so a badge's layout stays stable. trace:TASK-835
+    Neutral,
+    /// Work-routing: a *live* session lease holds the spec right now (▶). Axis is
+    /// orthogonal to status — "where in the pipeline now", not "what state".
+    /// trace:TASK-835
+    FlowActive,
+    /// Work-routing: BlockedBy an incomplete spec (⊘). trace:TASK-835
+    FlowBlocked,
+    /// Work-routing: present in a role queue, not yet started (↑). trace:TASK-835
+    FlowQueued,
 }
 
 impl Glyph {
@@ -103,6 +117,11 @@ impl Glyph {
             Glyph::Away => "🚶",
             Glyph::Solo => "🤖",
             Glyph::Robot => "🤖",
+            Glyph::Done => "◉",
+            Glyph::Neutral => "·",
+            Glyph::FlowActive => "▶",
+            Glyph::FlowBlocked => "⊘",
+            Glyph::FlowQueued => "↑",
         }
     }
 
@@ -126,6 +145,11 @@ impl Glyph {
             Glyph::Away => "[away]",
             Glyph::Solo => "[solo]",
             Glyph::Robot => "[bot]",
+            Glyph::Done => "[*]",
+            Glyph::Neutral => ".",
+            Glyph::FlowActive => ">",
+            Glyph::FlowBlocked => "x",
+            Glyph::FlowQueued => "^",
         }
     }
 
@@ -159,6 +183,11 @@ impl Glyph {
             Glyph::Away => "away",
             Glyph::Solo => "solo",
             Glyph::Robot => "robot",
+            Glyph::Done => "done",
+            Glyph::Neutral => "neutral",
+            Glyph::FlowActive => "flow_active",
+            Glyph::FlowBlocked => "flow_blocked",
+            Glyph::FlowQueued => "flow_queued",
         }
     }
 
@@ -174,7 +203,7 @@ impl Glyph {
 
     /// Every variant, for iteration (name parsing, exhaustive tests).
     /// trace:STORY-629
-    const ALL: [Glyph; 16] = [
+    const ALL: [Glyph; 21] = [
         Glyph::Check,
         Glyph::Cross,
         Glyph::Pending,
@@ -191,6 +220,11 @@ impl Glyph {
         Glyph::Away,
         Glyph::Solo,
         Glyph::Robot,
+        Glyph::Done,
+        Glyph::Neutral,
+        Glyph::FlowActive,
+        Glyph::FlowBlocked,
+        Glyph::FlowQueued,
     ];
 }
 
@@ -416,6 +450,23 @@ mod tests {
         assert_eq!(Glyph::SubArrow.render(GlyphProfile::Ascii), "\\_");
         assert_eq!(Glyph::Robot.render(GlyphProfile::Unicode), "🤖");
         assert_eq!(Glyph::Robot.render(GlyphProfile::Ascii), "[bot]");
+    }
+
+    /// TASK-835: the registry entries added for the status_display migration
+    /// must reproduce the historical literals byte-for-byte under the default
+    /// Unicode profile (the migration's correctness guarantee).
+    #[test]
+    fn task835_entries_match_historical_literals() {
+        assert_eq!(Glyph::Done.unicode(), "◉");
+        assert_eq!(Glyph::Neutral.unicode(), "·");
+        assert_eq!(Glyph::FlowActive.unicode(), "▶");
+        assert_eq!(Glyph::FlowBlocked.unicode(), "⊘");
+        assert_eq!(Glyph::FlowQueued.unicode(), "↑");
+        // ASCII fallbacks are single-display-column-friendly.
+        assert_eq!(Glyph::Done.ascii(), "[*]");
+        assert_eq!(Glyph::FlowActive.ascii(), ">");
+        assert_eq!(Glyph::FlowBlocked.ascii(), "x");
+        assert_eq!(Glyph::FlowQueued.ascii(), "^");
     }
 
     #[test]
