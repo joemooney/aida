@@ -1,0 +1,45 @@
+id: 019ecf29-2fdf-7522-bd77-315e2191f25f
+spec_id: BUG-566
+agreed_id: BUG-566
+title: cwd-unreadable warning misattributes ALL current_dir() errors to 'aida session end' + discards the real io::Error (network-share/permission cases get a misleading message)
+description: |-
+  Operator field report (2026-06-15): ran `aida queue list` from a non-repo non-aida directory on a NETWORK SHARE (possibly with an AIDA_* project env var set) and got an unhelpful error.
+
+  ## Root cause (verified by reproduction)
+  cwd_removed_warning (aida-cli/src/main.rs:38813, trace BUG-108) fires on ANY current_dir() Err, but hard-codes ONE explanation and discards the underlying io::Error:
+
+    "this directory no longer exists — its worktree was probably removed by `aida session end`."
+
+  current_dir() can Err for several reasons that this message conflates:
+  - ENOENT: dir deleted (worktree removal — the assumed case — OR a plain rm, OR a vanished mount)
+  - ESTALE / EIO: NFS / network-share stale handle or IO error (the operator likely case)
+  - EACCES: permission
+
+  Reproduced locally (case D): deleting the cwd out from under the process triggers exactly this message. On a network share that dropped, the same Err path fires and tells a user who never touched worktrees that `aida session end` removed one — sending them after a non-existent culprit. The actual io::Error kind + the path are NOT surfaced, so the failure is undiagnosable from the message.
+
+  Also observed: a bogus AIDA_PROJECT_ROOT / AIDA_CACHE_PATH is SILENTLY ignored (falls back to the user-global queue) — graceful, but means a stale project env var gives wrong-context output with no notice. Secondary; main bug is the misattribution.
+
+  ## Acceptance
+  - The warning surfaces the real failure: the offending PATH and the io::ErrorKind (e.g. "cannot read current directory `/mnt/share/...`: stale file handle / not found / permission denied").
+  - The cause text is cause-NEUTRAL: list the plausible causes (a worktree removed by `aida session end`, an unmounted/unavailable network share, a deleted directory, a permissions change) rather than asserting the worktree one.
+  - Recovery hint stays (cd to a readable dir / the main repo) but does not assume a `~/ai/<project>` layout as the only option.
+  - cwd_removed_warning remains pure/regression-testable; add cases for ENOENT vs a simulated non-ENOENT ErrorKind so the branch is pinned.
+
+  ## Could not reproduce the operator's EXACT error
+  The work aida version is unknown — if it predates BUG-108, the behavior may have been a silent empty queue instead. Worth confirming the version at work; the diagnostic-quality fix stands regardless.
+
+  Verify against aida-cli/src/main.rs cwd_removed_warning / warn_if_cwd_removed before coding.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T06:40:43.487541508Z
+modified_at: 2026-06-16T06:40:43.487541508Z
+req_type: Bug
+tags:
+- aida:queue
+- diagnostics
+- error-quality
+- from-operator
+- linked:BUG-108
+- network-share
