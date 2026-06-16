@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:57:46.027513551Z
-modified_at: 2026-06-16T07:23:55.342706591Z
+modified_at: 2026-06-16T07:37:55.514349386Z
 req_type: Spike
 tags:
 - aida:workspace
@@ -42,4 +42,10 @@ relationships:
   target_id: 019e444b-1dd9-7bf1-8d28-b7d0412aed6a
   created_at: 2026-06-16T06:58:25.087977773Z
   created_by: joe
+comments:
+- id: 019ecf5d-8e3a-76e1-9d8f-c22dd839a437
+  author: joe
+  content: Commit ffdd98712 references this requirement
+  created_at: 2026-06-16T07:37:55.514349386Z
+  modified_at: 2026-06-16T07:37:55.514349386Z
 human_only: true
