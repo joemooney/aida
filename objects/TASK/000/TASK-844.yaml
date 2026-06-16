@@ -17,8 +17,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T09:06:51.401979113Z
-modified_at: 2026-06-16T15:43:16.257045400Z
+modified_at: 2026-06-16T15:54:17.529640535Z
 req_type: Task
 tags:
 - batch:gitlab-store-now
 - parent:BUG-559
+comments:
+- id: 019ed123-fe39-7dd3-8f69-1f7f96c01b02
+  author: joe
+  content: Commit f27ff84d5 references this requirement
+  created_at: 2026-06-16T15:54:17.529640535Z
+  modified_at: 2026-06-16T15:54:17.529640535Z
