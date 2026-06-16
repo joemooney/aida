@@ -196,14 +196,18 @@ impl Glyph {
     /// place of `_` (so `sub-arrow` and `in-flight` work). Case-insensitive.
     /// Unknown key → `None` (silently ignored so a typo or a future glyph name
     /// in config doesn't error an older binary). trace:STORY-629
-    fn from_name(raw: &str) -> Option<Glyph> {
+    ///
+    /// Phase 4 (STORY-633) reuses this for the `aida config glyph set <name>`
+    /// validation — but the CLI rejects an unknown name with the valid list
+    /// rather than silently ignoring it. trace:STORY-633
+    pub(crate) fn from_name(raw: &str) -> Option<Glyph> {
         let normalized = raw.trim().to_ascii_lowercase().replace('-', "_");
         Glyph::ALL.iter().copied().find(|g| g.name() == normalized)
     }
 
     /// Every variant, for iteration (name parsing, exhaustive tests).
     /// trace:STORY-629
-    const ALL: [Glyph; 21] = [
+    pub(crate) const ALL: [Glyph; 21] = [
         Glyph::Check,
         Glyph::Cross,
         Glyph::Pending,
@@ -248,6 +252,150 @@ impl GlyphProfile {
             _ => None,
         }
     }
+}
+
+/// A named, binary-embedded glyph *theme* (phase 4 / STORY-633).
+///
+/// A theme is a curated preset of `{base profile + per-symbol override bundle}`.
+/// It is stored in config as a clean *reference* — `[ui] theme = "<name>"` — and
+/// resolved at render time, exactly like `[ui] glyphs = "ascii"` already works,
+/// rather than expanding its overrides into `[glyphs]`. The set grows by adding
+/// a preset here, not a config file.
+///
+/// Precedence tier introduced: a per-symbol `[glyphs]` override beats the theme
+/// bundle, which beats the base `[ui] glyphs` profile, which beats the registry
+/// default. See [`resolve_with_theme`]. trace:STORY-633
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Theme {
+    /// The reference name written to `[ui] theme` (lowercase, hyphen-friendly).
+    pub(crate) name: &'static str,
+    /// One-line human description for `aida config glyph theme list`.
+    pub(crate) description: &'static str,
+    /// The base profile the theme starts from before its bundle is applied.
+    pub(crate) base: GlyphProfile,
+    /// Per-symbol override bundle: `(Glyph, replacement)` pairs layered over the
+    /// base profile. An empty bundle = "just the base profile, named".
+    pub(crate) bundle: &'static [(Glyph, &'static str)],
+}
+
+impl Theme {
+    /// Render `glyph` under this theme: the bundle wins for a symbol it covers,
+    /// else the base profile's rendering. trace:STORY-633
+    pub(crate) fn render(&self, glyph: Glyph) -> String {
+        self.bundle
+            .iter()
+            .find(|(g, _)| *g == glyph)
+            .map(|(_, s)| (*s).to_string())
+            .unwrap_or_else(|| glyph.render(self.base).to_string())
+    }
+}
+
+/// The binary-embedded theme presets (phase 4 / STORY-633). Kept intentionally
+/// small — three sensible starters. `unicode` is the implicit default when no
+/// theme is set, so it is NOT listed here (selecting it = no theme reference).
+///
+/// - `ascii`: the pure ASCII fallback profile, named for discoverability.
+/// - `minimal`: unicode base, but the noisier emoji collapsed to quiet
+///   monochrome marks (no 🤖/🏠/🚶/⏳) for low-chrome terminals.
+/// - `nerd-font`: unicode base with heavier Nerd-Font-style status marks for
+///   terminals with a patched font. trace:STORY-633
+pub(crate) const THEMES: &[Theme] = &[
+    Theme {
+        name: "ascii",
+        description: "Pure ASCII fallback — no unicode/emoji (good for plain terminals).",
+        base: GlyphProfile::Ascii,
+        bundle: &[],
+    },
+    Theme {
+        name: "minimal",
+        description: "Quiet monochrome — unicode marks, emoji collapsed to plain glyphs.",
+        base: GlyphProfile::Unicode,
+        bundle: &[
+            (Glyph::Robot, "*"),
+            (Glyph::Solo, "*"),
+            (Glyph::Home, "@"),
+            (Glyph::Away, "~"),
+            (Glyph::Hourglass, "…"),
+            (Glyph::Mailbox, "@"),
+        ],
+    },
+    Theme {
+        name: "nerd-font",
+        description: "Heavy status marks for patched Nerd-Font terminals.",
+        base: GlyphProfile::Unicode,
+        bundle: &[
+            (Glyph::Check, "✔"),
+            (Glyph::Cross, "✖"),
+            (Glyph::Blocked, "⚠"),
+            (Glyph::Warning, "⚠"),
+            (Glyph::Done, "●"),
+            (Glyph::InFlight, "◑"),
+            (Glyph::Bullet, "▪"),
+        ],
+    },
+];
+
+/// Look up an embedded theme by name (case-insensitive; `-`/`_` interchangeable).
+/// `None` → unknown name. trace:STORY-633
+pub(crate) fn theme_by_name(raw: &str) -> Option<&'static Theme> {
+    let normalized = raw.trim().to_ascii_lowercase().replace('_', "-");
+    THEMES
+        .iter()
+        .find(|t| t.name.replace('_', "-") == normalized)
+}
+
+/// The comma-separated valid theme names, for error messages. trace:STORY-633
+pub(crate) fn valid_theme_names() -> String {
+    THEMES.iter().map(|t| t.name).collect::<Vec<_>>().join(", ")
+}
+
+/// Read `[ui] theme` from a `config.toml`. Missing file / key / unknown theme →
+/// `None` so the resolver falls through cleanly. trace:STORY-633
+fn read_theme_from_config(config_path: &Path) -> Option<&'static Theme> {
+    let body = std::fs::read_to_string(config_path).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    let raw = value.get("ui").and_then(|t| t.get("theme"))?.as_str()?;
+    theme_by_name(raw)
+}
+
+/// Resolve the active theme following the same project>user precedence as the
+/// profile selector. `AIDA_GLYPHS` env does NOT name a theme (it only forces a
+/// raw profile), so the env tier is skipped here. `None` → no theme set.
+/// trace:STORY-633
+pub(crate) fn active_theme(project_root: Option<&Path>) -> Option<&'static Theme> {
+    if let Some(root) = project_root {
+        let path = root.join(".aida").join("config.toml");
+        if let Some(t) = read_theme_from_config(&path) {
+            return Some(t);
+        }
+    }
+    if let Some(home) = aida_home_dir() {
+        let path = home.join(".aida").join("config.toml");
+        if let Some(t) = read_theme_from_config(&path) {
+            return Some(t);
+        }
+    }
+    None
+}
+
+/// Render `glyph` honoring the FULL phase-4 precedence resolved from
+/// `project_root`:
+///
+///   per-symbol `[glyphs]` override (project>user)
+///     > active `[ui] theme` bundle (project>user)
+///     > base `[ui] glyphs` profile (env>project>user)
+///     > registry default.
+///
+/// This is the one resolver new render sites should call. trace:STORY-633
+pub(crate) fn resolve_with_theme(glyph: Glyph, project_root: Option<&Path>) -> String {
+    let overrides = GlyphOverrides::resolve(project_root);
+    if let Some(custom) = overrides.get(glyph) {
+        return custom.to_string();
+    }
+    if let Some(theme) = active_theme(project_root) {
+        return theme.render(glyph);
+    }
+    glyph.render(active_profile(project_root)).to_string()
 }
 
 /// Resolve the active profile following the EPIC-45 precedence:
@@ -687,6 +835,110 @@ mod tests {
         // Only the valid key landed.
         assert_eq!(overrides.map.len(), 1);
 
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    // ----- Phase 4: themes + full precedence (STORY-633) -----
+
+    /// Write a `config.toml` with an explicit `[ui]` block (raw body lines) and
+    /// optionally a `[glyphs]` override body.
+    fn write_config_raw(dir: &Path, ui_body: &str, glyphs_body: Option<&str>) {
+        let aida = dir.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        let mut body = format!("[ui]\n{ui_body}\n");
+        if let Some(g) = glyphs_body {
+            body.push_str(&format!("\n[glyphs]\n{g}\n"));
+        }
+        std::fs::write(aida.join("config.toml"), body).unwrap();
+    }
+
+    #[test]
+    fn theme_lookup_is_case_and_separator_insensitive() {
+        assert_eq!(theme_by_name("ascii").map(|t| t.name), Some("ascii"));
+        assert_eq!(
+            theme_by_name("NERD_FONT").map(|t| t.name),
+            Some("nerd-font")
+        );
+        assert_eq!(
+            theme_by_name("nerd-font").map(|t| t.name),
+            Some("nerd-font")
+        );
+        assert_eq!(theme_by_name("minimal").map(|t| t.name), Some("minimal"));
+        assert!(theme_by_name("does-not-exist").is_none());
+    }
+
+    #[test]
+    fn theme_render_bundle_wins_else_base() {
+        let ascii = theme_by_name("ascii").unwrap();
+        // ascii theme has an empty bundle → base ASCII profile rendering.
+        assert_eq!(ascii.render(Glyph::Check), "[x]");
+        let nerd = theme_by_name("nerd-font").unwrap();
+        // bundle covers check; base is unicode.
+        assert_eq!(nerd.render(Glyph::Check), "✔");
+        // not in bundle → unicode base default.
+        assert_eq!(nerd.render(Glyph::Arrow), "▸");
+    }
+
+    /// The headline precedence pin: override > theme > profile > default.
+    #[test]
+    fn full_precedence_override_beats_theme_beats_profile_beats_default() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let proj = tempfile::tempdir().unwrap();
+        // Base profile ascii, theme nerd-font (overrides check→✔), and a
+        // per-symbol [glyphs] override check→OK.
+        write_config_raw(
+            proj.path(),
+            "glyphs = \"ascii\"\ntheme = \"nerd-font\"",
+            Some("check = \"OK\""),
+        );
+
+        // check: per-symbol override wins over the theme bundle + profile.
+        assert_eq!(resolve_with_theme(Glyph::Check, Some(proj.path())), "OK");
+        // arrow: no override, theme nerd-font has no arrow entry → theme's
+        // unicode BASE default, NOT the ascii [ui] glyphs profile ("->").
+        assert_eq!(resolve_with_theme(Glyph::Arrow, Some(proj.path())), "▸");
+        // done: theme bundle entry beats profile.
+        assert_eq!(resolve_with_theme(Glyph::Done, Some(proj.path())), "●");
+
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    #[test]
+    fn no_theme_falls_through_to_profile_then_default() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let proj = tempfile::tempdir().unwrap();
+        // Only a profile, no theme, no overrides.
+        write_config_raw(proj.path(), "glyphs = \"ascii\"", None);
+        assert!(active_theme(Some(proj.path())).is_none());
+        assert_eq!(resolve_with_theme(Glyph::Check, Some(proj.path())), "[x]");
+
+        // Empty project → unicode default.
+        let bare = tempfile::tempdir().unwrap();
+        assert_eq!(resolve_with_theme(Glyph::Check, Some(bare.path())), "✓");
+
+        std::env::remove_var("AIDA_TEST_HOME");
+    }
+
+    #[test]
+    fn project_theme_beats_user_theme() {
+        let _g = lock();
+        std::env::remove_var("AIDA_GLYPHS");
+        let home = tempfile::tempdir().unwrap();
+        write_config_raw(home.path(), "theme = \"ascii\"", None);
+        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let proj = tempfile::tempdir().unwrap();
+        write_config_raw(proj.path(), "theme = \"nerd-font\"", None);
+
+        assert_eq!(
+            active_theme(Some(proj.path())).map(|t| t.name),
+            Some("nerd-font")
+        );
         std::env::remove_var("AIDA_TEST_HOME");
     }
 }
