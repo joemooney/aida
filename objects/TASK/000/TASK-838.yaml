@@ -18,7 +18,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:04:37.855659842Z
-modified_at: 2026-06-16T05:14:26.998799393Z
+modified_at: 2026-06-16T05:53:53.532060471Z
 req_type: Task
 tags:
 - aida:intent
@@ -30,3 +30,9 @@ relationships:
   target_id: 019ececf-f0b8-7060-8dab-458c9b6d028b
   created_at: 2026-06-16T05:05:10.255201738Z
   created_by: joe
+comments:
+- id: 019ecefe-4f7c-7401-9e3d-20e4775bcdc7
+  author: joe
+  content: Commit f9408d959 references this requirement
+  created_at: 2026-06-16T05:53:53.532060471Z
+  modified_at: 2026-06-16T05:53:53.532060471Z
