@@ -451,6 +451,18 @@ pub(crate) struct OpenFacts {
     /// surfaces as `ReadyToClose` rather than the generic umbrella reason. The
     /// caller computes it (it needs the store); `OpenFacts` stays pure.
     pub epic_rollup: Option<(usize, usize)>,
+    /// BUG-564: the orthogonal `human_only` pickability marker (`req.human_only`
+    /// on the crate-level `Requirement`), carried here so the human worklist can
+    /// fold it into the [`human_required`] predicate. It is an INPUT to
+    /// classification, never derived from the other facts, so `OpenFacts` stays
+    /// exhaustively testable — a `human_only` spec is just one more bool the
+    /// predicate ORs in (mirroring [`human_required`]'s separate-arg contract).
+    /// Before this field, the human view fed `human_required` a hardcoded
+    /// `false`, so a spec that was human-required PURELY via this marker (a
+    /// non-human bucket) was invisible in `aida list human` while the queue's
+    /// human-only bucket — which reads the same `req.human_only` — showed it.
+    /// trace:BUG-564 | ai:claude
+    pub human_only: bool,
 }
 
 /// TASK-723: prefix marking a comment as a non-derivable residual openness
@@ -1786,7 +1798,41 @@ mod tests {
             findings: Vec::new(),
             residual_notes: Vec::new(),
             epic_rollup: None,
+            human_only: false,
         }
+    }
+
+    /// BUG-564: a human-only spec whose DERIVED bucket is NOT a needs-human
+    /// bucket must still be classified human-required (so it surfaces in
+    /// `aida list human`), and must NOT be human-required when the marker is
+    /// off. This is the predicate the human-view filter now folds `f.human_only`
+    /// into — before the fix the view fed `human_required` a hardcoded `false`,
+    /// so the init scaffolding-commit task (High/Approved → Actionable, a
+    /// non-human bucket) was invisible while the queue's human-only bucket showed
+    /// it. trace:BUG-564 | ai:claude
+    #[test]
+    fn human_required_folds_in_human_only_marker_over_non_human_bucket() {
+        // An approved, unblocked, decision-free, in-flight-free task classifies
+        // to the Actionable bucket — explicitly NOT a needs-human bucket.
+        let f = open("task", "approved", &[], false, false, false);
+        let (bucket, _) = explain_open(&f);
+        assert!(
+            !bucket.needs_human(),
+            "precondition: {bucket:?} must be a non-human bucket for this test"
+        );
+
+        // human_only OFF → not human-required (the bucket alone doesn't qualify).
+        assert!(
+            !human_required(&f, false),
+            "non-human bucket without the human_only marker must NOT be human-required"
+        );
+
+        // human_only ON → human-required PURELY via the orthogonal marker, even
+        // though the derived bucket self-resolves. This is the BUG-564 case.
+        assert!(
+            human_required(&f, true),
+            "a human-only spec must be human-required even with a non-human bucket"
+        );
     }
 
     /// BUG-511: a live reviewer lease reads "being reviewed", any other

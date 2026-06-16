@@ -74711,6 +74711,14 @@ fn collect_open_facts(
             findings,
             residual_notes,
             epic_rollup,
+            // BUG-564: carry the spec's orthogonal human-only marker (the same
+            // `req.human_only` the queue's "Blocked — human-only" bucket and the
+            // spec-card `[human-only]` chip read) so the human worklist folds it
+            // into `human_required` instead of a hardcoded `false`. A spec that
+            // is human-required PURELY via this marker now surfaces in
+            // `aida list human` exactly as it does in the queue.
+            // trace:BUG-564 | ai:claude
+            human_only: req.human_only,
         });
     }
     facts
@@ -75381,10 +75389,14 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     // the specs the canonical `human_required` predicate (SPIKE-57/TASK-746)
     // classifies as needing a human — the rest self-resolve. Routing the filter
     // through the named predicate keeps this view and the predicate from
-    // drifting. The orthogonal `human_only` marker is not yet folded in at the
-    // view layer (a later SPIKE-57 phase enriches the facts with it), so the
-    // predicate is fed `false` here — equivalent to the prior bucket check.
-    // trace:STORY-562 trace:TASK-746
+    // drifting. BUG-564: the orthogonal `human_only` marker is now folded in at
+    // the view layer — `collect_open_facts` enriches each fact with
+    // `req.human_only`, so a spec that is human-required PURELY via the marker
+    // (e.g. init's High "Commit AIDA scaffolding" task, a non-human bucket)
+    // surfaces here exactly as it does in the queue's human-only bucket, which
+    // reads the SAME `req.human_only`. Before this fix the marker was fed as a
+    // hardcoded `false`, so the two human views contradicted each other on a new
+    // user's first interaction. trace:STORY-562 trace:TASK-746 trace:BUG-564
     let classified: Vec<(
         burndown::OpenFacts,
         burndown::OpenBucket,
@@ -75402,8 +75414,16 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
         // operator (default: advisor → they show on `aida advisor`, not here).
         // `operator_seat` also excludes `AwaitingDecision`, rendered richer by
         // the first-class "decisions-awaiting" bucket below. trace:STORY-620
-        .filter(|(_, bucket, _)| {
-            bucket.operator_seat()
+        .filter(|(f, bucket, _)| {
+            // BUG-564: a spec carrying the `human_only` marker is human-required
+            // regardless of its derived bucket — the canonical `human_required`
+            // predicate ORs the marker in, and so must this view. Without this
+            // clause a human-only spec whose bucket is NOT a needs-human bucket
+            // (the init scaffolding-commit task is High/Approved → a non-human
+            // bucket) was invisible here while the queue showed it.
+            // trace:BUG-564 | ai:claude
+            f.human_only
+                || bucket.operator_seat()
                 || (seats::CONFIGURABLE_KEYS.contains(&bucket.key())
                     && seat_policy.seat_of(bucket.key()) == seats::Seat::Operator)
         })
