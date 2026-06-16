@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:03:14.616702572Z
-modified_at: 2026-06-16T05:09:34.000180408Z
+modified_at: 2026-06-16T05:14:08.521885363Z
 req_type: Story
 tags:
 - aida:intent
@@ -81,3 +81,8 @@ comments:
     REJECTED alt (separate aida doc): loses schema-reflection discoverability + requires a join; the doc/book projection benefit does not outweigh co-location for an intrinsic spec property.
   created_at: 2026-06-16T05:09:01.142651931Z
   modified_at: 2026-06-16T05:09:01.142651931Z
+- id: 019eced9-eb09-7af3-81f1-9710b69c15b3
+  author: joe
+  content: 'Cross-link: STORY-632 computes deterministic spec heft (in/out degree, cache-derived). Its output is a structured INPUT to this intent pass — the graph-neighborhood the comprehension reads, plus a heft signal so the LLM is told "N specs depend on this" rather than inferring importance. Reuse STORY-632s neighbor enumeration for the source_hash drift inputs too (one graph walk serves both).'
+  created_at: 2026-06-16T05:14:08.521885363Z
+  modified_at: 2026-06-16T05:14:08.521885363Z
