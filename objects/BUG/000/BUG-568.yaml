@@ -1,0 +1,37 @@
+id: 019ecf39-369f-7953-8e76-111ffb6fc208
+spec_id: BUG-568
+agreed_id: BUG-568
+title: 'Sibling/workspace mode: auto-bump, reconcile-status, show-linkage & trace-scan silently scan only the local repo — cross-repo completions never bump, linkage incomplete'
+description: |-
+  Live trap (Tier 1 of the multi-repo review, docs/plans/2026-06-15-multi-repo-one-store-review.md). aida init --sibling is DOCUMENTED as "recommended for multi-repo workspaces where multiple code repos share one store", but the completion/linkage pipeline assumes a single project_root and silently breaks when specs span repos.
+
+  ## Symptoms (verified by function signatures + scan sites)
+  - auto_bump_done_to_completed (aida-cli/src/main.rs ~82872): scans only the local repo default branch. A spec whose referencing commit merged in repo B NEVER auto-completes when you aida pull from repo A. SILENT.
+  - handle_db_reconcile_status (~83339): the recovery tool for missed bumps silently no-ops cross-repo — propagates the miss instead of fixing it.
+  - collect_git_linkage / collect_git_linkage_opts (71149/71162): aida show <ID> shows zero commits/files/PR for work done in a sibling repo — breaks the core trace/recall value prop.
+  - scan_trace_graph (~69773): trace comments in sibling repos never indexed.
+  - forge/PR detection (forge.rs ~550; main.rs ~45632): only the local origin queried.
+
+  ## Why this is a bug now (not a future feature)
+  The store-resolution layer already supports N-repos-to-1-store (sibling + workspace manifest). So a user CAN follow the docs, share a store across repos, and then silently lose auto-completion and linkage. Doc-vs-behavior defect.
+
+  ## Acceptance (Tier 1 — stop the trap; full model is SPIKE-62)
+  - When a workspace manifest (.aida-workspace) or sibling topology is present, the completion/linkage scanners iterate ALL workspace repos (not just the cwd repo): auto_bump + reconcile-status scan each repos default branch; collect_git_linkage + scan_trace_graph aggregate across repos.
+  - If full multi-repo scanning is deferred: at MINIMUM fail/ WARN loudly when running in a shared-store-but-multi-repo context that a completion/linkage scan covered only one repo (so the miss is visible, not silent).
+  - A test pins: a spec completed by a commit in repo B is auto-bumped (or loudly flagged) when pulling from repo A in a workspace.
+
+  Depends-on / informed-by SPIKE-62 for the repo-identity model, but the loud-failure fallback can ship independently and immediately.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T06:58:13.791768614Z
+modified_at: 2026-06-16T06:58:13.791768614Z
+req_type: Bug
+tags:
+- aida:workspace
+- correctness
+- from-operator
+- linked:SPIKE-62
+- multi-repo
+- silent-failure
