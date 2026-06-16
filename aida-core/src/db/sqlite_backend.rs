@@ -603,6 +603,8 @@ impl SqliteBackend {
                 // STORY-542: legacy centralized backend — not persisted.
                 // trace:STORY-542 | ai:claude
                 interface_changes: None,
+                // trace:STORY-631 | ai:claude
+                intent: None,
                 version,
             });
         }
@@ -1540,6 +1542,8 @@ impl DatabaseBackend for SqliteBackend {
                     // STORY-542: legacy centralized backend — not persisted.
                     // trace:STORY-542 | ai:claude
                     interface_changes: None,
+                    // trace:STORY-631 | ai:claude
+                    intent: None,
                     version,
                 }))
             }
