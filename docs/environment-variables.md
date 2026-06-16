@@ -130,7 +130,7 @@ doesn't match.
 | `AIDA_REVIEW_VERDICT_FILE` | Path the reviewer writes its verdict JSON to. | unset = standalone review. | launch-path | process env |
 | `AIDA_EXIT_SENTINEL` | Path the skill touches to signal clean completion for the graceful-exit handshake. | unset = non-orchestrated path. | launch-path | process env |
 | `AIDA_AGENT_CONTEXT_FILE` | Path to the role-context snapshot handed to a spawned agent. | unset. | launch-path (`aida agent new`) | process env |
-| `AIDA_PROJECT_ROOT` | Project root handed to a spawned agent subprocess. | unset = computed at launch. | launch-path | process env |
+| `AIDA_PROJECT_ROOT` | **Outbound-only.** Project root handed *down* to a spawned agent subprocess; AIDA only ever *writes* it when launching a child agent. AIDA does **not** read it on the resolution side — `find_project_root` resolves reads by walking up from CWD for `.git`, so exporting `AIDA_PROJECT_ROOT` in an interactive shell does **not** redirect where `aida` looks (it's a silent no-op for reads). To target a different project, `cd` into it or use `AIDA_STORE` for the store. (BUG-567 Finding 2: documenting the name-vs-behavior mismatch rather than changing it, the lower-risk option.) | unset = computed at launch. | launch-path | process env |
 | `AIDA_ASCIINEMA_WRAPPED` | Guards against double-wrapping when `--asciinema` re-execs `aida` under a recorder. | unset. Set `1` by the recorder subprocess. | launch-path | process env |
 
 ---
@@ -139,7 +139,8 @@ doesn't match.
 
 | Variable | What it does | Default | Who sets it | Scope |
 | --- | --- | --- | --- | --- |
-| `AIDA_STORE` | Targets a specific git-canonical store directory instead of walking up from CWD. Strict-but-quiet: a missing/invalid path (no `objects/` dir) falls through to normal resolution rather than erroring. | unset = `None` (normal resolution). | user | process env |
+| `AIDA_STORE` | Targets a specific git-canonical store directory instead of walking up from CWD. Strict: a missing/invalid path (not a dir, or no `objects/` subdir) falls through to normal resolution rather than erroring — never breaks a forgotten-export shell. When set-but-unusable it now emits ONE informational stderr notice naming the path + reason + that it fell back (BUG-567 Finding 1); mute with `AIDA_QUIET`. | unset = `None` (normal resolution). | user | process env |
+| `AIDA_QUIET` | Suppresses non-essential informational stderr notices (e.g. the `AIDA_STORE` set-but-unusable fall-through notice). Any value other than unset / empty / `0` / `false` enables it. | unset = notices shown. | user / scripts | process env |
 | `AIDA_HOME` | Redirects the global home (`~/.aida`) lookup — used for cross-platform isolation and deterministic test paths. | unset = `dirs::home_dir()`. | dev / test | process env |
 | `AIDA_CACHE_LOCK_STALE_SECS` | Seconds after which a cache lock is considered stale and can be reclaimed if its owner is dead. | `300`. | user | process env |
 | `AIDA_CACHE_RETRY_COUNT` | Number of retry attempts for cache operations. | `8` (length of the default backoff schedule). `0` disables retries. | user / test | process env |
