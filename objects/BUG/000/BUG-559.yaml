@@ -23,12 +23,12 @@ description: |-
   (c) At minimum, when aida-store is detected as the default/checked-out branch, the guidance message should say "git checkout main first" rather than just "run aida init".
 
   Recommend (a)+(b): make init never let the orphan branch become default, and make auto-attach resilient if it already did. Relates to TASK-621 (auto-attach), EPIC-35 (forge wiring), and BUG-558/STORY-619 (other launched/clone GitLab-surfaced gaps). This is the first concrete substrate-layer GitLab bug; the forge layer (Tier 2) has many more (~251 un-migrated gh sites).
-status: Completed
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:50:14.700945231Z
-modified_at: 2026-06-16T09:15:46.664739117Z
+modified_at: 2026-06-16T09:18:26.351978963Z
 req_type: Bug
 tags:
 - batch:gitlab-store-now
