@@ -26,15 +26,33 @@ description: |-
   - A genuinely-new (non-AIDA) repo still scaffolds and commits as today (no regression to the first-init flow).
   - init never newly-commits a scaffold path that the upstream tree does not already track, unless an explicit opt-in flag is passed.
   - Add a test covering: bootstrap-clone init leaves HEAD unchanged relative to origin.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T22:22:49.865858062Z
-modified_at: 2026-06-16T22:24:39.210407980Z
+modified_at: 2026-06-16T22:42:43.021080840Z
 req_type: Bug
 tags:
 - init
 - papercut
 - scaffold
 - severity:high
+history:
+- id: 019ed299-eac8-7d52-ae1c-1bbadf692428
+  author: aida-auto-bump
+  timestamp: 2026-06-16T22:42:43.016443447Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed299-eacd-79e0-b12b-32eb683b0a2c
+  timestamp: 2026-06-16T22:42:43.021080390Z
+  agent: aida
+  commit_sha: a2e80b0072cbf1e4a436105908ea207c12b415af
+  summary: Completed via merge a2e80b00
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T22:42:42.860504192Z
+  completion_sha: a2e80b0072cbf1e4a436105908ea207c12b415af
