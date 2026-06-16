@@ -5296,31 +5296,41 @@ fn hostname_or_unknown() -> String {
 /// that `findings.rs` expects. Keeps the projection logic in one place;
 /// mirrors the cache projection just well enough for the findings filter.
 fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::RequirementSummary> {
+    // STORY-632: compute deterministic in/out degree + heft once over the full
+    // graph so the MCP projection carries the same centrality as the cache.
+    // trace:STORY-632 | ai:claude
+    let degrees = aida_core::compute_degrees(store);
     store
         .requirements
         .iter()
-        .map(|r| aida_core::RequirementSummary {
-            id: r.id,
-            spec_id: r.spec_id.clone(),
-            agreed_id: r.agreed_id.clone(),
-            title: r.title.clone(),
-            description: r.description.clone(),
-            status: format!("{}", r.status),
-            priority: format!("{}", r.priority),
-            owner: r.owner.clone(),
-            feature: r.feature.clone(),
-            req_type: format!("{}", r.req_type),
-            tags: r.tags.iter().cloned().collect(),
-            created_at: r.created_at.to_rfc3339(),
-            modified_at: r.modified_at.to_rfc3339(),
-            archived: r.archived,
-            // trace:STORY-441 | ai:claude
-            archived_at: r.archived_at.map(|dt| dt.to_rfc3339()),
-            // trace:STORY-584 | ai:claude
-            deferred: r.deferred,
-            deferred_at: r.deferred_at.map(|dt| dt.to_rfc3339()),
-            deferred_until: r.deferred_until.clone(),
-            yaml_path: String::new(),
+        .map(|r| {
+            let d = degrees.get(&r.id).copied().unwrap_or_default();
+            aida_core::RequirementSummary {
+                id: r.id,
+                spec_id: r.spec_id.clone(),
+                agreed_id: r.agreed_id.clone(),
+                title: r.title.clone(),
+                description: r.description.clone(),
+                status: format!("{}", r.status),
+                priority: format!("{}", r.priority),
+                owner: r.owner.clone(),
+                feature: r.feature.clone(),
+                req_type: format!("{}", r.req_type),
+                tags: r.tags.iter().cloned().collect(),
+                created_at: r.created_at.to_rfc3339(),
+                modified_at: r.modified_at.to_rfc3339(),
+                archived: r.archived,
+                // trace:STORY-441 | ai:claude
+                archived_at: r.archived_at.map(|dt| dt.to_rfc3339()),
+                // trace:STORY-584 | ai:claude
+                deferred: r.deferred,
+                deferred_at: r.deferred_at.map(|dt| dt.to_rfc3339()),
+                deferred_until: r.deferred_until.clone(),
+                in_degree: d.in_degree,
+                out_degree: d.out_degree,
+                heft: d.heft,
+                yaml_path: String::new(),
+            }
         })
         .collect()
 }
