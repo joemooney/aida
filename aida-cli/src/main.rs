@@ -1254,12 +1254,17 @@ fn run() -> Result<()> {
         json,
     } = &cli.command
     {
+        // `--all` is the whole-catalog dump; a positional `<object>` is a
+        // single-object request. The two are contradictory, so `--all` carries
+        // `conflicts_with = "object"` in the clap definition (cli.rs) — clap
+        // rejects the combination with a clear error before this dispatch runs,
+        // so no runtime guard is needed here. trace:TASK-775 | ai:claude
         match object.as_deref().map(str::to_lowercase).as_deref() {
             // `--all` (human) and no-arg `--json` are both a full dump: the
             // catalog plus every object's reflection-derived field detail in
             // catalog order. For JSON we always include the per-object fields
             // (a no-arg `--json` was field-less before), so the machine surface
-            // is a true one-fetch full dump. trace:TASK-799 | ai:claude
+            // is a true one-fetch full dump. trace:TASK-799 trace:TASK-775 | ai:claude
             None if *all || *json => schema::print_all(*json, *explain),
             // `aida schema --explain` (no object) adds the lifecycle blocks to
             // the catalog view. trace:STORY-630 | ai:claude
