@@ -1,0 +1,43 @@
+id: 019ecead-1278-7752-b7e1-0c384e97cb48
+spec_id: STORY-630
+agreed_id: STORY-630
+title: 'aida schema --explain: per-field semantics + object lifecycle (when/why/who/how), drift-guarded'
+description: |-
+  Operator ask (2026-06-15): `aida schema --all` is great, but it only prints each field name + reflected type. Add an opt-in explanatory mode that says, per field and per object, WHEN / WHY / WHO / HOW it is used — turning schema into a self-documenting substrate reference instead of just a type list.
+
+  ## Design constraint (load-bearing)
+  The field LIST is reflection-derived from ts-rs-forge and drift-guarded (schema_enums_match_reflection) — that is the substrate-as-bouncer property and must be preserved. Per-field prose is necessarily hand-curated. So: reflection owns the field set; a curated doc-map owns the prose; a NEW drift-guard test must assert the doc-map covers EXACTLY the reflected fields of each documented kind (fail on any undocumented field OR orphan description). This mirrors how the catalog already pairs reflected field detail with hand-written object one-liners. Without the guard, --explain rots on the first new field.
+
+  ## Two layers of explanation
+  1. Object-level lifecycle: extend each catalog one-liner into a short block answering who writes the YAML file, when, why it exists, how/where it is read back, when it is deleted/archived. (The operator phrased it as when/why/who/how these files are used.)
+  2. Per-field semantics: a 1-2 line gloss per field PLUS a provenance tag (set-by: user / advisor-gated / merge-driven / orchestrator / reflection-derived). Provenance is the highest-value part — e.g. status being advisor-only for approved|planned but merge-driven for completed is underivable from the bare type.
+
+  ## Acceptance
+  - `aida schema --explain` (alias: `--details`) adds the explanatory layer to the catalog view: each object gets its lifecycle block.
+  - `aida schema <object> --explain` renders the field table with a description + provenance per field.
+  - `aida schema --all --explain` does both in one pass.
+  - `aida schema --json` (with --explain, or always) carries the per-field description + provenance and the object lifecycle as structured fields, so MCP/machine consumers get the same docs.
+  - A drift-guard test asserts every reflected field of each documented kind has a doc entry and every doc entry maps to a real reflected field (no undocumented fields, no orphans) — same spirit as schema_enums_match_reflection.
+  - Non --explain output is byte-for-byte unchanged (pure opt-in).
+
+  ## Slicing
+  Slice 1 (this story or first child): Requirement per-field prose + all 10 object lifecycle blocks + the drift guard + the flag plumbing + JSON. Slice 2 (follow-up child): per-field prose for the remaining 9 kinds (guard will list exactly which fields still need docs, so it doubles as the worklist).
+
+  ## Open forks for advisor/implementer
+  - Flag name: --explain vs --details vs -v/--verbose. Recommend --explain with --details alias.
+  - Does --explain imply showing prose only on demand, or should the bare `aida schema <object>` always include a short gloss column once written? Recommend opt-in to keep the cheat-sheet view terse.
+  - Provenance vocabulary: settle the closed set of set-by tokens before writing 30+ entries.
+
+  Verify flags with `aida schema --help` before coding.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T04:25:09.496245561Z
+modified_at: 2026-06-16T04:25:09.496245561Z
+req_type: Story
+tags:
+- aida:schema
+- docs-surface
+- from-operator
+- substrate-as-bouncer
