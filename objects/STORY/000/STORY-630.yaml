@@ -45,12 +45,12 @@ description: |-
   (Provenance vocabulary is now PINNED above — no longer an open fork.)
 
   Verify flags with `aida schema --help` before coding.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:25:09.496245561Z
-modified_at: 2026-06-16T05:09:34.497856260Z
+modified_at: 2026-06-16T05:10:15.471266659Z
 req_type: Story
 tags:
 - aida:schema
@@ -73,3 +73,21 @@ comments:
   content: 'Cross-link: STORY-631 adds an `intent: Option<SpecIntent>` field to Requirement. When both ship, --explain must document that field (provenance = ai, the motivating case for the ai token) and the drift-guard automatically requires its doc entry. Whichever ships second inherits the others coverage for free.'
   created_at: 2026-06-16T05:09:34.497856260Z
   modified_at: 2026-06-16T05:09:34.497856260Z
+history:
+- id: 019eced6-5caa-79c3-8304-556f8e717c8f
+  author: aida-auto-bump
+  timestamp: 2026-06-16T05:10:15.466707799Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019eced6-5caf-7ae1-be1d-8488694cb3d2
+  timestamp: 2026-06-16T05:10:15.471266166Z
+  agent: aida
+  commit_sha: 0fac892bec7a8ac83b19c2b63517966ee94db597
+  summary: Completed via merge 0fac892b
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T05:10:15.308396137Z
+  completion_sha: 0fac892bec7a8ac83b19c2b63517966ee94db597
