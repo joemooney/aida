@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:18.737322494Z
-modified_at: 2026-06-15T05:04:40.018561689Z
+modified_at: 2026-06-16T22:24:15.137540327Z
 req_type: Epic
 tags:
 - canonical-hub
@@ -21,3 +21,8 @@ comments:
   content: 'Corporate-boundary constraint CONFIRMED (2026-06-14): at the operator corporate network, gitlab.joemooney.com is blocked by the corporate web filter — verified via the git clone 302 to corp-firewall.example NewUnblockRequest page (reasoncode=CATEGORY_DENIED, category "Miscellaneous or Unknown", policy group REDACTED-POLICY-GROUP). Cloudflare WAF + free Bot Fight Mode were a SECONDARY blocker (now fixed: skip-rule on .git/ paths + Bot Fight Mode off; curl reaches GitLab and gets a clean 401). The real wall is the corporate proxy, upstream of Cloudflare, and it is a policy-governed security control (not engineered around). Implication for EPIC-44: the "one canonical hub reachable everywhere" assumption does NOT hold at the corporate boundary unless corporate IT allowlists the domain. Operator will submit the unblock request 2026-06-15. Until approved, model = personal gitlab (home/canonical) + corporate-sanctioned infra at work, bridged where policy permits. Revisit the hub-everywhere assumption after the whitelist decision lands.'
   created_at: 2026-06-15T05:04:40.018561689Z
   modified_at: 2026-06-15T05:04:40.018561689Z
+- id: 019ed289-0321-7f20-bf65-0f07d7291c6c
+  author: joe
+  content: 'HOLD (operator, 2026-06-16): cutover stays parked — operator still cannot access gitlab.joemooney.com from work. Blocker is operator''s corporate/work network access to the gitlab host, not anything in the codebase. The backlog-cleared half of the trigger is met and gitlab works locally (BUG-559 fix verified against it), so the ONLY remaining gate is operator work-access + explicit go. Do not repoint origin / flip [forge] provider until then.'
+  created_at: 2026-06-16T22:24:15.137540327Z
+  modified_at: 2026-06-16T22:24:15.137540327Z
