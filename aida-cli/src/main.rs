@@ -109531,6 +109531,79 @@ fn handle_queue_recover(
     Ok(())
 }
 
+/// TASK-836: probe the richer pre-merge facts for ONE ready integration
+/// candidate — CI rollup, RequestChanges (local verdict OR forge decision), and
+/// mergeability — and normalize them into the pure [`integrate::PrIntegrationState`]
+/// the pre-merge gate decides on. All the messy `gh`-string interpretation lives
+/// here, at the probe boundary; the decision ([`integrate::classify_integration_action`])
+/// stays pure + unit-tested.
+///
+/// Conservative: anything we cannot tell degrades to the optimistic value
+/// (CI `None`, no RequestChanges, `Unknown` mergeable) — the `--from-pr` drive
+/// re-gates CI + merge before the irreversible step, so "couldn't tell" never
+/// ships something unsafe; it just doesn't pre-empt a park. trace:TASK-836
+fn probe_pr_integration_state(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    branch: Option<&str>,
+    snapshot: &OpenPrSnapshot,
+) -> integrate::PrIntegrationState {
+    // The forge row for this PR (keyed by head branch).
+    let item = branch.and_then(|b| snapshot.by_branch.get(b));
+
+    // CI: prefer the snapshot rollup ("pass"/"fail"/"pending"/"?"), normalized.
+    let ci = match item.and_then(|i| i.ci_rollup.as_deref()) {
+        Some("pass") => integrate::CiState::Passing,
+        Some("fail") => integrate::CiState::Failing,
+        Some("pending") => integrate::CiState::Running,
+        _ => integrate::CiState::None,
+    };
+
+    // Mergeability: the forge's `mergeable` field — MERGEABLE / CONFLICTING /
+    // UNKNOWN. "UNKNOWN" means GitHub hasn't computed it yet; treated optimistic.
+    // A behind-base branch presents as CONFLICTING only on a real conflict, so
+    // we can't distinguish BehindBase from the snapshot alone — the caller's
+    // --rebase step covers the behind-base case, so mapping non-conflict to
+    // Unknown here is sufficient. trace:TASK-836
+    let mergeable = match item.and_then(|i| i.mergeable.as_deref()) {
+        Some("MERGEABLE") => integrate::MergeableState::Mergeable,
+        Some("CONFLICTING") => integrate::MergeableState::Conflicting,
+        _ => integrate::MergeableState::Unknown,
+    };
+
+    // RequestChanges from the forge's reviewDecision (CHANGES_REQUESTED).
+    let forge_request_changes = item
+        .and_then(|i| i.review_decision.as_deref())
+        .map(|d| d.eq_ignore_ascii_case("CHANGES_REQUESTED"))
+        .unwrap_or(false);
+
+    // RequestChanges from the LOCAL review-verdict file (the orchestrator's own
+    // reviewer writes `.aida/review-verdicts/PR-N.json`). Either source is a
+    // hard stop — never merge over a pending RequestChanges. trace:TASK-836
+    let local_request_changes = item
+        .map(|i| i.number)
+        .map(|n| {
+            let path = project_root
+                .join(".aida")
+                .join("review-verdicts")
+                .join(format!("PR-{n}.json"));
+            matches!(
+                read_verdict_file(&path),
+                Ok(auto_complete::ReviewerOutcome::Verdict(
+                    auto_complete::Verdict::RequestChanges
+                ))
+            )
+        })
+        .unwrap_or(false);
+
+    let _ = spec_id; // spec id is the caller's message prefix, not a probe input.
+    integrate::PrIntegrationState {
+        ci,
+        request_changes_pending: forge_request_changes || local_request_changes,
+        mergeable,
+    }
+}
+
 /// STORY-520: `aida queue integrate` — the thin integrator watch-loop.
 ///
 /// The consumer half of a producer/consumer split: parallel implementers
@@ -109598,6 +109671,12 @@ fn handle_queue_integrate(
 
     let mut integrated_total: usize = 0;
     let mut pass: usize = 0;
+    // TASK-836: track whether any member was parked (shelvable scenario) or made
+    // to wait (CI running) across the whole run, so the exit code mirrors the
+    // resilient-drain contract: exit 2 when anything was parked/skipped so a
+    // wrapping script triages instead of treating the run as a clean success.
+    // trace:TASK-836 | ai:claude
+    let mut any_parked_or_waited = false;
 
     loop {
         pass += 1;
@@ -109650,6 +109729,17 @@ fn handle_queue_integrate(
         }
 
         let ready = integrate::ready_for_integration(&candidates);
+
+        // TASK-836: one forge snapshot per pass (CI rollup + mergeable +
+        // reviewDecision keyed by branch) feeds the pre-merge scenario gate
+        // below. Empty when gh is missing/failing — the gate then degrades to
+        // the optimistic "Merge" verdict, and the --from-pr drive re-gates the
+        // irreversible step. trace:TASK-836 | ai:claude
+        let pr_snapshot = if dry_run || !ready.is_empty() {
+            collect_open_prs(&project_root)
+        } else {
+            OpenPrSnapshot::default()
+        };
 
         // --- Report the pass. ---
         if watch {
@@ -109787,6 +109877,34 @@ fn handle_queue_integrate(
                 println!("{} reached --max {} this run; stopping.", "▸".cyan(), max);
                 return Ok(());
             }
+            // TASK-836: pre-merge scenario gate. Probe the richer PR facts (CI
+            // state, RequestChanges, mergeability) and decide handle-vs-park
+            // BEFORE driving the merge. Reuses the resilient-drain
+            // park-and-continue contract: a shelvable scenario (CI red,
+            // RequestChanges, conflict) parks the spec with one legible line and
+            // the loop continues; CI-running waits (re-decided next --watch
+            // pass). trace:TASK-836 | ai:claude
+            let branch = branches.get(id).and_then(|b| b.clone());
+            let pr_state =
+                probe_pr_integration_state(&project_root, id, branch.as_deref(), &pr_snapshot);
+            match integrate::classify_integration_action(&pr_state) {
+                integrate::IntegrationAction::Park(reason) => {
+                    println!("  {} {} — {}", "⏸".yellow(), id, reason.message());
+                    any_parked_or_waited = true;
+                    continue;
+                }
+                integrate::IntegrationAction::WaitCi => {
+                    println!(
+                        "  {} {} — CI still running; skipping this pass (will re-check)",
+                        "⏳".yellow(),
+                        id
+                    );
+                    any_parked_or_waited = true;
+                    continue;
+                }
+                integrate::IntegrationAction::Merge => {}
+            }
+
             if dry_run {
                 let rebase_note = if rebase { " (would rebase first)" } else { "" };
                 println!(
@@ -109832,6 +109950,7 @@ fn handle_queue_integrate(
                                     id,
                                     pr
                                 );
+                                any_parked_or_waited = true; // trace:TASK-836
                                 continue;
                             }
                             Err(e) => {
@@ -109840,6 +109959,7 @@ fn handle_queue_integrate(
                                     "⚠".yellow(),
                                     id
                                 );
+                                any_parked_or_waited = true; // trace:TASK-836
                                 continue;
                             }
                         }
@@ -109882,6 +110002,7 @@ fn handle_queue_integrate(
                         id,
                         s.code().unwrap_or(-1)
                     );
+                    any_parked_or_waited = true; // trace:TASK-836
                 }
                 Err(e) => {
                     eprintln!(
@@ -109890,6 +110011,7 @@ fn handle_queue_integrate(
                         id,
                         e
                     );
+                    any_parked_or_waited = true; // trace:TASK-836
                 }
             }
         }
@@ -109903,6 +110025,22 @@ fn handle_queue_integrate(
         // Watch mode: sleep, then rescan. The store reload at the top of the
         // loop picks up specs producers shipped during the sleep.
         std::thread::sleep(std::time::Duration::from_secs(interval));
+    }
+
+    // TASK-836: mirror the resilient-drain exit-code contract — exit 2 when any
+    // member was parked (CI red / RequestChanges / conflict / rebase-skip /
+    // drive-refused) or made to wait (CI running), so a wrapping script (the
+    // solo loop) treats the run as "did its job but triage pending" rather than
+    // a clean success. Dry-run never mutates, so it always exits 0. The drain
+    // guard is RAII (Drop), and process::exit skips destructors — so drop it
+    // explicitly first to release the lock cleanly. trace:TASK-836 | ai:claude
+    if !dry_run && any_parked_or_waited {
+        println!(
+            "{} integration left member(s) parked/waiting — triage with `aida findings list`, then re-run.",
+            "▸".yellow().bold()
+        );
+        drop(_drain_guard);
+        std::process::exit(2);
     }
 
     Ok(())
