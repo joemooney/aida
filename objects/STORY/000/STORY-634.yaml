@@ -1,0 +1,19 @@
+id: 019ecf60-236b-7e70-8ded-cda8f27f359d
+spec_id: STORY-634
+agreed_id: STORY-634
+title: 'Multi-repo Tier 2: Origin{repo,component} field on Requirement + repo-qualified linkage (GATED on SPIKE-62 D1-D5)'
+description: 'Tier-2 build from the SPIKE-62 recommendation (docs/plans/2026-06-16-spike-62-multi-repo-dimension-recommendation.md). GATED: do NOT open a PR until the operator signs off D1-D5 (nested Origin field shape, completion_repo sibling, repo+component hierarchy, Tier-3-stays-gated, origin.repo join key). Scope when unblocked: (Tier 2-a) add Origin{repo, component:Option} + Requirement.origin, serde default/skip, validate repo against WorkspaceManifest, round-trip + old-binary-forward-compat tests; (Tier 2-b) add ImplementationInfo.completion_repo stamped in the auto-bump path, widen in-memory GitLinkage to carry per-repo attribution, qualify shipped_pr/branch rendering in print_git_linkage. Backward-compatible (None=single-repo, no migration/backfill). Benefits from BUG-568 manifest-iterating scanner. Tier 3 (scope/queue/advisor) is a separate future spec, DO-NOT-BUILD-YET per the gate.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T07:40:44.779244297Z
+modified_at: 2026-06-16T07:40:44.779244297Z
+req_type: Story
+tags:
+- aida:workspace
+- architecture
+- gated:operator-signoff
+- multi-repo
+- parent:SPIKE-62
+- schema
