@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:25:09.496245561Z
-modified_at: 2026-06-16T04:50:49.344929432Z
+modified_at: 2026-06-16T05:09:34.497856260Z
 req_type: Story
 tags:
 - aida:schema
@@ -68,3 +68,8 @@ comments:
   content: 'Provenance set PINNED into acceptance (operator request, 2026-06-15). Closed 6-token set grounded in real write-paths: system / user / advisor-gated / orchestrator / merge-driven / ai. A field may carry multiple (status spans advisor-gated + orchestrator + merge-driven across its transitions — the canonical motivating example for why provenance beats a bare type). Dropped the earlier "reflection-derived" token — category error: reflection owns the field LIST, not a value write-path. Drift-guard validates tokens against this closed set, so a 7th is a deliberate decision not an ad-hoc add.'
   created_at: 2026-06-16T04:50:49.344929432Z
   modified_at: 2026-06-16T04:50:49.344929432Z
+- id: 019eced5-bca1-78e1-b707-2ae8b9b377dc
+  author: joe
+  content: 'Cross-link: STORY-631 adds an `intent: Option<SpecIntent>` field to Requirement. When both ship, --explain must document that field (provenance = ai, the motivating case for the ai token) and the drift-guard automatically requires its doc entry. Whichever ships second inherits the others coverage for free.'
+  created_at: 2026-06-16T05:09:34.497856260Z
+  modified_at: 2026-06-16T05:09:34.497856260Z
