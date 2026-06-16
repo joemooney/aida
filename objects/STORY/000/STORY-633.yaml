@@ -1,0 +1,47 @@
+id: 019ecf21-1d57-7a13-9361-a6baa0b0c45b
+spec_id: STORY-633
+agreed_id: STORY-633
+title: 'Phase 4: aida config glyph — CLI surface for themes + per-symbol overrides over the registry'
+description: |-
+  Operator ask (2026-06-15): an `aida config glyph` command giving users (a) a set of canned glyph THEMES and (b) the option to change an INDIVIDUAL glyph — without hand-editing config.toml.
+
+  ## Why this is Phase 4, not a new subsystem
+  EPIC-45 already shipped the full resolution layer: STORY-628 (registry + unicode/ascii profiles + precedence), STORY-629 (the [glyphs] per-symbol override table — the data layer for "change an individual one"), TASK-835 (literal migration + CI lint, so overrides take visible effect). The ONLY missing layer is a CLI surface — today all of this requires hand-editing .aida/config.toml, and glyph names are not even discoverable without reading glyphs.rs. This story is pure ergonomics + curated theme presets + a TOML writer on top of tested machinery.
+
+  ## Surface
+  - `aida config glyph list` — every glyph: name | current rendering | registry default. The missing discoverability (today you cannot SEE the names/defaults).
+  - `aida config glyph theme list` — available themes, each with a one-line PREVIEW row.
+  - `aida config glyph theme <name>` — apply a canned theme.
+  - `aida config glyph set <name> <value>` — override one glyph (writes [glyphs] name = value via Glyph::from_name validation).
+  - `aida config glyph unset <name>` — drop one override; `aida config glyph reset` — clear all back to default.
+  - All honor scope: --user (~/.aida/config.toml) vs project (.aida/config.toml). Precedence already exists in glyphs.rs::active_profile / GlyphOverrides::resolve.
+
+  ## Theme model (design call)
+  A theme = a NAMED preset of {base profile + per-symbol override bundle}, stored as a reference `[ui] theme = "nerd-font"` resolved at render time — NOT expanded overrides written into config. This is consistent with how `[ui] glyphs = "ascii"` already works (named reference, clean config). Provide `aida config glyph theme <name> --expand` to materialize the bundle into [glyphs] for hand-tweaking. New precedence tier slots in: per-symbol [glyphs] override > THEME bundle > base [ui] glyphs profile > registry default. Themes embedded in the binary (like the ascii fallback), so the set grows by adding a preset, not a config file.
+
+  ## Acceptance
+  - `aida config glyph list` prints all 21 registry glyphs (Glyph::ALL) with name, currently-resolved rendering (honoring active profile+overrides+theme), and the unicode default.
+  - `aida config glyph theme list` lists the embedded themes with a preview; `aida config glyph theme <name>` writes `[ui] theme = <name>` to the chosen scope and confirms; unknown theme name errors with the valid set.
+  - `aida config glyph set <name> <value>` validates <name> via Glyph::from_name (reject unknown with the valid list), writes `[glyphs] <name> = "<value>"`; `unset`/`reset` remove entries. All writes preserve the rest of config.toml.
+  - A render-time precedence test pins: per-symbol override > theme bundle > profile > default.
+  - Default behavior unchanged when no theme/override set (still unicode). Memory: default stays emoji/unicode — additive only, never an auto-strip.
+
+  ## Open forks for advisor/implementer
+  - Which canned themes to ship (candidates: unicode (default), ascii/plain, minimal, nerd-font, emoji-forward, boxes). Settle the starter set.
+  - Preview rendering for `theme list` in a non-unicode terminal (preview the theme even if the active terminal cannot show it?).
+  - Verification dependency: themes/overrides only affect glyphs ROUTED through the registry — confirm TASK-835s migration coverage so a theme visibly changes output broadly, not just a handful of sites.
+
+  Verify with `aida config --help` and read aida-cli/src/glyphs.rs before coding.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T06:31:54.455302636Z
+modified_at: 2026-06-16T06:31:54.455302636Z
+req_type: Story
+tags:
+- aida:config
+- aida:glyph
+- ergonomics
+- from-operator
+- parent:EPIC-45
