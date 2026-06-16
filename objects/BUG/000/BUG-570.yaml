@@ -26,12 +26,12 @@ description: |-
   - A genuinely-new (non-AIDA) repo still scaffolds and commits as today (no regression to the first-init flow).
   - init never newly-commits a scaffold path that the upstream tree does not already track, unless an explicit opt-in flag is passed.
   - Add a test covering: bootstrap-clone init leaves HEAD unchanged relative to origin.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T22:22:49.865858062Z
-modified_at: 2026-06-16T22:22:49.865858062Z
+modified_at: 2026-06-16T22:24:39.210407980Z
 req_type: Bug
 tags:
 - init
