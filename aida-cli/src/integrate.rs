@@ -121,6 +121,153 @@ pub(crate) fn ready_for_integration(
         .collect()
 }
 
+// ── TASK-836: pre-merge scenario gate ────────────────────────────────────────
+//
+// `classify_candidate` above answers the *membership* question — "is this a
+// Done + open + unmerged + not-keystone PR the integrator should TRY to drive?"
+// It is deliberately coarse: it knows nothing about the PR's CI state, review
+// verdict, or mergeability. That coarseness was fine for the common case (one
+// Done spec, one clean open PR), but running the integrator inside the solo loop
+// surfaced the gaps — a PR with CI still running, a pending RequestChanges, or a
+// branch behind base that needs a rebase would all reach the `Integrate`
+// verdict and be driven *blind* into the `--from-pr` merge.
+//
+// This pre-merge gate runs ONLY on the members `classify_candidate` already
+// admitted, with the *richer* probed facts ([`PrIntegrationState`]). It decides,
+// per member, whether to actually drive the merge now or to PARK + report and
+// continue (reusing the resilient-drain park-and-continue contract: a parked
+// member doesn't stop the loop, and the run exits non-zero when anything was
+// parked). It is PURE — given a normalized PR state, it returns the action — so
+// the handle-vs-park policy is exhaustively unit-testable with zero forge/store
+// I/O, the same discipline `classify_candidate` follows. trace:TASK-836
+
+/// The richer, normalized PR facts the pre-merge gate decides on. Built in
+/// `main.rs` from the forge probe (`gh pr list` rollup + per-spec lookup) and
+/// the local review-verdict file. Every field is a normalized
+/// already-interpreted signal so the decision stays pure + trivially testable —
+/// the messy string-parsing of `gh` output lives at the probe boundary, not
+/// here. trace:TASK-836 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct PrIntegrationState {
+    /// CI rollup for the PR head, as interpreted from the forge.
+    pub ci: CiState,
+    /// Whether a review verdict / forge review-decision is RequestChanges.
+    /// Sourced from BOTH the local `.aida/review-verdicts/` file AND the forge's
+    /// `reviewDecision` (`CHANGES_REQUESTED`) — either one is a hard stop.
+    pub request_changes_pending: bool,
+    /// Whether the PR is mergeable per the forge. `Mergeable` = clean,
+    /// `Conflicting` = real merge conflict (never auto-resolve), `Unknown` = the
+    /// forge hasn't computed it (or we couldn't tell). The behind-base scenario
+    /// (branch behind base, no conflict) is NOT a gate input — the forge merges
+    /// behind-base branches via a merge commit, and the caller's `--rebase` step
+    /// owns rebasing the branch onto current main before the merge — so it never
+    /// reaches this gate as a distinct state. trace:TASK-836
+    pub mergeable: MergeableState,
+}
+
+/// CI rollup state for a PR head, normalized from the forge. trace:TASK-836
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum CiState {
+    /// All required checks passed.
+    Passing,
+    /// At least one required check failed.
+    Failing,
+    /// CI is queued / in-progress — no terminal verdict yet.
+    Running,
+    /// No CI is configured / no checks ran, or we couldn't tell.
+    #[default]
+    None,
+}
+
+/// Mergeability of a PR per the forge. trace:TASK-836
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum MergeableState {
+    /// Forge reports the PR merges cleanly.
+    Mergeable,
+    /// A real merge conflict — never auto-resolved; the spec is parked.
+    Conflicting,
+    /// The forge hasn't computed mergeability yet (or the probe was
+    /// inconclusive). Treated optimistically — the `--from-pr` drive still
+    /// re-gates on CI + merge, so "unknown" never ships something unsafe.
+    #[default]
+    Unknown,
+}
+
+/// What the pre-merge gate decides for one already-admitted candidate.
+/// trace:TASK-836 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum IntegrationAction {
+    /// Facts are clean (CI passing/none/unknown, no RequestChanges, mergeable or
+    /// unknown) — drive the `--from-pr` merge now.
+    Merge,
+    /// CI is still running — skip this pass + report; a `--watch` re-scan will
+    /// re-decide once CI reaches a terminal state. Bounded by NOT blocking the
+    /// serial loop on a single PR. trace:TASK-836
+    WaitCi,
+    /// A shelvable scenario: park the spec + report ONE legible line, then
+    /// continue the loop (resilient-drain park-and-continue). The string is the
+    /// human-facing reason. trace:TASK-836
+    Park(ParkReason),
+}
+
+/// Why the pre-merge gate parked a member — kept structured so the message + the
+/// exit-code accounting stay legible and testable. trace:TASK-836
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ParkReason {
+    /// CI failed — never merge a red PR.
+    CiRed,
+    /// A RequestChanges review verdict is pending — never merge over it
+    /// (matches the known auto-merge-over-RequestChanges hazard).
+    RequestChanges,
+    /// A real merge conflict — never auto-resolved.
+    MergeConflict,
+}
+
+impl ParkReason {
+    /// One-line, SPEC-ID-free human reason (the caller prefixes the spec id).
+    pub fn message(self) -> &'static str {
+        match self {
+            ParkReason::CiRed => "CI is red — not merging a failing PR (parked for triage)",
+            ParkReason::RequestChanges => {
+                "a RequestChanges review is pending — not merging over it (parked for triage)"
+            }
+            ParkReason::MergeConflict => {
+                "the PR has a merge conflict — never auto-resolved (parked; rebase/resolve, then re-run)"
+            }
+        }
+    }
+}
+
+/// The pure pre-merge gate: given the richer probed PR facts for one
+/// already-admitted candidate, decide whether to merge now, wait for CI, or
+/// park. Order matters and encodes the safety priority:
+///   1. RequestChanges — a human asked for changes; never merge over it, even
+///      with green CI (the strongest, most explicit human signal).
+///   2. CI red — never merge a failing PR.
+///   3. Merge conflict — never auto-resolve.
+///   4. CI running — wait (re-decide next pass), don't merge blind.
+///   5. otherwise (mergeable / unknown, CI passing / none, no RequestChanges) —
+///      Merge. A behind-base branch is rebased by the caller's `--rebase` step
+///      before this gate, and the `--from-pr` drive re-gates the merge, so an
+///      Unknown-mergeable case is safe to let through (merge refuses, never
+///      corrupts).
+/// trace:TASK-836 | ai:claude
+pub(crate) fn classify_integration_action(s: &PrIntegrationState) -> IntegrationAction {
+    if s.request_changes_pending {
+        return IntegrationAction::Park(ParkReason::RequestChanges);
+    }
+    if s.ci == CiState::Failing {
+        return IntegrationAction::Park(ParkReason::CiRed);
+    }
+    if s.mergeable == MergeableState::Conflicting {
+        return IntegrationAction::Park(ParkReason::MergeConflict);
+    }
+    if s.ci == CiState::Running {
+        return IntegrationAction::WaitCi;
+    }
+    IntegrationAction::Merge
+}
+
 // ── STORY-335: rebase-conflict forecast (read-only first slice) ──────────────
 //
 // A deferred batch (`--auto-complete=through-ci`) cuts every branch from the
@@ -413,6 +560,117 @@ mod tests {
             candidate("C", true, true, true, false),
         ];
         assert!(ready_for_integration(&candidates).is_empty());
+    }
+
+    // ── TASK-836 pre-merge scenario gate ────────────────────────────────────
+
+    fn state(ci: CiState, rc: bool, m: MergeableState) -> PrIntegrationState {
+        PrIntegrationState {
+            ci,
+            request_changes_pending: rc,
+            mergeable: m,
+        }
+    }
+
+    #[test]
+    fn clean_pr_merges() {
+        // CI passing, no RequestChanges, mergeable → drive the merge.
+        let s = state(CiState::Passing, false, MergeableState::Mergeable);
+        assert_eq!(classify_integration_action(&s), IntegrationAction::Merge);
+    }
+
+    #[test]
+    fn no_ci_and_unknown_mergeable_still_merges() {
+        // A repo with no CI and a forge that hasn't computed mergeability is the
+        // common small-project case — let it through; --from-pr re-gates merge.
+        let s = state(CiState::None, false, MergeableState::Unknown);
+        assert_eq!(classify_integration_action(&s), IntegrationAction::Merge);
+    }
+
+    #[test]
+    fn ci_running_waits_not_merges() {
+        // CI in-progress: skip this pass + wait, never merge blind.
+        let s = state(CiState::Running, false, MergeableState::Mergeable);
+        assert_eq!(classify_integration_action(&s), IntegrationAction::WaitCi);
+    }
+
+    #[test]
+    fn ci_red_parks() {
+        let s = state(CiState::Failing, false, MergeableState::Mergeable);
+        assert_eq!(
+            classify_integration_action(&s),
+            IntegrationAction::Park(ParkReason::CiRed)
+        );
+    }
+
+    #[test]
+    fn request_changes_parks_even_with_green_ci() {
+        // The strongest human signal: a pending RequestChanges is never merged
+        // over, even with passing CI and a mergeable branch.
+        let s = state(CiState::Passing, true, MergeableState::Mergeable);
+        assert_eq!(
+            classify_integration_action(&s),
+            IntegrationAction::Park(ParkReason::RequestChanges)
+        );
+    }
+
+    #[test]
+    fn request_changes_takes_precedence_over_ci_red() {
+        // Both bad: RequestChanges wins the message (most explicit signal),
+        // though either alone parks. Ordering is the contract.
+        let s = state(CiState::Failing, true, MergeableState::Conflicting);
+        assert_eq!(
+            classify_integration_action(&s),
+            IntegrationAction::Park(ParkReason::RequestChanges)
+        );
+    }
+
+    #[test]
+    fn merge_conflict_parks_never_auto_resolved() {
+        let s = state(CiState::Passing, false, MergeableState::Conflicting);
+        assert_eq!(
+            classify_integration_action(&s),
+            IntegrationAction::Park(ParkReason::MergeConflict)
+        );
+    }
+
+    #[test]
+    fn conflict_parks_before_ci_running_is_considered() {
+        // A conflicting PR with CI still running is parked (conflict is
+        // terminal), not WaitCi — no point waiting on CI for an unmergeable PR.
+        let s = state(CiState::Running, false, MergeableState::Conflicting);
+        assert_eq!(
+            classify_integration_action(&s),
+            IntegrationAction::Park(ParkReason::MergeConflict)
+        );
+    }
+
+    #[test]
+    fn ci_red_parks_before_conflict_message() {
+        // CI red is reported when there's no RequestChanges, even if also
+        // conflicting — the CI signal is checked before the conflict signal.
+        let s = state(CiState::Failing, false, MergeableState::Conflicting);
+        assert_eq!(
+            classify_integration_action(&s),
+            IntegrationAction::Park(ParkReason::CiRed)
+        );
+    }
+
+    #[test]
+    fn park_reason_messages_are_distinct_and_nonempty() {
+        // Legibility: each park reason emits its own one-line, SPEC-ID-free why.
+        let msgs = [
+            ParkReason::CiRed.message(),
+            ParkReason::RequestChanges.message(),
+            ParkReason::MergeConflict.message(),
+        ];
+        for m in msgs {
+            assert!(!m.is_empty());
+            // SPEC-IDs must not leak into user-facing integrator output.
+            assert!(!m.contains("TASK-"));
+        }
+        assert_ne!(msgs[0], msgs[1]);
+        assert_ne!(msgs[1], msgs[2]);
     }
 
     // ── STORY-335 forecast helpers ──────────────────────────────────────────
