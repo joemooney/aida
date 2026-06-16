@@ -3,12 +3,12 @@ spec_id: TASK-818
 agreed_id: TASK-818
 title: 'Unify agent addressing: briefs route by short type name, mailbox by stable name (post-BUG-558)'
 description: 'After BUG-558 the launcher exports AIDA_USER = the stable agent name (e.g. codex-implementer-1), so mailbox/queue identity is the stable name. But briefs still route by the short type name (.aida/agent-briefs/codex/). So a coordinator addressing the SHORT name (--to codex) reaches the agent for briefs but NOT mailbox; the stable name reaches mailbox but not briefs. DESIGN FORK for disposition: (A) union AIDA_AGENT_TYPE (short name) into inbox_identities() so --to <type> ALSO reaches the agent''s mailbox — matches brief routing, but multiple instances of the same type share the <type> inbox and race on mark-seen (watermark is per-identity-string). (B) leave mailbox stable-name-only and migrate briefs to also accept the stable name (symmetric, no collision, but coordinators must know the per-instance name). (C) make it a [agents] config knob. Recommend (A) for type-level broadcast addressing + keep stable name for per-instance, accepting the shared-watermark race as acceptable for the rare multi-instance-same-type case. Needs operator/advisor sign-off before implementing.'
-status: Draft
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:24:48.476952031Z
-modified_at: 2026-06-16T15:43:18.834590543Z
+modified_at: 2026-06-16T16:05:46.538874968Z
 req_type: Task
 tags:
 - agent-launcher
