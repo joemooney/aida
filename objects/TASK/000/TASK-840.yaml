@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:25:40.214576737Z
-modified_at: 2026-06-16T06:25:40.214576737Z
+modified_at: 2026-06-16T09:30:02.501188763Z
 req_type: Task
 tags:
 - aida:glyphs
 - from-advisor
 - parent:EPIC-45
 - tech-debt
+comments:
+- id: 019ecfc4-3385-7a91-b1c8-f48081cb0e0a
+  author: joe
+  content: Commit 7e2815bed references this requirement
+  created_at: 2026-06-16T09:30:02.501188763Z
+  modified_at: 2026-06-16T09:30:02.501188763Z
