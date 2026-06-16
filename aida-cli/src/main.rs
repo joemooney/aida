@@ -74425,6 +74425,7 @@ mod burndown_run_tests {
             branch: "task-806".into(),
             role: "implementer".into(),
             worktree: "/home/joe/ai/aida-task-806".into(),
+            last_activity: None,
         }];
         let log = std::path::PathBuf::from("/repo/.aida/burndown/20260613T120000Z-abcd1234.jsonl");
         let out = render_burndown_status_human(&lock, &in_flight, Some(&log));
@@ -74447,6 +74448,39 @@ mod burndown_run_tests {
         assert!(out.contains("reclaims"), "out: {out}");
     }
 
+    // trace:TASK-834 | ai:claude
+    #[test]
+    fn activity_label_active_vs_idle_stuck_thresholds() {
+        let now = chrono::Utc::now();
+
+        // Just committed → "active Ns ago", no stuck flag.
+        let recent = now - chrono::Duration::seconds(15);
+        let label = format_activity_label(recent, now);
+        assert!(label.starts_with("active"), "label: {label}");
+        assert!(label.contains("15s"), "label: {label}");
+        assert!(!label.contains("stuck"), "label: {label}");
+
+        // Just under the threshold (9m) is still active.
+        let almost = now - chrono::Duration::seconds(ACTIVITY_STUCK_THRESHOLD_SECS - 60);
+        let label = format_activity_label(almost, now);
+        assert!(label.starts_with("active"), "label: {label}");
+        assert!(!label.contains("stuck"), "label: {label}");
+
+        // Past the threshold (15m) → "idle 15m ⚠ possibly stuck".
+        let stale = now - chrono::Duration::minutes(15);
+        let label = format_activity_label(stale, now);
+        assert!(label.starts_with("idle"), "label: {label}");
+        assert!(label.contains("15m"), "label: {label}");
+        assert!(label.contains("possibly stuck"), "label: {label}");
+
+        // Exactly at the threshold flips to stuck (>=).
+        let at = now - chrono::Duration::seconds(ACTIVITY_STUCK_THRESHOLD_SECS);
+        assert!(
+            format_activity_label(at, now).contains("stuck"),
+            "boundary should be inclusive"
+        );
+    }
+
     // trace:TASK-806 | ai:claude
     #[test]
     fn status_json_running_carries_drain_inflight_and_log() {
@@ -74456,6 +74490,7 @@ mod burndown_run_tests {
             branch: "task-806".into(),
             role: "implementer".into(),
             worktree: "/wt".into(),
+            last_activity: None,
         }];
         let log = std::path::PathBuf::from("/repo/.aida/burndown/run.jsonl");
         let s = render_burndown_status_json(&lock, &in_flight, Some(&log));
@@ -74795,6 +74830,11 @@ struct InFlightLease {
     branch: String,
     role: String,
     worktree: String,
+    /// TASK-834: most-recent activity in this lease's worktree (newest of the
+    /// last commit time and the newest non-`.git`/non-`target` file mtime).
+    /// `None` when the worktree is gone or git/fs probing failed — render the
+    /// row without the activity suffix rather than error. trace:TASK-834
+    last_activity: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// TASK-805: spec ids with a live (non-stale) session lease — "actively being
@@ -74902,6 +74942,8 @@ fn handle_burndown_status(json: bool) -> Result<()> {
             branch: l.branch.clone(),
             role: l.role.clone().unwrap_or_else(|| "-".to_string()),
             worktree: l.worktree_path.display().to_string(),
+            // TASK-834: best-effort per-agent activity probe from the worktree.
+            last_activity: worktree_last_activity(&l.worktree_path),
         })
         .collect();
 
@@ -75008,6 +75050,125 @@ fn recent_activity_line(
     ))
 }
 
+/// TASK-834: idle threshold past which a still-alive lease is flagged "possibly
+/// stuck" — the process exists but nothing has moved in the worktree for a
+/// while. trace:TASK-834
+const ACTIVITY_STUCK_THRESHOLD_SECS: i64 = 10 * 60;
+
+/// TASK-834: best-effort last-activity timestamp for a lease's worktree. Returns
+/// the newest of (the worktree's `git log -1` commit time) and (the newest
+/// non-`.git`/non-`target` file mtime). `None` when the worktree is missing or
+/// every probe failed — callers render the row without an activity suffix rather
+/// than erroring. trace:TASK-834 | ai:claude
+fn worktree_last_activity(worktree: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    if worktree.as_os_str().is_empty() || !worktree.exists() {
+        return None;
+    }
+
+    let mut newest: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut consider = |t: chrono::DateTime<chrono::Utc>| {
+        newest = Some(match newest {
+            Some(cur) if cur >= t => cur,
+            _ => t,
+        });
+    };
+
+    // Leg 1: last commit time (epoch seconds) via `git log -1 --format=%ct`.
+    if let Ok(output) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["log", "-1", "--format=%ct"])
+        .output()
+    {
+        if output.status.success() {
+            if let Ok(epoch) = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse::<i64>()
+            {
+                if let Some(dt) = chrono::DateTime::from_timestamp(epoch, 0) {
+                    consider(dt);
+                }
+            }
+        }
+    }
+
+    // Leg 2: newest non-`.git`/non-`target` file mtime, shallow walk of the
+    // worktree's top entries (best-effort; depth-bounded to stay cheap).
+    if let Some(dt) = newest_file_mtime(worktree, 3) {
+        consider(dt);
+    }
+
+    newest
+}
+
+/// TASK-834: newest file mtime under `dir`, skipping `.git` and `target`,
+/// bounded to `max_depth` levels. Best-effort: unreadable entries are skipped.
+/// trace:TASK-834 | ai:claude
+fn newest_file_mtime(
+    dir: &std::path::Path,
+    max_depth: usize,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    let mut newest: Option<chrono::DateTime<chrono::Utc>> = None;
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name == ".git" || name == "target" {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.is_dir() {
+            if max_depth > 0 {
+                if let Some(dt) = newest_file_mtime(&path, max_depth - 1) {
+                    if newest.map(|cur| dt > cur).unwrap_or(true) {
+                        newest = Some(dt);
+                    }
+                }
+            }
+        } else if let Ok(mtime) = meta.modified() {
+            let dt: chrono::DateTime<chrono::Utc> = mtime.into();
+            if newest.map(|cur| dt > cur).unwrap_or(true) {
+                newest = Some(dt);
+            }
+        }
+    }
+    newest
+}
+
+/// TASK-834: format the per-agent activity label from a last-activity timestamp
+/// and the current time. Pure — the unit-tested core of the in-flight activity
+/// signal. `… active 15s ago` when recent; `… idle 15m ⚠ possibly stuck` once
+/// the gap exceeds [`ACTIVITY_STUCK_THRESHOLD_SECS`]. trace:TASK-834 | ai:claude
+fn format_activity_label(
+    last_activity: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    let secs = now
+        .signed_duration_since(last_activity)
+        .num_seconds()
+        .max(0);
+    let rel = humanize_idle(secs);
+    if secs >= ACTIVITY_STUCK_THRESHOLD_SECS {
+        format!("idle {rel} ⚠ possibly stuck")
+    } else {
+        format!("active {rel} ago")
+    }
+}
+
+/// TASK-834: compact `Ns`/`Nm`/`Nh`/`Nd` for an elapsed-seconds gap (no " ago"
+/// suffix — callers add their own framing). trace:TASK-834 | ai:claude
+fn humanize_idle(secs: i64) -> String {
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else if secs < 86400 {
+        format!("{}h", secs / 3600)
+    } else {
+        format!("{}d", secs / 86400)
+    }
+}
+
 /// TASK-806: human-readable `burndown status` summary. Pure over its inputs so
 /// the three lock states render identically in tests and at the terminal.
 /// trace:TASK-806 | ai:claude
@@ -75067,8 +75228,13 @@ fn render_burndown_status_human(
             "  {}",
             format!("In-flight ({} leased):", in_flight.len()).bold()
         );
+        // TASK-834: per-agent activity suffix so a committing agent reads
+        // differently from one idle/stuck 15m. Computed against now from each
+        // lease's captured last-activity; absent (worktree gone / probe failed)
+        // → no suffix, the row still renders. trace:TASK-834
+        let now = chrono::Utc::now();
         for f in in_flight {
-            let _ = writeln!(
+            let _ = write!(
                 out,
                 "    {:<20} {:<18} {:<14} {}",
                 truncate(&f.scope, 20),
@@ -75076,6 +75242,17 @@ fn render_burndown_status_human(
                 truncate(&f.role, 14),
                 f.worktree.dimmed()
             );
+            if let Some(t) = f.last_activity {
+                let label = format_activity_label(t, now);
+                let secs = now.signed_duration_since(t).num_seconds().max(0);
+                let painted = if secs >= ACTIVITY_STUCK_THRESHOLD_SECS {
+                    label.yellow().to_string()
+                } else {
+                    label.green().to_string()
+                };
+                let _ = write!(out, "  {painted}");
+            }
+            let _ = writeln!(out);
         }
     }
 
@@ -75137,11 +75314,20 @@ fn render_burndown_status_json(
     let in_flight_json: Vec<serde_json::Value> = in_flight
         .iter()
         .map(|f| {
+            // TASK-834: surface the activity signal to machine consumers too —
+            // `last_activity` (RFC-3339) plus a derived `stuck` flag. null when
+            // the worktree probe found nothing. trace:TASK-834
+            let now = chrono::Utc::now();
+            let stuck = f.last_activity.map(|t| {
+                now.signed_duration_since(t).num_seconds() >= ACTIVITY_STUCK_THRESHOLD_SECS
+            });
             serde_json::json!({
                 "spec": f.scope,
                 "branch": f.branch,
                 "role": f.role,
                 "worktree": f.worktree,
+                "last_activity": f.last_activity.map(|t| t.to_rfc3339()),
+                "stuck": stuck,
             })
         })
         .collect();
