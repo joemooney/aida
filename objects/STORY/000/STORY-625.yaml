@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-15T03:18:25.433897244Z
-modified_at: 2026-06-15T03:44:27.489137366Z
+modified_at: 2026-06-16T04:14:25.715730352Z
 req_type: Story
 tags:
 - autonomy
@@ -26,6 +26,11 @@ comments:
   content: 'Reopened (advisor): the TASK-830 commit subject listed (STORY-625) and auto-completed it on merge, but only SLICE 1 (the loop skeleton + --dry-run) shipped. Remaining: slice 2 (carry the full integrate strategies, not the partial integrate --watch) + slice 4 (TASK-829 advisor pipeline-activity surfacing). Lesson reapplied: trailer only the slice task, never the parent story.'
   created_at: 2026-06-15T03:44:27.489137366Z
   modified_at: 2026-06-15T03:44:27.489137366Z
+- id: 019ecea3-3fb3-7cf2-9e56-4e348d4267f5
+  author: joe
+  content: 'Reconciliation (advisor, 2026-06-15): the ACTIVE LOOP is delivered and PROVEN — aida solo run/--watch runs garden→assess→queue→implement→integrate on a cadence and drove BUG-563/564/565 from new→Completed unattended overnight; BUG-562 (spawn fix), TASK-830 (slice 1), STORY-627 (legibility: verbs/responsive-stop/solo.lock/heartbeat) all shipped. Closing. Two genuinely-separate follow-ups remain as their own specs: TASK-827 (make OTHER drains honor the solo flag — re-parented to EPIC-43) and TASK-835 (integrator strategy completeness — the gaps the operator noted in queue integrate).'
+  created_at: 2026-06-16T04:14:25.715730352Z
+  modified_at: 2026-06-16T04:14:25.715730352Z
 history:
 - id: 019ec95f-5998-7772-bd7b-c46c7e0830c3
   author: aida-auto-bump
