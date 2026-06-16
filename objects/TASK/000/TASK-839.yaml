@@ -15,13 +15,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:16:00.953892836Z
-modified_at: 2026-06-16T05:16:22.743916820Z
+modified_at: 2026-06-16T05:16:23.081411266Z
 req_type: Task
 tags:
 - aida:graph
 - deferred:needs-concrete-case
 - from-operator
 - speculative
+relationships:
+- rel_type: References
+  target_id: 019eced9-9e78-7d20-bca1-1c52e584a2d7
+  created_at: 2026-06-16T05:16:23.081405461Z
+  created_by: joe
 deferred: true
 deferred_at: 2026-06-16T05:16:22.743916820Z
 deferred_until: a concrete case appears where two same-type relationship edges genuinely need different weights (type-weighting in STORY-632 is insufficient)
