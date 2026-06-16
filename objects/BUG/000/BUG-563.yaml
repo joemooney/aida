@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:09:53.090081612Z
-modified_at: 2026-06-16T03:09:53.090081612Z
+modified_at: 2026-06-16T03:30:50.195406266Z
 req_type: Bug
 tags:
 - distributed
@@ -25,3 +25,9 @@ tags:
 - node-identity
 - reliability
 - store
+comments:
+- id: 019ece7b-56d3-7fa2-91b7-7f9f4e708161
+  author: joe
+  content: Commit 7c0b5c2c5 references this requirement
+  created_at: 2026-06-16T03:30:50.195406266Z
+  modified_at: 2026-06-16T03:30:50.195406266Z
