@@ -32,12 +32,12 @@ description: |-
   - Verification dependency: themes/overrides only affect glyphs ROUTED through the registry — confirm TASK-835s migration coverage so a theme visibly changes output broadly, not just a handful of sites.
 
   Verify with `aida config --help` and read aida-cli/src/glyphs.rs before coding.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:31:54.455302636Z
-modified_at: 2026-06-16T07:11:04.320018010Z
+modified_at: 2026-06-16T07:19:08.383975821Z
 req_type: Story
 tags:
 - aida:config
@@ -55,3 +55,21 @@ comments:
   content: Commit 730bcdf13 references this requirement
   created_at: 2026-06-16T07:11:04.320018010Z
   modified_at: 2026-06-16T07:11:04.320018010Z
+history:
+- id: 019ecf4c-5b5b-7070-ba96-b7505b4bafd9
+  author: aida-auto-bump
+  timestamp: 2026-06-16T07:19:08.379382436Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecf4c-5b5f-73f1-b9bd-ee2fc77abb25
+  timestamp: 2026-06-16T07:19:08.383975272Z
+  agent: aida
+  commit_sha: 5a4e645b73375c9804b85e18180c1148f7177126
+  summary: Completed via merge 5a4e645b
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T07:19:08.206552624Z
+  completion_sha: 5a4e645b73375c9804b85e18180c1148f7177126
