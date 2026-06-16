@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:50:14.700945231Z
-modified_at: 2026-06-14T21:46:09.860440759Z
+modified_at: 2026-06-16T09:07:30.709166236Z
 req_type: Bug
 tags:
 - batch:gitlab-store-now
@@ -43,6 +43,11 @@ comments:
   content: 'Status correction (advisor, 2026-06-14): re-opened to Approved. PR #916 (TASK-821) shipped only the SUBSTRATE SLICE — actionable guidance when a fresh clone has aida-store checked out. My commit trailer wrongly listed (BUG-559) and auto-completed it on merge. The SOURCE fix (a: aida init makes the GitLab default branch main via glab, so the orphan store never becomes default) is still pending and needs the GitLab env + glab (product seat''s forge lane). BUG-559 stays open until the source fix lands. trace:TASK-821'
   created_at: 2026-06-14T21:44:34.473520814Z
   modified_at: 2026-06-14T21:44:34.473520814Z
+- id: 019ecfaf-9315-7b02-8194-25564a4ee760
+  author: joe
+  content: Commit aaec5b561 references this requirement
+  created_at: 2026-06-16T09:07:30.709166236Z
+  modified_at: 2026-06-16T09:07:30.709166236Z
 history:
 - id: 019ec817-55cf-7160-8ee0-e9ffa4511f38
   author: aida-auto-bump
