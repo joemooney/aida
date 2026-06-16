@@ -10622,35 +10622,105 @@ fn attached_store_present(project_root: &std::path::Path) -> bool {
     project_root.join(".aida-store").join("objects").is_dir()
 }
 
+/// Classification of an `AIDA_STORE` value: either it resolves to a usable
+/// store, or it's set-but-unusable with a specific reason. Lets the
+/// resolution core stay pure/unit-testable while the env wrapper decides
+/// whether to print the BUG-567 fall-through notice. trace:BUG-567 | ai:claude
+enum StoreOverride {
+    /// `AIDA_STORE` points at a valid git-canonical store (canonicalized).
+    Usable(std::path::PathBuf),
+    /// `AIDA_STORE` was set but unusable; carries a human-readable reason so
+    /// the wrapper can name WHY it fell through (BUG-567 Finding 1).
+    Unusable { reason: String },
+}
+
 /// Resolve the `AIDA_STORE` env override into a usable store path, or `None`
 /// when unset / pointing at something that isn't a git-canonical store. A valid
 /// store directory is one that exists and contains an `objects/` subdirectory
 /// (the per-spec YAML tree GitBackend manages). Validation is deliberately
-/// strict-but-quiet: a typo'd or not-yet-created path falls through to normal
+/// strict — a typo'd or not-yet-created path falls THROUGH to normal
 /// resolution rather than erroring, so the override is opt-in and never the
-/// thing that breaks a forgotten-export shell. Use `aida sandbox create` to
-/// produce a directory this accepts. trace:SPIKE-48 | ai:claude
+/// thing that breaks a forgotten-export shell (SPIKE-48). Use `aida sandbox
+/// create` to produce a directory this accepts.
+///
+/// BUG-567 Finding 1: the fall-through is no longer SILENT. When `AIDA_STORE`
+/// is set but unusable we emit exactly ONE stderr notice naming the path, the
+/// reason, and that we fell back to normal resolution — then still fall
+/// through (no error, no behavior change; informational only). Suppress with
+/// `AIDA_QUIET` so scripts can mute it. The never-break-a-forgotten-export
+/// intent (SPIKE-48) is preserved — we inform, we don't error.
+/// trace:SPIKE-48 trace:BUG-567 | ai:claude
 fn aida_store_override() -> Option<std::path::PathBuf> {
     let raw = std::env::var("AIDA_STORE").ok()?;
     let raw = raw.trim();
     if raw.is_empty() {
         return None;
     }
-    aida_store_override_from(std::path::Path::new(raw))
+    // trace:BUG-567 | ai:claude
+    match aida_store_override_from(std::path::Path::new(raw)) {
+        StoreOverride::Usable(p) => Some(p),
+        StoreOverride::Unusable { reason } => {
+            if !aida_quiet() {
+                eprintln!(
+                    "{} AIDA_STORE points at `{raw}` but it's unusable ({reason}); \
+                     falling back to normal store resolution.\n  {} set AIDA_QUIET=1 \
+                     to silence this, or point AIDA_STORE at a directory holding an \
+                     `objects/` subdir (see `aida sandbox create`).",
+                    "⚠".yellow().bold(),
+                    "→".cyan(),
+                );
+            }
+            None
+        }
+    }
+}
+
+/// Is output suppression requested? BUG-567: honor `AIDA_QUIET` (any non-empty,
+/// non-"0"/"false" value) so the informational store fall-through notice can be
+/// muted by scripts. trace:BUG-567 | ai:claude
+fn aida_quiet() -> bool {
+    match std::env::var("AIDA_QUIET") {
+        Ok(v) => {
+            let v = v.trim();
+            !(v.is_empty() || v == "0" || v.eq_ignore_ascii_case("false"))
+        }
+        Err(_) => false,
+    }
 }
 
 /// Path-resolution core of [`aida_store_override`], split out so it can be
-/// unit-tested without mutating process env. Returns the canonicalized store
-/// path when `path` exists and holds an `objects/` directory, else `None`.
-/// trace:SPIKE-48 | ai:claude
-fn aida_store_override_from(path: &std::path::Path) -> Option<std::path::PathBuf> {
+/// unit-tested without mutating process env. Returns [`StoreOverride::Usable`]
+/// (canonicalized) when `path` exists and holds an `objects/` directory, else
+/// [`StoreOverride::Unusable`] carrying the specific reason it was rejected.
+/// trace:SPIKE-48 trace:BUG-567 | ai:claude
+fn aida_store_override_from(path: &std::path::Path) -> StoreOverride {
     if !path.is_dir() {
-        return None;
+        return StoreOverride::Unusable {
+            reason: "not a directory".to_string(),
+        };
     }
     if !path.join("objects").is_dir() {
-        return None;
+        return StoreOverride::Unusable {
+            reason: "missing an `objects/` subdirectory".to_string(),
+        };
     }
-    Some(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
+    StoreOverride::Usable(path.canonicalize().unwrap_or_else(|_| path.to_path_buf()))
+}
+
+#[cfg(test)]
+impl StoreOverride {
+    fn is_some(&self) -> bool {
+        matches!(self, StoreOverride::Usable(_))
+    }
+    fn is_none(&self) -> bool {
+        matches!(self, StoreOverride::Unusable { .. })
+    }
+    fn expect(self, msg: &str) -> std::path::PathBuf {
+        match self {
+            StoreOverride::Usable(p) => p,
+            StoreOverride::Unusable { reason } => panic!("{msg}: unusable ({reason})"),
+        }
+    }
 }
 
 /// Walk up from `start` and return the project root whose `.aida/config.toml`
@@ -38877,23 +38947,40 @@ mod task_475_store_behind_tests {
     }
 }
 
-/// Render the BUG-108 dangling-cwd warning, given the result of a
-/// `getcwd()` probe. Pure, so the removed-worktree state is regression-
-/// testable without a process-global `chdir`: a worktree that `aida
-/// session end` removed makes `std::env::current_dir()` return
-/// `Err(ENOENT)`, which is exactly the `Err` input here. `None` means
-/// the cwd is healthy and nothing should be printed.
-/// trace:BUG-108 | ai:claude
+/// Render the cwd-unreadable warning, given the result of a `getcwd()`
+/// probe. Pure, so the unreadable-cwd state is regression-testable
+/// without a process-global `chdir`: a worktree that `aida session end`
+/// removed makes `std::env::current_dir()` return `Err(ENOENT)`, and a
+/// dropped network share / permission change yields other `ErrorKind`s —
+/// all of which are the `Err` input here. `None` means the cwd is healthy
+/// and nothing should be printed.
+///
+/// BUG-566: the message must surface the REAL failure — the underlying
+/// `io::Error` (its `ErrorKind`) — and stay cause-NEUTRAL rather than
+/// asserting `aida session end` removed a worktree. `current_dir()` can
+/// Err for several reasons that the old single-cause message conflated:
+/// a worktree removed by `aida session end`, an unmounted/unavailable
+/// network share (ESTALE / EIO), a plainly-deleted directory (ENOENT),
+/// or a permissions change (EACCES). On platforms where `current_dir()`
+/// returns the offending path in the error we surface it too.
+/// trace:BUG-108 trace:BUG-566 | ai:claude
 fn cwd_removed_warning(cwd: &std::io::Result<std::path::PathBuf>) -> Option<String> {
-    if cwd.is_ok() {
-        return None;
-    }
+    // trace:BUG-566 | ai:claude
+    let err = match cwd {
+        Ok(_) => return None,
+        Err(e) => e,
+    };
+    // Human-readable rendering of the OS error (kind + message), e.g.
+    // "entity not found" / "stale file handle" / "permission denied".
+    let reason = err.to_string();
     Some(format!(
-        "{} this directory no longer exists — its worktree was probably \
-         removed by `aida session end`.\n  AIDA can't resolve a project \
-         from a deleted directory, so any queue / list output below is an \
-         empty fallback, not the real state.\n  {} cd to the main repo and \
-         retry (e.g. `cd ~/ai/<project>`).",
+        "{} cannot read the current directory: {reason}.\n  This usually \
+         means one of: a worktree removed by `aida session end`, an \
+         unmounted or unavailable network share, a directory that was \
+         deleted, or a permissions change.\n  AIDA can't resolve a project \
+         from a directory it can't read, so any queue / list output below \
+         is an empty fallback, not the real state.\n  {} cd to a readable \
+         directory (e.g. your project's main repo) and retry.",
         "⚠".yellow().bold(),
         "→".cyan(),
     ))
@@ -55454,24 +55541,48 @@ mod statusline_tests {
         assert!(!live.contains("no longer exists"));
     }
 
-    /// BUG-108: a worktree removed by `aida session end` leaves any shell
-    /// still inside it with a dangling cwd — `getcwd()` returns ENOENT.
-    /// The warning must fire for that `Err` and stay silent for a healthy
-    /// `Ok` cwd, so a genuinely-empty queue is never mislabeled.
-    /// trace:BUG-108 | ai:claude
+    /// BUG-108 / BUG-566: a worktree removed by `aida session end` leaves
+    /// any shell still inside it with a dangling cwd — `getcwd()` returns
+    /// ENOENT. The warning must fire for that `Err` and stay silent for a
+    /// healthy `Ok` cwd, so a genuinely-empty queue is never mislabeled.
+    /// BUG-566 additionally requires the message to surface the REAL
+    /// io::ErrorKind and stay cause-neutral (not assert the worktree case),
+    /// so a network-share / permission failure isn't misattributed.
+    /// trace:BUG-108 trace:BUG-566 | ai:claude
     #[test]
     fn cwd_removed_warning_fires_only_for_a_dangling_cwd() {
         // Healthy cwd → no warning.
         let healthy: std::io::Result<std::path::PathBuf> = Ok(std::env::temp_dir());
         assert!(cwd_removed_warning(&healthy).is_none());
 
-        // Removed worktree → getcwd() yields ENOENT → warning fires and
-        // names the cause so the user can tell it from an empty queue.
-        let dangling: std::io::Result<std::path::PathBuf> =
+        // ENOENT branch (deleted dir / removed worktree): warning fires,
+        // surfaces the real error kind, and lists the worktree cause WITHOUT
+        // asserting it as the only one.
+        let enoent: std::io::Result<std::path::PathBuf> =
             Err(std::io::Error::from(std::io::ErrorKind::NotFound));
-        let msg = cwd_removed_warning(&dangling).expect("warning for a dangling cwd");
-        assert!(msg.contains("no longer exists"));
+        let msg = cwd_removed_warning(&enoent).expect("warning for a deleted cwd");
+        assert!(msg.contains("cannot read the current directory"));
+        // The real io::ErrorKind text is surfaced (not discarded).
+        assert!(msg.contains(&std::io::Error::from(std::io::ErrorKind::NotFound).to_string()));
+        // Cause-neutral: lists worktree-removal as ONE possibility...
         assert!(msg.contains("session end"));
+        // ...alongside the network-share / permission alternatives.
+        assert!(msg.contains("network share"));
+        assert!(msg.contains("permissions"));
+        // Recovery hint stays, without hardcoding a `~/ai/<project>` layout.
+        assert!(msg.contains("readable directory"));
+        assert!(!msg.contains("~/ai/"));
+
+        // Non-ENOENT branch (e.g. a dropped network share → PermissionDenied
+        // standing in for ESTALE/EACCES, which aren't stable ErrorKinds):
+        // the warning still fires and surfaces THIS kind, not a hardcoded one.
+        let perm: std::io::Result<std::path::PathBuf> =
+            Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        let msg = cwd_removed_warning(&perm).expect("warning for an unreadable cwd");
+        assert!(msg.contains("cannot read the current directory"));
+        assert!(
+            msg.contains(&std::io::Error::from(std::io::ErrorKind::PermissionDenied).to_string())
+        );
     }
 
     /// TASK-74: branch-shape heuristic for "this is a reviewer session;
@@ -60735,6 +60846,63 @@ mod store_walkup_tests {
         std::fs::create_dir_all(&weird).unwrap();
         std::fs::write(weird.join("objects"), "not a dir").unwrap();
         assert!(aida_store_override_from(&weird).is_none());
+    }
+
+    /// BUG-567 Finding 1: a set-but-unusable AIDA_STORE classifies as
+    /// `Unusable` with a SPECIFIC reason (so the env wrapper can name WHY it
+    /// fell through), and a valid store classifies as `Usable`. The wrapper
+    /// stays a pure fall-through — it never errors — preserving the SPIKE-48
+    /// never-break-a-forgotten-export intent; this only makes the reason
+    /// surfaceable. trace:BUG-567 | ai:claude
+    #[test]
+    fn aida_store_override_reports_reason_for_unusable() {
+        let tmp = TempDir::new().unwrap();
+
+        // Not a directory (also covers a dropped/typo'd path).
+        match aida_store_override_from(&tmp.path().join("nope")) {
+            StoreOverride::Unusable { reason } => assert!(reason.contains("not a directory")),
+            StoreOverride::Usable(_) => panic!("a missing path must be Unusable"),
+        }
+
+        // Exists but lacks objects/ → distinct, namable reason.
+        let bare = tmp.path().join("bare");
+        std::fs::create_dir_all(&bare).unwrap();
+        match aida_store_override_from(&bare) {
+            StoreOverride::Unusable { reason } => assert!(reason.contains("objects/")),
+            StoreOverride::Usable(_) => panic!("a dir without objects/ must be Unusable"),
+        }
+
+        // A valid store → Usable.
+        let good = tmp.path().join("good");
+        std::fs::create_dir_all(good.join("objects")).unwrap();
+        assert!(aida_store_override_from(&good).is_some());
+    }
+
+    /// BUG-567: the notice is suppressible. `aida_quiet()` is true only for a
+    /// real opt-in value, false for unset / "0" / "false" / empty, so scripts
+    /// can mute the informational store fall-through. trace:BUG-567 | ai:claude
+    #[test]
+    fn aida_quiet_honors_only_real_optin_values() {
+        // This mutates process env, so keep it self-contained and restore.
+        let prev = std::env::var("AIDA_QUIET").ok();
+        let restore = |prev: &Option<String>| match prev {
+            Some(v) => std::env::set_var("AIDA_QUIET", v),
+            None => std::env::remove_var("AIDA_QUIET"),
+        };
+
+        std::env::remove_var("AIDA_QUIET");
+        assert!(!aida_quiet(), "unset → not quiet");
+
+        for off in ["", "0", "false", "FALSE"] {
+            std::env::set_var("AIDA_QUIET", off);
+            assert!(!aida_quiet(), "{off:?} → not quiet");
+        }
+        for on in ["1", "true", "yes", "anything"] {
+            std::env::set_var("AIDA_QUIET", on);
+            assert!(aida_quiet(), "{on:?} → quiet");
+        }
+
+        restore(&prev);
     }
 
     /// SPIKE-48: `sandbox_is_populated` is true only for a git repo holding
