@@ -10682,6 +10682,93 @@ fn aida_store_override() -> Option<std::path::PathBuf> {
     }
 }
 
+/// BUG-568: detect a "shared-store-but-multi-repo" context — a workspace where
+/// a single `.aida-store` is shared by two or more code repos (via a
+/// `.aida-workspace` manifest, as written by `aida init --sibling` /
+/// `init_workspace`).
+///
+/// The completion/linkage scanners (`auto_bump_done_to_completed`,
+/// `handle_db_reconcile_status`, `collect_git_linkage*`, `scan_trace_graph`)
+/// each scan only the *local* repo's history/source tree. When the store spans
+/// multiple repos, a spec whose referencing commit / trace comment lives in a
+/// SIBLING repo is silently missed. Full multi-repo scanning is deferred to
+/// SPIKE-62 (it needs the repo-identity model); until then we at least make the
+/// limitation VISIBLE rather than silent.
+///
+/// Returns the other repo names (those whose `path` is not the current repo)
+/// when a multi-repo workspace is detected, or `None` otherwise. The common
+/// single-repo case (no manifest, or a manifest with <2 repos) returns `None`
+/// → callers warn nothing → ZERO behavior change. The detection is cheap: walk
+/// up from cwd for `.aida-workspace`, parse it, count repos.
+// trace:BUG-568 | ai:claude
+fn detect_multi_repo_shared_store(from: &std::path::Path) -> Option<Vec<String>> {
+    let (workspace_root, manifest) = aida_core::workspace::WorkspaceManifest::discover(from)?;
+    if manifest.repos.len() < 2 {
+        return None;
+    }
+    // Identify which repo (if any) we're currently inside, so we can name the
+    // OTHERS in the warning. Canonicalize both sides so a symlinked/relative
+    // cwd still matches.
+    let here = from.canonicalize().ok();
+    let others: Vec<String> = manifest
+        .repos
+        .iter()
+        .filter(|r| {
+            let repo_abs = workspace_root.join(&r.path);
+            match (&here, repo_abs.canonicalize().ok()) {
+                (Some(h), Some(repo)) => !h.starts_with(&repo),
+                _ => true,
+            }
+        })
+        .map(|r| {
+            if r.name.is_empty() {
+                r.path.clone()
+            } else {
+                r.name.clone()
+            }
+        })
+        .collect();
+    Some(others)
+}
+
+/// BUG-568: emit ONE clear stderr warning that a completion/linkage scan
+/// covered only the local repo while the store is shared across multiple repos,
+/// so cross-repo completions/linkage may be missed. `scan_label` names the scan
+/// (e.g. "auto-bump", "linkage scan") so the user can tell which surface was
+/// limited. Suppressible via `AIDA_QUIET` (uniform with the BUG-567 store
+/// fall-through notice). No-ops in the single-repo case (the detector returns
+/// `None`). trace:BUG-568 | ai:claude
+fn warn_multi_repo_scan_limited(from: &std::path::Path, scan_label: &str) {
+    if aida_quiet() {
+        return;
+    }
+    // Warn at most once per process — several scan sites can fire in one
+    // command (e.g. `collect_git_linkage_opts` delegates to `scan_trace_graph`,
+    // and a single `aida pull` runs auto-bump then renders linkage), and one
+    // clear notice beats a wall of repeats. trace:BUG-568 | ai:claude
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    let Some(others) = detect_multi_repo_shared_store(from) else {
+        return;
+    };
+    if WARNED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let other_repos = if others.is_empty() {
+        String::new()
+    } else {
+        format!(" (other repos sharing this store: {})", others.join(", "))
+    };
+    eprintln!(
+        "{} {scan_label} covered only the local repo, but this store is shared across \
+         multiple repos{other_repos}. Cross-repo completions/linkage may be missed \
+         (full multi-repo scanning is not yet implemented).\n  {} run this from each \
+         repo, or set AIDA_QUIET=1 to silence.",
+        "⚠".yellow().bold(),
+        "→".cyan(),
+    );
+}
+
 /// Is output suppression requested? BUG-567: honor `AIDA_QUIET` (any non-empty,
 /// non-"0"/"false" value) so the informational store fall-through notice can be
 /// muted by scripts. trace:BUG-567 | ai:claude
@@ -61059,6 +61146,67 @@ mod store_walkup_tests {
         );
     }
 
+    /// BUG-568: single-repo store (no `.aida-workspace`) → detector returns
+    /// None → no multi-repo warning fires (ZERO behavior change for the common
+    /// case). trace:BUG-568 | ai:claude
+    #[test]
+    fn detect_multi_repo_returns_none_for_single_repo_store() {
+        let tmp = TempDir::new().unwrap();
+        let repo = tmp.path().join("solo");
+        std::fs::create_dir_all(&repo).unwrap();
+        // No `.aida-workspace` manifest anywhere up the tree.
+        assert!(
+            detect_multi_repo_shared_store(&repo).is_none(),
+            "single-repo store must not trigger the multi-repo warning"
+        );
+    }
+
+    /// BUG-568: a `.aida-workspace` manifest listing ≥2 repos → detector returns
+    /// Some(other_repos) → the loud cross-repo-miss warning fires. The reported
+    /// list excludes the repo we're standing in. trace:BUG-568 | ai:claude
+    #[test]
+    fn detect_multi_repo_returns_others_for_workspace_with_two_repos() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        let repo_a = ws.join("repo-a");
+        let repo_b = ws.join("repo-b");
+        std::fs::create_dir_all(&repo_a).unwrap();
+        std::fs::create_dir_all(&repo_b).unwrap();
+
+        let mut manifest = aida_core::workspace::WorkspaceManifest {
+            name: "ws".into(),
+            ..Default::default()
+        };
+        manifest.add_repo("repo-a", "RepoA");
+        manifest.add_repo("repo-b", "RepoB");
+        manifest.save(ws).unwrap();
+
+        // Standing in repo-a: detector fires and names the OTHER repo (RepoB).
+        let others = detect_multi_repo_shared_store(&repo_a)
+            .expect("workspace with 2 repos must trigger the warning");
+        assert_eq!(
+            others,
+            vec!["RepoB".to_string()],
+            "warning should name the sibling repo, not the one we're inside"
+        );
+
+        // A single-repo manifest does NOT trigger it (boundary at <2 repos).
+        let tmp2 = TempDir::new().unwrap();
+        let ws2 = tmp2.path();
+        let solo = ws2.join("only");
+        std::fs::create_dir_all(&solo).unwrap();
+        let mut one = aida_core::workspace::WorkspaceManifest {
+            name: "one".into(),
+            ..Default::default()
+        };
+        one.add_repo("only", "Only");
+        one.save(ws2).unwrap();
+        assert!(
+            detect_multi_repo_shared_store(&solo).is_none(),
+            "a workspace with a single repo is not multi-repo"
+        );
+    }
+
     /// No `.aida/config.toml` anywhere up the tree → returns None (caller
     /// falls through to legacy / registry resolution).
     /// trace:BUG-57 | ai:claude
@@ -70288,6 +70436,11 @@ pub(crate) fn scan_trace_graph(
         r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
     )
     .unwrap();
+    // BUG-568: trace comments are indexed only from the LOCAL source tree, so
+    // trace markers in sibling repos of a shared-store workspace are never
+    // found. Warn loudly (deduped per-process). trace:BUG-568 | ai:claude
+    warn_multi_repo_scan_limited(project_root, "trace-comment scan");
+
     let exts = ["rs", "ts", "tsx", "js", "jsx", "py", "sh"];
     let mut files = Vec::new();
     collect_source_files(project_root, &exts, &mut files);
@@ -71596,6 +71749,13 @@ pub(crate) fn collect_git_linkage_opts(
     scan_trace: bool,
 ) -> GitLinkage {
     use std::process::Command as PCmd;
+
+    // BUG-568: linkage (commits/files/PR) is collected only from the LOCAL
+    // repo. In a shared-store multi-repo workspace, work done in a sibling repo
+    // shows zero linkage here — warn loudly so the gap is visible rather than
+    // read as "no work done". Suppressible via AIDA_QUIET for hot batch callers
+    // (e.g. the `aida human` reviews sweep). trace:BUG-568 | ai:claude
+    warn_multi_repo_scan_limited(project_root, "git-linkage scan");
 
     let git = |args: &[&str]| -> Option<String> {
         PCmd::new("git")
@@ -83340,6 +83500,12 @@ fn auto_bump_done_to_completed(
         return Ok(Vec::new());
     }
 
+    // BUG-568: this scan only walks the LOCAL repo's default branch. If the
+    // store is shared across multiple repos, a spec landed in a sibling repo
+    // won't auto-complete here — warn loudly so the miss is visible.
+    // trace:BUG-568 | ai:claude
+    warn_multi_repo_scan_limited(project_root, "auto-bump (Done→Completed) scan");
+
     // ── Step 2: build the git log invocation ──
     // BUG-94: with `pre_sha = None` we can't form a `X..HEAD` range
     // because `HEAD~50` fails (`git rev-parse` exit 128) on repos with
@@ -83886,6 +84052,12 @@ fn handle_db_reconcile_status(
             default_branch
         );
     }
+
+    // BUG-568: the manual replay scans only the LOCAL repo's default branch —
+    // same single-repo blind spot as the live auto-bump. In a shared-store
+    // multi-repo workspace it silently propagates the miss instead of fixing
+    // it, so warn loudly. trace:BUG-568 | ai:claude
+    warn_multi_repo_scan_limited(project_root, "reconcile-status scan");
 
     // BUG-536: full-message (`%B`) scan, NUL-record-separated, so the manual
     // replay sees the same squash-body completion trailers the live auto-bump
