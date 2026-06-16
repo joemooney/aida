@@ -3,12 +3,12 @@ spec_id: BUG-562
 agreed_id: BUG-562
 title: 'aida solo --watch: every cycle step fails to spawn (ENOENT) after the binary is rebuilt mid-run — current_exe() goes stale'
 description: 'Found live 2026-06-15 during the first real aida solo --watch overnight run. solo_cycle (aida-cli/src/main.rs) spawns each step via std::env::current_exe(). When the aida binary is replaced while the loop runs (e.g. a cargo build --release swaps target/release/aida — which happened repeatedly this session after merges), the running process current_exe() returns the stale path (on Linux, the unlinked inode → "<path> (deleted)"), so every Command::new(exe).status() fails with "No such file or directory (os error 2)". The loop kept cycling but accomplished nothing (all 6 steps failed each cycle). Fix: resolve the aida binary robustly per run — use current_exe() ONLY if the path still exists; otherwise fall back to PATH `aida` (which re-resolves to the live binary, surviving rebuilds). The user invokes `aida solo --watch` via PATH, so PATH `aida` is the correct live binary. Parent STORY-625 (solo loop).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:04:17.626569954Z
-modified_at: 2026-06-16T03:04:17.626569954Z
+modified_at: 2026-06-16T03:13:55.061390661Z
 req_type: Bug
 tags:
 - autonomy
@@ -16,3 +16,21 @@ tags:
 - parent:STORY-625
 - severity:major
 - solo-mode
+history:
+- id: 019ece6b-d971-7f22-a073-a42ece646b82
+  author: aida-auto-bump
+  timestamp: 2026-06-16T03:13:55.057032059Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ece6b-d975-76c3-963b-0f81ff2cd2bc
+  timestamp: 2026-06-16T03:13:55.061389928Z
+  agent: aida
+  commit_sha: d08985b2c51d60c97e4e5eed375bf3f0c3ac3994
+  summary: Completed via merge d08985b2
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T03:13:54.901406280Z
+  completion_sha: d08985b2c51d60c97e4e5eed375bf3f0c3ac3994
