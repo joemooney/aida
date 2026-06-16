@@ -1,0 +1,27 @@
+id: 019eced1-35df-7151-9ad9-be2d595759ed
+spec_id: TASK-838
+agreed_id: TASK-838
+title: aida-pickup loads the spec's aida intent comprehension at the top of implementer context
+description: |-
+  Follow-up to STORY-631 (aida intent <spec>). Once a per-spec AI intent-comprehension exists, /aida-pickup (and queue work brief assembly) should lead the implementer context with it: the distilled plain-terms WHY-this-exists IS the brief, ahead of the raw spec body and the Critical-Files/Followups section. An agent picking up the spec gets reason-for-being before mechanics — exactly the --audience llm consumer STORY-631 targets.
+
+  BLOCKED-BY STORY-631 — this is inert until aida intent generates+caches a comprehension. Thin linking work: read the cached intent doc (provenance ai, --about the spec) if present and fresh; surface it at the top of the pickup brief; show a one-line stale/absent note (do NOT auto-generate inline — pickup must stay fast and non-AI-blocking; generation stays an explicit aida intent / sweep step).
+
+  ## Acceptance
+  - /aida-pickup and queue work brief assembly, when a fresh aida intent comprehension exists for the spec, render it (llm audience) at the TOP of the brief, labeled AI-generated.
+  - If absent or stale: a one-line note ("no/stale intent comprehension — run aida intent <spec>") and continue; never block pickup on an AI pass.
+  - No behavior change when STORY-631 has not shipped (feature-detect the cached doc).
+
+  Verify against the /aida-pickup skill + queue work brief path before coding.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T05:04:37.855659842Z
+modified_at: 2026-06-16T05:04:37.855659842Z
+req_type: Task
+tags:
+- aida:intent
+- aida:pickup
+- from-operator
+- living-docs
