@@ -61,6 +61,8 @@ mod schema;
 mod seats;
 mod session;
 mod session_manifest;
+// trace:STORY-627 | ai:claude — per-repo solo-loop lock + liveness sentinel.
+mod solo_lock;
 mod stacks;
 mod state_snapshot;
 mod status_cleanup;
@@ -132,8 +134,8 @@ use crate::cli::{
     PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelDefCommand, RelationshipCommand,
     ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
     ScaffoldCommand, ScheduleCommand, ServerCommand, SessionCommand, SessionManifestCommand,
-    SessionWakeupCommand, SkillCommand, StackCommand, TraceCommand, TriageCommand, TypeCommand,
-    WorkerCommand, ZenCommand,
+    SessionWakeupCommand, SkillCommand, SoloAction, StackCommand, TraceCommand, TriageCommand,
+    TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1608,6 +1610,7 @@ fn run() -> Result<()> {
         // STORY-624: solo-mode flag — machine-global ~/.aida/solo.toml, no
         // requirement store needed (mirrors the away/home early dispatch).
         Command::Solo {
+            action,
             off,
             status,
             ttl,
@@ -1615,7 +1618,15 @@ fn run() -> Result<()> {
             dry_run,
             interval,
         } => {
-            return handle_solo_command(*off, *status, ttl.as_deref(), *watch, *dry_run, *interval);
+            return handle_solo_command(
+                *action,
+                *off,
+                *status,
+                ttl.as_deref(),
+                *watch,
+                *dry_run,
+                *interval,
+            );
         }
         // TASK-784: pure read of the caller-identity resolvers (env vars +
         // current_user_id + detect_agent_type). No project store needed, so
@@ -52882,13 +52893,47 @@ fn solo_cycle(dry_run: bool) -> Result<()> {
             label,
             args.join(" ").dimmed()
         );
-        match std::process::Command::new(&exe).args(*args).status() {
-            Ok(s) if s.success() => {}
-            Ok(s) => eprintln!(
-                "    {} step exited {} — continuing (retried next tick)",
-                "note:".yellow(),
-                s.code().unwrap_or(-1)
-            ),
+        // STORY-627: spawn the step and poll it, printing a heartbeat every
+        // ~30s while it runs. The long steps (`intake --apply`, `burndown run`)
+        // shell out to `claude -p` for minutes — without this an operator watches
+        // silence and can't tell a working loop from a wedged one.
+        // trace:STORY-627 | ai:claude
+        match std::process::Command::new(&exe).args(*args).spawn() {
+            Ok(mut child) => {
+                let started = std::time::Instant::now();
+                let mut next_beat = std::time::Duration::from_secs(SOLO_HEARTBEAT_SECS);
+                let status = loop {
+                    match child.try_wait() {
+                        Ok(Some(s)) => break Ok(s),
+                        Ok(None) => {
+                            if started.elapsed() >= next_beat {
+                                let mins = started.elapsed().as_secs() / 60;
+                                println!(
+                                    "    {} working… ({}m) — {} to stop",
+                                    "·".dimmed(),
+                                    mins,
+                                    "Ctrl-C or `aida solo stop`".cyan()
+                                );
+                                next_beat += std::time::Duration::from_secs(SOLO_HEARTBEAT_SECS);
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        }
+                        Err(e) => break Err(e),
+                    }
+                };
+                match status {
+                    Ok(s) if s.success() => {}
+                    Ok(s) => eprintln!(
+                        "    {} step exited {} — continuing (retried next tick)",
+                        "note:".yellow(),
+                        s.code().unwrap_or(-1)
+                    ),
+                    Err(e) => eprintln!(
+                        "    {} step wait failed: {e} — continuing",
+                        "note:".yellow()
+                    ),
+                }
+            }
             Err(e) => eprintln!(
                 "    {} step failed to spawn: {e} — continuing",
                 "note:".yellow()
@@ -52898,6 +52943,14 @@ fn solo_cycle(dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+/// STORY-627: how often the per-step progress heartbeat prints while a long
+/// `solo_cycle` step (e.g. `claude -p`) runs. trace:STORY-627 | ai:claude
+const SOLO_HEARTBEAT_SECS: u64 = 30;
+
+/// STORY-627: while the inter-cycle sleep waits, poll the solo flag this often so
+/// `aida solo stop` lands within seconds, not a full cycle. trace:STORY-627
+const SOLO_STOP_POLL_SECS: u64 = 2;
+
 /// STORY-625: the solo LOOP — the single leave-it-running command that works the
 /// safe backlog end-to-end on a cadence (subsumes `aida queue integrate
 /// --watch`). Sets the solo flag on entry; each tick re-checks it and exits when
@@ -52905,6 +52958,19 @@ fn solo_cycle(dry_run: bool) -> Result<()> {
 /// `--dry-run` runs ONE tick that prints the cycle and exits, so the loop is
 /// verifiable without a live drain. trace:STORY-625 | ai:claude
 fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
+    // STORY-627: acquire the per-repo solo lock so a second `aida solo run`
+    // refuses while a live one holds it (and a Ctrl-C-killed loop is
+    // stale-reclaimed). A dry-run is a single non-integrating tick — no lock.
+    // The guard's Drop releases the lock on a clean exit / flag-clear.
+    // trace:STORY-627 | ai:claude
+    let _lock_guard = if dry_run {
+        None
+    } else {
+        let root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        Some(solo_lock::acquire_solo_lock(&root)?)
+    };
+
     // Entering the loop turns solo on (default TTL) so the flag + statusline
     // reflect the active pipeline. A dry-run does NOT flip the real flag.
     if !dry_run && !presence::current_solo(chrono::Utc::now()) {
@@ -52920,13 +52986,13 @@ fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
             "running".green().bold()
         },
         interval,
-        "Ctrl-C or `aida solo --off`".cyan()
+        "Ctrl-C or `aida solo stop`".cyan()
     );
     loop {
         let now = chrono::Utc::now();
         if !dry_run && !presence::current_solo(now) {
             println!(
-                "{} solo flag cleared (--off or TTL) — loop stopped.",
+                "{} solo flag cleared (stop or TTL) — loop stopped.",
                 "■".dimmed()
             );
             break;
@@ -52941,18 +53007,104 @@ fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
             "{} cycle complete; sleeping {}s ({} to stop)",
             "·".dimmed(),
             interval,
-            "Ctrl-C / `aida solo --off`".cyan()
+            "Ctrl-C / `aida solo stop`".cyan()
         );
-        std::thread::sleep(std::time::Duration::from_secs(interval));
+        // STORY-627 responsive stop: poll the solo flag in short increments
+        // during the inter-cycle sleep so `aida solo stop` lands within seconds,
+        // not a full cycle + sleep. Break the moment the flag clears.
+        // trace:STORY-627 | ai:claude
+        if solo_sleep_until_stop(
+            interval,
+            SOLO_STOP_POLL_SECS,
+            &mut |secs| std::thread::sleep(std::time::Duration::from_secs(secs)),
+            &mut || presence::current_solo(chrono::Utc::now()),
+        ) {
+            println!(
+                "{} solo flag cleared during sleep — loop stopped.",
+                "■".dimmed()
+            );
+            break;
+        }
     }
     Ok(())
+}
+
+/// STORY-627: the inter-cycle sleep, broken into `poll_secs` increments so the
+/// solo flag is re-checked frequently and `aida solo stop` lands within seconds.
+/// Returns `true` if the flag cleared mid-sleep (caller should stop the loop),
+/// `false` if the full `interval` elapsed with the flag still set. Both `sleep`
+/// and the flag check (`still_solo`) are injected so the poll cadence is
+/// unit-testable without real wall-clock waits or touching `~/.aida/solo.toml`.
+/// trace:STORY-627 | ai:claude
+fn solo_sleep_until_stop(
+    interval: u64,
+    poll_secs: u64,
+    sleep: &mut impl FnMut(u64),
+    still_solo: &mut impl FnMut() -> bool,
+) -> bool {
+    let poll = poll_secs.max(1);
+    let mut remaining = interval;
+    while remaining > 0 {
+        let chunk = remaining.min(poll);
+        sleep(chunk);
+        remaining -= chunk;
+        if !still_solo() {
+            return true;
+        }
+    }
+    false
 }
 
 /// `aida solo [--off | --status | --ttl <DURATION> | --watch [--dry-run]]` —
 /// enter/exit/show solo mode (the visible work-state flag, STORY-624) or run the
 /// solo LOOP (STORY-625). State lives in `~/.aida/solo.toml` with a safety TTL;
 /// the statusline surfaces it. trace:STORY-624 trace:STORY-625 | ai:claude
+/// STORY-627: the resolved solo action after folding the canonical verb and the
+/// legacy `--watch`/`--off`/`--status` flag aliases into one. The verb wins when
+/// present; otherwise the flag aliases apply (silently, so nothing breaks).
+/// Pure so the verb→action mapping is unit-testable. trace:STORY-627 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SoloEffect {
+    /// Run the loop (`solo run` / `--watch`).
+    Run,
+    /// Stop a running loop (`solo stop` / `--off`).
+    Stop,
+    /// Print state (`solo status` / `--status`).
+    Status,
+    /// No verb, no alias → enter solo MODE (set the flag).
+    EnterMode,
+}
+
+/// Fold the canonical verb and the legacy flag aliases into a single effect.
+/// The verb takes precedence; otherwise `--watch`→Run, `--off`→Stop,
+/// `--status`→Status, and (with none of them) EnterMode. `--off` is checked
+/// before `--status` to match the prior arm order. trace:STORY-627 | ai:claude
+fn resolve_solo_effect(
+    action: Option<SoloAction>,
+    off: bool,
+    status: bool,
+    watch: bool,
+) -> SoloEffect {
+    if let Some(a) = action {
+        return match a {
+            SoloAction::Run => SoloEffect::Run,
+            SoloAction::Stop => SoloEffect::Stop,
+            SoloAction::Status => SoloEffect::Status,
+        };
+    }
+    if watch {
+        SoloEffect::Run
+    } else if off {
+        SoloEffect::Stop
+    } else if status {
+        SoloEffect::Status
+    } else {
+        SoloEffect::EnterMode
+    }
+}
+
 fn handle_solo_command(
+    action: Option<SoloAction>,
     off: bool,
     status: bool,
     ttl: Option<&str>,
@@ -52960,21 +53112,71 @@ fn handle_solo_command(
     dry_run: bool,
     interval: u64,
 ) -> Result<()> {
-    if watch {
+    let effect = resolve_solo_effect(action, off, status, watch);
+    let now = chrono::Utc::now();
+    if effect == SoloEffect::Run {
         return run_solo_loop(dry_run, interval);
     }
-    let now = chrono::Utc::now();
-    if status {
-        if presence::current_solo(now) {
-            println!("{} solo mode {}", "🤖", "ON".green().bold());
-        } else {
-            println!("solo mode {}", "off".dimmed());
+    if effect == SoloEffect::Status {
+        // STORY-627: corroborate the flag against the loop lock so `status` can
+        // tell a live loop from a Ctrl-C-orphaned flag. trace:STORY-627
+        let root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        match solo_lock::probe_lock(&root) {
+            solo_lock::LockStatus::Running(l) => {
+                println!(
+                    "{} solo loop {} (pid {}, since {})",
+                    "🤖",
+                    "RUNNING".green().bold(),
+                    l.pid,
+                    l.started_at_utc
+                );
+            }
+            solo_lock::LockStatus::Stale(l) => {
+                println!(
+                    "{} solo loop flag set but no live process (stale lock pid {}). \
+                     Run `aida solo stop` to clear it.",
+                    "⚠".yellow(),
+                    l.pid
+                );
+            }
+            solo_lock::LockStatus::None => {
+                if presence::current_solo(now) {
+                    println!("{} solo mode {}", "🤖", "ON".green().bold());
+                } else {
+                    println!("solo mode {}", "off".dimmed());
+                }
+            }
         }
         return Ok(());
     }
-    if off {
+    if effect == SoloEffect::Stop {
+        // STORY-627: clear the flag AND signal a live loop pid so stop lands even
+        // mid-step (when the loop is blocked inside a long `claude -p` step) and
+        // the flag-left-ON-after-Ctrl-C gap is closed. trace:STORY-627
         presence::clear_solo()?;
-        println!("solo mode {}", "off".bold());
+        let root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        match solo_lock::probe_lock(&root) {
+            solo_lock::LockStatus::Running(l) => {
+                if solo_lock::signal_stop(l.pid) {
+                    println!(
+                        "solo mode {} — signalled the running loop (pid {}).",
+                        "off".bold(),
+                        l.pid
+                    );
+                } else {
+                    println!(
+                        "solo mode {} (loop pid {} already gone).",
+                        "off".bold(),
+                        l.pid
+                    );
+                }
+            }
+            solo_lock::LockStatus::Stale(_) | solo_lock::LockStatus::None => {
+                println!("solo mode {}", "off".bold());
+            }
+        }
         return Ok(());
     }
     let ttl_secs = match ttl {
@@ -52988,9 +53190,128 @@ fn handle_solo_command(
          keystone/architecture is parked for the operator. `{}` to exit.",
         "🤖",
         "ON".green().bold(),
-        "aida solo --off".cyan()
+        "aida solo stop".cyan()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod solo_tests {
+    use super::*;
+    use crate::cli::SoloAction;
+
+    // ── resolve_solo_effect: verb → action, with flags as silent aliases ──
+
+    #[test]
+    fn verb_run_maps_to_run() {
+        assert_eq!(
+            resolve_solo_effect(Some(SoloAction::Run), false, false, false),
+            SoloEffect::Run
+        );
+    }
+
+    #[test]
+    fn verb_stop_maps_to_stop() {
+        assert_eq!(
+            resolve_solo_effect(Some(SoloAction::Stop), false, false, false),
+            SoloEffect::Stop
+        );
+    }
+
+    #[test]
+    fn verb_status_maps_to_status() {
+        assert_eq!(
+            resolve_solo_effect(Some(SoloAction::Status), false, false, false),
+            SoloEffect::Status
+        );
+    }
+
+    #[test]
+    fn watch_flag_aliases_to_run() {
+        assert_eq!(
+            resolve_solo_effect(None, false, false, true),
+            SoloEffect::Run
+        );
+    }
+
+    #[test]
+    fn off_flag_aliases_to_stop() {
+        assert_eq!(
+            resolve_solo_effect(None, true, false, false),
+            SoloEffect::Stop
+        );
+    }
+
+    #[test]
+    fn status_flag_aliases_to_status() {
+        assert_eq!(
+            resolve_solo_effect(None, false, true, false),
+            SoloEffect::Status
+        );
+    }
+
+    #[test]
+    fn no_verb_no_flag_enters_mode() {
+        assert_eq!(
+            resolve_solo_effect(None, false, false, false),
+            SoloEffect::EnterMode
+        );
+    }
+
+    #[test]
+    fn verb_wins_over_a_conflicting_flag() {
+        // `aida solo stop --watch` → the verb is canonical, so Stop wins.
+        assert_eq!(
+            resolve_solo_effect(Some(SoloAction::Stop), false, false, true),
+            SoloEffect::Stop
+        );
+    }
+
+    // ── solo_sleep_until_stop: responsive-poll exits when the flag clears ──
+
+    #[test]
+    fn sleep_runs_full_interval_when_flag_stays_set() {
+        let mut slept = Vec::new();
+        let cleared = solo_sleep_until_stop(
+            10,
+            2,
+            &mut |s| slept.push(s),
+            &mut || true, // flag never clears
+        );
+        assert!(!cleared, "should report not-cleared after a full interval");
+        // 10s in 2s chunks → five 2s sleeps.
+        assert_eq!(slept, vec![2, 2, 2, 2, 2]);
+    }
+
+    #[test]
+    fn sleep_breaks_early_when_flag_clears() {
+        let mut calls = 0;
+        let mut slept = Vec::new();
+        let cleared = solo_sleep_until_stop(300, 2, &mut |s| slept.push(s), &mut || {
+            calls += 1;
+            calls < 2 // clears on the second poll
+        });
+        assert!(cleared, "should report cleared mid-sleep");
+        // Only polled twice → only two 2s chunks slept, NOT the full 300s.
+        assert_eq!(slept, vec![2, 2]);
+    }
+
+    #[test]
+    fn sleep_chunks_the_tail_remainder() {
+        // 5s in 2s chunks → 2, 2, 1.
+        let mut slept = Vec::new();
+        let cleared = solo_sleep_until_stop(5, 2, &mut |s| slept.push(s), &mut || true);
+        assert!(!cleared);
+        assert_eq!(slept, vec![2, 2, 1]);
+    }
+
+    #[test]
+    fn sleep_clamps_zero_poll_to_one() {
+        // poll_secs 0 must not divide-by-zero / spin — clamps to 1.
+        let mut slept = Vec::new();
+        let _ = solo_sleep_until_stop(3, 0, &mut |s| slept.push(s), &mut || true);
+        assert_eq!(slept, vec![1, 1, 1]);
+    }
 }
 
 /// Pure source-label resolver for `aida whoami`'s user-id line. Mirrors
