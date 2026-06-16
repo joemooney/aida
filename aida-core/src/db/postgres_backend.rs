@@ -445,6 +445,8 @@ impl PostgresBackend {
             decision_request: None,
             // trace:STORY-542 | ai:claude
             interface_changes: None,
+            // trace:STORY-631 | ai:claude
+            intent: None,
             version,
         })
     }

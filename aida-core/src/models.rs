@@ -414,6 +414,35 @@ impl InterfaceChanges {
     }
 }
 
+/// AI-generated plain-terms comprehension of WHY a spec exists — its intent,
+/// distilled from the spec + its immediate graph neighborhood (parents,
+/// blockers, decisions, referenced specs, key comments). Unlike `aida why`
+/// (a deterministic Rust classifier over store signals), this is an LLM
+/// SYNTHESIS task: GENERATED (an AI pass), CACHED (never recompute per read),
+/// and DRIFT-STAMPED (regenerated when the spec or its neighbors change).
+///
+/// Stored as a nested field on [`Requirement`] (skip_serializing_if none, so
+/// specs without it stay clean). Deliberately NOT in the `diff_snapshots`
+/// history allow-list — AI regeneration generates ZERO history rows.
+///
+/// `stale` is COMPUTED at read time (stored `source_hash` vs a freshly-computed
+/// neighborhood hash), NEVER a stored bool. trace:STORY-631 | ai:claude
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct SpecIntent {
+    /// Layman register: plain prose for a human skimmer.
+    pub layman: String,
+    /// LLM register: denser/structured comprehension an agent loads BEFORE
+    /// working the spec.
+    pub llm: String,
+    /// RFC3339 timestamp of when this comprehension was generated.
+    pub generated_at: String,
+    /// Hash of the graph-neighborhood inputs at generation time. Compared
+    /// against a freshly-computed hash at read to detect drift (staleness).
+    pub source_hash: String,
+    /// The model identifier that produced the comprehension.
+    pub model: String,
+}
+
 /// One enumerated answer to a [`DecisionRequest`].
 ///
 /// Each choice carries a human-readable `label` and `consequence` plus a
@@ -3808,6 +3837,15 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interface_changes: Option<InterfaceChanges>,
 
+    /// AI-generated plain-terms comprehension of WHY this spec exists — its
+    /// intent, distilled from the spec + its graph neighborhood. Generated
+    /// on-demand by `aida intent <spec>`, cached here, and drift-stamped via
+    /// `source_hash`. `None` until first generated. Deliberately NOT in the
+    /// `diff_snapshots` history allow-list — regeneration writes ZERO history
+    /// rows. trace:STORY-631 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intent: Option<SpecIntent>,
+
     /// Version number for optimistic locking (SQLite only)
     /// Incremented on each update, used to detect concurrent modifications
     #[serde(skip)]
@@ -3864,6 +3902,8 @@ impl Requirement {
             decision_request: None,
             // trace:STORY-542 | ai:claude
             interface_changes: None,
+            // trace:STORY-631 | ai:claude
+            intent: None,
             urls: Vec::new(),
             attachments: Vec::new(),
             trace_links: Vec::new(),

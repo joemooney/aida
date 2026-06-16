@@ -241,6 +241,8 @@ pub use models::{
     RequirementType,
     RequirementTypeDefinition,
     RequirementsStore,
+    // AI-generated WHY-comprehension cached on a spec (STORY-631)
+    SpecIntent,
     SyncStatus,
     // Team type
     Team,

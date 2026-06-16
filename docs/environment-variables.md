@@ -235,6 +235,7 @@ Claude models; set these only when pointing at a proxy or a non-default model.
 | `AIDA_EVAL_MODEL` | Model ID for evaluation operations. | provider-dependent. | ops | process env |
 | `AIDA_ANTHROPIC_BASE_URL` | Anthropic API base URL. | `https://api.anthropic.com`. | ops / dev | process env |
 | `AIDA_OPENAI_BASE_URL` | OpenAI API base URL. | `https://api.openai.com`. | ops / dev | process env |
+| `AIDA_INTENT_MODEL` | Fallback model label stamped on a generated `aida intent` comprehension when the `/aida-intent` skill's sidecar omits its own model id. | `claude`. | dev | process env |
 
 ---
 
