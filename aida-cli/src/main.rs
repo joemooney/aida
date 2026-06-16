@@ -52230,7 +52230,12 @@ fn handle_presence_command() -> Result<()> {
 /// phase is retried next tick). With `dry_run`, each step is PRINTED, not run.
 /// trace:STORY-625 | ai:claude
 fn solo_cycle(dry_run: bool) -> Result<()> {
-    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    // BUG-562: use the hardened resolver, NOT raw current_exe(). The solo loop is
+    // long-running; a `cargo build` that swaps the binary mid-run makes Linux
+    // report current_exe() as "<path> (deleted)", which Command::new cannot spawn
+    // — every cycle step then ENOENTs. resolve_aida_exe() falls back to the
+    // on-PATH `aida` (the live binary) when the exe path is gone. trace:BUG-562
+    let exe = resolve_aida_exe();
     // Each step is (label, args-to-`aida`). Garden first — this is what reaps the
     // stale leases / OBE briefs the operator otherwise saw pile up unattended.
     let steps: &[(&str, &[&str])] = &[
