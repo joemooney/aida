@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:50:14.700945231Z
-modified_at: 2026-06-16T09:18:26.351978963Z
+modified_at: 2026-06-16T09:18:27.393309078Z
 req_type: Bug
 tags:
 - batch:gitlab-store-now
@@ -48,6 +48,11 @@ comments:
   content: Commit aaec5b561 references this requirement
   created_at: 2026-06-16T09:07:30.709166236Z
   modified_at: 2026-06-16T09:07:30.709166236Z
+- id: 019ecfb9-9841-7422-915e-75453f0626e0
+  author: joe
+  content: 'Symptom CURED via PR #957 (fix b): try_attach_store_worktree now recovers a fresh clone that landed on aida-store (switch to a code branch or detached HEAD, then fetch+attach the worktree) instead of erroring — a teammate/CI cloning an AIDA-on-GitLab repo now gets a working store. Per the spec author''s instruction this stays open until the source-side prevention (fix a: init never lets the orphan become the forge default) lands — that is TASK-844 (needs GitHub+GitLab live verification + the glab set-default-branch call, product-seat forge lane). Deferring behind TASK-844 so it''s tracked without reading as falsely-actionable. — advisor'
+  created_at: 2026-06-16T09:18:27.393309078Z
+  modified_at: 2026-06-16T09:18:27.393309078Z
 history:
 - id: 019ec817-55cf-7160-8ee0-e9ffa4511f38
   author: aida-auto-bump
