@@ -55,18 +55,11 @@ ALLOW_LIST=(
   "$SRC_DIR/session.rs"
   "$SRC_DIR/mcp.rs"
   "$SRC_DIR/workflow_hints.rs"
-  "$SRC_DIR/reviewer_summary.rs"
   "$SRC_DIR/status_cleanup.rs"
   "$SRC_DIR/drain_state.rs"
   "$SRC_DIR/backlog.rs"
-  "$SRC_DIR/headless_tee.rs"
-  "$SRC_DIR/session_manifest.rs"
-  "$SRC_DIR/presence.rs"
   "$SRC_DIR/burndown.rs"
   "$SRC_DIR/orchestrator.rs"
-  "$SRC_DIR/drain_lock.rs"
-  "$SRC_DIR/client.rs"
-  "$SRC_DIR/agent_registry.rs"
 )
 
 block_mode=0

@@ -204,9 +204,14 @@ pub async fn ping_server(server_addr: &str) -> Result<()> {
     let elapsed = start.elapsed();
 
     let status = response.into_inner();
+    // trace:TASK-840 | ai:claude — route the success check through the registry.
+    let check = crate::glyphs::get(
+        crate::glyphs::Glyph::Check,
+        crate::find_project_root().ok().as_deref(),
+    );
     println!(
         "{} Server at {} is {} ({}ms, v{})",
-        "✓".green(),
+        check.green(),
         server_addr,
         status.status.green(),
         elapsed.as_millis(),

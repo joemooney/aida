@@ -265,6 +265,13 @@ pub fn format_event_for_tee(line: &str, opts: &TeeOptions) -> TeeOutcome {
     let mut out = TeeOutcome::default();
     let typ = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
+    // trace:TASK-840 | ai:claude — route the status markers through the registry
+    // (resolve the profile once for this event).
+    let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
+    let warn = crate::glyphs::Glyph::Warning.render(profile);
+    let cross = crate::glyphs::Glyph::Cross.render(profile);
+    let check = crate::glyphs::Glyph::Check.render(profile);
+
     // Loud always-on signals — compute before the enabled gate. A loud
     // surfacing for `is_error` on a `result` event also flips `is_result`
     // so the tail loop exits.
@@ -273,7 +280,7 @@ pub fn format_event_for_tee(line: &str, opts: &TeeOptions) -> TeeOutcome {
         if !denials.is_empty() {
             let summary = summarize_denials(denials);
             out.lines
-                .push(format!("⚠ permission denied: {}", summary.red()));
+                .push(format!("{warn} permission denied: {}", summary.red()));
             denials_surfaced = true;
         }
     }
@@ -292,16 +299,20 @@ pub fn format_event_for_tee(line: &str, opts: &TeeOptions) -> TeeOutcome {
                 .map(|s| s.to_string())
                 .unwrap_or_default();
             let line = if detail.is_empty() {
-                format!("✗ result is_error ({})", subtype)
+                format!("{cross} result is_error ({})", subtype)
             } else {
-                format!("✗ result is_error ({}): {}", subtype, first_line(&detail))
+                format!(
+                    "{cross} result is_error ({}): {}",
+                    subtype,
+                    first_line(&detail)
+                )
             };
             out.lines.push(line.red().to_string());
         } else if opts.enabled {
             // Verdict + cost line (informational; only when tee is on).
             let duration_ms = parsed.get("duration_ms").and_then(|v| v.as_u64());
             let cost = parsed.get("total_cost_usd").and_then(|v| v.as_f64());
-            let mut bits: Vec<String> = vec!["✓ result".to_string()];
+            let mut bits: Vec<String> = vec![format!("{check} result")];
             if let Some(d) = duration_ms {
                 bits.push(format!("{}ms", d));
             }
@@ -314,7 +325,8 @@ pub fn format_event_for_tee(line: &str, opts: &TeeOptions) -> TeeOutcome {
         // A non-result event with is_error:true (rare — usually denials
         // ride alongside) — surface it raw so the failure can't hide.
         // Skip if denials already covered it.
-        out.lines.push(format!("✗ {}", trimmed).red().to_string());
+        out.lines
+            .push(format!("{cross} {}", trimmed).red().to_string());
     }
 
     if !opts.enabled {

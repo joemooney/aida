@@ -4,7 +4,7 @@
 //! list to `.aida/sessions/<session-id>.manifest.toml`. Other sessions can
 //! see "this spec is planned by session X" so two concurrent runs don't
 //! grab the same item. `aida session show --plan` reads it back to render
-//! a ✓ Done / ◐ In progress / ○ Pending status table.
+//! a Done / In progress / Pending status table (glyphs via the registry).
 //!
 //! Why a separate file from the lease: lease state is "what is this
 //! session" (scope, branch, worktree, role); manifest state is "what does
@@ -266,11 +266,19 @@ pub enum ItemStatus {
 }
 
 impl ItemStatus {
+    /// The status glyph. InProgress / Done route through the glyph registry so
+    /// an `[ui] glyphs = "ascii"` / `AIDA_GLYPHS=ascii` profile re-renders them
+    /// (default Unicode reproduces the historical literals byte-for-byte).
+    /// Pending keeps its small white-circle literal — it is not a registry glyph.
+    // trace:TASK-840 | ai:claude
     pub fn glyph(self) -> &'static str {
+        let root = crate::find_project_root().ok();
         match self {
             ItemStatus::Pending => "○",
-            ItemStatus::InProgress => "◐",
-            ItemStatus::Done => "✓",
+            ItemStatus::InProgress => {
+                crate::glyphs::get(crate::glyphs::Glyph::InFlight, root.as_deref())
+            }
+            ItemStatus::Done => crate::glyphs::get(crate::glyphs::Glyph::Check, root.as_deref()),
         }
     }
 
