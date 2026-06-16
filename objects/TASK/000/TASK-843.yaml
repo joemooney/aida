@@ -3,13 +3,31 @@ spec_id: TASK-843
 agreed_id: TASK-843
 title: 'integrate: multiple open PRs for one spec'
 description: 'Follow-up of TASK-836. detect_open_pr_for_spec_via_forge returns at most one PR per spec; if a spec has MORE than one open PR (e.g. a reopened/duplicate), the integrator silently picks one. Design question: detect the multiple-open-PRs case and park+report (ambiguous which to merge) rather than guess. Currently out of the safe-bounded set because resolving which PR is canonical needs a policy decision.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T08:21:10.412220786Z
-modified_at: 2026-06-16T08:21:10.412220786Z
+modified_at: 2026-06-16T08:53:38.451787755Z
 req_type: Task
 tags:
 - integrator
 - parent:TASK-836
+history:
+- id: 019ecfa2-e00f-7863-9659-23e733493f85
+  author: aida-auto-bump
+  timestamp: 2026-06-16T08:53:38.447300960Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecfa2-e013-7552-bbf7-932764bb911c
+  timestamp: 2026-06-16T08:53:38.451787275Z
+  agent: aida
+  commit_sha: 7d469050ff7c76784516ae4ba7a97975a49ad1ba
+  summary: Completed via merge 7d469050
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T08:53:38.284112274Z
+  completion_sha: 7d469050ff7c76784516ae4ba7a97975a49ad1ba
