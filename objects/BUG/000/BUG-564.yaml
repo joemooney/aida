@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:14:53.145173739Z
-modified_at: 2026-06-16T03:16:08.557469686Z
+modified_at: 2026-06-16T03:28:11.353378873Z
 req_type: Bug
 tags:
 - aida:human
@@ -30,3 +30,9 @@ relationships:
   target_id: 019ece6d-a446-7ba1-9518-61524ff26f62
   created_at: 2026-06-16T03:16:08.557463619Z
   created_by: joe
+comments:
+- id: 019ece78-ea59-7353-bc37-29ace54ee2fa
+  author: joe
+  content: Commit b13fefdd2 references this requirement
+  created_at: 2026-06-16T03:28:11.353378873Z
+  modified_at: 2026-06-16T03:28:11.353378873Z
