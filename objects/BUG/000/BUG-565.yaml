@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:15:52.518404579Z
-modified_at: 2026-06-16T03:15:52.518404579Z
+modified_at: 2026-06-16T03:16:08.900186142Z
 req_type: Bug
 tags:
 - gitignore
@@ -27,3 +27,8 @@ tags:
 - onboarding
 - reliability
 - scaffolding
+relationships:
+- rel_type: !Custom related
+  target_id: 019ece6c-bc59-7793-8e28-a5ec3e86a764
+  created_at: 2026-06-16T03:16:08.900183711Z
+  created_by: joe
