@@ -425,6 +425,173 @@ pub(crate) fn integrate_strategy_from_config(content: &str) -> Option<IntegrateS
     None
 }
 
+// ── TASK-843: multiple open PRs for one spec — newest-canonical policy ────────
+//
+// `detect_open_pr_for_spec_via_forge` returns at most one PR per spec, so a spec
+// with >1 open PR (a reopened/duplicate, or two branches both naming the spec in
+// their body) was resolved by whichever the forge happened to return first — a
+// silent, non-deterministic pick. This decides that case explicitly:
+//
+//   * exactly one mergeable PR → integrate it (the common case);
+//   * several mergeable PRs   → the NEWEST (highest PR number) is canonical;
+//     integrate it and report the rest as ignored-this-pass (legible, not
+//     silent — the operator can close the dupes);
+//   * none mergeable          → PARK + report the candidate numbers (reuses the
+//     park-and-continue contract; the exit code already mirrors a park).
+//
+// Newest-wins is the safe default: a reopened/rebased duplicate is almost always
+// the higher number, and the `--from-pr` drive re-gates the merge, so an ignored
+// stale PR is never silently merged. The decision is PURE over the candidate
+// list so it is exhaustively unit-testable with synthetic PR numbers, the same
+// discipline `classify_candidate` / `classify_integration_action` follow.
+// trace:TASK-843
+
+/// One open PR found for a spec, reduced to the two facts the canonical-pick
+/// needs: its number (the newest-wins key) and whether it is mergeable (clean /
+/// admissible this pass). The richer per-PR gate ([`classify_integration_action`])
+/// still runs on the chosen PR afterwards. trace:TASK-843 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PrCandidate {
+    /// The forge PR number — also the newest-canonical tiebreak (higher = newer).
+    pub number: u64,
+    /// True when this PR is clean/mergeable enough to be a merge candidate this
+    /// pass (no merge conflict, not already merged). Non-mergeable PRs can't be
+    /// the canonical pick — if NONE are mergeable the spec is parked.
+    pub mergeable: bool,
+}
+
+/// What to do when a spec has one-or-more open PRs. trace:TASK-843 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CanonicalPrDecision {
+    /// No open PRs at all — nothing to integrate (the caller skips quietly,
+    /// matching `CandidateVerdict::SkipNoPr`).
+    NoPr,
+    /// Integrate `chosen` (the newest mergeable PR). `ignored` lists the OTHER
+    /// open PR numbers this pass skipped (empty in the common single-PR case),
+    /// in descending order, so the caller can emit one legible "ignored #N, #M"
+    /// line. trace:TASK-843
+    Integrate { chosen: u64, ignored: Vec<u64> },
+    /// One-or-more open PRs but NONE are mergeable — park + report the
+    /// candidates (descending order). Reuses the existing Park path.
+    Park { candidates: Vec<u64> },
+}
+
+/// Pure newest-canonical policy for a spec's open PRs. Given the candidate PR
+/// list (any order), pick the newest mergeable PR as canonical, report the rest
+/// as ignored, or park when none are mergeable. Order of the returned
+/// `ignored` / `candidates` lists is descending by PR number (newest first) for
+/// stable, legible output. trace:TASK-843 | ai:claude
+pub(crate) fn select_canonical_pr(prs: &[PrCandidate]) -> CanonicalPrDecision {
+    if prs.is_empty() {
+        return CanonicalPrDecision::NoPr;
+    }
+    // Newest-first by number, stable + deterministic regardless of input order.
+    let mut sorted: Vec<&PrCandidate> = prs.iter().collect();
+    sorted.sort_by(|a, b| b.number.cmp(&a.number));
+
+    let mergeable: Vec<&PrCandidate> = sorted.iter().copied().filter(|p| p.mergeable).collect();
+    if mergeable.is_empty() {
+        // None clean — park, reporting every candidate (newest first).
+        return CanonicalPrDecision::Park {
+            candidates: sorted.iter().map(|p| p.number).collect(),
+        };
+    }
+    // Newest mergeable is canonical; every OTHER open PR (mergeable or not) is
+    // ignored this pass and reported so the operator can close the dupes.
+    let chosen = mergeable[0].number;
+    let ignored: Vec<u64> = sorted
+        .iter()
+        .map(|p| p.number)
+        .filter(|n| *n != chosen)
+        .collect();
+    CanonicalPrDecision::Integrate { chosen, ignored }
+}
+
+// ── TASK-842: multi-spec PR recognition + dedupe ─────────────────────────────
+//
+// A single PR whose commit trailers reference MULTIPLE specs (a cluster PR, e.g.
+// `(BUG-566) (BUG-567)`) was previously keyed on one spec id by the integrator;
+// the SIBLING specs on the PR were unrecognized, and — because the integrator
+// scans Done specs and looks up a PR per spec — the SAME PR could be selected
+// once per member spec and driven repeatedly.
+//
+// The actual completion is unchanged: the merge-trailer → auto-bump path already
+// promotes every trailered spec to Completed on merge. This is RECOGNITION +
+// DEDUPE + REPORTING only:
+//
+//   * detect the full set of spec-IDs a PR's trailers reference (the caller
+//     extracts them via `extract_spec_ids_from_commit`; this layer dedupes +
+//     reports so it stays pure over the trailer set);
+//   * collapse a multi-spec PR to ONE integration unit (dedupe by PR number) so
+//     it is driven once, not N times;
+//   * emit a legible line naming ALL specs the merge will complete.
+//
+// Pure over the (pr_number, spec_ids) recognition rows so it is unit-testable
+// with synthetic trailer sets. trace:TASK-842
+
+/// One PR recognized as completing one-or-more specs on merge. `spec_ids` is the
+/// full trailer set the PR references (deduped, in first-seen order).
+/// trace:TASK-842 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PrCompletion {
+    pub number: u64,
+    pub spec_ids: Vec<String>,
+}
+
+/// Collapse per-spec recognition rows into one [`PrCompletion`] per PR number,
+/// so a multi-spec cluster PR — which the Done-spec scan surfaces once per member
+/// spec — is integrated ONCE, not N times. Input is `(pr_number, spec_ids)` rows
+/// (one per Done spec the scan considered); output is one row per distinct PR
+/// number, with the UNION of every spec the PR's trailers reference (first-seen
+/// order across rows preserved, case-insensitive de-dup). PR rows are returned
+/// in first-seen order so the report is stable. trace:TASK-842 | ai:claude
+pub(crate) fn dedupe_pr_completions(rows: &[(u64, Vec<String>)]) -> Vec<PrCompletion> {
+    let mut order: Vec<u64> = Vec::new();
+    let mut by_number: std::collections::HashMap<u64, Vec<String>> =
+        std::collections::HashMap::new();
+    for (number, spec_ids) in rows {
+        let entry = by_number.entry(*number).or_default();
+        if !order.contains(number) {
+            order.push(*number);
+        }
+        for id in spec_ids {
+            let id = id.trim();
+            if id.is_empty() {
+                continue;
+            }
+            if !entry.iter().any(|x| x.eq_ignore_ascii_case(id)) {
+                entry.push(id.to_string());
+            }
+        }
+    }
+    order
+        .into_iter()
+        .map(|number| PrCompletion {
+            number,
+            spec_ids: by_number.remove(&number).unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// One legible, SPEC-ID-bearing line for a multi-spec PR completion — the
+/// "integrating PR #N → completes BUG-566, BUG-567" report. The spec ids ARE the
+/// payload here (developer-facing integrator output that names what the merge
+/// completes), so they stay in the line. trace:TASK-842 | ai:claude
+pub(crate) fn describe_pr_completion(c: &PrCompletion) -> String {
+    if c.spec_ids.is_empty() {
+        format!(
+            "integrating PR #{} → completes (no trailered spec)",
+            c.number
+        )
+    } else {
+        format!(
+            "integrating PR #{} → completes {}",
+            c.number,
+            c.spec_ids.join(", ")
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -809,6 +976,199 @@ enabled = true
         assert_eq!(
             integrate_strategy_from_config("[other]\nstrategy = \"stacked\"\n"),
             None
+        );
+    }
+
+    // ── TASK-843 newest-canonical policy for multiple PRs per spec ───────────
+
+    fn pr(number: u64, mergeable: bool) -> PrCandidate {
+        PrCandidate { number, mergeable }
+    }
+
+    #[test]
+    fn no_open_prs_yields_nopr() {
+        assert_eq!(select_canonical_pr(&[]), CanonicalPrDecision::NoPr);
+    }
+
+    #[test]
+    fn single_mergeable_pr_integrates_with_no_ignored() {
+        // The common case: exactly one clean open PR → integrate it, nothing
+        // ignored.
+        let d = select_canonical_pr(&[pr(42, true)]);
+        assert_eq!(
+            d,
+            CanonicalPrDecision::Integrate {
+                chosen: 42,
+                ignored: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn multiple_mergeable_prs_newest_wins_rest_ignored() {
+        // Several clean PRs: the highest number is canonical, the rest are
+        // reported as ignored this pass (descending order).
+        let d = select_canonical_pr(&[pr(10, true), pr(57, true), pr(31, true)]);
+        assert_eq!(
+            d,
+            CanonicalPrDecision::Integrate {
+                chosen: 57,
+                ignored: vec![31, 10],
+            }
+        );
+    }
+
+    #[test]
+    fn newest_wins_independent_of_input_order() {
+        // Determinism: any input order yields the same canonical pick + ignored
+        // list (descending).
+        let a = select_canonical_pr(&[pr(57, true), pr(10, true), pr(31, true)]);
+        let b = select_canonical_pr(&[pr(31, true), pr(57, true), pr(10, true)]);
+        assert_eq!(a, b);
+        assert_eq!(
+            a,
+            CanonicalPrDecision::Integrate {
+                chosen: 57,
+                ignored: vec![31, 10],
+            }
+        );
+    }
+
+    #[test]
+    fn newest_mergeable_wins_even_when_a_higher_pr_is_unmergeable() {
+        // PR #99 is the newest but conflicting; the newest MERGEABLE (#57) is
+        // canonical, and #99 is still reported as ignored (operator can close).
+        let d = select_canonical_pr(&[pr(99, false), pr(57, true), pr(10, true)]);
+        assert_eq!(
+            d,
+            CanonicalPrDecision::Integrate {
+                chosen: 57,
+                ignored: vec![99, 10],
+            }
+        );
+    }
+
+    #[test]
+    fn none_mergeable_parks_reporting_all_candidates() {
+        // No clean PR among several → park, reporting every candidate number
+        // (descending) so the operator sees the ambiguity.
+        let d = select_canonical_pr(&[pr(10, false), pr(57, false), pr(31, false)]);
+        assert_eq!(
+            d,
+            CanonicalPrDecision::Park {
+                candidates: vec![57, 31, 10],
+            }
+        );
+    }
+
+    #[test]
+    fn single_unmergeable_pr_parks() {
+        // Even one PR, if not mergeable, parks rather than driving blind.
+        let d = select_canonical_pr(&[pr(42, false)]);
+        assert_eq!(
+            d,
+            CanonicalPrDecision::Park {
+                candidates: vec![42],
+            }
+        );
+    }
+
+    // ── TASK-842 multi-spec PR recognition + dedupe ─────────────────────────
+
+    #[test]
+    fn single_spec_pr_recognized_as_one_completion() {
+        let out = dedupe_pr_completions(&[(7, vec!["BUG-566".to_string()])]);
+        assert_eq!(
+            out,
+            vec![PrCompletion {
+                number: 7,
+                spec_ids: vec!["BUG-566".to_string()],
+            }]
+        );
+    }
+
+    #[test]
+    fn multi_spec_pr_detected_and_deduped_to_one_unit() {
+        // The cluster PR #7 carries BUG-566 + BUG-567. The Done-spec scan
+        // surfaces it once per member spec (two rows, same PR number); dedupe
+        // collapses to ONE completion so the PR is driven once, not twice, with
+        // the UNION of specs.
+        let rows = vec![
+            (7, vec!["BUG-566".to_string(), "BUG-567".to_string()]),
+            (7, vec!["BUG-567".to_string(), "BUG-566".to_string()]),
+        ];
+        let out = dedupe_pr_completions(&rows);
+        assert_eq!(out.len(), 1, "multi-spec PR collapses to a single unit");
+        assert_eq!(out[0].number, 7);
+        // First-seen order across rows preserved, case-insensitive de-dup.
+        assert_eq!(
+            out[0].spec_ids,
+            vec!["BUG-566".to_string(), "BUG-567".to_string()]
+        );
+    }
+
+    #[test]
+    fn distinct_prs_stay_separate_in_first_seen_order() {
+        let rows = vec![
+            (12, vec!["STORY-1".to_string()]),
+            (7, vec!["BUG-566".to_string(), "BUG-567".to_string()]),
+            (12, vec!["STORY-1".to_string()]), // dupe row for PR 12
+        ];
+        let out = dedupe_pr_completions(&rows);
+        assert_eq!(out.len(), 2);
+        // PR 12 first-seen, then PR 7.
+        assert_eq!(out[0].number, 12);
+        assert_eq!(out[0].spec_ids, vec!["STORY-1".to_string()]);
+        assert_eq!(out[1].number, 7);
+        assert_eq!(
+            out[1].spec_ids,
+            vec!["BUG-566".to_string(), "BUG-567".to_string()]
+        );
+    }
+
+    #[test]
+    fn dedupe_unions_specs_seen_across_separate_rows() {
+        // A PR whose trailer set was only partially recognized per row: the
+        // union across rows is the full completion set.
+        let rows = vec![
+            (9, vec!["BUG-566".to_string()]),
+            (9, vec!["BUG-567".to_string()]),
+            (9, vec!["bug-566".to_string()]), // case-insensitive dup of BUG-566
+        ];
+        let out = dedupe_pr_completions(&rows);
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0].spec_ids,
+            vec!["BUG-566".to_string(), "BUG-567".to_string()]
+        );
+    }
+
+    #[test]
+    fn dedupe_empty_rows_yields_empty() {
+        assert!(dedupe_pr_completions(&[]).is_empty());
+    }
+
+    #[test]
+    fn describe_pr_completion_lists_all_specs() {
+        let c = PrCompletion {
+            number: 7,
+            spec_ids: vec!["BUG-566".to_string(), "BUG-567".to_string()],
+        };
+        assert_eq!(
+            describe_pr_completion(&c),
+            "integrating PR #7 → completes BUG-566, BUG-567"
+        );
+    }
+
+    #[test]
+    fn describe_pr_completion_handles_no_trailer() {
+        let c = PrCompletion {
+            number: 8,
+            spec_ids: vec![],
+        };
+        assert_eq!(
+            describe_pr_completion(&c),
+            "integrating PR #8 → completes (no trailered spec)"
         );
     }
 }
