@@ -1,0 +1,17 @@
+id: 019ece9d-f21a-7b31-9c11-c2eb30a3262e
+spec_id: TASK-835
+agreed_id: TASK-835
+title: 'Phase 3: migrate remaining raw glyph literals to the registry + CI lint blocking new ones'
+description: Phase 3 of EPIC-45. Incrementally migrate the long tail of inline glyph literals (~2568 sites across aida-cli, 1742 in main.rs) to the phase-1 registry so the override/profile applies everywhere, not just the seeded hot paths. Add a CI lint (grep-based gate or a clippy-style check) that flags NEW raw glyph literals outside the registry module, so coverage ratchets up and cannot regress (substrate-as-bouncer). Ship the lint REPORT-ONLY first (annotate the count), then flip to blocking once the bulk is migrated. Exempt the registry module itself, tests, and docs.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T04:08:38.170899941Z
+modified_at: 2026-06-16T04:08:38.170899941Z
+req_type: Task
+tags:
+- ci
+- glyphs
+- tech-debt
+- ui
