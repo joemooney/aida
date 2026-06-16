@@ -12,12 +12,12 @@ description: |-
   Note: auto-attach now RECOVERS from the aida-store-is-default state (fix b, shipped in the BUG-559 PR), so first-user pain is already resolved; this is belt-and-suspenders root-cause prevention. See the TODO(BUG-559) comment at the orphan-push site in aida-cli/src/main.rs (handle_init).
 
   Companion product-seat follow-up: the glab-API explicit-set-default-branch call (needs the GitLab env + glab).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T09:06:51.401979113Z
-modified_at: 2026-06-16T15:54:17.529640535Z
+modified_at: 2026-06-16T16:01:40.830391384Z
 req_type: Task
 tags:
 - batch:gitlab-store-now
@@ -28,3 +28,21 @@ comments:
   content: Commit f27ff84d5 references this requirement
   created_at: 2026-06-16T15:54:17.529640535Z
   modified_at: 2026-06-16T15:54:17.529640535Z
+history:
+- id: 019ed12a-c1d9-7b42-9eb8-9936f51c36ee
+  author: aida-auto-bump
+  timestamp: 2026-06-16T16:01:40.825850041Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed12a-c1de-7c11-80b7-2e101588cc49
+  timestamp: 2026-06-16T16:01:40.830390901Z
+  agent: aida
+  commit_sha: f361d60153de7d75a696db7959be60a04c7e960c
+  summary: Completed via merge f361d601
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T16:01:40.666301276Z
+  completion_sha: f361d60153de7d75a696db7959be60a04c7e960c
