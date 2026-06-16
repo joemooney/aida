@@ -13,12 +13,12 @@ description: |-
   - No behavior change when STORY-631 has not shipped (feature-detect the cached doc).
 
   Verify against the /aida-pickup skill + queue work brief path before coding.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T05:04:37.855659842Z
-modified_at: 2026-06-16T05:05:10.255207849Z
+modified_at: 2026-06-16T05:14:26.998799393Z
 req_type: Task
 tags:
 - aida:intent
