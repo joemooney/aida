@@ -1,0 +1,24 @@
+id: 019ecedb-a239-7830-b7c5-d9bd050b9989
+spec_id: TASK-839
+agreed_id: TASK-839
+title: Per-edge weight on Relationship (same-type edges differing in salience)
+description: |-
+  Operator floated (2026-06-15): should a Relationship carry its own weight, so two edges of the SAME type can differ in salience (this References is load-bearing, that one incidental)?
+
+  Current state: Relationship (models.rs:1938) has rel_type/target_id/created_at/created_by — no weight field. Edge-TYPE weighting (blocks heavier than references) is handled by a static lookup table in STORY-632, which covers the common case without per-edge storage.
+
+  Why parked (not built): per-edge weight is canonical data (YAML write per edge); who sets it is unclear (manual = tedious, AI = another generation pass); and no concrete case yet exists where two same-type edges genuinely need different weights. Type-weighting already separates blocks from references. Build only when a real same-type-divergence case appears.
+
+  If built later: weight: Option<f32> on Relationship (skip_serializing_if none); centrality (STORY-632) would multiply each edge by its per-edge weight when present, falling back to the type-table weight. Settle who/when sets it before implementing.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T05:16:00.953892836Z
+modified_at: 2026-06-16T05:16:00.953892836Z
+req_type: Task
+tags:
+- aida:graph
+- deferred:needs-concrete-case
+- from-operator
+- speculative
