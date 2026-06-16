@@ -20,6 +20,12 @@
 use colored::Colorize;
 use std::io::Write;
 
+/// Render a registry glyph honoring the active profile. Default Unicode profile
+/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+fn glyph(g: crate::glyphs::Glyph) -> &'static str {
+    crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
+}
+
 /// One snapshot of every "needs attention" category. Each `Vec` may be
 /// empty — an empty vec for a category means "nothing to clean here";
 /// a `Healthy` footer enumerates the categories that came back empty
@@ -29,7 +35,7 @@ pub(crate) struct CleanupReport {
     /// Worktrees with uncommitted modifications. Loss-risky: real work
     /// sitting on disk only.
     pub uncommitted_wip: Vec<UncommittedWipItem>,
-    /// Specs ◐ In Progress with no Live or Dormant lease covering them.
+    /// Specs In Progress with no Live or Dormant lease covering them.
     /// May still have local/pushed branch commits — those are recoverable
     /// but easy to forget about.
     pub sticky_in_progress: Vec<StickyInProgressItem>,
@@ -37,7 +43,7 @@ pub(crate) struct CleanupReport {
     /// Orphaned work — once the worktree closes, the commits become
     /// archaeology.
     pub branches_ahead_no_pr: Vec<BranchAheadItem>,
-    /// Specs ◉ Done where a referencing commit landed on `main` but the
+    /// Specs Done where a referencing commit landed on `main` but the
     /// auto-bump scanner didn't promote them (commit format mismatch,
     /// timing race, or BUG-96 unreadable YAML).
     pub missed_auto_bump: Vec<MissedAutoBumpItem>,
@@ -263,10 +269,12 @@ impl CleanupReport {
             return None;
         }
         let n = project_scoped_count;
+        // trace:TASK-840 | ai:claude — route the markers through the registry.
+        let bullet = glyph(crate::glyphs::Glyph::Bullet);
         let mut lines: Vec<String> = Vec::new();
         lines.push(format!(
             "{} {} item{} need cleanup attention:",
-            "⚠".yellow(),
+            glyph(crate::glyphs::Glyph::Warning).yellow(),
             n,
             if n == 1 { "" } else { "s" },
         ));
@@ -276,49 +284,49 @@ impl CleanupReport {
         // top-listed line is the highest-impact category.
         if !self.uncommitted_wip.is_empty() {
             lines.push(format!(
-                "  • Uncommitted work at risk ({}): {}",
+                "  {bullet} Uncommitted work at risk ({}): {}",
                 self.uncommitted_wip.len(),
                 self.uncommitted_wip[0].branch.dimmed(),
             ));
         }
         if !self.claimed_done_diverged.is_empty() {
             lines.push(format!(
-                "  • Claimed Done but substrate disagrees ({}): {}",
+                "  {bullet} Claimed Done but substrate disagrees ({}): {}",
                 self.claimed_done_diverged.len(),
                 self.claimed_done_diverged[0].spec_id.dimmed(),
             ));
         }
         if !self.sticky_in_progress.is_empty() {
             lines.push(format!(
-                "  • Specs In Progress without lease ({}): {}",
+                "  {bullet} Specs In Progress without lease ({}): {}",
                 self.sticky_in_progress.len(),
                 self.sticky_in_progress[0].spec_id.dimmed(),
             ));
         }
         if !self.branches_ahead_no_pr.is_empty() {
             lines.push(format!(
-                "  • Local branches ahead of main, no PR ({}): {}",
+                "  {bullet} Local branches ahead of main, no PR ({}): {}",
                 self.branches_ahead_no_pr.len(),
                 self.branches_ahead_no_pr[0].branch.dimmed(),
             ));
         }
         if !self.missed_auto_bump.is_empty() {
             lines.push(format!(
-                "  • Done specs missed by auto-bump ({}): {}",
+                "  {bullet} Done specs missed by auto-bump ({}): {}",
                 self.missed_auto_bump.len(),
                 self.missed_auto_bump[0].spec_id.dimmed(),
             ));
         }
         if !self.open_prs.is_empty() {
             lines.push(format!(
-                "  • Open PRs ({}): PR-{}",
+                "  {bullet} Open PRs ({}): PR-{}",
                 self.open_prs.len(),
                 self.open_prs[0].number,
             ));
         }
         if !self.dormant_leases.is_empty() {
             lines.push(format!(
-                "  • Dormant leases ({}): {} ({})",
+                "  {bullet} Dormant leases ({}): {} ({})",
                 self.dormant_leases.len(),
                 self.dormant_leases[0].lease_id.dimmed(),
                 self.dormant_leases[0].scope,
@@ -326,7 +334,7 @@ impl CleanupReport {
         }
         if !self.stale_reviewer_leases.is_empty() {
             lines.push(format!(
-                "  • Stale reviewer leases ({}): PR-{}",
+                "  {bullet} Stale reviewer leases ({}): PR-{}",
                 self.stale_reviewer_leases.len(),
                 self.stale_reviewer_leases[0].pr_number,
             ));
@@ -437,7 +445,11 @@ impl CleanupReport {
         writeln!(w)?;
 
         if self.is_empty() {
-            writeln!(w, "  {} Nothing needs cleanup attention.", "✓".green())?;
+            writeln!(
+                w,
+                "  {} Nothing needs cleanup attention.",
+                glyph(crate::glyphs::Glyph::Check).green()
+            )?;
             writeln!(w)?;
             return Ok(());
         }
@@ -489,7 +501,12 @@ impl CleanupReport {
         if !healthy_lines.is_empty() {
             writeln!(w, "{}", "─── Healthy ───".bold())?;
             for line in healthy_lines {
-                writeln!(w, "  {} {}", "✓".green(), line)?;
+                writeln!(
+                    w,
+                    "  {} {}",
+                    glyph(crate::glyphs::Glyph::Check).green(),
+                    line
+                )?;
             }
             writeln!(w)?;
         }
@@ -531,7 +548,7 @@ fn render_uncommitted_wip(
     writeln!(
         w,
         "{} Uncommitted work at risk ({}):",
-        "⚠".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -564,8 +581,8 @@ fn render_sticky_in_progress(
     writeln!(
         w,
         "{} Specs {} In Progress without active lease ({}):",
-        "⚠".yellow(),
-        "◐".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
+        glyph(crate::glyphs::Glyph::InFlight).yellow(),
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -621,7 +638,7 @@ fn render_branches_ahead(
     writeln!(
         w,
         "{} Local branches ahead of main with no PR ({}):",
-        "⚠".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -656,8 +673,8 @@ fn render_missed_auto_bump(
     writeln!(
         w,
         "{} Specs {} Done missed by auto-bump ({}):",
-        "⚠".yellow(),
-        "◉".green(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
+        glyph(crate::glyphs::Glyph::Done).green(),
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -697,7 +714,7 @@ fn render_open_prs(
     writeln!(
         w,
         "{} Open {}s awaiting review/merge ({}):",
-        "⚠".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
         noun,
         items.len()
     )?;
@@ -758,7 +775,7 @@ fn render_dormant_leases(
     writeln!(
         w,
         "{} Dormant leases ({}{}):",
-        "⚠".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
         items.len(),
         header_suffix
     )?;
@@ -811,7 +828,7 @@ fn render_stale_reviewer_leases(
     writeln!(
         w,
         "{} Stale reviewer leases on merged PRs ({}):",
-        "⚠".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -841,7 +858,7 @@ fn render_orphan_project_dirs(
     writeln!(
         w,
         "{} Orphan Claude Code project dirs ({}):",
-        "⚠".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -871,7 +888,7 @@ fn render_claimed_done_diverged(
     writeln!(
         w,
         "{} Claimed Done but substrate disagrees ({}):",
-        "⚠".yellow(),
+        glyph(crate::glyphs::Glyph::Warning).yellow(),
         items.len()
     )?;
     for item in items.iter().take(cap) {
@@ -1012,7 +1029,7 @@ mod tests {
     fn strip_ansi(s: &str) -> String {
         // ESC[...m sequences are pure ASCII — we can scan the string by
         // char and emit anything that isn't part of one, preserving the
-        // multi-byte UTF-8 glyphs (box-drawing dashes, em-dash, the ⚠
+        // multi-byte UTF-8 glyphs (box-drawing dashes, em-dash, the warning
         // marker) verbatim.
         let mut out = String::with_capacity(s.len());
         let mut chars = s.chars().peekable();
@@ -1223,9 +1240,10 @@ mod tests {
         // The one populated category must NOT appear in the Healthy block.
         // We assert that by checking the line count: 8 empty categories =>
         // 8 healthy lines (STORY-469 added the claimed-Done-divergence one).
+        let check = crate::glyphs::Glyph::Check.render(crate::glyphs::active_profile(None));
         let healthy_count = out
             .lines()
-            .filter(|l| l.trim_start().starts_with("✓"))
+            .filter(|l| l.trim_start().starts_with(check))
             .count();
         assert_eq!(healthy_count, 8);
     }

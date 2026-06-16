@@ -15,6 +15,12 @@ use std::time::Instant;
 
 use colored::Colorize;
 
+/// Render a registry glyph honoring the active profile. Default Unicode profile
+/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+fn glyph(g: crate::glyphs::Glyph) -> &'static str {
+    crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
+}
+
 /// Which subset of the six phases an invocation runs.
 /// trace:STORY-246 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -784,7 +790,7 @@ pub(crate) struct OrchestrationResult {
     /// carries the id the PR actually credits. The batch drain records *this*
     /// id as shipped and stops with [`BatchDrainOutcome::Mismatched`] so the
     /// dispatched spec stays queued with an accurate reason rather than a
-    /// false `✓ shipped`. `None` when dispatched == shipped (the common path)
+    /// false `shipped` line. `None` when dispatched == shipped (the common path)
     /// or when the driver could not determine an id from the PR's commits.
     /// trace:BUG-245 | ai:claude
     pub(crate) shipped_spec_id: Option<String>,
@@ -1238,7 +1244,7 @@ fn emit_start(phase: Phase, spec: &str, json: bool, elapsed: u128) {
         eprintln!();
         eprintln!(
             "{} {}",
-            "▶".cyan().bold(),
+            glyph(crate::glyphs::Glyph::FlowActive).cyan().bold(),
             format!("Phase {}/6: {}", phase.index(), phase.label()).bold()
         );
     }
@@ -1253,7 +1259,7 @@ fn emit_done(phase: Phase, spec: &str, json: bool, elapsed: u128) {
     } else {
         eprintln!(
             "  {} {}",
-            "✓".green(),
+            glyph(crate::glyphs::Glyph::Check).green(),
             format!("phase {} complete", phase.index()).dimmed()
         );
     }
@@ -1293,7 +1299,7 @@ fn emit_shipped_mismatch(dispatched: &str, shipped: &str, json: bool, elapsed: u
 /// Print the success epilogue and build the success [`OrchestrationResult`].
 ///
 /// `dispatched` is the spec the orchestrator was launched for; `credited` is
-/// the id reported in the `✓ shipped` line. They differ only in the BUG-245
+/// the id reported in the `shipped` line. They differ only in the BUG-245
 /// mismatch case — phase 1's PR named a different spec than the dispatched id
 /// — so on a match (the common path) the caller passes `dispatched` for both
 /// and the JSON event + epilogue read exactly as pre-BUG-245.
@@ -1327,7 +1333,7 @@ fn finish_success(
         eprintln!();
         eprintln!(
             "{} {} shipped ({})",
-            "✓".green().bold(),
+            glyph(crate::glyphs::Glyph::Check).green().bold(),
             credited.bold(),
             fmt_duration(elapsed)
         );
@@ -1664,7 +1670,7 @@ fn finish_inconclusive_shelved(
         eprintln!(
             "{} {} shelved ({}) — transient verify failure, batch advances; \
              triage with `aida findings list`",
-            "⚠".yellow().bold(),
+            glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             spec.bold(),
             fmt_duration(elapsed)
         );
@@ -1833,7 +1839,7 @@ fn finish_failure(
         eprintln!();
         eprintln!(
             "{} phase {} ({}) failed: {}",
-            "✗".red().bold(),
+            glyph(crate::glyphs::Glyph::Cross).red().bold(),
             phase.index(),
             phase.label(),
             failure.reason
@@ -1842,7 +1848,7 @@ fn finish_failure(
         eprintln!();
         eprintln!(
             "{} {} — auto-complete failed at phase {} ({})",
-            "✗".red().bold(),
+            glyph(crate::glyphs::Glyph::Cross).red().bold(),
             spec.bold(),
             phase.index(),
             fmt_duration(elapsed)
@@ -1913,7 +1919,7 @@ fn finish_reconciled(
         );
         eprintln!(
             "{} {} shipped ({}, reconciled)",
-            "✓".green().bold(),
+            glyph(crate::glyphs::Glyph::Check).green().bold(),
             spec.bold(),
             fmt_duration(elapsed)
         );
@@ -2034,7 +2040,7 @@ fn resolve_punt_via_advisor(
             if !json {
                 eprintln!(
                     "  {} advisor resolved the fork — resuming the implementer with the answer",
-                    "✓".green()
+                    glyph(crate::glyphs::Glyph::Check).green()
                 );
             }
             resume_after_advisor(driver, spec, json, start, durations, &answer, batch)
@@ -6136,7 +6142,7 @@ mod tests {
     /// summary must never claim a spec shipped *and* report it stayed at
     /// the head in the same run. The mismatch outcome credits the actual
     /// shipped id (not the dispatched one) in `shipped`, so a reader cannot
-    /// see "✓ X shipped" alongside "X stayed at head" for the same X.
+    /// see "X shipped" alongside "X stayed at head" for the same X.
     /// trace:BUG-245 | ai:claude
     #[test]
     fn drain_batch_mismatch_summary_is_self_consistent() {

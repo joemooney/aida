@@ -33,6 +33,13 @@ const LOW_RISK_TAGS: &[&str] = &[
     "fmt",
 ];
 
+// Glyph helpers — route status/marker glyphs through the central registry so the
+// `ascii` profile / `AIDA_GLYPHS` / `[glyphs]` overrides apply. Default Unicode
+// profile reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+fn glyph(g: crate::glyphs::Glyph) -> &'static str {
+    crate::glyphs::get(g, find_project_root().ok().as_deref())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum RiskLevel {
@@ -788,7 +795,7 @@ fn handle_groom(
     if let Some(name) = batch {
         println!(
             "{} Groomed {} item(s) into the queue, tagged `batch:{}`.",
-            "✓".green(),
+            glyph(crate::glyphs::Glyph::Check).green(),
             updated.to_string().bold(),
             name.bold()
         );
@@ -799,7 +806,7 @@ fn handle_groom(
     } else {
         println!(
             "{} Groomed {} item(s) into the queue.",
-            "✓".green(),
+            glyph(crate::glyphs::Glyph::Check).green(),
             updated.to_string().bold()
         );
     }
@@ -943,7 +950,7 @@ fn handle_groom_pickable(
     if groom_ids.is_empty() {
         println!(
             "{} No pickable backlog items at risk ≤ {} — nothing to groom.",
-            "•".dimmed(),
+            glyph(crate::glyphs::Glyph::Bullet).dimmed(),
             max_risk.chip()
         );
         return Ok(());
@@ -962,7 +969,7 @@ fn handle_groom_pickable(
     if let Some(name) = batch {
         println!(
             "{} Auto-groomed {} pickable item(s) into the queue, tagged `batch:{}`.",
-            "✓".green(),
+            glyph(crate::glyphs::Glyph::Check).green(),
             updated.to_string().bold(),
             name.bold()
         );
@@ -973,14 +980,14 @@ fn handle_groom_pickable(
     } else {
         println!(
             "{} Auto-groomed {} pickable item(s) into the queue.",
-            "✓".green(),
+            glyph(crate::glyphs::Glyph::Check).green(),
             updated.to_string().bold()
         );
     }
     if !parked.is_empty() {
         println!(
             "  {} {} item(s) parked (gate / risk ceiling) — see `aida backlog groom --pickable` (dry run) for reasons.",
-            "•".dimmed(),
+            glyph(crate::glyphs::Glyph::Bullet).dimmed(),
             parked.len().to_string().bold()
         );
     }
@@ -1024,7 +1031,7 @@ fn render_pickable_dry_run(
             let title = by_id.get(id).map(|r| r.title.as_str()).unwrap_or("");
             println!(
                 "  {} {}  —  {}  {}",
-                "⊘".dimmed(),
+                glyph(crate::glyphs::Glyph::FlowBlocked).dimmed(),
                 id.bold(),
                 title,
                 format!("[{}]", reason.label()).dimmed()

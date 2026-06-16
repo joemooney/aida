@@ -50,16 +50,10 @@ EXEMPT_REGISTRY=(
 )
 ALLOW_LIST=(
   "$SRC_DIR/main.rs"
+  # cli.rs — remaining literals are all in `///` clap doc/help text (compile-time
+  # strings rendered in `--help`), which cannot route through the runtime glyph
+  # registry. Kept on the allow-list by design. (TASK-840)
   "$SRC_DIR/cli.rs"
-  "$SRC_DIR/auto_complete.rs"
-  "$SRC_DIR/session.rs"
-  "$SRC_DIR/mcp.rs"
-  "$SRC_DIR/workflow_hints.rs"
-  "$SRC_DIR/status_cleanup.rs"
-  "$SRC_DIR/drain_state.rs"
-  "$SRC_DIR/backlog.rs"
-  "$SRC_DIR/burndown.rs"
-  "$SRC_DIR/orchestrator.rs"
 )
 
 block_mode=0
