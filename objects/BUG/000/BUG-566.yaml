@@ -29,12 +29,12 @@ description: |-
   The work aida version is unknown — if it predates BUG-108, the behavior may have been a silent empty queue instead. Worth confirming the version at work; the diagnostic-quality fix stands regardless.
 
   Verify against aida-cli/src/main.rs cwd_removed_warning / warn_if_cwd_removed before coding.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:40:43.487541508Z
-modified_at: 2026-06-16T06:41:07.442040064Z
+modified_at: 2026-06-16T06:55:51.608425875Z
 req_type: Bug
 tags:
 - aida:queue
