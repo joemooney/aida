@@ -1,0 +1,17 @@
+id: 019ecea3-433b-7123-bb15-2253eb818b54
+spec_id: TASK-836
+agreed_id: TASK-836
+title: 'aida queue integrate: strategy completeness (the gaps surfaced running it inside the solo loop)'
+description: Operator noted (2026-06-15) that aida queue integrate (the integrator the solo loop calls for its merge step) has unimplemented strategies — it works for the common Done+open-PR case but does not handle all merge scenarios. Inventory the gaps (e.g. rebase-needed PRs, stacked branches, multi-spec PRs, CI-still-running, RequestChanges-pending, conflicts) and decide which the integrator should handle vs park. Makes the solo loop fully robust for unattended runs. Relates STORY-625 (solo loop), TASK-813 (integrator keystone-park).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T04:14:26.619412393Z
+modified_at: 2026-06-16T04:14:26.619412393Z
+req_type: Task
+tags:
+- autonomy
+- from-product
+- integrator
+- relates:STORY-625
