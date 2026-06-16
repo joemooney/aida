@@ -39,11 +39,56 @@ fn normalize(status: &str) -> String {
         .collect()
 }
 
+/// Profile-aware status glyph (proof site for the EPIC-45 glyph registry).
+///
+/// Maps a requirement status to a [`crate::glyphs::Glyph`] and renders it for
+/// the supplied profile, so `[ui] glyphs = "ascii"` (or `AIDA_GLYPHS=ascii`)
+/// downgrades these markers to ASCII. The default profile is Unicode, which
+/// reproduces [`status_glyph`] byte-for-byte for the canonical statuses.
+/// Unmapped / custom statuses still fall back to the neutral bullet.
+//
+// trace:STORY-628 | ai:claude
+pub(crate) fn status_glyph_for_profile(
+    status: &str,
+    profile: crate::glyphs::GlyphProfile,
+) -> &'static str {
+    use crate::glyphs::Glyph;
+    let glyph = match normalize(status).as_str() {
+        "draft" => Glyph::Pending,
+        "approved" => Glyph::Arrow,
+        "planned" => Glyph::Queued,
+        "inprogress" => Glyph::InFlight,
+        "completed" => Glyph::Check,
+        "rejected" => Glyph::Cross,
+        "needsattention" => Glyph::Blocked,
+        // "done" (◉) and unmapped/custom statuses have no registry entry yet
+        // (the long tail is phase 3 / TASK-835) — keep the literal behaviour.
+        _ => return status_glyph_literal(status),
+    };
+    glyph.render(profile)
+}
+
 /// Glyph for a requirement status. Always safe to print — plain Unicode, no
 /// ANSI — so it survives `NO_COLOR` and copy-paste. Unknown / project-specific
 /// `custom_status` values get a neutral bullet rather than nothing, so the
 /// badge layout stays stable.
+///
+/// Honors the EPIC-45 glyph profile (proof site): with `[ui] glyphs = "ascii"`
+/// or `AIDA_GLYPHS=ascii` the canonical statuses downgrade to ASCII. The
+/// default profile is Unicode, which reproduces the historical literals
+/// byte-for-byte. trace:STORY-628 | ai:claude
 pub(crate) fn status_glyph(status: &str) -> &'static str {
+    let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
+    if profile != crate::glyphs::GlyphProfile::Unicode {
+        return status_glyph_for_profile(status, profile);
+    }
+    status_glyph_literal(status)
+}
+
+/// The historical literal status→glyph map. Kept as the Unicode source of
+/// truth for [`status_glyph_for_profile`]'s unmapped fallback and for tests
+/// that assert the default rendering. trace:STORY-628 | ai:claude
+fn status_glyph_literal(status: &str) -> &'static str {
     match normalize(status).as_str() {
         "draft" => "◯",
         "approved" => "▸",
@@ -152,17 +197,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn profile_glyph_unicode_matches_literal_ascii_downgrades() {
+        use crate::glyphs::GlyphProfile;
+        // Unicode profile reproduces the literal byte-for-byte for mapped statuses.
+        assert_eq!(
+            status_glyph_for_profile("Completed", GlyphProfile::Unicode),
+            "✓"
+        );
+        assert_eq!(
+            status_glyph_for_profile("Approved", GlyphProfile::Unicode),
+            "▸"
+        );
+        // ASCII profile downgrades.
+        assert_eq!(
+            status_glyph_for_profile("Completed", GlyphProfile::Ascii),
+            "[x]"
+        );
+        assert_eq!(
+            status_glyph_for_profile("Approved", GlyphProfile::Ascii),
+            "->"
+        );
+        // Unmapped status (Done has no registry entry yet) keeps its literal
+        // under either profile.
+        assert_eq!(status_glyph_for_profile("Done", GlyphProfile::Ascii), "◉");
+        assert_eq!(status_glyph_for_profile("Done", GlyphProfile::Unicode), "◉");
+    }
+
+    #[test]
     fn glyph_for_each_canonical_status() {
-        assert_eq!(status_glyph("Draft"), "◯");
-        assert_eq!(status_glyph("Approved"), "▸");
-        assert_eq!(status_glyph("Planned"), "▷");
-        assert_eq!(status_glyph("In Progress"), "◐");
-        assert_eq!(status_glyph("Done"), "◉");
-        assert_eq!(status_glyph("Completed"), "✓");
-        assert_eq!(status_glyph("Rejected"), "✗");
+        assert_eq!(status_glyph_literal("Draft"), "◯");
+        assert_eq!(status_glyph_literal("Approved"), "▸");
+        assert_eq!(status_glyph_literal("Planned"), "▷");
+        assert_eq!(status_glyph_literal("In Progress"), "◐");
+        assert_eq!(status_glyph_literal("Done"), "◉");
+        assert_eq!(status_glyph_literal("Completed"), "✓");
+        assert_eq!(status_glyph_literal("Rejected"), "✗");
         // trace:STORY-332 | ai:claude
-        assert_eq!(status_glyph("Needs Attention"), "⚠");
-        assert_eq!(status_glyph("NeedsAttention"), "⚠");
+        assert_eq!(status_glyph_literal("Needs Attention"), "⚠");
+        assert_eq!(status_glyph_literal("NeedsAttention"), "⚠");
     }
 
     #[test]
@@ -180,19 +252,19 @@ mod tests {
     fn glyph_normalizes_spacing() {
         // The InProgress label reaches this code in several spellings, and
         // table callers hand in a column-padded cell.
-        assert_eq!(status_glyph("In Progress"), "◐");
-        assert_eq!(status_glyph("InProgress"), "◐");
-        assert_eq!(status_glyph("in-progress"), "◐");
-        assert_eq!(status_glyph("in_progress"), "◐");
-        assert_eq!(status_glyph("Approved   "), "▸");
+        assert_eq!(status_glyph_literal("In Progress"), "◐");
+        assert_eq!(status_glyph_literal("InProgress"), "◐");
+        assert_eq!(status_glyph_literal("in-progress"), "◐");
+        assert_eq!(status_glyph_literal("in_progress"), "◐");
+        assert_eq!(status_glyph_literal("Approved   "), "▸");
     }
 
     #[test]
     fn glyph_unknown_status_is_neutral_bullet() {
         // Project-specific custom_status values must not fall through to
         // nothing — a neutral bullet keeps the badge layout stable.
-        assert_eq!(status_glyph("Blocked"), "·");
-        assert_eq!(status_glyph(""), "·");
+        assert_eq!(status_glyph_literal("Blocked"), "·");
+        assert_eq!(status_glyph_literal(""), "·");
     }
 
     #[test]
