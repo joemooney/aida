@@ -28702,6 +28702,84 @@ fn is_legacy_store_cruft_path(path: &str) -> bool {
     path == "scaffold-report.html" || (path.starts_with("requirements") && path.ends_with(".yaml"))
 }
 
+/// BUG-563: detect per-clone RUNTIME files wrongly TRACKED on the orphan
+/// `aida-store` branch — `.aida/node.toml` (the strictly-per-clone "I am node N"
+/// pointer), `.aida/dispenser.toml` (per-node id counter), `.aida/*.lock`, and
+/// `.aida/cache.db*` (the rebuildable read projection). If the orphan branch was
+/// created (or had these committed) BEFORE the store-branch gitignore landed,
+/// each clone's auto-sync commits rewrite `node.toml` with that clone's own node
+/// id, so every cross-clone store-leg rebase conflicts on it forever — stranding
+/// the rebase and breaking `aida push` with TOML parse errors from conflict
+/// markers.
+///
+/// GUARD: gated strictly on git-canonical mode — `.aida/config.toml` declares
+/// `mode = "distributed"` AND the orphan `aida-store` worktree is attached at
+/// `.aida-store/`. The scan runs `git ls-files` IN THE STORE WORKTREE (not the
+/// main repo), so it inspects the orphan branch's tree, never the project tree.
+/// Returns the store-worktree-relative tracked paths to flag (empty when clean
+/// or when the project is not git-canonical / the store worktree is absent).
+// trace:BUG-563 | ai:claude
+fn detect_store_tracked_runtime(project_root: &std::path::Path) -> Vec<String> {
+    // Gate 1: config declares distributed/git-canonical mode.
+    if distributed_mode_declared_from(project_root).is_none() {
+        return Vec::new();
+    }
+    // Gate 2: the orphan `aida-store` worktree is actually attached — we scan
+    // its tree, so it must be present on disk.
+    let store_worktree = project_root.join(".aida-store");
+    if !store_worktree.join("objects").is_dir() {
+        return Vec::new();
+    }
+
+    // `git ls-files` in the STORE worktree lists only paths TRACKED on the
+    // orphan branch — an untracked-but-gitignored `node.toml` (the post-heal
+    // state) is correctly NOT flagged.
+    let Ok(output) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_worktree)
+        .args(["ls-files", "-z"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    let mut hits: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .filter(|p| is_store_tracked_runtime_path(p))
+        .map(|p| p.to_string())
+        .collect();
+    hits.sort();
+    hits.dedup();
+    hits
+}
+
+/// Whether a store-worktree-relative path is a per-clone runtime file that must
+/// never be tracked on the orphan `aida-store` branch: `.aida/node.toml`,
+/// `.aida/dispenser.toml`, any `.aida/*.lock`, or any `.aida/cache.db*`
+/// (`cache.db`, `cache.db-journal`, `cache.db-wal`, `cache.db-shm`). Scoped to
+/// the top-level `.aida/` dir only — never matches nested paths or shared,
+/// legitimately-tracked store files (`config.toml`, `metadata.yaml`, the
+/// `objects/`/`registry/` trees, requirement yaml).
+// trace:BUG-563 | ai:claude
+fn is_store_tracked_runtime_path(path: &str) -> bool {
+    // Only files directly under a top-level `.aida/` dir.
+    let Some(name) = path.strip_prefix(".aida/") else {
+        return false;
+    };
+    // No further nesting — `.aida/<name>` only, not `.aida/sub/<name>`.
+    if name.contains('/') {
+        return false;
+    }
+    name == "node.toml"
+        || name == "dispenser.toml"
+        || name.ends_with(".lock")
+        || name == "cache.db"
+        || name.starts_with("cache.db-")
+}
+
 fn collect_doctor_findings(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
@@ -29084,6 +29162,26 @@ fn collect_doctor_findings(
         });
     }
 
+    // BUG-563: per-clone RUNTIME files (`.aida/node.toml`, `.aida/dispenser.toml`,
+    // `.aida/*.lock`, `.aida/cache.db*`) wrongly TRACKED on the orphan aida-store
+    // branch. Each clone's auto-sync rewrites node.toml with its own node id, so
+    // every cross-clone store-leg rebase conflicts on it forever. Cheap
+    // `git ls-files` scan IN THE `.aida-store` WORKTREE; the detector self-gates
+    // on distributed mode + an attached store worktree. trace:BUG-563 | ai:claude
+    for path in detect_store_tracked_runtime(project_root) {
+        push(DoctorFinding {
+            category: "store-tracked-runtime".to_string(),
+            id: path.clone(),
+            summary: format!(
+                "per-clone runtime file `{}` is tracked on the orphan aida-store branch (every cross-clone rebase conflicts on it forever)",
+                path
+            ),
+            action: "git rm --cached the file in the store worktree + gitignore it (per-clone runtime state must stay untracked)"
+                .to_string(),
+            safe_heal: true,
+        });
+    }
+
     out.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     Ok(out)
 }
@@ -29136,12 +29234,20 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // project. trace:TASK-752 | ai:claude
         "legacy-store-cruft" | "legacy-store" | "store-cruft" | "legacy-cruft"
         | "requirements-yaml" => "legacy-store-cruft",
+        // BUG-563: per-clone runtime files (node.toml / dispenser.toml /
+        // *.lock / cache.db*) wrongly tracked on the orphan aida-store branch.
+        // trace:BUG-563 | ai:claude
+        "store-tracked-runtime"
+        | "store-runtime"
+        | "tracked-runtime"
+        | "store-node-toml"
+        | "store-runtime-cruft" => "store-tracked-runtime",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
              orphan-branches, stale-remote-branches, orphan-queue-entries, \
              stale-reviewer-leases, stale-locks, dead-agents, OBE-briefs, \
-             completed-without-commit, legacy-store-cruft)",
+             completed-without-commit, legacy-store-cruft, store-tracked-runtime)",
             other
         ),
     };
@@ -29857,6 +29963,11 @@ fn heal_doctor_finding(
         // git-canonical mode, so this never touches an active centralized
         // backend). trace:TASK-752 | ai:claude
         "legacy-store-cruft" => heal_doctor_legacy_store_cruft(project_root, finding),
+        // BUG-563: git-rm --cached the per-clone runtime file in the STORE
+        // worktree + gitignore it + commit on the store worktree. safe_heal (the
+        // detector self-gates on git-canonical mode + an attached store
+        // worktree). trace:BUG-563 | ai:claude
+        "store-tracked-runtime" => heal_doctor_store_tracked_runtime(project_root, finding),
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
@@ -30234,6 +30345,137 @@ fn ensure_legacy_store_cruft_gitignore(project_root: &std::path::Path) -> Result
     let block = "\n# Legacy pre-git-canonical store snapshots (live store is the orphan aida-store branch)\n\
          requirements*.yaml\n\
          scaffold-report.html\n";
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&gitignore_path)
+        .with_context(|| format!("opening {}", gitignore_path.display()))?;
+    f.write_all(block.as_bytes())
+        .with_context(|| format!("appending to {}", gitignore_path.display()))?;
+    Ok(true)
+}
+
+/// BUG-563: heal a per-clone runtime file wrongly tracked on the orphan
+/// `aida-store` branch — `git rm --cached` it IN THE STORE WORKTREE (untrack but
+/// keep the working copy, since the live clone still needs its own node.toml /
+/// dispenser.toml / cache), ensure the store-worktree gitignore guards the
+/// per-clone runtime set, then COMMIT the untrack on the store worktree so the
+/// orphan branch stops carrying it. Idempotent: a path already untracked (e.g. a
+/// prior heal removed it) reports `skipped`; the gitignore block is appended only
+/// once; a no-op commit is skipped. trace:BUG-563 | ai:claude
+fn heal_doctor_store_tracked_runtime(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let store_worktree = project_root.join(".aida-store");
+    let path = &finding.id;
+
+    // Re-confirm the file is still tracked on the orphan branch before removing —
+    // between scan and heal another heal (or a manual `git rm`) may have already
+    // dropped it.
+    let still_tracked = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_worktree)
+        .args(["ls-files", "--error-unmatch", path])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !still_tracked {
+        // Still make sure the gitignore guard is in place (idempotent).
+        let gi = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: "already untracked".to_string(),
+            status: "skipped".to_string(),
+            detail: gi.then(|| "appended gitignore guard".to_string()),
+        });
+    }
+
+    // Untrack but KEEP the working copy — this clone still needs its own
+    // per-clone runtime file; only the orphan branch must stop carrying it.
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_worktree)
+        .args(["rm", "--cached", "--quiet", "--"])
+        .arg(path)
+        .status()
+        .with_context(|| format!("git rm --cached {path} in store worktree"))?;
+    if !status.success() {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "failed".to_string(),
+            detail: Some(format!("git rm --cached {path} failed")),
+        });
+    }
+
+    let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
+
+    // Stage the gitignore (if we touched it) and commit the untrack on the
+    // store worktree so the orphan branch stops carrying the per-clone file.
+    if appended {
+        let _ = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store_worktree)
+            .args(["add", ".gitignore"])
+            .status();
+    }
+    let commit = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_worktree)
+        .args([
+            "commit",
+            "--quiet",
+            "-m",
+            "chore(store): stop tracking per-clone runtime file (BUG-563)",
+        ])
+        .status()
+        .with_context(|| "committing untrack on store worktree".to_string())?;
+    if !commit.success() {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "failed".to_string(),
+            detail: Some("commit on store worktree failed".to_string()),
+        });
+    }
+
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "git rm --cached + gitignore + commit on store worktree (per-clone runtime stays untracked)"
+            .to_string(),
+        status: "healed".to_string(),
+        detail: appended.then(|| "appended gitignore guard".to_string()),
+    })
+}
+
+/// BUG-563: append the per-clone-runtime gitignore guard to the STORE worktree's
+/// `.gitignore` so the untracked files can't return on the orphan branch.
+/// Idempotent — no-op if the load-bearing patterns are already present. Returns
+/// whether it wrote anything. trace:BUG-563 | ai:claude
+fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
+    use std::io::Write;
+    let gitignore_path = store_worktree.join(".gitignore");
+    let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+    // Already guarded? `.aida/node.toml` is the load-bearing pattern (the one
+    // that conflicts on every cross-clone rebase).
+    if existing.lines().any(|l| l.trim() == ".aida/node.toml") {
+        return Ok(false);
+    }
+    let block =
+        "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
+         .aida/node.toml\n\
+         .aida/dispenser.toml\n\
+         .aida/*.lock\n\
+         .aida/cache.db\n\
+         .aida/cache.db-journal\n\
+         .aida/cache.db-shm\n\
+         .aida/cache.db-wal\n";
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -31567,6 +31809,156 @@ mod story_462_doctor_tests {
             "missing orphan branch → no-op"
         );
     }
+
+    // ── BUG-563: store-tracked per-clone runtime detection + heal ──
+
+    #[test]
+    fn normalize_doctor_category_accepts_store_tracked_runtime() {
+        // BUG-563
+        for alias in [
+            "store-tracked-runtime",
+            "store-runtime",
+            "tracked-runtime",
+            "store-node-toml",
+            "store-runtime-cruft",
+        ] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                "store-tracked-runtime"
+            );
+        }
+    }
+
+    #[test]
+    fn is_store_tracked_runtime_path_matches_per_clone_runtime() {
+        // BUG-563: the per-clone runtime set under top-level `.aida/`.
+        assert!(is_store_tracked_runtime_path(".aida/node.toml"));
+        assert!(is_store_tracked_runtime_path(".aida/dispenser.toml"));
+        assert!(is_store_tracked_runtime_path(".aida/dispenser.lock"));
+        assert!(is_store_tracked_runtime_path(".aida/sync.lock"));
+        assert!(is_store_tracked_runtime_path(".aida/cache.db"));
+        assert!(is_store_tracked_runtime_path(".aida/cache.db-journal"));
+        assert!(is_store_tracked_runtime_path(".aida/cache.db-wal"));
+        assert!(is_store_tracked_runtime_path(".aida/cache.db-shm"));
+        // Shared, legitimately-tracked store files never match.
+        assert!(!is_store_tracked_runtime_path(".aida/config.toml"));
+        assert!(!is_store_tracked_runtime_path("metadata.yaml"));
+        assert!(!is_store_tracked_runtime_path(
+            "objects/TASK/000/TASK-1.yaml"
+        ));
+        assert!(!is_store_tracked_runtime_path(
+            "registry/agreed_counters.toml"
+        ));
+        // Not under .aida/, or nested deeper than top-level — never match.
+        assert!(!is_store_tracked_runtime_path("node.toml"));
+        assert!(!is_store_tracked_runtime_path(".aida/sub/node.toml"));
+        assert!(!is_store_tracked_runtime_path("src/.aida/node.toml"));
+    }
+
+    /// BUG-563: build a project that declares distributed mode with an attached
+    /// `.aida-store` worktree (orphan `aida-store` branch) whose tree TRACKS
+    /// `.aida/node.toml` + `.aida/cache.db` + a `.aida/*.lock`. The detector
+    /// flags all three; the heal `git rm --cached`'s + gitignores + commits on
+    /// the store worktree, after which they no longer reappear and the working
+    /// copies survive (per-clone state stays on disk).
+    #[test]
+    fn detects_and_heals_store_tracked_runtime_on_git_canonical_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        // git-canonical: config declares distributed mode.
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("README.md"), "x\n").unwrap();
+        git752(root, &["add", "."]);
+        git752(root, &["commit", "-qm", "init"]);
+
+        // Attach the orphan `aida-store` worktree at `.aida-store/`.
+        git752(
+            root,
+            &["worktree", "add", "-q", "-b", "aida-store", ".aida-store"],
+        );
+        let store = root.join(".aida-store");
+        // Make it look like a real store (the detector gates on objects/).
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::write(store.join("objects/.keep"), "").unwrap();
+        std::fs::create_dir_all(store.join(".aida")).unwrap();
+        // Per-clone runtime files WRONGLY tracked on the orphan branch.
+        std::fs::write(store.join(".aida/node.toml"), "node_id = 1\n").unwrap();
+        std::fs::write(store.join(".aida/dispenser.toml"), "next = 5\n").unwrap();
+        std::fs::write(store.join(".aida/sync.lock"), "").unwrap();
+        std::fs::write(store.join(".aida/cache.db"), "binary").unwrap();
+        git752(&store, &["add", "-A"]);
+        git752(&store, &["commit", "-qm", "store w/ tracked runtime"]);
+
+        // Detect: all four per-clone runtime files flagged.
+        let req_store = aida_core::models::RequirementsStore::new();
+        let findings =
+            collect_doctor_findings(root, &req_store, Some("store-tracked-runtime")).unwrap();
+        assert_eq!(findings.len(), 4, "all runtime files flagged: {findings:?}");
+        assert!(findings
+            .iter()
+            .all(|f| f.category == "store-tracked-runtime"));
+        assert!(findings.iter().all(|f| f.safe_heal));
+        let ids: std::collections::HashSet<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert!(ids.contains(".aida/node.toml"));
+        assert!(ids.contains(".aida/dispenser.toml"));
+        assert!(ids.contains(".aida/sync.lock"));
+        assert!(ids.contains(".aida/cache.db"));
+
+        // Heal each.
+        for finding in &findings {
+            let result = heal_doctor_store_tracked_runtime(root, finding).unwrap();
+            assert_eq!(result.status, "healed", "{result:?}");
+        }
+        // git-rm --cached'd → no longer tracked → no longer flagged.
+        let after =
+            collect_doctor_findings(root, &req_store, Some("store-tracked-runtime")).unwrap();
+        assert!(
+            after.is_empty(),
+            "healed runtime must not reappear: {after:?}"
+        );
+        // Working copies survive (per-clone state stays on disk).
+        assert!(store.join(".aida/node.toml").exists());
+        assert!(store.join(".aida/cache.db").exists());
+        // gitignore guard appended on the STORE worktree.
+        let gi = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        assert!(gi.contains(".aida/node.toml"));
+        assert!(gi.contains(".aida/dispenser.toml"));
+        assert!(gi.contains(".aida/*.lock"));
+        assert!(gi.contains(".aida/cache.db"));
+    }
+
+    /// BUG-563 GUARD: with distributed-mode config but NO attached `.aida-store`
+    /// worktree, the detector is a NO-OP (Gate 2) — nothing to scan.
+    #[test]
+    fn store_tracked_runtime_is_noop_without_store_worktree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("README.md"), "x\n").unwrap();
+        git752(root, &["add", "."]);
+        git752(root, &["commit", "-qm", "init"]);
+        // No `.aida-store/` worktree attached.
+        assert!(
+            detect_store_tracked_runtime(root).is_empty(),
+            "no store worktree → no-op"
+        );
+    }
 }
 
 /// STORY-70: a STORY or BUG description should carry an acceptance
@@ -32708,6 +33100,35 @@ fn doctor_fsck() -> Result<()> {
         println!(
             "    fix: {}",
             "aida doctor --heal --category legacy-store-cruft".cyan()
+        );
+    }
+    println!();
+
+    // --- Check 8: per-clone runtime files tracked on the orphan aida-store branch ---
+    // BUG-563: `.aida/node.toml` / dispenser.toml / *.lock / cache.db* tracked on
+    // the orphan branch make every cross-clone store-leg rebase conflict forever.
+    // The detector self-gates on distributed mode + an attached store worktree.
+    // A finding is a problem (non-zero exit) so fsck can gate CI;
+    // `aida doctor --heal --category store-tracked-runtime` resolves it.
+    // trace:BUG-563 | ai:claude
+    println!("{}", "── store-tracked runtime ──".bold());
+    let runtime_cruft = detect_store_tracked_runtime(&project_root);
+    if runtime_cruft.is_empty() {
+        println!(
+            "  {} no per-clone runtime files tracked on the orphan aida-store branch (or not a git-canonical project).",
+            "✓".green()
+        );
+    } else {
+        had_problem = true;
+        println!(
+            "  {} {} per-clone runtime file(s) tracked on the orphan aida-store branch: {}",
+            "✗".red(),
+            runtime_cruft.len(),
+            runtime_cruft.join(", ")
+        );
+        println!(
+            "    fix: {}",
+            "aida doctor --heal --category store-tracked-runtime".cyan()
         );
     }
     println!();
