@@ -11006,6 +11006,159 @@ fn choose_store_attach_recovery(
     }
 }
 
+/// What `aida init` should push to a fresh/empty origin, and in what order, so a
+/// forge that adopts the first-pushed branch as its default (GitLab's
+/// push-to-create) ends up with the **code** branch as default — never the
+/// orphan `aida-store` (which would make a fresh clone check out the internal
+/// YAML store as if it were the project). Root-cause prevention for BUG-559.
+/// trace:TASK-844 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum InitPushPlan {
+    /// A code branch exists and has commits → push it FIRST (so the forge
+    /// adopts it as default), then the orphan store. The string is the code
+    /// branch name to push.
+    CodeBranchFirst(String),
+    /// No code branch with commits to push (brand-new repo / nothing committed)
+    /// → fall back to the legacy behavior: push only the orphan store. Pushing
+    /// uncommitted/empty code would surprise the user (blast-radius guardrail),
+    /// so we don't. The set-default-branch call can still run after the push.
+    OrphanOnly,
+}
+
+/// Decide the init push plan from two facts about the working repo: whether a
+/// code branch (`main`/`master`) **exists**, and whether it **has commits**.
+/// Pure so the push-order decision is unit-testable without a live remote.
+///
+/// - code branch exists AND has commits → [`InitPushPlan::CodeBranchFirst`]
+/// - otherwise → [`InitPushPlan::OrphanOnly`] (conservative fallback; never
+///   pushes code the user hasn't committed).
+///
+/// trace:TASK-844 | ai:claude
+fn decide_init_push_plan(code_branch: Option<&str>, code_branch_has_commits: bool) -> InitPushPlan {
+    match code_branch {
+        Some(name) if code_branch_has_commits => InitPushPlan::CodeBranchFirst(name.to_string()),
+        _ => InitPushPlan::OrphanOnly,
+    }
+}
+
+#[cfg(test)]
+mod task_844_init_push_order_tests {
+    use super::*;
+    use crate::forge::{project_path_of, ForgeKind};
+
+    /// Empty origin + main has commits → push main FIRST so the forge adopts
+    /// main (not the orphan store) as default.
+    #[test]
+    fn pushes_code_branch_first_when_main_has_commits() {
+        let plan = decide_init_push_plan(Some("main"), true);
+        assert_eq!(plan, InitPushPlan::CodeBranchFirst("main".to_string()));
+    }
+
+    /// master is honored the same as main (the code branch name flows through).
+    #[test]
+    fn pushes_code_branch_first_honors_master() {
+        let plan = decide_init_push_plan(Some("master"), true);
+        assert_eq!(plan, InitPushPlan::CodeBranchFirst("master".to_string()));
+    }
+
+    /// Brand-new repo: code branch has no commits → fall back to orphan-only
+    /// (do NOT push uncommitted code — blast-radius guardrail).
+    #[test]
+    fn falls_back_to_orphan_only_when_no_commits() {
+        let plan = decide_init_push_plan(Some("main"), false);
+        assert_eq!(plan, InitPushPlan::OrphanOnly);
+    }
+
+    /// No code branch at all → orphan-only fallback.
+    #[test]
+    fn falls_back_to_orphan_only_when_no_code_branch() {
+        let plan = decide_init_push_plan(None, true);
+        assert_eq!(plan, InitPushPlan::OrphanOnly);
+    }
+
+    /// GitHub set-default-branch command shape: `gh repo edit [proj]
+    /// --default-branch main`. Project ref is optional (gh resolves from cwd).
+    #[test]
+    fn github_set_default_branch_cmd_with_and_without_project() {
+        let with = ForgeKind::GitHub.set_default_branch_cmd("main", Some("owner/repo"));
+        assert_eq!(
+            with,
+            Some(vec![
+                "gh".into(),
+                "repo".into(),
+                "edit".into(),
+                "owner/repo".into(),
+                "--default-branch".into(),
+                "main".into(),
+            ])
+        );
+        let without = ForgeKind::GitHub.set_default_branch_cmd("main", None);
+        assert_eq!(
+            without,
+            Some(vec![
+                "gh".into(),
+                "repo".into(),
+                "edit".into(),
+                "--default-branch".into(),
+                "main".into(),
+            ])
+        );
+    }
+
+    /// GitLab set-default-branch command shape: `glab api -X PUT
+    /// projects/<url-encoded-path> -f default_branch=main`. The project path is
+    /// required and `/`-encoded to `%2F`.
+    #[test]
+    fn gitlab_set_default_branch_cmd_encodes_project_path() {
+        let cmd = ForgeKind::GitLab.set_default_branch_cmd("main", Some("group/sub/proj"));
+        assert_eq!(
+            cmd,
+            Some(vec![
+                "glab".into(),
+                "api".into(),
+                "-X".into(),
+                "PUT".into(),
+                "projects/group%2Fsub%2Fproj".into(),
+                "-f".into(),
+                "default_branch=main".into(),
+            ])
+        );
+    }
+
+    /// GitLab requires a project ref — without one there's no command to build.
+    #[test]
+    fn gitlab_set_default_branch_cmd_none_without_project() {
+        assert_eq!(ForgeKind::GitLab.set_default_branch_cmd("main", None), None);
+    }
+
+    /// Pure-git has no forge API → no command at all.
+    #[test]
+    fn pure_git_has_no_set_default_branch_cmd() {
+        assert_eq!(
+            ForgeKind::None.set_default_branch_cmd("main", Some("owner/repo")),
+            None
+        );
+    }
+
+    /// project_path_of parses both SSH and HTTPS origins and strips `.git`.
+    #[test]
+    fn project_path_extraction() {
+        assert_eq!(
+            project_path_of("git@github.com:owner/repo.git").as_deref(),
+            Some("owner/repo")
+        );
+        assert_eq!(
+            project_path_of("https://gitlab.example.com/group/sub/proj.git").as_deref(),
+            Some("group/sub/proj")
+        );
+        assert_eq!(
+            project_path_of("git@gitlab.joemooney.com:grp/proj").as_deref(),
+            Some("grp/proj")
+        );
+        assert_eq!(project_path_of(""), None);
+    }
+}
+
 #[cfg(test)]
 mod bug_559_clone_recovery_tests {
     use super::*;
@@ -19944,19 +20097,62 @@ fn handle_init_distributed_worktree(
     // the push fails (offline, auth, etc.) — failure isn't fatal here.
     // trace:BUG-23 trace:TASK-421 | ai:claude
     //
-    // TODO(BUG-559 root-cause prevention): this is the FIRST and (on a
-    // push-to-create empty origin) ONLY branch init pushes, so a forge that
-    // adopts the first-pushed branch as the project default (GitLab) makes the
-    // orphan `aida-store` the default — breaking fresh-clone checkout. Fix (a)
-    // is to push the code/main branch BEFORE this orphan push so the forge
-    // adopts `main` as default. Not done here: init does not currently push the
-    // code branch at all (the user/PR flow does), so pushing it from init is a
-    // behavior change with real blast radius (pushing user code that may not be
-    // ready), and the forge-default effect can only be confirmed against a live
-    // GitHub + GitLab. Tracked as a follow-up TASK needing live verification.
-    // Auto-attach now RECOVERS from this state (fix b above), so first-user pain
-    // is already resolved; this remains belt-and-suspenders. trace:BUG-559 | ai:claude
+    // BUG-559 root-cause prevention (TASK-844): the orphan-store push below is
+    // the FIRST push to a fresh origin. A forge that adopts the first-pushed
+    // branch as its default (GitLab's push-to-create) would therefore make the
+    // orphan `aida-store` the project default — breaking fresh-clone checkout
+    // (the clone checks out the internal YAML store as code). Prevent that two
+    // ways, both gated on the origin being EMPTY (a real push-to-create) so we
+    // never change behavior for an existing repo:
+    //   (a) push the CODE branch (main/master) FIRST, before the orphan store,
+    //       so the forge adopts main as default. Guardrail: only when the code
+    //       branch exists and has commits (it always does here — init creates an
+    //       initial commit above — but the pure `decide_init_push_plan` keeps the
+    //       conservative-fallback contract explicit and testable).
+    //   (b) after the first real push, explicitly set the remote default branch
+    //       to the code branch via the forge API (`gh repo edit` / `glab api`),
+    //       belt-and-suspenders for forges/CLIs that don't honor push order.
+    // GitHub already defaults to main via repo-create, so (a) is harmless there;
+    // (b) is a no-op reassert. Live end-to-end verification against GitHub +
+    // GitLab is a manual maintainer step. trace:TASK-844 trace:BUG-559 | ai:claude
     if git_ops::has_remote(&cwd, "origin") {
+        // The code branch is the main-repo's current branch (orphan-worktree
+        // creation didn't switch it). Push-to-create = origin has no heads yet.
+        let code_branch = git_ops::current_branch(&cwd).ok();
+        let origin_empty = git_ops::remote_has_no_heads(&cwd, "origin");
+        // Init guarantees the code branch carries at least an initial commit by
+        // this point, so HEAD resolves; the pure decider still encodes the
+        // "must have commits" guardrail explicitly. trace:TASK-844
+        let code_branch_has_commits = git_ops::head_sha(&cwd).is_ok();
+        let plan = decide_init_push_plan(code_branch.as_deref(), code_branch_has_commits);
+
+        // (a) On an empty origin, push the code branch first so the forge adopts
+        //     it as default rather than the orphan store.
+        if origin_empty {
+            if let InitPushPlan::CodeBranchFirst(cb) = &plan {
+                let out = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&cwd)
+                    .args(["push", "-u", "origin", cb])
+                    .output();
+                match out {
+                    Ok(o) if o.status.success() => {
+                        println!("  {} pushed code branch to origin/{}", "Done".green(), cb);
+                    }
+                    _ => {
+                        eprintln!(
+                            "  {} could not push code branch to origin/{} \
+                             (run `git push -u origin {}` later)",
+                            "Note:".dimmed(),
+                            cb,
+                            cb
+                        );
+                    }
+                }
+            }
+        }
+
+        // The orphan-store push (unchanged behavior).
         let push_result = std::process::Command::new("git")
             .arg("-C")
             .arg(&store_path)
@@ -19979,6 +20175,29 @@ fn handle_init_distributed_worktree(
                     worktree_dir,
                     branch_name
                 );
+            }
+        }
+
+        // (b) Explicitly assert the forge default branch = the code branch, so
+        //     even a forge/CLI that ignores push order ends up correct. Only on
+        //     a push-to-create (empty origin) and only when we know the code
+        //     branch; best-effort (a missing forge CLI / auth just no-ops).
+        if origin_empty {
+            if let InitPushPlan::CodeBranchFirst(cb) = &plan {
+                let kind = crate::forge::resolve_forge_kind(&cwd);
+                let project_ref = crate::forge::origin_url(&cwd)
+                    .as_deref()
+                    .and_then(crate::forge::project_path_of);
+                if let Some(argv) = kind.set_default_branch_cmd(cb, project_ref.as_deref()) {
+                    if let Some((prog, args)) = argv.split_first() {
+                        let out = std::process::Command::new(prog).args(args).output();
+                        if let Ok(o) = out {
+                            if o.status.success() {
+                                println!("  {} set forge default branch to {}", "Done".green(), cb);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
