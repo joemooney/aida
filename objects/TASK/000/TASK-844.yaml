@@ -1,0 +1,24 @@
+id: 019ecfae-f989-7811-bd85-78012b53c075
+spec_id: TASK-844
+agreed_id: TASK-844
+title: 'aida init: push main before aida-store on push-to-create so the forge default branch is main (BUG-559 root-cause prevention; needs GitHub+GitLab live verification)'
+description: |-
+  Root-cause prevention for BUG-559. On push-to-create against an empty origin, aida init currently pushes ONLY the orphan aida-store branch (it does not push the code/main branch at all). A forge that adopts the first-pushed branch as the project default (GitLab) therefore makes aida-store the default branch, which breaks fresh-clone checkout (the clone checks out the internal YAML store as code).
+
+  Fix (a): push the code/main branch BEFORE the orphan aida-store push during init push-to-create, so the forge adopts main as default. Optionally also explicitly set the remote default branch to main via the forge API.
+
+  Why deferred from the BUG-559 PR: init does not push the code branch today, so pushing it from init is a behavior change with real blast radius (pushing user code that may not be ready). The forge-default effect can only be confirmed against a live GitHub + GitLab. Needs the GitLab test env (gitlab.joemooney.com) the product seat validated against.
+
+  Note: auto-attach now RECOVERS from the aida-store-is-default state (fix b, shipped in the BUG-559 PR), so first-user pain is already resolved; this is belt-and-suspenders root-cause prevention. See the TODO(BUG-559) comment at the orphan-push site in aida-cli/src/main.rs (handle_init).
+
+  Companion product-seat follow-up: the glab-API explicit-set-default-branch call (needs the GitLab env + glab).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T09:06:51.401979113Z
+modified_at: 2026-06-16T09:06:51.401979113Z
+req_type: Task
+tags:
+- batch:gitlab-store-now
+- parent:BUG-559
