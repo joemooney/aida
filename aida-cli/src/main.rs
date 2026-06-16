@@ -23311,6 +23311,58 @@ impl PolicyRow {
     }
 }
 
+/// One config section in the central policy registry: a `[section]` header and
+/// the resolved knob rows under it.
+///
+/// TASK-793 (anti-drift, slice 2 of BUG-533): the registry — built by
+/// [`policy_registry`] — is the single source of truth for which config knobs
+/// `aida config show` renders. `render_effective_policy` iterates this list
+/// rather than open-coding each section, so adding a knob is one registry entry
+/// and it surfaces in `config show` automatically. The
+/// [`KNOWN_CONFIG_SECTIONS`] const plus the `policy_registry_covers_*` tests are
+/// the bouncer: a section read elsewhere in the codebase but absent from the
+/// registry fails CI. trace:TASK-793 | ai:claude
+struct PolicySection {
+    /// The bare `[section]` name (no brackets) — the registry key matched
+    /// against [`KNOWN_CONFIG_SECTIONS`] by the completeness test.
+    section: &'static str,
+    /// Bold header line shown above the rows (may add an inline gloss after the
+    /// `[section]` token, e.g. "— agent permission posture").
+    header: String,
+    /// Resolved knob rows under this section.
+    rows: Vec<PolicyRow>,
+}
+
+impl PolicySection {
+    fn print(&self) {
+        println!();
+        println!("{}", self.header.bold());
+        for row in &self.rows {
+            row.print();
+        }
+    }
+}
+
+/// Every config section `aida config show` is expected to render. This is the
+/// drift tripwire: each `[section]` AIDA reads from `.aida/config.toml`,
+/// `~/.aida/agents.toml`, or `~/.aida/config.toml` must appear here AND be
+/// emitted by [`policy_registry`]. A new knob in a brand-new section that
+/// forgets the registry trips `policy_registry_covers_known_sections`. Keep this
+/// list and the registry in lockstep. trace:TASK-793 | ai:claude
+const KNOWN_CONFIG_SECTIONS: &[&str] = &[
+    "agents",
+    "contained",
+    "mailbox",
+    "advisor",
+    "archive",
+    "telemetry",
+    "intake",
+    "presence",
+    "hints",
+    "ui",
+    "seats",
+];
+
 /// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
 /// when absent / unparseable (so a missing file just means "all defaults").
 /// trace:BUG-533 | ai:claude
@@ -23329,27 +23381,55 @@ pub(crate) fn config_lookup<'a>(
     cfg?.get(section)?.get(key)
 }
 
-/// Render the full effective policy surface for `aida config show`. Each known
-/// config section is shown with its resolved value + source (default / project
-/// `.aida/config.toml` / global `~/.aida/agents.toml` / env). This is the
+/// Render the full effective policy surface for `aida config show`. Iterates the
+/// central [`policy_registry`] — each registered section is shown with its
+/// resolved value + source (default / project `.aida/config.toml` / global
+/// `~/.aida/agents.toml` / global `~/.aida/config.toml` / env). This is the
 /// runtime complement to `docs/environment-variables.md`.
 ///
-/// Anti-drift note (BUG-533 slice 2): adding a knob here is a single push to
-/// the `rows` vec built per section — the readers and this renderer still live
-/// in separate places, so a fully-central registry remains a follow-up.
-/// trace:BUG-533 | ai:claude
+/// Anti-drift (BUG-533 slice 2 / TASK-793): this renderer no longer hardcodes
+/// the section list — it walks whatever [`policy_registry`] returns, so a knob
+/// added there surfaces here for free. [`KNOWN_CONFIG_SECTIONS`] +
+/// `policy_registry_covers_known_sections` keep the registry from silently
+/// falling behind a newly-added config section.
+/// trace:TASK-793 trace:BUG-533 | ai:claude
 fn render_effective_policy(project_root: &std::path::Path) {
-    let cfg = read_project_config_value(project_root);
-
     println!();
     println!("{}", "Effective Policy:".blue().bold());
+
+    for section in policy_registry(project_root) {
+        section.print();
+    }
+
+    println!();
+    println!(
+        "  {}",
+        "Override any AIDA_* env var per docs/environment-variables.md.".dimmed()
+    );
+}
+
+/// The central config-policy registry (BUG-533 slice 2 / TASK-793). Returns one
+/// [`PolicySection`] per known config section, each carrying its resolved knob
+/// rows. This is the **single source of truth** consumed by `aida config show`
+/// ([`render_effective_policy`]); adding a knob is a one-spot edit here and it
+/// appears in `config show` automatically — no separate renderer edit, which is
+/// exactly the drift that produced BUG-533.
+///
+/// Each section's resolution reuses the existing reader helpers
+/// (`load_agents_contained`, `IntakeConfig::load`, `seats::*`,
+/// `glyphs::active_*`, `workflow_hints::enabled`, …) so the rendered values
+/// match what the rest of the binary actually reads — the registry is a view
+/// over the real readers, not a parallel re-derivation.
+/// trace:TASK-793 trace:BUG-533 | ai:claude
+fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
+    let cfg = read_project_config_value(project_root);
+    let mut sections: Vec<PolicySection> = Vec::new();
 
     // --- Agent permission posture (security-relevant — lead with it). ---
     // Resolution: global ~/.aida/agents.toml base, project .aida/agents.toml
     // override; default false (faithful native posture). trace:STORY-495
-    println!();
-    println!("{}", "[agents] — agent permission posture".bold());
-    {
+    sections.push({
+        let mut rows = Vec::new();
         let global_path = aida_home_dir().map(|h| h.join(".aida/agents.toml"));
         let project_agents = project_root.join(".aida/agents.toml");
         let global_bypass = global_path
@@ -23366,22 +23446,25 @@ fn render_effective_policy(project_root: &std::path::Path) {
         } else {
             format!("{} (Claude prompts; faithful launcher)", "native".green())
         };
-        PolicyRow {
+        rows.push(PolicyRow {
             key: "bypass",
             value: rendered,
             source,
+        });
+        PolicySection {
+            section: "agents",
+            header: "[agents] — agent permission posture".to_string(),
+            rows,
         }
-        .print();
-    }
+    });
 
     // --- Contained posture (sandbox enable + egress allowlist). After TASK-798
     // unified the posture under `[contained]` (`enable` alias of legacy
     // `[agents] contained`, plus `allowed_hosts`), surface both rows here so
     // `aida config show` reflects the resolved sandbox/egress stance. Reuses the
     // existing resolution helpers rather than re-deriving. trace:TASK-802 | ai:claude
-    println!();
-    println!("{}", "[contained] — sandbox + egress posture".bold());
-    {
+    sections.push({
+        let mut rows = Vec::new();
         // `enable`: resolve the source by precedence (last-wins, mirroring
         // load_agents_contained): unified `[contained] enable` overrides legacy
         // `[agents] contained` (project, then global); else default false.
@@ -23408,12 +23491,11 @@ fn render_effective_policy(project_root: &std::path::Path) {
         } else {
             format!("{} (agents run unsandboxed)", "disabled".dimmed())
         };
-        PolicyRow {
+        rows.push(PolicyRow {
             key: "enable",
             value: rendered,
             source,
-        }
-        .print();
+        });
 
         // `allowed_hosts`: the egress allowlist; empty = no egress restriction.
         let hosts = crate::session::contained_allowed_hosts(project_root);
@@ -23425,18 +23507,20 @@ fn render_effective_policy(project_root: &std::path::Path) {
         } else {
             (hosts.join(", "), PolicySource::ProjectConfig)
         };
-        PolicyRow {
+        rows.push(PolicyRow {
             key: "allowed_hosts",
             value,
             source,
+        });
+        PolicySection {
+            section: "contained",
+            header: "[contained] — sandbox + egress posture".to_string(),
+            rows,
         }
-        .print();
-    }
+    });
 
     // --- Mailbox act-on-mail policy. trace:TASK-782 ---
-    println!();
-    println!("{}", "[mailbox]".bold());
-    {
+    sections.push({
         let raw = config_lookup(cfg.as_ref(), "mailbox", "act_on_mail")
             .and_then(|v| v.as_str())
             .and_then(aida_core::mailbox::ActOnMail::parse);
@@ -23451,18 +23535,19 @@ fn render_effective_policy(project_root: &std::path::Path) {
             ),
             None => ("surface-and-recommend".to_string(), PolicySource::Default),
         };
-        PolicyRow {
-            key: "act_on_mail",
-            value,
-            source,
+        PolicySection {
+            section: "mailbox",
+            header: "[mailbox]".to_string(),
+            rows: vec![PolicyRow {
+                key: "act_on_mail",
+                value,
+                source,
+            }],
         }
-        .print();
-    }
+    });
 
     // --- Advisor calibration mode. trace:STORY-347 ---
-    println!();
-    println!("{}", "[advisor]".bold());
-    {
+    sections.push({
         let raw =
             config_lookup(cfg.as_ref(), "advisor", "calibration_mode").and_then(|v| v.as_str());
         let (value, source) = match raw {
@@ -23477,18 +23562,19 @@ fn render_effective_policy(project_root: &std::path::Path) {
             Some(_) => ("off".to_string(), PolicySource::ProjectConfig),
             None => ("off".to_string(), PolicySource::Default),
         };
-        PolicyRow {
-            key: "calibration_mode",
-            value,
-            source,
+        PolicySection {
+            section: "advisor",
+            header: "[advisor]".to_string(),
+            rows: vec![PolicyRow {
+                key: "calibration_mode",
+                value,
+                source,
+            }],
         }
-        .print();
-    }
+    });
 
     // --- Archive auto-sweep. trace:STORY-441 (env: AIDA_AUTO_ARCHIVE) ---
-    println!();
-    println!("{}", "[archive]".bold());
-    {
+    sections.push({
         let env_off = std::env::var("AIDA_AUTO_ARCHIVE")
             .map(|v| v.trim() == "0")
             .unwrap_or(false);
@@ -23508,18 +23594,19 @@ fn render_effective_policy(project_root: &std::path::Path) {
                 None => ("disabled (unset)".to_string(), PolicySource::Default),
             }
         };
-        PolicyRow {
-            key: "auto_after_days",
-            value,
-            source,
+        PolicySection {
+            section: "archive",
+            header: "[archive]".to_string(),
+            rows: vec![PolicyRow {
+                key: "auto_after_days",
+                value,
+                source,
+            }],
         }
-        .print();
-    }
+    });
 
     // --- Telemetry. trace:STORY-122 (env: AIDA_TELEMETRY) ---
-    println!();
-    println!("{}", "[telemetry]".bold());
-    {
+    sections.push({
         let env_off = std::env::var("AIDA_TELEMETRY")
             .map(|v| matches!(v.trim(), "0" | "false" | "no" | "off"))
             .unwrap_or(false);
@@ -23534,18 +23621,19 @@ fn render_effective_policy(project_root: &std::path::Path) {
                 None => ("enabled".to_string(), PolicySource::Default),
             }
         };
-        PolicyRow {
-            key: "enabled",
-            value,
-            source,
+        PolicySection {
+            section: "telemetry",
+            header: "[telemetry]".to_string(),
+            rows: vec![PolicyRow {
+                key: "enabled",
+                value,
+                source,
+            }],
         }
-        .print();
-    }
+    });
 
     // --- Intake policy. trace:STORY-560 ---
-    println!();
-    println!("{}", "[intake]".bold());
-    {
+    sections.push({
         let intake = crate::intake::IntakeConfig::load(project_root);
         let default = crate::intake::IntakeConfig::default();
         let src = |is_default: bool| {
@@ -23555,30 +23643,31 @@ fn render_effective_policy(project_root: &std::path::Path) {
                 PolicySource::ProjectConfig
             }
         };
-        PolicyRow {
-            key: "disposition_bias",
-            value: intake.disposition_bias.as_str().to_string(),
-            source: src(intake.disposition_bias == default.disposition_bias),
+        PolicySection {
+            section: "intake",
+            header: "[intake]".to_string(),
+            rows: vec![
+                PolicyRow {
+                    key: "disposition_bias",
+                    value: intake.disposition_bias.as_str().to_string(),
+                    source: src(intake.disposition_bias == default.disposition_bias),
+                },
+                PolicyRow {
+                    key: "on_apply",
+                    value: intake.on_apply.as_str().to_string(),
+                    source: src(intake.on_apply == default.on_apply),
+                },
+                PolicyRow {
+                    key: "do_not_approve_classes",
+                    value: intake.do_not_approve_classes.join(", "),
+                    source: src(intake.do_not_approve_classes == default.do_not_approve_classes),
+                },
+            ],
         }
-        .print();
-        PolicyRow {
-            key: "on_apply",
-            value: intake.on_apply.as_str().to_string(),
-            source: src(intake.on_apply == default.on_apply),
-        }
-        .print();
-        PolicyRow {
-            key: "do_not_approve_classes",
-            value: intake.do_not_approve_classes.join(", "),
-            source: src(intake.do_not_approve_classes == default.do_not_approve_classes),
-        }
-        .print();
-    }
+    });
 
     // --- Presence settings. trace:STORY-561 ---
-    println!();
-    println!("{}", "[presence]".bold());
-    {
+    sections.push({
         let render_str = |section: &str, key: &str, default: &str| match config_lookup(
             cfg.as_ref(),
             section,
@@ -23589,20 +23678,24 @@ fn render_effective_policy(project_root: &std::path::Path) {
             Some(s) => (s.trim().to_string(), PolicySource::ProjectConfig),
             None => (default.to_string(), PolicySource::Default),
         };
+        let mut rows = Vec::new();
         for (key, default) in [
             ("consumers", "on"),
             ("away_drain", "headless-both"),
             ("home_offer", "surface"),
         ] {
             let (value, source) = render_str("presence", key, default);
-            PolicyRow { key, value, source }.print();
+            rows.push(PolicyRow { key, value, source });
         }
-    }
+        PolicySection {
+            section: "presence",
+            header: "[presence]".to_string(),
+            rows,
+        }
+    });
 
     // --- Workflow hints. trace:STORY-106 (env: AIDA_HINTS) ---
-    println!();
-    println!("{}", "[hints]".bold());
-    {
+    sections.push({
         let env = std::env::var("AIDA_HINTS").ok().filter(|s| {
             matches!(
                 s.trim().to_ascii_lowercase().as_str(),
@@ -23619,28 +23712,83 @@ fn render_effective_policy(project_root: &std::path::Path) {
         } else {
             PolicySource::Default
         };
-        PolicyRow {
-            key: "workflow_hints",
-            value: if effective {
-                "enabled".to_string()
-            } else {
-                "disabled".to_string()
-            },
-            source,
+        PolicySection {
+            section: "hints",
+            header: "[hints]".to_string(),
+            rows: vec![PolicyRow {
+                key: "workflow_hints",
+                value: if effective {
+                    "enabled".to_string()
+                } else {
+                    "disabled".to_string()
+                },
+                source,
+            }],
         }
-        .print();
-    }
+    });
+
+    // --- UI glyphs/theme rendering (EPIC-45 / STORY-633). The glyph profile +
+    // theme are read by the `glyphs` module via its own precedence chain
+    // (`AIDA_GLYPHS` env > project > user > default); surface the resolved
+    // values so `config show` covers the visible-rendering knobs too. Reuses
+    // the module's own resolvers — no parallel parse. trace:TASK-793 | ai:claude
+    sections.push({
+        let mut rows = Vec::new();
+
+        // `glyphs` profile: env > project `[ui] glyphs` > user > default unicode.
+        let env_glyphs = std::env::var("AIDA_GLYPHS")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
+        let project_glyphs =
+            config_lookup(cfg.as_ref(), "ui", "glyphs").and_then(|v| v.as_str().map(String::from));
+        let profile = crate::glyphs::active_profile(Some(project_root));
+        let glyphs_source = if env_glyphs.is_some() {
+            PolicySource::Env("AIDA_GLYPHS")
+        } else if project_glyphs.is_some() {
+            PolicySource::ProjectConfig
+        } else {
+            PolicySource::Default
+        };
+        rows.push(PolicyRow {
+            key: "glyphs",
+            value: profile.name().to_string(),
+            source: glyphs_source,
+        });
+
+        // `theme`: project `[ui] theme` > user > none. `AIDA_GLYPHS` does not
+        // name a theme, so there is no env tier here (mirrors `active_theme`).
+        let project_theme =
+            config_lookup(cfg.as_ref(), "ui", "theme").and_then(|v| v.as_str().map(String::from));
+        let (theme_value, theme_source) = match crate::glyphs::active_theme(Some(project_root)) {
+            Some(t) => {
+                let source = if project_theme.is_some() {
+                    PolicySource::ProjectConfig
+                } else {
+                    PolicySource::GlobalConfig
+                };
+                (t.name.to_string(), source)
+            }
+            None => ("(none)".dimmed().to_string(), PolicySource::Default),
+        };
+        rows.push(PolicyRow {
+            key: "theme",
+            value: theme_value,
+            source: theme_source,
+        });
+
+        PolicySection {
+            section: "ui",
+            header: "[ui] — glyph profile + theme".to_string(),
+            rows,
+        }
+    });
 
     // --- Seat policy: which configurable buckets show on the operator vs the
     // advisor worklist. trace:STORY-620 ---
-    println!();
-    println!(
-        "{}",
-        "[seats] — operator (aida human) vs advisor (aida advisor) worklist".bold()
-    );
-    {
+    sections.push({
         let project_cfg = project_root.join(".aida/config.toml");
         let global_cfg = aida_home_dir().map(|h| h.join(".aida/config.toml"));
+        let mut rows = Vec::new();
         for &key in seats::CONFIGURABLE_KEYS {
             // Re-derive the source by precedence (project > user-global >
             // default) so the row shows where the effective value came from.
@@ -23653,20 +23801,21 @@ fn render_effective_policy(project_root: &std::path::Path) {
                 (None, Some(s)) => (s, PolicySource::GlobalConfig),
                 (None, None) => (seats::default_seat(key), PolicySource::Default),
             };
-            PolicyRow {
+            rows.push(PolicyRow {
                 key,
                 value: seat.as_str().to_string(),
                 source,
-            }
-            .print();
+            });
         }
-    }
+        PolicySection {
+            section: "seats",
+            header: "[seats] — operator (aida human) vs advisor (aida advisor) worklist"
+                .to_string(),
+            rows,
+        }
+    });
 
-    println!();
-    println!(
-        "  {}",
-        "Override any AIDA_* env var per docs/environment-variables.md.".dimmed()
-    );
+    sections
 }
 
 /// Handle `aida config hints [true|false]` — show or persist the
@@ -121852,5 +122001,74 @@ mod bug_533_config_show_tests {
         assert!(PolicySource::Env("AIDA_TELEMETRY")
             .label()
             .contains("AIDA_TELEMETRY"));
+    }
+
+    // TASK-793 anti-drift tests: the central policy registry is the single
+    // source of truth `aida config show` consumes. These assert it stays in
+    // lockstep with `KNOWN_CONFIG_SECTIONS` so a knob added to a brand-new
+    // config section without registering it fails CI instead of going silently
+    // invisible (the exact failure that produced BUG-533). trace:TASK-793
+
+    /// Every section in `KNOWN_CONFIG_SECTIONS` must be emitted by
+    /// `policy_registry` — i.e. `aida config show` covers every section AIDA
+    /// reads. A new `[section]` added to the const but forgotten in the registry
+    /// trips here.
+    #[test]
+    fn policy_registry_covers_known_sections() {
+        let dir = tempfile::tempdir().unwrap();
+        let rendered: std::collections::HashSet<&'static str> = policy_registry(dir.path())
+            .iter()
+            .map(|s| s.section)
+            .collect();
+        for &section in KNOWN_CONFIG_SECTIONS {
+            assert!(
+                rendered.contains(section),
+                "config section `[{section}]` is in KNOWN_CONFIG_SECTIONS but \
+                 `policy_registry` does not emit it — add it to the registry so \
+                 `aida config show` renders it (anti-drift, TASK-793)"
+            );
+        }
+    }
+
+    /// The reverse guard: every section the registry emits must be a known
+    /// section (no stray/typo'd section name) AND the two lists must be the same
+    /// size, so the const can't quietly drift out of sync with the registry.
+    #[test]
+    fn policy_registry_emits_only_known_sections() {
+        let dir = tempfile::tempdir().unwrap();
+        let sections = policy_registry(dir.path());
+        let known: std::collections::HashSet<&'static str> =
+            KNOWN_CONFIG_SECTIONS.iter().copied().collect();
+        for s in &sections {
+            assert!(
+                known.contains(s.section),
+                "`policy_registry` emits section `[{}]` which is not in \
+                 KNOWN_CONFIG_SECTIONS — register it there too (anti-drift, TASK-793)",
+                s.section
+            );
+        }
+        // Each registered section appears exactly once and the counts match, so
+        // neither list can carry an entry the other lacks.
+        assert_eq!(
+            sections.len(),
+            KNOWN_CONFIG_SECTIONS.len(),
+            "policy_registry section count != KNOWN_CONFIG_SECTIONS count — \
+             the registry and the drift tripwire have diverged (TASK-793)"
+        );
+    }
+
+    /// Every emitted section must carry at least one knob row — an empty section
+    /// header in `config show` is a bug (the renderer would print a bare
+    /// `[section]` with nothing under it). trace:TASK-793
+    #[test]
+    fn policy_registry_sections_have_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        for s in policy_registry(dir.path()) {
+            assert!(
+                !s.rows.is_empty(),
+                "config section `[{}]` rendered no knob rows",
+                s.section
+            );
+        }
     }
 }
