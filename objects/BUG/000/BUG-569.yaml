@@ -1,0 +1,18 @@
+id: 019ecf60-b071-7733-a8b9-7c512f0315fe
+spec_id: BUG-569
+agreed_id: BUG-569
+title: Advisor writes emit "agent target antigravity is ambiguous" warning when 2+ antigravity agents are registered
+description: 'Observed repeatedly during advisor edit/comment commands (aida edit --status, aida comment add) this session: stderr "warning: agent target antigravity is ambiguous — matches multiple active agents: antigravity#NNNN, antigravity#MMMM". Some notification/routing path resolves a bare agent name "antigravity" against the agent registry and warns when 2+ active agents share that name. Harmless (the command succeeds) but noisy. Find the bare-name agent-target resolution (likely a post-write notification/mailbox hook) and either disambiguate (route to all matching, or skip) or suppress the warning when the target is a name-class not a specific id. Verify cause before fixing.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T07:41:20.881537431Z
+modified_at: 2026-06-16T07:41:20.881537431Z
+req_type: Bug
+tags:
+- aida:agent
+- diagnostics
+- from-advisor
+- notifications
+- papercut
