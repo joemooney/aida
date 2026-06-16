@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:50:14.700945231Z
-modified_at: 2026-06-16T09:18:27.776748762Z
+modified_at: 2026-06-16T15:43:16.968132691Z
 req_type: Bug
 tags:
 - batch:gitlab-store-now
@@ -79,9 +79,6 @@ processing_record:
   agent: aida
   commit_sha: ca9c3d055328906f000e1afc5f0e3831250ca028
   summary: Completed via merge ca9c3d05
-deferred: true
-deferred_at: 2026-06-16T09:18:27.776748762Z
-deferred_until: TASK-844 lands (init pushes main first / sets forge default to main) — the source-side prevention for the orphan-becomes-default root cause
 implementation_info:
   implemented: false
   completed_at: 2026-06-14T21:43:52.877483020Z
