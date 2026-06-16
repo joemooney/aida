@@ -3,12 +3,12 @@ spec_id: TASK-827
 agreed_id: TASK-827
 title: 'Solo mode as a drain autonomy posture: drains honor the solo flag (maximum-discretion safe-backlog mode)'
 description: 'Follow-up to STORY-624 (which shipped the visible solo-state flag + statusline). Wire solo as an autonomy posture the drains/orchestrator HONOR: when solo is active, the advisor+integrator works the SAFE backlog end-to-end with maximum discretion (groom -> implement -> integrate -> repeat), parking keystone/architecture for the human, per EPIC-43 / docs/solo-mode.md. Read presence::current_solo where the drain decides escalate-vs-proceed. Parent EPIC-43.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T22:29:27.685196417Z
-modified_at: 2026-06-16T08:01:26.674014164Z
+modified_at: 2026-06-16T08:09:18.787962015Z
 req_type: Task
 tags:
 - autonomy
@@ -25,3 +25,21 @@ comments:
   content: Commit 1429ef159 references this requirement
   created_at: 2026-06-16T08:01:26.674014164Z
   modified_at: 2026-06-16T08:01:26.674014164Z
+history:
+- id: 019ecf7a-4abf-7251-9b14-182c1d8d990d
+  author: aida-auto-bump
+  timestamp: 2026-06-16T08:09:18.783356481Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecf7a-4ac3-7f53-8bf2-9bece4424a1d
+  timestamp: 2026-06-16T08:09:18.787961323Z
+  agent: aida
+  commit_sha: 476cca2964a7789efb02cb61182d5f6722b1e47c
+  summary: Completed via merge 476cca29
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T08:09:18.624230117Z
+  completion_sha: 476cca2964a7789efb02cb61182d5f6722b1e47c
