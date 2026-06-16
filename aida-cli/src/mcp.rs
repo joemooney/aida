@@ -3911,13 +3911,16 @@ impl<'a> McpServer<'a> {
             ));
         }
         let mut lines: Vec<String> = Vec::new();
+        // completed / started-not-completed / pending — same status markers as
+        // `aida session show --plan`, routed through the glyph registry so the
+        // ascii profile / [glyphs] overrides apply. `○` (pending) is not a
+        // registry glyph and stays literal. trace:EPIC-27 trace:TASK-840 | ai:claude
+        let root = crate::find_project_root().ok();
         for it in &manifest.items {
-            // ✓ completed / ◐ started-not-completed / ○ pending — same status
-            // glyphs as `aida session show --plan`. trace:EPIC-27
             let marker = if it.completed_at.is_some() {
-                "✓"
+                crate::glyphs::get(crate::glyphs::Glyph::Check, root.as_deref())
             } else if it.started_at.is_some() {
-                "◐"
+                crate::glyphs::get(crate::glyphs::Glyph::InFlight, root.as_deref())
             } else {
                 "○"
             };
@@ -6839,7 +6842,7 @@ fn session_tool_descriptors() -> Value {
         },
         {
             "name": "session_manifest",
-            "description": "Show a session's planned-cluster manifest — the SPEC-IDs /aida-pickup recorded it intends to work, with per-item status (✓ done / ◐ started / ○ pending). Read mirror of `aida session manifest` / `aida session show --plan`. Writing/marking the manifest stays CLI-only (it needs the active session's cwd context and happens automatically as `aida edit` / `queue done` run).",
+            "description": "Show a session's planned-cluster manifest — the SPEC-IDs /aida-pickup recorded it intends to work, with per-item status (a marker per item: done / started / pending). Read mirror of `aida session manifest` / `aida session show --plan`. Writing/marking the manifest stays CLI-only (it needs the active session's cwd context and happens automatically as `aida edit` / `queue done` run).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -6847,7 +6850,7 @@ fn session_tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "either `Session <id> planned cluster (<done>/<total> done, source: <src>):` followed by `  <✓|◐|○> <SPEC-ID>` lines, or a note that no manifest exists yet. On an ambiguous/absent id with multiple sessions, the envelope sets `isError: true`."
+                "either `Session <id> planned cluster (<done>/<total> done, source: <src>):` followed by `  <status-marker> <SPEC-ID>` lines (a marker per item: done / started / pending), or a note that no manifest exists yet. On an ambiguous/absent id with multiple sessions, the envelope sets `isError: true`."
             )
         },
         {
@@ -10862,8 +10865,12 @@ mod tests {
         crate::session_manifest::save(&path, &manifest).unwrap();
 
         let shown = server.tool_session_manifest(&json!({})).unwrap();
+        let check = crate::glyphs::Glyph::Check.render(crate::glyphs::active_profile(None));
         assert!(shown.contains("1/2 done"), "shown: {shown}");
-        assert!(shown.contains("✓ TASK-100"), "shown: {shown}");
+        assert!(
+            shown.contains(&format!("{check} TASK-100")),
+            "shown: {shown}"
+        );
         assert!(shown.contains("○ TASK-101"), "shown: {shown}");
     }
 

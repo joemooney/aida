@@ -590,7 +590,7 @@ pub(crate) enum AutoReleaseDecision {
 /// creator-shell PID is alive, (b) the lease file's mtime is younger than the
 /// threshold, (c) a live `claude` process is running inside the worktree
 /// suffices. The auto-release path only fires when *all three* fail — the
-/// safety case is the one the bug filed against (`◐ dormant`, no live claude,
+/// safety case is the one the bug filed against (dormant lease, no live claude,
 /// lease minted hours ago).
 ///
 /// trace:BUG-307 | ai:claude

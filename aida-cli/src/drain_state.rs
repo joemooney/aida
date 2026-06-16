@@ -469,15 +469,22 @@ fn fmt_local(rfc3339: &str) -> String {
     }
 }
 
+/// Render a registry glyph honoring the active profile. Default Unicode profile
+/// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
+fn glyph(g: crate::glyphs::Glyph) -> &'static str {
+    crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
+}
+
 /// The glyph + state description for one member row.
 fn member_line(member: &DrainMember) -> String {
     let (glyph, desc) = match member.state.as_str() {
-        STATE_COMPLETED => ("✓", "completed".to_string()),
-        STATE_FAILED => ("✗", "failed".to_string()),
+        STATE_COMPLETED => (glyph(crate::glyphs::Glyph::Check), "completed".to_string()),
+        STATE_FAILED => (glyph(crate::glyphs::Glyph::Cross), "failed".to_string()),
+        // `○` (U+25CB) is not a registry glyph — left as a literal marker.
         STATE_QUEUED => ("○", "queued".to_string()),
         // `in-phase-N` — the member currently running.
         other => (
-            "▶",
+            glyph(crate::glyphs::Glyph::FlowActive),
             other
                 .strip_prefix("in-phase-")
                 .map(|n| format!("phase {n}"))
@@ -506,7 +513,8 @@ pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
 
     if stale {
         out.push_str(&format!(
-            "⚠ Stale drain-state file — orchestrator (pid {}) is no longer running.\n",
+            "{} Stale drain-state file — orchestrator (pid {}) is no longer running.\n",
+            glyph(crate::glyphs::Glyph::Warning),
             state.orchestrator_pid
         ));
         out.push_str("  The drain crashed or was killed without cleaning up.\n\n");
@@ -530,7 +538,12 @@ pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
         // what the orchestrator is waiting on.
         if member.is_running() {
             if let Some(phase) = &state.current_phase {
-                line = format!("  ▶ {:<13} phase {}", member.spec, phase);
+                line = format!(
+                    "  {} {:<13} phase {}",
+                    glyph(crate::glyphs::Glyph::FlowActive),
+                    member.spec,
+                    phase
+                );
             }
         }
         out.push_str(&line);
@@ -834,9 +847,11 @@ mod tests {
         state.current_phase = Some("3 (reviewer)".to_string());
         let out = render_human(&state, false);
         assert!(out.contains("Active drain: batch:autonomy-modes"));
-        assert!(out.contains("✓ STORY-301"));
+        let check = crate::glyphs::Glyph::Check.render(crate::glyphs::active_profile(None));
+        let active = crate::glyphs::Glyph::FlowActive.render(crate::glyphs::active_profile(None));
+        assert!(out.contains(&format!("{check} STORY-301")));
         assert!(out.contains("PR-80"));
-        assert!(out.contains("▶ STORY-285"));
+        assert!(out.contains(&format!("{active} STORY-285")));
         assert!(out.contains("phase 3 (reviewer)"));
         assert!(out.contains("○ STORY-276"));
         // The "how far through" line names the current member's position.
