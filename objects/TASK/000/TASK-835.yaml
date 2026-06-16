@@ -3,12 +3,12 @@ spec_id: TASK-835
 agreed_id: TASK-835
 title: 'Phase 3: migrate remaining raw glyph literals to the registry + CI lint blocking new ones'
 description: Phase 3 of EPIC-45. Incrementally migrate the long tail of inline glyph literals (~2568 sites across aida-cli, 1742 in main.rs) to the phase-1 registry so the override/profile applies everywhere, not just the seeded hot paths. Add a CI lint (grep-based gate or a clippy-style check) that flags NEW raw glyph literals outside the registry module, so coverage ratchets up and cannot regress (substrate-as-bouncer). Ship the lint REPORT-ONLY first (annotate the count), then flip to blocking once the bulk is migrated. Exempt the registry module itself, tests, and docs.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:08:38.170899941Z
-modified_at: 2026-06-16T06:16:09.389932648Z
+modified_at: 2026-06-16T06:23:58.040779583Z
 req_type: Task
 tags:
 - ci
@@ -25,3 +25,21 @@ comments:
   content: Commit 58bec7d6c references this requirement
   created_at: 2026-06-16T06:16:09.389932648Z
   modified_at: 2026-06-16T06:16:09.389932648Z
+history:
+- id: 019ecf19-d854-7622-9db1-68aceb489c52
+  author: aida-auto-bump
+  timestamp: 2026-06-16T06:23:58.036228422Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecf19-d858-7532-bdbd-5bba0052dfd7
+  timestamp: 2026-06-16T06:23:58.040778932Z
+  agent: aida
+  commit_sha: b3c3725413175e3179830d69d57b27bc3707cf67
+  summary: Completed via merge b3c37254
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T06:23:57.882256632Z
+  completion_sha: b3c3725413175e3179830d69d57b27bc3707cf67
