@@ -32,6 +32,33 @@ aida queue integrate --watch
 Run them as a loop (intake → drain → integrate, repeat). `integrate --watch`
 can run continuously alongside; the others re-run per cycle.
 
+## The solo posture: drains honor the flag (TASK-827)
+
+`aida solo` is not just a statusline marker — when it is active
+(`presence::current_solo`), a fully-headless drain (`--no-human=both`) honors
+it as a **maximum-discretion safe-backlog posture**. On a punted design-fork
+the headless advisor escalates, the posture decides what happens next *per
+spec*:
+
+| Spec class | Solo active | Behaviour |
+|------------|-------------|-----------|
+| **Safe** (ordinary task/story, no keystone tag) | yes | **Proceed on the defensible default** — `--escalate-defaults` semantics. Maximum discretion: the drain ships the safe call and keeps moving. |
+| **Keystone / architecture** (epic type, or `keystone` / `architecture` / `security` / `supervised` / `needs-supervised-build` / `blast-radius:high` / `risk:high` tag) | yes | **Park for the human** — `--escalate-blocks` semantics. Never ships keystone unattended; parks `NeedsAttention` for review, reusing the EPIC-28 park path. |
+| any | no | **Unchanged** — your explicit `--escalate-*` flags win; solo supplies nothing. |
+
+The drain prints one line per spec when the posture is in effect:
+`🤖 solo posture: working safe backlog, parking keystone for human`.
+
+This reuses the existing escalate mechanism (`EscalateMode::Defaults` /
+`Blocks`) and the existing park path — it does not invent a new parking
+system. The posture only applies under `--no-human=both` (where the advisor
+escalation tier runs); a non-headless or non-solo drain is untouched. The
+keystone classifier is conservative by design: a false positive merely parks a
+safe spec for human review (cheap), while shipping keystone unattended (the
+expensive error) is what it guards against. The posture decision is the pure
+`presence::resolve_solo_posture` / `is_keystone_class`, unit-tested in
+isolation. trace:TASK-827
+
 ## Why it's safe to leave running (the floor)
 
 | Guarantee | Mechanism |

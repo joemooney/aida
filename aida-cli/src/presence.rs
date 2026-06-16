@@ -314,6 +314,101 @@ pub(crate) fn statusline_solo_marker(now: DateTime<Utc>) -> Option<String> {
     current_solo(now).then(|| "🤖 solo".to_string())
 }
 
+// ---------------------------------------------------------------------------
+// Solo as a drain autonomy POSTURE (TASK-827 / EPIC-43).
+//
+// STORY-624 shipped solo as a visible FLAG; this folds that flag into the
+// escalate-vs-proceed decision the `--no-human=both` drain makes on a punted
+// design-fork. The contract (docs/solo-mode.md):
+//
+//   solo active + SAFE work     → PROCEED on the defensible default
+//                                 (max-discretion safe-backlog mode)
+//   solo active + KEYSTONE work → PARK for the human (never ship keystone
+//                                 unattended), reusing the existing
+//                                 NeedsAttention park path
+//   solo inactive               → UNCHANGED (the baseline escalate flags win)
+//
+// PURE — the decision is unit-tested in isolation; the call site reads
+// `current_solo` + classifies the spec and feeds them in. trace:TASK-827
+// ---------------------------------------------------------------------------
+
+/// PURE: is this spec keystone / architecture-class — the work solo mode must
+/// PARK for the human rather than ship on a default?
+///
+/// Conservative by design (a false negative ships keystone unattended, the
+/// expensive error; a false positive merely parks a safe spec for human review,
+/// the cheap one). Reuses the existing `supervised` convention (`burndown.rs`)
+/// and adds the small documented heuristic the spec calls for: `epic` type, or
+/// any `keystone` / `architecture` / `security` / high-blast-radius tag.
+/// trace:TASK-827 | ai:claude
+pub(crate) fn is_keystone_class<'a, I>(req_type: &str, tags: I) -> bool
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    // An epic is architecture-shaped by definition — never ship one on a
+    // default.
+    if req_type.trim().eq_ignore_ascii_case("epic") {
+        return true;
+    }
+    tags.into_iter().any(|t| {
+        let lo = t.trim().to_ascii_lowercase();
+        // Exact keystone/architecture/security/supervised markers, plus the
+        // `supervised` / `needs-supervised-build` build-gating convention and
+        // any explicit `blast-radius:high` / `risk:high` tag.
+        lo == "keystone"
+            || lo == "architecture"
+            || lo == "security"
+            || lo == "supervised"
+            || lo == "needs-supervised-build"
+            || lo == "blast-radius:high"
+            || lo == "risk:high"
+    })
+}
+
+/// The solo posture's verdict for one punted/escalated design-fork.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SoloPosture {
+    /// Solo inactive — solo supplied nothing; the baseline escalate flags win.
+    Inactive,
+    /// Solo active + safe work → resume on the defensible default
+    /// (max-discretion). Maps to `EscalateMode::Defaults`.
+    ProceedOnDefault,
+    /// Solo active + keystone/architecture work → park `NeedsAttention` for the
+    /// human. Maps to `EscalateMode::Blocks`.
+    ParkForHuman,
+}
+
+impl SoloPosture {
+    /// Did solo actually steer the verdict (the trigger for the one-line
+    /// banner)? `Inactive` means it did not.
+    pub(crate) fn is_active(self) -> bool {
+        !matches!(self, SoloPosture::Inactive)
+    }
+
+    /// Whether this posture wants the escalate-on-fork behaviour to ship the
+    /// defensible default (`true`) or park (`false`). Only consulted when
+    /// `is_active()`. trace:TASK-827
+    pub(crate) fn escalate_defaults(self) -> bool {
+        matches!(self, SoloPosture::ProceedOnDefault)
+    }
+}
+
+/// PURE: resolve the solo posture for one design-fork from solo state +
+/// keystone classification. **Solo inactive → `Inactive`** (baseline behaviour
+/// unchanged, the load-bearing "do not change behaviour when solo is off"
+/// guarantee). Solo active biases toward PROCEED on safe work and PARK on
+/// keystone work. trace:TASK-827 | ai:claude
+pub(crate) fn resolve_solo_posture(solo_active: bool, is_keystone: bool) -> SoloPosture {
+    if !solo_active {
+        return SoloPosture::Inactive;
+    }
+    if is_keystone {
+        SoloPosture::ParkForHuman
+    } else {
+        SoloPosture::ProceedOnDefault
+    }
+}
+
 /// Read `[presence] away_ttl` from a project's `.aida/config.toml`, falling
 /// back to the 8h default. Accepts an integer (seconds) or a humantime-ish
 /// string (`"8h"`, `"30m"`, `"2h30m"`). Unparseable / absent → default.
@@ -655,6 +750,68 @@ mod tests {
         assert!(!effective_solo(false, now, 3600, now));
         // Clock skew (set_at in the future) → still on within window.
         assert!(effective_solo(true, now + Duration::minutes(5), 3600, now));
+    }
+
+    // --- TASK-827: solo as a drain autonomy posture ------------------------
+
+    /// Solo INACTIVE → posture is `Inactive` regardless of keystone-ness, and
+    /// the baseline escalate behaviour is left untouched. This is the
+    /// load-bearing "don't change behaviour when solo is off" guarantee.
+    #[test]
+    fn solo_inactive_posture_is_unchanged() {
+        assert_eq!(resolve_solo_posture(false, false), SoloPosture::Inactive);
+        assert_eq!(resolve_solo_posture(false, true), SoloPosture::Inactive);
+        assert!(!SoloPosture::Inactive.is_active());
+    }
+
+    /// Solo ACTIVE + SAFE work → proceed on the defensible default (maximum
+    /// discretion safe-backlog mode → `EscalateMode::Defaults`).
+    #[test]
+    fn solo_active_safe_proceeds_on_default() {
+        let posture = resolve_solo_posture(true, false);
+        assert_eq!(posture, SoloPosture::ProceedOnDefault);
+        assert!(posture.is_active());
+        assert!(posture.escalate_defaults()); // → Defaults (proceed)
+    }
+
+    /// Solo ACTIVE + KEYSTONE work → park for the human (never ship keystone
+    /// unattended → `EscalateMode::Blocks`).
+    #[test]
+    fn solo_active_keystone_parks_for_human() {
+        let posture = resolve_solo_posture(true, true);
+        assert_eq!(posture, SoloPosture::ParkForHuman);
+        assert!(posture.is_active());
+        assert!(!posture.escalate_defaults()); // → Blocks (park)
+    }
+
+    /// Keystone classification: epic type and the documented keystone /
+    /// architecture / security / supervised / high-blast-radius tags trip it;
+    /// an ordinary task with no such tag does not.
+    #[test]
+    fn keystone_classification_heuristic() {
+        // Epic type → keystone regardless of tags.
+        assert!(is_keystone_class("Epic", std::iter::empty()));
+        assert!(is_keystone_class("epic", std::iter::empty()));
+        // Ordinary task, no keystone tag → safe.
+        assert!(!is_keystone_class("Task", std::iter::empty()));
+        assert!(!is_keystone_class("Story", ["cleanup"]));
+        // Each documented keystone tag trips it (case-insensitive).
+        for tag in [
+            "keystone",
+            "Architecture",
+            "security",
+            "supervised",
+            "needs-supervised-build",
+            "blast-radius:high",
+            "risk:high",
+        ] {
+            assert!(
+                is_keystone_class("Task", [tag]),
+                "tag {tag} should classify keystone"
+            );
+        }
+        // A benign tag alongside no keystone marker stays safe.
+        assert!(!is_keystone_class("Task", ["batch:nightly", "papercut"]));
     }
 
     #[test]

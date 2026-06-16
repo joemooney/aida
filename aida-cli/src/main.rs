@@ -110237,6 +110237,44 @@ fn run_auto_complete(
     // single-spec drain keeps the Inconclusive pause. The two are exact
     // inverses, so `batch` derives directly from `owns_drain_state`.
     let batch = !owns_drain_state;
+    // TASK-827: solo mode as a max-discretion safe-backlog POSTURE. When solo is
+    // active (`presence::current_solo`), fold it into this spec's escalate
+    // behaviour per-spec: SAFE work proceeds on the defensible default
+    // (ProceedOnDefault → Defaults — maximum discretion), KEYSTONE/architecture
+    // work parks for the human (ParkForHuman → Blocks — never ship keystone
+    // unattended). Reuses the existing escalate mechanism + park path; when solo
+    // is inactive the posture is `Inactive` and `escalate_mode` is UNCHANGED, so
+    // non-solo behaviour is untouched. Only meaningful under `--no-human=both`
+    // where the advisor escalation tier runs. trace:TASK-827 | ai:claude
+    let escalate_mode = {
+        // The advisor escalation tier (where `escalate_mode` is consulted) only
+        // runs under `--no-human=both`; gate the posture there so a non-headless
+        // solo drain neither prints a misleading banner nor flips a no-op flag.
+        let advisor_tier_runs = no_human == Some(auto_complete::NoHumanMode::Both);
+        let solo_active = advisor_tier_runs && presence::current_solo(chrono::Utc::now());
+        let is_keystone = solo_active && solo_spec_is_keystone(storage, spec);
+        let posture = presence::resolve_solo_posture(solo_active, is_keystone);
+        if posture.is_active() {
+            if !json {
+                if matches!(posture, presence::SoloPosture::ParkForHuman) {
+                    eprintln!(
+                        "  {} solo posture: working safe backlog, parking keystone for human ({} classified keystone — parks on a design-fork)",
+                        "🤖".bold(),
+                        spec
+                    );
+                } else {
+                    eprintln!(
+                        "  {} solo posture: working safe backlog, parking keystone for human ({} is safe — proceeds on the defensible default)",
+                        "🤖".bold(),
+                        spec
+                    );
+                }
+            }
+            auto_complete::EscalateMode::from_flags(posture.escalate_defaults())
+        } else {
+            escalate_mode
+        }
+    };
     let result = auto_complete::orchestrate_with_resume(
         &mut driver,
         spec,
@@ -112311,6 +112349,26 @@ fn resolve_lifecycle_skip(storage: &Storage, spec: &str) -> Result<auto_complete
     Ok(auto_complete::LifecycleSkip::from_tags(
         req.tags.iter().map(String::as_str),
     ))
+}
+
+/// TASK-827: classify this spec as keystone/architecture-class for the solo
+/// posture. Best-effort — if the spec can't be loaded we treat it as
+/// non-keystone so the posture errs toward the cheap error (a safe spec parked
+/// or proceeded), never the expensive one (shipping keystone unattended is
+/// guarded separately by the `supervised` drain exclusion). Returns the
+/// `(req_type, tags)` of a conservative classification via
+/// `presence::is_keystone_class`. trace:TASK-827 | ai:claude
+fn solo_spec_is_keystone(storage: &Storage, spec: &str) -> bool {
+    let Ok(store) = storage.load() else {
+        return false;
+    };
+    let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec)) else {
+        return false;
+    };
+    presence::is_keystone_class(
+        &req.req_type.to_string(),
+        req.tags.iter().map(String::as_str),
+    )
 }
 
 /// Best-effort lookup of the most recent workflow run id for `branch`, used
