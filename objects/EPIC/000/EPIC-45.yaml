@@ -28,3 +28,7 @@ tags:
 - terminal-compat
 - ui
 - windows
+relationships:
+- rel_type: Parent
+  target_id: 019ece9d-c302-7a63-85aa-ca77b984b333
+  created_at: 2026-06-16T04:08:29.348617098Z
