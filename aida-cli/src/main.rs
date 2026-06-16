@@ -16082,13 +16082,33 @@ fn collect_agent_briefs(
     for_agent: Option<&str>,
     include_acked: bool,
 ) -> Result<Vec<BriefListEntry>> {
+    // Internal scans (notification banners, dependency walks, drain pickups)
+    // resolve a bare agent-type name-class and must stay silent; only an
+    // explicit user `--for-agent <target>` should surface ambiguity.
+    collect_agent_briefs_inner(project_root, for_agent, include_acked, true)
+}
+
+// BUG-569: the ambiguity warning from `resolve_brief_directories` is only a real
+// user error when the caller explicitly targeted an agent. Internal callers that
+// pass a bare agent-TYPE name-class (e.g. `detect_agent_type()` → "antigravity")
+// to scan that type's briefs were inheriting the warning and printing spurious
+// "agent target 'antigravity' is ambiguous" noise on every advisor edit/comment
+// when 2+ agents of that type were registered. Route those through
+// `warn_on_ambiguity = false`. trace:BUG-569 | ai:claude
+fn collect_agent_briefs_inner(
+    project_root: &std::path::Path,
+    for_agent: Option<&str>,
+    include_acked: bool,
+    warn_on_ambiguity: bool,
+) -> Result<Vec<BriefListEntry>> {
     let root = project_root.join(".aida").join("agent-briefs");
     if !root.exists() {
         return Ok(Vec::new());
     }
 
     let allowed_dirs: Option<Vec<String>> = if let Some(target) = for_agent {
-        let (dirs, warning) = agent_registry::resolve_brief_directories(project_root, target);
+        let (dirs, warning) =
+            resolve_brief_dirs_with_optional_warning(project_root, target, warn_on_ambiguity);
         if let Some(warn) = warning {
             eprintln!("{}", warn);
         }
@@ -16144,6 +16164,22 @@ fn collect_agent_briefs(
     Ok(entries)
 }
 
+/// BUG-569: resolve brief directories for `target`, dropping the ambiguity
+/// warning entirely when `warn_on_ambiguity` is false. The warning is only a
+/// real user error when the caller explicitly targeted an agent (e.g.
+/// `aida brief list --for-agent <target>`); internal scans that pass a bare
+/// agent-TYPE name-class must stay silent. Split out so the suppression
+/// decision is unit-testable without capturing stderr. trace:BUG-569 | ai:claude
+fn resolve_brief_dirs_with_optional_warning(
+    project_root: &std::path::Path,
+    target: &str,
+    warn_on_ambiguity: bool,
+) -> (Vec<String>, Option<String>) {
+    let (dirs, warning) = agent_registry::resolve_brief_directories(project_root, target);
+    let warning = if warn_on_ambiguity { warning } else { None };
+    (dirs, warning)
+}
+
 fn normalize_brief_dependency(
     store: &RequirementsStore,
     depends_on: Option<&str>,
@@ -16172,7 +16208,8 @@ fn ensure_brief_dependency_is_acyclic(
         anyhow::bail!("brief dependency cycle: {spec_id} cannot depend on itself");
     }
 
-    let mut deps = collect_agent_briefs(project_root, Some(agent), true)?
+    // BUG-569: internal dependency walk — stay silent on type-class ambiguity.
+    let mut deps = collect_agent_briefs_inner(project_root, Some(agent), true, false)?
         .into_iter()
         .filter_map(|entry| entry.depends_on.map(|dep| (entry.spec_id, dep)))
         .collect::<std::collections::HashMap<_, _>>();
@@ -16279,7 +16316,8 @@ fn pending_brief_banner_lines(
     if !matches!(agent_type, "claude" | "codex" | "antigravity") {
         return None;
     }
-    let entries = collect_agent_briefs(project_root, Some(agent_type), false).ok()?;
+    // BUG-569: bare agent-type scan — stay silent on type-class ambiguity.
+    let entries = collect_agent_briefs_inner(project_root, Some(agent_type), false, false).ok()?;
     if entries.is_empty() {
         return None;
     }
@@ -16524,7 +16562,10 @@ fn read_agent_brief(project_root: &std::path::Path, brief_file: &str, latest: bo
         } else {
             dirs[0].clone()
         };
-        let entries = collect_agent_briefs(project_root, Some(&chosen_agent), false)?;
+        // BUG-569: the explicit-target warning already fired above via
+        // resolve_brief_directories; this re-scan stays silent to avoid a
+        // double warning.
+        let entries = collect_agent_briefs_inner(project_root, Some(&chosen_agent), false, false)?;
         let last_entry = entries.last().ok_or_else(|| {
             anyhow::anyhow!(
                 "Error: no pending briefs found for agent \"{}\". Use 'aida brief list' to view available briefs.",
@@ -16638,7 +16679,8 @@ fn render_agent_brief_read(
     if agent.is_empty() {
         return Ok(body.to_string());
     }
-    let pending = collect_agent_briefs(project_root, Some(&agent), false)?;
+    // BUG-569: internal render scan — stay silent on type-class ambiguity.
+    let pending = collect_agent_briefs_inner(project_root, Some(&agent), false, false)?;
     if pending.iter().any(|entry| {
         entry.spec_id == depends_on
             && entry.path != path
@@ -17295,6 +17337,98 @@ mod task_492_brief_tests {
         assert!(all[0].acked);
         let body = std::fs::read_to_string(&all[0].path).unwrap();
         assert!(body.contains("status: acked"));
+    }
+
+    // BUG-569: an advisor `aida edit --status` / `aida comment add` fires the
+    // pending-brief banner, which scans briefs by the running agent's bare TYPE
+    // ("antigravity"). When 2+ live antigravity agents are registered, the
+    // type-class matches both and `resolve_brief_directories` used to emit a
+    // spurious "agent target 'antigravity' is ambiguous" warning on the banner
+    // path. The internal (non-targeted) scan must stay silent — the banner must
+    // render without any ambiguity line. trace:BUG-569 | ai:claude
+    #[test]
+    fn banner_scan_does_not_warn_when_agent_type_is_ambiguous() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+
+        // Two live agents of the same TYPE (antigravity), distinct names/pids —
+        // the exact condition that makes the bare type-class resolve
+        // ambiguously. Registry entries are keyed by `<type>#<pid>`, so two
+        // distinct LIVE pids are required (same pid would collapse to one
+        // entry). Use this process's pid plus a spawned child held alive for
+        // the duration of the test.
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn a second live process for the second agent pid");
+        let pid_a = std::process::id();
+        let pid_b = child.id();
+        agent_registry::register_existing_agent(
+            root,
+            "antigravity",
+            pid_a,
+            "advisor".to_string(),
+            None,
+            root.to_path_buf(),
+            Some("antigravity-advisor-1".to_string()),
+        )
+        .unwrap();
+        agent_registry::register_existing_agent(
+            root,
+            "antigravity",
+            pid_b,
+            "implementer".to_string(),
+            None,
+            root.to_path_buf(),
+            Some("antigravity-implementer-2".to_string()),
+        )
+        .unwrap();
+
+        // The explicit-target path (warn_on_ambiguity = true) must STILL warn —
+        // ambiguity is a real user error when someone typed `--for-agent`.
+        let (_dirs, warn_explicit) =
+            resolve_brief_dirs_with_optional_warning(root, "antigravity", true);
+        assert!(
+            warn_explicit
+                .as_deref()
+                .is_some_and(|w| w.contains("is ambiguous")),
+            "explicit type-class targeting should still warn: {warn_explicit:?}"
+        );
+
+        // The internal/banner path (warn_on_ambiguity = false) must be SILENT —
+        // this is the spurious-warning suppression that BUG-569 fixes.
+        let (_dirs, warn_internal) =
+            resolve_brief_dirs_with_optional_warning(root, "antigravity", false);
+        assert!(
+            warn_internal.is_none(),
+            "internal type-class scan must not warn on ambiguity: {warn_internal:?}"
+        );
+
+        // A pending brief under the `antigravity` type dir so the banner has
+        // something to render.
+        let brief_dir = root.join(".aida").join("agent-briefs").join("antigravity");
+        std::fs::create_dir_all(&brief_dir).unwrap();
+        std::fs::write(
+            brief_dir.join("TASK-999-20260101T000000Z.md"),
+            "---\nspec_id: TASK-999\nagent: antigravity\nstatus: pending\n---\nbody\n",
+        )
+        .unwrap();
+
+        // The banner path (the bug's surface) must render the brief WITHOUT the
+        // spurious ambiguity line.
+        let lines = pending_brief_banner_lines(root, "antigravity")
+            .expect("banner should render for a pending brief");
+        assert!(
+            lines.iter().any(|l| l.contains("NEW BRIEF(S) PENDING")),
+            "banner should announce the pending brief"
+        );
+        assert!(
+            !lines.iter().any(|l| l.contains("is ambiguous")),
+            "banner must not leak the ambiguous-target warning: {lines:?}"
+        );
+
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     #[test]
@@ -35989,8 +36123,10 @@ session; if you need the next pickup, start a fresh `aida agent new ... --spec N
     out.push('\n');
 
     out.push_str("## Pending Briefs\n\n");
-    let briefs = collect_agent_briefs(&plan.project_root, Some(config.agent_type), false)
-        .unwrap_or_default();
+    // BUG-569: bare agent-type snapshot scan — stay silent on type-class ambiguity.
+    let briefs =
+        collect_agent_briefs_inner(&plan.project_root, Some(config.agent_type), false, false)
+            .unwrap_or_default();
     if briefs.is_empty() {
         out.push_str("_No pending briefs for this agent at launch._\n\n");
     } else {
@@ -89402,7 +89538,9 @@ fn collect_awaiting_report(
         "claude" | "codex" | "antigravity" => Some(agent_type.as_str()),
         _ => None,
     };
-    let pending_briefs = collect_agent_briefs(project_root, brief_filter, false)
+    // BUG-569: bare agent-type filter for the status surface — stay silent on
+    // type-class ambiguity.
+    let pending_briefs = collect_agent_briefs_inner(project_root, brief_filter, false, false)
         .ok()
         .unwrap_or_default()
         .into_iter()
