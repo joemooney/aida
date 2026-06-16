@@ -295,3 +295,11 @@ blocks:
   range_end: 1000
   next: 1
   allocated_at: 2026-05-24T01:16:52.687552074Z
+- node_id: '5'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: '*'
+  range_start: 1001
+  range_end: 2000
+  next: 1001
+  allocated_at: 2026-06-16T19:41:35.983521868Z
