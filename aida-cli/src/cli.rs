@@ -1,5 +1,18 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
+
+/// The canonical `aida solo <action>` verbs. The legacy
+/// `--watch`/`--off`/`--status` flags map onto these as silent aliases.
+// trace:STORY-627 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SoloAction {
+    /// Start the solo loop in the foreground (== legacy `--watch`).
+    Run,
+    /// Stop a running solo loop (== legacy `--off`).
+    Stop,
+    /// Print whether a solo loop / solo mode is active (== legacy `--status`).
+    Status,
+}
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -7049,6 +7062,13 @@ pub enum Command {
     /// 24h cap (e.g. 8h, 2h30m).
     // trace:STORY-624 | ai:claude
     Solo {
+        /// What to do: `run` (start the loop), `stop` (stop it), or `status`.
+        /// Omit to enter solo MODE (the work-state flag). The legacy
+        /// `--watch`/`--off`/`--status` flags are silent aliases for
+        /// run/stop/status.
+        // trace:STORY-627 | ai:claude
+        #[clap(value_enum)]
+        action: Option<SoloAction>,
         /// Exit solo mode.
         #[clap(long)]
         off: bool,
