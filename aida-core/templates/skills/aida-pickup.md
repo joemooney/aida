@@ -311,11 +311,24 @@ aida show <spec_id> --card
 ```
 
 The card prints a header rule, the `id · type · priority · status`
-one-liner, key fields (feature, tags, parent, related specs), the
-description trimmed to its lead summary, the acceptance criteria, and
+one-liner, key fields (feature, tags, parent, related specs), the spec's
+cached **Intent (AI-generated)** comprehension if one is fresh (TASK-838),
+the description trimmed to its lead summary, the acceptance criteria, and
 the git-linkage summary. The user can scroll up at any point to re-read
 the goal, and can catch a mismatch between the spec and how you're
 interpreting it early.
+
+**Lead your first message with the `▸ Intent (AI-generated)` block when
+the card prints one** (TASK-838). It is the spec's distilled plain-terms
+*WHY-this-exists* — the reason-for-being ahead of the mechanics — cached
+by `aida intent <spec>` (STORY-631). Read it first to orient, then read
+the description and acceptance for the *what*. It is **AI-generated** and
+labeled as such: treat it as a fast orientation aid, not as binding
+contract — the `## Acceptance` criteria stay authoritative. When the card
+instead prints `▸ Intent: no/stale intent comprehension — run aida intent
+<spec>`, that is informational; **do not** stop to generate it (pickup
+stays fast and non-AI-blocking) — generation is an explicit `aida intent`
+/ sweep step, not part of pickup.
 
 Pick the density to match the situation:
 

@@ -94191,6 +94191,63 @@ fn card_count_acceptance(body: &str) -> usize {
         .count()
 }
 
+/// Lead the spec card's brief with the spec's cached `aida intent`
+/// comprehension (TASK-838). When a FRESH comprehension exists, render its
+/// `llm` register at the top of the brief, clearly labeled AI-generated, ahead
+/// of the description and plan brief. When absent or stale, emit a one-line
+/// nudge and continue — NEVER block pickup on an AI pass, never generate inline.
+///
+/// Computes the fresh neighborhood hash exactly as `aida intent` does (reusing
+/// [`build_intent_neighborhood`] + [`intent::is_stale`] via
+/// [`intent::decide_pickup_intent`]), so the brief and `aida intent` agree on
+/// drift. Feature-detects the `Option<SpecIntent>`: a store predating STORY-631
+/// (or a spec never run through `aida intent`) takes the absent-note path with
+/// no other behavior change. Store-load failure is non-fatal — the card is a
+/// convenience surface, so we silently skip the intent block rather than abort
+/// the whole card. trace:TASK-838 | ai:claude
+fn render_card_intent(req: &aida_core::Requirement, store_path: &std::path::Path) {
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    // The full requirement set lets build_intent_neighborhood resolve the
+    // spec's immediate neighbors for the same drift hash `aida intent` computes.
+    let Some(store) = load_store_for_lookup(&project_root) else {
+        return;
+    };
+    let inputs = build_intent_neighborhood(req, &store.requirements);
+    let fresh_hash = inputs.source_hash();
+    let disp = req.display_id();
+
+    match intent::decide_pickup_intent(req.intent.as_ref(), &fresh_hash) {
+        intent::PickupIntent::Render {
+            llm,
+            model,
+            generated_at,
+        } => {
+            // Lead the brief. Label it AI-generated so no reader mistakes the
+            // prose for hand-authored ground truth.
+            println!("  {}", "▸ Intent (AI-generated):".bold());
+            println!(
+                "    {}",
+                format!("model={model} · generated {generated_at}").dimmed()
+            );
+            for line in llm.trim().lines() {
+                println!("    {line}");
+            }
+            println!();
+        }
+        intent::PickupIntent::Note { stale } => {
+            println!(
+                "  {} {}",
+                "▸ Intent:".bold(),
+                intent::pickup_intent_note(&disp, stale).dimmed()
+            );
+            println!();
+        }
+    }
+}
+
 /// Render a requirement as a compact, boxed "spec card" — the rendering
 /// behind `aida show --card`. The /aida-pickup skill calls this at session
 /// start so the spec's contract stays in terminal scrollback for the whole
@@ -94300,6 +94357,17 @@ fn render_spec_card(
     if printed_field {
         println!();
     }
+
+    // TASK-838: lead the implementer brief with the spec's cached `aida intent`
+    // comprehension — the distilled plain-terms WHY-this-exists, ahead of the
+    // raw spec body and the plan brief (Critical Files / Followups). This is
+    // THIN linking work: surface the already-cached `llm`-register prose, NEVER
+    // generate inline (pickup must stay fast and non-AI-blocking). A spec with
+    // no cached comprehension, or a STALE one (neighborhood hash drifted),
+    // gets a single-line nudge toward `aida intent <spec>` and we continue.
+    // Feature-detects the `Option<SpecIntent>`, so a store without STORY-631
+    // intent sees only the absent note. trace:TASK-838 | ai:claude
+    render_card_intent(req, store_path);
 
     // STORY-332: a punted spec carries its fork reason — surface it on the
     // card so a triager sees the contract and the obstacle together.

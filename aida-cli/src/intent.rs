@@ -123,6 +123,71 @@ pub fn is_stale(stored_source_hash: &str, fresh_source_hash: &str) -> bool {
     stored_source_hash != fresh_source_hash
 }
 
+/// The pickup-brief decision for a spec's cached comprehension (TASK-838).
+///
+/// `/aida-pickup` and the `aida queue work` brief lead the implementer context
+/// with the spec's cached `llm`-register comprehension when one exists AND is
+/// fresh. This enum is the pure, testable decision — given the stored intent
+/// (an `Option`) and the freshly-computed neighborhood hash, it says what the
+/// brief should render. Pickup must stay fast and non-AI-blocking, so a missing
+/// or stale comprehension is a ONE-LINE note, never an inline generation.
+/// trace:TASK-838 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PickupIntent {
+    /// Fresh comprehension — render the `llm` register at the top of the brief,
+    /// labeled AI-generated. Carries the prose, the model, and the generated-at
+    /// stamp so the caller can label provenance.
+    Render {
+        llm: String,
+        model: String,
+        generated_at: String,
+    },
+    /// Absent or stale — emit a one-line note nudging `aida intent <spec>` and
+    /// continue. `stale` distinguishes the two for the wording.
+    Note { stale: bool },
+}
+
+/// Decide what the pickup brief should render for a spec's cached comprehension.
+///
+/// FEATURE-DETECT the `Option`: a spec with no `intent` (STORY-631 not run for
+/// it, or not shipped at all) yields `Note { stale: false }` — an absent note,
+/// no behavior change beyond the one line. A present-but-stale comprehension
+/// (neighborhood hash drifted) yields `Note { stale: true }`. Only a present,
+/// fresh comprehension yields `Render`. Reuses [`is_stale`] for the drift call —
+/// the same comparator `aida intent` uses — so the two surfaces never diverge.
+/// trace:TASK-838 | ai:claude
+pub fn decide_pickup_intent(
+    intent: Option<&aida_core::SpecIntent>,
+    fresh_source_hash: &str,
+) -> PickupIntent {
+    match intent {
+        None => PickupIntent::Note { stale: false },
+        Some(i) => {
+            if is_stale(&i.source_hash, fresh_source_hash) {
+                PickupIntent::Note { stale: true }
+            } else {
+                PickupIntent::Render {
+                    llm: i.llm.clone(),
+                    model: i.model.clone(),
+                    generated_at: i.generated_at.clone(),
+                }
+            }
+        }
+    }
+}
+
+/// The one-line note text for the absent / stale cases. Names the spec and the
+/// remedy (`aida intent <spec>`) without leaking the SPEC-ID into a banner — the
+/// id is the developer breadcrumb the implementer already holds at pickup.
+/// trace:TASK-838 | ai:claude
+pub fn pickup_intent_note(disp: &str, stale: bool) -> String {
+    if stale {
+        format!("stale intent comprehension — run `aida intent {disp}` to refresh")
+    } else {
+        format!("no intent comprehension — run `aida intent {disp}` to generate")
+    }
+}
+
 /// The `--json` payload for `aida intent`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IntentJson {
@@ -303,6 +368,62 @@ mod tests {
         assert!(yaml2.contains("intent:"));
         let back: Requirement = serde_yaml::from_str(&yaml2).unwrap();
         assert_eq!(back.intent, req2.intent);
+    }
+
+    fn sample_intent(source_hash: &str) -> aida_core::SpecIntent {
+        aida_core::SpecIntent {
+            layman: "plain why".to_string(),
+            llm: "dense why".to_string(),
+            generated_at: "2026-06-15T00:00:00Z".to_string(),
+            source_hash: source_hash.to_string(),
+            model: "claude-opus".to_string(),
+        }
+    }
+
+    // TASK-838: the pickup-brief decision — present+fresh renders the llm
+    // register at top; absent emits a note; stale emits a note. Reuses the
+    // is_stale comparator (via decide_pickup_intent) so the brief and
+    // `aida intent` agree on drift. trace:TASK-838
+    #[test]
+    fn pickup_renders_when_intent_present_and_fresh() {
+        let intent = sample_intent("abc123");
+        let got = decide_pickup_intent(Some(&intent), "abc123");
+        assert_eq!(
+            got,
+            PickupIntent::Render {
+                llm: "dense why".to_string(),
+                model: "claude-opus".to_string(),
+                generated_at: "2026-06-15T00:00:00Z".to_string(),
+            },
+            "a fresh comprehension must render the llm register"
+        );
+    }
+
+    #[test]
+    fn pickup_notes_when_intent_absent() {
+        let got = decide_pickup_intent(None, "abc123");
+        assert_eq!(
+            got,
+            PickupIntent::Note { stale: false },
+            "no cached comprehension → absent note, no behavior change"
+        );
+        assert!(pickup_intent_note("TASK-838", false).contains("no intent"));
+        assert!(pickup_intent_note("TASK-838", false).contains("aida intent TASK-838"));
+    }
+
+    #[test]
+    fn pickup_notes_when_intent_stale() {
+        // Stored hash differs from the freshly-computed neighborhood hash →
+        // is_stale(...) is true → a stale note, never an inline regeneration.
+        let intent = sample_intent("OLD-hash");
+        let got = decide_pickup_intent(Some(&intent), "NEW-hash");
+        assert_eq!(
+            got,
+            PickupIntent::Note { stale: true },
+            "a drifted comprehension must note stale, not render"
+        );
+        assert!(pickup_intent_note("TASK-838", true).contains("stale intent"));
+        assert!(pickup_intent_note("TASK-838", true).contains("aida intent TASK-838"));
     }
 
     #[test]
