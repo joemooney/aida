@@ -25,6 +25,7 @@ mod external_import_bleed;
 mod findings;
 mod forge;
 mod global_queue;
+mod glyphs;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
 mod headless_tail;
 mod headless_tee;
