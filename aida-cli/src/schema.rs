@@ -55,6 +55,13 @@ struct CatalogEntry {
     /// struct is a *projection* (a derived in-memory shape) rather than the
     /// exact on-disk record, so the reader isn't misled. trace:TASK-714
     note: Option<&'static str>,
+    /// The object-level **lifecycle** block surfaced by `aida schema --explain`:
+    /// who writes the record, when, why it exists, how/where it is read back,
+    /// and when it is deleted/archived. Hand-curated prose grounded in
+    /// `docs/lifecycle.md` + the discipline `lifecycle-vocabulary.md`; not
+    /// reflected. Rendered only under `--explain`, so the terse view is
+    /// unchanged. trace:STORY-630 | ai:claude
+    lifecycle: &'static str,
 }
 
 /// The curated catalog of storable object kinds. The one-liner descriptions are
@@ -68,6 +75,16 @@ const CATALOG: &[CatalogEntry] = &[
         description: "The core spec node (epic/story/task/bug/...) — title, status, type, priority, relationships, history.",
         decl: Requirement::decl,
         note: None,
+        lifecycle: "Written as one YAML file under `.aida-store/objects/TYPE/000/SPEC-ID.yaml` on the \
+             orphan `aida-store` branch — the writer of record. Created by `aida add` (status \
+             Draft) and edited by `aida edit` / MCP `update_requirement`; every change also appends \
+             a HistoryEntry row in-file. Status climbs Draft → Approved (advisor sign-off) → \
+             Planned → In Progress (`aida queue work`) → Done (`aida queue done`, on a branch) → \
+             Completed (auto-bumped by `aida pull` once a referencing commit lands on main). Read \
+             back via the SQLite cache (`.aida/cache.db`, a rebuildable projection) for \
+             `aida list`/`search`, and directly from YAML for the full record. Never deleted — \
+             retired by the orthogonal view flags `archived` / `deferred`; the YAML, audit trail, \
+             and graph survive.",
     },
     CatalogEntry {
         name: "Finding",
@@ -78,6 +95,13 @@ const CATALOG: &[CatalogEntry] = &[
              `from-review:` / `from-implementer:` / `from-advisor:` tag. The fields below are \
              the triage-row projection `aida findings list` derives from that tagged spec.",
         ),
+        lifecycle: "No standalone file. The orchestrator (or an advisor/implementer/reviewer) files \
+             a Finding when it shelves a phase-failure or records an observation: `aida findings \
+             add` writes a Draft Requirement tagged `from-review:` / `from-implementer:` / \
+             `from-advisor:`, so on disk it is just another spec YAML. Read back as the \
+             triage-row projection by `aida findings list`; triaged with `aida findings triage` \
+             (promote to real work, or dismiss). Cleared by archiving/rejecting the underlying \
+             spec — same retirement path as any Requirement.",
     },
     CatalogEntry {
         name: "Brief",
@@ -88,48 +112,104 @@ const CATALOG: &[CatalogEntry] = &[
              projection `aida brief list` parses from that frontmatter (spec_id / agent / \
              generated_at / depends_on / status), plus its on-disk path.",
         ),
+        lifecycle: "A markdown file with YAML frontmatter under `.aida/agent-briefs/<agent>/` — \
+             local per-clone runtime state, not committed. Written by `aida brief <agent> <SPEC>` \
+             (or the orchestrator) to route work to an agent without scrollback. Read back by \
+             `aida brief list --for-agent` / MCP `list_briefs` + `read_brief` at pickup; the \
+             role-context snapshot leads with it. Acknowledged with `aida brief ack` / \
+             `ack_brief`, which marks it consumed. Ephemeral — superseded or cleaned up once the \
+             work is picked up.",
     },
     CatalogEntry {
         name: "Punt",
         description: "A design-fork an autonomous agent could not safely resolve; parks the spec NeedsAttention.",
         decl: PuntRecord::decl,
         note: Some("One append-only line in `.aida/punts.jsonl`."),
+        lifecycle: "One append-only JSONL line in `.aida/punts.jsonl` — local runtime state. \
+             Written when an autonomous (`--no-human`) implementer or reviewer hits a decision it \
+             cannot safely make and **punts** rather than guess (`aida punt` / `/aida-punt`), which \
+             also flips the spec to NeedsAttention and stamps its `attention_reason`. Read back by \
+             `aida findings list` / MCP `list_punts` + `read_punt` for human/advisor triage. \
+             Resolved with `aida punt resolve` (or by editing the spec out of NeedsAttention); the \
+             ledger is the durable history and is never rewritten — it keeps the decision trail \
+             even after the spec resumes.",
     },
     CatalogEntry {
         name: "Directive",
         description: "A standing instruction posted to an agent/role via the inter-agent mailbox.",
         decl: Directive::decl,
         note: Some("One parsed line of `.aida/worker.cmd` (verb + args)."),
+        lifecycle: "One parsed line (verb + args) of `.aida/worker.cmd` — local runtime state on the \
+             inter-agent mailbox substrate. Posted by an operator/advisor via `aida directive post` \
+             / MCP `post_directive` to give a running worker a standing instruction. Read back by \
+             the worker (and `aida directive list` / MCP `list_directives`) on its poll loop. \
+             Acknowledged with `ack_directive` once acted on; consumed/cleared from the queue \
+             thereafter.",
     },
     CatalogEntry {
         name: "Comment",
         description: "A threaded note on a Requirement (carries reactions; doc-seed carrier).",
         decl: Comment::decl,
         note: None,
+        lifecycle: "Not a standalone file — an element of the parent Requirement's `comments:` array, \
+             so it lives inside that spec's YAML on the orphan `aida-store` branch and is written \
+             with it. Added by a human or agent via `aida comment add` / MCP `add_comment`; \
+             threaded (a comment may reply to another) and the carrier for doc-seeds captured \
+             during design discussion. Read back wherever the spec is shown (`aida show`, MCP \
+             `show_requirement`). Persists for the life of the spec; never edited in place.",
     },
     CatalogEntry {
         name: "Lease",
         description: "An active claim on a spec/worktree by a session — prevents double-driving.",
         decl: SessionLease::decl,
         note: Some("One session lease file under `.aida/sessions/`."),
+        lifecycle: "One lease file under `.aida/sessions/` — local per-clone runtime state. Written \
+             when a session starts working a spec/worktree (`aida session start` / `aida queue \
+             work` / MCP `session_start`) so a second session can't double-drive the same spec. \
+             Read back by `aida session leases` / MCP `list_active_leases` + `session_leases` \
+             before pickup or before rejecting/pivoting a spec. Released when the session ends \
+             (`aida session end` / `release_task`); a stale lease (dead PID) is reclaimable.",
     },
     CatalogEntry {
         name: "QueueItem",
         description: "A position in a role's work queue (keyed off the shell user identity).",
         decl: QueueEntry::decl,
         note: None,
+        lifecycle: "A position in a per-user work queue (local runtime state), keyed off the shell's \
+             user identity — `current_user_id()` resolves `--user` → `AIDA_USER` → `USER`, NOT the \
+             node/role identity. Added by `aida queue add` / MCP `queue_add` (queue membership = \
+             the advisor's sign-off that the work is worth doing). Read back by `aida queue list` / \
+             `queue_next` and the statusline depth. Drained by `aida queue work`; removed on `aida \
+             queue done` / `queue_remove`, reordered by `queue_move`. A freshly-Done item lingers \
+             in the 'awaiting merge' section until the auto-bump.",
     },
     CatalogEntry {
         name: "HistoryEntry",
         description: "An immutable change row inside a Requirement's YAML (the spec-state time series).",
         decl: HistoryEntry::decl,
         note: None,
+        lifecycle: "Not a standalone file — an element of the parent Requirement's `history:` array, \
+             so it lives inside that spec's YAML on the orphan `aida-store` branch. Appended \
+             automatically on every field change (status flip, priority/tag/owner edit, …) by the \
+             write path — never written by hand. Immutable once written: each row carries an id \
+             (UUID), author, timestamp, and a `changes:` list of {field, old, new} triples. This \
+             is the source-of-truth spec-state time series — read back by `aida history --events` \
+             / `--id <id>`; burn-down/status-flow analyses walk these arrays directly. Never \
+             deleted (it is the audit trail).",
     },
     CatalogEntry {
         name: "Relationship",
         description: "A typed edge between two Requirements (parent/child/blocked-by/blocks/references/...).",
         decl: Relationship::decl,
         note: None,
+        lifecycle: "Not a standalone file — an element of the source Requirement's `relationships:` \
+             array, so it lives inside that spec's YAML on the orphan `aida-store` branch. Added by \
+             `aida add-relationship` / MCP `add_relationship` (or implied at creation via \
+             `--parent`). A typed directed edge (parent/child/blocked-by/blocks/verifies/…) to \
+             another spec's UUID. Read back by `aida graph` / `aida show` / MCP `query_graph` for \
+             transitive blocked-by/blocks chains, epic rollups, and impact closure; the `blocked-by` \
+             edge gates autonomous pickability. Persists with the spec; removed when the edge is \
+             deleted.",
     },
 ];
 
@@ -145,9 +225,38 @@ pub fn is_catalog_object(name: &str) -> bool {
 /// emit. Single source so the MCP surface can't drift from the CLI.
 /// trace:TASK-715 | ai:claude
 pub fn catalog_json() -> Value {
+    catalog_json_inner(false)
+}
+
+/// The catalog JSON with the optional explanatory layer (lifecycle per object)
+/// — the public surface the MCP `schema` tool calls. trace:STORY-630
+pub fn catalog_json_explain(explain: bool) -> Value {
+    catalog_json_inner(explain)
+}
+
+/// The full-dump JSON with the optional explanatory layer. trace:STORY-630
+pub fn full_dump_json_explain(explain: bool) -> Value {
+    full_dump_json_inner(explain)
+}
+
+/// The per-object detail JSON with the optional explanatory layer.
+/// trace:STORY-630
+pub fn object_json_explain(name: &str, explain: bool) -> Option<Value> {
+    object_json_inner(name, explain)
+}
+
+/// The catalog JSON, optionally carrying the `lifecycle` block per object
+/// (`--explain`). trace:STORY-630 | ai:claude
+fn catalog_json_inner(explain: bool) -> Value {
     let objects: Vec<Value> = CATALOG
         .iter()
-        .map(|e| json!({ "name": e.name, "description": e.description }))
+        .map(|e| {
+            if explain {
+                json!({ "name": e.name, "description": e.description, "lifecycle": e.lifecycle })
+            } else {
+                json!({ "name": e.name, "description": e.description })
+            }
+        })
         .collect();
     json!({ "objects": objects })
 }
@@ -158,11 +267,13 @@ pub fn catalog_json() -> Value {
 /// Requirement — its controlled-vocabulary `enums`) inlined, in catalog order.
 /// A true one-fetch full dump for the CLI manual generator, aida-tutor, and MCP
 /// consumers. Reuses the same per-object projection [`object_json`] builds — no
-/// reimplementation. trace:TASK-799 | ai:claude
-pub fn full_dump_json() -> Value {
+/// reimplementation. With `explain`, adds the explanatory layer (per-field
+/// example/provenance/description + per-object lifecycle). trace:TASK-799
+/// trace:STORY-630 | ai:claude
+fn full_dump_json_inner(explain: bool) -> Value {
     let objects: Vec<Value> = CATALOG
         .iter()
-        .map(|e| object_json(e.name).expect("catalog kind has object_json detail"))
+        .map(|e| object_json_inner(e.name, explain).expect("catalog kind has object_json detail"))
         .collect();
     json!({ "objects": objects })
 }
@@ -175,20 +286,21 @@ pub fn full_dump_json() -> Value {
 /// can distinguish a typo from a catalog kind. Single source so the MCP
 /// surface can't drift from the CLI. trace:TASK-715 | ai:claude
 pub fn object_json(name: &str) -> Option<Value> {
+    object_json_inner(name, false)
+}
+
+/// As [`object_json`] but, when `explain` is set, adds the per-field
+/// `example`/`provenance`/`description` (where a curated doc entry exists) and
+/// the object's `lifecycle` block. trace:STORY-630 | ai:claude
+fn object_json_inner(name: &str, explain: bool) -> Option<Value> {
     if name.eq_ignore_ascii_case("Requirement") {
-        return Some(requirement_json());
+        return Some(requirement_json_inner(explain));
     }
     let entry = catalog_entry(name)?;
     let fields = parse_struct_fields(&(entry.decl)());
     let field_vals: Vec<Value> = fields
         .iter()
-        .map(|f| {
-            json!({
-                "name": f.name,
-                "type": f.ts_type,
-                "optional": f.optional,
-            })
-        })
+        .map(|f| field_json(f, explain, name))
         .collect();
     let mut obj = serde_json::Map::new();
     obj.insert("object".to_string(), json!(entry.name));
@@ -196,24 +308,42 @@ pub fn object_json(name: &str) -> Option<Value> {
     if let Some(note) = entry.note {
         obj.insert("note".to_string(), json!(note));
     }
+    if explain {
+        obj.insert("lifecycle".to_string(), json!(entry.lifecycle));
+    }
     Some(Value::Object(obj))
+}
+
+/// JSON for one reflected field. With `explain`, folds in the curated
+/// `example`/`provenance`/`description` when a doc entry exists for that field
+/// (Requirement is fully documented today; other kinds carry the base shape
+/// until Slice 2). trace:STORY-630 | ai:claude
+fn field_json(f: &FieldSchema, explain: bool, object: &str) -> Value {
+    let mut m = serde_json::Map::new();
+    m.insert("name".to_string(), json!(f.name));
+    m.insert("type".to_string(), json!(f.ts_type));
+    m.insert("optional".to_string(), json!(f.optional));
+    if explain && object.eq_ignore_ascii_case("Requirement") {
+        if let Some(doc) = requirement_field_doc(&f.name) {
+            m.insert("example".to_string(), json!(doc.example));
+            m.insert("provenance".to_string(), json!(doc.provenance.token()));
+            m.insert("description".to_string(), json!(doc.description));
+        }
+    }
+    Value::Object(m)
 }
 
 /// The reflection-derived `Requirement` field table + the four
 /// controlled-vocabulary enums as a JSON value. Shared by `print_requirement`
 /// (CLI `--json`) and the MCP schema surface. trace:TASK-715 | ai:claude
-fn requirement_json() -> Value {
+/// With `explain`, folds the curated per-field semantics into each field and
+/// adds the object lifecycle block. trace:STORY-630 | ai:claude
+fn requirement_json_inner(explain: bool) -> Value {
     let fields = requirement_fields();
     let enums = requirement_enums();
     let field_vals: Vec<Value> = fields
         .iter()
-        .map(|f| {
-            json!({
-                "name": f.name,
-                "type": f.ts_type,
-                "optional": f.optional,
-            })
-        })
+        .map(|f| field_json(f, explain, "Requirement"))
         .collect();
     let enum_vals: Value = {
         let mut map = serde_json::Map::new();
@@ -222,11 +352,15 @@ fn requirement_json() -> Value {
         }
         Value::Object(map)
     };
-    json!({
-        "object": "Requirement",
-        "fields": field_vals,
-        "enums": enum_vals,
-    })
+    let mut out = serde_json::Map::new();
+    out.insert("object".to_string(), json!("Requirement"));
+    out.insert("fields".to_string(), json!(field_vals));
+    out.insert("enums".to_string(), enum_vals);
+    if explain {
+        let entry = catalog_entry("Requirement").expect("Requirement is a catalog kind");
+        out.insert("lifecycle".to_string(), json!(entry.lifecycle));
+    }
+    Value::Object(out)
 }
 
 /// A controlled-vocabulary enum the CLI/MCP accept as argument tokens.
@@ -243,6 +377,380 @@ struct FieldSchema {
     ts_type: String,
     /// `true` when the field is optional / nullable in the wire shape.
     optional: bool,
+}
+
+// ============================================================================
+// STORY-630: the explanatory layer.
+//
+// The field LIST stays reflection-derived (substrate-as-bouncer). The per-field
+// prose / example / provenance is necessarily hand-curated. So: reflection owns
+// the field set; the curated `FieldDoc` map owns the semantics; and a drift-guard
+// test (`explain_docs_match_reflection`) asserts the doc-map covers EXACTLY the
+// reflected fields of each documented kind — fail on any undocumented field OR
+// orphan entry. Mirrors `schema_enums_match_reflection`. trace:STORY-630
+// ============================================================================
+
+/// The closed set of "set-by" provenance tokens a documented field carries.
+/// Keeping this an enum (not free text) is what makes provenance a controlled
+/// vocabulary the operator can scan. trace:STORY-630 | ai:claude
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Provenance {
+    /// Written by a person or an agent acting on a person's behalf (`aida add`,
+    /// `aida edit`, MCP write tools).
+    User,
+    /// A transition gated to the advisor seat (e.g. Approved/Planned status).
+    AdvisorGated,
+    /// Set by the merge → `aida pull` auto-bump, not by hand (e.g. Completed).
+    MergeDriven,
+    /// Written by the `--auto-complete` orchestrator / autonomous drain
+    /// machinery (punts, failure reasons, attention reasons).
+    Orchestrator,
+    /// Maintained by the engine itself — IDs, timestamps, the history array,
+    /// version counters. The user never sets these directly.
+    ReflectionDerived,
+}
+
+impl Provenance {
+    /// The on-the-wire token (the closed set the spec settled on).
+    fn token(self) -> &'static str {
+        match self {
+            Provenance::User => "user",
+            Provenance::AdvisorGated => "advisor-gated",
+            Provenance::MergeDriven => "merge-driven",
+            Provenance::Orchestrator => "orchestrator",
+            Provenance::ReflectionDerived => "reflection-derived",
+        }
+    }
+}
+
+/// The hand-curated semantics for one reflected field: a concrete example
+/// value, a provenance token, and a 1-2 line "set by X when Y, because Z"
+/// gloss. Keyed by the reflected field name so the drift-guard can pair them.
+/// trace:STORY-630 | ai:claude
+struct FieldDoc {
+    /// Reflected field name this entry documents (must match a `FieldSchema.name`).
+    name: &'static str,
+    /// A concrete, realistic example value — makes the field paste-ready in a
+    /// way the bare reflected type cannot.
+    example: &'static str,
+    /// Who sets the field (the closed provenance set).
+    provenance: Provenance,
+    /// 1-2 line gloss of when/why the field is used.
+    description: &'static str,
+}
+
+/// The per-field semantics for `Requirement` — Slice 1 of STORY-630 documents
+/// the core spec node completely. The drift-guard test asserts this list covers
+/// exactly the reflected `Requirement` field set (no gaps, no orphans), so a
+/// field added to `models.rs` without an entry here fails the build.
+/// trace:STORY-630 | ai:claude
+const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
+    FieldDoc {
+        name: "id",
+        example: "019ecead-1278-7752-b7e1-0c384e97cb48",
+        provenance: Provenance::ReflectionDerived,
+        description: "Stable UUID, assigned once at creation. The permanent identity every \
+             spec_id/agreed_id resolves back to; never changes.",
+    },
+    FieldDoc {
+        name: "spec_id",
+        example: "TASK-837",
+        provenance: Provenance::ReflectionDerived,
+        description: "Human-friendly node-scoped ID minted at `aida add` from the dispenser. The \
+             breadcrumb you put in trace comments and commit trailers.",
+    },
+    FieldDoc {
+        name: "agreed_id",
+        example: "FR-423",
+        provenance: Provenance::MergeDriven,
+        description: "Short agreed ID assigned at the merge gate (`aida db merge-gate`) in \
+             distributed mode. Resolves to the same UUID as spec_id; unused in centralized mode.",
+    },
+    FieldDoc {
+        name: "prefix_override",
+        example: "SEC",
+        provenance: Provenance::User,
+        description:
+            "Optional uppercase prefix forcing the spec_id family (e.g. SEC for security) \
+             instead of deriving it from feature/type. Set at creation.",
+    },
+    FieldDoc {
+        name: "title",
+        example: "aida schema --explain: per-field semantics",
+        provenance: Provenance::User,
+        description: "Short human title. Set at `aida add`, editable via `aida edit --title`.",
+    },
+    FieldDoc {
+        name: "description",
+        example: "Add an opt-in explanatory mode to `aida schema` …",
+        provenance: Provenance::User,
+        description: "The full spec body (acceptance criteria, design notes). Set at creation, \
+             edited via `aida edit`. The primary input to grooming and planning.",
+    },
+    FieldDoc {
+        name: "status",
+        example: "in-progress",
+        provenance: Provenance::AdvisorGated,
+        description:
+            "Lifecycle state (draft→approved→planned→in-progress→done→completed). Draft is \
+             the default; Approved/Planned are advisor-gated; Done is set by `aida queue done`; \
+             Completed is merge-driven (auto-bumped by `aida pull`).",
+    },
+    FieldDoc {
+        name: "priority",
+        example: "high",
+        provenance: Provenance::User,
+        description: "high/medium/low. Set at creation (default medium) or via `aida edit \
+             --priority`; feeds queue ordering and triage.",
+    },
+    FieldDoc {
+        name: "owner",
+        example: "joe",
+        provenance: Provenance::User,
+        description: "Person/agent responsible for the spec. Set via `aida add --owner` / `aida \
+             edit`; empty when unassigned.",
+    },
+    FieldDoc {
+        name: "feature",
+        example: "schema-surface",
+        provenance: Provenance::User,
+        description:
+            "The feature category the spec belongs to (NOT a type). Drives spec_id prefix \
+             derivation and grouping; set at creation.",
+    },
+    FieldDoc {
+        name: "created_at",
+        example: "2026-06-15T09:30:00Z",
+        provenance: Provenance::ReflectionDerived,
+        description: "UTC creation timestamp, stamped once by the engine at `aida add`. Immutable.",
+    },
+    FieldDoc {
+        name: "created_by",
+        example: "joe",
+        provenance: Provenance::ReflectionDerived,
+        description: "Identity that created the spec, captured by the engine at creation.",
+    },
+    FieldDoc {
+        name: "modified_at",
+        example: "2026-06-15T21:48:00Z",
+        provenance: Provenance::ReflectionDerived,
+        description: "UTC last-modified timestamp, re-stamped by the engine on every write. For a \
+             true change time series read `history:` rather than this single value.",
+    },
+    FieldDoc {
+        name: "req_type",
+        example: "story",
+        provenance: Provenance::User,
+        description:
+            "Requirement type (epic/story/task/bug/spike/… 19 variants). Set at `aida add \
+             --type`; governs the spec_id family and lifecycle expectations.",
+    },
+    FieldDoc {
+        name: "meta_subtype",
+        example: "prompt",
+        provenance: Provenance::User,
+        description:
+            "Subtype for Meta requirements (prompt/skill/command/…). Only meaningful when \
+             req_type is meta; None otherwise.",
+    },
+    FieldDoc {
+        name: "dependencies",
+        example: "[\"019ec…\", \"019ed…\"]",
+        provenance: Provenance::User,
+        description: "UUIDs of specs this one depends on (a coarser list than typed \
+             relationships). Set via the add/edit paths.",
+    },
+    FieldDoc {
+        name: "tags",
+        example: "[\"aida:schema\", \"papercut\"]",
+        provenance: Provenance::User,
+        description: "Free-form labels (colon-namespaced for subcommand surfaces, flat for \
+             behavior/severity). Set via `--tags`; drive filtering, batching, and parking.",
+    },
+    FieldDoc {
+        name: "weight",
+        example: "3.0",
+        provenance: Provenance::User,
+        description:
+            "Optional effort estimate (story points). Set via `aida edit`; only shown when \
+             present.",
+    },
+    FieldDoc {
+        name: "relationships",
+        example: "[{ kind: blocked-by, target: 019ec… }]",
+        provenance: Provenance::User,
+        description:
+            "Typed directed edges to other specs (parent/child/blocked-by/blocks/…). Added \
+             via `aida add-relationship`; the blocked-by edge gates autonomous pickability.",
+    },
+    FieldDoc {
+        name: "comments",
+        example: "[{ author: joe, content: \"Refinement: …\" }]",
+        provenance: Provenance::User,
+        description: "Threaded notes on the spec (and the doc-seed carrier). Appended via `aida \
+             comment add`; never binding on implementers — refinements belong in the description.",
+    },
+    FieldDoc {
+        name: "history",
+        example: "[{ author: joe, changes: [{field: status, …}] }]",
+        provenance: Provenance::ReflectionDerived,
+        description: "Immutable append-only change rows — the source-of-truth spec-state time \
+             series. Written automatically on every field change; read via `aida history`.",
+    },
+    FieldDoc {
+        name: "processing_record",
+        example: "[{ outcome: \"merged via #759\", … }]",
+        provenance: Provenance::Orchestrator,
+        description: "Durable audit trail of what was done + why each time the spec was processed \
+             to completion, promoted from the brief/review verdict. Parallel to history:.",
+    },
+    FieldDoc {
+        name: "archived",
+        example: "false",
+        provenance: Provenance::User,
+        description:
+            "View flag (orthogonal to status) hiding the spec from default list/search. Set \
+             by `aida archive`, cleared by `aida unarchive`. Archive ≠ deletion.",
+    },
+    FieldDoc {
+        name: "archived_at",
+        example: "2026-05-01T12:00:00Z",
+        provenance: Provenance::User,
+        description:
+            "UTC timestamp stamped when archived (None otherwise), used by `--older-than` \
+             sweeps to compute age. Cleared on unarchive.",
+    },
+    FieldDoc {
+        name: "deferred",
+        example: "false",
+        provenance: Provenance::User,
+        description: "View flag (orthogonal to status and archived) for primed/conditional work \
+             that returns on a trigger. Set by `aida defer`, cleared by `aida undefer`.",
+    },
+    FieldDoc {
+        name: "deferred_at",
+        example: "2026-06-10T08:00:00Z",
+        provenance: Provenance::User,
+        description: "UTC timestamp stamped when deferred (None otherwise). Cleared on undefer.",
+    },
+    FieldDoc {
+        name: "deferred_until",
+        example: "when a slice verb ships",
+        provenance: Provenance::User,
+        description: "The free-text revisit trigger — the one thing distinguishing deferred \
+             (prospective) from archived (retrospective). Set via `aida defer --until`.",
+    },
+    FieldDoc {
+        name: "custom_status",
+        example: "in-review",
+        provenance: Provenance::User,
+        description: "Custom status string for types with non-standard statuses; takes precedence \
+             over the status enum when set.",
+    },
+    FieldDoc {
+        name: "custom_priority",
+        example: "p0",
+        provenance: Provenance::User,
+        description: "Custom priority string for types with non-standard priorities; takes \
+             precedence over the priority enum when set.",
+    },
+    FieldDoc {
+        name: "custom_fields",
+        example: "{ \"sprint\": \"2026-Q2\" }",
+        provenance: Provenance::User,
+        description: "Arbitrary key→value extension fields for project-specific metadata. Set via \
+             the edit path.",
+    },
+    FieldDoc {
+        name: "urls",
+        example: "[{ label: \"design\", url: \"https://…\" }]",
+        provenance: Provenance::User,
+        description: "External URL links attached to the spec. Added via the edit path.",
+    },
+    FieldDoc {
+        name: "attachments",
+        example: "[{ name: \"mock.png\", … }]",
+        provenance: Provenance::User,
+        description: "File attachments on the spec.",
+    },
+    FieldDoc {
+        name: "trace_links",
+        example: "[{ file: \"schema.rs\", symbol: \"print_all\" }]",
+        provenance: Provenance::ReflectionDerived,
+        description: "Links to code artifacts implementing the spec, derived from `// trace:` \
+             comments in the codebase.",
+    },
+    FieldDoc {
+        name: "gitlab_issues",
+        example: "[{ project: \"grp/proj\", iid: 42 }]",
+        provenance: Provenance::User,
+        description: "Links to related GitLab issues.",
+    },
+    FieldDoc {
+        name: "external_refs",
+        example: "[\"linear:LIN-123\", \"jira:PROJ-456\"]",
+        provenance: Provenance::User,
+        description:
+            "One-way validated `provider:id` references composing the spec with PM systems \
+             (Linear/Jira/GitHub). AIDA records the ref but never syncs state back.",
+    },
+    FieldDoc {
+        name: "implementation_info",
+        example: "{ branch: \"feat/…\", pr: 759 }",
+        provenance: Provenance::Orchestrator,
+        description: "Implementation metadata (branch / PR / commit linkage) captured as the spec \
+             is worked.",
+    },
+    FieldDoc {
+        name: "ai_evaluation",
+        example: "{ score: 0.8, suggestions: [...] }",
+        provenance: Provenance::ReflectionDerived,
+        description:
+            "Cached AI evaluation results, populated by the background evaluator when the \
+             spec changes.",
+    },
+    FieldDoc {
+        name: "attention_reason",
+        example: "{ category: design-fork, detail: \"…\" }",
+        provenance: Provenance::Orchestrator,
+        description: "Why the spec is currently paused — set by `aida punt` when status flips to \
+             NeedsAttention, cleared on triage. The durable history lives in the punt ledger.",
+    },
+    FieldDoc {
+        name: "failure_reason",
+        example: "{ phase: ci, detail: \"red on …\" }",
+        provenance: Provenance::Orchestrator,
+        description: "Why the --auto-complete orchestrator shelved the spec after a phase failure \
+             (sibling to attention_reason). Sticks until triaged out of NeedsAttention.",
+    },
+    FieldDoc {
+        name: "human_only",
+        example: "false",
+        provenance: Provenance::User,
+        description:
+            "Marks work no agent can do (a sign-off, a physical task). The pre-pickup gate \
+             skips any spec with this set, so no doomed implementer is spawned.",
+    },
+    FieldDoc {
+        name: "decision_request",
+        example: "{ question: \"…\", options: [...] }",
+        provenance: Provenance::User,
+        description: "A structured decision the human answers outside any agent (the async \
+             decision-inbox artifact). Set by `aida questions ask`, answered by `… answer`.",
+    },
+    FieldDoc {
+        name: "interface_changes",
+        example: "{ cli: [\"aida schema --explain\"] }",
+        provenance: Provenance::User,
+        description: "User-facing interface changes captured at close — the deterministic source \
+             for the operator digest. Populated by `aida queue done`.",
+    },
+];
+
+/// Look up the curated semantics for a Requirement field by reflected name.
+/// trace:STORY-630 | ai:claude
+fn requirement_field_doc(name: &str) -> Option<&'static FieldDoc> {
+    REQUIREMENT_FIELD_DOCS.iter().find(|d| d.name == name)
 }
 
 /// Convert a reflected PascalCase enum variant name into its on-the-wire
@@ -459,16 +967,36 @@ fn type_admits_null(ts_type: &str) -> bool {
     admits
 }
 
-/// `aida schema` (no args) — the storable-object catalog.
-pub fn print_catalog(json_out: bool) {
+/// `aida schema` (no args) — the storable-object catalog. With `explain`, each
+/// object also renders its lifecycle block. trace:STORY-630 | ai:claude
+pub fn print_catalog(json_out: bool, explain: bool) {
     if json_out {
         // Single source: the same value `aida://schema` / the `schema` MCP
         // tool emit. trace:TASK-715 | ai:claude
-        println!("{}", serde_json::to_string_pretty(&catalog_json()).unwrap());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&catalog_json_inner(explain)).unwrap()
+        );
         return;
     }
 
     println!("Storable object catalog\n");
+    if explain {
+        // The explanatory catalog: each kind's one-liner followed by its
+        // lifecycle block. trace:STORY-630 | ai:claude
+        for (i, e) in CATALOG.iter().enumerate() {
+            if i > 0 {
+                println!();
+            }
+            println!("{}\n  {}", e.name, e.description);
+            println!("  Lifecycle: {}", wrap_indent(e.lifecycle, "    "));
+        }
+        println!(
+            "\nPer-field semantics for any kind: `aida schema <object> --explain` \
+             (e.g. `aida schema requirement --explain`)."
+        );
+        return;
+    }
     let width = CATALOG.iter().map(|e| e.name.len()).max().unwrap_or(0);
     for e in CATALOG {
         println!("  {:<width$}  {}", e.name, e.description, width = width);
@@ -479,33 +1007,61 @@ pub fn print_catalog(json_out: bool) {
     );
 }
 
+/// Reflow a long lifecycle/description string onto wrapped lines with a hanging
+/// indent, so the explanatory blocks read as prose in a terminal rather than as
+/// one ragged line. Whitespace-collapsing; ~78-col target. trace:STORY-630
+fn wrap_indent(text: &str, indent: &str) -> String {
+    const WIDTH: usize = 78;
+    let mut out = String::new();
+    let mut line_len = indent.len();
+    let mut first = true;
+    for word in text.split_whitespace() {
+        if !first && line_len + 1 + word.len() > WIDTH {
+            out.push('\n');
+            out.push_str(indent);
+            line_len = indent.len();
+            out.push_str(word);
+            line_len += word.len();
+        } else {
+            if !first {
+                out.push(' ');
+                line_len += 1;
+            }
+            out.push_str(word);
+            line_len += word.len();
+        }
+        first = false;
+    }
+    out
+}
+
 /// `aida schema --all` (and the field-included no-arg `aida schema --json`) —
 /// the full dump in one pass: the catalog followed by every object's
 /// reflection-derived field detail, in catalog order. Reuses the existing
-/// per-object renderers ([`full_dump_json`] / [`print_requirement`] /
+/// per-object renderers ([`full_dump_json_inner`] / [`print_requirement`] /
 /// [`print_object`]) — no field assembly is reimplemented here.
 /// trace:TASK-799 | ai:claude
-pub fn print_all(json_out: bool) {
+pub fn print_all(json_out: bool, explain: bool) {
     if json_out {
         // Single source: the same per-object projection `aida schema <object>`
         // and the MCP schema surface build. trace:TASK-799 | ai:claude
         println!(
             "{}",
-            serde_json::to_string_pretty(&full_dump_json()).unwrap()
+            serde_json::to_string_pretty(&full_dump_json_inner(explain)).unwrap()
         );
         return;
     }
 
-    print_catalog(false);
+    print_catalog(false, explain);
     println!("\n{}\n", "=".repeat(60));
     for (i, e) in CATALOG.iter().enumerate() {
         if i > 0 {
             println!("\n{}\n", "-".repeat(60));
         }
         if e.name.eq_ignore_ascii_case("Requirement") {
-            print_requirement(false);
+            print_requirement(false, explain);
         } else {
-            print_object(e.name, false);
+            print_object(e.name, false, explain);
         }
     }
 }
@@ -519,7 +1075,7 @@ fn catalog_entry(name: &str) -> Option<&'static CatalogEntry> {
 /// (which keeps its enum-augmented view in [`print_requirement`]). Renders the
 /// reflection-derived field table for the kind's backing struct. The caller has
 /// already confirmed `name` is a catalog kind. trace:TASK-714 | ai:claude
-pub fn print_object(name: &str, json_out: bool) {
+pub fn print_object(name: &str, json_out: bool, explain: bool) {
     let Some(entry) = catalog_entry(name) else {
         // Defensive: the dispatcher only calls this for catalog kinds.
         return;
@@ -527,7 +1083,8 @@ pub fn print_object(name: &str, json_out: bool) {
     if json_out {
         // Single source: the same value `aida://schema/<object>` / the
         // `schema` MCP tool emit. trace:TASK-715 | ai:claude
-        let v = object_json(entry.name).expect("catalog kind has object_json detail");
+        let v =
+            object_json_inner(entry.name, explain).expect("catalog kind has object_json detail");
         println!("{}", serde_json::to_string_pretty(&v).unwrap());
         return;
     }
@@ -535,6 +1092,17 @@ pub fn print_object(name: &str, json_out: bool) {
     let fields = parse_struct_fields(&(entry.decl)());
 
     println!("{} — fields\n", entry.name);
+    if explain {
+        // Per-field semantics are curated for Requirement (Slice 1); other
+        // kinds show the reflected shape plus their lifecycle block until
+        // Slice 2 fills their field prose. trace:STORY-630 | ai:claude
+        print_explained_fields(&fields, entry.name);
+        if let Some(note) = entry.note {
+            println!("\nNote: {note}");
+        }
+        println!("\nLifecycle\n  {}", wrap_indent(entry.lifecycle, "  "));
+        return;
+    }
     let name_w = fields.iter().map(|f| f.name.len()).max().unwrap_or(0);
     for f in &fields {
         let opt = if f.optional { " (optional)" } else { "" };
@@ -551,15 +1119,44 @@ pub fn print_object(name: &str, json_out: bool) {
     }
 }
 
+/// Render the per-field explanatory block: for each field, its type + (when a
+/// curated doc entry exists) example value, provenance token, and the
+/// when/why gloss. Fields without a doc entry (non-Requirement kinds until
+/// Slice 2) print type-only with a `(prose pending)` marker so the gap is
+/// visible — the drift-guard test names exactly which fields those are.
+/// trace:STORY-630 | ai:claude
+fn print_explained_fields(fields: &[FieldSchema], object: &str) {
+    for f in fields {
+        let opt = if f.optional { " (optional)" } else { "" };
+        let doc = if object.eq_ignore_ascii_case("Requirement") {
+            requirement_field_doc(&f.name)
+        } else {
+            None
+        };
+        match doc {
+            Some(d) => {
+                println!("  {} : {}{}", f.name, f.ts_type, opt);
+                println!("      example    {}", d.example);
+                println!("      set by     {}", d.provenance.token());
+                println!("      {}", wrap_indent(d.description, "      "));
+            }
+            None => {
+                println!("  {} : {}{}  (prose pending)", f.name, f.ts_type, opt);
+            }
+        }
+        println!();
+    }
+}
+
 /// `aida schema requirement` — the reflection-derived field table and the
 /// four controlled-vocabulary enums in on-the-wire token form.
-pub fn print_requirement(json_out: bool) {
+pub fn print_requirement(json_out: bool, explain: bool) {
     if json_out {
         // Single source: the same value `aida://schema/requirement` / the
         // `schema` MCP tool emit. trace:TASK-715 | ai:claude
         println!(
             "{}",
-            serde_json::to_string_pretty(&requirement_json()).unwrap()
+            serde_json::to_string_pretty(&requirement_json_inner(explain)).unwrap()
         );
         return;
     }
@@ -568,16 +1165,20 @@ pub fn print_requirement(json_out: bool) {
     let enums = requirement_enums();
 
     println!("Requirement — fields\n");
-    let name_w = fields.iter().map(|f| f.name.len()).max().unwrap_or(0);
-    for f in &fields {
-        let opt = if f.optional { " (optional)" } else { "" };
-        println!(
-            "  {:<name_w$}  {}{}",
-            f.name,
-            f.ts_type,
-            opt,
-            name_w = name_w
-        );
+    if explain {
+        print_explained_fields(&fields, "Requirement");
+    } else {
+        let name_w = fields.iter().map(|f| f.name.len()).max().unwrap_or(0);
+        for f in &fields {
+            let opt = if f.optional { " (optional)" } else { "" };
+            println!(
+                "  {:<name_w$}  {}{}",
+                f.name,
+                f.ts_type,
+                opt,
+                name_w = name_w
+            );
+        }
     }
 
     println!("\nRequirement — controlled vocabularies (on-the-wire tokens)\n");
@@ -589,6 +1190,11 @@ pub fn print_requirement(json_out: bool) {
             e.tokens.join("|"),
             field_w = field_w
         );
+    }
+
+    if explain {
+        let entry = catalog_entry("Requirement").expect("Requirement is a catalog kind");
+        println!("\nLifecycle\n  {}", wrap_indent(entry.lifecycle, "  "));
     }
 }
 
@@ -819,8 +1425,12 @@ mod tests {
             }
             // Exercises the reflection + render path; a parse that emits nothing
             // would surface as an empty table, caught by the drift guard above.
-            print_object(entry.name, false);
-            print_object(entry.name, true);
+            print_object(entry.name, false, false);
+            print_object(entry.name, true, false);
+            // The explanatory mode must also render cleanly for every kind.
+            // trace:STORY-630
+            print_object(entry.name, false, true);
+            print_object(entry.name, true, true);
         }
     }
 
@@ -830,7 +1440,7 @@ mod tests {
     /// catalog. Requirement additionally carries its `enums` block.
     #[test]
     fn full_dump_includes_fields_for_every_kind() {
-        let dump = full_dump_json();
+        let dump = full_dump_json_inner(false);
         let objects = dump
             .get("objects")
             .and_then(|v| v.as_array())
@@ -877,7 +1487,135 @@ mod tests {
     /// trace:TASK-799
     #[test]
     fn print_all_runs_in_both_modes() {
-        print_all(false);
-        print_all(true);
+        print_all(false, false);
+        print_all(true, false);
+        // Explanatory mode must also run clean. trace:STORY-630
+        print_all(false, true);
+        print_all(true, true);
+    }
+
+    /// DRIFT-GUARD (STORY-630): the curated per-field doc-map for `Requirement`
+    /// must cover EXACTLY the reflected `Requirement` field set — every reflected
+    /// field has a complete doc entry (example + provenance + description), and
+    /// every doc entry maps to a real reflected field (no orphans). This is the
+    /// substrate-as-bouncer property for the `--explain` layer: a field added to
+    /// `models.rs` without an explanation, or an explanation left behind after a
+    /// field is removed, fails the build here. Same spirit as
+    /// `schema_enums_match_reflection`. The failure message lists exactly which
+    /// fields still need docs, so the guard doubles as the Slice-2 worklist.
+    #[test]
+    fn explain_docs_match_reflection() {
+        use std::collections::BTreeSet;
+
+        let reflected: BTreeSet<String> =
+            requirement_fields().into_iter().map(|f| f.name).collect();
+        let documented: BTreeSet<String> = REQUIREMENT_FIELD_DOCS
+            .iter()
+            .map(|d| d.name.to_string())
+            .collect();
+
+        // 1. No undocumented reflected field (the Slice-2 worklist if it fails).
+        let undocumented: Vec<&String> = reflected.difference(&documented).collect();
+        assert!(
+            undocumented.is_empty(),
+            "schema --explain: these reflected Requirement fields have NO doc entry \
+             (add them to REQUIREMENT_FIELD_DOCS): {undocumented:?}"
+        );
+
+        // 2. No orphan doc entry (a doc for a field reflection no longer emits).
+        let orphans: Vec<&String> = documented.difference(&reflected).collect();
+        assert!(
+            orphans.is_empty(),
+            "schema --explain: these doc entries map to NO reflected Requirement field \
+             (remove or rename them in REQUIREMENT_FIELD_DOCS): {orphans:?}"
+        );
+
+        // 3. Each doc entry is complete (non-empty example + description). The
+        //    provenance token is from the closed set by construction (enum).
+        for d in REQUIREMENT_FIELD_DOCS {
+            assert!(
+                !d.example.trim().is_empty(),
+                "schema --explain: field `{}` has an empty example value",
+                d.name
+            );
+            assert!(
+                !d.description.trim().is_empty(),
+                "schema --explain: field `{}` has an empty description",
+                d.name
+            );
+            assert!(
+                !d.provenance.token().is_empty(),
+                "schema --explain: field `{}` has an empty provenance token",
+                d.name
+            );
+        }
+
+        // 4. No duplicate doc entries (would silently shadow).
+        assert_eq!(
+            documented.len(),
+            REQUIREMENT_FIELD_DOCS.len(),
+            "schema --explain: REQUIREMENT_FIELD_DOCS has duplicate field entries"
+        );
+    }
+
+    /// Every catalog kind carries a non-empty lifecycle block (the object-level
+    /// layer of `--explain`). A new catalog kind added without a lifecycle block
+    /// fails here. trace:STORY-630
+    #[test]
+    fn every_catalog_kind_has_a_lifecycle_block() {
+        for e in CATALOG {
+            assert!(
+                !e.lifecycle.trim().is_empty(),
+                "catalog kind `{}` has an empty lifecycle block — \
+                 add one for `aida schema --explain`",
+                e.name
+            );
+        }
+    }
+
+    /// The `--explain` JSON for Requirement carries the per-field
+    /// example/provenance/description and the object lifecycle, and the
+    /// non-explain JSON does NOT (pure opt-in / byte-stable default).
+    /// trace:STORY-630
+    #[test]
+    fn explain_json_carries_semantics_default_does_not() {
+        // Default: no example/provenance/description, no lifecycle.
+        let plain = requirement_json_inner(false);
+        let plain_first = &plain["fields"][0];
+        assert!(plain_first.get("example").is_none());
+        assert!(plain_first.get("provenance").is_none());
+        assert!(plain.get("lifecycle").is_none());
+
+        // Explain: every Requirement field carries the full doc triple, and the
+        // object carries its lifecycle block.
+        let rich = requirement_json_inner(true);
+        assert!(rich.get("lifecycle").and_then(|v| v.as_str()).is_some());
+        let fields = rich["fields"].as_array().expect("fields array");
+        for f in fields {
+            let name = f["name"].as_str().unwrap();
+            assert!(
+                f.get("example").and_then(|v| v.as_str()).is_some(),
+                "explain JSON field `{name}` missing example"
+            );
+            let prov = f
+                .get("provenance")
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| panic!("explain JSON field `{name}` missing provenance"));
+            assert!(
+                [
+                    "user",
+                    "advisor-gated",
+                    "merge-driven",
+                    "orchestrator",
+                    "reflection-derived"
+                ]
+                .contains(&prov),
+                "explain JSON field `{name}` has out-of-set provenance `{prov}`"
+            );
+            assert!(
+                f.get("description").and_then(|v| v.as_str()).is_some(),
+                "explain JSON field `{name}` missing description"
+            );
+        }
     }
 }

@@ -4715,10 +4715,17 @@ impl<'a> McpServer<'a> {
         // each kind's field/enum detail inlined, mirroring `aida schema --all
         // --json`. trace:TASK-799 | ai:claude
         let all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        // `explain: true` adds the explanatory layer — per-field
+        // example/provenance/description and each object's lifecycle block —
+        // mirroring `aida schema --explain`. trace:STORY-630 | ai:claude
+        let explain = args
+            .get("explain")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let value = match object {
-            None if all => crate::schema::full_dump_json(),
-            None => crate::schema::catalog_json(),
-            Some(name) => crate::schema::object_json(name).ok_or_else(|| {
+            None if all => crate::schema::full_dump_json_explain(explain),
+            None => crate::schema::catalog_json_explain(explain),
+            Some(name) => crate::schema::object_json_explain(name, explain).ok_or_else(|| {
                 format!(
                     "Unknown schema object: {} (omit `object` for the catalog of storable kinds)",
                     name
@@ -7092,6 +7099,12 @@ fn workflow_tool_descriptors() -> Value {
                     "all": {
                         "type": "boolean",
                         "description": "With no `object`, return the full dump: the catalog with each kind's field/enum detail inlined (mirrors `aida schema --all --json`).",
+                        "default": false,
+                        "example": true
+                    },
+                    "explain": {
+                        "type": "boolean",
+                        "description": "Add the explanatory layer (mirrors `aida schema --explain`): each documented field carries `example` / `provenance` (one of user / advisor-gated / merge-driven / orchestrator / reflection-derived) / `description`, and each object carries a `lifecycle` block (who writes it, when, why, how it's read back, when it retires). Requirement is fully documented; other kinds carry their lifecycle block plus the base field shape.",
                         "default": false,
                         "example": true
                     }
