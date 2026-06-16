@@ -3,12 +3,12 @@ spec_id: TASK-793
 agreed_id: TASK-793
 title: 'config show: central policy registry so new knobs auto-surface (anti-drift slice 2 of BUG-533)'
 description: 'Follow-up to BUG-533 (PR #850 shipped slice 1 — render all sections with effective value + source — and explicitly deferred this). DURABLE ANTI-DRIFT: introduce a central policy registry/enumeration that BOTH the config readers AND ''aida config show'' consume, so a newly-added config knob auto-appears in config show without a separate edit. Substrate-as-bouncer: makes config-show completeness STRUCTURAL rather than a thing to remember. Without it, render_effective_policy hardcodes the known sections and will silently fall behind again — exactly the failure that produced BUG-533 (every policy added since config show was written was invisible to it). trace:relates:BUG-533'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T19:13:54.051680503Z
-modified_at: 2026-06-13T19:14:01.521719582Z
+modified_at: 2026-06-16T16:29:15.830399404Z
 req_type: Task
 tags:
 - aida:config
@@ -16,6 +16,24 @@ tags:
 - discoverability
 - relates:BUG-533
 - tech-debt
+history:
+- id: 019ed144-02ab-7c50-b8cb-342fcf556d14
+  author: aida-auto-bump
+  timestamp: 2026-06-16T16:29:15.819026989Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed144-02b6-7321-b666-92b9d651b880
+  timestamp: 2026-06-16T16:29:15.830398098Z
+  agent: aida
+  commit_sha: de45a3b93bd7bf1d2d9e6ee7ae85ad5f3a300862
+  summary: Completed via merge de45a3b9
 deferred: true
 deferred_at: 2026-06-13T19:14:01.521719582Z
 deferred_until: config show drifts again, or the next config knob is added without it appearing
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T16:29:15.658920177Z
+  completion_sha: de45a3b93bd7bf1d2d9e6ee7ae85ad5f3a300862
