@@ -272,6 +272,19 @@ pub fn has_remote(repo: &Path, remote: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// True when the remote has NO branch heads yet — i.e. a brand-new/empty
+/// remote, the "push-to-create" state. Implemented via `git ls-remote --heads
+/// <remote>`: an empty stdout (with a successful exit) means no heads. Returns
+/// false on any git error (offline, unreachable) so callers treat
+/// "can't tell" as "not known-empty" and don't take empty-origin-only paths.
+/// trace:TASK-844 | ai:claude
+pub fn remote_has_no_heads(repo: &Path, remote: &str) -> bool {
+    match git(repo, &["ls-remote", "--heads", remote]) {
+        Ok(r) if r.success => r.stdout.trim().is_empty(),
+        _ => false,
+    }
+}
+
 /// Check whether `<remote>/<branch>` exists on the remote, without fetching.
 /// Returns false on any git error (offline, unreachable remote, etc.) so
 /// callers can treat absence and unreachability the same.
