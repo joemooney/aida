@@ -170,6 +170,30 @@ doesn't match.
 
 ---
 
+## Display & terminal
+
+How AIDA renders glyphs to the terminal. The glyph profile is a per-machine /
+per-terminal property (some terminals — e.g. Windows ConEmu — can't render all
+the emoji defaults), so it is settable per-shell via the env var or
+persistently via config. Opt-in by design: the default is UNICODE, so output is
+unchanged unless you choose `ascii`. Nothing auto-downgrades.
+
+| Variable | What it does | Default | Who sets it | Scope |
+| --- | --- | --- | --- | --- |
+| `AIDA_GLYPHS` | Selects the glyph rendering profile. Values: `unicode` (emoji/unicode, the default) or `ascii` (curated ASCII fallbacks). Highest-priority tier of the selector: env > project `.aida/config.toml` `[ui] glyphs` > user `~/.aida/config.toml` `[ui] glyphs` > default `unicode`. | `unicode`. | user | process env |
+
+**Config equivalent — `[ui] glyphs`:** set `glyphs = "ascii"` under a `[ui]`
+table in `.aida/config.toml` (project) or `~/.aida/config.toml` (user-global)
+to persist the profile without an env var. `AIDA_GLYPHS` overrides both; project
+overrides user.
+
+> **Phase-1 scope (STORY-628 / EPIC-45):** only glyphs migrated to the central
+> registry honor the profile today (the status glyphs in `aida list` / `aida
+> show` etc.); the long tail of raw glyph literals still prints unicode until
+> the phase-3 migration (TASK-835).
+
+---
+
 ## Telemetry & exit timing
 
 | Variable | What it does | Default | Who sets it | Scope |
