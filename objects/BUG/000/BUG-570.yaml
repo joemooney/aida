@@ -1,0 +1,40 @@
+id: 019ed287-b609-7fb2-b379-45d09ab6b58e
+spec_id: BUG-570
+agreed_id: BUG-570
+title: aida init on a clone silently commits a scaffold dump to the code branch
+description: |-
+  SYMPTOM
+  Running `aida init` in a fresh clone of an already-initialized AIDA project produces a divergent code-branch commit ("chore: scaffold AIDA") that re-scaffolds and commits regenerable files, including scaffold directories the upstream project deliberately does not track. Pushing it pollutes the shared default branch.
+
+  REPRO (observed 2026-06-16)
+  1. git clone an existing AIDA repo into a new dir.
+  2. aida init (detects existing store on origin: "bootstrapping clone").
+  3. init stages + commits 52 files / 10.6k insertions as commit b556867a0, incl. 19 .codex/skills, 19 .antigravity/skills, and 2 .claude files committed as real files where the repo tracks symlinks.
+  4. aida push lands it on origin/main. Other clones then fail `aida pull` on untracked-file collisions.
+
+  ROOT CAUSE
+  - init_scaffold_commit_paths (aida-cli/src/main.rs:9640) filters scaffold candidate paths by exists() ONLY. It stages every scaffolded path whether or not it is already tracked upstream or a net-new untracked surface, so a clone newly commits dirs the upstream chose not to track.
+  - should_auto_commit_scaffold (main.rs ~9685) returns Some(true) when stdin is NOT a TTY, so a non-interactive agent/CI `aida init` SILENTLY auto-commits the scaffold dump with no prompt. This is the dangerous path.
+  - The bootstrap-clone code path (main.rs:20426, "Detected existing AIDA store on origin") does not suppress commit_init_scaffolding.
+
+  WHY CRITICAL
+  A clone or an agent must be able to run aida init without mutating the shared code branch. Today a headless agent init silently commits a scaffold dump; an operator init prompts default-Y and one Enter does it. Either way the default branch gets polluted on the next push.
+
+  ACCEPTANCE
+  - On a bootstrap-clone (existing AIDA store detected on origin), aida init does NOT create a code-branch commit by default. It attaches the store, builds the cache, acquires a node id, and writes any missing local scaffold files, but leaves the working tree uncommitted (operator commits deliberately if desired).
+  - Non-interactive (no TTY) aida init on a bootstrap-clone must NOT auto-commit scaffolding.
+  - A genuinely-new (non-AIDA) repo still scaffolds and commits as today (no regression to the first-init flow).
+  - init never newly-commits a scaffold path that the upstream tree does not already track, unless an explicit opt-in flag is passed.
+  - Add a test covering: bootstrap-clone init leaves HEAD unchanged relative to origin.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T22:22:49.865858062Z
+modified_at: 2026-06-16T22:22:49.865858062Z
+req_type: Bug
+tags:
+- init
+- papercut
+- scaffold
+- severity:high
