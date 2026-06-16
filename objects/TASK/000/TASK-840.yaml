@@ -3,12 +3,12 @@ spec_id: TASK-840
 agreed_id: TASK-840
 title: 'EPIC-45 glyph long-tail: migrate the 18 allow-listed files to the registry, tightening the lint per file'
 description: 'Follow-up to TASK-835 (phase 3 shipped the CI lint + high-traffic surfaces). scripts/glyph-lint.sh ALLOW_LIST is the tracked inventory of remaining raw glyph literals (~865 across 18 files: main.rs, cli.rs, auto_complete.rs, session.rs, mcp.rs, workflow_hints.rs, reviewer_summary.rs, status_cleanup.rs, drain_state.rs, backlog.rs, headless_tee.rs, session_manifest.rs, presence.rs, burndown.rs, orchestrator.rs, drain_lock.rs, client.rs, agent_registry.rs). Migrate file-by-file, deleting each line from ALLOW_LIST as its literals move onto the registry; the lint tightens automatically (substrate-as-bouncer). Incremental, no single giant diff. Default unicode profile output must stay byte-for-byte unchanged per file migrated. Low priority — the forward-guard already prevents NEW raw glyphs; this is cleanup of the pre-existing tail.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:25:40.214576737Z
-modified_at: 2026-06-16T15:32:08.478157675Z
+modified_at: 2026-06-16T15:39:54.227903915Z
 req_type: Task
 tags:
 - aida:glyphs
@@ -46,6 +46,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 019ed116-d1cd-7c42-9527-5dba14c57870
+  author: aida-auto-bump
+  timestamp: 2026-06-16T15:39:54.189885911Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 processing_record:
 - id: 019ecfcb-a7a3-7422-be79-ff0c63ae1f95
   timestamp: 2026-06-16T09:38:10.979407885Z
@@ -57,6 +64,11 @@ processing_record:
   agent: aida
   commit_sha: cd123fa36884fa80676381ef6935fd42965d1fbb
   summary: Completed via merge cd123fa3
+- id: 019ed116-d1f3-7443-b529-50461eaeaae7
+  timestamp: 2026-06-16T15:39:54.227898644Z
+  agent: aida
+  commit_sha: a1d9b4fdefcb5b4475604a17e68b5321d6a7f01d
+  summary: Completed via merge a1d9b4fd
 implementation_info:
   implemented: false
   completed_at: 2026-06-16T09:38:10.815692330Z
