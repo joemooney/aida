@@ -7492,6 +7492,16 @@ pub enum Command {
         // trace:STORY-552 | ai:claude
         #[clap(long)]
         git_init: bool,
+
+        /// When bootstrapping a clone of an already-initialized AIDA project,
+        /// commit the locally-written scaffold files to the code branch. The
+        /// safe default leaves them uncommitted so a clone never pushes a
+        /// scaffold dump to the shared default branch; pass this to opt into a
+        /// deliberate scaffold commit. No effect on a genuinely-new first init,
+        /// which always commits its own scaffolding.
+        // trace:BUG-570 | ai:claude
+        #[clap(long)]
+        commit_scaffold: bool,
     },
 
     /// Starter-memory-pack drift discovery (`aida memories check`)

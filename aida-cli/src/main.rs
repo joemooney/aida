@@ -1128,6 +1128,7 @@ fn run() -> Result<()> {
         refresh,
         focus,
         git_init,
+        commit_scaffold,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -1162,6 +1163,7 @@ fn run() -> Result<()> {
                 *verbose,
                 name.as_deref(),
                 *git_init,
+                *commit_scaffold,
             )?;
         }
         // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
@@ -8691,6 +8693,9 @@ fn handle_init_command(
         db_path.clone(),
         "Requirements database (SQLite)",
         verbose,
+        // Legacy centralized first-init: commit scaffolding as before (BUG-570
+        // suppression is the bootstrap-clone path only). trace:BUG-570
+        false,
     )
 }
 
@@ -9846,6 +9851,13 @@ fn complete_init_scaffolding(
     db_path: std::path::PathBuf,
     storage_label: &str,
     verbose: bool,
+    // BUG-570: when true, write the scaffold files but do NOT create a
+    // code-branch commit. The bootstrap-clone path (existing AIDA store on
+    // origin) passes this so `aida init` on a clone never auto-commits a
+    // scaffold dump to the shared default branch — the operator commits
+    // deliberately if they want. Genuinely-new first-init passes false and
+    // commits its own scaffolding as before. trace:BUG-570 | ai:claude
+    suppress_scaffold_commit: bool,
 ) -> Result<()> {
     // Build ScaffoldConfig with escape hatches
     let mut config = ScaffoldConfig::default();
@@ -10221,13 +10233,40 @@ fn complete_init_scaffolding(
     // onboarding "remember to commit the scaffolding" footgun (BUG-445) and
     // the downstream "fresh clone / session worktree lacks the scaffolding"
     // failure (BUG-433, BUG-73 family). trace:TASK-631 | ai:claude
-    let scaffolding_committed = commit_init_scaffolding(root).unwrap_or(false);
+    //
+    // BUG-570: on a bootstrap-clone (existing AIDA store on origin) we suppress
+    // this entirely. A clone re-scaffolds regenerable files the upstream tree
+    // already carries (and dirs the upstream deliberately tracks as symlinks /
+    // doesn't track at all); auto-committing them — silently, when init runs
+    // headless with no TTY — produced a divergent "chore: scaffold AIDA" dump
+    // that polluted the shared default branch on the next push. Write the files,
+    // leave the working tree uncommitted, and tell the operator. The commit is
+    // theirs to make deliberately (or opt in with `aida init --commit-scaffold`).
+    // trace:BUG-570 | ai:claude
+    let scaffolding_committed = if suppress_scaffold_commit {
+        let paths = init_scaffold_commit_paths(root);
+        if !paths.is_empty() {
+            println!(
+                "  {} wrote AIDA scaffold files and left them uncommitted — commit deliberately with `git add {} && git commit` if you want them on this clone's branch.",
+                "Note:".dimmed(),
+                paths.join(" "),
+            );
+        }
+        false
+    } else {
+        commit_init_scaffolding(root).unwrap_or(false)
+    };
 
     // trace:TASK-510 | ai:antigravity
     // DEDUP (TASK-631): when init committed the scaffolding itself, skip
     // enqueuing the "Commit AIDA scaffolding" onboarding task — the first
     // user shouldn't be told to do an already-done step.
-    if !scaffolding_committed {
+    //
+    // BUG-570: when we deliberately suppressed the commit (bootstrap-clone),
+    // also skip the onboarding task — a clone of an already-set-up project
+    // shouldn't be nudged to commit a scaffold dump to the shared branch; the
+    // uncommitted-files note above already covers the deliberate-commit option.
+    if !scaffolding_committed && !suppress_scaffold_commit {
         if let Err(e) = enqueue_initial_scaffold_task(root, &db_path) {
             eprintln!(
                 "  {} could not enqueue initial scaffolding task: {}",
@@ -10657,6 +10696,138 @@ mod task_631_init_self_commit_tests {
         assert!(
             !tracked.contains(".claude"),
             "the gitignored .claude path must NOT be committed (intent-respecting): {tracked}"
+        );
+    }
+
+    /// Set up a temp git repo standing in for a fresh CLONE: an initial commit
+    /// exists on `main`, and a fake `origin` remote points HEAD at it so HEAD ==
+    /// origin/main at the start. Returns the repo root + the HEAD sha. The
+    /// scaffold files are written but NOT committed by the helper. trace:BUG-570
+    fn setup_clone_like_repo(tmp: &TempDir) -> (std::path::PathBuf, String) {
+        let root = tmp.path().to_path_buf();
+        git_in(&root, &["init", "-q", "-b", "main"]);
+        git_in(&root, &["config", "user.email", "t@t"]);
+        git_in(&root, &["config", "user.name", "t"]);
+        git_in(
+            &root,
+            &["commit", "--allow-empty", "-q", "-m", "upstream root"],
+        );
+        // A bare "origin" so origin/main resolves to the same commit (a clone
+        // starts with HEAD == origin/main).
+        let origin = tmp.path().join("origin.git");
+        git_in(&root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+        git_in(
+            &root,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        git_in(&root, &["push", "-q", "origin", "main"]);
+        let head = git_head(&root);
+        (root, head)
+    }
+
+    fn git_head(root: &std::path::Path) -> String {
+        let out = std::process::Command::new("git")
+            .current_dir(root)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Write the scaffold files a bootstrap-clone would land locally, then drive
+    /// `complete_init_scaffolding`. Returns the HEAD sha afterward.
+    fn run_complete_scaffolding(root: &std::path::Path, suppress: bool) -> String {
+        // The Claude profile keeps the scaffold set small + deterministic.
+        let store = aida_core::models::RequirementsStore::new();
+        let db_path = root.join(".aida-store");
+        complete_init_scaffolding(
+            root,
+            &store,
+            "claude",
+            false, // no_skills
+            true,  // no_hooks — keep the scaffold set lean for the test
+            false, // force
+            db_path,
+            "test store",
+            false, // verbose
+            suppress,
+        )
+        .unwrap();
+        git_head(root)
+    }
+
+    /// BUG-570 criterion 1+5: a bootstrap-clone init (suppress=true) must NOT
+    /// create a code-branch commit — HEAD stays exactly where origin/main is.
+    /// The scaffold files are written (working tree dirty) but uncommitted.
+    /// trace:BUG-570 | ai:claude
+    #[test]
+    fn bootstrap_clone_init_leaves_head_unchanged() {
+        let tmp = TempDir::new().unwrap();
+        let (root, head_before) = setup_clone_like_repo(&tmp);
+
+        let head_after = run_complete_scaffolding(&root, /* suppress */ true);
+
+        assert_eq!(
+            head_before, head_after,
+            "bootstrap-clone init must not create a new code-branch commit"
+        );
+        // And it actually wrote local scaffold files (uncommitted).
+        assert!(
+            root.join("CLAUDE.md").exists(),
+            "scaffold files should be written locally even when the commit is suppressed"
+        );
+        let status = std::process::Command::new("git")
+            .current_dir(&root)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&status.stdout).trim().is_empty(),
+            "the written scaffold files should leave the working tree dirty (uncommitted)"
+        );
+    }
+
+    /// BUG-570 criterion 2: non-interactive (no TTY, the test harness) init on a
+    /// bootstrap-clone must NOT auto-commit. Same HEAD-unchanged guarantee as the
+    /// TTY case — suppression is independent of the TTY heuristic. The test
+    /// process has no TTY, so this exercises exactly the dangerous silent path.
+    /// trace:BUG-570 | ai:claude
+    #[test]
+    fn bootstrap_clone_init_no_tty_does_not_autocommit() {
+        // Belt-and-suspenders: even if some env tried to force auto-commit, the
+        // bootstrap-clone suppression must win.
+        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        let tmp = TempDir::new().unwrap();
+        let (root, head_before) = setup_clone_like_repo(&tmp);
+
+        let head_after = run_complete_scaffolding(&root, /* suppress */ true);
+
+        assert_eq!(
+            head_before, head_after,
+            "non-TTY bootstrap-clone init must not silently auto-commit a scaffold dump"
+        );
+    }
+
+    /// BUG-570 criterion 3: a genuinely-new first-init (suppress=false) STILL
+    /// commits its scaffolding — no regression. In the no-TTY test harness the
+    /// auto-commit branch fires, so HEAD must advance past the root commit.
+    /// trace:BUG-570 | ai:claude
+    #[test]
+    fn genuinely_new_init_still_commits_scaffolding() {
+        std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        git_in(root, &["init", "-q", "-b", "main"]);
+        git_in(root, &["config", "user.email", "t@t"]);
+        git_in(root, &["config", "user.name", "t"]);
+        git_in(root, &["commit", "--allow-empty", "-q", "-m", "root"]);
+        let head_before = git_head(root);
+
+        let head_after = run_complete_scaffolding(root, /* suppress */ false);
+
+        assert_ne!(
+            head_before, head_after,
+            "genuinely-new first-init must still commit its scaffolding (no BUG-570 regression)"
         );
     }
 }
@@ -19866,6 +20037,9 @@ fn handle_init_distributed_worktree(
     verbose: bool,
     name: Option<&str>,
     git_init: bool,
+    // BUG-570: forwarded to the bootstrap-clone path so `--commit-scaffold`
+    // can opt into a deliberate scaffold commit on a clone. trace:BUG-570
+    commit_scaffold: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -19964,6 +20138,7 @@ fn handle_init_distributed_worktree(
             agent,
             no_hooks,
             verbose,
+            commit_scaffold,
         );
     }
 
@@ -20000,6 +20175,7 @@ fn handle_init_distributed_worktree(
                 agent,
                 no_hooks,
                 verbose,
+                commit_scaffold,
             );
         }
         eprintln!(
@@ -20381,6 +20557,9 @@ fn handle_init_distributed_worktree(
         std::path::PathBuf::from(worktree_dir),
         &storage_label,
         verbose,
+        // Genuinely-new first-init: commit the scaffolding as before (BUG-570
+        // suppression applies only to the bootstrap-clone path).
+        false,
     )?;
 
     // Sharing + teammate onboarding are real, but premature for a solo
@@ -20419,6 +20598,11 @@ fn handle_init_post_clone(
     agent: &str,
     no_hooks: bool,
     verbose: bool,
+    // BUG-570: opt-in `--commit-scaffold` to deliberately commit the locally
+    // written scaffold files on a clone. Default false → leave them uncommitted
+    // so a clone never pushes a scaffold dump to the shared default branch.
+    // trace:BUG-570 | ai:claude
+    commit_scaffold: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -20559,6 +20743,10 @@ fn handle_init_post_clone(
         std::path::PathBuf::from(worktree_dir),
         &storage_label,
         verbose,
+        // BUG-570: bootstrap-clone → suppress the scaffold commit by default.
+        // Only `--commit-scaffold` opts into a deliberate code-branch commit.
+        // trace:BUG-570 | ai:claude
+        !commit_scaffold,
     )?;
 
     // Prompt the user to acquire a node id. Auto-allocate happens inside
@@ -20938,6 +21126,9 @@ fn handle_init_distributed_sibling(
         std::path::PathBuf::from("aida-store"),
         &storage_label,
         verbose,
+        // Genuinely-new sibling first-init: commit scaffolding as before (no
+        // bootstrap-clone path here). trace:BUG-570
+        false,
     )?;
 
     println!();
