@@ -12,12 +12,12 @@ description: |-
   FIX: enrich burndown::OpenFacts (or the handle_list_human classification step) with each spec's `human_only` marker and pass it to human_required instead of `false`, so a human-only spec surfaces in `aida list human` exactly as it does in the queue's human-only bucket. Add a regression test: a human-only Approved spec with a non-human bucket must appear in the human view. The predicate human_required(f, human_only) = bucket.needs_human() || human_only already supports this; only the view's call site hardcodes false.
 
   IMPACT: highest at onboarding — `aida list human` is the "what should I do?" front door, and it tells a new user "nothing needs you" while the High-priority scaffolding-commit task sits stranded.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T03:14:53.145173739Z
-modified_at: 2026-06-16T03:28:11.353378873Z
+modified_at: 2026-06-16T03:42:18.415475376Z
 req_type: Bug
 tags:
 - aida:human
@@ -36,3 +36,21 @@ comments:
   content: Commit b13fefdd2 references this requirement
   created_at: 2026-06-16T03:28:11.353378873Z
   modified_at: 2026-06-16T03:28:11.353378873Z
+history:
+- id: 019ece85-d72b-7933-86c4-32a3d1b58b40
+  author: aida-auto-bump
+  timestamp: 2026-06-16T03:42:18.411029414Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ece85-d72f-7c93-9480-53f81b00004e
+  timestamp: 2026-06-16T03:42:18.415474435Z
+  agent: aida
+  commit_sha: dba093fd16bdb11a7bf339c60646bee2b735cba1
+  summary: Completed via merge dba093fd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T03:42:18.254455883Z
+  completion_sha: dba093fd16bdb11a7bf339c60646bee2b735cba1
