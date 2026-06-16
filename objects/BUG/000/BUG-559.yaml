@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:50:14.700945231Z
-modified_at: 2026-06-16T15:43:16.968132691Z
+modified_at: 2026-06-16T16:07:11.960326231Z
 req_type: Bug
 tags:
 - batch:gitlab-store-now
@@ -53,6 +53,11 @@ comments:
   content: 'Symptom CURED via PR #957 (fix b): try_attach_store_worktree now recovers a fresh clone that landed on aida-store (switch to a code branch or detached HEAD, then fetch+attach the worktree) instead of erroring — a teammate/CI cloning an AIDA-on-GitLab repo now gets a working store. Per the spec author''s instruction this stays open until the source-side prevention (fix a: init never lets the orphan become the forge default) lands — that is TASK-844 (needs GitHub+GitLab live verification + the glab set-default-branch call, product-seat forge lane). Deferring behind TASK-844 so it''s tracked without reading as falsely-actionable. — advisor'
   created_at: 2026-06-16T09:18:27.393309078Z
   modified_at: 2026-06-16T09:18:27.393309078Z
+- id: 019ed12f-cf58-76e2-866a-7be7a2f93626
+  author: joe
+  content: 'RESOLVED + LIVE-VERIFIED (2026-06-16): fix-a (TASK-844, push main before aida-store on push-to-create) verified against the live gitlab.joemooney.com — pushed main first then aida-store second, ''git remote show origin'' reports HEAD branch: main (the orphan store no longer becomes default). fix-b (auto-attach recovery) shipped earlier in #957. Both halves done. Note: the glab-API set-default-branch fallback (b) could not be live-tested here (glab on this machine is authed for gitlab.com, not gitlab.joemooney.com) but it is belt-and-suspenders on top of the now-proven push-order fix. Throwaway verify project ai/bug559-verify-1781625948 left on gitlab for manual delete (glab not authed). — advisor'
+  created_at: 2026-06-16T16:07:11.960326231Z
+  modified_at: 2026-06-16T16:07:11.960326231Z
 history:
 - id: 019ec817-55cf-7160-8ee0-e9ffa4511f38
   author: aida-auto-bump
