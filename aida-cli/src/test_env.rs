@@ -42,6 +42,51 @@ pub(crate) struct EnvVarGuard {
     _guard: MutexGuard<'static, ()>,
 }
 
+/// Multi-key variant of [`EnvVarGuard`] for tests that need SEVERAL env
+/// vars set simultaneously. `EnvVarGuard` holds `ENV_LOCK` for its whole
+/// lifetime, so two `EnvVarGuard::set` calls deadlock — this acquires the
+/// lock ONCE and sets/restores every key under it. trace:TASK-818
+pub(crate) struct EnvVarsGuard {
+    prev: Vec<(&'static str, Option<OsString>)>,
+    _guard: MutexGuard<'static, ()>,
+}
+
+impl EnvVarsGuard {
+    /// Set each `(key, value)` for the guard's lifetime; restore prior
+    /// values on drop. Same lock-poisoning tolerance as [`EnvVarGuard::set`].
+    pub(crate) fn set(pairs: &[(&'static str, &str)]) -> Self {
+        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let mut prev = Vec::with_capacity(pairs.len());
+        for (key, value) in pairs {
+            prev.push((*key, std::env::var_os(key)));
+            // SAFETY: serialised by ENV_LOCK.
+            #[allow(unused_unsafe)]
+            unsafe {
+                std::env::set_var(key, value);
+            }
+        }
+        Self {
+            prev,
+            _guard: guard,
+        }
+    }
+}
+
+impl Drop for EnvVarsGuard {
+    fn drop(&mut self) {
+        for (key, prev) in &self.prev {
+            // SAFETY: still holding ENV_LOCK via self._guard.
+            #[allow(unused_unsafe)]
+            unsafe {
+                match prev {
+                    Some(v) => std::env::set_var(key, v),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+}
+
 impl EnvVarGuard {
     /// Set `key` to `value` for the guard's lifetime. Lock poisoning is
     /// tolerated (`into_inner` on a poisoned lock) so a panic in one
