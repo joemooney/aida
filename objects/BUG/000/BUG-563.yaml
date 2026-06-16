@@ -1,0 +1,27 @@
+id: 019ece68-2842-74b2-83dc-81a16ef54ae6
+spec_id: BUG-563
+agreed_id: BUG-563
+title: 'doctor: detect+heal per-clone runtime files (node.toml/dispenser.toml) wrongly TRACKED on the orphan aida-store branch'
+description: |-
+  INCIDENT (2026-06-15, tq downstream repo on spock): a store-leg `aida pull` failed mid-rebase with "could not apply 941c17a... chore: sync pending changes" conflicting on `.aida/node.toml`. The conflict markers then made node.toml invalid TOML, so the follow-up `aida push` died with "TOML parse error at line 1, column 1: <<<<<<< HEAD".
+
+  ROOT CAUSE: `.aida/node.toml` (the per-clone node-identity pointer at `.aida-store/.aida/node.toml`, "I am node N" — strictly per-clone per EPIC-1-052 Phase 1 / BUG-430) was TRACKED on that project's orphan aida-store branch. Each clone's auto-sync commits rewrite it with that clone's own node id, so every cross-clone rebase conflicts on it. The canonical aida store branch already gitignores `.aida/node.toml` + `.aida/dispenser.toml` + `.aida/*.lock` and does NOT track them; an older / pre-fix store branch that committed node.toml before the gitignore landed keeps re-conflicting forever, and nothing detects or repairs it.
+
+  GAP: `aida doctor` detects tracked LEGACY-CENTRALIZED cruft on a git-canonical project (requirements*.yaml / scaffold-report.html, TASK-752) and safe-heals it with git-rm + gitignore, but has NO equivalent detector for a PER-CLONE RUNTIME FILE tracked on the orphan aida-store branch (node.toml, dispenser.toml, *.lock, cache.db*). The `aida node blocks verify` (FR-281) cross-checks nodes.toml against blocks.yaml but never looks at the per-clone node.toml pointer or whether it is wrongly tracked.
+
+  FIX (proposed): add a doctor category (e.g. `store-tracked-runtime`) that scans `git ls-files` on the orphan store worktree for any path matching the per-clone runtime set and, when found, safe-heals with `git rm --cached <path>` + appends the canonical gitignore block + commits. Mirror the TASK-752 detector shape (detect_legacy_store_cruft) but scope it to the .aida-store worktree and the per-clone file set. Should self-gate on distributed mode + orphan branch present. Manual recovery today: `cd .aida-store && git rebase --abort; git rm --cached .aida/node.toml .aida/dispenser.toml; gitignore them; commit; push`.
+
+  REPRO RISK: any project whose aida-store branch was created (or had node.toml committed) before the EPIC-1-052 Phase 1 gitignore — i.e. multi-machine setups predating the fix. Surfaces as recurring store-sync rebase conflicts that strand the spec at the broken-rebase state and break `aida push`.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-16T03:09:53.090081612Z
+modified_at: 2026-06-16T03:09:53.090081612Z
+req_type: Bug
+tags:
+- distributed
+- doctor
+- node-identity
+- reliability
+- store
