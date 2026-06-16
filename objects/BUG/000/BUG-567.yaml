@@ -20,12 +20,12 @@ description: |-
   - Tests pin: AIDA_STORE valid (used), set-but-invalid (notice + fall-through), unset (silent normal resolution).
 
   Verify against aida_store_override / aida_store_override_from / find_project_root before coding.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T06:44:55.137517788Z
-modified_at: 2026-06-16T06:55:52.354021526Z
+modified_at: 2026-06-16T07:19:08.379329558Z
 req_type: Bug
 tags:
 - aida:config
@@ -44,3 +44,21 @@ relationships:
   target_id: 019e90ee-901e-7d61-bb88-8857174330d7
   created_at: 2026-06-16T06:45:07.024615087Z
   created_by: joe
+history:
+- id: 019ecf4c-5b56-7f92-873e-5e5ae5cb87bc
+  author: aida-auto-bump
+  timestamp: 2026-06-16T07:19:08.374596368Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecf4c-5b5b-7070-ba96-b74d6179866c
+  timestamp: 2026-06-16T07:19:08.379328918Z
+  agent: aida
+  commit_sha: e3eb13b718f59f45139997f150015cb2578e0a53
+  summary: Completed via merge e3eb13b7
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T07:19:08.206552624Z
+  completion_sha: e3eb13b718f59f45139997f150015cb2578e0a53
