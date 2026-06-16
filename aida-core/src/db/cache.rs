@@ -14,7 +14,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::models::{Requirement, RequirementsStore};
+use crate::models::{Relationship, RelationshipType, Requirement, RequirementsStore};
+use std::collections::HashMap;
 
 /// Lightweight projection of a Requirement, sourced from the cache rather
 /// than from canonical YAML. Contains just the fields needed for list /
@@ -45,7 +46,95 @@ pub struct RequirementSummary {
     pub deferred_at: Option<String>,
     /// Free-text revisit trigger; None when not set. trace:STORY-584 | ai:claude
     pub deferred_until: Option<String>,
+    /// Inbound edge count — deterministic local centrality. trace:STORY-632 | ai:claude
+    pub in_degree: u32,
+    /// Outbound edge count. trace:STORY-632 | ai:claude
+    pub out_degree: u32,
+    /// Type-weighted combined heft score (inbound + outbound). trace:STORY-632 | ai:claude
+    pub heft: u32,
     pub yaml_path: String,
+}
+
+/// STORY-632: deterministic local graph-centrality of a single spec, derived
+/// from the relationship graph and materialized in the cache (never in YAML).
+///
+/// `in_degree` and `out_degree` are tracked SEPARATELY on purpose — they mean
+/// different things: high inbound = foundational / load-bearing heft (specs
+/// that reference or depend on this one); high outbound = coupling / complexity
+/// (this spec reaching out to many others, often just a big epic). v1 is RAW
+/// LOCAL degree (direct edges only — not transitive, no PageRank).
+///
+/// `heft` is a type-weighted combined score: each inbound + outbound edge
+/// contributes `edge_weight(rel_type)` (see the static lookup table). A
+/// `blocked-by`/`blocks` edge carries more heft than a bare `references`.
+/// trace:STORY-632 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Degrees {
+    /// Count of inbound edges (other specs whose relationships target this one).
+    pub in_degree: u32,
+    /// Count of this spec's own outbound edges.
+    pub out_degree: u32,
+    /// Type-weighted combined score over inbound + outbound edges.
+    pub heft: u32,
+}
+
+/// Static `RelationshipType -> weight` lookup for the type-weighted heft score
+/// (STORY-632). NOT a field on `Relationship` (the operator resolved the fork on
+/// 2026-06-15: type-weighting is a small table, not per-edge state). A
+/// blocks/blocked-by edge is the heaviest signal of structural importance; a
+/// duplicate carries none. trace:STORY-632 | ai:claude
+pub fn edge_weight(rel_type: &RelationshipType) -> u32 {
+    match rel_type {
+        RelationshipType::BlockedBy | RelationshipType::Blocks => 3,
+        RelationshipType::Parent | RelationshipType::Child => 2,
+        RelationshipType::Verifies | RelationshipType::VerifiedBy => 1,
+        RelationshipType::References => 1,
+        RelationshipType::Duplicate => 0,
+        RelationshipType::Custom(_) => 1,
+    }
+}
+
+/// Compute per-spec in/out degree + type-weighted heft for every requirement in
+/// `store`, from the relationship graph. v1 = raw LOCAL degree (direct edges
+/// only). Each requirement's outbound edges (`req.relationships`) contribute to
+/// its own out_degree, and to the in_degree of each edge's target. Heft sums
+/// `edge_weight` over both the inbound and outbound edges incident to a spec.
+///
+/// Returns a map keyed by requirement UUID. Specs with no edges are absent from
+/// the map (callers default to `Degrees::default()` == all-zero).
+/// trace:STORY-632 | ai:claude
+pub fn compute_degrees(store: &RequirementsStore) -> HashMap<Uuid, Degrees> {
+    let mut degrees: HashMap<Uuid, Degrees> = HashMap::new();
+    for req in &store.requirements {
+        for rel in &req.relationships {
+            let w = edge_weight(&rel.rel_type);
+            // Outbound edge from `req`.
+            let src = degrees.entry(req.id).or_default();
+            src.out_degree += 1;
+            src.heft += w;
+            // Inbound edge to the target.
+            let dst = degrees.entry(rel.target_id).or_default();
+            dst.in_degree += 1;
+            dst.heft += w;
+        }
+    }
+    degrees
+}
+
+/// Out-degree-only computation for a single spec's own relationships, used by
+/// the single-row write-through path (`upsert_requirement`) which has no view of
+/// the wider graph. The inbound axis of an upserted row is preserved from the
+/// prior cache row (a neighbor's edge change still requires a full
+/// `aida cache rebuild` to re-derive — same rebuildable-projection contract as
+/// the rest of the cache). trace:STORY-632 | ai:claude
+fn own_outbound(relationships: &[Relationship]) -> (u32, u32) {
+    let mut out_degree = 0u32;
+    let mut heft = 0u32;
+    for rel in relationships {
+        out_degree += 1;
+        heft += edge_weight(&rel.rel_type);
+    }
+    (out_degree, heft)
 }
 
 /// Three-way filter for the archive axis. STORY-441 introduces archive as
@@ -90,6 +179,19 @@ pub enum DeferFilter {
 /// `"deferred:`. trace:STORY-584 | ai:claude
 const DEFER_TAG_LIKE: &str = r#"tags_json LIKE '%"deferred:%'"#;
 
+/// Ordering for cache list queries. STORY-632 adds `Heft` so
+/// `aida list --sort heft` surfaces the most-connected (load-bearing) specs
+/// first. trace:STORY-632 | ai:claude
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum SortOrder {
+    /// Default: freshest-first by modified_at.
+    #[default]
+    ModifiedDesc,
+    /// Most-connected first by the type-weighted heft score (ties broken by
+    /// modified_at DESC).
+    HeftDesc,
+}
+
 /// Filter passed to cache list queries. All fields are AND'd together;
 /// each field's match semantics are documented inline.
 #[derive(Debug, Default, Clone)]
@@ -121,7 +223,9 @@ pub struct ListFilter {
     /// rows (flag set OR `deferred:*`-tagged) are filtered out.
     /// trace:STORY-584 | ai:claude
     pub defer: DeferFilter,
-    /// Optional cap on returned rows (after ordering by modified_at DESC).
+    /// Result ordering. Default `ModifiedDesc`. trace:STORY-632 | ai:claude
+    pub sort: SortOrder,
+    /// Optional cap on returned rows (after ordering).
     pub limit: Option<usize>,
 }
 
@@ -163,7 +267,10 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // external issue refs become searchable.
 // STORY-584: bumped to "4" when the `deferred` / `deferred_at` / `deferred_until`
 // columns were added (view-flag parallel to archived).
-const SCHEMA_VERSION: &str = "4";
+// STORY-632: bumped to "5" when the `in_degree` / `out_degree` / `heft`
+// centrality columns were added (computed-on-rebuild from the relationship
+// graph, never stored in YAML).
+const SCHEMA_VERSION: &str = "5";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -559,6 +666,10 @@ impl Cache {
         store: &RequirementsStore,
         source_head_sha: &str,
     ) -> Result<usize> {
+        // STORY-632: degree/heft is a pure function of the WHOLE relationship
+        // graph, so compute it once over the full store before the row inserts.
+        // trace:STORY-632 | ai:claude
+        let degrees = compute_degrees(store);
         let count = {
             let conn = self.conn.lock().unwrap();
             with_cache_write(&self.path, "rebuild cache", || {
@@ -566,7 +677,8 @@ impl Cache {
                 tx.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
                 let mut count = 0usize;
                 for req in &store.requirements {
-                    insert_one(&tx, req)?;
+                    let d = degrees.get(&req.id).copied().unwrap_or_default();
+                    insert_one(&tx, req, d)?;
                     count += 1;
                 }
                 tx.commit()?;
@@ -579,11 +691,40 @@ impl Cache {
     }
 
     /// Single-row upsert called after a write-through git mutation succeeds.
+    ///
+    /// STORY-632: the edited row's out_degree + heft are recomputed from its own
+    /// relationships (cheap, no graph view needed). The inbound axis is
+    /// PRESERVED from the prior cache row — a single-row write can't re-derive a
+    /// neighbor's in_degree, so an edge add/remove leaves the *other* endpoint's
+    /// inbound count stale until the next full `aida cache rebuild`. This matches
+    /// the rebuildable-projection contract: centrality is authoritative after a
+    /// rebuild; per-write upserts keep the touched row's own outbound axis fresh.
+    /// trace:STORY-632 | ai:claude
     pub fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         with_cache_write(&self.path, "upsert cached requirement", || {
+            // Preserve the inbound axis recorded by the last full rebuild.
+            let prior_in: u32 = conn
+                .query_row(
+                    "SELECT in_degree FROM requirements_cache WHERE id = ?1",
+                    params![req.id.to_string()],
+                    |row| row.get::<_, i64>(0),
+                )
+                .ok()
+                .map(|v| v.max(0) as u32)
+                .unwrap_or(0);
+            let (out_degree, out_heft) = own_outbound(&req.relationships);
+            // Heft over inbound edges isn't recoverable from a single row's
+            // state, so approximate the inbound contribution as 1-per-edge
+            // (the modal weight) plus the exact outbound heft. The next rebuild
+            // replaces this with the exact type-weighted value.
+            let degrees = Degrees {
+                in_degree: prior_in,
+                out_degree,
+                heft: out_heft + prior_in,
+            };
             delete_one_uncommitted(&conn, &req.id)?;
-            insert_one(&conn, req)?;
+            insert_one(&conn, req, degrees)?;
             Ok(())
         })?;
         Ok(())
@@ -607,7 +748,7 @@ impl Cache {
             "SELECT id, spec_id, agreed_id, title, description, status, priority,
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
-                    yaml_path
+                    in_degree, out_degree, heft, yaml_path
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -698,7 +839,11 @@ impl Cache {
             }
         }
 
-        sql.push_str(" ORDER BY modified_at DESC");
+        match filter.sort {
+            SortOrder::ModifiedDesc => sql.push_str(" ORDER BY modified_at DESC"),
+            // trace:STORY-632 | ai:claude
+            SortOrder::HeftDesc => sql.push_str(" ORDER BY heft DESC, modified_at DESC"),
+        }
         if let Some(n) = filter.limit {
             sql.push_str(&format!(" LIMIT {}", n));
         }
@@ -752,7 +897,7 @@ impl Cache {
                           c.status, c.priority, c.owner, c.feature, c.req_type,
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
-                          c.yaml_path
+                          c.in_degree, c.out_degree, c.heft, c.yaml_path
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -772,6 +917,28 @@ impl Cache {
         let conn = self.conn.lock().unwrap();
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM requirements_cache", [], |r| r.get(0))?;
         Ok(n as usize)
+    }
+
+    /// STORY-632: read the cached in/out degree + heft for a single spec by
+    /// UUID. Returns `Degrees::default()` (all-zero) when the spec isn't in the
+    /// cache yet. trace:STORY-632 | ai:claude
+    pub fn degrees_for_id(&self, id: &Uuid) -> Result<Degrees> {
+        let conn = self.conn.lock().unwrap();
+        let d = conn
+            .query_row(
+                "SELECT in_degree, out_degree, heft FROM requirements_cache WHERE id = ?1",
+                params![id.to_string()],
+                |row| {
+                    Ok(Degrees {
+                        in_degree: row.get::<_, i64>(0)?.max(0) as u32,
+                        out_degree: row.get::<_, i64>(1)?.max(0) as u32,
+                        heft: row.get::<_, i64>(2)?.max(0) as u32,
+                    })
+                },
+            )
+            .ok()
+            .unwrap_or_default();
+        Ok(d)
     }
 }
 
@@ -820,7 +987,7 @@ fn fts_schema_drifted(conn: &Connection) -> bool {
 
 // ---------------------------------------------------------------- row helpers
 
-fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
+fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees) -> Result<()> {
     let yaml_path = yaml_path_for(req);
     let tags_json = serde_json::to_string(&req.tags).unwrap_or_else(|_| "[]".into());
     let archived = if req.archived { 1 } else { 0 };
@@ -844,8 +1011,9 @@ fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
         "INSERT INTO requirements_cache (
             id, spec_id, agreed_id, title, description, status, priority,
             owner, feature, req_type, tags_json, created_at, modified_at,
-            archived, archived_at, deferred, deferred_at, deferred_until, yaml_path
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+            archived, archived_at, deferred, deferred_at, deferred_until,
+            in_degree, out_degree, heft, yaml_path
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -865,6 +1033,9 @@ fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
             deferred,
             deferred_at,
             deferred_until,
+            degrees.in_degree,
+            degrees.out_degree,
+            degrees.heft,
             yaml_path,
         ],
     )?;
@@ -917,7 +1088,11 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         deferred: deferred_int != 0,
         deferred_at: row.get(16)?,
         deferred_until: row.get(17)?,
-        yaml_path: row.get(18)?,
+        // trace:STORY-632 | ai:claude — columns 18/19/20 (stored as INTEGER).
+        in_degree: row.get::<_, i64>(18)?.max(0) as u32,
+        out_degree: row.get::<_, i64>(19)?.max(0) as u32,
+        heft: row.get::<_, i64>(20)?.max(0) as u32,
+        yaml_path: row.get(21)?,
     })
 }
 
@@ -966,6 +1141,144 @@ mod tests {
         r.tags.insert("a".into());
         r.tags.insert("b".into());
         r
+    }
+
+    fn rel(rel_type: RelationshipType, target: Uuid) -> Relationship {
+        Relationship {
+            rel_type,
+            target_id: target,
+            created_at: None,
+            created_by: None,
+        }
+    }
+
+    /// STORY-632: a synthetic star graph — one hub with N inbound + M outbound
+    /// edges — exercises the separate-axis degree computation and the
+    /// type-weighted heft score.
+    #[test]
+    fn compute_degrees_counts_inbound_and_outbound_separately() {
+        // Hub HUB-1 has 2 outbound edges (→ OUT-1, → OUT-2) and 3 inbound
+        // edges (IN-1, IN-2, IN-3 each point at it).
+        let hub = sample_req("HUB-1", "hub");
+        let out1 = sample_req("OUT-1", "out1");
+        let out2 = sample_req("OUT-2", "out2");
+        let in1 = sample_req("IN-1", "in1");
+        let in2 = sample_req("IN-2", "in2");
+        let in3 = sample_req("IN-3", "in3");
+
+        let (hub_id, out1_id, out2_id) = (hub.id, out1.id, out2.id);
+
+        let mut hub = hub;
+        hub.relationships
+            .push(rel(RelationshipType::Blocks, out1_id)); // weight 3
+        hub.relationships
+            .push(rel(RelationshipType::References, out2_id)); // weight 1
+
+        let mut in1 = in1;
+        in1.relationships
+            .push(rel(RelationshipType::BlockedBy, hub_id)); // weight 3
+        let mut in2 = in2;
+        in2.relationships
+            .push(rel(RelationshipType::Parent, hub_id)); // weight 2
+        let mut in3 = in3;
+        in3.relationships
+            .push(rel(RelationshipType::References, hub_id)); // weight 1
+
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([hub, out1, out2, in1, in2, in3]);
+
+        let degrees = compute_degrees(&store);
+        let hub_d = degrees.get(&hub_id).copied().unwrap();
+        assert_eq!(hub_d.in_degree, 3, "3 specs point at the hub");
+        assert_eq!(hub_d.out_degree, 2, "hub has 2 outbound edges");
+        // heft = outbound (3 + 1) + inbound (3 + 2 + 1) = 10
+        assert_eq!(hub_d.heft, 10);
+
+        // A pure leaf target of an outbound edge gets in_degree 1, out 0.
+        let out1_d = degrees.get(&out1_id).copied().unwrap();
+        assert_eq!(out1_d.in_degree, 1);
+        assert_eq!(out1_d.out_degree, 0);
+        assert_eq!(out1_d.heft, 3); // the inbound Blocks edge, weight 3
+    }
+
+    /// STORY-632: the static type-weight table matches the operator-agreed
+    /// values (BlockedBy/Blocks=3, Parent/Child=2, Verifies/References/Custom=1,
+    /// Duplicate=0).
+    #[test]
+    fn edge_weight_table_matches_agreed_values() {
+        assert_eq!(edge_weight(&RelationshipType::BlockedBy), 3);
+        assert_eq!(edge_weight(&RelationshipType::Blocks), 3);
+        assert_eq!(edge_weight(&RelationshipType::Parent), 2);
+        assert_eq!(edge_weight(&RelationshipType::Child), 2);
+        assert_eq!(edge_weight(&RelationshipType::Verifies), 1);
+        assert_eq!(edge_weight(&RelationshipType::VerifiedBy), 1);
+        assert_eq!(edge_weight(&RelationshipType::References), 1);
+        assert_eq!(edge_weight(&RelationshipType::Duplicate), 0);
+        assert_eq!(edge_weight(&RelationshipType::Custom("x".into())), 1);
+    }
+
+    /// STORY-632: the cache round-trips the new in/out degree + heft columns
+    /// across a rebuild, and `degrees_for_id` reads them back.
+    #[test]
+    fn cache_roundtrips_degree_columns() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut a = sample_req("FR-1-001", "alpha");
+        let b = sample_req("FR-1-002", "beta");
+        let (a_id, b_id) = (a.id, b.id);
+        // a --Blocks--> b  (weight 3). a: out 1, b: in 1.
+        a.relationships.push(rel(RelationshipType::Blocks, b_id));
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(a);
+        store.requirements.push(b);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let a_d = cache.degrees_for_id(&a_id).unwrap();
+        assert_eq!(a_d.out_degree, 1);
+        assert_eq!(a_d.in_degree, 0);
+        assert_eq!(a_d.heft, 3);
+
+        let b_d = cache.degrees_for_id(&b_id).unwrap();
+        assert_eq!(b_d.in_degree, 1);
+        assert_eq!(b_d.out_degree, 0);
+        assert_eq!(b_d.heft, 3);
+
+        // Unknown id → all-zero default.
+        assert_eq!(
+            cache.degrees_for_id(&Uuid::nil()).unwrap(),
+            Degrees::default()
+        );
+    }
+
+    /// STORY-632: `SortOrder::HeftDesc` orders the most-connected spec first.
+    #[test]
+    fn list_summaries_sorts_by_heft() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut hub = sample_req("HUB-1", "hub");
+        let leaf = sample_req("LEAF-1", "leaf");
+        let lonely = sample_req("LONE-1", "lonely");
+        hub.relationships
+            .push(rel(RelationshipType::Blocks, leaf.id)); // hub heft 3, leaf heft 3
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(hub);
+        store.requirements.push(leaf);
+        store.requirements.push(lonely); // heft 0
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::HeftDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        // Lonely (heft 0) must be last; the two heft-3 specs lead.
+        assert_eq!(rows.last().unwrap().spec_id.as_deref(), Some("LONE-1"));
+        assert!(rows[0].heft >= rows[2].heft);
     }
 
     #[test]
