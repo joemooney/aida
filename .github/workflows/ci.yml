@@ -165,6 +165,15 @@ jobs:
         # Revisit only with a pinned toolchain. trace:TASK-709 trace:TASK-710
         run: cargo clippy --workspace -- -W clippy::all -D clippy::correctness
 
+      # EPIC-45 / TASK-835: the glyph-literal forward-guard (substrate-as-bouncer).
+      # Fails the PR when a NEW raw status/marker glyph literal is typed inline
+      # outside the registry (aida-cli/src/glyphs.rs) and the explicit allow-list
+      # in the script. Pre-existing long-tail literals are allow-listed (that list
+      # IS the tracked back-migration inventory); --block catches only new ones,
+      # so coverage ratchets up and cannot regress. trace:TASK-835 | ai:claude
+      - name: Glyph-literal lint (block new raw glyphs)
+        run: bash scripts/glyph-lint.sh --block
+
   # Create release artifacts for tags
   release:
     name: Release (${{ matrix.os }})
