@@ -1508,6 +1508,35 @@ mod tests {
         print_all(true, true);
     }
 
+    /// TASK-775: `aida schema --all --json` must be a one-fetch map naming
+    /// EXACTLY the catalog object set — every catalog kind appears in the dump
+    /// and the dump names nothing outside the catalog. Driven off `CATALOG`
+    /// itself (the same source-of-truth the catalog view and `--all` iterate),
+    /// so a newly-added object auto-extends the assertion: drift-safe.
+    #[test]
+    fn full_dump_json_is_keyed_by_every_catalog_object() {
+        use std::collections::BTreeSet;
+
+        let dump = full_dump_json_inner(false);
+        let dumped: BTreeSet<String> = dump
+            .get("objects")
+            .and_then(|v| v.as_array())
+            .expect("full dump has an objects array")
+            .iter()
+            .map(|o| {
+                o.get("object")
+                    .and_then(|v| v.as_str())
+                    .expect("each entry names its object")
+                    .to_string()
+            })
+            .collect();
+        let catalog: BTreeSet<String> = CATALOG.iter().map(|e| e.name.to_string()).collect();
+        assert_eq!(
+            dumped, catalog,
+            "the --all --json map must be keyed by exactly the catalog object set"
+        );
+    }
+
     /// DRIFT-GUARD (STORY-630): the curated per-field doc-map for `Requirement`
     /// must cover EXACTLY the reflected `Requirement` field set — every reflected
     /// field has a complete doc entry (example + provenance + description), and

@@ -7283,7 +7283,9 @@ pub enum Command {
 
         /// Dump every object's full field detail in one pass: the catalog
         /// followed by each kind's field table, in catalog order.
-        // trace:TASK-799
+        // `conflicts_with = "object"` makes `--all <object>` a clear clap error
+        // — `--all` is the whole catalog, a positional is one object.
+        // trace:TASK-799 trace:TASK-775
         #[clap(long, conflicts_with = "object")]
         all: bool,
 
