@@ -19,8 +19,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T19:10:17.205484158Z
-modified_at: 2026-06-15T15:19:14.671935340Z
+modified_at: 2026-06-16T04:56:29.942486275Z
 req_type: Task
+comments:
+- id: 019ecec9-c3f6-73d2-98b5-b77a06bc6acd
+  author: joe
+  content: Commit 3019c3352 references this requirement
+  created_at: 2026-06-16T04:56:29.942486275Z
+  modified_at: 2026-06-16T04:56:29.942486275Z
 history:
 - id: 019ecbdd-8beb-72c0-82bd-04b8e8f35d4a
   author: aida-auto-bump
