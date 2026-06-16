@@ -252,6 +252,15 @@ impl GlyphProfile {
             _ => None,
         }
     }
+
+    /// Canonical profile name for display (e.g. in `aida config show`).
+    /// trace:TASK-793 | ai:claude
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            GlyphProfile::Unicode => "unicode",
+            GlyphProfile::Ascii => "ascii",
+        }
+    }
 }
 
 /// A named, binary-embedded glyph *theme* (phase 4 / STORY-633).
