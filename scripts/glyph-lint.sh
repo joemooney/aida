@@ -49,7 +49,6 @@ EXEMPT_REGISTRY=(
   "$SRC_DIR/status_display.rs"
 )
 ALLOW_LIST=(
-  "$SRC_DIR/main.rs"
   # cli.rs — remaining literals are all in `///` clap doc/help text (compile-time
   # strings rendered in `--help`), which cannot route through the runtime glyph
   # registry. Kept on the allow-list by design. (TASK-840)

@@ -90,6 +90,18 @@ use std::collections::HashSet;
 use std::io::IsTerminal;
 use uuid::Uuid;
 
+// trace:TASK-840 | ai:claude
+/// Render a registry [`crate::glyphs::Glyph`] honoring the active glyph profile
+/// (`AIDA_GLYPHS` env / `[ui] glyphs` config / default unicode). The crate-root
+/// twin of the module-local `glyph()` helpers in `auto_complete.rs`,
+/// `status_cleanup.rs`, etc. Called fully-qualified (`crate::glyph(...)`) from
+/// the migrated literal sites so it resolves uniformly from main-code and
+/// inline test-module scopes alike. Default (unicode) output is byte-for-byte
+/// identical to the raw literals it replaced.
+pub(crate) fn glyph(g: crate::glyphs::Glyph) -> &'static str {
+    crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
+}
+
 use aida_core::{
     check_migration_status,
     check_scaffold_status,
@@ -2906,7 +2918,11 @@ fn handle_findings_command(
                                     "  {:<20} {:<14} {}",
                                     "",
                                     "",
-                                    format!("↳ lean: {lean}").dimmed()
+                                    format!(
+                                        "{} lean: {lean}",
+                                        crate::glyph(crate::glyphs::Glyph::SubArrow)
+                                    )
+                                    .dimmed()
                                 );
                             }
                         }
@@ -2939,7 +2955,11 @@ fn handle_findings_command(
                                     "  {:<20} {:<14} {}",
                                     "",
                                     "",
-                                    format!("↳ hint: {hint}").dimmed()
+                                    format!(
+                                        "{} hint: {hint}",
+                                        crate::glyph(crate::glyphs::Glyph::SubArrow)
+                                    )
+                                    .dimmed()
                                 );
                             }
                         }
@@ -4165,16 +4185,22 @@ fn finalize_answer(
         choice.label.bold()
     );
     for effect in &applied.effects {
-        println!("  {} {effect}", "✓".green());
+        println!(
+            "  {} {effect}",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
     }
     if !applied.is_disposition {
-        println!("  {} bound the decision into ## Acceptance", "✓".green());
+        println!(
+            "  {} bound the decision into ## Acceptance",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
     }
     if promoted_to_approved {
         // trace:BUG-526
         println!(
             "  {} promoted Draft → Approved (advisor authority)",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
     }
 
@@ -4188,7 +4214,7 @@ fn finalize_answer(
             // keeps_parked — rejected / kept-parked: deliberately not queued.
             println!(
                 "  {} not queued (left held by the chosen resolution)",
-                "◐".dimmed()
+                crate::glyph(crate::glyphs::Glyph::InFlight).dimmed()
             );
         }
         burndown::Pickability::Parked(reason) => {
@@ -4196,7 +4222,7 @@ fn finalize_answer(
             // claiming Ready.
             println!(
                 "  {} still parked: {} — not queued",
-                "◐".yellow(),
+                crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                 reason.dimmed()
             );
         }
@@ -4213,7 +4239,7 @@ fn maybe_autoqueue(store_path: &std::path::Path, req: &Requirement) -> Result<()
     if !matches!(req.status, RequirementStatus::Approved) {
         println!(
             "  {} unparked, but status is {} (not Approved) — not auto-queued",
-            "◐".dimmed(),
+            crate::glyph(crate::glyphs::Glyph::InFlight).dimmed(),
             req.status
         );
         return Ok(());
@@ -4221,7 +4247,7 @@ fn maybe_autoqueue(store_path: &std::path::Path, req: &Requirement) -> Result<()
     if !has_advisor_authority() {
         println!(
             "  {} unparked, but this session lacks advisor authority — re-run as the advisor to queue",
-            "◐".dimmed()
+            crate::glyph(crate::glyphs::Glyph::InFlight).dimmed()
         );
         return Ok(());
     }
@@ -4631,7 +4657,9 @@ fn handle_research_command(
 
     println!(
         "{} analysis at {}",
-        "✓ deliverable:".green().bold(),
+        format!("{} deliverable:", crate::glyph(crate::glyphs::Glyph::Check))
+            .green()
+            .bold(),
         analysis_path.display()
     );
     println!("  pointer comment attached to {display_id}");
@@ -4856,7 +4884,10 @@ fn questions_clarify(
         kept
     };
 
-    println!("{} clarify", "▸".cyan().bold());
+    println!(
+        "{} clarify",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     println!(
         "  {} {} spec(s): {}",
         "→".green(),
@@ -7261,7 +7292,11 @@ fn handle_advisor_dashboard(
                     l.scope,
                     l.owner.dimmed(),
                     l.branch.dimmed(),
-                    format!("⚠ spec {state}").yellow()
+                    format!(
+                        "{} spec {state}",
+                        crate::glyph(crate::glyphs::Glyph::Warning)
+                    )
+                    .yellow()
                 ),
                 None => println!("  {} {} ({})", l.scope, l.owner.dimmed(), l.branch.dimmed()),
             }
@@ -7876,7 +7911,10 @@ fn handle_done_command(
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
     if matches!(req.status, RequirementStatus::Completed) {
-        println!("{} {display_id} is already done.", "✓".green().bold());
+        println!(
+            "{} {display_id} is already done.",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+        );
         return Ok(());
     }
     let new_status = RequirementStatus::Completed;
@@ -7900,7 +7938,11 @@ fn handle_done_command(
     );
     backend.update_requirement(&req)?;
     record_role_activity(&display_id, "done");
-    println!("{} {display_id} — {}", "✓".green().bold(), "done".green());
+    println!(
+        "{} {display_id} — {}",
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+        "done".green()
+    );
     Ok(())
 }
 
@@ -9326,7 +9368,7 @@ fn print_memory_drift(mem_dir: &std::path::Path, report: &MemoryDriftReport, ver
     if report.behind() == 0 {
         println!(
             "  {} memory pack is current with this aida binary.",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
         println!();
     } else {
@@ -9765,7 +9807,10 @@ fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
     }
     match git_ops::commit(root, "chore: scaffold AIDA") {
         Ok(true) => {
-            println!("  {} saved your AIDA setup", "✓".green());
+            println!(
+                "  {} saved your AIDA setup",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
             Ok(true)
         }
         // Nothing staged was new (already tracked + unchanged). Not an error.
@@ -9880,7 +9925,7 @@ fn complete_init_scaffolding(
                 } else {
                     eprintln!(
                         "{} Warning: .git/hooks/pre-commit exists and contains custom user edits. Skipping. Use --force to overwrite.",
-                        "⚠".yellow()
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                     );
                     skipped_count += 1;
                     continue;
@@ -9938,7 +9983,10 @@ fn complete_init_scaffolding(
                 .output()
             {
                 Ok(o) if o.status.success() => {
-                    println!("{} Codex CLI MCP server configured", "✓".green());
+                    println!(
+                        "{} Codex CLI MCP server configured",
+                        crate::glyph(crate::glyphs::Glyph::Check).green()
+                    );
                 }
                 _ => {
                     // Silently skip — codex mcp add may fail for various reasons
@@ -9950,7 +9998,15 @@ fn complete_init_scaffolding(
     // Print post-init message. Brief by default; --verbose for the full
     // file inventory + per-agent hint blocks. trace:BUG-19 | ai:claude
     println!();
-    println!("{}", "AIDA initialized ✓".green().bold());
+    println!(
+        "{}",
+        format!(
+            "AIDA initialized {}",
+            crate::glyph(crate::glyphs::Glyph::Check)
+        )
+        .green()
+        .bold()
+    );
 
     if verbose {
         println!();
@@ -10074,7 +10130,9 @@ fn complete_init_scaffolding(
     // "recall why" to the payoff. trace:TASK-732 | ai:claude
     println!(
         "  {} The loop: {} → build → {} → done.",
-        "▶".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive)
+            .green()
+            .bold(),
         "capture".bold(),
         "link".bold()
     );
@@ -10673,7 +10731,7 @@ fn aida_store_override() -> Option<std::path::PathBuf> {
                      falling back to normal store resolution.\n  {} set AIDA_QUIET=1 \
                      to silence this, or point AIDA_STORE at a directory holding an \
                      `objects/` subdir (see `aida sandbox create`).",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     "→".cyan(),
                 );
             }
@@ -10764,7 +10822,7 @@ fn warn_multi_repo_scan_limited(from: &std::path::Path, scan_label: &str) {
          multiple repos{other_repos}. Cross-repo completions/linkage may be missed \
          (full multi-repo scanning is not yet implemented).\n  {} run this from each \
          repo, or set AIDA_QUIET=1 to silence.",
-        "⚠".yellow().bold(),
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
         "→".cyan(),
     );
 }
@@ -12232,8 +12290,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 return Ok(());
             }
 
-            // TASK-670: compute the leading work-routing overlay (↑ queued /
-            // ▶ in-flight / ⊘ blocked) once for the visible row set, then map
+            // TASK-670: compute the leading work-routing overlay (queued /
+            // in-flight / blocked markers) once for the visible row set, then map
             // each row to a glyph. Two cheap reads are always on (a queues
             // dir scan + a live-lease probe); the blocked axis needs a graph
             // walk so it's gated behind --blocked. `--no-glyph` short-circuits
@@ -13099,7 +13157,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                     if let Some(last) = last_short {
                                         eprintln!(
                                         "{} {} agreed-id block exhausted (last short id: {}-{}).",
-                                        "⚠".yellow().bold(),
+                                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                                         prefix_upper,
                                         prefix_upper,
                                         last
@@ -13363,7 +13421,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     ) {
                         eprintln!(
                             "  {} could not record open effort for {spec_id}: {e}",
-                            "⚠".yellow()
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                         );
                     }
                     // BUG-372: make newly allocated SPEC-IDs visible to the
@@ -13441,7 +13499,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     if let Some(name) = batch_norm {
                         println!(
                             "{} Queued {}{} (advisor-cleared at filing), tagged `batch:{}`.",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             did.bold(),
                             route_suffix,
                             name.bold()
@@ -13449,7 +13507,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     } else {
                         println!(
                             "{} Queued {}{} (advisor-cleared at filing).",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             did.bold(),
                             route_suffix
                         );
@@ -13761,13 +13819,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 let phrase = relationship_phrase(&rel.rel_type);
                                 match backend.get_requirement(&rel.target_id)? {
                                     Some(t) => println!(
-                                        "  ↳ {} {} ({})",
+                                        "  {} {} {} ({})",
+                                        crate::glyph(crate::glyphs::Glyph::SubArrow),
                                         phrase.cyan(),
                                         t.spec_id.as_deref().unwrap_or("?").yellow(),
                                         t.title
                                     ),
                                     None => println!(
-                                        "  ↳ {} {} (missing)",
+                                        "  {} {} {} (missing)",
+                                        crate::glyph(crate::glyphs::Glyph::SubArrow),
                                         phrase.cyan(),
                                         rel.target_id.to_string().dimmed()
                                     ),
@@ -13805,8 +13865,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         );
                     }
                     // STORY-446: Blockers section — one line per BlockedBy edge
-                    // with the blocker's status + a pickability glyph (✓ when
-                    // Completed/satisfied, ◐ when it still blocks pickup), so the
+                    // with the blocker's status + a pickability glyph (check when
+                    // Completed/satisfied, in-flight when it still blocks pickup), so the
                     // pickability gate's verdict is visible at a glance.
                     // trace:STORY-446 | ai:claude
                     let blocker_targets: Vec<uuid::Uuid> = req
@@ -13835,16 +13895,20 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 unsatisfied += 1;
                             }
                             let glyph = if satisfied {
-                                "✓".green().to_string()
+                                crate::glyph(crate::glyphs::Glyph::Check)
+                                    .green()
+                                    .to_string()
                             } else {
-                                "◐".yellow().to_string()
+                                crate::glyph(crate::glyphs::Glyph::InFlight)
+                                    .yellow()
+                                    .to_string()
                             };
                             println!("  {} {} ({})", glyph, sid, status);
                         }
                         if unsatisfied > 0 {
                             println!(
                                 "  {} blocked — {} blocker(s) not yet Completed; `aida queue work` will refuse pickup",
-                                "⚠".yellow(),
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                                 unsatisfied
                             );
                         }
@@ -14233,7 +14297,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                 }
                 if let Some(msg) = tags_replace_warning(&old_tags, &req.tags) {
-                    eprintln!("  {} {}", "⚠".yellow().bold(), msg);
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        msg
+                    );
                 }
                 changed = true;
             }
@@ -14263,7 +14331,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         eprintln!(
                             "  {} unrecognized lifecycle tag `{}` — it will NOT short-circuit \
                              any phase. Valid: {}",
-                            "⚠".yellow().bold(),
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                             tag,
                             auto_complete::RECOGNIZED_LIFECYCLE_TAGS.join(", ")
                         );
@@ -15874,7 +15942,7 @@ fn emit_brief_deep_link(
         eprintln!(
             "{} brief deep-link prompt exceeded Claude Code's 5000-char URL ceiling — \
              link may fail to open",
-            "⚠".yellow()
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
     println!("{}", rendered.url);
@@ -16470,7 +16538,8 @@ fn pending_brief_banner_lines(
     out.push(String::new());
     out.push(
         format!(
-            "⚠ NEW BRIEF(S) PENDING for agent `{}` — read before exiting:",
+            "{} NEW BRIEF(S) PENDING for agent `{}` — read before exiting:",
+            crate::glyph(crate::glyphs::Glyph::Warning),
             agent_type
         )
         .red()
@@ -19964,7 +20033,7 @@ fn handle_init_distributed_worktree(
                 if verbose {
                     println!(
                         "  {} acquired node id {} (hostname={}, email={}){}",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         new_id,
                         hn,
                         email.as_deref().unwrap_or("-"),
@@ -19985,7 +20054,7 @@ fn handle_init_distributed_worktree(
                     if !blocks.is_empty() && verbose {
                         println!(
                             "  {} auto-allocated {} initial block{}",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             blocks.len(),
                             if blocks.len() == 1 { "" } else { "s" }
                         );
@@ -20061,7 +20130,11 @@ fn handle_init_distributed_worktree(
     // inference instead of having to read .aida/config.toml. EPIC-35 init UX.
     if verbose {
         let (_, msg) = forge::init_forge_detection_message(&cwd);
-        println!("  {} {}", "✓".green(), msg);
+        println!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            msg
+        );
     }
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
@@ -21312,7 +21385,11 @@ fn print_processing_records(records: &[aida_core::ProcessingRecord]) {
             linkage.push(format!("verdict {v}"));
         }
         if !linkage.is_empty() {
-            println!("  {} {}", "↳".dimmed(), linkage.join(" · ").dimmed());
+            println!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                linkage.join(" · ").dimmed()
+            );
         }
         println!("  {}", rec.summary);
         for d in &rec.decisions {
@@ -21451,7 +21528,11 @@ fn handle_record_command(
                     }
                 }
             })?;
-            println!("{} pruned {} record(s).", "✓".green(), total);
+            println!(
+                "{} pruned {} record(s).",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                total
+            );
             Ok(())
         }
     }
@@ -21657,13 +21738,17 @@ fn handle_graph_command(
     if is_tree {
         // Indented hierarchy so parents, children, and siblings are distinct
         // (BUG-534). tree_layout includes the queried node, rooted at the epic;
-        // a `▸` marks "you are here" when the query is not the structural root.
+        // an arrow marks "you are here" when the query is not the structural root.
         for (nid, depth) in aida_core::graph_walk::tree_layout(id, &result.nodes, &result.edges) {
             let queried = nid == id;
             let lead = if queried {
                 match depth {
-                    0 => "▸ ".to_string(),
-                    d => format!("{}▸ ", "  ".repeat(d - 1)),
+                    0 => format!("{} ", crate::glyph(crate::glyphs::Glyph::Arrow)).to_string(),
+                    d => format!(
+                        "{}{} ",
+                        "  ".repeat(d - 1),
+                        crate::glyph(crate::glyphs::Glyph::Arrow)
+                    ),
                 }
             } else {
                 "  ".repeat(depth)
@@ -21758,7 +21843,7 @@ fn apply_calibration_tags(
                 if let Err(e) = backend.update_requirement(&req) {
                     eprintln!(
                         "  {} could not stamp calibration tags on {spec}: {e}",
-                        "⚠".yellow()
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                     );
                 }
             }
@@ -21789,7 +21874,7 @@ fn apply_calibration_tags(
         if let Err(e) = storage.save(&store) {
             eprintln!(
                 "  {} could not save calibration tags on {spec}: {e}",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
         }
     }
@@ -21818,7 +21903,7 @@ fn apply_effort_tag(
                 if let Err(e) = backend.update_requirement(&req) {
                     eprintln!(
                         "  {} could not stamp effort tag on {spec}: {e}",
-                        "⚠".yellow()
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                     );
                 }
             }
@@ -21840,7 +21925,7 @@ fn apply_effort_tag(
         if let Err(e) = storage.save(&store) {
             eprintln!(
                 "  {} could not save effort tag on {spec}: {e}",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
         }
     }
@@ -22240,7 +22325,7 @@ fn edit_requirement_cli(
     storage.save(&store)?;
     println!(
         "{} Updated {} ({} field(s) changed)",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         spec_id,
         changes.len()
     );
@@ -22594,7 +22679,7 @@ fn handle_feature_command(cmd: &FeatureCommand, storage: &Storage) -> Result<()>
                 let feature_name = crate::prompts::prompt_new_feature(&mut store)?;
                 println!(
                     "{} Feature '{}' created successfully.",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     feature_name
                 );
             } else {
@@ -22610,7 +22695,7 @@ fn handle_feature_command(cmd: &FeatureCommand, storage: &Storage) -> Result<()>
                 let feature = store.add_feature(&name, &prefix)?;
                 println!(
                     "{} Feature '{}' created with prefix '{}'.",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     feature.name,
                     feature.prefix
                 );
@@ -22742,7 +22827,10 @@ fn handle_feature_command(cmd: &FeatureCommand, storage: &Storage) -> Result<()>
                 }
 
                 storage.save(&store)?;
-                println!("{} Feature updated successfully.", "✓".green());
+                println!(
+                    "{} Feature updated successfully.",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
             } else {
                 // Fall back to legacy feature handling
                 let features = store.get_feature_names();
@@ -22769,7 +22857,7 @@ fn handle_feature_command(cmd: &FeatureCommand, storage: &Storage) -> Result<()>
                         storage.save(&store)?;
                         println!(
                             "{} Feature '{}' renamed to '{}'.",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             feature,
                             new_feature_name
                         );
@@ -22872,7 +22960,7 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
             storage.save(&store)?;
             println!(
                 "{} ID format set to {:?}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 store.id_config.format
             );
         }
@@ -22888,7 +22976,7 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
             storage.save(&store)?;
             println!(
                 "{} Numbering strategy set to {:?}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 store.id_config.numbering
             );
         }
@@ -22898,7 +22986,11 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
             }
             store.id_config.digits = *digits;
             storage.save(&store)?;
-            println!("{} ID digits set to {}", "✓".green(), digits);
+            println!(
+                "{} ID digits set to {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                digits
+            );
         }
         ConfigCommand::Migrate { yes } => {
             if !*yes {
@@ -22921,7 +23013,7 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
             storage.save(&store)?;
             println!(
                 "{} Successfully migrated {} requirements to new ID format.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 store.requirements.len()
             );
         }
@@ -23398,7 +23490,7 @@ fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
             let prior = workflow_hints::persist_setting(&project_root, value)?;
             println!(
                 "{} workflow_hints {} {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 if value { "enabled" } else { "disabled" },
                 match prior {
                     Some(p) if p == value => "(no change)".dimmed().to_string(),
@@ -23512,7 +23604,7 @@ fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
                 clear_theme_reference(&path)?;
                 println!(
                     "{} cleared theme → unicode default ({})",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     scope_label(scope, &path)
                 );
                 return Ok(());
@@ -23537,7 +23629,7 @@ fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
                 glyph_config::expand_theme(&path, base, &bundle)?;
                 println!(
                     "{} expanded theme `{}` into [glyphs] ({})",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     theme.name,
                     scope_label(scope, &path)
                 );
@@ -23545,7 +23637,7 @@ fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
                 glyph_config::set_theme(&path, theme.name)?;
                 println!(
                     "{} theme = {} ({})",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     theme.name.cyan(),
                     scope_label(scope, &path)
                 );
@@ -23565,7 +23657,7 @@ fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
             glyph_config::set_override(&path, glyph.name(), value)?;
             println!(
                 "{} {} = {} ({})",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 glyph.name().cyan(),
                 value,
                 scope_label(scope, &path)
@@ -23586,7 +23678,7 @@ fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
             if removed {
                 println!(
                     "{} unset {} ({})",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     glyph.name().cyan(),
                     scope_label(scope, &path)
                 );
@@ -23607,7 +23699,7 @@ fn handle_config_glyph(cmd: &GlyphCommand) -> Result<()> {
             if removed {
                 println!(
                     "{} cleared all glyph overrides ({})",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     scope_label(scope, &path)
                 );
             } else {
@@ -23750,7 +23842,7 @@ fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
             storage.save(&store)?;
             println!(
                 "{} Requirement type '{}' added with prefix '{}'.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 name,
                 prefix.to_uppercase()
             );
@@ -23782,7 +23874,7 @@ fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
                 storage.save(&store)?;
                 println!(
                     "{} Requirement type '{}' removed.",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     removed.name
                 );
             } else {
@@ -23829,7 +23921,7 @@ fn handle_retire_legacy_ids(
     if renames.is_empty() {
         println!(
             "{} No legacy ids to retire — every requirement's spec_id already matches its agreed_id.",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
         return Ok(());
     }
@@ -23877,7 +23969,7 @@ fn handle_retire_legacy_ids(
     println!();
     println!(
         "{} Retired {} legacy spec_id{}. Canonical id now lives in spec_id alone.",
-        "✓".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
         renames.len(),
         if renames.len() == 1 { "" } else { "s" }
     );
@@ -23935,7 +24027,7 @@ fn handle_db_check_collisions(
     if collisions.is_empty() {
         println!(
             "{} No agreed-id collisions found ({} requirements scanned).",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             store.requirements.len()
         );
         return Ok(());
@@ -23943,7 +24035,7 @@ fn handle_db_check_collisions(
 
     println!(
         "{} {} collision{} found across {} requirements:",
-        "✗".red().bold(),
+        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
         collisions.len(),
         if collisions.len() == 1 { "" } else { "s" },
         store.requirements.len()
@@ -24272,7 +24364,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
             if blocks_without_node.is_empty() && nodes_without_block.is_empty() {
                 println!(
                     "{} consistent — every block has a registered node, every node has a block.",
-                    "✓".green().bold()
+                    crate::glyph(crate::glyphs::Glyph::Check).green().bold()
                 );
                 return Ok(());
             }
@@ -24281,7 +24373,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 had_error = true;
                 println!(
                     "{} {} block-owning node{} not in registry/nodes.toml:",
-                    "✗".red().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     blocks_without_node.len(),
                     if blocks_without_node.len() == 1 {
                         ""
@@ -24320,7 +24412,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                     had_error = true;
                     println!(
                         "{} {} registered node{} with no claimed block (blocks-only policy):",
-                        "✗".red().bold(),
+                        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                         nodes_without_block.len(),
                         if nodes_without_block.len() == 1 {
                             ""
@@ -24722,7 +24814,7 @@ fn handle_doc_command(
             if gaps.is_empty() {
                 println!(
                     "{} Doc coverage OK — every spec completed {} has a doc entry.",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     window_label
                 );
                 return Ok(());
@@ -24730,7 +24822,7 @@ fn handle_doc_command(
 
             println!(
                 "{} {} spec(s) completed {} have no doc entry:",
-                "⚠".yellow(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                 gaps.len(),
                 window_label
             );
@@ -24924,7 +25016,7 @@ fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Resul
                 if *dry_run {
                     "→ dry-run:".cyan()
                 } else {
-                    "✓".green()
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
                 },
                 total_planned,
                 if total_planned == 1 { "" } else { "s" },
@@ -24936,7 +25028,11 @@ fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Resul
                 println!("    + {}", p.display().to_string().green());
             }
             for p in &report.drifted {
-                println!("    ↑ {}", p.display().to_string().yellow());
+                println!(
+                    "    {} {}",
+                    crate::glyph(crate::glyphs::Glyph::FlowQueued),
+                    p.display().to_string().yellow()
+                );
             }
             for p in &report.deleted {
                 println!(
@@ -24977,7 +25073,10 @@ fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Resul
                 eprintln!("\n    Run `aida docs build` to regenerate.");
                 std::process::exit(1);
             }
-            println!("{} docs tree matches graph projection.", "✓".green());
+            println!(
+                "{} docs tree matches graph projection.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
         }
         // TASK-589: surface the embedded discipline glossary from the CLI.
         // trace:TASK-589 | ai:claude
@@ -25086,7 +25185,9 @@ fn handle_rules_command(
             let prefix = if *dry_run {
                 "→ dry-run:".cyan().to_string()
             } else {
-                "✓".green().to_string()
+                crate::glyph(crate::glyphs::Glyph::Check)
+                    .green()
+                    .to_string()
             };
             println!(
                 "{} {} written, {} unchanged, {} removed",
@@ -26522,7 +26623,7 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             }
             println!(
                 "{} sent {} (thread {}){}",
-                "✉".green(),
+                crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
                 id.cyan(),
                 thread_id.dimmed(),
                 flag
@@ -26544,7 +26645,10 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 let mut msgs: Vec<&Message> = merged.iter().filter(|m| !m.deleted).collect();
                 msgs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
                 if msgs.is_empty() {
-                    println!("{} no messages", "✉".dimmed());
+                    println!(
+                        "{} no messages",
+                        crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
+                    );
                     return Ok(());
                 }
                 println!(
@@ -26596,7 +26700,12 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 } else {
                     "inbox empty for"
                 };
-                println!("{} {} {}", "✉".dimmed(), label, who_label.cyan());
+                println!(
+                    "{} {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
+                    label,
+                    who_label.cyan()
+                );
                 return Ok(());
             }
             let header = if *unread { "Unread for" } else { "Inbox for" };
@@ -26671,7 +26780,10 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 known_agents.iter().map(String::as_str),
             );
             if summaries.is_empty() {
-                println!("{} no agents have mail", "✉".dimmed());
+                println!(
+                    "{} no agents have mail",
+                    crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
+                );
                 return Ok(());
             }
             println!("{}", "Mailbox overview".bold());
@@ -26685,7 +26797,16 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                     "all read".dimmed().to_string()
                 };
                 let urgent = if s.urgent_unread > 0 {
-                    format!(" {}", format!("⚠ {} urgent", s.urgent_unread).red().bold())
+                    format!(
+                        " {}",
+                        format!(
+                            "{} {} urgent",
+                            crate::glyph(crate::glyphs::Glyph::Warning),
+                            s.urgent_unread
+                        )
+                        .red()
+                        .bold()
+                    )
                 } else {
                     String::new()
                 };
@@ -26719,7 +26840,11 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 ..msg.clone()
             };
             mailbox_store::write_message_marker(project_root, &marker)?;
-            println!("{} retracted {}", "✉".green(), msg.id.cyan());
+            println!(
+                "{} retracted {}",
+                crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
+                msg.id.cyan()
+            );
             Ok(())
         }
         MailboxCommand::Delete { message_id } => {
@@ -26739,7 +26864,11 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
                 ..msg.clone()
             };
             mailbox_store::write_message_marker(project_root, &marker)?;
-            println!("{} deleted {}", "✉".green(), msg.id.cyan());
+            println!(
+                "{} deleted {}",
+                crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
+                msg.id.cyan()
+            );
             Ok(())
         }
         MailboxCommand::Thread { thread_id } => {
@@ -26750,7 +26879,7 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             if msgs.is_empty() {
                 println!(
                     "{} no messages in thread {}",
-                    "✉".dimmed(),
+                    crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
                     thread_id.cyan()
                 );
                 return Ok(());
@@ -26778,13 +26907,13 @@ fn handle_mailbox_command(cmd: &MailboxCommand, store_path: &std::path::Path) ->
             if n == 0 {
                 println!(
                     "{} mailbox already in sync (nothing new to digest)",
-                    "✉".dimmed()
+                    crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
                 );
                 return Ok(());
             }
             println!(
                 "{} digested {} message(s) to the canonical store",
-                "✉".green(),
+                crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
                 n.to_string().cyan(),
             );
             Ok(())
@@ -26892,7 +27021,10 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
         })
         .unwrap_or_else(|| "?".to_string());
     let flag = if m.urgent {
-        format!("{} ", "⚠".red().bold())
+        format!(
+            "{} ",
+            crate::glyph(crate::glyphs::Glyph::Warning).red().bold()
+        )
     } else {
         String::new()
     };
@@ -26968,7 +27100,11 @@ fn render_mailbox_notice(
         summary.total
     );
     for item in &summary.shown {
-        let mark = if item.urgent { "⚠ " } else { "" };
+        let mark = if item.urgent {
+            format!("{} ", crate::glyph(crate::glyphs::Glyph::Warning))
+        } else {
+            String::new()
+        };
         // Surface an actionable intent so the agent can tell an FYI from a
         // request/handoff at the notice level — fyi is the unmarked default,
         // matching `aida mailbox inbox`. trace:TASK-790 | ai:claude
@@ -27529,8 +27665,8 @@ fn handle_role_enter(project_root: &std::path::Path, name: Option<&str>, cd: boo
 /// `RoleState` so the label layout (`format_role_picker_option`) is pure and
 /// testable without a real TTY read.
 struct RolePickerRow {
-    /// `▸` = offered default, `*` = currently-active shell role, ` ` otherwise.
-    marker: char,
+    /// Arrow = offered default, `*` = currently-active shell role, ` ` otherwise.
+    marker: String,
     name: String,
     global: bool,
     /// Pre-humanized recency, e.g. "3h ago".
@@ -27616,7 +27752,7 @@ fn pick_role_interactively(
 /// role list with arrow-key navigation via `inquire::Select` — up/down move the
 /// highlight, Enter selects, Esc cancels. inquire writes its prompt to stderr
 /// (not stdout), so callers whose stdout is a captured pipe (`eval "$(...)"`)
-/// stay uncorrupted. `highlight`, when set, marks that role `▸` and is
+/// stay uncorrupted. `highlight`, when set, marks that role with an arrow and is
 /// pre-selected (cursor parked on it) when the picker opens. Returns
 /// `Ok(Some(name))` on selection, `Ok(None)` on cancel.
 // trace:TASK-817 | ai:claude
@@ -27645,13 +27781,13 @@ fn pick_role_with_header(
         .iter()
         .enumerate()
         .map(|(i, role)| {
-            // `*` = currently-active shell role; `▸` = the offered default.
+            // `*` = currently-active shell role; the Arrow glyph = the offered default.
             let marker = if Some(i) == highlight_idx {
-                '▸'
+                crate::glyph(crate::glyphs::Glyph::Arrow).to_string()
             } else if active.as_deref() == Some(&role.name) {
-                '*'
+                "*".to_string()
             } else {
-                ' '
+                " ".to_string()
             };
             RolePickerRow {
                 marker,
@@ -27668,8 +27804,9 @@ fn pick_role_with_header(
         .map(|r| format_role_picker_option(r, picker_terminal_width()))
         .collect();
 
-    let mut select = inquire::Select::new(header, labels)
-        .with_help_message("↑↓ to move, type to filter, Enter to select, Esc to cancel");
+    let mut select = inquire::Select::new(header, labels).with_help_message(
+        "Use arrow keys to move, type to filter, Enter to select, Esc to cancel",
+    );
     // TASK-817: park the cursor on the offered default so Enter accepts it.
     if let Some(idx) = highlight_idx {
         select = select.with_starting_cursor(idx);
@@ -27872,7 +28009,8 @@ fn emit_role_enter_eval(
         .map(|p| format!(" — {}", p))
         .unwrap_or_default();
     println!(
-        "echo '✓ {} role: {}{}{}'",
+        "echo '{} {} role: {}{}{}'",
+        crate::glyph(crate::glyphs::Glyph::Check),
         verb,
         sh_single_quote(&state.name),
         scope,
@@ -28068,7 +28206,10 @@ fn handle_role_end() -> Result<()> {
     println!("fi");
     println!("unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT");
     println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
-    println!("    echo \"✓ Deactivated role: $__AIDA_ROLE_END_PREV\"");
+    println!(
+        "    echo \"{} Deactivated role: $__AIDA_ROLE_END_PREV\"",
+        crate::glyph(crate::glyphs::Glyph::Check)
+    );
     println!("else");
     println!("    echo 'No role active.'");
     println!("fi");
@@ -29172,7 +29313,7 @@ fn store_status() -> Result<()> {
         (Some(p), Some(c)) if p == c => {
             println!(
                 "{} aligned — code commit was paired with the current store HEAD.",
-                "✓".green()
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             );
         }
         (Some(p), Some(c)) => {
@@ -29423,7 +29564,7 @@ fn store_install_hook(force: bool) -> Result<()> {
 
     println!(
         "{} installed prepare-commit-msg hook at {}",
-        "✓".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
         target.display().to_string().cyan()
     );
     println!();
@@ -30802,14 +30943,21 @@ fn resolve_completed_since_cutoff(
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
     println!("{}", "─── AIDA doctor ───".bold());
     if report.findings.is_empty() && report.hidden_completed_without_commit == 0 {
-        println!("  {} no multi-agent state drift detected", "✓".green());
+        println!(
+            "  {} no multi-agent state drift detected",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
     } else {
         let mut current = "";
         for finding in &report.findings {
             if current != finding.category {
                 current = &finding.category;
                 println!();
-                println!("{} {}", "•".cyan(), current.bold());
+                println!(
+                    "{} {}",
+                    crate::glyph(crate::glyphs::Glyph::Bullet).cyan(),
+                    current.bold()
+                );
             }
             let safety = if finding.safe_heal { "safe" } else { "manual" };
             println!("  - {} [{}]", finding.summary, safety.dimmed());
@@ -30818,7 +30966,11 @@ fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
         if report.hidden_completed_without_commit > 0 {
             if current != "completed-without-commit" {
                 println!();
-                println!("{} {}", "•".cyan(), "completed-without-commit".bold());
+                println!(
+                    "{} {}",
+                    crate::glyph(crate::glyphs::Glyph::Bullet).cyan(),
+                    "completed-without-commit".bold()
+                );
             }
             println!(
                 "  ({} older completed-without-commit finding{} hidden — pass --all to list)",
@@ -33012,7 +33164,7 @@ fn doctor_convention_check(quiet: bool) -> Result<()> {
     if missing.is_empty() {
         println!(
             "{} all {} STORY/BUG description(s) carry an acceptance section.",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             total_in_scope
         );
         return Ok(());
@@ -33022,7 +33174,7 @@ fn doctor_convention_check(quiet: bool) -> Result<()> {
         for (id, title) in &missing {
             println!(
                 "{} {}  no `## Acceptance` / `## Verify` section  {}",
-                "⚠".yellow(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                 id.bold(),
                 title.dimmed()
             );
@@ -33096,14 +33248,14 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     if dangling.is_empty() {
         println!(
             "{} every relationship target resolves to an existing requirement.",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
         return Ok(());
     }
 
     println!(
         "{} {} dangling relationship reference(s):",
-        "✗".red().bold(),
+        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
         dangling.len()
     );
     println!();
@@ -33164,7 +33316,11 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
             dangling.len()
         ),
     );
-    println!("{} repaired {} requirement(s).", "✓".green().bold(), fixed);
+    println!(
+        "{} repaired {} requirement(s).",
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+        fixed
+    );
     println!("  Push with: {}", "aida push".cyan());
     Ok(())
 }
@@ -33227,7 +33383,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
     if orphan_specs.is_empty() {
         println!(
             "{} every `trace:<SPEC-ID>` in source resolves to a requirement ({} unique spec_ids referenced from {} location(s)).",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             by_spec.len(),
             by_spec.values().map(|v| v.len()).sum::<usize>()
         );
@@ -33236,7 +33392,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
 
     println!(
         "{} {} trace comment(s) reference unknown spec_ids:",
-        "✗".red().bold(),
+        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
         orphan_specs.len()
     );
     println!();
@@ -33303,7 +33459,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
     let stats = strip_dangling_traces(&project_root, &dangling_set, false)?;
     println!(
         "{} stripped {} line(s) (deleted {} whole, modified {} mixed) across {} file(s).",
-        "✓".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
         stats.lines_deleted + stats.lines_modified,
         stats.lines_deleted,
         stats.lines_modified,
@@ -33622,7 +33778,7 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
     if stale.is_empty() {
         println!(
             "{} no stale blocks — every active block has a registered node.",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
         return Ok(());
     }
@@ -33676,7 +33832,11 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
         ),
     );
 
-    println!("{} tombstoned {} block(s).", "✓".green().bold(), count);
+    println!(
+        "{} tombstoned {} block(s).",
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+        count
+    );
     println!("  Push with: {}", "aida push".cyan());
     Ok(())
 }
@@ -33743,14 +33903,14 @@ fn doctor_scrub_collisions() -> Result<()> {
     if collisions.is_empty() {
         println!(
             "{} no spec_id collisions — every spec_id maps to exactly one requirement.",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
         return Ok(());
     }
 
     println!(
         "{} {} spec_id collision(s) found:",
-        "✗".red().bold(),
+        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
         collisions.len()
     );
     println!();
@@ -33815,13 +33975,13 @@ fn doctor_fsck() -> Result<()> {
         if orphan_blocks.is_empty() {
             println!(
                 "  {} every active block has a registered node owner.",
-                "✓".green()
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             );
         } else {
             had_problem = true;
             println!(
                 "  {} {} block-owning node(s) not in nodes.toml: {}",
-                "✗".red(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red(),
                 orphan_blocks.len(),
                 orphan_blocks.join(", ")
             );
@@ -33863,12 +34023,15 @@ fn doctor_fsck() -> Result<()> {
             .map(|(spec, _)| spec)
             .collect();
         if collisions.is_empty() {
-            println!("  {} every spec_id maps to one requirement.", "✓".green());
+            println!(
+                "  {} every spec_id maps to one requirement.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
         } else {
             had_problem = true;
             println!(
                 "  {} {} spec_id(s) claimed by multiple requirements: {}",
-                "✗".red(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red(),
                 collisions.len(),
                 collisions
                     .iter()
@@ -33951,12 +34114,15 @@ fn doctor_fsck() -> Result<()> {
             }
         }
         if dangling == 0 {
-            println!("  {} every relationship target resolves.", "✓".green());
+            println!(
+                "  {} every relationship target resolves.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
         } else {
             had_problem = true;
             println!(
                 "  {} {} dangling relationship reference(s).",
-                "✗".red(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red(),
                 dangling
             );
             println!(
@@ -34012,7 +34178,7 @@ fn doctor_fsck() -> Result<()> {
         if dangling == 0 {
             println!(
                 "  {} {} unique spec_ids referenced from {} location(s); all resolve.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 by_spec.len(),
                 total_refs
             );
@@ -34051,14 +34217,14 @@ fn doctor_fsck() -> Result<()> {
         (aida_core::IdCounterScope::Global, true) => {
             println!(
                 "  {} config=global, blocks have a `*` block. Consistent.",
-                "✓".green()
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             );
         }
         (aida_core::IdCounterScope::Global, false) => {
             had_problem = true;
             println!(
                 "  {} config says global but no `*` block exists. New `aida add` would fall back to per-type.",
-                "✗".red()
+                crate::glyph(crate::glyphs::Glyph::Cross).red()
             );
             println!(
                 "    fix: {}",
@@ -34074,7 +34240,7 @@ fn doctor_fsck() -> Result<()> {
         (aida_core::IdCounterScope::PerType, false) => {
             println!(
                 "  {} config=per-type, no `*` block. Consistent.",
-                "✓".green()
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             );
         }
     }
@@ -34092,13 +34258,13 @@ fn doctor_fsck() -> Result<()> {
     if cruft.is_empty() {
         println!(
             "  {} no tracked legacy-store artifacts (or not a git-canonical project).",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
     } else {
         had_problem = true;
         println!(
             "  {} {} tracked legacy-store artifact(s) on a git-canonical project: {}",
-            "✗".red(),
+            crate::glyph(crate::glyphs::Glyph::Cross).red(),
             cruft.len(),
             cruft.join(", ")
         );
@@ -34121,13 +34287,13 @@ fn doctor_fsck() -> Result<()> {
     if runtime_cruft.is_empty() {
         println!(
             "  {} no per-clone runtime files tracked on the orphan aida-store branch (or not a git-canonical project).",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
     } else {
         had_problem = true;
         println!(
             "  {} {} per-clone runtime file(s) tracked on the orphan aida-store branch: {}",
-            "✗".red(),
+            crate::glyph(crate::glyphs::Glyph::Cross).red(),
             runtime_cruft.len(),
             runtime_cruft.join(", ")
         );
@@ -34142,7 +34308,12 @@ fn doctor_fsck() -> Result<()> {
         println!("{}", "fsck found problems — see above.".red().bold());
         std::process::exit(1);
     } else {
-        println!("{}", "✓ fsck clean.".green().bold());
+        println!(
+            "{}",
+            format!("{} fsck clean.", crate::glyph(crate::glyphs::Glyph::Check))
+                .green()
+                .bold()
+        );
     }
     Ok(())
 }
@@ -34181,7 +34352,7 @@ fn doctor_migrate_counter_scope(
     if current_scope == aida_core::IdCounterScope::Global {
         println!(
             "{} already on global counter_scope — nothing to migrate.",
-            "✓".green()
+            crate::glyph(crate::glyphs::Glyph::Check).green()
         );
         return Ok(());
     }
@@ -34304,7 +34475,10 @@ fn doctor_migrate_counter_scope(
     );
 
     println!();
-    println!("{} migration complete.", "✓".green().bold());
+    println!(
+        "{} migration complete.",
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+    );
     println!(
         "  new global block: {}",
         format!("*-{}..{}", new_start, new_end).cyan()
@@ -34779,8 +34953,9 @@ fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>> {
 
     let choices = agent_type_picker_choices();
     let labels: Vec<&str> = choices.iter().map(|(label, _)| *label).collect();
-    let select = inquire::Select::new("Select an agent type to launch:", labels)
-        .with_help_message("↑↓ to move, type to filter, Enter to select, Esc to cancel");
+    let select = inquire::Select::new("Select an agent type to launch:", labels).with_help_message(
+        "Use arrow keys to move, type to filter, Enter to select, Esc to cancel",
+    );
 
     match select.raw_prompt() {
         Ok(choice) => {
@@ -34905,7 +35080,11 @@ fn agent_resume(agent: &str) -> Result<()> {
         .name
         .clone()
         .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
-    println!("{} {} resumed (available)", "▶".green(), identity.cyan());
+    println!(
+        "{} {} resumed (available)",
+        crate::glyph(crate::glyphs::Glyph::FlowActive).green(),
+        identity.cyan()
+    );
     Ok(())
 }
 
@@ -35100,7 +35279,10 @@ fn agent_new_claude(
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "claude")? {
         Some(r) => Some(r),
         None => {
-            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            eprintln!(
+                "{} launch cancelled — no role selected.",
+                crate::glyph(crate::glyphs::Glyph::Cross).yellow()
+            );
             return Ok(());
         }
     };
@@ -35191,7 +35373,10 @@ fn agent_new_codex(
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "codex")? {
         Some(r) => Some(r),
         None => {
-            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            eprintln!(
+                "{} launch cancelled — no role selected.",
+                crate::glyph(crate::glyphs::Glyph::Cross).yellow()
+            );
             return Ok(());
         }
     };
@@ -35237,7 +35422,10 @@ fn agent_new_antigravity(
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "antigravity")? {
         Some(r) => Some(r),
         None => {
-            eprintln!("{} launch cancelled — no role selected.", "✗".yellow());
+            eprintln!(
+                "{} launch cancelled — no role selected.",
+                crate::glyph(crate::glyphs::Glyph::Cross).yellow()
+            );
             return Ok(());
         }
     };
@@ -35325,7 +35513,9 @@ fn agent_new_with_config(
 
     eprintln!(
         "{} launching {} (stable name: {}) in {}",
-        "▶".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive)
+            .green()
+            .bold(),
         config.agent_type,
         plan.name.cyan(),
         plan.launch_cwd.display().to_string().cyan()
@@ -35437,7 +35627,9 @@ fn agent_new_bg_dispatch(
 
     eprintln!(
         "{} dispatching {} (stable name: {}) to Claude Code's background supervisor in {}",
-        "▶".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive)
+            .green()
+            .bold(),
         config.agent_type,
         plan.name.cyan(),
         plan.launch_cwd.display().to_string().cyan()
@@ -36641,7 +36833,11 @@ fn agent_stop(name: &str) -> Result<()> {
     println!("Stopping agent '{}' (PID {})...", name_trimmed, agent.pid);
     terminate_pids_with_grace(&[agent.pid], 5);
     let _ = agent_registry::remove_agent(&project_root, &agent.agent_type, agent.pid);
-    println!("{} Agent '{}' stopped.", "✓".green(), name_trimmed);
+    println!(
+        "{} Agent '{}' stopped.",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        name_trimmed
+    );
     Ok(())
 }
 
@@ -36691,7 +36887,7 @@ fn agent_register(
     )?;
     println!(
         "{} registered {}#{} ({}) at {}",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         entry.agent_type,
         entry.pid,
         entry.role.as_deref().unwrap_or("(none)"),
@@ -38670,7 +38866,7 @@ fn peer_lease_sharing_worktree<'a>(
 }
 
 /// TASK-670: the set of requirement UUIDs that sit in *some* role queue
-/// (across every user's queue file), for the leading ↑ work-routing glyph on
+/// (across every user's queue file), for the leading queued work-routing glyph on
 /// `aida list`. Cheap by design — one `read_dir` over
 /// `.aida-store/registry/queues/` + a YAML parse per file, no Storage::load().
 /// Work-routing is a project-global axis (not the current shell's queue), so we
@@ -38778,10 +38974,10 @@ pub(crate) fn format_queue_membership(memberships: &[(Option<String>, usize)]) -
 }
 
 /// TASK-670: the set of scope strings held by *live* session leases — the input
-/// for the in-flight ▶ work-routing glyph. "Live" means a running claude was
+/// for the in-flight work-routing glyph. "Live" means a running claude was
 /// found inside the lease's worktree (the same probe `aida session leases` uses
 /// for its `live` state); dormant / stale / reaped leases are excluded so a
-/// dead session never shows ▶ (cf. STORY-496). Scopes are lowercased for a
+/// dead session never shows the in-flight marker (cf. STORY-496). Scopes are lowercased for a
 /// case-insensitive match against a row's spec/agreed id. trace:TASK-670 | ai:claude
 fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
     in_flight_lease_role_map(project_root).into_keys().collect()
@@ -39625,7 +39821,7 @@ fn cwd_removed_warning(cwd: &std::io::Result<std::path::PathBuf>) -> Option<Stri
          from a directory it can't read, so any queue / list output below \
          is an empty fallback, not the real state.\n  {} cd to a readable \
          directory (e.g. your project's main repo) and retry.",
-        "⚠".yellow().bold(),
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
         "→".cyan(),
     ))
 }
@@ -41329,7 +41525,11 @@ fn session_start(
     ) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
         PreflightDecision::AllowWithWarning(msg) => {
-            eprintln!("{} {}", "⚠".yellow().bold(), msg);
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                msg
+            );
         }
         PreflightDecision::AllowAndBump | PreflightDecision::Allow => {}
     }
@@ -41367,7 +41567,7 @@ fn session_start(
                 eprintln!();
                 eprintln!(
                     "{} PR-{}'s source branch `{}` is held by lease {}",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     n,
                     source_branch.yellow(),
                     l.id.yellow()
@@ -41402,7 +41602,7 @@ fn session_start(
                     eprintln!();
                     eprintln!(
                         "{} cancelled — no changes made; re-run when ready.",
-                        "✓".dimmed()
+                        crate::glyph(crate::glyphs::Glyph::Check).dimmed()
                     );
                     std::process::exit(1);
                 };
@@ -41761,7 +41961,7 @@ fn session_start(
                 eprintln!(
                     "{} active role {} doesn't match this scope's default {}.\n  \
                      Recording: {} (scope-derived). Pass --role {} to override.",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     format!("({})", env).cyan(),
                     format!("({})", d).cyan(),
                     d.cyan().bold(),
@@ -41864,7 +42064,7 @@ fn session_start(
             Err(e) => {
                 eprintln!(
                     "{} couldn't bump spec status for `{}` (stays at Approved): {} — `aida doctor` will heal",
-                    "⚠".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     owns,
                     e
                 );
@@ -41881,7 +42081,11 @@ fn session_start(
     // — no raw `export` lines bleeding into the terminal. The wrapper
     // captures stdout into eval; stderr passes through to the user; stdin
     // is unaffected so any prompts still work. trace:STORY-73 | ai:claude
-    eprintln!("{} session {} started", "✓".green().bold(), id.yellow());
+    eprintln!(
+        "{} session {} started",
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+        id.yellow()
+    );
     eprintln!("  {}: {}", "scope".bold(), owns.cyan());
     eprintln!("  {}: {}", "branch".bold(), branch_name.cyan());
     eprintln!(
@@ -41920,7 +42124,7 @@ fn session_start(
             eprintln!();
             eprintln!(
                 "{} Concurrent session{} on {} detected:",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 if other_leases.len() == 1 { "" } else { "s" },
                 owns.cyan()
             );
@@ -42025,7 +42229,9 @@ fn session_start(
         eprintln!();
         eprintln!(
             "{} {}",
-            "▶".green().bold(),
+            crate::glyph(crate::glyphs::Glyph::FlowActive)
+                .green()
+                .bold(),
             format!(
                 "launching claude in {} ({})",
                 worktree_path.display(),
@@ -42683,7 +42889,7 @@ fn assemble_worktree_status_rows(
 /// non-main, non-store worktree with its branch, tied spec, clean/dirty
 /// state, the session lease covering it, live/dormant status, commits-ahead
 /// of the default branch, its open PR (number + CI + mergeability), and an
-/// obsolescence verdict (✓ in flight / ⚠ obsolete — `git worktree remove`).
+/// obsolescence verdict (in flight / obsolete — `git worktree remove`).
 /// Silent when only the main worktree exists. The open-PR fields come from a
 /// single batched `gh pr list` snapshot — one gh call regardless of worktree
 /// count. trace:STORY-456 | ai:claude
@@ -42724,18 +42930,32 @@ fn print_status_worktrees_section(project_root: &std::path::Path) {
         }
         if let Some(ahead) = row.ahead {
             if ahead > 0 {
-                line.push_str(&format!(" · {ahead}↑main"));
+                line.push_str(&format!(
+                    " · {ahead}{}main",
+                    crate::glyph(crate::glyphs::Glyph::FlowQueued)
+                ));
             }
         }
         if let Some(n) = row.pr_number {
             let ci = row.pr_ci.as_deref().unwrap_or("?");
             line.push_str(&format!(" · {}", format!("PR #{n} [CI:{ci}]").cyan()));
         }
-        // Verdict marker: ✓ in flight / ⚠ obsolete — <recovery command>.
+        // Verdict marker: in flight / obsolete — <recovery command>.
         if row.obsolete {
-            line.push_str(&"  ⚠ obsolete — `git worktree remove`".dimmed().to_string());
+            line.push_str(
+                &format!(
+                    "  {} obsolete — `git worktree remove`",
+                    crate::glyph(crate::glyphs::Glyph::Warning)
+                )
+                .dimmed()
+                .to_string(),
+            );
         } else {
-            line.push_str(&"  ✓ in flight".dimmed().to_string());
+            line.push_str(
+                &format!("  {} in flight", crate::glyph(crate::glyphs::Glyph::Check))
+                    .dimmed()
+                    .to_string(),
+            );
         }
         println!("{line}");
     }
@@ -43345,7 +43565,8 @@ fn print_status_findings_section(backend: &aida_core::CachedGitBackend) {
         for group in &section.groups {
             for row in &group.rows {
                 println!(
-                    "  • {} {} ({}) — {}",
+                    "  {} {} {} ({}) — {}",
+                    crate::glyph(crate::glyphs::Glyph::Bullet),
                     section.source.label().dimmed(),
                     row.display_id.yellow(),
                     group.origin,
@@ -43791,7 +44012,7 @@ fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
 //                            for non-PR sessions; gh-missing is graceful)
 //   PR exists, no CI runs → Info: "PR opened, CI hasn't started" + proceed
 //   PR exists, CI running → Prompt (default) / Wait (--wait-ci) / Cancel
-//   PR exists, CI green   → Info: "✓ CI green" + proceed
+//   PR exists, CI green   → Info: format!("{} CI green", crate::glyph(crate::glyphs::Glyph::Check)) + proceed
 //   PR exists, CI red     → Warn + prompt to keep session for fixups
 //
 // Both `--skip-ci` and `--force` bypass the probe entirely. With `--yes`
@@ -43861,7 +44082,11 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
             CiAction::Proceed
         }
         CiProbe::Green { pr_number } => {
-            eprintln!("  {} CI green on PR-{}.", "✓".green(), pr_number);
+            eprintln!(
+                "  {} CI green on PR-{}.",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                pr_number
+            );
             CiAction::Proceed
         }
         CiProbe::InProgress { pr_number } => {
@@ -43871,21 +44096,21 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
                 // specific intro line itself.
                 eprintln!(
                     "  {} CI in progress on PR-{} — blocking until CI completes.",
-                    "◐".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                     pr_number,
                 );
                 CiAction::Wait
             } else if yes {
                 eprintln!(
                     "  {} CI in progress on PR-{} (proceeding — --yes set; pass --wait-ci to block).",
-                    "◐".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                     pr_number,
                 );
                 CiAction::Proceed
             } else {
                 CiAction::Cancel(format!(
                     "  {} CI is still in progress on PR-{}.\n  Options:\n    --wait-ci   block until CI completes\n    --skip-ci   release lease now (you'll have to push fixups in a new session if CI goes red)\n    --force     release lease unconditionally",
-                    "◐".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                     pr_number,
                 ))
             }
@@ -43897,7 +44122,7 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
             if yes {
                 eprintln!(
                     "  {} CI RED on PR-{}: {}\n  ({} set — ending anyway. Push fixups in a new session via `aida queue rework`.)",
-                    "✗".red(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red(),
                     pr_number,
                     failed_summary.dimmed(),
                     "--yes".dimmed(),
@@ -43906,7 +44131,7 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
             } else {
                 CiAction::Cancel(format!(
                     "  {} CI RED on PR-{}: {}\n  Recommended: keep this session alive and push fixups (the implementer's lease lets you commit without re-claiming).\n  To end anyway: pass --force or --yes.",
-                    "✗".red(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red(),
                     pr_number,
                     failed_summary,
                 ))
@@ -44112,7 +44337,7 @@ fn wait_for_ci_terminal(branch: &str) -> CiProbe {
             CiProbe::InProgress { pr_number } => {
                 eprintln!(
                     "  {} CI still running on PR-{} ({}m {}s elapsed, poll {}/{})",
-                    "◐".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                     pr_number,
                     elapsed / 60,
                     elapsed % 60,
@@ -44188,7 +44413,7 @@ fn watch_ci_terminal(branch: &str) -> CiProbe {
     };
     eprintln!(
         "  {} streaming `gh run watch {}`",
-        "▶".cyan(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive).cyan(),
         run_id.dimmed()
     );
     // Inherit stdio so gh's live-updating display renders straight to
@@ -45221,13 +45446,16 @@ fn session_end(
     // is still intact. Reporting is honest: success printed only on
     // actual success; missing file is a quiet no-op (already-released
     // lease from a previous partial run is fine); other errors warn so
-    // the user can clean up manually instead of trusting a stale "✓".
+    // the user can clean up manually instead of trusting a stale check mark.
     // trace:BUG-56 | ai:claude
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
     match std::fs::remove_file(lease_target) {
-        Ok(_) => eprintln!("{} lease deleted", "✓".green()),
+        Ok(_) => eprintln!(
+            "{} lease deleted",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        ),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             // Already gone — keep quiet.
         }
@@ -45352,7 +45580,10 @@ fn session_end(
             Ok(o) if o.status.success() => {
                 let _ = std::io::stderr().write_all(&o.stdout);
                 let _ = std::io::stderr().write_all(&o.stderr);
-                eprintln!("{} worktree removed", "✓".green());
+                eprintln!(
+                    "{} worktree removed",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
             }
             Ok(o) => {
                 let _ = std::io::stderr().write_all(&o.stdout);
@@ -45392,7 +45623,7 @@ fn session_end(
                     match std::fs::remove_dir_all(&cc_dir) {
                         Ok(_) => eprintln!(
                             "{} purged Claude Code project dir {}",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             cc_dir.display().to_string().dimmed()
                         ),
                         Err(e) => eprintln!(
@@ -47410,7 +47641,7 @@ fn capture_interface_changes(
     } else {
         println!(
             "  {} interface changes captured for {} ({})",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             display_id.bold(),
             summary.dimmed()
         );
@@ -47561,7 +47792,12 @@ fn extract_plan_followups(
         println!("  {} no followups filed", "·".dimmed());
     } else {
         for (id, title) in &filed {
-            println!("  {} {} {}", "✓".green(), id.bold(), title.dimmed());
+            println!(
+                "  {} {} {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                id.bold(),
+                title.dimmed()
+            );
         }
     }
     if !declined.is_empty() {
@@ -47968,18 +48204,26 @@ fn try_auto_queue_pr_review(
 }
 
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
-/// end` and `aida pr auto-queue-review` (filed = ✓ green, already-exists
-/// = ⓘ cyan, by-design skip = dim, needs-attention = ⚠ yellow).
+/// end` and `aida pr auto-queue-review` (filed = green check, already-exists
+/// = cyan info, by-design skip = dim, needs-attention = yellow warning).
 /// trace:STORY-90 BUG-72 | ai:claude
 fn render_auto_queue_outcome(outcome: &AutoQueueOutcome) {
     match outcome.status {
-        AutoQueueStatus::Filed => println!("{} {}", "✓".green(), outcome.summary),
+        AutoQueueStatus::Filed => println!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            outcome.summary
+        ),
         AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
         AutoQueueStatus::SkippedByDesign => {
             eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed())
         }
         AutoQueueStatus::SkippedNeedsAttention => {
-            eprintln!("{} {}", "⚠".yellow().bold(), outcome.summary.yellow())
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                outcome.summary.yellow()
+            )
         }
     }
 }
@@ -48143,7 +48387,11 @@ fn pr_rebase_handler(
     // ---- Step 2: refuse cross-fork PRs. ----
     if info.is_cross_repository {
         let msg = cross_fork_refusal(n, info.head_repo_owner.as_deref());
-        eprintln!("{} {}", "✗".red().bold(), msg);
+        eprintln!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+            msg
+        );
         anyhow::bail!("cross-fork PR refused");
     }
 
@@ -48167,11 +48415,15 @@ fn pr_rebase_handler(
         Ok(_) => {
             eprintln!(
                 "{} `git fetch origin` failed — refs may be stale",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
         }
         Err(e) => {
-            eprintln!("{} could not invoke git fetch: {}", "⚠".yellow(), e);
+            eprintln!(
+                "{} could not invoke git fetch: {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                e
+            );
         }
     }
 
@@ -48287,7 +48539,7 @@ fn pr_rebase_handler(
         if matches!(mode, PrRebaseMode::Interactive) {
             eprintln!(
                 "{} rebase hit {} conflict(s) in {}",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 conflicts.len(),
                 wt_path.display()
             );
@@ -48330,7 +48582,7 @@ fn pr_rebase_handler(
             if still_rebasing || status_says_rebasing {
                 eprintln!(
                     "{} rebase still in progress — leaving worktree at {}",
-                    "✗".red().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     wt_path.display()
                 );
                 anyhow::bail!("rebase not complete");
@@ -48345,7 +48597,7 @@ fn pr_rebase_handler(
                 .status();
             eprintln!(
                 "{} rebase hit {} conflict(s) — aborted, worktree cleaned",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 conflicts.len()
             );
             for f in conflicts.iter().take(20) {
@@ -48374,7 +48626,7 @@ fn pr_rebase_handler(
         if !smoke_ok {
             eprintln!(
                 "{} smoke check `{}` failed — leaving worktree at {} for inspection",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 cmd,
                 wt_path.display()
             );
@@ -48402,7 +48654,7 @@ fn pr_rebase_handler(
     if !push_ok {
         eprintln!(
             "{} force-with-lease push failed — leaving worktree at {} for inspection",
-            "✗".red().bold(),
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
             wt_path.display()
         );
         eprintln!(
@@ -48432,7 +48684,7 @@ fn pr_rebase_handler(
         .unwrap_or_else(|| "(unknown)".to_string());
     eprintln!(
         "{} PR-{} rebased onto {} — new head {}",
-        "✓".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
         n,
         origin_base,
         new_sha
@@ -48663,7 +48915,11 @@ fn pr_ship_handler(
                 0
             } else {
                 let new_n = pr_ship_create_pr(&project_root, &branch)?;
-                eprintln!("  {} created PR-{}", "✓".green(), new_n);
+                eprintln!(
+                    "  {} created PR-{}",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    new_n
+                );
                 log_ship_activity(
                     &main_worktree,
                     Some(new_n),
@@ -48712,7 +48968,7 @@ fn pr_ship_handler(
         let child_prs: Vec<String> = open_child_prs.iter().map(|n| format!("#{n}")).collect();
         eprintln!(
             "  {} keeping branch `{}` after merge — {} stacked on it",
-            "⚠".yellow(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             branch,
             if child_prs.is_empty() {
                 format!(
@@ -48851,11 +49107,19 @@ fn pr_ship_handler(
                 &StepOutcome::Failed(detail),
             );
             let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
-            eprintln!("{} CI failed for PR-{}", "✗".red().bold(), pr_number);
+            eprintln!(
+                "{} CI failed for PR-{}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                pr_number
+            );
             eprintln!("  {}", hint);
             anyhow::bail!("CI did not pass for PR-{pr_number}");
         }
-        eprintln!("  {} CI green for PR-{}", "✓".green(), pr_number);
+        eprintln!(
+            "  {} CI green for PR-{}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            pr_number
+        );
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
@@ -48920,11 +49184,19 @@ fn pr_ship_handler(
             &StepOutcome::Failed(stderr_text.clone()),
         );
         let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
-        eprintln!("{} merge failed: {}", "✗".red().bold(), stderr_text);
+        eprintln!(
+            "{} merge failed: {}",
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+            stderr_text
+        );
         eprintln!("  {}", hint);
         return Err(e.context("`gh pr merge` failed"));
     }
-    eprintln!("  {} merged PR-{}", "✓".green(), pr_number);
+    eprintln!(
+        "  {} merged PR-{}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        pr_number
+    );
     log_ship_activity(
         &main_worktree,
         Some(pr_number),
@@ -48950,7 +49222,7 @@ fn pr_ship_handler(
             {
                 eprintln!(
                     "  {} could not record ship calibration for {spec}: {e}",
-                    "⚠".yellow()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
             if let Err(e) = effort_calibration::upsert_ship(
@@ -48961,7 +49233,7 @@ fn pr_ship_handler(
             ) {
                 eprintln!(
                     "  {} could not record ship effort for {spec}: {e}",
-                    "⚠".yellow()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
             apply_effort_tag(
@@ -49012,7 +49284,7 @@ fn pr_ship_handler(
                 let hint = recovery_hint(&ShipStep::Pull, Some(pr_number));
                 eprintln!(
                     "{} could not prepare main worktree for `aida pull` — the merge already landed, so this is a sync issue, not a merge issue.",
-                    "⚠".yellow().bold()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                 );
                 eprintln!("  {}", e);
                 eprintln!("  {}", hint);
@@ -49031,12 +49303,15 @@ fn pr_ship_handler(
                 eprintln!(
                     "{} `aida pull` failed — the merge already landed, so this \
                      is a sync issue, not a merge issue.",
-                    "⚠".yellow().bold()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                 );
                 eprintln!("  {}", hint);
                 // Don't bail — the merge landed; pull failure is recoverable.
             } else {
-                eprintln!("  {} pulled main", "✓".green());
+                eprintln!(
+                    "  {} pulled main",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
                 log_ship_activity(
                     &main_worktree,
                     Some(pr_number),
@@ -49107,10 +49382,17 @@ fn pr_ship_handler(
                             &StepOutcome::Failed(format!("exit {}", end_status)),
                         );
                         let hint = recovery_hint(&ShipStep::EndLease, Some(pr_number));
-                        eprintln!("{} session end failed", "⚠".yellow().bold());
+                        eprintln!(
+                            "{} session end failed",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                        );
                         eprintln!("  {}", hint);
                     } else {
-                        eprintln!("  {} ended lease {}", "✓".green(), lease.id);
+                        eprintln!(
+                            "  {} ended lease {}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            lease.id
+                        );
                         log_ship_activity(
                             &main_worktree,
                             Some(pr_number),
@@ -49137,7 +49419,7 @@ fn pr_ship_handler(
 
     eprintln!(
         "{} aida pr ship — PR-{} shipped",
-        "✓".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
         pr_number
     );
 
@@ -49186,7 +49468,7 @@ fn write_implementer_complete_banner(
     writeln!(
         w,
         "{} {}",
-        "▶".cyan().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive).cyan().bold(),
         "IMPLEMENTER COMPLETE — EXIT NOW".bold()
     )?;
     writeln!(w, "{}", bar.bold())?;
@@ -50740,8 +51022,8 @@ impl LeaseState {
     fn glyph(self) -> &'static str {
         match self {
             LeaseState::Live => "●",
-            LeaseState::Dormant => "◐",
-            LeaseState::Stale => "⚠",
+            LeaseState::Dormant => crate::glyph(crate::glyphs::Glyph::InFlight),
+            LeaseState::Stale => crate::glyph(crate::glyphs::Glyph::Warning),
         }
     }
     fn label(self) -> &'static str {
@@ -51220,7 +51502,7 @@ fn cleanup_escalated_leases_for_spec(project_root: &std::path::Path, spec_id: &s
     if cleaned > 0 {
         eprintln!(
             "  {} {} escalated worktree{} cleaned up",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             cleaned,
             if cleaned == 1 { "" } else { "s" },
         );
@@ -51966,7 +52248,7 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     }
     println!(
         "{} removed {} orphan project dir{}",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         removed,
         if removed == 1 { "" } else { "s" }
     );
@@ -52000,7 +52282,7 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
                 }
                 println!(
                     "{} removed {} orphan manifest{}",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     mremoved,
                     if mremoved == 1 { "" } else { "s" }
                 );
@@ -52131,7 +52413,7 @@ fn session_prune_escalations(dry_run: bool, yes: bool) -> Result<()> {
     }
     println!(
         "{} removed {} escalated worktree{}",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         removed,
         if removed == 1 { "" } else { "s" }
     );
@@ -52372,7 +52654,7 @@ fn session_prune(
 
     println!(
         "{} Deleted {} file{} ({} freed){}",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         deleted,
         if deleted == 1 { "" } else { "s" },
         humanize_size(bytes_freed),
@@ -52619,7 +52901,7 @@ fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
 /// Render the planned-cluster manifest for `session_id` as a status table.
 /// Reads the requirement store once to resolve each item's current status
 /// (so a spec the user flipped to "in progress" via /aida-pickup actually
-/// shows as ◐ regardless of whether mark-started ran). trace:STORY-98
+/// shows as the in-flight glyph regardless of whether mark-started ran). trace:STORY-98
 fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> Result<()> {
     let path = session_manifest::manifest_path(project_root, session_id);
     println!();
@@ -52998,7 +53280,11 @@ fn session_wakeup_dispatch(cmd: &SessionWakeupCommand) -> Result<()> {
                 cancelled_at: None,
             };
             save_wakeup(&wakeup_path(&project_root, tag), &rec)?;
-            println!("{} registered fallback wakeup {}", "✓".green(), tag.cyan());
+            println!(
+                "{} registered fallback wakeup {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                tag.cyan()
+            );
             println!(
                 "  {}",
                 format!(
@@ -53017,7 +53303,11 @@ fn session_wakeup_dispatch(cmd: &SessionWakeupCommand) -> Result<()> {
                     rec.status = WAKEUP_STATUS_CANCELLED.to_string();
                     rec.cancelled_at = Some(chrono::Utc::now());
                     save_wakeup(&path, &rec)?;
-                    println!("{} cancelled fallback wakeup {}", "✓".green(), tag.cyan());
+                    println!(
+                        "{} cancelled fallback wakeup {}",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        tag.cyan()
+                    );
                 }
                 Some(_) => {
                     println!(
@@ -53283,7 +53573,7 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
 
     println!(
         "{} {} for session {} ({} items)",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         "Wrote planned-cluster manifest".bold(),
         (&lease.id[..lease.id.len().min(8)]).yellow(),
         manifest.items.len()
@@ -53322,7 +53612,7 @@ fn session_manifest_mark(spec_id: &str, session_query: Option<&str>, kind: MarkK
     if updated {
         println!(
             "{} marked {} as {} in session {} manifest",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             spec_id.bold(),
             action,
             (&lease.id[..lease.id.len().min(8)]).dimmed()
@@ -53863,7 +54153,7 @@ fn handle_away_command() -> Result<()> {
     let set_at = now; // just set
     println!(
         "{} away — effective for {} (auto-flips home on any interactive command)",
-        "🚶".to_string(),
+        crate::glyph(crate::glyphs::Glyph::Away).to_string(),
         presence::ttl_remaining_label(set_at, ttl, now)
     );
     Ok(())
@@ -53874,7 +54164,10 @@ fn handle_away_command() -> Result<()> {
 fn handle_home_command() -> Result<()> {
     let ttl = resolve_away_ttl_secs();
     presence::set_home(ttl)?;
-    println!("{} home", "🏠".to_string());
+    println!(
+        "{} home",
+        crate::glyph(crate::glyphs::Glyph::Home).to_string()
+    );
     Ok(())
 }
 
@@ -53970,7 +54263,7 @@ fn solo_cycle(dry_run: bool) -> Result<()> {
         }
         println!(
             "  {} {} — aida {}",
-            "▸".cyan(),
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
             label,
             args.join(" ").dimmed()
         );
@@ -54060,7 +54353,7 @@ fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
     println!(
         "{} solo loop {} (interval {}s) — garden → assess/queue → implement → integrate → repeat. \
          {} to stop.",
-        "🤖",
+        crate::glyph(crate::glyphs::Glyph::Robot),
         if dry_run {
             "DRY-RUN".yellow().bold()
         } else {
@@ -54207,7 +54500,7 @@ fn handle_solo_command(
             solo_lock::LockStatus::Running(l) => {
                 println!(
                     "{} solo loop {} (pid {}, since {})",
-                    "🤖",
+                    crate::glyph(crate::glyphs::Glyph::Robot),
                     "RUNNING".green().bold(),
                     l.pid,
                     l.started_at_utc
@@ -54217,13 +54510,17 @@ fn handle_solo_command(
                 println!(
                     "{} solo loop flag set but no live process (stale lock pid {}). \
                      Run `aida solo stop` to clear it.",
-                    "⚠".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     l.pid
                 );
             }
             solo_lock::LockStatus::None => {
                 if presence::current_solo(now) {
-                    println!("{} solo mode {}", "🤖", "ON".green().bold());
+                    println!(
+                        "{} solo mode {}",
+                        crate::glyph(crate::glyphs::Glyph::Robot),
+                        "ON".green().bold()
+                    );
                 } else {
                     println!("solo mode {}", "off".dimmed());
                 }
@@ -54269,7 +54566,7 @@ fn handle_solo_command(
     println!(
         "{} solo mode {} — advisor+integrator working the safe backlog end-to-end; \
          keystone/architecture is parked for the operator. `{}` to exit.",
-        "🤖",
+        crate::glyph(crate::glyphs::Glyph::Robot),
         "ON".green().bold(),
         "aida solo stop".cyan()
     );
@@ -54567,14 +54864,18 @@ mod statusline_tests {
     }
 
     /// TASK-244: shell role disagrees with the active session's role —
-    /// both surfaced with the `⚠` glyph.
+    /// both surfaced with the warning glyph.
     #[test]
     fn role_segment_mismatch_surfaces_both() {
         let (text, mismatch) = role_segment_text("implementer", Some("reviewer"), true);
         assert!(mismatch);
         assert!(text.contains("role:implementer"), "got: {}", text);
         assert!(text.contains("session:reviewer"), "got: {}", text);
-        assert!(text.contains('⚠'), "got: {}", text);
+        assert!(
+            text.contains(crate::glyph(crate::glyphs::Glyph::Warning)),
+            "got: {}",
+            text
+        );
     }
 
     /// TASK-244: no active session → no mismatch, plain segment.
@@ -54941,8 +55242,14 @@ mod statusline_tests {
     #[test]
     fn lease_state_renders() {
         assert_eq!(LeaseState::Live.glyph(), "●");
-        assert_eq!(LeaseState::Dormant.glyph(), "◐");
-        assert_eq!(LeaseState::Stale.glyph(), "⚠");
+        assert_eq!(
+            LeaseState::Dormant.glyph(),
+            crate::glyph(crate::glyphs::Glyph::InFlight)
+        );
+        assert_eq!(
+            LeaseState::Stale.glyph(),
+            crate::glyph(crate::glyphs::Glyph::Warning)
+        );
         assert_eq!(LeaseState::Live.label(), "live");
         assert_eq!(LeaseState::Dormant.label(), "dormant");
         assert_eq!(LeaseState::Stale.label(), "stale");
@@ -55307,14 +55614,14 @@ mod statusline_tests {
     // ---- TASK-817: arrow-key role picker option labels ----
 
     fn picker_row(
-        marker: char,
+        marker: &str,
         name: &str,
         global: bool,
         recency: &str,
         purpose: Option<&str>,
     ) -> super::RolePickerRow {
         super::RolePickerRow {
-            marker,
+            marker: marker.to_string(),
             name: name.to_string(),
             global,
             recency: recency.to_string(),
@@ -55329,14 +55636,20 @@ mod statusline_tests {
     fn role_picker_option_shows_name_scope_recency_and_purpose() {
         use super::format_role_picker_option;
         let row = picker_row(
-            '▸',
+            crate::glyph(crate::glyphs::Glyph::Arrow),
             "advisor",
             true,
             "3h ago",
             Some("Routes work and gardens the queue."),
         );
         let label = format_role_picker_option(&row, 80);
-        assert!(label.starts_with("▸ advisor"), "label was {label:?}");
+        assert!(
+            label.starts_with(&format!(
+                "{} advisor",
+                crate::glyph(crate::glyphs::Glyph::Arrow)
+            )),
+            "label was {label:?}"
+        );
         assert!(label.contains("[global]"), "label was {label:?}");
         assert!(label.contains("· 3h ago"), "label was {label:?}");
         assert!(
@@ -55353,11 +55666,11 @@ mod statusline_tests {
     fn role_picker_option_no_purpose_has_no_separator() {
         use super::format_role_picker_option;
         let with_none =
-            format_role_picker_option(&picker_row('*', "advisor", false, "5m ago", None), 80);
+            format_role_picker_option(&picker_row("*", "advisor", false, "5m ago", None), 80);
         assert_eq!(with_none, "* advisor · 5m ago");
         // A whitespace-only purpose is treated as absent.
         let blank = format_role_picker_option(
-            &picker_row(' ', "implementer", false, "2d ago", Some("   ")),
+            &picker_row(" ", "implementer", false, "2d ago", Some("   ")),
             80,
         );
         assert_eq!(blank, "  implementer · 2d ago");
@@ -55371,7 +55684,7 @@ mod statusline_tests {
         let long = "word ".repeat(200);
         let width = 50;
         let label = format_role_picker_option(
-            &picker_row(' ', "advisor", false, "now", Some(&long)),
+            &picker_row(" ", "advisor", false, "now", Some(&long)),
             width,
         );
         assert!(
@@ -55391,7 +55704,7 @@ mod statusline_tests {
     fn role_picker_option_drops_purpose_when_no_room() {
         use super::format_role_picker_option;
         // Width just past the header so <8 cols remain for the purpose.
-        let row = picker_row(' ', "advisor", false, "now", Some("Routes work."));
+        let row = picker_row(" ", "advisor", false, "now", Some("Routes work."));
         let header_only = "  advisor · now";
         let width = header_only.chars().count() + 4;
         let label = format_role_picker_option(&row, width);
@@ -55959,7 +56272,7 @@ mod statusline_tests {
         ));
     }
 
-    /// BUG-249: pre-fix, `aida queue move <id>` printed `✓ Moved` even
+    /// BUG-249: pre-fix, `aida queue move <id>` printed a `Moved` check line even
     /// when `<id>` wasn't in the queue at all — queue_reorder's update
     /// loop simply didn't match anything and the write completed with
     /// no entries changed. The classifier distinguishes that case from
@@ -60407,7 +60720,8 @@ mod bug_231_findings_promote_tests {
         assert!(out.contains("joe/advisor"), "identity set: {out}");
         assert!(out.contains("heads up: rebasing forge") && out.contains("from codex"));
         assert!(
-            out.contains("⚠ ") && out.contains("STOP — CI is red"),
+            out.contains(&format!("{} ", crate::glyph(crate::glyphs::Glyph::Warning)))
+                && out.contains("STOP — CI is red"),
             "urgent mark: {out}"
         );
         // Actionable intent is tagged; the fyi default stays unmarked (TASK-790).
@@ -64482,7 +64796,7 @@ fn handle_rebase_command(
             if !json {
                 eprintln!(
                     "{} {} file{} touched on BOTH sides — rebase may conflict:",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     detection.overlap.len(),
                     if detection.overlap.len() == 1 {
                         ""
@@ -64948,7 +65262,7 @@ mod handle_pull_command_tests {
     /// BUG-254: when the code-leg `git pull --ff-only` fails (here: an
     /// untracked file would be overwritten by the merge), `handle_pull_command`
     /// must return Err so `aida pull` exits non-zero — the orchestrator's
-    /// phase 5 then halts instead of falsely announcing `✓ phase 5 complete`
+    /// phase 5 then halts instead of falsely announcing `phase 5 complete`
     /// over a stale tree (which used to break phase 6 with confusing
     /// missing-file errors). trace:BUG-254 | ai:claude
     #[test]
@@ -67768,7 +68082,7 @@ fn maybe_hint_advisor_seat() {
 }
 
 /// they disagree — and the warning is enabled — both are shown with a
-/// `⚠` glyph so three-way role confusion (shell vs session vs resumed
+/// warning glyph so three-way role confusion (shell vs session vs resumed
 /// conversation) is visible at a glance. Returns `(text, is_mismatch)`
 /// so the caller picks the colour. Pure — unit-tested independent of
 /// the statusline IO. trace:TASK-244 | ai:claude
@@ -67792,7 +68106,12 @@ fn role_segment_text(
             .unwrap_or(false);
     if mismatch {
         (
-            format!("role:{} ⚠ session:{}", shell_role, session_role.unwrap()),
+            format!(
+                "role:{} {} session:{}",
+                shell_role,
+                crate::glyph(crate::glyphs::Glyph::Warning),
+                session_role.unwrap()
+            ),
             true,
         )
     } else {
@@ -68055,7 +68374,16 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     // `aida mailbox inbox`. trace:STORY-539 | ai:claude
     if let Some(urgent) = read_urgent_unread_count(&project_root) {
         if urgent > 0 {
-            parts.push(format!("⚠ mail:{}", urgent).red().bold().to_string());
+            parts.push(
+                format!(
+                    "{} mail:{}",
+                    crate::glyph(crate::glyphs::Glyph::Warning),
+                    urgent
+                )
+                .red()
+                .bold()
+                .to_string(),
+            );
         }
     }
     // Cache freshness: only surface non-fresh states. Fresh is the boring
@@ -68106,7 +68434,7 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     }
     // TASK-756/TASK-783: operator-presence segment. Only the effective `away`
     // state is surfaced (a short glyph + word + compact TTL-remaining, e.g.
-    // `🚶 away 2h`) — `home` is the boring default and stays quiet, matching
+    // `away 2h`) — `home` is the boring default and stays quiet, matching
     // the cache/freshness "only the non-default is noise-worthy" contract.
     // READ-ONLY: this goes through the non-flipping `statusline_away_remaining`
     // (→ `current_presence`/`effective_presence`), NEVER
@@ -68115,10 +68443,14 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     // trace:TASK-756 trace:TASK-783
     if let Some(remaining) = presence::statusline_away_remaining(chrono::Utc::now()) {
         parts.push(
-            format!("{} away {}", "🚶", remaining)
-                .yellow()
-                .bold()
-                .to_string(),
+            format!(
+                "{} away {}",
+                crate::glyph(crate::glyphs::Glyph::Away),
+                remaining
+            )
+            .yellow()
+            .bold()
+            .to_string(),
         );
     }
     // STORY-624: solo-mode segment — surfaced only while active (off is the
@@ -69016,10 +69348,18 @@ fn handle_lint_command(spec: Option<&str>, scope: Option<&str>, json: bool) -> R
     for s in &scored {
         let header = format!("{}  {}", s.req.display_id(), s.req.title);
         if s.report.is_clean() {
-            println!("{} {}", "✓".green(), header);
+            println!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                header
+            );
             continue;
         }
-        println!("{} {}", "⚠".yellow(), header.bold());
+        println!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            header.bold()
+        );
         for f in &s.report.findings {
             println!(
                 "    {} {}",
@@ -69729,7 +70069,7 @@ fn plan_capture(pr_arg: &str, stdout: bool) -> Result<()> {
     let verb = if existed { "overwrote" } else { "wrote" };
     println!(
         "{} {} {} from PR-{}",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         verb,
         path.display().to_string().bold(),
         number
@@ -69769,7 +70109,11 @@ fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
                 .map(|x| x.eq_ignore_ascii_case(&sid))
                 .unwrap_or(false)
         }) else {
-            eprintln!("  {} {} not found", "⚠".yellow(), sid);
+            eprintln!(
+                "  {} {} not found",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                sid
+            );
             continue;
         };
         let real_id = req.spec_id.clone().unwrap_or(sid);
@@ -69793,7 +70137,7 @@ fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
                 if dry_run {
                     println!(
                         "  {} {} → Planned (plan: {})",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         real_id,
                         rel.display()
                     );
@@ -69804,13 +70148,17 @@ fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
                     if status.success() {
                         println!(
                             "  {} {} → Planned (plan: {})",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             real_id,
                             rel.display()
                         );
                         promoted += 1;
                     } else {
-                        eprintln!("  {} {} — status edit failed", "✗".red(), real_id);
+                        eprintln!(
+                            "  {} {} — status edit failed",
+                            crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                            real_id
+                        );
                     }
                 }
             }
@@ -70042,7 +70390,12 @@ fn plan_fan_out(
             } else {
                 "plan → promote"
             };
-            println!("  {} {} → {}", "•".dimmed(), sid.bold(), action);
+            println!(
+                "  {} {} → {}",
+                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed(),
+                sid.bold(),
+                action
+            );
         }
         println!("(dry-run) {} spec(s) would be processed", set.len());
         return Ok(());
@@ -70052,7 +70405,11 @@ fn plan_fan_out(
     let (mut planned, mut promoted, mut failed) = (0usize, 0usize, 0usize);
     for sid in &set {
         if !promote_only {
-            println!("\n{} planning {}", "▶".cyan(), sid.bold());
+            println!(
+                "\n{} planning {}",
+                crate::glyph(crate::glyphs::Glyph::FlowActive).cyan(),
+                sid.bold()
+            );
             let status = std::process::Command::new(&exe)
                 .args(["queue", "work", sid, "--plan-only"])
                 .status()
@@ -70060,7 +70417,7 @@ fn plan_fan_out(
             if !status.success() {
                 eprintln!(
                     "  {} {} — plan session exited with status {}; skipping promote",
-                    "✗".red(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red(),
                     sid,
                     status.code().unwrap_or(-1)
                 );
@@ -70079,7 +70436,7 @@ fn plan_fan_out(
         } else {
             eprintln!(
                 "  {} {} — promote exited with status {} (did the plan file's `Specs:` header list {sid}?)",
-                "✗".red(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red(),
                 sid,
                 status.code().unwrap_or(-1)
             );
@@ -70089,7 +70446,7 @@ fn plan_fan_out(
 
     println!(
         "\n{} fan-out done: {} planned, {} promoted, {} failed",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         planned,
         promoted,
         failed
@@ -71736,7 +72093,7 @@ mod bug_229_display_matrix_tests {
 /// TASK-234: render the "Done — awaiting merge" body grouped by PR +
 /// state instead of as a flat list. [`classify_in_flight_specs`] does
 /// the git-only bucketing; this adds the `gh` PR-state lookups and
-/// prints each bucket with a concrete `▶ Next` action.
+/// prints each bucket with a concrete `Next` action.
 ///
 /// BUG-366: the "start review" hint must name a command that survives an
 /// operator's reflexive flags. Bare `aida queue work PR-N` resolves to the
@@ -71795,7 +72152,11 @@ fn render_in_flight_grouped(
                     count,
                     plural
                 );
-                println!("    {} {}", "◐".bright_green(), ids_line);
+                println!(
+                    "    {} {}",
+                    crate::glyph(crate::glyphs::Glyph::InFlight).bright_green(),
+                    ids_line
+                );
 
                 // BUG-229: gather the three drain-pipeline signals, then
                 // let `classify_open_pr_display` pick the stage. gh's
@@ -71819,14 +72180,14 @@ fn render_in_flight_grouped(
                         let by = approver.map(|a| format!(" by {}", a)).unwrap_or_default();
                         println!(
                             "    {} Review complete{}, awaiting merge — Next: merge (`{}`)",
-                            "▶".bold(),
+                            crate::glyph(crate::glyphs::Glyph::FlowActive).bold(),
                             by,
                             format!("gh pr merge {} --squash", pr.number).cyan()
                         );
                     }
                     InFlightPrDisplay::UnderReviewLease { session_id, since } => println!(
                         "    {} {}",
-                        "⏳".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
                         format!(
                             "Under review (reviewer session {} since {})",
                             session_id, since
@@ -71835,17 +72196,17 @@ fn render_in_flight_grouped(
                     ),
                     InFlightPrDisplay::UnderReviewStory { story_id } => println!(
                         "    {} {}",
-                        "⏳".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
                         format!("Under review (review story {})", story_id).yellow()
                     ),
                     InFlightPrDisplay::CiRunning => println!(
                         "    {} {}",
-                        "◐".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                         "CI running — Next: wait for CI to finish, then review".yellow()
                     ),
                     InFlightPrDisplay::AwaitingReview => println!(
                         "    {} start review (`{}`)",
-                        "▶ Next:".bold(),
+                        format!("{} Next:", crate::glyph(crate::glyphs::Glyph::FlowActive)).bold(),
                         review_pickup_hint(pr.number).cyan()
                     ),
                 }
@@ -71863,13 +72224,17 @@ fn render_in_flight_grouped(
                             count,
                             plural
                         );
-                        println!("    {} {}", "◐".bright_green(), ids_line);
+                        println!(
+                            "    {} {}",
+                            crate::glyph(crate::glyphs::Glyph::InFlight).bright_green(),
+                            ids_line
+                        );
                         let when = merged_at
                             .map(|t| format!("Merged {}", t))
                             .unwrap_or_else(|| "Merged".to_string());
                         println!(
                             "    {} {} — Next: `{}` (auto-bumps {} spec{} to Completed)",
-                            "▶".bold(),
+                            crate::glyph(crate::glyphs::Glyph::FlowActive).bold(),
                             when,
                             "aida pull".cyan(),
                             count,
@@ -71884,10 +72249,15 @@ fn render_in_flight_grouped(
                             count,
                             plural
                         );
-                        println!("    {} {}", "◐".bright_green(), ids_line);
+                        println!(
+                            "    {} {}",
+                            crate::glyph(crate::glyphs::Glyph::InFlight).bright_green(),
+                            ids_line
+                        );
                         println!(
                             "    {} open a PR (`{}`), then merge → `{}`",
-                            "▶ Next:".bold(),
+                            format!("{} Next:", crate::glyph(crate::glyphs::Glyph::FlowActive))
+                                .bold(),
                             "/aida-pr".cyan(),
                             "aida pull".cyan()
                         );
@@ -71912,11 +72282,16 @@ fn render_in_flight_grouped(
             let pr_note = pr
                 .map(|n| format!("(#{}, {})", n, ago))
                 .unwrap_or_else(|| format!("(merged {})", ago));
-            println!("    {} {}  {}", "◐".yellow(), id.bold(), pr_note.dimmed());
+            println!(
+                "    {} {}  {}",
+                crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
+                id.bold(),
+                pr_note.dimmed()
+            );
         }
         println!(
             "    {} `{}` replays the missed bumps to Completed",
-            "▶ Next:".bold(),
+            format!("{} Next:", crate::glyph(crate::glyphs::Glyph::FlowActive)).bold(),
             "aida db reconcile-status".cyan()
         );
     }
@@ -71934,7 +72309,11 @@ fn render_in_flight_grouped(
             no_commit.len(),
             if no_commit.len() == 1 { "" } else { "s" }
         );
-        println!("    {} {}", "◐".dimmed(), no_commit.join("  "));
+        println!(
+            "    {} {}",
+            crate::glyph(crate::glyphs::Glyph::InFlight).dimmed(),
+            no_commit.join("  ")
+        );
         // TASK-671: name the real SPEC-ID (it's the payload the user must type
         // into the commit trailer — an allowed user-facing id use per TASK-268),
         // be remote-aware (no "open a PR" for a local-only project with no
@@ -71947,13 +72326,13 @@ fn render_in_flight_grouped(
             if has_origin {
                 println!(
                     "    {} commit your change with `({})` in the message, then open a PR — the merge auto-completes it.",
-                    "▶ Next:".bold(),
+                    format!("{} Next:", crate::glyph(crate::glyphs::Glyph::FlowActive)).bold(),
                     id.cyan()
                 );
             } else {
                 println!(
                     "    {} commit your change with `({})` in the message — that auto-completes it on the next `{}`.",
-                    "▶ Next:".bold(),
+                    format!("{} Next:", crate::glyph(crate::glyphs::Glyph::FlowActive)).bold(),
                     id.cyan(),
                     "aida pull".cyan()
                 );
@@ -71966,13 +72345,13 @@ fn render_in_flight_grouped(
             if has_origin {
                 println!(
                     "    {} commit each with its own `({})` trailer in the message, then open a PR — the merge auto-completes each.",
-                    "▶ Next:".bold(),
+                    format!("{} Next:", crate::glyph(crate::glyphs::Glyph::FlowActive)).bold(),
                     "SPEC-ID".cyan()
                 );
             } else {
                 println!(
                     "    {} commit each with its own `({})` trailer — that auto-completes each on the next `{}`.",
-                    "▶ Next:".bold(),
+                    format!("{} Next:", crate::glyph(crate::glyphs::Glyph::FlowActive)).bold(),
                     "SPEC-ID".cyan(),
                     "aida pull".cyan()
                 );
@@ -72320,7 +72699,7 @@ fn print_git_linkage(project_root: &std::path::Path, ids: &[String], verbose: bo
         println!(
             "  {} Link your code to it: add a {} comment where you implement it, \
              or name {} in a commit message — then this fills in on its own.",
-            "↳".dimmed(),
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
             format!("// trace:{example_id}").cyan(),
             format!("({example_id})").cyan(),
         );
@@ -72507,7 +72886,7 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
             .with_context(|| format!("could not write {}", path.display()))?;
         println!(
             "{} appended Reusable helpers section to {}",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             path.display()
         );
     } else {
@@ -73056,7 +73435,7 @@ fn plan_scan(
         if !json {
             println!(
                 "{} appended Pre-plan scan section to {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 path.display()
             );
         }
@@ -73098,7 +73477,7 @@ fn plan_scan(
         if !json {
             println!(
                 "{} attached pre-plan scan as a provenance comment on {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 target_display
             );
         }
@@ -73326,7 +73705,7 @@ fn handle_goal_command(
             println!(
                 "{} the assembled /goal line exceeds Claude Code's 5000-char URL ceiling — \
                  emitting anyway, but the link may fail to open",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
         }
         println!("{}", rendered.url);
@@ -73337,12 +73716,12 @@ fn handle_goal_command(
         if copy_to_clipboard(&goal_line) {
             println!(
                 "{} copied the /goal condition to the clipboard",
-                "✓".green()
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             );
         } else {
             println!(
                 "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
         }
         println!();
@@ -73353,7 +73732,9 @@ fn handle_goal_command(
     // Default: framed output with the per-clause verification recipe.
     println!(
         "{} machine-checkable completion condition ({} clause{}):",
-        "▶".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive)
+            .green()
+            .bold(),
         clauses.len(),
         if clauses.len() == 1 { "" } else { "s" }
     );
@@ -73896,7 +74277,7 @@ fn handle_ultraplan_command(
     if copy_to_clipboard(&prompt) {
         println!(
             "{} {}",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             ultraplan_copy_success_message(&display.bold().to_string(), token_estimate)
         );
         println!(
@@ -74734,12 +75115,16 @@ fn handle_dev_activate(
         None => String::new(),
     };
     let stale_note = if stale {
-        " ⚠ alternate build is newer — run `aida dev status` for details"
+        format!(
+            " {} alternate build is newer — run `aida dev status` for details",
+            crate::glyph(crate::glyphs::Glyph::Warning)
+        )
     } else {
-        ""
+        String::new()
     };
     println!(
-        "echo '✓ aida dev activated ({} build at {}{}){}'",
+        "echo '{} aida dev activated ({} build at {}{}){}'",
+        crate::glyph(crate::glyphs::Glyph::Check),
         profile,
         bin_dir.display(),
         pin_note,
@@ -74767,7 +75152,10 @@ fn handle_dev_deactivate() -> Result<()> {
     println!(
         "unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE AIDA_DEV_PROFILE_PIN"
     );
-    println!("echo '✓ aida dev deactivated'");
+    println!(
+        "echo '{} aida dev deactivated'",
+        crate::glyph(crate::glyphs::Glyph::Check)
+    );
     Ok(())
 }
 
@@ -75704,7 +76092,10 @@ fn handle_intake_command(
         cfg.on_apply
     };
 
-    println!("{} intake pass", "▸".cyan().bold());
+    println!(
+        "{} intake pass",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     println!(
         "  {}",
         format!(
@@ -75767,7 +76158,7 @@ fn handle_intake_command(
     if permission_mode.is_none() {
         println!(
             "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
-            "⚠".yellow(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             "BYPASSED".yellow().bold()
         );
     }
@@ -76027,7 +76418,7 @@ mod burndown_run_tests {
         assert!(label.starts_with("active"), "label: {label}");
         assert!(!label.contains("stuck"), "label: {label}");
 
-        // Past the threshold (15m) → "idle 15m ⚠ possibly stuck".
+        // Past the threshold (15m) -> "idle 15m possibly stuck" with a warning marker.
         let stale = now - chrono::Duration::minutes(15);
         let label = format_activity_label(stale, now);
         assert!(label.starts_with("idle"), "label: {label}");
@@ -76194,7 +76585,10 @@ fn handle_burndown_run(
     let (ready, awaiting_signoff, parked, _supervised, _titles) =
         resolve_burndown_sets(status, tag, batch)?;
 
-    println!("{} burndown run", "▸".cyan().bold());
+    println!(
+        "{} burndown run",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     println!(
         "  {}",
         burndown::selector_summary(status, tag, batch).dimmed()
@@ -76275,7 +76669,7 @@ fn handle_burndown_run(
     if permission_mode.is_none() {
         println!(
             "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
-            "⚠".yellow(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             "BYPASSED".yellow().bold()
         );
     } else {
@@ -76698,7 +77092,7 @@ fn newest_file_mtime(
 
 /// TASK-834: format the per-agent activity label from a last-activity timestamp
 /// and the current time. Pure — the unit-tested core of the in-flight activity
-/// signal. `… active 15s ago` when recent; `… idle 15m ⚠ possibly stuck` once
+/// signal. `… active 15s ago` when recent; `… idle 15m possibly stuck` (with a warning) once
 /// the gap exceeds [`ACTIVITY_STUCK_THRESHOLD_SECS`]. trace:TASK-834 | ai:claude
 fn format_activity_label(
     last_activity: chrono::DateTime<chrono::Utc>,
@@ -76710,7 +77104,10 @@ fn format_activity_label(
         .max(0);
     let rel = humanize_idle(secs);
     if secs >= ACTIVITY_STUCK_THRESHOLD_SECS {
-        format!("idle {rel} ⚠ possibly stuck")
+        format!(
+            "idle {rel} {} possibly stuck",
+            crate::glyph(crate::glyphs::Glyph::Warning)
+        )
     } else {
         format!("active {rel} ago")
     }
@@ -76740,7 +77137,11 @@ fn render_burndown_status_human(
 ) -> String {
     use std::fmt::Write as _;
     let mut out = String::new();
-    let _ = writeln!(out, "{} burndown status", "▸".cyan().bold());
+    let _ = writeln!(
+        out,
+        "{} burndown status",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     let _ = writeln!(out);
 
     match lock {
@@ -76767,7 +77168,7 @@ fn render_burndown_status_human(
             let _ = writeln!(
                 out,
                 "  {} stale drain lock — pid {} (started {}) is no longer running",
-                "⚠".yellow(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                 l.pid,
                 when
             );
@@ -77185,7 +77586,10 @@ fn handle_burndown_explain(json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!("{} why each open spec is still open", "▸".cyan().bold());
+    println!(
+        "{} why each open spec is still open",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     if classified.is_empty() {
         println!("  {}", "Nothing open — the backlog is clear.".dimmed());
         return Ok(());
@@ -77835,7 +78239,10 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
         return Ok(());
     }
 
-    println!("{} what needs a human", "▸".cyan().bold());
+    println!(
+        "{} what needs a human",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     let nothing = classified.is_empty()
         && routed_only.is_empty()
         && pending_decisions.is_empty()
@@ -78084,7 +78491,11 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
         hints.push("advisor work: `aida advisor`".to_string());
     }
     if !hints.is_empty() {
-        println!("\n  {} {}", "↳".dimmed(), hints.join(" · ").dimmed());
+        println!(
+            "\n  {} {}",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            hints.join(" · ").dimmed()
+        );
     }
     Ok(())
 }
@@ -78207,7 +78618,10 @@ fn handle_advisor_worklist(
         return Ok(());
     }
 
-    println!("{} the advisor's worklist", "▸".cyan().bold());
+    println!(
+        "{} the advisor's worklist",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     let nothing = advisor_rows.is_empty() && distill.is_empty() && triage == 0 && bless.is_empty();
     if nothing {
         println!(
@@ -78306,7 +78720,7 @@ fn handle_advisor_worklist(
 
     println!(
         "\n  {} operator decisions / reviews live on `aida human` · full dashboard: `aida advisor status`",
-        "↳".dimmed()
+        crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
     );
     Ok(())
 }
@@ -78527,12 +78941,12 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
         if copy_to_clipboard(&prompt) {
             println!(
                 "{} copied the grooming prompt to the clipboard — paste it to the advisor",
-                "✓".green()
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             );
         } else {
             println!(
                 "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
             println!();
             print!("{prompt}");
@@ -78550,7 +78964,10 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
     let n_clarify = counts(burndown::UnblockAction::Clarify);
     let n_leave = counts(burndown::UnblockAction::Leave);
 
-    println!("{} grooming prompt for the advisor", "▸".cyan().bold());
+    println!(
+        "{} grooming prompt for the advisor",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     if lines.is_empty() {
         println!(
             "  {}",
@@ -78699,7 +79116,7 @@ fn print_intent(
     };
     println!(
         "{} {} — intent ({})",
-        "▸".cyan().bold(),
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
         disp.cyan(),
         audience
     );
@@ -78717,7 +79134,7 @@ fn print_intent(
         println!(
             "  {} the spec or its neighbors changed since this was generated — \
              re-run with {} to regenerate.",
-            "⚠".yellow(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             "--refresh".yellow().bold()
         );
     }
@@ -78774,7 +79191,7 @@ fn generate_intent(
 
     println!(
         "{} {disp} — generating intent comprehension (headless /aida-intent)…",
-        "▸".cyan().bold()
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
     );
 
     let session_id = Uuid::now_v7().to_string();
@@ -78872,7 +79289,7 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         } else {
             println!(
                 "{} {} is archived (shelved) — run `aida unarchive {}` to reactivate it.",
-                "▸".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
                 disp.cyan(),
                 disp
             );
@@ -78899,7 +79316,7 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         } else {
             println!(
                 "{} {} is {} — it's done, nothing keeping it open.",
-                "▸".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
                 disp.cyan(),
                 status.green()
             );
@@ -78971,7 +79388,11 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
     } else {
         "·".dimmed()
     };
-    println!("{} {}", "▸".cyan().bold(), f.id.cyan().bold());
+    println!(
+        "{} {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        f.id.cyan().bold()
+    );
     // The derived reason gets the bucket header; finding-links + residual notes
     // each get their own labelled line beneath it.
     let mut iter = reasons.iter();
@@ -79211,7 +79632,10 @@ fn handle_burndown_plan(
     // yet queued. Read-only; the answer to "what could I bless next?".
     // trace:STORY-546
     if candidates_view {
-        println!("{} burndown candidates", "▸".cyan().bold());
+        println!(
+            "{} burndown candidates",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+        );
         println!(
             "  {}",
             burndown::selector_summary(status, tag, batch).dimmed()
@@ -79241,7 +79665,10 @@ fn handle_burndown_plan(
 
     // Plain-language header: glosses "selector" so a new user understands what
     // is shown and how to narrow it (no bare jargon). trace:STORY-544
-    println!("{} burndown plan", "▸".cyan().bold());
+    println!(
+        "{} burndown plan",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
     println!(
         "  {}",
         burndown::selector_summary(status, tag, batch).dimmed()
@@ -79273,15 +79700,19 @@ fn handle_burndown_plan(
             "Ready (queued + bounded + unblocked + decision-free):".bold()
         );
         for id in &ready {
-            // TASK-805: when a drain owns this spec, mark its state: ▶ in-flight
+            // TASK-805: when a drain owns this spec, mark its state: in-flight
             // (an implementer is leased on it now) / ◷ scheduled (claimed, not
-            // yet picked up). Falls back to the plain ✓ when no drain is live.
+            // yet picked up). Falls back to the plain check mark when no drain is live.
             let (glyph, suffix) = match &overlay {
-                Some(o) if o.in_flight.contains(id) => {
-                    ("▶".cyan(), format!("  {}", "in-flight".cyan()))
-                }
+                Some(o) if o.in_flight.contains(id) => (
+                    crate::glyph(crate::glyphs::Glyph::FlowActive).cyan(),
+                    format!("  {}", "in-flight".cyan()),
+                ),
                 Some(_) => ("◷".yellow(), format!("  {}", "scheduled".yellow())),
-                None => ("✓".green(), String::new()),
+                None => (
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    String::new(),
+                ),
             };
             println!("  {} {}{}{}", glyph, id.cyan(), title_cell(id), suffix);
         }
@@ -79310,7 +79741,12 @@ fn handle_burndown_plan(
                 .bold()
         );
         for id in &supervised {
-            println!("  {} {}{}", "▸".magenta(), id.cyan(), title_cell(id));
+            println!(
+                "  {} {}{}",
+                crate::glyph(crate::glyphs::Glyph::Arrow).magenta(),
+                id.cyan(),
+                title_cell(id)
+            );
         }
     }
     if !parked.is_empty() {
@@ -79382,7 +79818,7 @@ fn handle_release(
         });
         println!(
             "{} would run a {} release: {} → {}",
-            "▸".cyan().bold(),
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
             bump.bold(),
             cur,
             target.green()
@@ -79413,7 +79849,7 @@ fn handle_release(
             }
             None => println!(
                 "  {} not in an aida repo (cd into the checkout or set AIDA_DEV_REPO)",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             ),
         }
         if let Some(n) = after_pr {
@@ -79448,24 +79884,30 @@ fn handle_release(
             })
         });
 
-        println!("{} waiting for PR #{n}'s checks…", "▸".cyan().bold());
+        println!(
+            "{} waiting for PR #{n}'s checks…",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+        );
         match std::process::Command::new("gh")
             .args(build_after_pr_watch_args(n))
             .status()
         {
-            Ok(s) if s.success() => println!("  {} PR #{n} checks passed", "✓".green()),
+            Ok(s) if s.success() => println!("  {} PR #{n} checks passed", crate::glyph(crate::glyphs::Glyph::Check).green()),
             Ok(_) => anyhow::bail!(
                 "PR #{n}'s checks did not pass — not merging or releasing. Inspect with `gh pr checks {n}`, or fix + re-run."
             ),
             Err(e) => anyhow::bail!("could not run `gh pr checks {n} --watch`: {e}"),
         }
 
-        println!("{} merging PR #{n}…", "▸".cyan().bold());
+        println!(
+            "{} merging PR #{n}…",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+        );
         match std::process::Command::new("gh")
             .args(build_after_pr_merge_args(n))
             .status()
         {
-            Ok(s) if s.success() => println!("  {} PR #{n} merged", "✓".green()),
+            Ok(s) if s.success() => println!("  {} PR #{n} merged", crate::glyph(crate::glyphs::Glyph::Check).green()),
             _ => anyhow::bail!(
                 "`gh pr merge {n} --squash --delete-branch` failed — merge it manually, then re-run `aida release` without --after-pr."
             ),
@@ -79473,7 +79915,10 @@ fn handle_release(
 
         // Sync local main so release.sh tags the merged commit.
         if let Some(r) = &repo {
-            println!("{} syncing local main…", "▸".cyan().bold());
+            println!(
+                "{} syncing local main…",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+            );
             let pull = std::process::Command::new("git")
                 .arg("-C")
                 .arg(r)
@@ -79834,7 +80279,11 @@ fn poll_until_published(url: &str, timeout: std::time::Duration) -> Result<()> {
             .context("Failed to invoke curl")?;
         let code = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if code == "200" {
-            println!("\n  ✓ artifact available ({}s)", start.elapsed().as_secs());
+            println!(
+                "\n  {} artifact available ({}s)",
+                crate::glyph(crate::glyphs::Glyph::Check),
+                start.elapsed().as_secs()
+            );
             return Ok(());
         }
         // Animated dots so the user sees we're not stuck.
@@ -80462,13 +80911,13 @@ fn handle_digest_command(
         if copy_to_clipboard(&rendered) {
             println!(
                 "{} copied digest to clipboard ({} chars)",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 rendered.chars().count(),
             );
         } else {
             println!(
                 "{} no clipboard tool found (wl-copy/xclip/xsel/pbcopy/clip) — printing instead",
-                "⚠".yellow()
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
             print!("{rendered}");
             if !rendered.ends_with('\n') {
@@ -80693,7 +81142,11 @@ fn render_auto_complete_failures(
             if g.gap() > 0.001 {
                 println!(
                     "  {}",
-                    "↳ work sessions finished but the orchestrator scored as failed".dimmed()
+                    format!(
+                        "{} work sessions finished but the orchestrator scored as failed",
+                        crate::glyph(crate::glyphs::Glyph::SubArrow)
+                    )
+                    .dimmed()
                 );
             }
         }
@@ -81045,9 +81498,9 @@ fn handle_health_command(
     } else {
         for (outcome, count) in session_tally.breakdown() {
             let marker = if outcome.is_success() {
-                "✓".green()
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             } else {
-                "✗".yellow()
+                crate::glyph(crate::glyphs::Glyph::Cross).yellow()
             };
             println!("    {} {:<16} {}", marker, outcome.slug(), count);
         }
@@ -81471,7 +81924,10 @@ fn auto_push_store_best_effort(store_path: &std::path::Path, reason: &str) {
         std::time::Duration::from_secs(5),
     ) {
         Ok(status) if status.success() => {
-            eprintln!("  {} auto-pushed aida-store ({reason})", "✓".green());
+            eprintln!(
+                "  {} auto-pushed aida-store ({reason})",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
         }
         Ok(_) => {
             eprintln!(
@@ -81518,7 +81974,7 @@ fn maybe_digest_mailbox_best_effort(store_path: &std::path::Path, reason: &str) 
         Ok(0) => {}
         Ok(n) => eprintln!(
             "  {} digested {n} mailbox message(s) to the canonical store ({reason})",
-            "✉".dimmed()
+            crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
         ),
         Err(e) => eprintln!(
             "  {} mailbox digest skipped ({reason}): {e}",
@@ -82001,7 +82457,7 @@ fn handle_push_command(
                 {
                     eprintln!(
                         "{} branch {} was the head of {} which already merged.",
-                        "⚠".yellow().bold(),
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                         branch.cyan(),
                         format!("PR-{}", pr.number).cyan(),
                     );
@@ -82051,7 +82507,7 @@ fn handle_push_command(
                 if let Some((behind, sample)) = branch_behind_main(&project_root, &branch) {
                     eprintln!(
                         "{} {} is {} commit{} behind {}:",
-                        "⚠".yellow().bold(),
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                         branch.cyan(),
                         behind,
                         if behind == 1 { "" } else { "s" },
@@ -82253,7 +82709,7 @@ fn handle_pull_command(
     // BUG-254: track per-leg failures so the function's exit reflects what
     // actually happened. Before this, a non-zero `git pull --ff-only` was
     // logged as a Warning and swallowed — `aida pull` returned 0 and the
-    // orchestrator's phase 5 then announced `✓ phase 5 complete` over a
+    // orchestrator's phase 5 then announced `phase 5 complete` over a
     // stale tree, breaking the auto-bump scan and confusing phase 6.
     // trace:BUG-254 | ai:claude
     let mut code_failed: Option<String> = None;
@@ -82588,7 +83044,7 @@ fn handle_pull_command(
     }
 
     // BUG-254: any leg failure → non-zero exit, so the orchestrator's
-    // phase 5 reports failure instead of `✓ phase 5 complete` over a
+    // phase 5 reports failure instead of `phase 5 complete` over a
     // tree that did not advance. The detail names which legs failed so
     // the headless drain's JSONL log captures the cause.
     // trace:BUG-254 | ai:claude
@@ -82680,7 +83136,7 @@ fn cascade_rebase_stacked_branches(
 
     eprintln!(
         "{} {} stacked branch{} to rebase onto {}",
-        "▶".cyan().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive).cyan().bold(),
         affected.len(),
         if affected.len() == 1 { "" } else { "es" },
         default_short.cyan()
@@ -82694,7 +83150,7 @@ fn cascade_rebase_stacked_branches(
             eprintln!(
                 "  {} skipping `{}` — no lease found (worktree may have been removed; \
                  run `aida stack show --prune-stale` to clean up the graph)",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 entry.branch.cyan()
             );
             continue;
@@ -82702,7 +83158,7 @@ fn cascade_rebase_stacked_branches(
         if !lease.worktree_path.exists() {
             eprintln!(
                 "  {} skipping `{}` — worktree {} is missing",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 entry.branch.cyan(),
                 lease.worktree_path.display()
             );
@@ -82723,7 +83179,10 @@ fn cascade_rebase_stacked_branches(
             let _ = std::io::stderr().flush();
             let mut ans = String::new();
             if std::io::stdin().read_line(&mut ans).is_err() {
-                eprintln!("  {} cascade aborted at stdin EOF", "✗".red());
+                eprintln!(
+                    "  {} cascade aborted at stdin EOF",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red()
+                );
                 return Ok(());
             }
             if !matches!(ans.trim(), "y" | "Y") {
@@ -82768,7 +83227,7 @@ fn cascade_rebase_stacked_branches(
                 let new_sha = aida_core::git_ops::head_sha(&lease.worktree_path).ok();
                 eprintln!(
                     "  {} rebased `{}` onto {} ({})",
-                    "✓".green().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                     entry.branch.cyan(),
                     default_short.cyan(),
                     new_sha
@@ -82805,7 +83264,7 @@ fn cascade_rebase_stacked_branches(
                 eprintln!(
                     "  {} rebase of `{}` hit conflicts; left in mid-rebase state at {}. \
                      Run `/aida-rebase` or `git rebase --abort` to recover.",
-                    "✗".red().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     entry.branch.cyan(),
                     lease.worktree_path.display()
                 );
@@ -82815,7 +83274,7 @@ fn cascade_rebase_stacked_branches(
             Err(e) => {
                 eprintln!(
                     "  {} could not spawn `git rebase` for `{}`: {}",
-                    "✗".red().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     entry.branch.cyan(),
                     e
                 );
@@ -83291,21 +83750,26 @@ fn print_fetch_delta(
         None => {
             // First-ever sight of the remote ref. Don't claim a count we
             // can't justify — say "now visible" instead.
-            println!("  {} {} origin/{} now visible", "✓".green(), leg, branch);
+            println!(
+                "  {} {} origin/{} now visible",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                leg,
+                branch
+            );
             return;
         }
     };
     if n == 0 {
         println!(
             "  {} {} origin/{} already up-to-date",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             leg,
             branch
         );
     } else {
         println!(
             "  {} {} {} new commit{} on origin/{}",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             leg,
             n,
             if n == 1 { "" } else { "s" },
@@ -87662,7 +88126,7 @@ fn print_status_presence_line(project_root: &std::path::Path) {
     let _ = project_root; // reserved: per-project presence would key off this
     println!(
         "  {} {} (set {}, {})",
-        "🚶".to_string(),
+        crate::glyph(crate::glyphs::Glyph::Away).to_string(),
         "away".yellow().bold(),
         presence::since_label(set_at, now),
         presence::ttl_remaining_label(set_at, file.ttl_secs, now)
@@ -87899,10 +88363,18 @@ fn print_status_pr_section(ctx: &UserStatusContext, focused: bool) {
             match pr.ci_rollup.as_deref() {
                 None => println!("  {} (no checks reported)", "ci:".dimmed()),
                 Some("SUCCESS") => {
-                    println!("  {} {}", "ci:".dimmed(), "✓ SUCCESS".green())
+                    println!(
+                        "  {} {}",
+                        "ci:".dimmed(),
+                        format!("{} SUCCESS", crate::glyph(crate::glyphs::Glyph::Check)).green()
+                    )
                 }
                 Some(r) if r.contains("FAILURE") || r.contains("CANCELLED") => {
-                    println!("  {} {}", "ci:".dimmed(), format!("✗ {}", r).red())
+                    println!(
+                        "  {} {}",
+                        "ci:".dimmed(),
+                        format!("{} {}", crate::glyph(crate::glyphs::Glyph::Cross), r).red()
+                    )
                 }
                 Some(r) if r.contains("PENDING") || r.contains("IN_PROGRESS") => {
                     println!("  {} {}", "ci:".dimmed(), format!("⏱ {}", r).yellow())
@@ -87963,7 +88435,7 @@ fn print_status_queue_section(ctx: &UserStatusContext, _focused: bool) {
         if !in_progress_rows.is_empty() {
             println!(
                 "  {} {}",
-                "◐".magenta(),
+                crate::glyph(crate::glyphs::Glyph::InFlight).magenta(),
                 format!("In progress ({}):", in_progress_total).magenta()
             );
             for row in &in_progress_rows {
@@ -88158,7 +88630,7 @@ fn claude_status_chip(entry: &claude_agents::ClaudeAgentEntry) -> String {
         "failed" | "Failed" => label.red().to_string(),
         _ => label.normal().to_string(),
     };
-    format!("• {}", painted)
+    format!("{} {}", crate::glyph(crate::glyphs::Glyph::Bullet), painted)
 }
 
 fn print_status_short(ctx: &UserStatusContext) {
@@ -88182,16 +88654,16 @@ fn print_status_short(ctx: &UserStatusContext) {
                 .as_deref()
                 .map(|r| {
                     if r == "SUCCESS" {
-                        "ci✓"
+                        format!("ci{}", crate::glyph(crate::glyphs::Glyph::Check))
                     } else if r.contains("FAIL") || r.contains("CANCEL") {
-                        "ci✗"
+                        format!("ci{}", crate::glyph(crate::glyphs::Glyph::Cross))
                     } else if r.contains("PENDING") || r.contains("IN_PROGRESS") {
-                        "ci⏱"
+                        "ci⏱".to_string()
                     } else {
-                        "ci?"
+                        "ci?".to_string()
                     }
                 })
-                .unwrap_or("ci?");
+                .unwrap_or_else(|| "ci?".to_string());
             format!(" PR#{} {}", p.number, ci)
         }
         _ => String::new(),
@@ -90135,20 +90607,28 @@ fn print_status_hygiene_section(
 
     for finding in findings.iter().take(limit) {
         let heal_mode = if finding.safe_heal { "safe" } else { "manual" };
-        println!("  • {}", finding.category.cyan());
+        println!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Bullet),
+            finding.category.cyan()
+        );
         println!("    - {} [{}]", finding.summary, heal_mode.dimmed());
         println!("      {} {}", "→".yellow(), finding.action.dimmed());
     }
 
     if total > limit {
         let overflow = total - limit;
-        println!("    • +{} more (run aida doctor)", overflow);
+        println!(
+            "    {} +{} more (run aida doctor)",
+            crate::glyph(crate::glyphs::Glyph::Bullet),
+            overflow
+        );
     }
 
     if uncorroborated > 0 {
         println!(
             "  {} {} Completed spec{} with no corroborating commit (run {})",
-            "⚠".yellow(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             uncorroborated,
             if uncorroborated == 1 { "" } else { "s" },
             "aida doctor --category completed-without-commit".cyan()
@@ -91201,7 +91681,12 @@ fn summarize_cross_platform_ci_runs(
     if latest_completed_success && latest_fresh {
         return CrossPlatformCiSummary {
             release_gate: CrossPlatformReleaseGate::Ready,
-            summary: format!("{} green ({}{})", "✓".green(), latest_age, latest_run),
+            summary: format!(
+                "{} green ({}{})",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                latest_age,
+                latest_run
+            ),
             detail: None,
         };
     }
@@ -91225,7 +91710,13 @@ fn summarize_cross_platform_ci_runs(
     };
     CrossPlatformCiSummary {
         release_gate: CrossPlatformReleaseGate::Blocked,
-        summary: format!("{} {} ({}{})", "✗".red(), reason, latest_age, latest_run),
+        summary: format!(
+            "{} {} ({}{})",
+            crate::glyph(crate::glyphs::Glyph::Cross).red(),
+            reason,
+            latest_age,
+            latest_run
+        ),
         detail: last_green_detail.or_else(|| {
             Some(
                 "No previous green cross-platform run found. Releases require <24h green."
@@ -92288,7 +92779,7 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
 
                 println!(
                     "{} Successfully migrated {} requirements to PostgreSQL",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     count
                 );
                 return Ok(());
@@ -92332,7 +92823,7 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
 
                 println!(
                     "{} Successfully migrated {} requirements to '{}'",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     count,
                     target_path.display()
                 );
@@ -92373,7 +92864,7 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
 
             println!(
                 "{} Successfully migrated {} requirements to '{}'",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 count,
                 target_path.display()
             );
@@ -92553,7 +93044,11 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 aida_core::workspace::init_workspace(&cwd, ws_name, None, remote.as_deref())?;
 
             println!();
-            println!("{} Workspace '{}' initialized", "✓".green(), manifest.name);
+            println!(
+                "{} Workspace '{}' initialized",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                manifest.name
+            );
             println!();
             println!("  {}:", "Repos discovered".bold());
             for repo in &manifest.repos {
@@ -92591,7 +93086,7 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
             target.save(&store)?;
             println!(
                 "{} Exported {} requirements to git store at {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 store.requirements.len(),
                 output_path.display()
             );
@@ -93336,7 +93831,9 @@ fn handle_rel_list_modern(
         let to = format!("{:<to_w$}", r.target_spec, to_w = to_w);
         let title = shorten_title(&r.target_title, 60);
         let marker = if !r.target_resolved {
-            "⚠ ".red().to_string()
+            format!("{} ", crate::glyph(crate::glyphs::Glyph::Warning))
+                .red()
+                .to_string()
         } else if r
             .target_status
             .as_deref()
@@ -93817,7 +94314,9 @@ fn render_tree_node(
     // Glyph hint without emoji (CLAUDE.md house rule): two-state mark on
     // the most useful axis — completed vs everything else.
     let glyph = if status.eq_ignore_ascii_case("completed") {
-        "✓".green().to_string()
+        crate::glyph(crate::glyphs::Glyph::Check)
+            .green()
+            .to_string()
     } else {
         "○".dimmed().to_string()
     };
@@ -94328,7 +94827,11 @@ fn add_relationship_definition(
     store.add_relationship_definition(def)?;
     storage.save(&store)?;
 
-    println!("{} Added relationship definition '{}'", "✓".green(), name);
+    println!(
+        "{} Added relationship definition '{}'",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        name
+    );
     Ok(())
 }
 
@@ -94390,11 +94893,15 @@ fn edit_relationship_definition(
     if existing.built_in {
         println!(
             "{} Updated built-in relationship definition '{}' (limited fields)",
-            "✓".green(),
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
             name
         );
     } else {
-        println!("{} Updated relationship definition '{}'", "✓".green(), name);
+        println!(
+            "{} Updated relationship definition '{}'",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            name
+        );
     }
     Ok(())
 }
@@ -94438,7 +94945,11 @@ fn remove_relationship_definition(
     store.remove_relationship_definition(name)?;
     storage.save(&store)?;
 
-    println!("{} Removed relationship definition '{}'", "✓".green(), name);
+    println!(
+        "{} Removed relationship definition '{}'",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        name
+    );
     Ok(())
 }
 
@@ -94571,7 +95082,11 @@ fn trace_add(
 
     storage.save(&store)?;
 
-    println!("{} Added trace link to {}", "✓".green(), spec_id);
+    println!(
+        "{} Added trace link to {}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        spec_id
+    );
     println!("  File: {}", file_path.cyan());
     if let Some(sym) = symbol {
         println!("  Symbol: {}", sym.yellow());
@@ -94732,7 +95247,10 @@ fn trace_remove(storage: &Storage, req_id: &str, link_id: &str) -> Result<()> {
     }
 
     storage.save(&store)?;
-    println!("{} Trace link removed", "✓".green());
+    println!(
+        "{} Trace link removed",
+        crate::glyph(crate::glyphs::Glyph::Check).green()
+    );
     Ok(())
 }
 
@@ -94980,7 +95498,11 @@ fn trace_scan(
         }
 
         storage.save(&store)?;
-        println!("{} Added {} new trace links", "✓".green(), added);
+        println!(
+            "{} Added {} new trace links",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            added
+        );
     }
 
     Ok(())
@@ -95112,7 +95634,11 @@ fn trace_sweep(
         }
 
         storage.save(&store)?;
-        println!("{} Added {} new commit trace links", "✓".green(), updated);
+        println!(
+            "{} Added {} new commit trace links",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            updated
+        );
     }
 
     Ok(())
@@ -95253,7 +95779,14 @@ fn render_card_intent(req: &aida_core::Requirement, store_path: &std::path::Path
         } => {
             // Lead the brief. Label it AI-generated so no reader mistakes the
             // prose for hand-authored ground truth.
-            println!("  {}", "▸ Intent (AI-generated):".bold());
+            println!(
+                "  {}",
+                format!(
+                    "{} Intent (AI-generated):",
+                    crate::glyph(crate::glyphs::Glyph::Arrow)
+                )
+                .bold()
+            );
             println!(
                 "    {}",
                 format!("model={model} · generated {generated_at}").dimmed()
@@ -95266,7 +95799,7 @@ fn render_card_intent(req: &aida_core::Requirement, store_path: &std::path::Path
         intent::PickupIntent::Note { stale } => {
             println!(
                 "  {} {}",
-                "▸ Intent:".bold(),
+                format!("{} Intent:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
                 intent::pickup_intent_note(&disp, stale).dimmed()
             );
             println!();
@@ -95312,8 +95845,12 @@ fn render_spec_card(
     const WIDTH: usize = 72;
     let rule = "═".repeat(WIDTH);
 
-    // Header: ▶ <ID> — <title>, title trimmed to keep the banner tidy.
-    let prefix = format!("▶ {} — ", id);
+    // Header: a flow-active marker then `<ID> — <title>`, title trimmed to keep the banner tidy.
+    let prefix = format!(
+        "{} {} — ",
+        crate::glyph(crate::glyphs::Glyph::FlowActive),
+        id
+    );
     let budget = WIDTH.saturating_sub(prefix.chars().count());
     let title = if req.title.chars().count() > budget {
         let t: String = req.title.chars().take(budget.saturating_sub(1)).collect();
@@ -95349,12 +95886,20 @@ fn render_spec_card(
     // so the card only shows a feature the user actually set.
     let mut printed_field = false;
     if !req.feature.is_empty() && req.feature != "Uncategorized" {
-        println!("  {} {}", "▸ Feature:".bold(), req.feature);
+        println!(
+            "  {} {}",
+            format!("{} Feature:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
+            req.feature
+        );
         printed_field = true;
     }
     if !req.tags.is_empty() {
         let tags: Vec<String> = req.tags.iter().cloned().collect();
-        println!("  {} {}", "▸ Tags:".bold(), tags.join(", "));
+        println!(
+            "  {} {}",
+            format!("{} Tags:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
+            tags.join(", ")
+        );
         printed_field = true;
     }
     let join_rels = |bucket: &str| -> String {
@@ -95372,12 +95917,20 @@ fn render_spec_card(
     };
     let parent = join_rels("Parent");
     if !parent.is_empty() {
-        println!("  {} {}", "▸ Parent:".bold(), parent);
+        println!(
+            "  {} {}",
+            format!("{} Parent:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
+            parent
+        );
         printed_field = true;
     }
     let related = join_rels("Related");
     if !related.is_empty() {
-        println!("  {} {}", "▸ Related:".bold(), related);
+        println!(
+            "  {} {}",
+            format!("{} Related:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
+            related
+        );
         printed_field = true;
     }
     if printed_field {
@@ -95398,10 +95951,23 @@ fn render_spec_card(
     // STORY-332: a punted spec carries its fork reason — surface it on the
     // card so a triager sees the contract and the obstacle together.
     if let Some(reason) = req.attention_reason.as_ref() {
-        println!("  {} {}", "⚠ Punted:".magenta().bold(), reason.category);
+        println!(
+            "  {} {}",
+            format!("{} Punted:", crate::glyph(crate::glyphs::Glyph::Warning))
+                .magenta()
+                .bold(),
+            reason.category
+        );
         println!("    {}", reason.detail);
         if let Some(lean) = &reason.lean {
-            println!("    {}", format!("↳ lean: {lean}").dimmed());
+            println!(
+                "    {}",
+                format!(
+                    "{} lean: {lean}",
+                    crate::glyph(crate::glyphs::Glyph::SubArrow)
+                )
+                .dimmed()
+            );
         }
         println!();
     }
@@ -95410,7 +95976,10 @@ fn render_spec_card(
     // truncated to ~3 paragraphs / ~500 chars on a paragraph boundary.
     // Brief already returned above; only Balanced and Full reach here.
     let (desc_body, desc_label) = if density == CardDensity::Full {
-        (req.description.trim().to_string(), "▸ Description:")
+        (
+            req.description.trim().to_string(),
+            format!("{} Description:", crate::glyph(crate::glyphs::Glyph::Arrow)),
+        )
     } else {
         let (body, truncated) = card_truncate_paragraphs(card_lead_prose(&req.description), 3, 500);
         let body = if truncated && !body.is_empty() {
@@ -95418,7 +95987,13 @@ fn render_spec_card(
         } else {
             body
         };
-        (body, "▸ Description (summary):")
+        (
+            body,
+            format!(
+                "{} Description (summary):",
+                crate::glyph(crate::glyphs::Glyph::Arrow)
+            ),
+        )
     };
     if !desc_body.is_empty() {
         println!("  {}", desc_label.bold());
@@ -95438,7 +96013,15 @@ fn render_spec_card(
             } else {
                 format!("{} items", n)
             };
-            println!("  {}", format!("▸ Acceptance ({}):", label).bold());
+            println!(
+                "  {}",
+                format!(
+                    "{} Acceptance ({}):",
+                    crate::glyph(crate::glyphs::Glyph::Arrow),
+                    label
+                )
+                .bold()
+            );
             for line in acc.lines() {
                 let t = line.trim_end();
                 if !t.is_empty() {
@@ -95465,7 +96048,11 @@ fn render_spec_card(
                 .and_then(|s| discover_plan_context(&project_root, s))
         });
         if let Some(ctx) = plan {
-            println!("  {} {}", "▸ Plan brief:".bold(), ctx.plan_file.cyan());
+            println!(
+                "  {} {}",
+                format!("{} Plan brief:", crate::glyph(crate::glyphs::Glyph::Arrow)).bold(),
+                ctx.plan_file.cyan()
+            );
             if !ctx.critical_files.is_empty() {
                 println!(
                     "    {} ({})",
@@ -95805,7 +96392,8 @@ fn read_commits_in_range(
 fn format_trailer_guard_refusal(surface: &str, violations: &[TrailerViolation]) -> Vec<String> {
     let mut lines = Vec::new();
     lines.push(format!(
-        "✗ {surface}: {} commit trailer reference(s) name a spec that does not resolve:",
+        "{} {surface}: {} commit trailer reference(s) name a spec that does not resolve:",
+        crate::glyph(crate::glyphs::Glyph::Cross),
         violations.len()
     ));
     for v in violations {
@@ -95893,9 +96481,10 @@ fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
 
     if store.is_none() {
         eprintln!(
-            "⚠ trace gate: no requirement store reachable from {} — cannot validate references. \
+            "{} trace gate: no requirement store reachable from {} — cannot validate references. \
              Ensure the gate runs where the store is attached (`aida cache rebuild` / fresh-clone \
              auto-attach).",
+            crate::glyph(crate::glyphs::Glyph::Warning),
             project_root.display()
         );
     }
@@ -95912,13 +96501,15 @@ fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&payload)?);
     } else if violations.is_empty() {
         println!(
-            "✓ trace gate: {} commit(s) in `{}` — every (SPEC-ID) trailer resolves to a live spec",
+            "{} trace gate: {} commit(s) in `{}` — every (SPEC-ID) trailer resolves to a live spec",
+            crate::glyph(crate::glyphs::Glyph::Check),
             commits.len(),
             range
         );
     } else {
         eprintln!(
-            "✗ trace gate: {} dead/dangling SPEC-ID reference(s) in `{}`:",
+            "{} trace gate: {} dead/dangling SPEC-ID reference(s) in `{}`:",
+            crate::glyph(crate::glyphs::Glyph::Cross),
             violations.len(),
             range
         );
@@ -96579,9 +97170,10 @@ fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result
     let store = load_store_for_lookup(&project_root);
     if store.is_none() {
         eprintln!(
-            "⚠ trace coverage: no requirement store reachable from {} — anchor/trailer ids cannot \
+            "{} trace coverage: no requirement store reachable from {} — anchor/trailer ids cannot \
              be confirmed live (every id is treated as live; coverage may be over-counted). Run \
              where the store is attached (`aida cache rebuild`).",
+            crate::glyph(crate::glyphs::Glyph::Warning),
             project_root.display()
         );
     }
@@ -96665,9 +97257,16 @@ fn handle_trace_coverage(range: Option<&str>, json: bool, block: bool) -> Result
             println!("  exempt: {summary}");
         }
         if uncovered.is_empty() {
-            println!("✓ every coverable changed hunk carries trace coverage");
+            println!(
+                "{} every coverable changed hunk carries trace coverage",
+                crate::glyph(crate::glyphs::Glyph::Check)
+            );
         } else {
-            eprintln!("⚠ {} uncovered coverable hunk(s):", uncovered.len());
+            eprintln!(
+                "{} {} uncovered coverable hunk(s):",
+                crate::glyph(crate::glyphs::Glyph::Warning),
+                uncovered.len()
+            );
             for h in &uncovered {
                 eprintln!(
                     "  {}:{} (+{} line(s)) — no // trace: anchor and no live commit trailer",
@@ -97781,13 +98380,13 @@ fn handle_review_spec(
             if let Some((full, _, _)) = linkage.commits.first() {
                 println!(
                     "  {} to see the merged diff: {}",
-                    "↳".dimmed(),
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                     format!("git show {full}").cyan()
                 );
             }
             println!(
                 "  {} if it genuinely needs another look, {}.",
-                "↳".dimmed(),
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                 format!("aida queue rework {spec_id}").cyan()
             );
         }
@@ -97833,7 +98432,7 @@ fn handle_review_spec(
             );
             println!(
                 "  {} the held draft {change_noun} is closed or was never opened.",
-                "↳".dimmed()
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
             );
             // AC-5: offer to (re)open a PR before review.
             if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
@@ -97850,7 +98449,7 @@ fn handle_review_spec(
                     );
                     println!(
                         "  {} then re-run {} once the {change_noun} is open.",
-                        "↳".dimmed(),
+                        crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                         format!("aida review {spec_id}").cyan()
                     );
                     return Ok(());
@@ -97858,7 +98457,7 @@ fn handle_review_spec(
             } else {
                 println!(
                     "  {} to open one: {}",
-                    "↳".dimmed(),
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                     format!("git push -u origin {branch} && gh pr create --fill").cyan()
                 );
             }
@@ -97879,7 +98478,7 @@ fn handle_review_spec(
             println!(
                 "  {} nothing to review — the work has landed. \
                  If it needs another look, {}.",
-                "↳".dimmed(),
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                 format!("aida queue rework {spec_id}").cyan()
             );
             return Ok(());
@@ -97893,7 +98492,7 @@ fn handle_review_spec(
             println!(
                 "  {} commit your work with a {} trailer, push, and open a {change_noun}; \
                  then re-run {}.",
-                "↳".dimmed(),
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                 format!("({spec_id})").cyan(),
                 format!("aida review {spec_id}").cyan()
             );
@@ -97941,7 +98540,7 @@ fn handle_review_spec(
                     eprintln!(
                         "  {} stale-base check for {change_noun}-{n} failed ({e}); \
                          proceeding with review",
-                        "⚠".yellow().bold()
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                     );
                     None
                 }
@@ -97949,7 +98548,7 @@ fn handle_review_spec(
             if let Some((behind, overlap)) = stale {
                 eprintln!(
                     "  {} {}",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     pr_rebase::stale_base_review_warn_message(n, behind, &overlap).yellow()
                 );
                 // Offer the rebase inline while a human is at the prompt —
@@ -97966,7 +98565,7 @@ fn handle_review_spec(
                             eprintln!(
                                 "  {} rebase did not complete ({e}); the review \
                                  will run against the stale base",
-                                "⚠".yellow().bold()
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                             );
                         }
                     }
@@ -98009,7 +98608,9 @@ fn handle_review_spec(
 
     println!(
         "\n  {} running reviewer over the diff against {}'s acceptance criteria…",
-        "▶".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive)
+            .green()
+            .bold(),
         spec_id.cyan()
     );
 
@@ -98031,7 +98632,7 @@ fn handle_review_spec(
     if !status.success() {
         eprintln!(
             "  {} the reviewer exited non-zero ({})",
-            "⚠".yellow(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             status
         );
     }
@@ -98063,7 +98664,7 @@ fn handle_review_spec(
         None => {
             println!(
                 "  {} the reviewer produced no verdict file — review against {} yourself.",
-                "⚠".yellow(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                 spec_id.cyan()
             );
             String::new()
@@ -98092,7 +98693,10 @@ fn handle_review_spec(
     let choice = match inquire::Select::new("What now?", options).prompt() {
         Ok(c) => c,
         Err(_) => {
-            println!("  {} deferred — the spec stays held.", "↳".dimmed());
+            println!(
+                "  {} deferred — the spec stays held.",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+            );
             return Ok(());
         }
     };
@@ -98110,7 +98714,7 @@ fn handle_review_spec(
                 );
                 println!(
                     "  {} the spec auto-bumps Done → Completed when the merge lands on the default branch.",
-                    "↳".dimmed()
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
                 );
             }
             None => println!(
@@ -98138,7 +98742,10 @@ fn handle_review_spec(
             None => println!("  {} no open {change_noun} to diff.", "ℹ".cyan()),
         }
     } else {
-        println!("  {} deferred — the spec stays held.", "↳".dimmed());
+        println!(
+            "  {} deferred — the spec stays held.",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+        );
     }
 
     Ok(())
@@ -98161,7 +98768,11 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ReviewCommand::Assemble { output } => {
             let project_root = find_project_root()?;
             let out_path = rules_sync::assemble_review_md(&project_root, output.as_deref())?;
-            println!("✓ Assembled root REVIEW.md at {}", out_path.display());
+            println!(
+                "{} Assembled root REVIEW.md at {}",
+                crate::glyph(crate::glyphs::Glyph::Check),
+                out_path.display()
+            );
             Ok(())
         }
     }
@@ -98291,7 +98902,7 @@ fn generate_review_prompt(
             .with_context(|| format!("failed to write review prompt to {}", path))?;
         eprintln!(
             "{} review prompt written to {} ({} spec{}{})",
-            "✓".green().bold(),
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
             path,
             spec_ids.len(),
             if spec_ids.len() == 1 { "" } else { "s" },
@@ -98486,7 +99097,7 @@ fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &
                 std::fs::write(output_path, &content)?;
                 println!(
                     "{} Report generated: {}",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     output_path.display()
                 );
             } else {
@@ -98637,7 +99248,7 @@ fn handle_scaffold_command(
                     std::fs::write(output_path, &html)?;
                     println!(
                         "{} Scaffold report generated: {}",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         output_path.display()
                     );
                 } else {
@@ -98647,9 +99258,15 @@ fn handle_scaffold_command(
             }
 
             if status.is_current {
-                println!("{} Scaffold is up to date", "✓".green());
+                println!(
+                    "{} Scaffold is up to date",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
             } else {
-                println!("{} Scaffold drift detected", "⚠".yellow());
+                println!(
+                    "{} Scaffold drift detected",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
             }
 
             println!();
@@ -98666,7 +99283,11 @@ fn handle_scaffold_command(
                     println!();
                     println!("{}:", "Matching".green());
                     for path in &status.matching {
-                        println!("  ✓ {}", path.display());
+                        println!(
+                            "  {} {}",
+                            crate::glyph(crate::glyphs::Glyph::Check),
+                            path.display()
+                        );
                     }
                 }
 
@@ -98697,7 +99318,11 @@ fn handle_scaffold_command(
                     println!();
                     println!("{}:", "Missing".red());
                     for path in &status.missing {
-                        println!("  ✗ {}", path.display());
+                        println!(
+                            "  {} {}",
+                            crate::glyph(crate::glyphs::Glyph::Cross),
+                            path.display()
+                        );
                     }
                 }
 
@@ -98799,7 +99424,7 @@ fn handle_scaffold_command(
                         } else {
                             println!(
                                 "  {} {} (skipped - exists and contains custom user edits, use --force to overwrite)",
-                                "⚠".yellow(),
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                                 artifact.path.display()
                             );
                             skipped += 1;
@@ -98862,7 +99487,7 @@ fn handle_scaffold_command(
                 if total_changes == 0 {
                     println!(
                         "{} Already up to date — {} file(s) match templates exactly, nothing would change.",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         unchanged
                     );
                 } else {
@@ -98880,13 +99505,13 @@ fn handle_scaffold_command(
                 if total_changes == 0 && skipped == 0 {
                     println!(
                         "{} Already up to date — {} file(s) match templates exactly, nothing changed.",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         unchanged
                     );
                 } else {
                     println!(
                         "{} Scaffold applied: {} created, {} updated, {} unchanged{}.",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         created,
                         updated,
                         unchanged,
@@ -98921,14 +99546,19 @@ fn handle_scaffold_command(
                         match removed {
                             Ok(()) => println!("  {} {}", "-".red(), rel.display()),
                             Err(e) => {
-                                eprintln!("  {} {} (failed: {})", "⚠".yellow(), rel.display(), e)
+                                eprintln!(
+                                    "  {} {} (failed: {})",
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                                    rel.display(),
+                                    e
+                                )
                             }
                         }
                     }
                 } else {
                     println!(
                         "{} {} obsolete aida-* file(s) this AIDA version no longer ships:",
-                        "⚠".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                         obe.len()
                     );
                     for p in &obe {
@@ -99013,7 +99643,7 @@ fn handle_scaffold_command(
             println!();
             println!(
                 "{} Extracted {} templates ({} skipped)",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 extracted,
                 skipped
             );
@@ -99407,7 +100037,11 @@ fn run_scaffold_upgrade(
                 // useful signal for a managed-merge upgrade.
                 for ch in &changes {
                     let kind = match ch.kind {
-                        aida_core::SlotChangeKind::Replaced => "↑".cyan().to_string(),
+                        aida_core::SlotChangeKind::Replaced => {
+                            crate::glyph(crate::glyphs::Glyph::FlowQueued)
+                                .cyan()
+                                .to_string()
+                        }
                         aida_core::SlotChangeKind::Added => "+".green().to_string(),
                     };
                     eprintln!(
@@ -99452,9 +100086,18 @@ fn run_scaffold_upgrade(
         }
         if !stats.upgraded.is_empty() {
             let verb = if force { "overwritten" } else { "upgraded" };
-            println!("  {} {} {}:", "↑".cyan().bold(), stats.upgraded.len(), verb);
+            println!(
+                "  {} {} {}:",
+                crate::glyph(crate::glyphs::Glyph::FlowQueued).cyan().bold(),
+                stats.upgraded.len(),
+                verb
+            );
             for p in &stats.upgraded {
-                println!("      ↑ {}", p.display());
+                println!(
+                    "      {} {}",
+                    crate::glyph(crate::glyphs::Glyph::FlowQueued),
+                    p.display()
+                );
             }
             total_changes += stats.upgraded.len();
         }
@@ -99479,7 +100122,7 @@ fn run_scaffold_upgrade(
         if stats.unchanged > 0 {
             println!(
                 "  {} {} matching (no action needed)",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 stats.unchanged
             );
         }
@@ -99495,10 +100138,14 @@ fn run_scaffold_upgrade(
     } else if total_changes == 0 {
         println!(
             "{} Scaffold up to date — nothing to do.",
-            "✓".green().bold()
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold()
         );
     } else {
-        println!("{} {} file(s) changed.", "✓".green().bold(), total_changes);
+        println!(
+            "{} {} file(s) changed.",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            total_changes
+        );
     }
     Ok(())
 }
@@ -100116,9 +100763,10 @@ fn generate_scaffold_html_report(
         html,
         r#"<header>
     <h1>📊 AIDA Scaffold Status Report</h1>
-    <p class="meta">Project: {} • Generated: {}</p>
+    <p class="meta">Project: {} {} Generated: {}</p>
 </header>"#,
         root.display(),
+        crate::glyph(crate::glyphs::Glyph::Bullet),
         timestamp
     )?;
 
@@ -100151,9 +100799,15 @@ fn generate_scaffold_html_report(
 
     // Overall status
     let overall_status = if status.is_current {
-        r#"<p class="status-ok">✓ Scaffold is up to date</p>"#
+        format!(
+            r#"<p class="status-ok">{} Scaffold is up to date</p>"#,
+            crate::glyph(crate::glyphs::Glyph::Check)
+        )
     } else {
-        r#"<p class="status-warn">⚠ Scaffold drift detected</p>"#
+        format!(
+            r#"<p class="status-warn">{} Scaffold drift detected</p>"#,
+            crate::glyph(crate::glyphs::Glyph::Warning)
+        )
     };
     writeln!(
         html,
@@ -100166,14 +100820,16 @@ fn generate_scaffold_html_report(
         writeln!(
             html,
             r#"<section>
-    <h2 class="status-ok">✓ Matching Files ({})</h2>
+    <h2 class="status-ok">{} Matching Files ({})</h2>
     <ul class="file-list">"#,
+            crate::glyph(crate::glyphs::Glyph::Check),
             status.matching.len()
         )?;
         for path in &status.matching {
             writeln!(
                 html,
-                r#"        <li><span class="icon">✓</span>{}</li>"#,
+                r#"        <li><span class="icon">{}</span>{}</li>"#,
+                crate::glyph(crate::glyphs::Glyph::Check),
                 path.display()
             )?;
         }
@@ -100262,14 +100918,16 @@ fn generate_scaffold_html_report(
         writeln!(
             html,
             r#"<section>
-    <h2 class="status-error">✗ Missing Files ({})</h2>
+    <h2 class="status-error">{} Missing Files ({})</h2>
     <ul class="file-list">"#,
+            crate::glyph(crate::glyphs::Glyph::Cross),
             status.missing.len()
         )?;
         for path in &status.missing {
             writeln!(
                 html,
-                r#"        <li><span class="icon status-error">✗</span>{}</li>"#,
+                r#"        <li><span class="icon status-error">{}</span>{}</li>"#,
+                crate::glyph(crate::glyphs::Glyph::Cross),
                 path.display()
             )?;
         }
@@ -100590,7 +101248,7 @@ fn warn_if_queued_ahead_of_blocker(
         if intended_position < blocker_entry.position {
             eprintln!(
                 "  {}  {} queued ahead of {}, which blocks it",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 dep_display(req).bold(),
                 dep_display(target).bold(),
             );
@@ -100617,7 +101275,7 @@ fn warn_if_queued_ahead_of_blocker(
         if points_at_us && entry.position < intended_position {
             eprintln!(
                 "  {}  {} queued ahead of {}, which blocks it",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 dep_display(other).bold(),
                 dep_display(req).bold(),
             );
@@ -100911,7 +101569,7 @@ fn handle_queue_advance(
                 "›".dimmed(),
                 item.display.bold(),
                 item.title,
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
             );
             continue;
         };
@@ -100938,7 +101596,7 @@ fn handle_queue_advance(
             } else {
                 println!(
                     "  {} needs a human — skipped. {}",
-                    "↳".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).yellow(),
                     burndown::advance_action_label(bucket)
                 );
             }
@@ -100965,17 +101623,26 @@ fn handle_queue_advance(
             Ok(c) => c,
             // Esc / Ctrl-C / cancel → treat as Quit (stop the walk).
             Err(_) => {
-                println!("  {} stopping the walk.", "✓".green());
+                println!(
+                    "  {} stopping the walk.",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
                 break;
             }
         };
 
         if choice == "Quit" {
-            println!("  {} stopping the walk.", "✓".green());
+            println!(
+                "  {} stopping the walk.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
             break;
         }
         if choice == "Skip" {
-            println!("  {} skipped.", "↳".dimmed());
+            println!(
+                "  {} skipped.",
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+            );
             continue;
         }
         // The only remaining option is the bucket's primary action.
@@ -101022,7 +101689,7 @@ fn advance_dispatch(
             ) {
                 eprintln!(
                     "  {} review of {} did not complete: {}",
-                    "⚠".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display,
                     e
                 );
@@ -101055,13 +101722,13 @@ fn advance_dispatch(
                         backend.update_requirement(&req)?;
                         println!(
                             "  {} dropped `review:draft-only` from {} — it can now drain.",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             display.bold()
                         );
                     } else {
                         println!(
                             "  {} {} had no `review:draft-only` tag.",
-                            "↳".dimmed(),
+                            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                             display
                         );
                     }
@@ -101083,7 +101750,7 @@ fn advance_dispatch(
         AdvanceAction::Decision => {
             println!(
                 "  {} this item needs a human decision. Answer it with: {}",
-                "↳".yellow(),
+                crate::glyph(crate::glyphs::Glyph::SubArrow).yellow(),
                 "aida questions".cyan()
             );
         }
@@ -101097,7 +101764,7 @@ fn advance_dispatch(
             advance_report_status(status, display);
             println!(
                 "  {} tip: {} drains every ready item at once.",
-                "↳".dimmed(),
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                 "aida burndown run".cyan()
             );
         }
@@ -101116,7 +101783,7 @@ fn advance_dispatch(
                 println!(
                     "  {} approving {} needs the advisor role (or an interactive terminal). \
                      Re-run as advisor: `AIDA_SESSION_ROLE=advisor aida queue advance {}`.",
-                    "⚠".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display.bold(),
                     display
                 );
@@ -101136,7 +101803,7 @@ fn advance_dispatch(
             backend.update_requirement(&req)?;
             println!(
                 "  {} approved {} — it's now drainable.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display.bold()
             );
         }
@@ -101162,7 +101829,7 @@ fn advance_dispatch(
                     println!(
                         "  {} rejecting {} needs the advisor role. \
                          Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.",
-                        "⚠".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                         display.bold()
                     );
                     return Ok(());
@@ -101179,9 +101846,16 @@ fn advance_dispatch(
                 );
                 req.modified_at = chrono::Utc::now();
                 backend.update_requirement(&req)?;
-                println!("  {} rejected {}.", "✓".green(), display.bold());
+                println!(
+                    "  {} rejected {}.",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    display.bold()
+                );
             } else {
-                println!("  {} left parked.", "↳".dimmed());
+                println!(
+                    "  {} left parked.",
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+                );
             }
         }
         AdvanceAction::Close => {
@@ -101198,7 +101872,10 @@ fn advance_dispatch(
                 false
             };
             if !do_close {
-                println!("  {} left open.", "↳".dimmed());
+                println!(
+                    "  {} left open.",
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+                );
                 return Ok(());
             }
             let backend = advance_backend(store_path)?;
@@ -101215,7 +101892,7 @@ fn advance_dispatch(
                 println!(
                     "  {} closing {} needs the advisor role (or an interactive terminal). \
                      Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.",
-                    "⚠".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display.bold()
                 );
                 return Ok(());
@@ -101234,14 +101911,14 @@ fn advance_dispatch(
             backend.update_requirement(&req)?;
             println!(
                 "  {} closed {} — all children were completed.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display.bold()
             );
         }
         AdvanceAction::None => {
             println!(
                 "  {} nothing to do — it resolves through normal flow.",
-                "↳".dimmed()
+                crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
             );
         }
     }
@@ -101255,12 +101932,12 @@ fn advance_report_status(status: std::io::Result<std::process::ExitStatus>, disp
         Ok(s) if s.success() => {}
         Ok(_) => println!(
             "  {} {} did not complete — it stays in the queue.",
-            "↳".yellow(),
+            crate::glyph(crate::glyphs::Glyph::SubArrow).yellow(),
             display
         ),
         Err(e) => eprintln!(
             "  {} could not launch the sub-step for {}: {}",
-            "⚠".yellow(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
             display,
             e
         ),
@@ -101542,7 +102219,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // the existing render path. Additionally collect a set of
             // entries that are queued *ahead* of their unsatisfied
             // blocked-by blocker (AC9) so the main render can decorate
-            // them with a ⚠. trace:STORY-333 | ai:claude
+            // them with a warning marker. trace:STORY-333 | ai:claude
             #[derive(Clone)]
             struct BlockedEntry<'a> {
                 req: &'a aida_core::Requirement,
@@ -102198,7 +102875,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         continue;
                     }
                     lines.push(format!(
-                        "  ⚠  {} queued ahead of {}, which blocks it",
+                        "  {}  {} queued ahead of {}, which blocks it",
+                        crate::glyph(crate::glyphs::Glyph::Warning),
                         dep_display.bold(),
                         blocker_displays.join(", ").bold()
                     ));
@@ -102231,7 +102909,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 println!("{}", "─".repeat(80));
                 // TASK-234: grouped render — bucket the Done specs by PR
                 // + state (awaiting merge / stuck / awaiting commit),
-                // each with a concrete ▶ Next action, instead of a flat
+                // each with a concrete `Next` action, instead of a flat
                 // list under one descriptive hint. trace:TASK-234
                 let project_root = storage
                     .path()
@@ -102281,7 +102959,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             reason_label.magenta().to_string()
                         }
                         // TASK-131: needs-triage gets magenta+bold to match
-                        // the `⚠ Needs Attention` status badge palette, so
+                        // the `Needs Attention` status badge palette, so
                         // a punted spec reads visually as "decide something
                         // here" in both surfaces. trace:TASK-131 | ai:claude
                         aida_core::pickability::BlockedReason::NeedsTriage => {
@@ -102595,7 +103273,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 record_role_activity(spec_id, "queue-add");
                 println!(
                     "{} Added {} ({}) to {} {}",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     display_id.bold(),
                     req.title,
                     "global queue".cyan(),
@@ -102673,7 +103351,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
             println!(
                 "{} Added {} ({}) to queue{}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display_id.bold(),
                 req.title,
                 routing
@@ -102738,7 +103416,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         .unwrap_or("???");
                     println!(
                         "{} Removed {} from global queue [role:{}, origin:{}]",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         display_id.bold(),
                         role,
                         target.project_name
@@ -102776,11 +103454,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             match remove_role.as_deref() {
                 Some(role) => println!(
                     "{} Removed {} from queue [role:{}]",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     display_id.bold(),
                     role
                 ),
-                None => println!("{} Removed {} from queue", "✓".green(), display_id.bold()),
+                None => println!(
+                    "{} Removed {} from queue",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    display_id.bold()
+                ),
             }
         }
         QueueCommand::Move {
@@ -102809,7 +103491,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // BUG-249: the relative paths (--top/--bottom/--before/--after)
             // never checked the target side — queue_reorder silently
             // no-ops when the target isn't in the queue file, so the
-            // command printed `✓ Moved` for a spec that wasn't in the
+            // command printed a `Moved` check line for a spec that wasn't in the
             // queue at all. Surface the two error states explicitly
             // before any path-specific logic runs.
             // trace:BUG-249 | ai:claude
@@ -102877,7 +103559,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if *requested != slot {
                     println!(
                         "{} Moved {} to slot {} — --to {} is out of range (queue has {} item{})",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         display_id.bold(),
                         slot,
                         requested,
@@ -102887,7 +103569,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 } else {
                     println!(
                         "{} Moved {} to slot {} in queue",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         display_id.bold(),
                         slot,
                     );
@@ -102989,7 +103671,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 .as_deref()
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
-            println!("{} Moved {} in queue", "✓".green(), display_id.bold());
+            println!(
+                "{} Moved {} in queue",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                display_id.bold()
+            );
         }
         // trace:STORY-566 | ai:claude
         QueueCommand::Advance { id, yes, user } => {
@@ -102999,9 +103685,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let user_id = get_user(user);
             storage.queue_clear(&user_id, *completed)?;
             if *completed {
-                println!("{} Cleared completed items from queue", "✓".green());
+                println!(
+                    "{} Cleared completed items from queue",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
             } else {
-                println!("{} Cleared all items from queue", "✓".green());
+                println!(
+                    "{} Cleared all items from queue",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
             }
         }
         // Prune queue entries matching a predicate. Today only `--orphaned`
@@ -103095,7 +103787,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             if orphans.is_empty() {
                 println!(
                     "{} No {noun} queue entries found{}",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     if r#for.is_some() {
                         format!(" for role {}", r#for.as_deref().unwrap())
                     } else {
@@ -103109,7 +103801,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     if *dry_run {
                         "ℹ".yellow()
                     } else {
-                        "✗".yellow()
+                        crate::glyph(crate::glyphs::Glyph::Cross).yellow()
                     },
                     n.to_string().bold(),
                     if n == 1 { "y" } else { "ies" },
@@ -103143,7 +103835,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     }
                     println!(
                         "{} Removed {} {noun} queue entr{}",
-                        "✓".green(),
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
                         n.to_string().bold(),
                         if n == 1 { "y" } else { "ies" },
                     );
@@ -103814,7 +104506,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // STORY-98: same reason as the BUG-65 hookup above — `queue
             // done` bypasses Command::Edit, so the manifest-flip path
             // there doesn't fire. Mirror it explicitly so `aida session
-            // show --plan` flips ✓ Done at completion time. STORY-86:
+            // show --plan` flips the Done check at completion time. STORY-86:
             // pass "Done" since that's the canonical status now (manifest
             // treats Done + Completed equivalently — both check the item
             // off the planned cluster).
@@ -103823,7 +104515,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             println!(
                 "{} {} marked done and removed from queue.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display_id.bold()
             );
             println!(
@@ -104030,7 +104722,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         eprintln!(
                             "  {} --zen and --no-human both set; --no-human wins (it is the \
                              stronger autonomy mode — nobody is reachable to consult)",
-                            "⚠".yellow().bold()
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                         );
                     }
                     std::env::remove_var(zen::ZEN_ENV);
@@ -104059,7 +104751,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 eprintln!(
                     "  {} --pause-always has no effect without --zen (it governs the \
                      standalone --zen finish checkpoint only)",
-                    "⚠".yellow().bold()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                 );
             }
             // TASK-270: accept `batch:NAME` as a positional id (equivalent
@@ -104197,7 +104889,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if drain_res.presence_applied {
                     eprintln!(
                         "  {} operator {} → drain defaulting to {}{} (per [presence] away_drain; override with --no-human / --escalate-*)",
-                        "🚶",
+                        crate::glyph(crate::glyphs::Glyph::Away),
                         "away".yellow().bold(),
                         drain_res
                             .no_human
@@ -104790,7 +105482,7 @@ fn classify_progress_bucket(status: &aida_core::RequirementStatus) -> ProgressBu
         RequirementStatus::InProgress => ProgressBucket::WorkingNow,
         // STORY-332: a punted spec is paused pending triage — still work the
         // batch must land, so it buckets with the not-yet-done Remaining set
-        // (its ⚠ status glyph carries the "needs a decision" signal).
+        // (its warning status glyph carries the "needs a decision" signal).
         RequirementStatus::NeedsAttention => ProgressBucket::Remaining,
         _ => ProgressBucket::Remaining,
     }
@@ -105135,7 +105827,7 @@ fn handle_queue_progress(
     if shelved_count > 0 {
         println!(
             "{} {} shelved (NeedsAttention — needs a decision; triage with {})",
-            "⚠".yellow().bold(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             shelved_count.to_string().yellow().bold(),
             "aida findings list".cyan()
         );
@@ -105622,7 +106314,7 @@ fn handle_queue_rework(
         eprintln!(
             "  {} {} is already In Progress — re-queueing without status \
              flip. Pass `--force` to silence this warning.",
-            "⚠".yellow().bold(),
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
             display_id
         );
     }
@@ -105643,7 +106335,7 @@ fn handle_queue_rework(
             update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
             println!(
                 "{} {} status: {} → {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display_id.bold(),
                 current_status.to_string().dimmed(),
                 new_status.to_string().cyan(),
@@ -105702,7 +106394,7 @@ fn handle_queue_rework(
     };
     println!(
         "{} Queued {} ({}){}",
-        "✓".green(),
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
         display_id.bold(),
         title,
         routing
@@ -106784,7 +107476,7 @@ fn handle_queue_work(
             {
                 eprintln!(
                     "  {} could not record pickup calibration for {spec}: {e}",
-                    "⚠".yellow()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
             // Stamp the tags on the spec so existing tag tooling works
@@ -106805,7 +107497,7 @@ fn handle_queue_work(
             ) {
                 eprintln!(
                     "  {} could not record plan effort for {spec}: {e}",
-                    "⚠".yellow()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
             apply_effort_tag(
@@ -106924,7 +107616,7 @@ fn handle_queue_work(
                     Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
                         eprintln!(
                             "  {} {}",
-                            "⚠".yellow().bold(),
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                             pr_rebase::stale_base_warn_message(pr_n, behind).yellow()
                         );
                     }
@@ -106938,7 +107630,7 @@ fn handle_queue_work(
                             eprintln!(
                                 "  {} stale-base + overlap detected; \
                                  `--allow-stale-base` is set, proceeding.\n{}",
-                                "⚠".yellow().bold(),
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                                 msg.yellow()
                             );
                         } else {
@@ -106949,7 +107641,7 @@ fn handle_queue_work(
                         eprintln!(
                             "  {} pre-flight stale-base check for PR-{pr_n} failed \
                              ({e}); proceeding with reviewer",
-                            "⚠".yellow().bold()
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                         );
                     }
                 }
@@ -106985,7 +107677,7 @@ fn handle_queue_work(
                     }) => {
                         eprintln!(
                             "  {} {}",
-                            "⚠".yellow().bold(),
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                             pr_rebase::intermediate_only_warn_message(pr_n, &intermediate).yellow()
                         );
                     }
@@ -106995,7 +107687,7 @@ fn handle_queue_work(
                             eprintln!(
                                 "  {} intermediate-only diff detected; \
                                  `--allow-intermediate-only` is set, proceeding.\n{}",
-                                "⚠".yellow().bold(),
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                                 msg.yellow()
                             );
                         } else {
@@ -107006,7 +107698,7 @@ fn handle_queue_work(
                         eprintln!(
                             "  {} pre-flight intermediate-only check for PR-{pr_n} failed \
                              ({e}); proceeding with reviewer",
-                            "⚠".yellow().bold()
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                         );
                     }
                 }
@@ -107019,7 +107711,9 @@ fn handle_queue_work(
     eprintln!();
     eprintln!(
         "{} queue work {} mode",
-        "▶".green().bold(),
+        crate::glyph(crate::glyphs::Glyph::FlowActive)
+            .green()
+            .bold(),
         format!("({:?})", plan.mode).to_lowercase().cyan()
     );
     let line = |label: &str, value: String| {
@@ -107110,7 +107804,11 @@ fn handle_queue_work(
     }
     if let Some(warns) = &warnings {
         for w in warns {
-            eprintln!("  {} {}", "⚠".yellow().bold(), w.yellow());
+            eprintln!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                w.yellow()
+            );
         }
     }
 
@@ -107355,7 +108053,7 @@ fn handle_queue_work(
         if let Err(e) = run_aida_db_sync_pull(storage.path()) {
             eprintln!(
                 "  {} {}",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 format!("pre-pickup pull failed; proceeding with local view: {}", e).yellow()
             );
         }
@@ -107424,7 +108122,7 @@ fn handle_queue_work(
     if let Some(b) = resolved_base.as_deref() {
         eprintln!(
             "  {} base: {} {}",
-            "▶".cyan().bold(),
+            crate::glyph(crate::glyphs::Glyph::FlowActive).cyan().bold(),
             b.cyan(),
             if stack {
                 "(detected via --stack)".dimmed().to_string()
@@ -107485,7 +108183,11 @@ fn handle_queue_work(
         let base_ref = resolved_base.as_deref().unwrap_or("main");
         if let Some(behind) = commits_behind_origin_main(&project_root, base_ref) {
             if let Some(msg) = behind_origin_warning(behind, "main") {
-                eprintln!("  {} {}", "⚠".yellow().bold(), msg.yellow());
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    msg.yellow()
+                );
             }
         }
     }
@@ -107515,7 +108217,7 @@ fn handle_queue_work(
         if let Err(e) = stacks::save(&project_root, &graph) {
             eprintln!(
                 "  {} {}",
-                "⚠".yellow().bold(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 format!(
                     "stack graph save failed: {} (cascade may miss this branch)",
                     e
@@ -107525,7 +108227,7 @@ fn handle_queue_work(
         } else {
             eprintln!(
                 "  {} stacked: {} → {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 lease.branch.cyan(),
                 parent.cyan()
             );
@@ -107580,14 +108282,14 @@ fn handle_queue_work(
         if plan.mode == QueueWorkMode::Cluster {
             eprintln!(
                 "  {} wrote manifest with {} planned item(s)",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 plan.entries.len()
             );
         }
         if let Some(ctx) = &plan_context {
             eprintln!(
                 "  {} attached plan brief from {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 ctx.plan_file.cyan()
             );
         }
@@ -107597,7 +108299,7 @@ fn handle_queue_work(
         eprintln!();
         eprintln!(
             "{} setup complete; launch deferred (`--no-launch`).",
-            "✓".green().bold()
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold()
         );
         eprintln!(
             "  {}",
@@ -107730,7 +108432,9 @@ fn handle_queue_work(
                     .join(format!("{}-{}.jsonl", lease.branch, id));
                 eprintln!(
                     "{} {}",
-                    "▶".green().bold(),
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
                     format!(
                         "resuming claude headless session {} in {} (claude -p, {}, prompt `{}`)",
                         &id[..id.len().min(8)],
@@ -107763,7 +108467,9 @@ fn handle_queue_work(
             }
             eprintln!(
                 "{} {}",
-                "▶".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::FlowActive)
+                    .green()
+                    .bold(),
                 format!(
                     "resuming claude session {} in {} ({})",
                     &id[..id.len().min(8)],
@@ -107788,7 +108494,9 @@ fn handle_queue_work(
                     .join(format!("{}-{}.jsonl", lease.branch, id));
                 eprintln!(
                     "{} {}",
-                    "▶".green().bold(),
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
                     format!(
                         "launching claude headless in {} (claude -p, {}, prompt `{}`)",
                         lease.worktree_path.display(),
@@ -107815,7 +108523,9 @@ fn handle_queue_work(
             }
             eprintln!(
                 "{} {}",
-                "▶".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::FlowActive)
+                    .green()
+                    .bold(),
                 format!(
                     "launching claude in {} ({}, prompt `{}`)",
                     lease.worktree_path.display(),
@@ -107874,7 +108584,9 @@ fn run_standalone_reviewer(
                     .join(format!("{branch}-{id}.jsonl"));
                 eprintln!(
                     "{} {}",
-                    "▶".green().bold(),
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
                     format!(
                         "resuming claude headless reviewer session {} in {} (claude -p, {})",
                         &id[..id.len().min(8)],
@@ -107901,7 +108613,9 @@ fn run_standalone_reviewer(
             } else {
                 eprintln!(
                     "{} {}",
-                    "▶".green().bold(),
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
                     format!(
                         "resuming claude reviewer session {} in {} ({})",
                         &id[..id.len().min(8)],
@@ -107924,7 +108638,9 @@ fn run_standalone_reviewer(
                     .join(format!("{branch}-{id}.jsonl"));
                 eprintln!(
                     "{} {}",
-                    "▶".green().bold(),
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
                     format!(
                         "launching claude headless reviewer in {} (claude -p, {})",
                         worktree.display(),
@@ -107950,7 +108666,9 @@ fn run_standalone_reviewer(
                 let name = session::derive_session_name(scope, branch, role);
                 eprintln!(
                     "{} {}",
-                    "▶".green().bold(),
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
                     format!(
                         "launching claude reviewer in {} ({}, prompt `{}`)",
                         worktree.display(),
@@ -108503,7 +109221,7 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
                         Err(e) => eprintln!(
                             "  {} could not file the review brief ({e}) — \
                              hand the PR to your reviewer manually",
-                            "⚠".yellow().bold()
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                         ),
                     }
                 }
@@ -108522,7 +109240,7 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
                     zen::mark_needs_human(&project_root, &lease.id, reason)?;
                     println!(
                         "{} marked this --zen session human-needed — the finish checkpoint will pause",
-                        "✓".green()
+                        crate::glyph(crate::glyphs::Glyph::Check).green()
                     );
                     Ok(())
                 }
@@ -108532,7 +109250,7 @@ fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
                     eprintln!(
                         "  {} no active session lease covers this directory — `aida zen finish` \
                          keys the needs-human marker off the lease, so there is nothing to mark",
-                        "⚠".yellow().bold()
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                     );
                     Ok(())
                 }
@@ -108619,7 +109337,7 @@ fn handle_stack_command(cmd: &StackCommand) -> Result<()> {
                     if !*json {
                         eprintln!(
                             "  {} pruned {} stale entr{}",
-                            "✓".green(),
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
                             stale.len(),
                             if stale.len() == 1 { "y" } else { "ies" }
                         );
@@ -108778,7 +109496,10 @@ fn drain_clear(
             if json {
                 println!("{{\"status\":\"cleared\"}}");
             } else {
-                println!("{} removed the stale drain-state file", "✓".green().bold());
+                println!(
+                    "{} removed the stale drain-state file",
+                    crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+                );
             }
             Ok(())
         }
@@ -108894,7 +109615,7 @@ fn handle_no_human_command(cmd: &cli::NoHumanCommand) -> Result<()> {
             };
             println!(
                 "{} --no-human acknowledged for {} ({}). Future drains skip the scope prompt.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 scope,
                 path.display()
             );
@@ -108914,7 +109635,7 @@ fn handle_no_human_command(cmd: &cli::NoHumanCommand) -> Result<()> {
                     .with_context(|| format!("removing {}", path.display()))?;
                 println!(
                     "{} revoked {} — the scope prompt will return.",
-                    "✓".green(),
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
                     path.display()
                 );
             } else {
@@ -108924,7 +109645,11 @@ fn handle_no_human_command(cmd: &cli::NoHumanCommand) -> Result<()> {
         }
         cli::NoHumanCommand::Status => {
             match no_human_ack_source() {
-                Some(src) => println!("{} --no-human is acknowledged (via {}).", "✓".green(), src),
+                Some(src) => println!(
+                    "{} --no-human is acknowledged (via {}).",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    src
+                ),
                 None => println!(
                     "{} --no-human is NOT acknowledged — the scope prompt will fire. \
                      Run `aida no-human acknowledge` to persist it.",
@@ -108955,7 +109680,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
                 eprintln!(
                     "{}  --no-human=both runs the implementer AND reviewer phases \
                      headless.",
-                    "⚠".yellow().bold()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                 );
                 eprintln!("   No human is at the keyboard during phase 1 (implementer).");
                 eprintln!(
@@ -108969,7 +109694,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
             } else {
                 eprintln!(
                     "{}  --no-human covers the reviewer phase only.",
-                    "⚠".yellow().bold()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                 );
                 eprintln!("   Phase 1 (implementer) still requires interactive input.");
                 eprintln!("   The drain will pause at each phase-1 completion until you act.");
@@ -109171,14 +109896,17 @@ fn handle_drain_resume(
     let project_root = match storage.path().parent() {
         Some(p) => p.to_path_buf(),
         None => {
-            eprintln!("✗ cannot derive project root from the store path");
+            eprintln!(
+                "{} cannot derive project root from the store path",
+                crate::glyph(crate::glyphs::Glyph::Cross)
+            );
             std::process::exit(1);
         }
     };
     let Some(state) = drain_state::DrainState::read(&project_root) else {
         eprintln!(
             "{} no `.aida/drain-state.json` — there is no crashed drain to resume.",
-            "✗".red().bold()
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
         );
         eprintln!(
             "  {} a clean drain removes its state file on exit; only a crashed/killed \
@@ -109195,7 +109923,7 @@ fn handle_drain_resume(
         if !matches {
             eprintln!(
                 "{} --drain-id `{}` does not match the recorded drain (run `{}`, started {}).",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 id,
                 state.run_uuid,
                 state.started_at
@@ -109256,7 +109984,7 @@ fn handle_drain_resume(
         drain_resume::ResumeOutcome::RefuseOrchestratorAlive => {
             eprintln!(
                 "{} refusing to resume — the original orchestrator (pid {}) is still alive.",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 state.orchestrator_pid
             );
             eprintln!(
@@ -109286,7 +110014,7 @@ fn handle_drain_resume(
         drain_resume::ResumeOutcome::AlreadyComplete => {
             println!(
                 "{} every phase of `{}` is already complete — clearing the stale drain-state.",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 spec_label
             );
             let _ = drain_state::DrainState::clear(&project_root);
@@ -109406,7 +110134,7 @@ fn handle_from_pr(
         None => {
             eprintln!(
                 "{} cannot derive project root from the store path",
-                "✗".red().bold()
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
             );
             std::process::exit(1);
         }
@@ -109423,7 +110151,7 @@ fn handle_from_pr(
         drain_resume::FromPrOutcome::RefuseAlreadyCompleted => {
             eprintln!(
                 "{} `{}` is already Completed — the merge already promoted it; nothing to drive.",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 spec
             );
             eprintln!(
@@ -109435,7 +110163,7 @@ fn handle_from_pr(
         drain_resume::FromPrOutcome::RefuseNoPr => {
             eprintln!(
                 "{} no open PR found for `{}` — nothing to drive with `--from-pr`.",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 spec
             );
             eprintln!(
@@ -109448,7 +110176,7 @@ fn handle_from_pr(
         drain_resume::FromPrOutcome::RefuseAlreadyMerged => {
             eprintln!(
                 "{} {} is already merged — the merge already happened, so there is nothing to drive.",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 pr.map(|n| format!("PR-{n}")).unwrap_or_else(|| "the PR".into())
             );
             eprintln!(
@@ -109557,7 +110285,7 @@ fn handle_queue_recover(
         None => {
             eprintln!(
                 "{} no spec matched `{}` in the store — probing git/PR state by the id verbatim.",
-                "⚠".yellow(),
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                 spec_query
             );
             (spec_query.to_string(), "<unknown>".to_string(), false)
@@ -109704,7 +110432,11 @@ fn handle_queue_recover(
     // Helper: run an `aida` subcommand from the project root, surfacing its
     // exit code. Non-zero leaves the state visible for manual resume.
     let run_aida = |args: &[&str]| -> std::io::Result<std::process::ExitStatus> {
-        println!("  {} aida {}", "▸".cyan(), args.join(" "));
+        println!(
+            "  {} aida {}",
+            crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+            args.join(" ")
+        );
         std::process::Command::new(&aida)
             .current_dir(&project_root)
             .args(args)
@@ -109712,7 +110444,11 @@ fn handle_queue_recover(
     };
     let run_git =
         |args: &[&str], cwd: &std::path::Path| -> std::io::Result<std::process::ExitStatus> {
-            println!("  {} git {}", "▸".cyan(), args.join(" "));
+            println!(
+                "  {} git {}",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+                args.join(" ")
+            );
             std::process::Command::new("git")
                 .arg("-C")
                 .arg(cwd)
@@ -109732,7 +110468,7 @@ fn handle_queue_recover(
         queue_recover::RecoverAction::AlreadyCompleted => {
             println!(
                 "{} `{}` is already Completed — nothing to recover.",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 spec
             );
             if state.lease_held && confirm("end the leaked lease for this spec?") {
@@ -109763,7 +110499,7 @@ fn handle_queue_recover(
             let Some(b) = branch.as_deref() else {
                 eprintln!(
                     "{} no branch to push for `{}` — cannot recover automatically.",
-                    "✗".red().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     spec
                 );
                 return Ok(());
@@ -109776,7 +110512,7 @@ fn handle_queue_recover(
             if !push_st.success() {
                 eprintln!(
                     "{} push failed — resolve manually, then re-run `aida queue recover {}`.",
-                    "✗".red().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     spec
                 );
                 return Ok(());
@@ -109786,7 +110522,10 @@ fn handle_queue_recover(
                 .current_dir(&probe_repo)
                 .args(["pr", "create", "--fill"])
                 .status();
-            println!("  {} gh pr create --fill", "▸".cyan());
+            println!(
+                "  {} gh pr create --fill",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan()
+            );
             match pr_st {
                 Ok(s) if s.success() => {
                     // Now drive phases 3-6 on the freshly-opened PR.
@@ -109796,7 +110535,7 @@ fn handle_queue_recover(
                     eprintln!(
                         "{} `gh pr create` failed — open the PR manually, then run \
                          `aida queue recover {}` again (it will take the drive-from-PR path).",
-                        "✗".red().bold(),
+                        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                         spec
                     );
                 }
@@ -109816,15 +110555,24 @@ fn handle_queue_recover(
                 &probe_repo,
             )?;
             let Some(b) = branch.as_deref() else {
-                eprintln!("{} no branch to push.", "✗".red().bold());
+                eprintln!(
+                    "{} no branch to push.",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+                );
                 return Ok(());
             };
             let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
             if !push_st.success() {
-                eprintln!("{} push failed — resolve manually.", "✗".red().bold());
+                eprintln!(
+                    "{} push failed — resolve manually.",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+                );
                 return Ok(());
             }
-            println!("  {} gh pr create --fill", "▸".cyan());
+            println!(
+                "  {} gh pr create --fill",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan()
+            );
             let pr_st = std::process::Command::new("gh")
                 .current_dir(&probe_repo)
                 .args(["pr", "create", "--fill"])
@@ -109834,7 +110582,7 @@ fn handle_queue_recover(
             } else {
                 eprintln!(
                     "{} `gh pr create` failed — open the PR manually, then re-run recover.",
-                    "✗".red().bold()
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
                 );
             }
         }
@@ -109854,7 +110602,7 @@ fn handle_queue_recover(
             )?;
             println!(
                 "{} WIP committed. Resume later with `aida queue work {} --resume`.",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 spec
             );
         }
@@ -110094,7 +110842,7 @@ fn handle_queue_integrate(
         if watch {
             println!(
                 "{} integrator pass {} — {} Done spec(s), {} ready for integration",
-                "▸".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
                 pass,
                 candidates.len(),
                 ready.len()
@@ -110102,7 +110850,7 @@ fn handle_queue_integrate(
         } else {
             println!(
                 "{} {} Done spec(s); {} ready for integration",
-                "▸".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
                 candidates.len(),
                 ready.len()
             );
@@ -110125,7 +110873,7 @@ fn handle_queue_integrate(
                 integrate::CandidateVerdict::SkipProbeInconclusive => {
                     println!(
                         "  {} {} — PR probe inconclusive (gh missing/auth/network); skipping, not guessing",
-                        "⚠".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                         c.id
                     );
                 }
@@ -110174,13 +110922,17 @@ fn handle_queue_integrate(
             let base_label = base.as_deref().unwrap_or("main");
             println!(
                 "\n{} Rebase forecast (each PR branch onto {}, in order):",
-                "▸".cyan().bold(),
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
                 base_label
             );
             for r in &rows {
                 match &r.forecast {
                     integrate::RebaseForecast::Clean => {
-                        println!("    {} {} — clean", "✓".green(), r.id);
+                        println!(
+                            "    {} {} — clean",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            r.id
+                        );
                     }
                     integrate::RebaseForecast::Conflict(files) => {
                         let detail = if files.is_empty() {
@@ -110188,7 +110940,12 @@ fn handle_queue_integrate(
                         } else {
                             format!(": {}", files.join(", "))
                         };
-                        println!("    {} {} — conflict{}", "⚠".yellow(), r.id, detail);
+                        println!(
+                            "    {} {} — conflict{}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            r.id,
+                            detail
+                        );
                     }
                     integrate::RebaseForecast::Unknown(why) => {
                         println!("    {} {} — unknown ({})", "?".dimmed(), r.id, why);
@@ -110199,7 +110956,7 @@ fn handle_queue_integrate(
             if s.conflict > 0 {
                 println!(
                     "  {} {} of {} will conflict — resolve {} first.",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     s.conflict,
                     rows.len(),
                     s.conflicting_ids.join(", ")
@@ -110207,12 +110964,16 @@ fn handle_queue_integrate(
             } else if s.unknown > 0 {
                 println!(
                     "  {} {} clean, {} indeterminate — re-check those before integrating.",
-                    "▸".cyan(),
+                    crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
                     s.clean,
                     s.unknown
                 );
             } else {
-                println!("  {} all {} forecast clean.", "✓".green().bold(), s.clean);
+                println!(
+                    "  {} all {} forecast clean.",
+                    crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+                    s.clean
+                );
             }
             println!(
                 "  {} forecast checks each branch against current {} independently; a member that\n    only conflicts with an earlier un-landed batch member won't show here yet (follow-up).",
@@ -110259,7 +111020,11 @@ fn handle_queue_integrate(
 
         for id in &ready_ids {
             if max != 0 && integrated_total >= max {
-                println!("{} reached --max {} this run; stopping.", "▸".cyan(), max);
+                println!(
+                    "{} reached --max {} this run; stopping.",
+                    crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+                    max
+                );
                 return Ok(());
             }
             // TASK-836: pre-merge scenario gate. Probe the richer PR facts (CI
@@ -110281,7 +111046,7 @@ fn handle_queue_integrate(
                 integrate::IntegrationAction::WaitCi => {
                     println!(
                         "  {} {} — CI still running; skipping this pass (will re-check)",
-                        "⏳".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
                         id
                     );
                     any_parked_or_waited = true;
@@ -110344,7 +111109,7 @@ fn handle_queue_integrate(
                                 .join(", ");
                             println!(
                                 "  {} {} — {} open PRs; integrating newest (#{}), ignoring this pass: {}",
-                                "▸".cyan(),
+                                crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
                                 id,
                                 ignored.len() + 1,
                                 chosen,
@@ -110420,12 +111185,16 @@ fn handle_queue_integrate(
                             .status();
                         match rb {
                             Ok(s) if s.success() => {
-                                println!("  {} `{}` rebased onto main", "✓".green(), id);
+                                println!(
+                                    "  {} `{}` rebased onto main",
+                                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                                    id
+                                );
                             }
                             Ok(_) => {
                                 println!(
                                     "  {} `{}` rebase failed (conflict?) — skipping; resolve with `aida pr rebase {}` then re-run",
-                                    "⚠".yellow(),
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                                     id,
                                     pr
                                 );
@@ -110435,7 +111204,7 @@ fn handle_queue_integrate(
                             Err(e) => {
                                 println!(
                                     "  {} `{}` rebase could not run ({e}) — skipping",
-                                    "⚠".yellow(),
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                                     id
                                 );
                                 any_parked_or_waited = true; // trace:TASK-836
@@ -110468,7 +111237,11 @@ fn handle_queue_integrate(
             match status {
                 Ok(s) if s.success() => {
                     integrated_total += 1;
-                    println!("  {} `{}` integrated", "✓".green().bold(), id);
+                    println!(
+                        "  {} `{}` integrated",
+                        crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+                        id
+                    );
                 }
                 Ok(s) => {
                     // A non-zero exit means the drive shelved/refused this spec
@@ -110477,7 +111250,7 @@ fn handle_queue_integrate(
                     // spec. trace:STORY-520 | ai:claude
                     eprintln!(
                         "  {} `{}` did not integrate cleanly (exit {}); leaving for triage and continuing",
-                        "⚠".yellow(),
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                         id,
                         s.code().unwrap_or(-1)
                     );
@@ -110486,7 +111259,7 @@ fn handle_queue_integrate(
                 Err(e) => {
                     eprintln!(
                         "  {} failed to launch the drive for `{}`: {}",
-                        "✗".red().bold(),
+                        crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                         id,
                         e
                     );
@@ -110516,7 +111289,7 @@ fn handle_queue_integrate(
     if !dry_run && any_parked_or_waited {
         println!(
             "{} integration left member(s) parked/waiting — triage with `aida findings list`, then re-run.",
-            "▸".yellow().bold()
+            crate::glyph(crate::glyphs::Glyph::Arrow).yellow().bold()
         );
         drop(_drain_guard);
         std::process::exit(2);
@@ -110712,7 +111485,11 @@ fn run_auto_complete(
     // queued for the implementer. Queue it if it isn't — so a fresh
     // `aida add` flows straight into `--auto-complete`.
     if let Err(e) = ensure_queued_for_implementer(storage, user_id, spec) {
-        eprintln!("{} {}", "✗".red().bold(), e);
+        eprintln!(
+            "{} {}",
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+            e
+        );
         std::process::exit(1);
     }
     // STORY-265 slice 3: the `--with-plan` PLAN PRELUDE. When `--with-plan` is
@@ -110731,7 +111508,7 @@ fn run_auto_complete(
             eprintln!(
                 "{} plan prelude failed for {}: {} — the drain did not start \
                  (re-run, or drop --with-plan to implement without a plan phase)",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 spec,
                 e
             );
@@ -110745,14 +111522,22 @@ fn run_auto_complete(
     let phase1_bump = match prepare_auto_complete_phase1_status(storage, spec) {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("{} {}", "✗".red().bold(), e);
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                e
+            );
             std::process::exit(1);
         }
     };
     let lifecycle_skip = match resolve_lifecycle_skip(storage, spec) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("{} {}", "✗".red().bold(), e);
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                e
+            );
             std::process::exit(1);
         }
     };
@@ -110762,7 +111547,7 @@ fn run_auto_complete(
         Err(e) => {
             eprintln!(
                 "{} could not resolve the project root: {}",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 e
             );
             std::process::exit(1);
@@ -110876,13 +111661,13 @@ fn run_auto_complete(
                 if matches!(posture, presence::SoloPosture::ParkForHuman) {
                     eprintln!(
                         "  {} solo posture: working safe backlog, parking keystone for human ({} classified keystone — parks on a design-fork)",
-                        "🤖".bold(),
+                        crate::glyph(crate::glyphs::Glyph::Robot).bold(),
                         spec
                     );
                 } else {
                     eprintln!(
                         "  {} solo posture: working safe backlog, parking keystone for human ({} is safe — proceeds on the defensible default)",
-                        "🤖".bold(),
+                        crate::glyph(crate::glyphs::Glyph::Robot).bold(),
                         spec
                     );
                 }
@@ -111194,7 +111979,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
                 // it and stop rather than reporting a false clean drain.
                 eprintln!(
                     "{} could not resolve batch members: {}",
-                    "✗".red().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                     e
                 );
                 std::process::exit(1);
@@ -111584,7 +112369,7 @@ fn emit_batch_chain_summary(
     if result.shipped.is_empty() && result.punted.is_empty() && result.escalated.is_empty() {
         eprintln!(
             "{} no queued items found in any requested batch: {}",
-            "✗".red().bold(),
+            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
             batch_names
                 .iter()
                 .map(|b| format!("batch:{b}"))
@@ -111598,14 +112383,14 @@ fn emit_batch_chain_summary(
         BatchDrainOutcome::Drained => {
             eprintln!(
                 "{} batch chain drained — {n} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
         }
         BatchDrainOutcome::MaxReached => {
             eprintln!(
                 "{} batch chain — `--max` reached, {n} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
             if let Some(batch) = &result.stopped_batch {
@@ -111620,11 +112405,15 @@ fn emit_batch_chain_summary(
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(
                 "{} batch chain stopped in `batch:{batch}` at {} (phase {} failed)",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 stopped.bold(),
                 phase.index()
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
             eprintln!(
                 "  {} later batches were not started — fix {stopped}, then re-run the chain",
                 "→".dimmed()
@@ -111635,10 +112424,14 @@ fn emit_batch_chain_summary(
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(
                 "{} batch chain stopped in `batch:{batch}` — {} stayed at the head after a successful run",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 stopped.bold()
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
         }
         BatchDrainOutcome::Mismatched {
             dispatched,
@@ -111651,7 +112444,11 @@ fn emit_batch_chain_summary(
                 dispatched.bold(),
                 shipped.bold()
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
         }
         BatchDrainOutcome::Inconclusive => {
             let batch = result.stopped_batch.as_deref().unwrap_or("<batch>");
@@ -111661,7 +112458,11 @@ fn emit_batch_chain_summary(
                 "⏸".yellow().bold(),
                 stopped.bold()
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
         }
         // BUG-250: a member deliberately held its PR — the chain pauses there
         // until the operator runs the gate and opens the PR. trace:BUG-250
@@ -111673,14 +112474,18 @@ fn emit_batch_chain_summary(
                 "⏸".yellow().bold(),
                 stopped.bold()
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
         }
         // EPIC-28: every batch drained, but at least one member shelved
         // or was skipped. trace:EPIC-28 | ai:claude
         BatchDrainOutcome::DrainedWithShelved => {
             eprintln!(
                 "{} batch chain drained — {n} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
         }
@@ -111847,20 +112652,20 @@ fn emit_batch_drain_summary(
             eprintln!(
                 "{} no queued items tagged `batch:{batch_name}` — tag members \
                  via `aida edit <id> --tags batch:{batch_name}` first",
-                "✗".red().bold()
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
             );
         }
         BatchDrainOutcome::Drained => {
             eprintln!(
                 "{} batch `batch:{batch_name}` drained — {n} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
         }
         BatchDrainOutcome::MaxReached => {
             eprintln!(
                 "{} batch `batch:{batch_name}` — `--max` reached, {n} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
             eprintln!(
@@ -111873,11 +112678,15 @@ fn emit_batch_drain_summary(
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(
                 "{} batch `batch:{batch_name}` drain stopped at {} (phase {} failed)",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 stopped.bold(),
                 phase.index()
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
             eprintln!(
                 "  {} the rest of the batch is untouched — fix {stopped} (hint above), \
                  then re-run `aida queue work --batch {batch_name} --auto-complete`",
@@ -111889,10 +112698,14 @@ fn emit_batch_drain_summary(
             eprintln!(
                 "{} batch `batch:{batch_name}` drain stopped — {} stayed at the head \
                  after a successful run (queue did not advance)",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 stopped.bold()
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
             eprintln!(
                 "  {} check {stopped}'s status (`aida show {stopped}`) — it may not have \
                  been dequeued",
@@ -111914,7 +112727,11 @@ fn emit_batch_drain_summary(
                 dispatched.bold(),
                 shipped.bold(),
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
             eprintln!(
                 "  {} {} is still queued — pick it back up with `aida queue work {}`, \
                  or remove it with `aida queue remove {}` if {} subsumed it",
@@ -111937,7 +112754,11 @@ fn emit_batch_drain_summary(
                 "⏸".yellow().bold(),
                 stopped.bold(),
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
             eprintln!(
                 "  {} transient — retry once the API is reachable: \
                  `gh api /rate_limit` then re-run \
@@ -111954,7 +112775,11 @@ fn emit_batch_drain_summary(
                 "⏸".yellow().bold(),
                 stopped.bold(),
             );
-            eprintln!("  {} already shipped ({n}): {}", "✓".green(), shipped_list);
+            eprintln!(
+                "  {} already shipped ({n}): {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                shipped_list
+            );
             eprintln!(
                 "  {} run your gate, open the PR (`gh pr create`), then re-run \
                  `aida queue work --batch {batch_name} --auto-complete`",
@@ -111969,7 +112794,7 @@ fn emit_batch_drain_summary(
             eprintln!(
                 "{} batch `batch:{batch_name}` drained with shelved members — \
                  {n} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
         }
@@ -112126,7 +112951,7 @@ fn resolve_next_n_head(storage: &Storage, user_id: &str) -> Option<String> {
         Err(e) => {
             eprintln!(
                 "{} could not resolve the queue head: {}",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 e
             );
             std::process::exit(1);
@@ -112411,20 +113236,20 @@ fn emit_next_n_drain_summary(
         {
             eprintln!(
                 "{} no drivable items in the queue — nothing to drive",
-                "✗".red().bold()
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
             );
         }
         BatchDrainOutcome::Drained => {
             eprintln!(
                 "{} next {n} drained — queue exhausted, {count} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
         }
         BatchDrainOutcome::MaxReached => {
             eprintln!(
                 "{} next {n} done — {count} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
             eprintln!(
@@ -112436,13 +113261,13 @@ fn emit_next_n_drain_summary(
             let stopped = result.stopped_at.as_deref().unwrap_or("<spec>");
             eprintln!(
                 "{} next {n} drain stopped at {} (phase {} failed)",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 stopped.bold(),
                 phase.index()
             );
             eprintln!(
                 "  {} already shipped ({count}): {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 shipped_list
             );
             eprintln!(
@@ -112455,12 +113280,12 @@ fn emit_next_n_drain_summary(
             eprintln!(
                 "{} next {n} drain stopped — {} stayed at the head after a successful run \
                  (queue did not advance)",
-                "✗".red().bold(),
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 stopped.bold()
             );
             eprintln!(
                 "  {} already shipped ({count}): {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 shipped_list
             );
             eprintln!(
@@ -112484,7 +113309,7 @@ fn emit_next_n_drain_summary(
             );
             eprintln!(
                 "  {} already shipped ({count}): {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 shipped_list
             );
             eprintln!(
@@ -112510,7 +113335,7 @@ fn emit_next_n_drain_summary(
             );
             eprintln!(
                 "  {} already shipped ({count}): {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 shipped_list
             );
             eprintln!(
@@ -112530,7 +113355,7 @@ fn emit_next_n_drain_summary(
             );
             eprintln!(
                 "  {} already shipped ({count}): {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 shipped_list
             );
             eprintln!(
@@ -112543,7 +113368,7 @@ fn emit_next_n_drain_summary(
             eprintln!(
                 "{} next {n} drained with shelved members — \
                  {count} spec{plural} shipped: {}",
-                "✓".green().bold(),
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 shipped_list.bold()
             );
         }
@@ -113106,7 +113931,7 @@ fn capture_review_calibration_for_spec(
             {
                 eprintln!(
                     "  {} could not record review calibration for {spec}: {e}",
-                    "⚠".yellow()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
         }
@@ -113120,7 +113945,7 @@ fn capture_review_calibration_for_spec(
     {
         eprintln!(
             "  {} could not record review effort for {spec}: {e}",
-            "⚠".yellow()
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
 }
@@ -114705,7 +115530,7 @@ impl RealPhaseDriver {
                 if !self.json {
                     eprintln!(
                         "  {} PR-{pr_number} auto-rebased cleanly; proceeding with phase 3",
-                        "✓".green().bold()
+                        crate::glyph(crate::glyphs::Glyph::Check).green().bold()
                     );
                 }
                 true
@@ -114740,7 +115565,7 @@ impl RealPhaseDriver {
                 eprintln!(
                     "  {} stale-base + overlap detected; `--allow-stale-base` is set, \
                      proceeding with reviewer.\n{}",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     msg.yellow()
                 );
                 Phase3StaleOverlapAction::Proceed
@@ -115467,7 +116292,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         if !self.json {
                             eprintln!(
                                 "  {} GH verify inconclusive (attempt {}/{}) — retrying in {}s: {}",
-                                "⏳".yellow(),
+                                crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
                                 attempt,
                                 schedule.len(),
                                 wait.as_secs(),
@@ -115523,7 +116348,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 eprintln!(
                                     "  {} could not auto-open a PR for the committed work \
                                      ({e:#}) — falling back to punt/fail",
-                                    "⚠".yellow()
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                                 );
                             }
                         }
@@ -115564,7 +116389,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         } else if matches!(probe, CiProbe::InProgress { .. }) {
             eprintln!(
                 "  {} waiting for CI on `{}` to finish…",
-                "◐".yellow(),
+                crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
                 branch
             );
             probe = if self.json {
@@ -115712,7 +116537,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
                 eprintln!(
                     "  {} {}",
-                    "⚠".yellow().bold(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                     pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
                 );
             }
@@ -115732,7 +116557,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             Err(e) => {
                 eprintln!(
                     "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",
-                    "⚠".yellow().bold()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                 );
             }
         }
@@ -115753,7 +116578,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate { intermediate }) => {
                     eprintln!(
                         "  {} {}",
-                        "⚠".yellow().bold(),
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                         pr_rebase::intermediate_only_warn_message(pr as u64, &intermediate)
                             .yellow()
                     );
@@ -115764,7 +116589,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         eprintln!(
                             "  {} intermediate-only diff detected; \
                              `--allow-intermediate-only` set, proceeding.\n{}",
-                            "⚠".yellow().bold(),
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                             msg.yellow()
                         );
                     } else {
@@ -115775,7 +116600,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     eprintln!(
                         "  {} pre-flight intermediate-only check failed ({e}); \
                          proceeding with reviewer",
-                        "⚠".yellow().bold()
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
                     );
                 }
             }
@@ -115855,14 +116680,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         let err_msg = String::from_utf8_lossy(&output.stderr);
                         eprintln!(
                             "    {} Poll error: gh api returned non-zero status: {}",
-                            "⚠".yellow(),
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                             err_msg.trim()
                         );
                     }
                     Err(e) => {
                         eprintln!(
                             "    {} Poll error: could not execute gh api: {}",
-                            "⚠".yellow(),
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                             e
                         );
                     }
@@ -115876,12 +116701,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 if let Some(obj) = data.as_object() {
                     let normal = obj.get("normal").and_then(|n| n.as_i64()).unwrap_or(0);
 
-                    eprintln!("  {} Tally resolved: normal={}", "✓".green(), normal);
+                    eprintln!(
+                        "  {} Tally resolved: normal={}",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        normal
+                    );
 
                     if normal > 0 {
                         eprintln!(
                             "  {} Major/critical issues detected; requesting changes",
-                            "✗".red()
+                            crate::glyph(crate::glyphs::Glyph::Cross).red()
                         );
                         return Ok(auto_complete::ReviewerOutcome::Verdict(
                             auto_complete::Verdict::RequestChanges,
@@ -115889,19 +116718,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     } else {
                         eprintln!(
                             "  {} No major/critical issues detected; approving",
-                            "✓".green()
+                            crate::glyph(crate::glyphs::Glyph::Check).green()
                         );
                         return Ok(auto_complete::ReviewerOutcome::Verdict(
                             auto_complete::Verdict::Approved,
                         ));
                     }
                 } else {
-                    eprintln!("  {} bughunter-severity data is malformed", "⚠".yellow());
+                    eprintln!(
+                        "  {} bughunter-severity data is malformed",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
                 }
             } else {
                 eprintln!(
                     "  {} bughunter-severity polling timed out or was missing",
-                    "⚠".yellow()
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
 
@@ -115913,7 +116745,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             if let Err(e) = file_reviewer_verdict_unavailable_finding(&self.project_root, pr) {
                 eprintln!(
                     "    {} could not file ReviewerVerdictUnavailable finding: {}",
-                    "⚠".yellow(),
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     e
                 );
             }
@@ -116104,7 +116936,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // analysis. merge_change reuses the SPEC-410-pinned argv (`pr merge <pr>
         // --squash --delete-branch`, byte-identical) and the same network_retry
         // wrapper, and owns the gh subprocess — so the prior raw gh-stdout echo
-        // is replaced by AIDA's own ✓ line (consistent with `aida pr ship`). A
+        // is replaced by AIDA's own check line (consistent with `aida pr ship`). A
         // failed merge returns the unified Err → a shelvable `Failed`
         // PhaseFailure, matching the previous non-zero-exit behaviour.
         // trace:STORY-516 trace:TASK-669 trace:BUG-286 | ai:claude
@@ -116139,7 +116971,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             .map_err(|e| {
                 auto_complete::PhaseFailure::new(format!("`gh pr merge {pr}` failed: {e:#}"))
             })?;
-        println!("  {} merged PR-{}", "✓".green(), pr);
+        println!(
+            "  {} merged PR-{}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            pr
+        );
         Ok(())
     }
 
@@ -117244,7 +118080,7 @@ impl QueueWorkLaunch {
 
 /// TASK-402: does `s` look like an AIDA *lease* id rather than a Claude
 /// *session* UUID? A lease id is a hyphenless hex run (e.g. `019e45cfc559`,
-/// the short form printed by `✓ session … started`); a Claude session UUID
+/// the short form printed by `session … started` check line); a Claude session UUID
 /// always carries hyphens (`019e45cf-acea-73c1-9476-…`). The orchestrator's
 /// phase-1 banner prominently shows the lease id, so pasting *that* into
 /// `--resume <id>` is the #1 recovery papercut — it never prefix-matches a
@@ -117272,7 +118108,7 @@ fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<String> {
         0 if requested.len() >= 16 => Ok(requested.to_string()),
         // TASK-402 (friction #1): the pasted value has the shape of an AIDA
         // lease id, not a Claude session UUID. The banner that advertised
-        // `✓ session <lease> started` is the trap — `--resume` wants the
+        // `session <lease> started` check line is the trap — `--resume` wants the
         // Claude session UUID. Name the mismatch and point at the right id.
         // trace:TASK-402 | ai:claude
         0 if looks_like_lease_id(requested) => anyhow::bail!(
@@ -117368,7 +118204,7 @@ fn resolve_queue_work_launch(
                 ),
                 labels.clone(),
             )
-            .with_help_message("↑↓ to move, Enter to choose")
+            .with_help_message("Use arrow keys to move, Enter to choose")
             .prompt()
             .context("session-resume picker cancelled")?;
             if pick == fresh_label {
@@ -118024,14 +118860,20 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             }
 
             config.save()?;
-            println!("{} Jira configuration saved.", "✓".green());
+            println!(
+                "{} Jira configuration saved.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
         }
         JiraCommand::Test => {
             let config = aida_core::JiraConfig::load()?;
             let client = aida_core::JiraClient::new(config)?;
             let project = rt.block_on(client.test_connection())?;
 
-            println!("{} Connected to Jira", "✓".green());
+            println!(
+                "{} Connected to Jira",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
             println!("  Project: {} ({})", project.name, project.key);
         }
         JiraCommand::List { jql, limit } => {
@@ -118131,7 +118973,7 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             let created = rt.block_on(client.create_issue(&request))?;
             println!(
                 "{} Created Jira issue {} for {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 created.key.white().bold(),
                 display_id
             );
@@ -118248,7 +119090,7 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                             in_sync += 1;
                             println!(
                                 "{} {:<12} ↔ {:<10} {} — in sync",
-                                "✓".green(),
+                                crate::glyph(crate::glyphs::Glyph::Check).green(),
                                 spec_id,
                                 jira_key,
                                 truncate_str(aida_title, 35)
@@ -118271,7 +119113,7 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                         errors += 1;
                         println!(
                             "{} {} ↔ {} — error: {}",
-                            "✗".red(),
+                            crate::glyph(crate::glyphs::Glyph::Cross).red(),
                             req.display_id(),
                             jira_key,
                             e
@@ -118307,8 +119149,17 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                     });
 
                     match rt.block_on(client.update_issue(jira_key, &fields)) {
-                        Ok(_) => println!("  {} Updated {}", "✓".green(), jira_key),
-                        Err(e) => eprintln!("  {} Failed {}: {}", "✗".red(), jira_key, e),
+                        Ok(_) => println!(
+                            "  {} Updated {}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            jira_key
+                        ),
+                        Err(e) => eprintln!(
+                            "  {} Failed {}: {}",
+                            crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                            jira_key,
+                            e
+                        ),
                     }
                 }
             }
@@ -118408,7 +119259,7 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
 
             println!(
                 "\n{} Imported {} issues as requirements.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 imported
             );
         }
@@ -118468,7 +119319,10 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             }
 
             config.save()?;
-            println!("{} GitHub configuration saved.", "✓".green());
+            println!(
+                "{} GitHub configuration saved.",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
         }
         GitHubCommand::Test => {
             let config = aida_core::GitHubConfig::load()?;
@@ -118477,7 +119331,10 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             let client = aida_core::GitHubClient::new(config)?;
             let repo = rt.block_on(client.test_connection())?;
 
-            println!("{} Connected to GitHub", "✓".green());
+            println!(
+                "{} Connected to GitHub",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
             println!("  Repository: {}", repo.full_name);
             println!("  URL:        {}", repo.html_url);
             println!("  Default:    {}", repo.default_branch);
@@ -118606,7 +119463,7 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             let issue = rt.block_on(client.create_issue(&request))?;
             println!(
                 "{} Created GitHub issue #{} for {}",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 issue.number,
                 display_id
             );
@@ -118691,7 +119548,7 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                         if diffs.is_empty() {
                             println!(
                                 "{} #{:<5} {} — in sync",
-                                "✓".green(),
+                                crate::glyph(crate::glyphs::Glyph::Check).green(),
                                 issue_number,
                                 truncate_str(aida_title, 45)
                             );
@@ -118709,7 +119566,12 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                         }
                     }
                     Err(e) => {
-                        println!("{} #{:<5} — error: {}", "✗".red(), issue_number, e);
+                        println!(
+                            "{} #{:<5} — error: {}",
+                            crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                            issue_number,
+                            e
+                        );
                     }
                 }
             }
@@ -118752,8 +119614,17 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                     };
 
                     match rt.block_on(client.update_issue(*issue_number, &update)) {
-                        Ok(_) => println!("  {} Updated #{}", "✓".green(), issue_number),
-                        Err(e) => eprintln!("  {} Failed #{}: {}", "✗".red(), issue_number, e),
+                        Ok(_) => println!(
+                            "  {} Updated #{}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            issue_number
+                        ),
+                        Err(e) => eprintln!(
+                            "  {} Failed #{}: {}",
+                            crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                            issue_number,
+                            e
+                        ),
                     }
                 }
             }
@@ -118883,7 +119754,7 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
 
             println!(
                 "\n{} Imported {} issues as requirements.",
-                "✓".green(),
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 imported
             );
         }
@@ -118935,11 +119806,20 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                         match rt.block_on(client.create_label(name, color, Some("Created by AIDA")))
                         {
                             Ok(_) => {
-                                println!("  {} Created label: {}", "✓".green(), name);
+                                println!(
+                                    "  {} Created label: {}",
+                                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                                    name
+                                );
                                 created += 1;
                             }
                             Err(e) => {
-                                eprintln!("  {} Failed to create {}: {}", "✗".red(), name, e);
+                                eprintln!(
+                                    "  {} Failed to create {}: {}",
+                                    crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                                    name,
+                                    e
+                                );
                             }
                         }
                     }
@@ -119291,11 +120171,11 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
                 // Status icon and color
                 let (status_icon, _status_color) = match state.sync_status {
-                    SyncStatus::InSync => ("✓", "green"),
+                    SyncStatus::InSync => (crate::glyph(crate::glyphs::Glyph::Check), "green"),
                     SyncStatus::AidaModified => ("△", "yellow"),
                     SyncStatus::GitLabModified => ("▽", "cyan"),
-                    SyncStatus::Conflict => ("⚠", "red"),
-                    SyncStatus::Error => ("✗", "red"),
+                    SyncStatus::Conflict => (crate::glyph(crate::glyphs::Glyph::Warning), "red"),
+                    SyncStatus::Error => (crate::glyph(crate::glyphs::Glyph::Cross), "red"),
                     SyncStatus::Untracked => ("?", "dimmed"),
                 };
 
@@ -119485,8 +120365,17 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                         };
 
                         match rt.block_on(client.create_label(label, color, None)) {
-                            Ok(_) => println!("  {} Created: {}", "✓".green(), label),
-                            Err(e) => println!("  {} Failed to create {}: {}", "✗".red(), label, e),
+                            Ok(_) => println!(
+                                "  {} Created: {}",
+                                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                                label
+                            ),
+                            Err(e) => println!(
+                                "  {} Failed to create {}: {}",
+                                crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                                label,
+                                e
+                            ),
                         }
                     }
                 }
@@ -119616,7 +120505,7 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                         if let Err(e) = storage.save_sync_state(&state) {
                             println!(
                                 "  {} {} GL-{}: {}",
-                                "✗".red(),
+                                crate::glyph(crate::glyphs::Glyph::Cross).red(),
                                 req_display,
                                 state.gitlab_issue_iid,
                                 e
@@ -119624,10 +120513,14 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                             error_count += 1;
                         } else {
                             let status_indicator = match new_status {
-                                SyncStatus::InSync => "✓".green(),
+                                SyncStatus::InSync => {
+                                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                                }
                                 SyncStatus::AidaModified => "△".yellow(),
                                 SyncStatus::GitLabModified => "▽".cyan(),
-                                SyncStatus::Conflict => "⚠".red(),
+                                SyncStatus::Conflict => {
+                                    crate::glyph(crate::glyphs::Glyph::Warning).red()
+                                }
                                 _ => "?".dimmed(),
                             };
                             println!(
