@@ -176,6 +176,96 @@ impl ForgeKind {
             _ => None,
         }
     }
+
+    /// Build the forge-CLI argv that explicitly sets the remote repository's
+    /// **default branch** to `branch`. Returns the program + its arguments in
+    /// argv form (not a shell string) so callers can spawn it without a shell.
+    /// `None` for pure-git (no forge API to call).
+    ///
+    /// `project_ref` is the forge-native project identifier — `owner/repo` for
+    /// GitHub (`gh` resolves it from cwd when `None`), and the
+    /// `group/subgroup/project` path for GitLab (required: `glab api` cannot
+    /// resolve it implicitly the way `gh` does).
+    ///
+    /// - GitHub: `gh repo edit [project] --default-branch <branch>`
+    /// - GitLab: `glab api -X PUT projects/<enc-path> -f default_branch=<branch>`
+    ///
+    /// trace:TASK-844 | ai:claude
+    pub fn set_default_branch_cmd(
+        self,
+        branch: &str,
+        project_ref: Option<&str>,
+    ) -> Option<Vec<String>> {
+        match self {
+            ForgeKind::GitHub => {
+                let mut argv = vec!["gh".to_string(), "repo".to_string(), "edit".to_string()];
+                if let Some(p) = project_ref {
+                    argv.push(p.to_string());
+                }
+                argv.push("--default-branch".to_string());
+                argv.push(branch.to_string());
+                Some(argv)
+            }
+            ForgeKind::GitLab => {
+                // `glab api` needs the project id/path; GitLab's REST API takes
+                // it URL-encoded ("group%2Fproject"). PUT the project endpoint
+                // with default_branch set.
+                let path = project_ref?;
+                let encoded = gitlab_encode_project_path(path);
+                Some(vec![
+                    "glab".to_string(),
+                    "api".to_string(),
+                    "-X".to_string(),
+                    "PUT".to_string(),
+                    format!("projects/{encoded}"),
+                    "-f".to_string(),
+                    format!("default_branch={branch}"),
+                ])
+            }
+            ForgeKind::None => None,
+        }
+    }
+}
+
+/// URL-encode a GitLab project path (`group/subgroup/project`) for use as the
+/// `:id` segment of a `projects/:id` REST call. GitLab accepts the path with
+/// `/` percent-encoded to `%2F`; only `/` needs encoding for well-formed
+/// project paths. Kept minimal + pure so the command construction is testable.
+/// trace:TASK-844 | ai:claude
+fn gitlab_encode_project_path(path: &str) -> String {
+    path.trim_matches('/').replace('/', "%2F")
+}
+
+/// Extract the forge-native project path (`owner/repo` or
+/// `group/subgroup/project`) from an `origin` URL, stripping any trailing
+/// `.git`. `None` for an unparseable URL. Pure so the init push-to-create
+/// default-branch call can be unit-tested without a live remote.
+/// trace:TASK-844 | ai:claude
+pub fn project_path_of(origin_url: &str) -> Option<String> {
+    let url = origin_url.trim();
+    if url.is_empty() {
+        return None;
+    }
+    // Get everything after the host: for scp-like `git@host:owner/repo.git`
+    // that's after the first ':'; for `scheme://host/owner/repo.git` it's after
+    // the host segment.
+    let after_host = if url.contains("://") {
+        let after_scheme = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+        // drop the authority (host[:port], possibly user@)
+        after_scheme.split_once('/').map(|(_, r)| r)?
+    } else if let Some((_, rest)) = url.split_once(':') {
+        // scp-like: host:owner/repo.git
+        rest
+    } else {
+        return None;
+    };
+    let path = after_host.trim_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    if path.is_empty() {
+        None
+    } else {
+        Some(path.to_string())
+    }
 }
 
 /// A change request: a GitHub PR or a GitLab MR. `id` is the forge-native
