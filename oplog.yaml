@@ -18438,5 +18438,51 @@ operations:
       (Provenance vocabulary is now PINNED above — no longer an open fork.)
 
       Verify flags with `aida schema --help` before coding.
-clock: 1822
+- id: 019eced5-a14a-7373-8811-4636da5990f0
+  target_id: 019ececf-f0b8-7060-8dab-458c9b6d028b
+  author: aida
+  node_id: '1'
+  lamport: 1823
+  timestamp: 2026-06-16T05:09:27.498122542Z
+  kind: !SetDescription
+    description: |-
+      Operator ask (2026-06-15): `aida why <spec>` answers why a spec is still OPEN (deterministic state/blocker classifier). There is a second, often more important axis aligned with AIDAs purpose: WHY does this spec exist — its intent, in plain layman terms, distilled from the tangled web of parents/blockers/decisions/comments/history that a human finds overwhelming but an LLM can comprehend. Meaning and implications drift as the graph changes, so the comprehension needs occasional refresh.
+
+      ## Architectural distinction (load-bearing)
+      Unlike `aida why` (a Rust classifier over store signals), intent-comprehension is necessarily an LLM SYNTHESIS task — it reads the spec + its graph neighborhood and distills reason-for-being into prose. Therefore it must be GENERATED (AI pass), CACHED (cost — never recompute per read), and DRIFT-STAMPED (regenerate when the spec or its neighbors change).
+
+      ## Surface (operator-chosen: new verb, clean split)
+      - `aida intent <spec>` — print the stored comprehension; generate on first call or when stale.
+      - `aida intent <spec> --audience layman|llm` — layman = prose for a human skimmer; llm = denser/structured comprehension an agent loads BEFORE working the spec. Mirrors `/aida-digest --audience`.
+      - `aida intent <spec> --refresh` — force regeneration.
+      - `aida why` is unchanged (stays the deterministic state classifier). Two verbs, two kinds of computation.
+
+      ## Storage (DECIDED 2026-06-15 — nested field on Requirement; supersedes earlier aida-doc approach)
+      Store as a nested field on Requirement, NOT a separate aida doc:
+        intent: Option<SpecIntent>   (#[serde skip_serializing_if none] — specs without it stay clean)
+        struct SpecIntent { layman: String, llm: String, generated_at: String, source_hash: String, model: String }
+      Why fields beat a separate doc:
+      - diff_snapshots (models.rs:6591) is an explicit 7-field history allow-list — a new intent field generates ZERO history rows, so AI regeneration does NOT bloat the audit trail.
+      - Flows through ts-rs reflection: aida schema requirement shows it automatically (STORY-538); STORY-630 --explain documents it; the schema drift-guard covers it; field provenance = ai (already in STORY-630s pinned set).
+      - Co-located: aida show / YAML / /aida-pickup carry it without a join; syncs to every clone via the orphan branch.
+      Design calls: ONE nested struct (not flat fields); `stale` is COMPUTED at read (stored source_hash vs freshly-computed neighborhood hash), never a stored bool. TRADEOFF accepted: each regeneration is a git write to the canonical orphan-branch object — fine because drift-GATED, not per-read. aida intent is therefore a substrate WRITER.
+
+      ## Acceptance (SLICE 1 — single-spec, on-demand)
+      - A new `intent: Option<SpecIntent>` field is added to Requirement (nested struct: layman, llm, generated_at, source_hash, model), skip_serializing_if none, and is NOT added to the diff_snapshots history allow-list.
+      - `aida intent <spec>` generates (via an LLM pass over the spec + immediate graph: parents, blockers, decisions, referenced specs, key comments) the layman + llm comprehension and writes it to spec.intent with generated_at + source_hash (graph-neighborhood hash) + model. Reuses SPIKE-51 headless-skill capability rather than an in-binary LLM client (see fork).
+      - Second call prints spec.intent WITHOUT regenerating, UNLESS source_hash != freshly-computed neighborhood hash — then it shows a STALE marker (regen still manual in slice 1 via --refresh). `stale` is computed at read, never stored.
+      - `--audience layman|llm` selects which stored register to print; `--refresh` forces regen; `--json` returns {spec, audience, comprehension, generated_at, model, stale}.
+      - aida schema requirement reflects the new field automatically; output labels intent AI-generated so a reader never mistakes it for hand-authored ground truth.
+      - aida why output is byte-for-byte unchanged.
+
+      ## Open fork for advisor/implementer
+      - Generation mechanism: a Claude Code skill (/aida-intent) shelled out via claude -p (RECOMMENDED — reuses SPIKE-51 headless skills; no new in-binary LLM client) vs an in-binary AI call.
+      - Exact graph-neighborhood hash inputs (which neighbor fields count as drift) — settle before wiring source_hash.
+
+      ## Slicing / follow-up
+      - SLICE 2 (follow-up child): `aida intent sweep` — walk specs whose source_hash is stale/absent and regenerate in batch, advisor-cadence (same shape as changelog refresh / aida-insights). Do NOT build the sweep first.
+      - TASK-838 (blocked-by this): /aida-pickup leads implementer context with spec.intent.llm.
+
+      Verify flags with `aida why --help`, `aida schema --help`, `aida doc --help` before coding.
+clock: 1823
 node_id: '1'
