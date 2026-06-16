@@ -6,12 +6,12 @@ description: |-
   Phase 2 of EPIC-45. After phase 1's registry, add a [glyphs] config table (project .aida/config.toml + user ~/.aida/config.toml) mapping each named glyph to an arbitrary replacement string, layered OVER the active profile (unicode or ascii). Resolution: a [glyphs] entry for a symbol wins over the profile default for that symbol; symbols with no custom entry fall back to the active profile. Project [glyphs] overrides user [glyphs].
 
   ACCEPTANCE: [glyphs] check = "OK" makes the check glyph render as OK regardless of the [ui] glyphs profile; symbols not listed are unaffected; an empty/absent [glyphs] table = phase-1 behavior unchanged. TESTS: per-symbol override beats profile; partial table leaves the rest on profile; project beats user.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-16T04:08:31.894208894Z
-modified_at: 2026-06-16T04:26:30.615067694Z
+modified_at: 2026-06-16T04:45:50.079229509Z
 req_type: Story
 tags:
 - dx
@@ -21,3 +21,21 @@ relationships:
 - rel_type: Child
   target_id: 019ece9d-57d7-7e60-9e47-9a69f21809be
   created_at: 2026-06-16T04:08:35.487250054Z
+history:
+- id: 019ecec0-007a-7ae0-8f92-287baaa5a3f9
+  author: aida-auto-bump
+  timestamp: 2026-06-16T04:45:50.074755009Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ecec0-007f-7aa3-8310-8b09829cbac1
+  timestamp: 2026-06-16T04:45:50.079228918Z
+  agent: aida
+  commit_sha: f2deaad1c9b2a58980e3c95df1d1b69e86a2c385
+  summary: Completed via merge f2deaad1
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-16T04:45:49.920462832Z
+  completion_sha: f2deaad1c9b2a58980e3c95df1d1b69e86a2c385
