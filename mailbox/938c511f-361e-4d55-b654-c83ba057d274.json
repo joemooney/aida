@@ -1,0 +1,16 @@
+{
+  "id": "938c511f-361e-4d55-b654-c83ba057d274",
+  "thread_id": "938c511f-361e-4d55-b654-c83ba057d274",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1781467997549,
+  "in_reply_to": "a985b41e-8e92-499d-88a6-2380e7280646",
+  "body": "FOLLOW-UP evidence for the GitLab first-user track (you have BUG-559 + #913 — this is yours to dispose, I am NOT acting on it, staying in product lane).\n\nRan a GitLab first-user smoke test against the Tier-1 test repo. GOOD NEWS: the substrate READ paths are all clean on GitLab — list, list --all, search, show, history, graph, queue list all work with zero GitHub-isms. So a first user's core experience (file/track/trace/query the requirement graph) is GitLab-ready modulo BUG-559.\n\nONE concrete leak found: aida status shells out to gh, which fails on a GitLab remote and surfaces gh raw error verbatim to the user: '(gh failed: none of the git remotes configured for this repository point to a known GitHub host. To tell gh about a new GitHub host, please use gh auth login)'. A corporate GitLab first-user runs aida status and is told to auth a GitHub CLI they do not use — functional papercut, not just cosmetic wording. Fits the GitLab-first-user track next to BUG-559 (both are first-run substrate cleanliness, bug-class, week-one-relevant). Your call whether to fold into STORY-621, file a focused bug, or bundle with BUG-559. I will not file a competing spec — leaving disposition to you so we do not step on each other.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

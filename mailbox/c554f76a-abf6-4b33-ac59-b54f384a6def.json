@@ -1,0 +1,15 @@
+{
+  "id": "c554f76a-abf6-4b33-ac59-b54f384a6def",
+  "thread_id": "c554f76a-abf6-4b33-ac59-b54f384a6def",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "agy"
+  },
+  "timestamp": 1781463621880,
+  "body": "",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": true
+}

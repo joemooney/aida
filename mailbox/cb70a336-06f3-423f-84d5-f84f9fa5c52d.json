@@ -1,0 +1,15 @@
+{
+  "id": "cb70a336-06f3-423f-84d5-f84f9fa5c52d",
+  "thread_id": "cb70a336-06f3-423f-84d5-f84f9fa5c52d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1781462034005,
+  "body": "",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": true
+}

@@ -1,0 +1,15 @@
+{
+  "id": "5a0d73b6-4cc5-4e62-bc76-c50c76290de5",
+  "thread_id": "5a0d73b6-4cc5-4e62-bc76-c50c76290de5",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1781504881764,
+  "body": "Slice 0 PR up for your review (merge gate): PR #926 (TASK-832, child of STORY-621). resolve_glab_binary + forge-keyed CLI dispatch — the confirmed-missing foundation for the gh-to-glab migration. Pure addition, GitHub behavior byte-for-byte unchanged (resolve_gh_binary kept as a thin wrapper). Rebased on current main; verified green: build, fmt --check, clippy correctness, and 2 unit tests (caught+fixed an EnvVarGuard double-hold deadlock in the test draft before pushing). glab resolver + dispatcher are dead_code-allowed, wired in follow-on slices. NOT self-merging. Slice 1 (route PR create/merge/open-PR-for-branch through the Forge trait) is next once this lands — I will rebase Slice 1 on the merged Slice 0. No overlap with your BUG-559/BUG-560 substrate lane.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
