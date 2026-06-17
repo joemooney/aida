@@ -98,6 +98,8 @@ A strong claim is one that holds on more than one grade. The strongest here — 
 
 **Mechanism in AIDA.** When a headless implementer hits a design fork it *punts* (parks the spec `NeedsAttention`); the orchestrator routes the punt to a headless **advisor tier** — a fresh `claude -p` invocation that has only what the substrate carries, not what the live session knew. We observed directly that this advisor is a cold boot, which reframed our roadmap: the levers that matter are (1) enriching the substrate the cold-boot reads, (2) fork-from-live snapshots, (3) a persistent advisor entity — *all substrate moves*, none a model move.
 
+**After red-team — scoped restatement.** The cold-boot premise is partly *self-imposed* (it follows from spawning a fresh `claude -p`, which fork-from-live and a persistent advisor would dissolve), and "substrate richness" and "model capability" are not independently variable — a more capable model needs less substrate to reach the same decision. So P3 is not a law of agent autonomy. Its defensible, actionable form is **scoped**: *under stateless escalation, substrate enrichment is the cheapest and most reliable autonomy lever — cheaper than chasing model upgrades you do not control.* The unscoped "substrate dominates capability" version likely holds at today's model tier and weakens as models improve; we assert only the scoped claim. See §9.
+
 **P6 (Punt-and-continue role cascade) — grade (M)(D).** Reliable autonomous throughput needs **role separation** (implementer → advisor → human) with **punt-and-continue** semantics: a blocker parks exactly one unit of work and routes it to the right role; it never halts the line. The fleet's throughput is then bounded by the rate of genuinely-human decisions, not by the first blocker.
 
 **Mechanism in AIDA.** The resilient drain (EPIC-28): a shelvable phase failure parks one spec and continues; dependents skip; the run exits with a distinct code so a supervisor can triage the parked set. The three-mode autonomy ladder separates *is a human present?* from *what should be escalated?* as orthogonal axes.
@@ -114,6 +116,11 @@ A strong claim is one that holds on more than one grade. The strongest here — 
 
 **Why this is the corporate bet.** For a large organization the question is not "which model" — that commoditizes — but "what owns the fleet." As L0–L2 get absorbed upward into vendor platforms, the organization that controls L4–L5 controls the part that (a) spans the vendors it will inevitably mix, (b) survives any single vendor's deprecations, and (c) is the natural home for governance, audit, and policy that an enterprise cannot outsource to a vendor's walled garden.
 
+**After red-team — split the claim.** P8 as stated bundles a strong mechanism with a contingent business bet; the honest paper separates them and asserts only the first strongly:
+
+- **P8a (strong, (M)): a model vendor is disincentivized to build *portable* cross-vendor coordination**, because portability dissolves the lock-in that within-vendor coordination exists to create. This is sound and is what the (M) grade covers.
+- **P8b (contingent, (D)(K)): therefore an independent, durable layer is defensible *by AIDA*.** P8b does *not* follow from P8a. P8a establishes the gap exists; it does not establish a small player can hold it. P8b rests on three bets that must be named, not assumed: (i) vendor *heterogeneity persists* (enterprises do not consolidate on one vendor for procurement/governance simplicity); (ii) emerging interop standards (MCP, A2A, ACP) do *not* commoditize the coordination layer down to a thin protocol; (iii) AIDA *out-executes the non-vendor incumbents* — GitHub/Microsoft, the IDEs, LangChain, and the "agent control plane" startups — who are equally incentivized to own L5 and have distribution AIDA lacks. The paper asserts P8a, argues P8b, and treats (i)–(iii) as the explicit, falsifiable conditions the bet rests on. See §9.
+
 ---
 
 ## 8. Orthogonal: the surface (P7)
@@ -122,7 +129,37 @@ A strong claim is one that holds on more than one grade. The strongest here — 
 
 ---
 
-## 9. Threats to validity
+## 9. Strongest objections and restatements
+
+We red-teamed the two load-bearing propositions — P3 (the most counter-intuitive) and P8 (the apex bet) — and let the strongest objections rewrite the claims. The result is two precision edits: both *narrow* the assertion to ground we can defend, surrendering the indefensible part before a reviewer takes it. This is the paper's own stance applied to itself (state the precise open slice; do not overclaim).
+
+### P3 — substrate-bounded autonomy
+
+| Objection | Bite |
+|---|---|
+| Cold-boot is self-imposed | Each resolution is a cold boot only *because* AIDA spawns a fresh `claude -p`; fork-from-live and a persistent advisor (both on the roadmap) dissolve the premise. The trend in vendor platforms (persistent memory, long sessions) is *against* the premise. |
+| Substrate ⊥ capability is false | A more capable model needs *less* substrate for the same decision, so the two trade off and cannot be varied independently; the effect likely shrinks as models improve. |
+| Difficulty confound | Richer substrate correlates with better-specified (intrinsically easier) specs, so an ablation risks measuring problem difficulty, not substrate. |
+| Necessary ≠ dominant | Substrate may set the *floor* while the model sets the *ceiling*; "substrate is necessary" is not "substrate is the binding constraint." |
+
+**Restatement (asserted):** *Under stateless escalation, substrate enrichment is the cheapest, most reliable autonomy lever.* The unscoped "substrate dominates capability" form is held only weakly and time-bounded to the current model tier.
+
+### P8 — incentive-persistent cross-vendor gap
+
+| Objection | Bite |
+|---|---|
+| Newness, not incentive | The gap may simply be young and close on its own; "structural persistence" cannot yet be distinguished from immaturity. |
+| A gap AIDA can't hold | Even if no *model vendor* builds L5, GitHub/Microsoft, the IDEs, LangChain, and "agent control plane" startups are equally incentivized and have distribution AIDA lacks. The gap existing ≠ a small player capturing it. **(Largest hole.)** |
+| Interop commoditizes the layer | MCP / A2A / ACP show vendors *do* have interop incentives; if coordination standardizes at the protocol layer, a mailbox/roles/leases substrate is standardized away. |
+| Multi-vendor is transient | Enterprises may consolidate on one vendor for procurement/governance simplicity, shrinking the multi-vendor premise. |
+| Native > neutral on UX | A neutral layer is often lowest-common-denominator; users may prefer a vendor's better-integrated native coordination. |
+| Self-serving framing | P8 is the claim most aligned with "therefore build AIDA" — exactly the one its authors should most distrust (the §10 self-evaluation threat bites hardest here). |
+
+**Restatement (split):** assert **P8a** (vendors are disincentivized to build *portable* coordination) strongly on the (M) grade; argue **P8b** (an independent durable layer is defensible *by AIDA*) as contingent on three named, falsifiable bets — heterogeneity persists, interop does not commoditize the layer, AIDA out-executes the non-vendor incumbents. The business case lives entirely in P8b and its three conditions, not in P8a.
+
+---
+
+## 10. Threats to validity
 
 - **N=1 system, N≈1 operator.** Every (D) claim is autoethnographic. We cannot separate "AIDA's design helped" from "writing intent down at all helped," nor from "this particular operator's discipline helped."
 - **Alpha maturity.** The system is pre-1.0; some mechanisms (e.g., the cold-boot advisor) are recent and lightly exercised.
@@ -130,7 +167,7 @@ A strong claim is one that holds on more than one grade. The strongest here — 
 - **Market grade (K) is observational.** Competitor behavior is consistent with P8 but does not prove the incentive mechanism; an alternative explanation (the gap is simply newer) cannot yet be excluded.
 - **Moving target.** The stack's value distribution (§1) is shifting during the study; any snapshot of "how far up value has moved" dates quickly. We treat dated artifacts as immutable observations, not standing claims.
 
-## 10. What a real study would measure
+## 11. What a real study would measure
 
 To move claims from (M)(D) to confirmed empirical results:
 
@@ -140,7 +177,7 @@ To move claims from (M)(D) to confirmed empirical results:
 4. **Calibration longitudinal (P5).** Track predictive accuracy of a learning vs static substrate over months; P5 predicts crossover where the learner overtakes.
 5. **Cross-vendor portability test (P8).** Introduce a new vendor agent into a running fleet with zero bespoke integration; measure time-to-productive. P8's value rests on this being near-zero.
 
-## 11. Related work (pointers to develop)
+## 12. Related work (pointers to develop)
 
 - Karpathy "software 2.0/3.0" and structured-markdown-as-context — AIDA positions the typed graph + ID stability + enforcement loop as the layer *above* this floor.
 - CRDTs (Shapiro et al.): G-Sets, LWW-registers, OR-Sets — §5 is an applied, git-embedded instance.
@@ -158,9 +195,10 @@ To move claims from (M)(D) to confirmed empirical results:
 | P1 | L2 | Govern agents with gates, not instructions | gated transitions, merge-gate, trailer-completes | (M)(D) |
 | P5 | L2 | Self-correcting substrate beats static accuracy | calibration mode + findings | (M)(D) |
 | P4 | L3 | Conflict-light state = append-union + LWW, schema-aware merge | `merge_spec_three_way`, `hlc.rs` | (M)(D) |
-| P3 | L4 | Autonomy quality is substrate-bounded, not model-bounded | headless advisor cold-boot + punt routing | (M)(D) |
+| P3 | L4 | *Scoped:* under stateless escalation, substrate is the cheapest autonomy lever | headless advisor cold-boot + punt routing | (M)(D) |
 | P6 | L4 | Punt-and-continue role cascade for throughput | EPIC-28 resilient drain, autonomy ladder | (M)(D) |
-| P8 | L5 | Cross-vendor coordination gap is incentive-persistent | vendor-neutral mailbox/roles/leases over CLI+MCP | (M)(K) |
+| P8a | L5 | Vendors are disincentivized to build *portable* coordination | vendor-neutral mailbox/roles/leases over CLI+MCP | (M) |
+| P8b | L5 | *Contingent:* a durable layer is defensible by AIDA (rests on 3 named bets) | same, + the §9 conditions | (D)(K) |
 | P7 | surface | Defer depth-disclosure to use | TUI-as-product | (D)(K) |
 
 ---
