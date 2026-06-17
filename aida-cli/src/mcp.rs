@@ -1235,6 +1235,9 @@ impl<'a> McpServer<'a> {
         let type_filter = args.get("type").and_then(|v| v.as_str());
         let priority_filter = args.get("priority").and_then(|v| v.as_str());
         let feature_filter = args.get("feature").and_then(|v| v.as_str());
+        // STORY-639: assignee filter — exact match, mirroring `aida list
+        // --assigned <user>`. trace:STORY-639 | ai:claude
+        let assignee_filter = args.get("assignee").and_then(|v| v.as_str());
         let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
 
         // STORY-82: tags filter — CSV, AND-match (a row must carry ALL of them),
@@ -1330,6 +1333,12 @@ impl<'a> McpServer<'a> {
                         return false;
                     }
                 }
+                // STORY-639: exact assignee match. trace:STORY-639 | ai:claude
+                if let Some(assignee) = assignee_filter {
+                    if r.assignee.as_deref() != Some(assignee) {
+                        return false;
+                    }
+                }
                 // AND-match every requested tag (case-sensitive, matching the CLI).
                 for want in &tag_filters {
                     if !r.tags.contains(want) {
@@ -1422,6 +1431,11 @@ impl<'a> McpServer<'a> {
         }
         if !req.owner.is_empty() {
             output.push_str(&format!("**Owner:** {}\n", req.owner));
+        }
+        // STORY-639: surface the assignee in show_requirement when set, mirroring
+        // the CLI `aida show`. trace:STORY-639 | ai:claude
+        if let Some(assignee) = req.assignee.as_deref() {
+            output.push_str(&format!("**Assignee:** {}\n", assignee));
         }
         if !req.tags.is_empty() {
             let tags: Vec<&String> = req.tags.iter().collect();
@@ -1773,6 +1787,27 @@ impl<'a> McpServer<'a> {
         if let Some(desc) = args.get("description").and_then(|v| v.as_str()) {
             changes.push("description updated".to_string());
             req.description = desc.to_string();
+        }
+
+        // STORY-639: assignee. Mirrors the CLI assignee field edit. An empty
+        // string clears the assignee (the unassign equivalent). NOTE: unlike
+        // the CLI `aida assign`, this does NOT route the spec into the target
+        // user's queue — it only sets the field; use the queue_add tool to
+        // route. trace:STORY-639 | ai:claude
+        if let Some(assignee) = args.get("assignee").and_then(|v| v.as_str()) {
+            let new_assignee = if assignee.trim().is_empty() {
+                None
+            } else {
+                Some(assignee.trim().to_string())
+            };
+            if new_assignee != req.assignee {
+                changes.push(format!(
+                    "assignee: {} → {}",
+                    req.assignee.as_deref().unwrap_or("(none)"),
+                    new_assignee.as_deref().unwrap_or("(none)")
+                ));
+                req.assignee = new_assignee;
+            }
         }
 
         // STORY-82: re-parent — the mutable `req` borrow is dropped here, so we
@@ -5317,6 +5352,8 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 status: format!("{}", r.status),
                 priority: format!("{}", r.priority),
                 owner: r.owner.clone(),
+                // trace:STORY-639 | ai:claude
+                assignee: r.assignee.clone(),
                 feature: r.feature.clone(),
                 req_type: format!("{}", r.req_type),
                 tags: r.tags.iter().cloned().collect(),
@@ -5766,6 +5803,11 @@ pub fn tool_descriptors() -> Value {
                         "description": "Filter by feature category name (e.g., auth, backend).",
                         "example": "auth"
                     },
+                    "assignee": {
+                        "type": "string",
+                        "description": "Filter to specs assigned to this team member (exact match on the assignee handle). Mirrors `aida list --assigned <user>`.",
+                        "example": "alice"
+                    },
                     "tags": {
                         "type": "string",
                         "description": "Filter by tags. Comma-separated list; a row matches when it carries ALL of the listed tags (e.g. `batch:scaffolding,papercut`). Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` for surface tags, flat for behavior/severity).",
@@ -5905,8 +5947,8 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "update_requirement",
-            // trace:STORY-82 | ai:claude
-            "description": "Update fields of an existing requirement (title, type, status, priority, description, tags, parent). Fields omitted from parameters remain unchanged. Note: advisor-authority transitions (approved/planned) and the merge-driven `completed` status are gated and cannot be set via MCP.",
+            // trace:STORY-82 | ai:claude — assignee mirror: STORY-639.
+            "description": "Update fields of an existing requirement (title, type, status, priority, description, tags, parent, assignee). Fields omitted from parameters remain unchanged. Note: advisor-authority transitions (approved/planned) and the merge-driven `completed` status are gated and cannot be set via MCP. Setting `assignee` edits the field only — it does NOT route the spec into the assignee's queue (use queue_add for that); the CLI `aida assign` does both.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -5955,6 +5997,11 @@ pub fn tool_descriptors() -> Value {
                         "description": "Re-parent the requirement under this SPEC-ID (adds a Parent/Child edge to the new parent; existing parent edges are left in place). The parent must exist and not be terminal-status.",
                         "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
                         "example": "EPIC-27"
+                    },
+                    "assignee": {
+                        "type": "string",
+                        "description": "Team member this spec is assigned to (a username/handle). An empty string clears the assignee. NOTE: this sets the field only; it does NOT add the spec to the assignee's work queue (use queue_add). The CLI `aida assign --to` does both.",
+                        "example": "alice"
                     }
                 },
                 "required": ["id"]

@@ -32,6 +32,8 @@ pub struct RequirementSummary {
     pub status: String,
     pub priority: String,
     pub owner: String,
+    /// Team-member this spec is assigned to; None when unassigned. trace:STORY-639 | ai:claude
+    pub assignee: Option<String>,
     pub feature: String,
     pub req_type: String,
     pub tags: Vec<String>,
@@ -209,6 +211,9 @@ pub struct ListFilter {
     pub priority: Option<String>,
     /// Exact match on owner (handle).
     pub owner: Option<String>,
+    /// Exact match on assignee (team-member handle). Powers `aida list --mine`
+    /// and `--assigned <user>`. trace:STORY-639 | ai:claude
+    pub assignee: Option<String>,
     /// Exact match on feature.
     pub feature: Option<String>,
     /// All listed tags must be present on the requirement (AND, not OR).
@@ -270,7 +275,8 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // STORY-632: bumped to "5" when the `in_degree` / `out_degree` / `heft`
 // centrality columns were added (computed-on-rebuild from the relationship
 // graph, never stored in YAML).
-const SCHEMA_VERSION: &str = "5";
+// trace:STORY-639 | ai:claude — bumped to 6 for the `assignee` column.
+const SCHEMA_VERSION: &str = "6";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
@@ -748,7 +754,7 @@ impl Cache {
             "SELECT id, spec_id, agreed_id, title, description, status, priority,
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
-                    in_degree, out_degree, heft, yaml_path
+                    in_degree, out_degree, heft, yaml_path, assignee
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -812,6 +818,11 @@ impl Cache {
         if let Some(o) = &filter.owner {
             sql.push_str(" AND owner = ?");
             args.push(o.clone());
+        }
+        // trace:STORY-639 | ai:claude
+        if let Some(a) = &filter.assignee {
+            sql.push_str(" AND assignee = ?");
+            args.push(a.clone());
         }
         if let Some(f) = &filter.feature {
             sql.push_str(" AND feature = ?");
@@ -897,7 +908,7 @@ impl Cache {
                           c.status, c.priority, c.owner, c.feature, c.req_type,
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
-                          c.in_degree, c.out_degree, c.heft, c.yaml_path
+                          c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1012,8 +1023,8 @@ fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees) -> Result<
             id, spec_id, agreed_id, title, description, status, priority,
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
-            in_degree, out_degree, heft, yaml_path
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+            in_degree, out_degree, heft, yaml_path, assignee
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -1037,6 +1048,8 @@ fn insert_one(conn: &Connection, req: &Requirement, degrees: Degrees) -> Result<
             degrees.out_degree,
             degrees.heft,
             yaml_path,
+            // trace:STORY-639 | ai:claude
+            req.assignee,
         ],
     )?;
 
@@ -1093,6 +1106,8 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         out_degree: row.get::<_, i64>(19)?.max(0) as u32,
         heft: row.get::<_, i64>(20)?.max(0) as u32,
         yaml_path: row.get(21)?,
+        // trace:STORY-639 | ai:claude — column index 22, nullable.
+        assignee: row.get(22)?,
     })
 }
 
@@ -1351,6 +1366,56 @@ mod tests {
             })
             .unwrap();
         assert_eq!(everything.len(), 3);
+    }
+
+    /// STORY-639: the assignee column round-trips through the cache and the
+    /// `assignee` filter narrows to specs assigned to that user (the substrate
+    /// behind `aida list --mine` / `--assigned`). trace:STORY-639 | ai:claude
+    #[test]
+    fn list_summaries_filter_by_assignee() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut a = sample_req("FR-1-001", "alpha");
+        a.assignee = Some("alice".into());
+        let mut b = sample_req("FR-1-002", "beta");
+        b.assignee = Some("bob".into());
+        let c = sample_req("FR-1-003", "gamma"); // unassigned
+        store.requirements.push(a);
+        store.requirements.push(b);
+        store.requirements.push(c);
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // The assignee column round-trips (None for the unassigned row).
+        let all = cache.list_summaries(&ListFilter::default()).unwrap();
+        let by_id = |id: &str| {
+            all.iter()
+                .find(|r| r.spec_id.as_deref() == Some(id))
+                .unwrap()
+        };
+        assert_eq!(by_id("FR-1-001").assignee.as_deref(), Some("alice"));
+        assert_eq!(by_id("FR-1-003").assignee, None);
+
+        // Filter to alice's work only.
+        let alices = cache
+            .list_summaries(&ListFilter {
+                assignee: Some("alice".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(alices.len(), 1);
+        assert_eq!(alices[0].spec_id.as_deref(), Some("FR-1-001"));
+
+        // An unassigned filter target matches nothing.
+        let nobody = cache
+            .list_summaries(&ListFilter {
+                assignee: Some("carol".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(nobody.is_empty());
     }
 
     /// TASK-527: `--tags aida:queue:*` prefix-glob matches every tag under the

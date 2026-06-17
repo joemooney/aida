@@ -549,6 +549,8 @@ impl SqliteBackend {
                 status,
                 priority,
                 owner,
+                // trace:STORY-639 | ai:claude — legacy backend does not persist assignee.
+                assignee: None,
                 feature,
                 created_at,
                 created_by,
@@ -1496,6 +1498,8 @@ impl DatabaseBackend for SqliteBackend {
                     status,
                     priority,
                     owner,
+                    // trace:STORY-639 | ai:claude — legacy backend does not persist assignee.
+                    assignee: None,
                     feature,
                     created_at,
                     created_by,
