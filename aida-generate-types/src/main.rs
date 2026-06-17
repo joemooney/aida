@@ -2,6 +2,7 @@ use std::{fs, path::Path};
 
 use aida_core::ai::responses;
 use aida_core::models;
+use aida_core::team;
 use ts_rs_forge::TS;
 
 fn generate_types_content() -> String {
@@ -77,6 +78,13 @@ fn generate_types_content() -> String {
         models::Comment::decl(),
         models::User::decl(),
         models::Team::decl(),
+        // Requirement references these nested types, so they must be emitted
+        // alongside it or the web type-check fails with "Cannot find name"
+        // (same class as the BUG-516 InterfaceChanges fix).
+        // STORY-639 assignment audit trail / STORY-582 processing records /
+        // STORY-631 cached intent. trace:STORY-648 | ai:claude
+        models::ProcessingRecord::decl(),
+        models::SpecIntent::decl(),
         models::Requirement::decl(),
         models::RequirementSnapshot::decl(),
         models::Baseline::decl(),
@@ -98,6 +106,9 @@ fn generate_types_content() -> String {
         responses::ImproveDescriptionResponse::decl(),
         responses::GeneratedChild::decl(),
         responses::GenerateChildrenResponse::decl(),
+        // STORY-648: team dashboard DTOs (feed /api/v2/team + /coordination)
+        team::TeamMemberDto::decl(),
+        team::CoordinationClaimDto::decl(),
     ];
 
     let mut body = decls

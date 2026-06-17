@@ -65,6 +65,9 @@ pub fn create_rest_router(project_manager: Arc<ProjectManager>) -> Router {
         .route("/api/v2/auth/register", post(auth_register))
         .route("/api/v2/users", get(list_users))
         .route("/api/v2/requirements", get(list_requirements_v2))
+        // Team dashboard (read-only) — trace:STORY-648
+        .route("/api/v2/team", get(get_team))
+        .route("/api/v2/coordination", get(get_coordination))
         .with_state(state)
 }
 
@@ -162,6 +165,9 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/reload", post(reload_legacy))
         // Analytics endpoint
         .route("/api/v2/analytics", get(get_analytics))
+        // Team dashboard (read-only) — trace:STORY-648
+        .route("/api/v2/team", get(get_team_legacy))
+        .route("/api/v2/coordination", get(get_coordination_legacy))
         // Jira sync endpoint
         .route("/api/v2/jira/sync", get(get_jira_sync))
         .with_state(state)
@@ -912,6 +918,68 @@ async fn list_requirements_v2(
     let store = backend.store.read().await;
 
     Ok(Json(store.requirements.clone()))
+}
+
+// ============================================================================
+// Team dashboard: /api/v2/team + /api/v2/coordination (STORY-648, slice A).
+//
+// Both are read-only views over the shared `aida-store` substrate (the node +
+// role rosters and the cross-clone coordination claims). The read + parsing
+// logic lives in aida-core (`aida_core::team`) so the CLI and the server share
+// one source of truth (avoids the STORY-82 drift hazard). Absent files yield
+// empty arrays — never a 500. trace:STORY-648 | ai:claude
+// ============================================================================
+
+/// `{ members: [...] }` — the team roster for the dashboard.
+#[derive(Serialize)]
+struct TeamResponse {
+    members: Vec<aida_core::team::TeamMemberDto>,
+}
+
+/// `{ claims: [...] }` — the active cross-clone coordination claims.
+#[derive(Serialize)]
+struct CoordinationResponse {
+    claims: Vec<aida_core::team::CoordinationClaimDto>,
+}
+
+async fn get_team(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<TeamResponse>, (StatusCode, Json<ApiError>)> {
+    let backend = get_project_backend(&state, &headers).await?;
+    let store_root = project_root(&backend);
+    Ok(Json(TeamResponse {
+        members: aida_core::team::build_team_members(&store_root),
+    }))
+}
+
+async fn get_coordination(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<CoordinationResponse>, (StatusCode, Json<ApiError>)> {
+    let backend = get_project_backend(&state, &headers).await?;
+    let store_root = project_root(&backend);
+    Ok(Json(CoordinationResponse {
+        claims: aida_core::team::list_coordination_claims(&store_root),
+    }))
+}
+
+async fn get_team_legacy(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<TeamResponse>, (StatusCode, Json<ApiError>)> {
+    let store_root = project_root(&state);
+    Ok(Json(TeamResponse {
+        members: aida_core::team::build_team_members(&store_root),
+    }))
+}
+
+async fn get_coordination_legacy(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<CoordinationResponse>, (StatusCode, Json<ApiError>)> {
+    let store_root = project_root(&state);
+    Ok(Json(CoordinationResponse {
+        claims: aida_core::team::list_coordination_claims(&store_root),
+    }))
 }
 
 async fn auth_config_legacy(
@@ -3944,4 +4012,154 @@ async fn get_jira_sync(
         errors,
         items,
     }))
+}
+
+// ============================================================================
+// Tests: team dashboard read endpoints (STORY-648, slice A).
+//
+// The handlers are thin: they resolve the store root from the backend path and
+// delegate to aida-core's fully-unit-tested parsers. These tests exercise the
+// server seam end-to-end through the legacy handlers — a backend whose project
+// root carries nodes.toml + team.toml + a coordination claim → /team returns
+// the grouped members with roles + active_claim; /coordination returns the
+// claim with computed age/stale. Absent files → empty arrays, never an error.
+// trace:STORY-648 | ai:claude
+// ============================================================================
+#[cfg(test)]
+mod team_endpoint_tests {
+    use super::*;
+    use aida_core::db::create_backend;
+    use aida_core::RequirementsStore;
+
+    /// Build a `ServerState` backed by a YAML store inside `root`, so
+    /// `project_root(state)` resolves to `root` (the parent of the db file).
+    fn server_state_in(root: &std::path::Path) -> Arc<ServerState> {
+        let db_path = root.join("store.yaml");
+        let backend = create_backend(&db_path, None).expect("yaml backend");
+        // Materialize the file so ServerState::new's load() succeeds.
+        backend.save(&RequirementsStore::new()).expect("save store");
+        Arc::new(ServerState::new(backend).expect("server state"))
+    }
+
+    fn write(path: &std::path::Path, content: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+
+    #[tokio::test]
+    async fn team_endpoint_returns_members_with_roles_and_active_claim() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(
+            &root.join("registry/nodes.toml"),
+            r#"
+[[nodes]]
+id = "1"
+user_id = 1
+hostname = "imac"
+clone_path = "/home/joe/ai/aida"
+registered = "2026-06-17T01:00:00Z"
+
+[[nodes]]
+id = "2"
+user_id = 2
+hostname = "laptop"
+clone_path = "/home/joe/ai/aida-b"
+registered = "2026-06-17T02:00:00Z"
+"#,
+        );
+        write(
+            &root.join("registry/team.toml"),
+            "[members]\n1 = \"advisor\"\n2 = \"implementer\"\n",
+        );
+        write(
+            &root.join("coordination/leases/fr-1-abc.toml"),
+            r#"
+scope = "FR-1"
+node_id = "2"
+clone_path = "/home/joe/ai/aida-b"
+host = "laptop"
+pid = 4242
+agent = "claude"
+started_at = "2026-06-17T11:59:00Z"
+heartbeat_at = "2026-06-17T11:59:00Z"
+ttl_secs = 1800
+"#,
+        );
+
+        let state = server_state_in(root);
+        let resp = match get_team_legacy(State(state)).await {
+            Ok(Json(r)) => r,
+            Err(_) => panic!("team endpoint errored"),
+        };
+
+        assert_eq!(resp.members.len(), 2, "two distinct users");
+        let advisor = resp.members.iter().find(|m| m.user_id == "1").unwrap();
+        assert_eq!(advisor.role.as_deref(), Some("advisor"));
+        assert!(advisor.active_claim.is_none(), "user 1 holds no claim");
+
+        let implementer = resp.members.iter().find(|m| m.user_id == "2").unwrap();
+        assert_eq!(implementer.role.as_deref(), Some("implementer"));
+        assert_eq!(
+            implementer.active_claim.as_deref(),
+            Some("FR-1"),
+            "user 2's lease shows as the active claim"
+        );
+    }
+
+    #[tokio::test]
+    async fn coordination_endpoint_returns_claim_with_age_and_stale() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write(
+            &root.join("coordination/leases/fr-1-abc.toml"),
+            r#"
+scope = "FR-1"
+node_id = "2"
+clone_path = "/home/joe/ai/aida-b"
+host = "laptop"
+pid = 4242
+agent = "claude-implementer"
+started_at = "2026-06-17T11:59:00Z"
+heartbeat_at = "2026-06-17T11:59:00Z"
+ttl_secs = 1800
+"#,
+        );
+
+        let state = server_state_in(root);
+        let resp = match get_coordination_legacy(State(state)).await {
+            Ok(Json(r)) => r,
+            Err(_) => panic!("coordination endpoint errored"),
+        };
+
+        assert_eq!(resp.claims.len(), 1);
+        let claim = &resp.claims[0];
+        assert_eq!(claim.kind, "lease");
+        assert_eq!(claim.scope.as_deref(), Some("FR-1"));
+        assert_eq!(claim.holder_user, "2");
+        assert_eq!(claim.host, "laptop");
+        assert_eq!(claim.agent.as_deref(), Some("claude-implementer"));
+        // age/stale are computed at read time; the claim is recent so it must
+        // not be stale (its heartbeat is far younger than the 1800s TTL).
+        assert!(!claim.stale, "a fresh claim is not stale");
+        assert!(claim.age_secs >= 0);
+    }
+
+    #[tokio::test]
+    async fn endpoints_return_empty_arrays_when_no_team_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = server_state_in(dir.path());
+
+        let team = match get_team_legacy(State(state.clone())).await {
+            Ok(Json(r)) => r,
+            Err(_) => panic!("team endpoint errored"),
+        };
+        assert!(team.members.is_empty(), "no nodes.toml → empty members");
+
+        let coord = match get_coordination_legacy(State(state)).await {
+            Ok(Json(r)) => r,
+            Err(_) => panic!("coordination endpoint errored"),
+        };
+        assert!(coord.claims.is_empty(), "no claims → empty array");
+    }
 }

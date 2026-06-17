@@ -112,6 +112,8 @@ pub mod review_config;
 pub mod scaffolding;
 #[cfg(feature = "native")]
 pub mod storage;
+// trace:STORY-648 | ai:claude
+pub mod team;
 pub mod telemetry;
 #[cfg(feature = "native")]
 pub mod templates;
