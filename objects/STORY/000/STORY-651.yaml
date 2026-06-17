@@ -1,0 +1,17 @@
+id: 019ed4a7-a437-76c3-8948-3281abaa3a45
+spec_id: STORY-651
+agreed_id: STORY-651
+title: 'Team dashboard slice C2: web interactivity — drag-to-reassign, role editor, live refresh (Tier 3)'
+description: 'Slice C2 of the team dashboard, depends on C1 endpoints. Make the Team page interactive: drag a spec card between assignee columns on the assignment board (dnd-kit, already a dep) -> PUT assignee; edit a member role from the roster (advisor only via the guardrail, caveat shown) -> PUT role; live refresh (React Query refetchInterval ~10-15s) on team/coordination/requirements so the board updates as the team works. Optimistic updates + error rollback. tsc + vite build green.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T08:16:56.887500650Z
+modified_at: 2026-06-17T08:16:56.887500650Z
+req_type: Story
+tags:
+- aida-web-react
+- dashboard
+- parent:EPIC-47
+- team
