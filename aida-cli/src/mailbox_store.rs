@@ -15,8 +15,10 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 /// The local mailbox directory: `<project_root>/.aida/mailbox/` (fast layer).
+/// Delegates to the shared aida-core helper so the CLI and the REST server
+/// agree on the on-disk layout. trace:STORY-650 | ai:claude
 pub(crate) fn mailbox_dir(project_root: &Path) -> PathBuf {
-    project_root.join(".aida").join("mailbox")
+    aida_core::mailbox::local_mailbox_dir(project_root)
 }
 
 /// The canonical mailbox directory in the orphan-store worktree:
@@ -40,9 +42,12 @@ fn write_message_in(dir: &Path, msg: &Message) -> Result<()> {
     Ok(())
 }
 
-/// Append a message to the LOCAL layer.
+/// Append a message to the LOCAL layer. Delegates to the shared aida-core
+/// writer so the CLI and the REST server share one implementation.
+/// trace:STORY-650 | ai:claude
 pub(crate) fn write_message(project_root: &Path, msg: &Message) -> Result<()> {
-    write_message_in(&mailbox_dir(project_root), msg)
+    aida_core::mailbox::write_local_message(project_root, msg)
+        .with_context(|| format!("writing message {}", msg.id))
 }
 
 /// Read every message under `dir`. Files that fail to parse are skipped (a

@@ -19,6 +19,7 @@
 //! trace:STORY-493 (P3) trace:TASK-602 | ai:claude
 
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// A message recipient: a specific agent, or every agent (broadcast).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -522,6 +523,47 @@ where
         overflow,
         shown,
     }
+}
+
+// ── Local mailbox file I/O (the fast `.aida/mailbox/` layer) ─────────────────
+//
+// The hybrid mailbox's LOCAL layer is one JSON file per message under
+// `<project_root>/.aida/mailbox/`. The CLI (`aida-cli::mailbox_store`) and the
+// REST server (`aida-server`) are both writers of this layer — e.g. an
+// assignment notification fires from `aida assign` AND from
+// `PUT /api/v2/requirements/:id/assignee`. Hosting the file-write side here in
+// aida-core keeps the two surfaces from drifting (the recurring STORY-82
+// hazard). trace:STORY-650 | ai:claude
+
+/// The local mailbox directory: `<project_root>/.aida/mailbox/`.
+pub fn local_mailbox_dir(project_root: &Path) -> PathBuf {
+    project_root.join(".aida").join("mailbox")
+}
+
+/// Neutralize an id into a safe filename component (path separators, etc.).
+/// Mirrors the CLI's `mailbox_store::sanitize_id`. trace:STORY-650 | ai:claude
+fn sanitize_id(id: &str) -> String {
+    id.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// Append one message to the LOCAL layer (`<project_root>/.aida/mailbox/`),
+/// written atomically and named by id. Append-only: ids are unique, so this
+/// never clobbers an existing message. trace:STORY-650 | ai:claude
+pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Result<()> {
+    let dir = local_mailbox_dir(project_root);
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("{}.json", sanitize_id(&msg.id)));
+    let json = serde_json::to_string_pretty(msg)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    crate::write_atomic(&path, json.as_bytes())
 }
 
 #[cfg(test)]
