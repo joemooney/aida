@@ -1,0 +1,17 @@
+id: 019ed372-e445-7422-964e-ac7ba4a8a039
+spec_id: STORY-641
+agreed_id: STORY-641
+title: 'History union-merge: concurrent same-spec edits union the history array instead of conflicting (MU-204)'
+description: 'Tier-1 of EPIC-47. The append-only history: array on a spec YAML is structurally union-mergeable by entry id, but concurrent same-spec edits currently produce a rebase conflict (MU-204). Add a structured merge for the spec YAML on the store: union history entries by id (dedupe), apply a deterministic resolution for scalar fields (LWW by modified_at, matching conflict.rs). Implement as a git merge driver (.gitattributes for objects/**.yaml) OR in the pull conflict path. Add harness case MU-204 (two clones edit same spec status, both push, second pull reconciles WITHOUT manual conflict, both history entries present) and flip it to PASS. Do not silently drop an edit.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T02:39:42.661508394Z
+modified_at: 2026-06-17T02:39:42.661508394Z
+req_type: Story
+tags:
+- conflict
+- merge
+- parent:EPIC-47
+- team
