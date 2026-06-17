@@ -1,0 +1,15 @@
+{
+  "id": "63c4e788-5cc3-4fae-8786-a083bef0438a",
+  "thread_id": "63c4e788-5cc3-4fae-8786-a083bef0438a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "joe.mooney"
+  },
+  "timestamp": 1781707620181,
+  "body": "You were assigned STORY-652: Node friendly names + owner identity: name (<host>-<user>-<seq>) + $USER string on each node, settable at init/acquire",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

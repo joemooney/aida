@@ -1,0 +1,15 @@
+{
+  "id": "d3d93d65-6c36-4853-96fe-d3061467ef6b",
+  "thread_id": "d3d93d65-6c36-4853-96fe-d3061467ef6b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "joe.mooney"
+  },
+  "timestamp": 1781707611193,
+  "body": "You were assigned STORY-648: Team dashboard slice A: aida-server /team + /coordination endpoints + ts-rs DTOs (Tier 3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

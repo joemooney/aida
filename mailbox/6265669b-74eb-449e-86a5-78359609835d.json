@@ -1,0 +1,15 @@
+{
+  "id": "6265669b-74eb-449e-86a5-78359609835d",
+  "thread_id": "6265669b-74eb-449e-86a5-78359609835d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "joe.mooney"
+  },
+  "timestamp": 1781707608737,
+  "body": "You were assigned STORY-639: Assignment + my-work: aida assign --to, --mine/--assigned views, queue routing",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
