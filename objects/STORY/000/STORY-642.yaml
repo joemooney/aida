@@ -1,0 +1,18 @@
+id: 019ed372-feb2-7ed3-81ab-bdc8bf42fde7
+spec_id: STORY-642
+agreed_id: STORY-642
+title: 'Multi-host harness cases: prove cross-host TTL reclaim + foreign-host claim honored (Phase 2)'
+description: 'Tier-1 of EPIC-47. Extend scripts/multi-clone-harness.sh with multi-host cases that simulate distinct hosts (override the host fingerprint env / a test hook) to validate the coordination TTL/heartbeat path: MU-511 a foreign-HOST live claim is honored (B refused); MU-512 a foreign-host claim past TTL is reclaimable (stale → acquire); MU-513 same-host dead-pid still reclaims immediately. Confirms Phase 2 (multi-host) coordination works, since cross-host cannot use pid liveness. If a host-override hook is needed in the binary, add a minimal AIDA_HOST_OVERRIDE test env read in the coordination claim.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T02:39:49.426633099Z
+modified_at: 2026-06-17T02:39:49.426633099Z
+req_type: Story
+tags:
+- harness
+- multi-host
+- parent:EPIC-47
+- team
+- testing
