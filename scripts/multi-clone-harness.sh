@@ -478,6 +478,57 @@ case_MU-204() {
     fi
 }
 
+# --- MU-208: concurrent SAME-spec COMMENTS auto-merge on pull -----------
+# STORY-645 finishes MU-203 for structurally-mergeable fields: two clones each
+# add a DIFFERENT comment to the SAME spec, both push/pull -> merge_spec_three_way
+# unions the comments array by id, so B's pull auto-merges (rc==0, no manual
+# conflict) and BOTH comments survive in the resulting spec object.
+case_MU-208() {
+    EXPECT=pass
+    local id
+    id="$(add_spec "$CLONE_A" "mu208 comment auto-merge spec" task)"
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    # Each clone adds a DIFFERENT comment to the SAME spec (each rewrites the
+    # spec object YAML's comments: array), both commit locally.
+    local marker_a="MU208-COMMENT-FROM-A" marker_b="MU208-COMMENT-FROM-B"
+    aida_in "$CLONE_A" comment add "$id" "$marker_a" >/dev/null 2>&1 || true
+    aida_in "$CLONE_B" comment add "$id" "$marker_b" >/dev/null 2>&1 || true
+    # A pushes first (wins the race); B pulls -> should AUTO-MERGE (comment union).
+    push_from "$CLONE_A"
+    local pull_out pull_rc
+    set +e
+    pull_out="$(aida_in "$CLONE_B" pull 2>&1)"
+    pull_rc=$?
+    set -e
+    # B must NOT be left mid-rebase.
+    local mid_rebase="no"
+    if run_in "$CLONE_B" git -C .aida-store status 2>/dev/null | grep -q "rebase in progress"; then
+        mid_rebase="yes"
+    fi
+    # BOTH comments must be present in the merged spec object.
+    local obj_path has_a has_b
+    obj_path="$(run_in "$CLONE_B" sh -c "find .aida-store/objects -name '${id}.yaml' 2>/dev/null | head -1")"
+    has_a="$(run_in "$CLONE_B" sh -c "grep -c '$marker_a' \"$obj_path\" 2>/dev/null")"
+    has_b="$(run_in "$CLONE_B" sh -c "grep -c '$marker_b' \"$obj_path\" 2>/dev/null")"
+    CASE_DETAIL="comments auto-merged ($id): rc=$pull_rc A=$has_a B=$has_b"
+    if assert_ne "" "$id" "spec id" \
+        && assert_eq "0" "$pull_rc" "B pull exits 0 (auto-merged, no manual conflict)" \
+        && assert_eq "no" "$mid_rebase" "B's store is NOT left mid-rebase" \
+        && assert_ne "0" "$has_a" "A's comment survived the comment union" \
+        && assert_ne "0" "$has_b" "B's comment survived the comment union" ; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+    fi
+    # Re-sync so later cases see a clean, converged store in both clones.
+    push_from "$CLONE_B"
+    pull_into "$CLONE_A"
+    pull_into "$CLONE_B"
+    if run_in "$CLONE_B" git -C .aida-store status 2>/dev/null | grep -q "rebase in progress"; then
+        recover_store_rebase "$CLONE_B"
+    fi
+}
+
 # --- MU-301: B's cache reflects the new spec after MU-201's pull ---------
 case_MU-301() {
     EXPECT=pass
@@ -1037,7 +1088,7 @@ case_MU-521() {
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
 
 list_cases() {
     echo "Available cases:"
