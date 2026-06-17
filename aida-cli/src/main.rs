@@ -13,6 +13,7 @@ mod cli;
 #[cfg(feature = "remote")]
 mod client;
 mod complexity_calibration;
+mod coordination;
 mod deep_link;
 mod digest;
 mod docs;
@@ -42065,6 +42066,43 @@ fn session_start(
         }
     }
 
+    // STORY-637: cross-clone lease claim on the shared store. The intra-clone
+    // check above only sees THIS clone's `.aida/sessions/`; this consults the
+    // `coordination/leases/` registry on the `aida-store` branch so a second
+    // clone is REFUSED a lease another clone already holds (MU-504). Best-
+    // effort: no remote / unreachable store WARNs and proceeds local-only —
+    // session start never becomes brittle on the network. A corroborated
+    // orchestrator subprocess (our own clone already driving this spec) and
+    // `--force-claim` both force-acquire. trace:STORY-637 | ai:claude
+    {
+        let store_root = project_root.join(".aida-store");
+        let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
+        let claim_role = launch_role
+            .clone()
+            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
+            .unwrap_or_default();
+        match coordination::acquire_claim(
+            &store_root,
+            owns,
+            &project_root,
+            &claim_role,
+            /* review_verb */ review_target.is_some(),
+            force_claim || orchestrated,
+        ) {
+            Ok(coordination::AcquireOutcome::Acquired) => {}
+            Ok(coordination::AcquireOutcome::Reclaimed(reason)) => {
+                eprintln!("  ℹ reclaiming a stale cross-clone lease on `{owns}` ({reason})");
+            }
+            Ok(coordination::AcquireOutcome::Unavailable(reason)) => {
+                eprintln!(
+                    "  {} cross-clone coordination unavailable: {reason}, proceeding",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+            Err(e) => anyhow::bail!("{e}"),
+        }
+    }
+
     // BUG-379: pre-flight spec-status gate. When `owns` is a SPEC-ID,
     // refuse states that mean "not work for me" (Done/Completed/Rejected/
     // Draft) and require --force-claim for ambiguous ones (already
@@ -46055,6 +46093,16 @@ fn session_end(
             );
         }
     }
+
+    // STORY-637: release the cross-clone lease claim on the shared store so a
+    // peer clone can take this scope. Best-effort by design — staleness (pid /
+    // TTL) reclaims a never-released claim, so a failed release never
+    // deadlocks. trace:STORY-637 | ai:claude
+    coordination::release_claim(
+        &project_root.join(".aida-store"),
+        &target.scope,
+        &project_root,
+    );
 
     // STORY-564: drop this session's `--zen` needs-human marker, if any, so a
     // future session that reuses the (time-ordered, effectively-unique) id
@@ -51676,11 +51724,72 @@ fn cc_session_id_for_worktree(worktree: &std::path::Path) -> Option<String> {
     newest.map(|(_, s)| s)
 }
 
+/// STORY-637: render the cross-clone lease section — claims on the shared
+/// `aida-store` registry held by OTHER clones (a different clone path than
+/// ours). Returns the number of foreign claims shown. Distinct from the
+/// local-lease table above it. trace:STORY-637 | ai:claude
+fn print_cross_clone_leases(
+    project_root: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> usize {
+    let store_root = project_root.join(".aida-store");
+    // Two clones sharing one store inherit the same node id, so discriminate
+    // "ours" vs "foreign" by the canonical clone path (the project root).
+    let our_clone = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf())
+        .display()
+        .to_string();
+    let foreign: Vec<coordination::Claim> = coordination::list_claims(&store_root)
+        .into_iter()
+        .filter(|c| c.clone_path.is_empty() || c.clone_path != our_clone)
+        .collect();
+    if foreign.is_empty() {
+        return 0;
+    }
+    println!();
+    println!("{}", "Cross-clone leases (other clones)".bold());
+    println!();
+    println!(
+        "{:<20} {:<10} {:<14} {:<14} age",
+        "scope", "host", "node", "agent"
+    );
+    println!("{}", "─".repeat(72));
+    for c in &foreign {
+        let age = chrono::DateTime::parse_from_rfc3339(&c.heartbeat_at)
+            .ok()
+            .map(|t| {
+                let secs = now
+                    .signed_duration_since(t.with_timezone(&chrono::Utc))
+                    .num_seconds()
+                    .max(0);
+                format!("{secs}s")
+            })
+            .unwrap_or_else(|| "?".to_string());
+        println!(
+            "{:<20} {:<10} {:<14} {:<14} {}",
+            truncate(&c.scope, 20),
+            truncate(&c.host, 10),
+            truncate(&c.node_id, 14),
+            truncate(if c.agent.is_empty() { "-" } else { &c.agent }, 14),
+            age
+        );
+        println!("{}{}", " ".repeat(2), c.clone_path.dimmed());
+    }
+    foreign.len()
+}
+
 fn session_leases(verbose: bool, all: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
-        println!("(no active sessions)");
+        // STORY-637: even with no LOCAL leases, a peer clone may hold a
+        // cross-clone lease — surface it before the "no sessions" hint so a
+        // refused `session start` has a place to point.
+        let foreign = print_cross_clone_leases(&project_root, chrono::Utc::now());
+        if foreign == 0 {
+            println!("(no active sessions)");
+        }
         println!();
         println!(
             "Start one with: {} {}",
@@ -51841,6 +51950,10 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
             }
         }
     }
+
+    // STORY-637: surface cross-clone lease claims held by OTHER clones —
+    // distinct from the local leases above. trace:STORY-637 | ai:claude
+    print_cross_clone_leases(&project_root, now);
 
     println!();
     println!(

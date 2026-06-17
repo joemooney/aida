@@ -61,7 +61,7 @@ Session-start and drain-start gain one `pull_rebase` + (on claim) one `push`. Th
 
 ## 5. Slices (each gated on the harness)
 
-- **Slice 1 — cross-clone LEASES (closes MU-504).** New `coordination/leases/` claim+release on the store; `session start --owns` and `aida agent new` pull+check+claim+push; refuse on a live cross-clone lease; same-host pid + TTL reclaim; `--force`. Harness MU-504 → PASS. Also surface foreign leases in `aida session leases` / `aida status`.
+- **Slice 1 — cross-clone LEASES (closes MU-504). ✅ SHIPPED (STORY-637).** `coordination/leases/<scope>.toml` claim+release on the store (`aida-cli/src/coordination.rs`); `session start --owns` and `aida agent new --spec` pull+check+claim+push; refuse on a live cross-clone lease; same-host pid (process-backed claims only) + universal TTL reclaim; `--force` / orchestrator-corroborated short-circuit. **Clone-identity keys off `clone_path`, not `node_id`** — two clones sharing one store inherit the same store-branch `node.toml` node id, so node_id can't tell clones apart. Session leases are NOT process-backed (the `session start` pid is ephemeral), so TTL — not pid — governs their reclaim. Harness MU-504 → PASS. Foreign leases surfaced in `aida session leases`.
 - **Slice 2 — cross-clone DRAIN + SOLO locks (closes MU-505/506).** Promote `drain.lock`/`solo.lock` to `coordination/` on the store (keep a local mirror for fast probe). `acquire_drain_lock`/`acquire_solo_lock` consult the shared claim first. Harness MU-505 → PASS (+ a MU-506 case). Heartbeat refresh on the drain/solo loop tick.
 - **Slice 3 (optional) — observability + cross-host hardening.** `aida status` cross-clone coordination view (who holds what, where), heartbeat tuning, a `coordination doctor` to reap orphaned claims.
 
