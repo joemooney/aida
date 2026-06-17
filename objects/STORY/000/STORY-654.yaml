@@ -3,12 +3,12 @@ spec_id: STORY-654
 agreed_id: STORY-654
 title: 'aida node set-owner / set-name + aida team unset-role: backfill legacy node identity + clean stray role keys'
 description: 'Backfill commands for legacy nodes that predate the node user/name fields (STORY-652), so an existing clone can become identity-coherent without re-acquiring. (1) aida node set-owner <id> --user <name>: set the owner $USER string on an existing nodes.toml entry (CAS push); if <id> is the current node, also update the local .aida-store/.aida/node.toml. (2) aida node set-name <id> --name <name>: set the friendly name on an existing node similarly. (3) aida team unset-role <user>: remove a member entry from registry/team.toml (CAS push) — to clean stray/duplicate keys (e.g. the orphaned integer "1" from the pre-STORY-653 roster). Validate the node id exists; reuse the node-registry CAS + set_role_cas patterns in aida-core. Tests for each. These resolve the cross-machine/legacy-node person_key gap on a per-node basis (the full multi-$USER person-unification stays the deferred follow-up).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T15:38:17.743456130Z
-modified_at: 2026-06-17T16:00:29.467310137Z
+modified_at: 2026-06-17T16:35:47.889321958Z
 req_type: Story
 tags:
 - cli
@@ -21,3 +21,21 @@ comments:
   content: Commit e7268fc26 references this requirement
   created_at: 2026-06-17T16:00:29.467310137Z
   modified_at: 2026-06-17T16:00:29.467310137Z
+history:
+- id: 019ed670-5a2c-7c01-bc9c-f63b39b56e30
+  author: aida-auto-bump
+  timestamp: 2026-06-17T16:35:47.884697010Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed670-5a31-7140-bebb-965841180f36
+  timestamp: 2026-06-17T16:35:47.889321247Z
+  agent: aida
+  commit_sha: a26f0df1e8caae5e21f2117a217feb4c00af38ee
+  summary: Completed via merge a26f0df1
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T16:35:47.708826317Z
+  completion_sha: a26f0df1e8caae5e21f2117a217feb4c00af38ee
