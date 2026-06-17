@@ -1,0 +1,17 @@
+id: 019ed47e-f842-7811-9c77-d51570bd3366
+spec_id: STORY-649
+agreed_id: STORY-649
+title: 'Team dashboard slice B: web Team page (roster, assignment board, who-holds-what, burndown) (Tier 3)'
+description: 'Slice B of the team dashboard (design docs/plans/2026-06-17-team-dashboard.md), depends on slice A endpoints + DTOs. Add a /team route + Sidebar entry in aida-web-react; useTeam() + useCoordination() React Query hooks over the new endpoints; four panels reusing existing dashboard idioms: roster table (user, role badge, host, last-seen, active dot), assignment board (specs grouped by assignee, columns per member + Unassigned), who-holds-what (active coordination claims with age/stale), team burndown (reuse StatusChart + /analytics). Read-only (drag-to-reassign is slice C). tsc + vite build green; absent data = friendly empty state.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T07:32:31.426113351Z
+modified_at: 2026-06-17T07:32:31.426113351Z
+req_type: Story
+tags:
+- aida-web-react
+- dashboard
+- parent:EPIC-47
+- team
