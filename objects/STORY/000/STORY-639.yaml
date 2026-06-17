@@ -6,9 +6,10 @@ description: Tier-1 of EPIC-47. aida assign <spec> --to <user> sets the assignee
 status: Completed
 priority: High
 owner: ''
+assignee: joe.mooney
 feature: Uncategorized
 created_at: 2026-06-17T02:39:29.862336060Z
-modified_at: 2026-06-17T03:30:41.104044428Z
+modified_at: 2026-06-17T14:46:48.327956078Z
 req_type: Story
 tags:
 - assignment
