@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T07:32:22.980237253Z
-modified_at: 2026-06-17T07:32:22.980237253Z
+modified_at: 2026-06-17T07:51:06.280999102Z
 req_type: Story
 tags:
 - aida-server
 - dashboard
 - parent:EPIC-47
 - team
+comments:
+- id: 019ed48f-fb29-7e23-89ed-78dde10ff501
+  author: joe
+  content: Commit f86f33c83 references this requirement
+  created_at: 2026-06-17T07:51:06.280999102Z
+  modified_at: 2026-06-17T07:51:06.280999102Z
