@@ -3,12 +3,12 @@ spec_id: STORY-648
 agreed_id: STORY-648
 title: 'Team dashboard slice A: aida-server /team + /coordination endpoints + ts-rs DTOs (Tier 3)'
 description: Slice A of the team dashboard (design docs/plans/2026-06-17-team-dashboard.md). Add read-only REST endpoints GET /api/v2/team (roster from nodes.toml + roles from team.toml + active coordination claim per member) and GET /api/v2/coordination (active leases + drain + solo claims with holder/scope/age/stale). Prefer moving the pure read logic (roster+roles, coordination listing) into aida-core so aida-cli + aida-server share one source (avoids STORY-82-style drift); fallback = server reads the registry files directly. DTOs derive ts-rs TS, exported via aida-generate-types into shared/types.ts. Respect existing auth/CORS/X-Project. Absent team.toml/coordination = empty arrays, never error. Endpoint tests. No web changes (slice B).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T07:32:22.980237253Z
-modified_at: 2026-06-17T07:51:06.280999102Z
+modified_at: 2026-06-17T07:58:49.987547347Z
 req_type: Story
 tags:
 - aida-server
@@ -21,3 +21,21 @@ comments:
   content: Commit f86f33c83 references this requirement
   created_at: 2026-06-17T07:51:06.280999102Z
   modified_at: 2026-06-17T07:51:06.280999102Z
+history:
+- id: 019ed497-0e7e-7931-a371-d333fed2377c
+  author: aida-auto-bump
+  timestamp: 2026-06-17T07:58:49.982690163Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed497-0e83-7ae1-915d-100b885be6ed
+  timestamp: 2026-06-17T07:58:49.987546467Z
+  agent: aida
+  commit_sha: 452929715beb1b57555321d6a10141f83f2b9624
+  summary: Completed via merge 45292971
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T07:58:49.826809398Z
+  completion_sha: 452929715beb1b57555321d6a10141f83f2b9624
