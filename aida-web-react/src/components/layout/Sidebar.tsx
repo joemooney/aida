@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Inbox, Activity, Columns3, List, Zap, Clock, Sparkles, FileText, MessageCircle, ArrowLeftRight, Settings, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
+import { LayoutDashboard, Inbox, Users, Activity, Columns3, List, Zap, Clock, Sparkles, FileText, MessageCircle, ArrowLeftRight, Settings, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useRequirements } from '../../hooks/useRequirements';
 import { useSavedViews } from '../../hooks/useSavedViews';
@@ -15,6 +15,7 @@ import {
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/queue', icon: Inbox, label: 'My Queue' },
+  { to: '/team', icon: Users, label: 'Team' },
   { to: '/activity', icon: Activity, label: 'My Activity' },
   { to: '/board', icon: Columns3, label: 'Kanban Board' },
   { to: '/list', icon: List, label: 'List View' },
