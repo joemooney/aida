@@ -1,0 +1,18 @@
+id: 019ed652-e979-7f82-91f5-6fa6ae022cd2
+spec_id: BUG-571
+agreed_id: BUG-571
+title: Web dashboard loads a 6.5MB all-requirements blob on every view — slow clicks/nav; needs a summary endpoint + detail-on-click
+description: 'Operator report: every interaction (open a task = 3s, even sidebar nav) is slow. Measured: GET /api/v2/requirements returns 6.5MB (~700 specs WITH full history/comments/relationships = 5219 nested objects); the server is fast (22ms) but the CLIENT downloads/parses/holds/re-renders the whole blob on every view. Compounded by the STORY-651 live-refresh refetchInterval which re-downloads the 6.5MB every ~12s. FIX: (1) aida-server: a lightweight summary list endpoint (e.g. GET /api/v2/requirements?view=summary or /requirements/summary) returning ONLY id/spec_id/title/status/priority/req_type/feature/assignee/owner/tags/parent/modified_at/archived/deferred — NO history/comments/relationships/processing_record. ts-rs DTO. (2) Web: list/kanban/dashboard/team-assignment-board (and sprints/timeline if they use the full list) switch to the summary hook; the detail panel / RequirementFullPage fetches the single FULL requirement on demand (GET /requirements/:id, already exists) when a task is opened. (3) Fix the team live-refresh to poll the summary (or team/coordination/analytics), never the 6.5MB full list. Verify: summary payload is a fraction of 6.5MB, clicking a task fetches one detail, web build green.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T16:03:38.489224056Z
+modified_at: 2026-06-17T16:03:38.489224056Z
+req_type: Bug
+tags:
+- aida-server
+- aida-web-react
+- dashboard
+- from-operator
+- performance
