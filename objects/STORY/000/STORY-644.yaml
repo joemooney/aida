@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:05:48.734187219Z
-modified_at: 2026-06-17T05:53:59.672948909Z
+modified_at: 2026-06-17T05:54:06.934325206Z
 req_type: Story
 tags:
 - assignment
@@ -16,3 +16,9 @@ tags:
 - notifications
 - parent:EPIC-47
 - team
+comments:
+- id: 019ed424-dfd6-7b53-b59b-beaa3a63fa5a
+  author: joe
+  content: 'Completed manually: merged to origin/main via PR #976 (verified present). Auto-bump was missed because the local working tree was on research/theory-of-aida, not main, when aida pull ran. — advisor'
+  created_at: 2026-06-17T05:54:06.934325206Z
+  modified_at: 2026-06-17T05:54:06.934325206Z
