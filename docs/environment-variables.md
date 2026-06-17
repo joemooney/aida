@@ -98,8 +98,8 @@ close.
 | `AIDA_PHASE_CEILING_MINUTES` | Phase watchdog ceiling (minutes). | `45`. | launch-path (`--phase-ceiling-minutes`) | process env |
 | `AIDA_NO_PROGRESS_MINUTES` | No-progress watchdog threshold (minutes). | `10`. | launch-path (`--no-progress-minutes`) | process env |
 | `AIDA_WORKER_SPEC_TIMEOUT` | Per-spec watchdog timeout (seconds) for the bash `timeout` wrapper in a drain loop. | `1800`. | user (drain script) | process env |
-| `AIDA_DRAIN_FORCE` | Bypasses the global drain-instance lock (`.aida/drain.lock`) so a second `burndown run` / `queue work --auto-complete` may launch against the same tree. | unset = lock enforced. Override with `1`/`true`/`yes`/`on`. | user | process env |
-| `AIDA_DRAIN_LOCK_STALE_SECS` | Age (seconds) past which a still-claimed drain lock is treated as stale and reclaimed even if its pid looks alive (pid-recycle backstop). | `1800`. | user | process env |
+| `AIDA_DRAIN_FORCE` | Bypasses both the local drain-instance lock (`.aida/drain.lock`) AND the shared cross-clone drain/solo claim (`coordination/{drain,solo}.lock.toml` on `aida-store`, STORY-638) so a second `burndown run` / `queue work --auto-complete` / `solo run` may launch against the same tree or another clone sharing the store. | unset = lock enforced. Override with `1`/`true`/`yes`/`on`. | user | process env |
+| `AIDA_DRAIN_LOCK_STALE_SECS` | Age (seconds) past which a still-claimed drain lock is treated as stale and reclaimed even if its pid looks alive (pid-recycle backstop). Also the TTL of the shared cross-clone drain claim (STORY-638). | `1800`. | user | process env |
 | `AIDA_COMMIT_STRICT` | The `aida-commit-msg` git hook rejects non-conforming commit messages. | `false`. Enabled with `true`. | user | process env |
 
 > The bare orchestration signals `AIDA_AUTO_COMPLETE`, `AIDA_AUTO_COMPLETE_PHASE`,

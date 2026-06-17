@@ -38,12 +38,20 @@
 //! trace:BUG-538 | ai:claude
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::process_probe;
+
+/// How often the background heartbeat thread refreshes the shared drain claim.
+/// Comfortably under the TTL ([`DEFAULT_STALE_SECS`]) so a long drain phase
+/// never lets the claim age out and get reclaimed by another clone.
+/// trace:STORY-638 | ai:claude
+const HEARTBEAT_INTERVAL_SECS: u64 = 300;
 
 /// File name under `.aida/` holding the live drain's lock. Gitignored by the
 /// deny-by-default `.aida/*` rule — pure per-clone runtime state.
@@ -171,6 +179,43 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
     let existing = read_lock(&path);
     let forced = force_requested();
 
+    // STORY-638: BEFORE the local lock, consult the SHARED drain claim on the
+    // `aida-store` branch so a second CLONE is refused while one holds an active
+    // drain (MU-505). The local lock only sees THIS clone's `.aida/drain.lock`.
+    // Drain/solo are process-backed, so the shared claim's same-host pid liveness
+    // is authoritative; the TTL folds in `AIDA_DRAIN_LOCK_STALE_SECS`. A live
+    // cross-clone drain errors here (naming the holder) before we touch the local
+    // lock; no remote / unreachable store WARNs and proceeds local-only — a drain
+    // must never be brittle on the network. trace:STORY-638 | ai:claude
+    let store_root = project_root.join(".aida-store");
+    let store_claimed = {
+        match crate::coordination::acquire_lock_claim(
+            &store_root,
+            crate::coordination::LockKind::Drain,
+            project_root,
+            command,
+            stale_secs(),
+            forced,
+        ) {
+            Ok(crate::coordination::LockAcquireOutcome::Acquired) => true,
+            Ok(crate::coordination::LockAcquireOutcome::Reclaimed(reason)) => {
+                eprintln!("  ℹ reclaiming a stale cross-clone drain claim ({reason})");
+                true
+            }
+            Ok(crate::coordination::LockAcquireOutcome::Unavailable(reason)) => {
+                eprintln!(
+                    "  {} cross-clone coordination unavailable: {reason}, proceeding",
+                    crate::glyphs::get(
+                        crate::glyphs::Glyph::Warning,
+                        crate::find_project_root().ok().as_deref(),
+                    )
+                );
+                false
+            }
+            Err(e) => anyhow::bail!("{e}"),
+        }
+    };
+
     match decide_lock(
         existing.clone(),
         Utc::now(),
@@ -230,9 +275,44 @@ pub(crate) fn acquire_drain_lock(project_root: &Path, command: &str) -> Result<D
             aida_core::write_atomic(&path, json).map_err(|e| {
                 anyhow::anyhow!("could not write drain lock {}: {e}", path.display())
             })?;
+            // STORY-638: when we hold the shared claim, spawn a background
+            // heartbeat thread that refreshes `heartbeat_at` periodically so a
+            // long drain (a single phase can outlast the TTL) never looks stale
+            // to another clone. The thread stops when the guard drops. Threading
+            // the guard through `burndown::run`'s deep per-spec loop would be
+            // invasive; a lifetime-scoped thread is the low-risk equivalent of
+            // "refresh on the loop tick". trace:STORY-638 | ai:claude
+            let (store_for_guard, heartbeat) = if store_claimed {
+                let stop = Arc::new(AtomicBool::new(false));
+                let stop_t = Arc::clone(&stop);
+                let store_t = store_root.clone();
+                let project_t = project_root.to_path_buf();
+                let handle = std::thread::spawn(move || {
+                    let step = std::time::Duration::from_secs(1);
+                    let mut elapsed = 0u64;
+                    while !stop_t.load(Ordering::Relaxed) {
+                        std::thread::sleep(step);
+                        elapsed += 1;
+                        if elapsed >= HEARTBEAT_INTERVAL_SECS {
+                            elapsed = 0;
+                            crate::coordination::heartbeat_lock_claim(
+                                &store_t,
+                                crate::coordination::LockKind::Drain,
+                                &project_t,
+                            );
+                        }
+                    }
+                });
+                (Some(store_root), Some(Heartbeat { stop, handle }))
+            } else {
+                (None, None)
+            };
             Ok(DrainGuard {
                 path,
                 pid: record.pid,
+                store_root: store_for_guard,
+                project_root: project_root.to_path_buf(),
+                heartbeat,
             })
         }
     }
@@ -290,16 +370,48 @@ fn classify_lock(existing: Option<DrainLock>, is_alive: impl Fn(u32) -> bool) ->
 /// removes the lock file — but ONLY if it still records THIS process's pid, so
 /// a guard that outlives a stale-reclaim by a successor never deletes the
 /// successor's live lock. trace:BUG-538 | ai:claude
+/// Background heartbeat thread handle for the shared drain claim (STORY-638).
+/// Its `stop` flag is flipped on guard drop so the thread exits promptly.
+#[derive(Debug)]
+struct Heartbeat {
+    stop: Arc<AtomicBool>,
+    handle: std::thread::JoinHandle<()>,
+}
+
 #[derive(Debug)]
 pub(crate) struct DrainGuard {
     path: PathBuf,
     pid: u32,
+    /// Set when we hold the SHARED cross-clone drain claim on the store (STORY-638).
+    /// `None` when cross-clone coordination was unavailable (local-only). The
+    /// project root is kept separately so a moved cwd doesn't break release.
+    /// trace:STORY-638 | ai:claude
+    store_root: Option<PathBuf>,
+    project_root: PathBuf,
+    /// Background thread refreshing the shared claim's heartbeat. `None` when
+    /// local-only. trace:STORY-638 | ai:claude
+    heartbeat: Option<Heartbeat>,
 }
 
 impl Drop for DrainGuard {
     fn drop(&mut self) {
-        // Only remove the file if it's still ours. A different drain may have
-        // reclaimed it (e.g. our pid was wrongly judged stale); deleting its
+        // Stop the heartbeat thread before releasing, so it can't re-write the
+        // claim after we delete it. trace:STORY-638 | ai:claude
+        if let Some(hb) = self.heartbeat.take() {
+            hb.stop.store(true, Ordering::Relaxed);
+            let _ = hb.handle.join();
+        }
+        // Release the shared cross-clone claim (best-effort; staleness covers a
+        // crash). trace:STORY-638 | ai:claude
+        if let Some(store_root) = &self.store_root {
+            crate::coordination::release_lock_claim(
+                store_root,
+                crate::coordination::LockKind::Drain,
+                &self.project_root,
+            );
+        }
+        // Only remove the local file if it's still ours. A different drain may
+        // have reclaimed it (e.g. our pid was wrongly judged stale); deleting its
         // lock would reopen the double-drive hole.
         if read_lock(&self.path).map(|l| l.pid) == Some(self.pid) {
             let _ = std::fs::remove_file(&self.path);

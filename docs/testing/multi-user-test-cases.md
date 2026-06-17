@@ -33,9 +33,9 @@ This table is the spine; almost every case is a consequence of it.
 | Briefs | `.aida/agent-briefs/<agent>/` | ✓ | | agent name + type (local only) |
 | Mailbox (local) | `.aida/mailbox/*.json` | ✓ | | inbox-identity union |
 | Mailbox (canonical) | `<store>/mailbox/*.json` | | ✓ | digested from local, id-keyed |
-| Session leases | `.aida/sessions/*.toml` | ✓ | | lease id (**not cross-clone visible**) |
-| Drain lock | `.aida/drain.lock` | ✓ | | pid (**per-clone — see MU-505**) |
-| Solo lock | `.aida/solo.lock` | ✓ | | pid (**per-clone — see MU-506**) |
+| Session leases | `.aida/sessions/*.toml` (local) + `coordination/leases/<scope>.toml` (shared, STORY-637) | ✓ | ✓ | lease id (local) + clone_path (shared) |
+| Drain lock | `.aida/drain.lock` (local mirror) + `coordination/drain.lock.toml` (shared, STORY-638) | ✓ | ✓ | pid (local) + clone_path (shared) |
+| Solo lock | `.aida/solo.lock` (local mirror) + `coordination/solo.lock.toml` (shared, STORY-638) | ✓ | ✓ | pid (local) + clone_path (shared) |
 
 **The two headline consequences for multi-user:**
 1. **Queue is shared and keyed by OS user**, so two same-host clones run by the same `$USER` operate on *one* queue (`current_user_id()`, `main.rs`). Different `AIDA_USER` → separate queues.
@@ -225,13 +225,15 @@ This table is the spine; almost every case is a consequence of it.
 
 ### MU-505 — two clones run drains simultaneously
 - **Setup:** A `aida burndown run`; B `aida queue work --auto-complete`.
-- **Expected (today):** **Both run** — `drain.lock` is per-clone-local; A's lock is invisible to B. Within one clone the lock prevents a second drain.
-- **Validates:** Cross-clone drain coordination.
-- **Status:** 🐛 **gap** — combined with MU-504, two clones can drain overlapping work → duplicate PRs, merge races. *(Same decision as MU-504: store-shared lock vs accept.)*
+- **Expected:** A acquires; **B is REFUSED** naming the holder (host / clone path / pid / cmd / age). A shared, process-backed drain claim lives at `coordination/drain.lock.toml` on the `aida-store` branch; both drain entry points (`burndown run`, `queue work --auto-complete`, `queue integrate`) pull-check-claim-push it BEFORE the local `.aida/drain.lock`. Liveness: same-host pid (drain IS the process) + TTL/heartbeat backstop (folds in `AIDA_DRAIN_LOCK_STALE_SECS`); a background heartbeat thread keeps a long drain fresh; the `DrainGuard` deletes the claim on exit. `AIDA_DRAIN_FORCE=1` overrides. Best-effort: no remote / unreachable store WARNs and proceeds local-only.
+- **Validates:** Cross-clone drain coordination (double-drive prevention).
+- **Status:** ✅ **closed by STORY-638** (slice 2) — `aida-cli/src/coordination.rs` (`LockKind::Drain`, `acquire_lock_claim`/`release_lock_claim`/`heartbeat_lock_claim`) + `drain_lock::acquire_drain_lock`; harness `case_MU-505` is `EXPECT=pass`. trace:STORY-638
 
 ### MU-506 — two clones run solo loops simultaneously
-- **Expected (today):** Both run — `solo.lock` is per-clone-local.
-- **Status:** 🐛 **gap** — same class as MU-505 (`solo_lock.rs`).
+- **Setup:** A `aida solo run`; B `aida solo run`.
+- **Expected:** A acquires; **B is REFUSED** naming the holder. Shared process-backed solo claim at `coordination/solo.lock.toml`; `solo_lock::acquire_solo_lock` consults it before the local `.aida/solo.lock`. Same-host pid liveness + TTL/heartbeat (refreshed on each loop cycle); `SoloGuard` deletes the claim on exit. `AIDA_DRAIN_FORCE=1` overrides. Best-effort if store unreachable.
+- **Validates:** Cross-clone solo coordination (same class as MU-505).
+- **Status:** ✅ **closed by STORY-638** (slice 2) — `LockKind::Solo` + `solo_lock::acquire_solo_lock`; harness `case_MU-506` is `EXPECT=pass`. trace:STORY-638
 
 ### MU-507 — within one clone, a second drain is refused
 - **Setup:** One clone, drain running; start a second drain.

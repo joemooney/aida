@@ -55037,7 +55037,7 @@ fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
     // stale-reclaimed). A dry-run is a single non-integrating tick — no lock.
     // The guard's Drop releases the lock on a clean exit / flag-clear.
     // trace:STORY-627 | ai:claude
-    let _lock_guard = if dry_run {
+    let lock_guard = if dry_run {
         None
     } else {
         let root =
@@ -55072,6 +55072,12 @@ fn run_solo_loop(dry_run: bool, interval: u64) -> Result<()> {
             break;
         }
         println!("\n{} cycle @ {}", "──".dimmed(), now.to_rfc3339().dimmed());
+        // STORY-638: refresh the shared cross-clone solo claim's heartbeat each
+        // tick so a long-running loop never ages past its TTL and gets reclaimed
+        // by another clone. No-op for a dry-run / local-only. trace:STORY-638
+        if let Some(g) = lock_guard.as_ref() {
+            g.heartbeat();
+        }
         solo_cycle(dry_run)?;
         if dry_run {
             println!("\n{} dry-run: one cycle shown; not looping.", "■".dimmed());
