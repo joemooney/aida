@@ -11,6 +11,7 @@ import { DocFullPage } from './components/docs/DocFullPage';
 import { RequirementFullPage } from './components/detail/RequirementFullPage';
 import { SettingsView } from './components/settings/SettingsView';
 import { QueuePage } from './components/queue/QueuePage';
+import { TeamPage } from './components/team/TeamPage';
 import { ActivityPage } from './components/activity/ActivityPage';
 import { ChatPage } from './components/chat/ChatPage';
 import { JiraSyncView } from './components/jira-sync/JiraSyncView';
@@ -42,6 +43,7 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="queue" element={<QueuePage />} />
+            <Route path="team" element={<TeamPage />} />
             <Route path="activity" element={<ActivityPage />} />
             <Route path="board" element={<KanbanBoard />} />
             <Route path="list" element={<RequirementsList />} />
