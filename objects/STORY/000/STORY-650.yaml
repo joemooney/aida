@@ -1,0 +1,17 @@
+id: 019ed4a7-833e-7e61-9c8d-449601e5d842
+spec_id: STORY-650
+agreed_id: STORY-650
+title: 'Team dashboard slice C1: server write endpoints (PUT assignee w/ notify+queue, PUT role) (Tier 3)'
+description: 'Slice C1 of the team dashboard (design docs/plans/2026-06-17-team-dashboard.md slice C). Two write endpoints mirroring existing CLI ops so the web UI can act: PUT /api/v2/requirements/:id/assignee {assignee} — set the assignee AND route to that user queue AND send the assignment notification, mirroring aida assign (STORY-639/644); PUT /api/v2/team/:user/role {role} — set the per-user role mirroring aida team set-role (STORY-646), surfacing the guardrail-not-security caveat in the response. Reuse the shared aida-core/aida-cli logic (do not duplicate the assign/role mechanics). Respect existing auth/CORS/X-Project. Endpoint tests. No web changes (slice C2).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T08:16:48.446832456Z
+modified_at: 2026-06-17T08:16:48.446832456Z
+req_type: Story
+tags:
+- aida-server
+- dashboard
+- parent:EPIC-47
+- team
