@@ -1,0 +1,17 @@
+id: 019ed3f8-c393-7010-83b4-d9608cbafbd4
+spec_id: STORY-645
+agreed_id: STORY-645
+title: 'Conflict auto-merge completeness: union-merge comments + relationships arrays on pull (Tier 2, finishes MU-203)'
+description: 'Tier-2 of EPIC-47. STORY-641 added merge_spec_three_way (union history by id + LWW scalars + tag union) so concurrent same-spec edits auto-merge on pull. Extend it to the OTHER append-only/set fields so concurrent comments + relationship edits also auto-merge instead of conflicting: union comments by comment id (dedupe), union relationships (dedupe by (type,target)). Verify which fields merge_spec_three_way already covers; add the missing ones. This finishes MU-203 for the structurally-mergeable fields (genuinely-divergent scalars stay LWW; truly-unresolvable still falls back to manual). Harness case: two clones each add a DIFFERENT comment to the same spec, both push/pull -> auto-merged, BOTH comments present, no manual conflict. Unit-test the comment/relationship union.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T05:05:56.115462263Z
+modified_at: 2026-06-17T05:05:56.115462263Z
+req_type: Story
+tags:
+- conflict
+- merge
+- parent:EPIC-47
+- team
