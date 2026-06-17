@@ -18636,5 +18636,33 @@ operations:
   timestamp: 2026-06-16T22:24:39.234994980Z
   kind: !SetStatus
     status: Approved
-clock: 1842
+- id: 019ed40d-787c-76a3-af3a-35b8d985e32d
+  target_id: 019ed405-459e-7c32-bfb9-c0c2360e7208
+  author: aida
+  node_id: '1'
+  lamport: 1843
+  timestamp: 2026-06-17T05:28:33.148072657Z
+  kind: !SetDescription
+    description: |-
+      Research project: use AIDA as a PROBE into multi-vendor AI agent fleet coordination. AIDA is the instrument and existence-proof, NOT the subject — protecting or promoting AIDA-the-product is explicitly not the objective (operator, 2026-06-16).
+
+      WHAT THE PROBE IS FOR
+      - Uncover the real requirements, complexities, minefields, and faulty assumptions that only surface once you actually build a coordination substrate.
+      - Demonstrate BOTH what is possible AND the limits/true cost of a home-grown solution.
+      - Inform the cost/benefit of roll-your-own (build vs buy vs wait) — where the honest verdict may be "do not build this" or "the right tool is not AIDA."
+
+      Working draft basis: docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md
+
+      FRAME
+      The artifact is the instrument; the deliverable is knowledge about the problem plus a roll-your-own cost/benefit verdict. Organized as a coordination stack (L0 model capability up to L5 cross-vendor fleet coordination). The eight propositions are recast as FINDINGS about the problem space, not arguments for AIDA. Product-defensibility claims (old P8b "L5 defensible by AIDA") drop; problem-space findings (P8a "vendors are disincentivized to build portable coordination") stay. AIDA's own limits and failures (e.g. BUG-570 init-clone main pollution; the missed-competitors discovery failure) are first-class data.
+
+      CHILDREN TO FILE AS WORK PROCEEDS
+      - Rewrite the draft on the probe frame: add "faulty assumptions this probe falsified" and "cost/benefit of roll-your-own" sections; demote advocacy framing.
+      - Red-team each load-bearing finding (P3, P8 done; fold-in landed).
+      - Run any of the five ablations named in the draft (gate-vs-rule, substrate-richness, calibration longitudinal, cross-vendor portability, multi-team field study).
+      - Refresh dated market snapshots feeding P8a (immutable, dated).
+      - Develop related-work into real citations.
+
+      STATUS: research / living document. Not a product deliverable.
+clock: 1843
 node_id: '1'
