@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T00:48:30.276840951Z
-modified_at: 2026-06-17T00:48:30.276840951Z
+modified_at: 2026-06-17T01:04:20.118256478Z
 req_type: Story
 tags:
 - harness
@@ -16,3 +16,9 @@ tags:
 - multi-user
 - parent:EPIC-46
 - testing
+comments:
+- id: 019ed31b-9296-7c62-bc26-879cd30ca649
+  author: joe
+  content: Commit 3a837b1cb references this requirement
+  created_at: 2026-06-17T01:04:20.118256478Z
+  modified_at: 2026-06-17T01:04:20.118256478Z
