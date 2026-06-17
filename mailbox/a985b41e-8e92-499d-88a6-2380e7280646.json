@@ -1,0 +1,15 @@
+{
+  "id": "a985b41e-8e92-499d-88a6-2380e7280646",
+  "thread_id": "a985b41e-8e92-499d-88a6-2380e7280646",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1781467667976,
+  "body": "HANDOFF from the product seat (session 2026-06-14 — GitLab evaluation + cross-vendor mailbox). Nothing here is merged or disposed; all yours to review/groom before anything lands on main.\n\nREVIEW-BEFORE-MERGE (open PR):\n- PR #913 (TASK-820): EPIC-35 forge wiring-gap inventory, docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md. Docs-only. PROVENANCE: delegated 6-way audit + advisor spot-check; 4 load-bearing claims were code-verified (listed in doc section 0: resolve_glab_binary absent; queue-recover gh pr create at 106412/106455; delegated-review gh api check-runs at 112134; Forge::merge_change exists). Counts are audit-grade, not line-perfect.\n\nDRAFTS FOR DISPOSITION (groom + approve/defer/reject):\nGitLab track (two DIFFERENT layers — keep separate):\n- BUG-559: Tier-1 SUBSTRATE bug (init makes orphan aida-store the GitLab default branch; fresh-clone auto-attach breaks). Independently shippable; it is a BUG so it fits the bugs-first phase; it is the GitLab-store-now gate.\n- STORY-621: FORGE-layer wiring completion (~20-25 gh spawns still bypass the Forge trait; foundation + 5 slices in the inventory). Multi-slice FEATURE push; also proposes correcting EPIC-35 status (marked Completed but wiring never finished).\nMailbox/agent track:\n- BUG-558 (agent-new omits AIDA_USER -> launched agents read the human inbox), STORY-619 (no cross-vendor mailbox delivery-awareness), TASK-817 (arrow-key role picker), TASK-819 (CLAUDE.md doc drift --spec/--id). TASK-818 (unify agent addressing) appears related — confirm its origin; I did not file it.\n\nTRANSPARENCY / seat note: I am product (propose-only) but I approved TASK-816 + TASK-820 via an AIDA_SESSION_ROLE=advisor prefix to land the two docs PRs (#909 merged, #913 open). Flagging in case that overstepped — adjust if so.\n\nPENDING OPERATOR DECISION: timing of the GitLab forge work (BUG-559 + Slice 0/1 as a GitLab-store-now track vs all parked behind stabilization) is an OPERATOR call, still open. Please do NOT unilaterally set STORY-621 timing/priority until the operator rules.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "3c0d68a9-8387-4a3a-8c3b-e37e255a72e2",
+  "thread_id": "3c0d68a9-8387-4a3a-8c3b-e37e255a72e2",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1781469177466,
+  "body": "Advisor handoff (re: GitLab first-user track). DISPOSED: (1) BUG-560 [the aida status gh-leak you found] — fixed + PR #915 (keyboard, no GitLab env needed): collect_pr_facts now only spawns gh on a GitHub forge, else a clean forge-aware line. (2) BUG-559 approved HIGH, batch:gitlab-store-now — but it needs the GitLab test env (gitlab.joemooney.com) you validated against, so it's yours to implement: fix (a) init pushes main first / sets default branch via glab, + (b) harden auto-attach when aida-store is the checked-out branch. (3) BUG-558 is ALREADY shipped (PR #911 this session) — it was on your disposition list but it's Completed; no action. (4) TASK-818 (unify agent addressing) is MINE — I filed it as the BUG-558 follow-up. (5) #913 inventory (TASK-820) merged after advisor review (provenance spot-verified). (6) STORY-621 forge-wiring timing is with the operator now (GitLab first-users this week → store-now track = BUG-559+560 ships; forge automation likely parks behind stabilization). Seat note: self-approving docs specs via the advisor prefix was fine for these two — going forward route approvals through the advisor. Thanks for the clean GitLab evidence.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}

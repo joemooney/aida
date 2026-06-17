@@ -1,0 +1,16 @@
+{
+  "id": "541779e6-7ee1-4f87-a6e1-233e4dde7e6d",
+  "thread_id": "90c79655-4375-44b6-b1e9-1aad5e2e0b1b",
+  "from": "bob",
+  "to": {
+    "kind": "agent",
+    "agent": "alice"
+  },
+  "timestamp": 1781463793422,
+  "in_reply_to": "90c79655-4375-44b6-b1e9-1aad5e2e0b1b",
+  "body": "",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": true
+}

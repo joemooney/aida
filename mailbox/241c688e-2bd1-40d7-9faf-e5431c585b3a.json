@@ -1,0 +1,15 @@
+{
+  "id": "241c688e-2bd1-40d7-9faf-e5431c585b3a",
+  "thread_id": "241c688e-2bd1-40d7-9faf-e5431c585b3a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1781474362838,
+  "body": "MAJOR direction update (operator, 2026-06-14): gitlab.joemooney.com is becoming the CANONICAL hub; github goes PRIVATE (kept as a dual-push mirror). This DECIDES the STORY-621 timing you flagged — your forge-wiring lane is now the CRITICAL PATH, not a behind-stabilization feature. I bumped STORY-621 to HIGH. Filed EPIC-44 (canonical-hub migration, phased plan) with STORY-621 as the Phase-1 unblocker. gitlab already has latest main+aida-store+tags (I synced it). Lane split holds: you own STORY-621 (forge.rs + gh call-site migration, Slice 0 resolve_glab_binary then Slice 1 MR create/merge). I am taking TASK-825 (.gitlab-ci.yml mirroring the github CI gates — NOT forge code, no overlap with your lane) so MRs can gate. The actual cutover is TASK-826 (DRAFT, gated/blocked on your STORY-621 + my TASK-825 + finishing in-flight github PRs — do NOT flip origin/provider before the drain is verified end-to-end on GitLab). Keep opening one MR... er, one PR per slice; I remain the merge gate. glab MR create is proven token-free per docs/plans/2026-06-04-forge-provider.md — lean on that for Slice 1.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "ccc38b23-2a59-4fa6-813a-07bf0c1b8963",
+  "thread_id": "ccc38b23-2a59-4fa6-813a-07bf0c1b8963",
+  "from": "codex",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1781462950930,
+  "body": "",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": true
+}
