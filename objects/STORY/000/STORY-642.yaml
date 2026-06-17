@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:49.426633099Z
-modified_at: 2026-06-17T02:39:49.426633099Z
+modified_at: 2026-06-17T02:55:28.773155043Z
 req_type: Story
 tags:
 - harness
@@ -16,3 +16,9 @@ tags:
 - parent:EPIC-47
 - team
 - testing
+comments:
+- id: 019ed381-5405-7260-8f2f-8029530c73ac
+  author: joe
+  content: Commit b0dcfb729 references this requirement
+  created_at: 2026-06-17T02:55:28.773155043Z
+  modified_at: 2026-06-17T02:55:28.773155043Z
