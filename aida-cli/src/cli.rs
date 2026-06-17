@@ -5883,6 +5883,19 @@ pub enum Command {
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
+
+        /// Show only specs assigned to you (assignee == your shell identity).
+        /// Composes with every other filter. Mutually exclusive with
+        /// `--assigned`.
+        // trace:STORY-639 | ai:claude
+        #[clap(long, conflicts_with = "assigned")]
+        mine: bool,
+
+        /// Show only specs assigned to <user>. Composes with every other
+        /// filter.
+        // trace:STORY-639 | ai:claude
+        #[clap(long, value_name = "USER")]
+        assigned: Option<String>,
     },
 
     /// Show details for a specific requirement
@@ -6350,6 +6363,36 @@ pub enum Command {
     Undefer {
         /// SPEC-ID or UUID to undefer.
         id: String,
+    },
+
+    /// Assign a spec to a team member — sets the durable assignee and routes
+    /// the spec into that member's work queue so it shows in their
+    /// `aida queue list`. Idempotent: re-running with the same target is a
+    /// no-op. Surface assigned work with `aida list --mine` (yours) or
+    /// `aida list --assigned <user>`.
+    // trace:STORY-639 | ai:claude
+    Assign {
+        /// SPEC-ID or UUID to assign.
+        id: String,
+
+        /// The team member to assign to (a username / handle, matching the
+        /// shell identity that `aida queue list` keys off — see
+        /// `current_user_id`).
+        #[clap(long, value_name = "USER")]
+        to: String,
+    },
+
+    /// Inverse of `aida assign` — clears the assignee. By default this leaves
+    /// the spec in the assignee's queue (the queue is the now-doing list, not
+    /// the assignment of record); pass `--from-queue` to also remove it.
+    // trace:STORY-639 | ai:claude
+    Unassign {
+        /// SPEC-ID or UUID to unassign.
+        id: String,
+
+        /// Also remove the spec from the (former) assignee's work queue.
+        #[clap(long)]
+        from_queue: bool,
     },
 
     /// Feature management commands

@@ -1,3 +1,8 @@
+// The MCP `tool_descriptors()` json! macro expands deeply; the default
+// recursion limit (128) is exceeded once new tool properties are added.
+// trace:STORY-639 | ai:claude
+#![recursion_limit = "256"]
+
 mod advisor;
 mod advisor_watch;
 mod agent_registry;
@@ -2686,6 +2691,14 @@ fn run() -> Result<()> {
             // STORY-584: defer uses the git-canonical write path.
             anyhow::bail!(
                 "aida defer/undefer requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
+        Command::Assign { .. } | Command::Unassign { .. } => {
+            // STORY-639: assignment uses the git-canonical write path.
+            anyhow::bail!(
+                "aida assign/unassign requires the distributed git-canonical store \
                  (run `aida init` to migrate, or this project is on the \
                  deprecated --centralized backend)"
             );
@@ -7902,6 +7915,124 @@ fn handle_undefer_command(
     Ok(())
 }
 
+/// `aida assign <SPEC> --to <user>` — set the durable assignee on a spec and
+/// route it into that user's work queue so it surfaces in their
+/// `aida queue list`. Idempotent: re-assigning to the same user is a no-op on
+/// both the assignee field and the queue (no duplicate queue entry).
+///
+/// Assignment is distinct from `owner` (the creator/author): owner records who
+/// filed the spec and drives contributions analytics; assignee is mutable
+/// work-division metadata. trace:STORY-639 | ai:claude
+fn handle_assign_command(
+    id: &str,
+    to: &str,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    let target = to.trim();
+    if target.is_empty() {
+        anyhow::bail!("--to requires a non-empty username");
+    }
+
+    let already_assigned_here = req.assignee.as_deref() == Some(target);
+    if !already_assigned_here {
+        let now = chrono::Utc::now();
+        req.assignee = Some(target.to_string());
+        req.modified_at = now;
+        backend.update_requirement(&req)?;
+    }
+    record_role_activity(&display_id, "assign");
+
+    // Route into the target user's queue (idempotent — skip if already there).
+    let storage = Storage::new(store_path.to_path_buf());
+    let existing = storage.queue_list(target, false).unwrap_or_default();
+    let already_queued = existing.iter().any(|e| e.requirement_id == req.id);
+    if !already_queued {
+        let this_machine = hostname();
+        let entry = aida_core::QueueEntry {
+            user_id: target.to_string(),
+            requirement_id: req.id,
+            position: i64::MAX, // sentinel: queue_add auto-assigns max+1000
+            added_by: current_user_id(None),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+            added_by_machine: Some(this_machine),
+        };
+        if let Err(e) = storage.queue_add(entry) {
+            eprintln!(
+                "{} assigned {display_id} but could not add it to {target}'s queue: {e}",
+                "warning:".yellow().bold()
+            );
+        }
+    }
+
+    println!(
+        "{} {display_id} {} {}",
+        "Assigned:".cyan().bold(),
+        "→".dimmed(),
+        target.bold()
+    );
+    if already_assigned_here && already_queued {
+        println!("  {}", "(already assigned and queued — no change)".dimmed());
+    } else {
+        println!("  {} {target}'s queue", "Queued to:".dimmed());
+    }
+    Ok(())
+}
+
+/// `aida unassign <SPEC>` — clear the assignee. By default the spec stays in
+/// the (former) assignee's queue, since the queue is the now-doing list rather
+/// than the assignment of record; `--from-queue` also removes it.
+/// trace:STORY-639 | ai:claude
+fn handle_unassign_command(
+    id: &str,
+    from_queue: bool,
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+) -> Result<()> {
+    let mut req = backend
+        .get_requirement_by_spec_id(id)?
+        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+    let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    let previous = req.assignee.clone();
+    if previous.is_none() {
+        anyhow::bail!("{display_id} is not assigned — nothing to unassign.");
+    }
+    let now = chrono::Utc::now();
+    req.assignee = None;
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+    record_role_activity(&display_id, "unassign");
+
+    println!("{} {display_id}", "Unassigned:".cyan().bold());
+    if from_queue {
+        if let Some(prev_user) = previous.as_deref() {
+            let storage = Storage::new(store_path.to_path_buf());
+            if let Err(e) = storage.queue_remove(prev_user, &req.id) {
+                eprintln!(
+                    "{} cleared the assignee but could not remove {display_id} from {prev_user}'s queue: {e}",
+                    "warning:".yellow().bold()
+                );
+            } else {
+                println!("  {} {prev_user}'s queue", "Removed from:".dimmed());
+            }
+        }
+    } else if let Some(prev_user) = previous.as_deref() {
+        println!(
+            "  {} still in {prev_user}'s queue (pass `--from-queue` to remove it)",
+            "Note:".dimmed()
+        );
+    }
+    Ok(())
+}
+
 /// `aida done <SPEC>` — the newcomer's "I finished it" verb. Marks a spec
 /// Completed, the solo end of the capture → build → done loop. Found running a
 /// novice's first session: there was no `aida done`, and `aida edit --status
@@ -12391,6 +12522,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             short,
             human,
             sort,
+            mine,
+            assigned,
             ..
         } => {
             // STORY-562: `aida list human` (positional alias) and `aida list
@@ -12537,6 +12670,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     aida_core::SortOrder::ModifiedDesc
                 }
             };
+            // STORY-639: `--mine` resolves to the shell identity (the same
+            // user the queue keys off); `--assigned <user>` filters on that
+            // user. The two are mutually exclusive (enforced by clap).
+            // trace:STORY-639 | ai:claude
+            let assignee_filter: Option<String> = if *mine {
+                Some(current_user_id(None))
+            } else {
+                assigned.clone()
+            };
             let filter = aida_core::ListFilter {
                 status: effective_status.clone(),
                 req_type: r#type.clone(),
@@ -12548,6 +12690,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 archive,
                 defer,
                 sort: sort_order,
+                assignee: assignee_filter,
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
@@ -12762,6 +12905,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     queued: bool,
                     in_flight: bool,
                     blocked: bool,
+                    // STORY-639: assignee carried as a machine field; omitted
+                    // (None) when unassigned. trace:STORY-639 | ai:claude
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    assignee: Option<&'a str>,
                 }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
@@ -12780,6 +12927,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                             queued,
                             in_flight,
                             blocked,
+                            assignee: r.assignee.as_deref(),
                         }
                     })
                     .collect();
@@ -12931,6 +13079,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         status_display::status_cell(status, 11)
                     }
                 };
+                // STORY-639: append a compact ` @user` marker to the Title cell
+                // when a spec is assigned — only when set, so unassigned rows
+                // render exactly as before (no new column, no width churn).
+                // trace:STORY-639 | ai:claude
+                let with_assignee = |title: &str, r: &aida_core::RequirementSummary| -> String {
+                    match r.assignee.as_deref() {
+                        Some(a) if !a.is_empty() => {
+                            format!("{} {}", title, format!("@{a}").cyan())
+                        }
+                        _ => title.to_string(),
+                    }
+                };
                 if *show_origin {
                     if *show_tags {
                         println!(
@@ -12988,7 +13148,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         } else {
                             println!(
                                 "{}{:<12} {}{:<12} {} {}",
-                                flow, display_id, origin_cell, req.req_type, status_cell, req.title,
+                                flow,
+                                display_id,
+                                origin_cell,
+                                req.req_type,
+                                status_cell,
+                                with_assignee(&req.title, req),
                             );
                         }
                     }
@@ -13041,7 +13206,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 req.req_type,
                                 status_cell,
                                 req.priority,
-                                req.title,
+                                with_assignee(&req.title, req),
                             );
                         }
                     }
@@ -14078,6 +14243,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     if !req.owner.is_empty() {
                         println!("{}: {}", "Owner".bold(), req.owner);
                     }
+                    // STORY-639: surface the assignee only when set, so an
+                    // unassigned spec renders exactly as before. trace:STORY-639
+                    if let Some(assignee) = req.assignee.as_deref() {
+                        println!("{}: {}", "Assignee".bold(), assignee);
+                    }
                     if !req.tags.is_empty() {
                         println!(
                             "{}: {}",
@@ -14959,6 +15129,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Undefer { id } => {
             // STORY-584: inverse of `aida defer`. trace:STORY-584 | ai:claude
             handle_undefer_command(id, &backend, store_path)?;
+        }
+        Command::Assign { id, to } => {
+            // STORY-639: set the durable assignee + route into the target
+            // user's work queue. trace:STORY-639 | ai:claude
+            handle_assign_command(id, to, &backend, store_path)?;
+        }
+        Command::Unassign { id, from_queue } => {
+            // STORY-639: clear the assignee (and optionally dequeue).
+            // trace:STORY-639 | ai:claude
+            handle_unassign_command(id, *from_queue, &backend, store_path)?;
         }
         Command::Done { spec } => {
             // TASK-728: the newcomer's "I finished it" verb. trace:TASK-727
@@ -16104,6 +16284,8 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
         | Command::Unarchive { .. }
         | Command::Defer { .. }
         | Command::Undefer { .. }
+        | Command::Assign { .. }
+        | Command::Unassign { .. }
         | Command::Rework { .. } => true,
         Command::Queue(cmd) => matches!(
             cmd,
@@ -21670,6 +21852,10 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     println!("{}: {}", "Type".blue(), type_str);
 
     println!("{}: {}", "Owner".blue(), req.owner);
+    // STORY-639: render assignee only when set. trace:STORY-639 | ai:claude
+    if let Some(assignee) = req.assignee.as_deref() {
+        println!("{}: {}", "Assignee".blue(), assignee);
+    }
     println!("{}: {}", "Feature".blue(), req.feature);
     println!("{}: {}", "Created".blue(), req.created_at);
     println!("{}: {}", "Modified".blue(), req.modified_at);
@@ -61788,6 +61974,80 @@ mod bug_231_findings_promote_tests {
         assert!(
             !theirs.iter().any(|e| e.requirement_id == fid),
             "a different user_id must not see another user's queue item"
+        );
+    }
+
+    /// Build a `CachedGitBackend` over a seeded store dir, mirroring the
+    /// production `handle_git_backend_command` setup. trace:STORY-639 | ai:claude
+    #[cfg(test)]
+    fn test_cached_backend(root: &std::path::Path) -> aida_core::CachedGitBackend {
+        let inner = aida_core::GitBackend::new(root).unwrap();
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(root);
+        aida_core::CachedGitBackend::with_inner(inner, &cache_path).unwrap()
+    }
+
+    /// STORY-639: `aida assign --to <user>` sets the assignee AND routes the
+    /// spec into that user's queue. Re-running is idempotent (no duplicate
+    /// queue entry). `aida unassign` clears the assignee and, by default,
+    /// leaves the spec in the queue; `--from-queue` removes it.
+    /// trace:STORY-639 | ai:claude
+    #[test]
+    fn assign_sets_assignee_and_routes_queue_idempotently() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let fid = seed_finding(&root, "TASK-639");
+        let backend = test_cached_backend(&root);
+
+        // Assign to alice.
+        handle_assign_command("TASK-639", "alice", &backend, &root).unwrap();
+        let req = backend
+            .get_requirement_by_spec_id("TASK-639")
+            .unwrap()
+            .unwrap();
+        assert_eq!(req.assignee.as_deref(), Some("alice"));
+        let alice_q = Storage::new(&root).queue_list("alice", false).unwrap();
+        assert_eq!(
+            alice_q.iter().filter(|e| e.requirement_id == fid).count(),
+            1,
+            "assign must route the spec into alice's queue exactly once"
+        );
+
+        // Idempotent re-assign: no duplicate queue entry, field unchanged.
+        handle_assign_command("TASK-639", "alice", &backend, &root).unwrap();
+        let alice_q = Storage::new(&root).queue_list("alice", false).unwrap();
+        assert_eq!(
+            alice_q.iter().filter(|e| e.requirement_id == fid).count(),
+            1,
+            "re-assigning to the same user must not duplicate the queue entry"
+        );
+
+        // Unassign (default): assignee cleared, queue entry retained.
+        handle_unassign_command("TASK-639", false, &backend, &root).unwrap();
+        let req = backend
+            .get_requirement_by_spec_id("TASK-639")
+            .unwrap()
+            .unwrap();
+        assert_eq!(req.assignee, None, "unassign must clear the assignee");
+        let alice_q = Storage::new(&root).queue_list("alice", false).unwrap();
+        assert_eq!(
+            alice_q.iter().filter(|e| e.requirement_id == fid).count(),
+            1,
+            "default unassign leaves the spec in the queue"
+        );
+
+        // Re-assign then unassign --from-queue: queue entry removed too.
+        handle_assign_command("TASK-639", "alice", &backend, &root).unwrap();
+        handle_unassign_command("TASK-639", true, &backend, &root).unwrap();
+        let alice_q = Storage::new(&root).queue_list("alice", false).unwrap();
+        assert!(
+            !alice_q.iter().any(|e| e.requirement_id == fid),
+            "--from-queue must remove the spec from the queue"
+        );
+
+        // Unassigning an already-unassigned spec errors.
+        assert!(
+            handle_unassign_command("TASK-639", false, &backend, &root).is_err(),
+            "unassigning an unassigned spec must error"
         );
     }
 

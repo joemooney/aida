@@ -628,6 +628,7 @@ mod tests {
             status: "In Progress".into(),
             priority: "high".into(),
             owner: String::new(),
+            assignee: None,
             feature: String::new(),
             req_type: "Task".into(),
             tags: Vec::new(),

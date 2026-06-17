@@ -515,6 +515,16 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
         description: "Person/agent responsible for the spec. Set via `aida add --owner` / `aida \
              edit`; empty when unassigned.",
     },
+    // trace:STORY-639 | ai:claude
+    FieldDoc {
+        name: "assignee",
+        example: "alice",
+        provenance: Provenance::User,
+        description: "Team member this spec is assigned to (work-division metadata, distinct from \
+             `owner`/creator). Set via `aida assign --to <user>` (which also routes the spec into \
+             that user's queue) and cleared by `aida unassign`. Surfaced by `aida list --mine` / \
+             `--assigned <user>`; None/omitted when unassigned.",
+    },
     FieldDoc {
         name: "feature",
         example: "schema-surface",

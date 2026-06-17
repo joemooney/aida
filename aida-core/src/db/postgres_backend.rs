@@ -394,6 +394,8 @@ impl PostgresBackend {
             status,
             priority,
             owner,
+            // trace:STORY-639 | ai:claude — postgres backend does not persist assignee.
+            assignee: None,
             feature,
             created_at,
             created_by,
