@@ -56,7 +56,7 @@ export function TeamPage() {
             <TeamBurndown requirements={reqs} />
           </div>
 
-          <AssignmentBoard requirements={reqs} />
+          <AssignmentBoard requirements={reqs} members={members} />
         </>
       )}
     </div>
