@@ -3,12 +3,12 @@ spec_id: STORY-637
 agreed_id: STORY-637
 title: 'Cross-clone leases: shared lease registry on the store (slice 1, closes MU-504)'
 description: 'Slice 1 of the cross-clone coordination design (docs/plans/2026-06-16-cross-clone-coordination.md). Shared lease claims under coordination/leases/<scope>.toml on the aida-store branch; session start --owns + aida agent new pull-check-claim-push; refuse on a LIVE cross-clone lease (same-host pid + universal TTL/heartbeat liveness), --force escape + stale auto-reclaim; surface foreign leases in aida session leases. Pure decide_claim decision fn + unit tests mirroring drain_lock. Best-effort: if the store is unreachable, warn and proceed (do not block work on network). Gate: scripts/multi-clone-harness.sh MU-504 flips GAP to PASS.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T01:15:54.865325049Z
-modified_at: 2026-06-17T01:53:00.280862429Z
+modified_at: 2026-06-17T02:00:43.726476036Z
 req_type: Story
 tags:
 - coordination
@@ -22,3 +22,21 @@ comments:
   content: Commit ea29f9e92 references this requirement
   created_at: 2026-06-17T01:53:00.280862429Z
   modified_at: 2026-06-17T01:53:00.280862429Z
+history:
+- id: 019ed34f-33c9-70b1-ae3f-814ef07f0695
+  author: aida-auto-bump
+  timestamp: 2026-06-17T02:00:43.721753919Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed34f-33ce-7580-8a74-6ee681c3da33
+  timestamp: 2026-06-17T02:00:43.726475202Z
+  agent: aida
+  commit_sha: 85049d6175c23cab3ab853801ef6109e77b90a2b
+  summary: Completed via merge 85049d61
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T02:00:43.565246526Z
+  completion_sha: 85049d6175c23cab3ab853801ef6109e77b90a2b
