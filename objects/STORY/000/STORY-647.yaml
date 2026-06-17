@@ -3,12 +3,12 @@ spec_id: STORY-647
 agreed_id: STORY-647
 title: 'Team RBAC slice 2: finer-grained op gating + protected specs/tags + strict mode (Tier 3)'
 description: 'Tier-3 slice 2 of EPIC-47 (design docs/plans/2026-06-16-team-rbac.md §3). Builds on slice-1 effective_role. (1) A small config-driven permission map: gated operation -> minimum role (defaults: status approve/plan/reject = advisor [slice 1]; add merge-gate/integrate + drain-start [burndown run / queue work --auto-complete] as advisor-gated; tunable under [team] in config). (2) Protected specs/tags: [team] protected_tags = [...]; editing/transitioning a spec carrying a protected tag requires advisor (guardrail). (3) [team] strict mode: when true, NON-rostered users get least-privilege for gated ops (default-deny) instead of the permissive env-fallback, and refusals are not bypassable by unsetting env (only --force, audited). Still a guardrail not security (document). Backward-compatible: no [team] config / strict=false = slice-1 behavior. Harness: strict-mode non-rostered user refused a gated op; protected-tag spec requires advisor. Unit-test the permission resolution.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T06:54:09.607904503Z
-modified_at: 2026-06-17T07:20:49.926167877Z
+modified_at: 2026-06-17T07:29:09.990505780Z
 req_type: Story
 tags:
 - parent:EPIC-47
@@ -21,3 +21,21 @@ comments:
   content: Commit ce32f79a1 references this requirement
   created_at: 2026-06-17T07:20:49.926167877Z
   modified_at: 2026-06-17T07:20:49.926167877Z
+history:
+- id: 019ed47b-e561-7062-9dba-d4ee87ccae94
+  author: aida-auto-bump
+  timestamp: 2026-06-17T07:29:09.985534955Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed47b-e566-7873-9bd4-5ac4011abe11
+  timestamp: 2026-06-17T07:29:09.990504922Z
+  agent: aida
+  commit_sha: bac66b40ecf647b14e512b8b5d8f9dcfb0f38505
+  summary: Completed via merge bac66b40
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T07:29:09.819427614Z
+  completion_sha: bac66b40ecf647b14e512b8b5d8f9dcfb0f38505
