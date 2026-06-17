@@ -3,12 +3,12 @@ spec_id: STORY-636
 agreed_id: STORY-636
 title: Same-host multi-clone test harness (scripts/multi-clone-harness.sh)
 description: 'Executable harness for the EPIC-46 catalog (docs/testing/multi-user-test-cases.md). Creates a throwaway bare origin + 2+ clones on one host (isolated HOME so the real ~/.aida is untouched), parameterizes AIDA_USER/node id, runs named MU-### cases, asserts. Each case declares EXPECT=pass|known-gap so the gap cases (MU-504/505/506 cross-clone coordination) report GAP now and flip to pass once shared coordination lands — red-to-green driver for that work. v1 cases: MU-101, MU-103, MU-201, MU-202, MU-203, MU-301, MU-401, MU-402, MU-504, MU-505, MU-507. Must NOT run a real auto-complete drain on a real spec (test lock/lease mechanics structurally). Suite exits non-zero only when an EXPECT=pass case FAILS.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T00:48:30.276840951Z
-modified_at: 2026-06-17T01:04:20.118256478Z
+modified_at: 2026-06-17T01:12:07.461654604Z
 req_type: Story
 tags:
 - harness
@@ -22,3 +22,21 @@ comments:
   content: Commit 3a837b1cb references this requirement
   created_at: 2026-06-17T01:04:20.118256478Z
   modified_at: 2026-06-17T01:04:20.118256478Z
+history:
+- id: 019ed322-b420-7c81-b9c1-cf40b169799d
+  author: aida-auto-bump
+  timestamp: 2026-06-17T01:12:07.456831154Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed322-b425-7742-8c82-7fc840f92ddb
+  timestamp: 2026-06-17T01:12:07.461653383Z
+  agent: aida
+  commit_sha: 17236d31770911a37a2f59d3f57bfefa6a8833be
+  summary: Completed via merge 17236d31
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T01:12:07.301522424Z
+  completion_sha: 17236d31770911a37a2f59d3f57bfefa6a8833be
