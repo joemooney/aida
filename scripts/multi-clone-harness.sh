@@ -939,6 +939,37 @@ EOF
     remove_shared_lock_claim "drain.lock.toml"
 }
 
+# --- MU-502: auto mailbox sync -- A sends, A push, B pull, B sees it --------
+# STORY-643: cross-user mailbox visibility now flows automatically on the normal
+# sync legs (no manual `aida mailbox sync`). A `aida mailbox send`s a message to
+# an identity B will read, A `aida push` (the push store leg PUBLISHES the local
+# mailbox into the canonical store + folds it into the store commit), B `aida
+# pull` (the rebase brings the canonical message down), then B `aida mailbox
+# inbox <identity>` (the read path merges canonical+local) SHOWS it. trace:STORY-643
+case_MU-502() {
+    EXPECT=pass
+    # Unique recipient id + body marker so we don't collide with other cases.
+    local recipient="mu502-teammate"
+    local marker="mu502-auto-sync-hello"
+    # A sends to an identity B will read (explicit --from so it is not A's own
+    # identity, and so the sender-exclusion never hides it from the recipient).
+    aida_in "$CLONE_A" mailbox send --to "$recipient" --from clonea "$marker" >/dev/null 2>&1 || true
+    # A publishes via the normal push (no manual `aida mailbox sync`).
+    push_from "$CLONE_A"
+    # B receives via the normal pull (brings the canonical message down).
+    pull_into "$CLONE_B"
+    # B reads the recipient's inbox; the canonical message must surface.
+    local inbox
+    inbox="$(aida_in "$CLONE_B" mailbox inbox "$recipient" 2>&1 || true)"
+    CASE_DETAIL="B sees A's message in $recipient's inbox after push/pull (no manual digest)"
+    if assert_contains "$inbox" "$marker" "B sees A's auto-synced message"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="auto mailbox sync did not surface the message; inbox=[${inbox:0:200}]"
+    fi
+}
+
 # --- MU-521: `aida team` in clone B lists BOTH clones' nodes (STORY-640) ----
 case_MU-521() {
     # STORY-640: `aida team` is the team roster — it reads registry/nodes.toml on
@@ -972,7 +1003,7 @@ case_MU-521() {
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-502 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
 
 list_cases() {
     echo "Available cases:"
