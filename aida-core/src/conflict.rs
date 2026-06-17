@@ -177,11 +177,16 @@ pub fn resolve_conflict(
 /// - **`processing_record:`** — union by `ProcessingRecord.id`, ordered by
 ///   `timestamp` then `id`.
 /// - **`tags:`** — union of both sides (a `HashSet`, so a set union).
+/// - **`relationships:`** — set union keyed by `(rel_type, target_id)` so two
+///   clones concurrently adding a different edge to the SAME spec both survive
+///   instead of the LWW base silently dropping the loser's edge (STORY-645).
+/// - **`dependencies:`** — set union by target uuid, same rationale.
 ///
 /// `base` is the merge-base version; it is currently used only to anchor the
 /// id-keyed unions implicitly (ours+theirs is a superset of base for
 /// append-only arrays). It is accepted so the signature is a true three-way
 /// merge and so future field-level policies can diff against the base.
+// trace:STORY-645 | ai:claude
 pub fn merge_spec_three_way(
     base: &Requirement,
     ours: &Requirement,
@@ -217,6 +222,23 @@ pub fn merge_spec_three_way(
     let mut tags = ours.tags.clone();
     tags.extend(theirs.tags.iter().cloned());
     merged.tags = tags;
+
+    // Relationships: set union keyed by the natural identity (rel_type,
+    // target_id). Without this, the LWW scalar base would silently drop the
+    // loser's concurrently-added relationship edge — so two clones each running
+    // `aida rel add` on the SAME spec produced a manual conflict (STORY-645).
+    // The first occurrence of a key wins, so its created_at/created_by metadata
+    // is preserved deterministically.
+    merged.relationships = union_relationships(&[
+        &base.relationships,
+        &ours.relationships,
+        &theirs.relationships,
+    ]);
+
+    // Dependencies: set union by target uuid (a plain `Vec<Uuid>` used as a
+    // set), order-stable. Same rationale as relationships.
+    merged.dependencies =
+        union_dependencies(&[&base.dependencies, &ours.dependencies, &theirs.dependencies]);
 
     merged
 }
@@ -264,6 +286,45 @@ fn union_processing_records(
     }
     let mut out: Vec<_> = by_id.into_values().collect();
     out.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then(a.id.cmp(&b.id)));
+    out
+}
+
+/// Union Relationship arrays by the natural key `(rel_type, target_id)`.
+///
+/// `Relationship` has no surrogate id, so identity is the type+target edge. The
+/// first source to contribute a given key wins (so created_at/created_by stays
+/// deterministic); ordering preserves first-seen insertion so the output is
+/// stable across runs. trace:STORY-645
+fn union_relationships(
+    sources: &[&Vec<crate::models::Relationship>],
+) -> Vec<crate::models::Relationship> {
+    use std::collections::HashSet;
+    let mut seen: HashSet<(crate::models::RelationshipType, Uuid)> = HashSet::new();
+    let mut out: Vec<crate::models::Relationship> = Vec::new();
+    for src in sources {
+        for rel in src.iter() {
+            let key = (rel.rel_type.clone(), rel.target_id);
+            if seen.insert(key) {
+                out.push(rel.clone());
+            }
+        }
+    }
+    out
+}
+
+/// Union dependency uuid lists (a `Vec<Uuid>` used as a set), first-seen order.
+/// trace:STORY-645
+fn union_dependencies(sources: &[&Vec<Uuid>]) -> Vec<Uuid> {
+    use std::collections::HashSet;
+    let mut seen: HashSet<Uuid> = HashSet::new();
+    let mut out: Vec<Uuid> = Vec::new();
+    for src in sources {
+        for dep in src.iter() {
+            if seen.insert(*dep) {
+                out.push(*dep);
+            }
+        }
+    }
     out
 }
 
@@ -622,6 +683,136 @@ mod tests {
         let merged = merge_spec_three_way(&base, &ours, &theirs);
         assert_eq!(merged.comments.len(), 2);
         let ids: std::collections::HashSet<_> = merged.comments.iter().map(|c| c.id).collect();
+        assert!(ids.contains(&c_ours.id));
+        assert!(ids.contains(&c_theirs.id));
+    }
+
+    // ----- STORY-645: relationship + dependency set-union on same-spec merge -----
+
+    use crate::models::{Relationship, RelationshipType};
+
+    fn rel(rel_type: RelationshipType, target: Uuid) -> Relationship {
+        Relationship {
+            rel_type,
+            target_id: target,
+            created_at: Some(Utc::now()),
+            created_by: Some("a".to_string()),
+        }
+    }
+
+    // trace:STORY-645 — two clones add a DIFFERENT relationship to the same spec;
+    // both edges must survive (LWW base would drop the loser's edge).
+    #[test]
+    fn test_merge_unions_relationships_by_key() {
+        let base = make_req("Title", "Draft");
+        let shared_target = Uuid::now_v7();
+        let ours_target = Uuid::now_v7();
+        let theirs_target = Uuid::now_v7();
+
+        let mut ours = base.clone();
+        ours.relationships = vec![
+            rel(RelationshipType::BlockedBy, shared_target),
+            rel(RelationshipType::BlockedBy, ours_target),
+        ];
+        ours.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut theirs = base.clone();
+        theirs.relationships = vec![
+            rel(RelationshipType::BlockedBy, shared_target),
+            rel(RelationshipType::BlockedBy, theirs_target),
+        ];
+        // theirs is the LWW winner — without the union its relationships would
+        // be the only ones kept.
+        theirs.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+
+        // shared deduped to one; ours + theirs both survive => 3 edges.
+        assert_eq!(merged.relationships.len(), 3);
+        let targets: std::collections::HashSet<_> =
+            merged.relationships.iter().map(|r| r.target_id).collect();
+        assert!(targets.contains(&shared_target));
+        assert!(targets.contains(&ours_target));
+        assert!(targets.contains(&theirs_target));
+    }
+
+    // trace:STORY-645 — the key is (rel_type, target_id): same target, different
+    // type is two distinct edges; identical (type,target) dedupes.
+    #[test]
+    fn test_merge_relationships_key_is_type_and_target() {
+        let base = make_req("Title", "Draft");
+        let target = Uuid::now_v7();
+
+        let mut ours = base.clone();
+        ours.relationships = vec![rel(RelationshipType::Parent, target)];
+        ours.modified_at = Utc::now();
+
+        let mut theirs = base.clone();
+        // Same target, DIFFERENT rel_type => distinct edge; plus an exact dup of
+        // ours that must collapse.
+        theirs.relationships = vec![
+            rel(RelationshipType::BlockedBy, target),
+            rel(RelationshipType::Parent, target),
+        ];
+        theirs.modified_at = Utc::now();
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        // Parent->target (deduped) + BlockedBy->target = 2 edges.
+        assert_eq!(merged.relationships.len(), 2);
+    }
+
+    // trace:STORY-645 — dependency uuid lists union as a set.
+    #[test]
+    fn test_merge_unions_dependencies() {
+        let base = make_req("Title", "Draft");
+        let shared = Uuid::now_v7();
+        let ours_dep = Uuid::now_v7();
+        let theirs_dep = Uuid::now_v7();
+
+        let mut ours = base.clone();
+        ours.dependencies = vec![shared, ours_dep];
+        ours.modified_at = Utc::now();
+
+        let mut theirs = base.clone();
+        theirs.dependencies = vec![shared, theirs_dep];
+        theirs.modified_at = Utc::now();
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(merged.dependencies.len(), 3);
+        let set: std::collections::HashSet<_> = merged.dependencies.iter().copied().collect();
+        assert!(set.contains(&shared));
+        assert!(set.contains(&ours_dep));
+        assert!(set.contains(&theirs_dep));
+    }
+
+    // trace:STORY-645 — comment union dedupes an identical comment by id while
+    // keeping two genuinely different comments (extends the STORY-641 test).
+    #[test]
+    fn test_merge_comments_dedupe_identical_keep_distinct() {
+        let base = make_req("Title", "Draft");
+
+        // A comment that exists on BOTH sides (same id) must collapse to one.
+        let shared = Comment::new("a".to_string(), "shared".to_string());
+
+        let mut ours = base.clone();
+        let c_ours = Comment::new("a".to_string(), "ours".to_string());
+        ours.comments = vec![shared.clone(), c_ours.clone()];
+        ours.modified_at = Utc::now();
+
+        let mut theirs = base.clone();
+        let c_theirs = Comment::new("b".to_string(), "theirs".to_string());
+        theirs.comments = vec![shared.clone(), c_theirs.clone()];
+        theirs.modified_at = Utc::now();
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        // shared (deduped) + ours + theirs = 3 distinct comment ids.
+        assert_eq!(merged.comments.len(), 3);
+        let ids: std::collections::HashSet<_> = merged.comments.iter().map(|c| c.id).collect();
+        assert!(ids.contains(&shared.id));
         assert!(ids.contains(&c_ours.id));
         assert!(ids.contains(&c_theirs.id));
     }
