@@ -3,12 +3,12 @@ spec_id: STORY-642
 agreed_id: STORY-642
 title: 'Multi-host harness cases: prove cross-host TTL reclaim + foreign-host claim honored (Phase 2)'
 description: 'Tier-1 of EPIC-47. Extend scripts/multi-clone-harness.sh with multi-host cases that simulate distinct hosts (override the host fingerprint env / a test hook) to validate the coordination TTL/heartbeat path: MU-511 a foreign-HOST live claim is honored (B refused); MU-512 a foreign-host claim past TTL is reclaimable (stale → acquire); MU-513 same-host dead-pid still reclaims immediately. Confirms Phase 2 (multi-host) coordination works, since cross-host cannot use pid liveness. If a host-override hook is needed in the binary, add a minimal AIDA_HOST_OVERRIDE test env read in the coordination claim.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:49.426633099Z
-modified_at: 2026-06-17T02:55:28.773155043Z
+modified_at: 2026-06-17T03:46:52.270832515Z
 req_type: Story
 tags:
 - harness
@@ -22,3 +22,21 @@ comments:
   content: Commit b0dcfb729 references this requirement
   created_at: 2026-06-17T02:55:28.773155043Z
   modified_at: 2026-06-17T02:55:28.773155043Z
+history:
+- id: 019ed3b0-60ea-7f40-b931-b5d128cff867
+  author: aida-auto-bump
+  timestamp: 2026-06-17T03:46:52.266064190Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed3b0-60ee-7803-8f90-a534de606be8
+  timestamp: 2026-06-17T03:46:52.270831255Z
+  agent: aida
+  commit_sha: 24a46dbe665600ad5668ab340c680f618dcfdfcc
+  summary: Completed via merge 24a46dbe
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T03:46:52.110298597Z
+  completion_sha: 24a46dbe665600ad5668ab340c680f618dcfdfcc
