@@ -235,6 +235,45 @@ To move claims from (M)(D) to confirmed empirical results:
 
 *Orchestration / control planes.* LangGraph, CrewAI, the Microsoft Agent Framework, Temporal, and Microsoft Agent 365 orchestrate or govern multi-agent work but hold coordination state in a service or process, not a portable program-owned record. They are the L4 orchestration neighbors and, increasingly (§9, P8b-iii), the incumbents most likely to contest L5.
 
+*Execution orchestrators.* A large class of parallel-execution tools — Claude Squad, Conductor Build, Code Conductor, Axel, SPECTRE, and others — fan agents out across isolated git worktrees with a review/merge dashboard. Of nine surveyed (June 2026), eight maintain *no* durable coordination model; they are L4 execution fan-out, not L1/L3/L5. *graft* is a related but distinct runtime lock-manager — OS-style claim-before-write leases at file-resource granularity (state in an in-memory bus), preventing concurrent-edit conflicts — complementary to intent coordination, not a substitute for it.
+
+*Identity and authorization.* *Authenticated Delegation* (South et al., arXiv:2501.09674, 2025) extends OAuth/OIDC with agent-ID and delegation tokens so a third party can verify an agent acts for a named principal within granted permissions. It is a trust substrate a coordination layer can sit *atop* — complementary, and a natural pairing for a cross-vendor fleet that must prove who authorized what.
+
+---
+
+## 15. What the probe produced — distinctive value, honestly assessed
+
+The probe stance forces a specific question: not "is AIDA good," but *what value, if any, did building it encapsulate that is genuinely distinctive rather than commodity — and how much of that survives contact with the current landscape (June 2026)?* We sort by defensibility and concede where neighbors match, because conceding is the point.
+
+**The honest correction, first.** Our initial read was that AIDA *fuses* a typed relationship graph + code-to-spec traces + lifecycle gates into a coordination substrate no neighbor holds whole. A landscape scan falsifies the strong form: the **Gas Town / Beads stack** (Yegge) holds most of that fusion — Beads is a typed-relationship issue graph (`relates_to` / `duplicates` / `supersedes` / parent-child + blocker-aware "ready" detection; ~24.6k stars at scan time), Gas Town adds seven coordination roles and enforced merge gates (the *Refinery* queue), it is cross-vendor and durable. AIDA is therefore **not unique in the fusion**; it is one member of a small family — with Gas Town/Beads the *more mature* member by traction — distinguished only by narrower choices. (Dated snapshot, treated as immutable per §10.)
+
+**Tier 1 — what survives as genuinely distinctive (narrowed).**
+- **Code-to-spec inline traceability** (`// trace:SPEC-ID`, machine-checkable from either direction): found in *none* of the dozen-odd tools surveyed (Gas Town only indirectly, via issue IDs in commits). The satisfaction relation living in the source itself is the sharpest surviving differentiator.
+- **Git-YAML-canonical store** (one plain YAML file per spec; SQLite a rebuildable cache) vs the family's *database-as-source-of-truth* (Beads requires Dolt). A real architectural fork: AIDA's record is readable with `git` and a text editor, works anywhere git works, needs no database engine — the "program-owned, inspectable, portable" property in its strongest form.
+- **Spec-lifecycle *authority* gates** — who may advance Draft→Approved→… (advisor-only transitions, merge-driven completion, trailer auto-complete) — as distinct from merge-time *verification* gates (Refinery's CI queue). AIDA gates the *authority to change intent state*; the family gates *what merges*. Different, rarer enforcement point.
+- **The MCP requirement-graph surface** (~60 tools exposing the typed graph to any agent): not matched by the fan-out tools; Beads exposes a CLI/SQL graph of a different shape.
+
+**Tier 2 — distinctive but contested (the family holds it too).** The typed relationship graph itself, role/lease coordination, and durable cross-vendor coordination are all present in Beads/Gas Town and *more mature there*. AIDA's versions differ in shape — a typed *requirement* graph (19 node types) vs an issue graph; an advisor/implementer/reviewer/integrator *seat* model vs Mayor/Polecat/Refinery — but the category is shared, not owned.
+
+**Tier 3 — commodity (where most of the field lives).** Parallel execution + worktree isolation + dashboard (Claude Squad, Conductor Build, Code Conductor, Axel — 8 of 9 surveyed); spec-structuring as portable markdown (Kiro, SPECTRE, spec-kit); runtime file-lock arbitration (graft). Useful, replicable, not where durable value sits.
+
+**Tier 4 — the value that does not depend on the artifact.** The transferable knowledge (P1–P8). Even granting that Gas Town/Beads matches much of AIDA's surface, the *findings* — substrate-as-bouncer, substrate-bounded autonomy, the conflict-light recipe, calibration-over-accuracy, the incentive-persistent gap — are the probe's durable output and generalize across the whole family.
+
+**Landscape map** (June 2026 snapshot; `Y` / `~` partial / `N`; star counts point-in-time):
+
+| Tool / family | Typed graph | Code↔spec trace | Lifecycle-authority gate | Roles / leases | Git-canonical (plain files) | Cross-vendor | Durable coordination model |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **AIDA** | Y | **Y** | **Y** | Y | **Y** (git-YAML) | Y | Y |
+| Gas Town + Beads | Y | ~ (issue IDs) | Y (merge queue) | Y (7 roles) | N (Dolt DB) | Y | Y |
+| GNAP (git-native) | N | N | N | N | Y | Y | ~ (primitive sync) |
+| graft (lock-manager) | ~ (runtime DAG) | N | ~ (resource locks) | ~ (file leases) | N (in-mem bus) | ~ (Claude-first) | runtime only |
+| Kiro (spec IDE) | N | N | ~ (workflow seq) | N | Y (md) | N | N (single agent) |
+| Kilo Code | N | N | N | N | N (ephemeral) | Y (model-level) | ~ (subtask) |
+| Claude Squad / Conductor | N | N | N | N | Y (worktrees) | Y | N (fan-out) |
+| spec-kit / SPECTRE | N | N | ~ (phase seq) | N | Y | mixed | N |
+
+**The synthesis (revised).** AIDA's encapsulated value is *not* a unique architecture — the landscape contains a more-mature sibling. It is (a) a narrow set of distinctive choices within a real family — code-to-spec traceability, git-YAML purity, lifecycle-authority gating, the MCP graph surface — and (b) the knowledge the build produced (Tier 4). For the central research question, the load-bearing landscape fact is that **the typed-graph + roles + gates + cross-vendor coordination model is now independently held by at least two efforts (AIDA, Gas Town/Beads) plus thinner ones (GNAP)** — which *strengthens* P8a (the niche is real and being filled by OSS, not by model vendors) while *sharpening* P8b's third condition: "out-execute the incumbents" must now also mean out-executing Gas Town/Beads, which has Yegge's distribution and an order of magnitude more traction. The probe's honest verdict on AIDA-the-artifact tilts further toward "a useful instrument that taught us the problem," not "the thing to bet on" — exactly the distinction the paper exists to keep clear.
+
 ---
 
 ## Appendix A — Proposition ↔ layer ↔ mechanism ↔ grade
