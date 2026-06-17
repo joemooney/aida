@@ -91851,10 +91851,11 @@ fn maybe_team_identity_guard(store_path: &std::path::Path, command: &Command) ->
         let project_root = store_path.parent().unwrap_or(store_path);
         let marker = project_root.join(".aida").join("team-onboarded");
         if !marker.exists() {
+            let bullet = crate::glyph(crate::glyphs::Glyph::Bullet);
             eprintln!(
                 "{} You've joined a shared AIDA store with {} other node(s). To keep your \
-                 work attributable + your queue separate:\n  • set a distinct identity:  {}\n  \
-                 • claim a node id:           {}",
+                 work attributable + your queue separate:\n  {bullet} set a distinct identity:  {}\n  \
+                 {bullet} claim a node id:           {}",
                 "Welcome:".cyan().bold(),
                 registry.nodes.len(),
                 "export AIDA_USER=<your-name>".cyan(),
