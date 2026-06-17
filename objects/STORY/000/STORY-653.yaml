@@ -3,12 +3,12 @@ spec_id: STORY-653
 agreed_id: STORY-653
 title: 'Dashboard roster identity coherence: group/key on the person identity matching roles+queues, friendly labels + node names'
 description: 'Fix: the dashboard roster groups nodes by integer node user_id (shows a cryptic "1") and the role editor writes team.toml under that integer key, but effective_role/queues/assignees key on the $USER string (current_user_id), so dashboard-set roles never enforce (team.toml currently has stray 1=advisor). Reconcile: the aida-core team read module + GET /api/v2/team group + key on the person identity that MATCHES roles/queues — the node owner $USER string (STORY A field), falling back to email then integer for old nodes; TeamMemberDto carries a friendly user label + the user node friendly names. The role editor (PUT /team/:user/role) + assignment (PUT assignee) write under that same identity so they actually enforce + display. Migrate/normalize the stray team.toml integer key. Web RosterPanel shows the friendly label + node names instead of the raw id. FLAG as a follow-up (do NOT solve here): cross-machine person unification — the same human may have different $USER on different machines (joe@imac vs joe.mooney@spock) + an integer user_id that collapsed them; deciding who is one person across accounts is a separate design question.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T13:35:05.301679863Z
-modified_at: 2026-06-17T13:35:05.301679863Z
+modified_at: 2026-06-17T14:43:02.391222781Z
 req_type: Story
 tags:
 - bug
@@ -16,3 +16,21 @@ tags:
 - node-identity
 - parent:EPIC-47
 - team
+history:
+- id: 019ed609-1e72-7da0-aec8-79697e7bfb44
+  author: aida-auto-bump
+  timestamp: 2026-06-17T14:43:02.386480950Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed609-1e77-7ae2-bca5-50cf74ae3115
+  timestamp: 2026-06-17T14:43:02.391221880Z
+  agent: aida
+  commit_sha: ca3beb3dc1ebe35031884fae8bb77ae71b732cd8
+  summary: Completed via merge ca3beb3d
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T14:43:02.229348797Z
+  completion_sha: ca3beb3dc1ebe35031884fae8bb77ae71b732cd8
