@@ -1021,6 +1021,40 @@ case_MU-502() {
     fi
 }
 
+# --- MU-541: assignment notification -- A assigns to B identity, B sees it ----
+# STORY-644: `aida assign <spec> --to <user>` ALSO sends a mailbox notice
+# addressed to <user> ("You were assigned <SPEC>: <title>"). Composes with the
+# STORY-643 auto mailbox sync: A assigns -> A push (publishes the local mailbox
+# into the canonical store) -> B pull (brings the canonical message down) -> B
+# `aida mailbox inbox <user>` SHOWS the assignment notice. trace:STORY-644
+case_MU-541() {
+    EXPECT=pass
+    # The assignee is an identity B will read; it differs from A's OS-user
+    # identity so the self-skip never fires and the notice is sent.
+    local recipient="mu541-teammate"
+    local id
+    id="$(add_spec "$CLONE_A" "mu541 assignment notice spec" task)"
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    # A assigns the spec to the teammate identity (sends the mailbox notice).
+    aida_in "$CLONE_A" assign "$id" --to "$recipient" >/dev/null 2>&1 || true
+    # A publishes via the normal push (no manual `aida mailbox sync`).
+    push_from "$CLONE_A"
+    # B receives via the normal pull.
+    pull_into "$CLONE_B"
+    # B reads the teammate's inbox; the assignment notice must surface.
+    local inbox
+    inbox="$(aida_in "$CLONE_B" mailbox inbox "$recipient" 2>&1 || true)"
+    CASE_DETAIL="B sees the assignment notice for $id in $recipient's inbox"
+    if assert_ne "" "$id" "spec id" \
+        && assert_contains "$inbox" "assigned" "inbox carries the assignment notice" \
+        && assert_contains "$inbox" "$id" "notice names the assigned spec"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="assignment notice did not surface; inbox=[${inbox:0:200}]"
+    fi
+}
+
 # --- MU-521: `aida team` in clone B lists BOTH clones' nodes (STORY-640) ----
 case_MU-521() {
     # STORY-640: `aida team` is the team roster — it reads registry/nodes.toml on
@@ -1054,7 +1088,7 @@ case_MU-521() {
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
 
 list_cases() {
     echo "Available cases:"
