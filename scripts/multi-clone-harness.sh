@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # trace:STORY-636 EPIC-46
+# trace:STORY-642 (multi-host: cross-host TTL coordination, AIDA_HOST_OVERRIDE)
 #
 # Same-host multi-clone test harness for the AIDA multi-user catalog.
 #
@@ -725,9 +726,223 @@ case_MU-507() {
 }
 
 # =========================================================================
+# Multi-host cases (STORY-642 / EPIC-47, Phase 2).
+#
+# Same-host coordination uses pid liveness; CROSS-host can only use the
+# TTL/heartbeat backstop (a remote pid is meaningless on this machine).
+# `decide_claim` already gates the pid fast path on `host == our_host`, so a
+# foreign-host claim is NEVER pid-reclaimed — only TTL-reclaimed. We prove that
+# end-to-end by simulating two distinct hosts on this one machine via the
+# `AIDA_HOST_OVERRIDE` test hook (read by coordination::hostname()).
+#
+# Mechanism: clone A takes a REAL cross-clone lease (`session start --owns`)
+# under AIDA_HOST_OVERRIDE=hostX, which writes a correctly-named claim file on
+# the store (coordination/leases/<sanitized-scope>.toml). We then drive clone B's
+# REAL acquire path under AIDA_HOST_OVERRIDE=hostY and observe the decision.
+# For the STALE case we rewrite A's pushed claim with an aged heartbeat + tiny
+# TTL (testing the real decision against controlled inputs). No real drain runs.
+# trace:STORY-642
+# =========================================================================
+
+# Locate clone A's pushed lease claim file for a scope (the FNV-hashed name is
+# computed by the binary; we glob it back rather than recompute the hash). Echoes
+# the absolute path, or empty if none. $1 = store dir, $2 = scope stem (lowercased).
+find_lease_claim_file() {
+    local store="$1" stem="$2"
+    local f
+    for f in "$store"/coordination/leases/"${stem}"-*.toml; do
+        [[ -e "$f" ]] && { echo "$f"; return 0; }
+    done
+    echo ""
+}
+
+# Rewrite the heartbeat_at + ttl_secs of an existing claim file in place so the
+# real decide_claim treats it as TTL-stale. $1 = file, $2 = heartbeat (RFC3339),
+# $3 = ttl_secs.
+age_claim_file() {
+    local file="$1" hb="$2" ttl="$3"
+    [[ -e "$file" ]] || return 1
+    # Replace the two fields; leave host/pid/clone_path/process_backed intact.
+    HOME="$WORKDIR/home" sed -i \
+        -e "s/^heartbeat_at = .*/heartbeat_at = \"$hb\"/" \
+        -e "s/^started_at = .*/started_at = \"$hb\"/" \
+        -e "s/^ttl_secs = .*/ttl_secs = $ttl/" \
+        "$file"
+}
+
+# Commit + push the store worktree of clone A (so clone B sees the change).
+push_store_A() {
+    local store="$CLONE_A/.aida-store"
+    ( cd "$store" && HOME="$WORKDIR/home" git add -A coordination >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git commit -q -m "test: harness multi-host claim" >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git push -q origin aida-store >/dev/null 2>&1 ) || true
+}
+
+# Clean up any cross-clone lease claim + worktrees a multi-host case created.
+cleanup_multihost_lease() {
+    local id="$1"
+    aida_in "$CLONE_A" session end "$id" >/dev/null 2>&1 || true
+    aida_in "$CLONE_B" session end "$id" >/dev/null 2>&1 || true
+    # Belt-and-braces: delete any lingering claim file + push.
+    local store="$CLONE_A/.aida-store" stem
+    stem="$(echo "$id" | tr '[:upper:]' '[:lower:]')"
+    rm -f "$store"/coordination/leases/"${stem}"-*.toml 2>/dev/null || true
+    push_store_A
+    pull_into "$CLONE_B"
+    ( cd "$CLONE_A" && HOME="$WORKDIR/home" git worktree prune >/dev/null 2>&1 ) || true
+    ( cd "$CLONE_B" && HOME="$WORKDIR/home" git worktree prune >/dev/null 2>&1 ) || true
+    rm -rf "$WORKDIR/wtA-$id" "$WORKDIR/wtB-$id" 2>/dev/null || true
+}
+
+# --- MU-511: foreign-HOST LIVE claim honored -> B refused (cross-host TTL) -
+case_MU-511() {
+    EXPECT=pass
+    # A takes a REAL lease as host "hostX" with a FRESH heartbeat. B (host
+    # "hostY") attempts the same scope: cross-host, so no pid fast path; the
+    # heartbeat is well within TTL, so B must REFUSE.
+    local id
+    id="$(add_spec "$CLONE_A" "mu511 cross-host live lease" task)"
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    ( cd "$CLONE_A" && HOME="$WORKDIR/home" AIDA_HOST_OVERRIDE=hostX \
+        "$AIDA_BIN" session start --owns "$id" --path "$WORKDIR/wtA-$id" >/dev/null 2>&1 ) || true
+    push_store_A
+    pull_into "$CLONE_B"
+    # Confirm the claim landed with the overridden foreign host.
+    local store="$CLONE_B/.aida-store" stem claim_file claim_host
+    stem="$(echo "$id" | tr '[:upper:]' '[:lower:]')"
+    claim_file="$(find_lease_claim_file "$store" "$stem")"
+    claim_host="$(grep -E '^host = ' "$claim_file" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' || true)"
+    # B attempts the lease as a DIFFERENT host.
+    local b_out b_rc
+    set +e
+    b_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_HOST_OVERRIDE=hostY \
+        "$AIDA_BIN" session start --owns "$id" --path "$WORKDIR/wtB-$id" 2>&1 )"
+    b_rc=$?
+    set -e
+    local refused=0
+    if [[ $b_rc -ne 0 || "$b_out" == *"already leased"* || "$b_out" == *"already owned"* ]]; then refused=1; fi
+    CASE_DETAIL="A=hostX live, claim host=$claim_host; B=hostY refused=$refused (desired=1)"
+    if assert_eq "$claim_host" "hostX" "A's claim recorded the overridden host" \
+        && assert_eq "$refused" "1" "B refuses a LIVE foreign-host lease (cross-host TTL not expired)"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        [[ "$refused" != "1" ]] && CASE_DETAIL="B not refused; rc=$b_rc out=[${b_out:0:160}]"
+    fi
+    cleanup_multihost_lease "$id"
+}
+
+# --- MU-512: foreign-HOST STALE claim reclaimable -> B acquires ----------
+case_MU-512() {
+    EXPECT=pass
+    # A takes a REAL lease as host "hostX", then we age its heartbeat past a tiny
+    # TTL and re-push. B (host "hostY") attempts the same scope: cross-host, TTL
+    # expired -> B must RECLAIM (acquire succeeds).
+    local id
+    id="$(add_spec "$CLONE_A" "mu512 cross-host stale lease" task)"
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    ( cd "$CLONE_A" && HOME="$WORKDIR/home" AIDA_HOST_OVERRIDE=hostX \
+        "$AIDA_BIN" session start --owns "$id" --path "$WORKDIR/wtA-$id" >/dev/null 2>&1 ) || true
+    # Age A's claim (foreign host, heartbeat 2h ago, ttl 60s -> well past TTL).
+    local store_a="$CLONE_A/.aida-store" stem claim_file old_hb
+    stem="$(echo "$id" | tr '[:upper:]' '[:lower:]')"
+    claim_file="$(find_lease_claim_file "$store_a" "$stem")"
+    old_hb="$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-2H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)"
+    age_claim_file "$claim_file" "$old_hb" 60
+    push_store_A
+    pull_into "$CLONE_B"
+    # A's `session start` bumped the spec to InProgress; a stale/crashed holder
+    # leaves it there. That's the orthogonal BUG-379 preflight gate, not the
+    # coordination decision under test — reset the spec to Approved (the
+    # documented recovery for a known-stale holder) so B's `session start`
+    # exercises the cross-host TTL RECLAIM cleanly. trace:STORY-642
+    ( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor \
+        "$AIDA_BIN" edit "$id" --status approved >/dev/null 2>&1 ) || true
+    push_from "$CLONE_B"; pull_into "$CLONE_B"
+    # B attempts the lease as a DIFFERENT host -> should reclaim (acquire).
+    local b_out b_rc
+    set +e
+    b_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_HOST_OVERRIDE=hostY \
+        "$AIDA_BIN" session start --owns "$id" --path "$WORKDIR/wtB-$id" 2>&1 )"
+    b_rc=$?
+    set -e
+    # Acquire success = exit 0 AND not refused. A "reclaiming a stale" note is a
+    # strong positive signal but not required.
+    local acquired=0
+    if [[ $b_rc -eq 0 && "$b_out" != *"already leased"* && "$b_out" != *"already owned"* ]]; then acquired=1; fi
+    local saw_reclaim=0
+    [[ "$b_out" == *"reclaiming a stale"* ]] && saw_reclaim=1
+    CASE_DETAIL="A=hostX stale (ttl 60s, hb 2h old); B=hostY acquired=$acquired reclaim-note=$saw_reclaim"
+    if assert_eq "$acquired" "1" "B reclaims a STALE foreign-host lease (cross-host TTL backstop)"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="B did not acquire stale foreign-host lease; rc=$b_rc out=[${b_out:0:160}]"
+    fi
+    cleanup_multihost_lease "$id"
+}
+
+# --- MU-513: same-HOST dead-pid claim reclaims immediately (fast path) ----
+case_MU-513() {
+    EXPECT=pass
+    # The same-host fast path must STILL work: a PROCESS-BACKED same-host claim
+    # whose pid is dead is reclaimable WITHOUT waiting for TTL. We exercise this
+    # via decide_claim's governance of the shared DRAIN lock (process-backed):
+    # write a same-host drain claim with a guaranteed-DEAD pid + a FRESH
+    # heartbeat (so TTL is NOT the trigger), then B's drain entry must reclaim
+    # and proceed (NOT refuse) -- proving pid liveness reclaimed it immediately.
+    # A guaranteed-dead pid: spawn `true` and reap it; its pid is now free.
+    local dead_pid
+    ( sleep 0.01 ) & dead_pid=$!
+    wait "$dead_pid" 2>/dev/null || true
+    local store="$CLONE_A/.aida-store" now canon
+    now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"   # FRESH heartbeat -> TTL is NOT stale
+    canon="$( cd "$CLONE_A" && pwd -P )"
+    mkdir -p "$store/coordination"
+    cat > "$store/coordination/drain.lock.toml" <<EOF
+scope = "drain"
+node_id = "1"
+clone_path = "$canon"
+host = "$(hostname)"
+pid = $dead_pid
+agent = "burndown run (harness sim, dead pid)"
+started_at = "$now"
+heartbeat_at = "$now"
+ttl_secs = 1800
+process_backed = true
+review_verb = false
+EOF
+    ( cd "$store" && HOME="$WORKDIR/home" git add coordination/drain.lock.toml >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git commit -q -m "test: harness same-host dead-pid drain claim" >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git push -q origin aida-store >/dev/null 2>&1 ) || true
+    # B attempts a drain on an EMPTY queue. The shared claim is same-host (this
+    # host) with a dead pid + fresh heartbeat: the fast path must reclaim it and
+    # the drain must NOT refuse on the cross-clone claim.
+    local out rc
+    set +e
+    out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_DRAIN_LOCK_STALE_SECS=3600 \
+        "$AIDA_BIN" queue work --auto-complete 2>&1 )"
+    rc=$?
+    set -e
+    # Refused-on-cross-clone-claim = the dead-pid fast path FAILED to reclaim.
+    local refused_on_claim=0
+    if [[ "$out" == *drain* && ( "$out" == *"another clone"* || "$out" == *"already running"* ) ]]; then
+        refused_on_claim=1
+    fi
+    CASE_DETAIL="same-host dead pid=$dead_pid, fresh hb; B reclaimed (not refused)=$((1-refused_on_claim))"
+    if assert_eq "$refused_on_claim" "0" "same-host dead-pid claim is reclaimed immediately (not refused, no TTL wait)"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="same-host dead-pid NOT reclaimed (refused on stale claim); rc=$rc out=[${out:0:160}]"
+    fi
+    remove_shared_lock_claim "drain.lock.toml"
+}
+
+# =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513)
 
 list_cases() {
     echo "Available cases:"

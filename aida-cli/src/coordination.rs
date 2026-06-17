@@ -268,7 +268,18 @@ fn read_claim(path: &Path) -> Option<Claim> {
 }
 
 /// Best-effort host name (informational; drives the same-host pid fast path).
+///
+/// `AIDA_HOST_OVERRIDE` (test hook) takes precedence when set non-empty: it lets
+/// the multi-clone harness simulate two DISTINCT hosts on one machine so the
+/// cross-host TTL/heartbeat path (where pid liveness is meaningless) can be
+/// exercised without a second physical machine. Production never sets it.
+/// trace:STORY-642 | ai:claude
 pub(crate) fn hostname() -> String {
+    if let Ok(h) = std::env::var("AIDA_HOST_OVERRIDE") {
+        if !h.is_empty() {
+            return h;
+        }
+    }
     sysinfo::System::host_name().unwrap_or_default()
 }
 
