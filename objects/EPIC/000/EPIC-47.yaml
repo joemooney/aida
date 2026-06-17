@@ -8,9 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:20.129434778Z
-modified_at: 2026-06-17T02:39:20.129434778Z
+modified_at: 2026-06-17T02:40:02.857416635Z
 req_type: Epic
 tags:
 - from-operator
 - multi-user
 - team
+comments:
+- id: 019ed373-3329-7b33-bbb9-ed7d4331a7c2
+  author: joe
+  content: Commit 81916959a references this requirement
+  created_at: 2026-06-17T02:40:02.857416635Z
+  modified_at: 2026-06-17T02:40:02.857416635Z
