@@ -3,12 +3,12 @@ spec_id: STORY-644
 agreed_id: STORY-644
 title: 'Assignment + mention notifications: assigning/@mentioning a user notifies them via the mailbox (Tier 2)'
 description: 'Tier-2 of EPIC-47. Compose assignment (STORY-639) + auto mailbox sync (STORY-643): aida assign <spec> --to <user> sends a mailbox message to that user (You were assigned <spec>: <title>), which propagates on their next pull. @mention in aida comment add (text contains @<user>) notifies the mentioned user the same way. Best-effort (never break assign/comment on a mailbox error); the message routes to the user inbox identity. Harness case: A assigns a spec to B identity -> B pull -> B mailbox inbox shows the assignment notice.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:05:48.734187219Z
-modified_at: 2026-06-17T05:05:48.734187219Z
+modified_at: 2026-06-17T05:53:59.672948909Z
 req_type: Story
 tags:
 - assignment
