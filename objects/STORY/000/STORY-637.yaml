@@ -1,0 +1,18 @@
+id: 019ed326-2c71-7643-af9c-bab79d889a96
+spec_id: STORY-637
+agreed_id: STORY-637
+title: 'Cross-clone leases: shared lease registry on the store (slice 1, closes MU-504)'
+description: 'Slice 1 of the cross-clone coordination design (docs/plans/2026-06-16-cross-clone-coordination.md). Shared lease claims under coordination/leases/<scope>.toml on the aida-store branch; session start --owns + aida agent new pull-check-claim-push; refuse on a LIVE cross-clone lease (same-host pid + universal TTL/heartbeat liveness), --force escape + stale auto-reclaim; surface foreign leases in aida session leases. Pure decide_claim decision fn + unit tests mirroring drain_lock. Best-effort: if the store is unreachable, warn and proceed (do not block work on network). Gate: scripts/multi-clone-harness.sh MU-504 flips GAP to PASS.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T01:15:54.865325049Z
+modified_at: 2026-06-17T01:15:54.865325049Z
+req_type: Story
+tags:
+- coordination
+- leases
+- multi-clone
+- multi-user
+- parent:EPIC-46
