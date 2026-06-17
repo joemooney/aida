@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T07:32:31.426113351Z
-modified_at: 2026-06-17T07:32:31.426113351Z
+modified_at: 2026-06-17T08:05:59.355558839Z
 req_type: Story
 tags:
 - aida-web-react
 - dashboard
 - parent:EPIC-47
 - team
+comments:
+- id: 019ed49d-9bbb-74a0-b70e-b28a5552bf44
+  author: joe
+  content: Commit 71fb48d3b references this requirement
+  created_at: 2026-06-17T08:05:59.355558839Z
+  modified_at: 2026-06-17T08:05:59.355558839Z
