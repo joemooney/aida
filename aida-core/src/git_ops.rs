@@ -1076,6 +1076,133 @@ pub fn register_node_remote_only(
     );
 }
 
+/// Which identity field on a node registry entry a backfill writes.
+// trace:STORY-654 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeIdentityField {
+    /// The owner `$USER` string (`current_user_id`) — the person key the team
+    /// roster joins on.
+    Owner,
+    /// The friendly node name (`<host>-<user>-<seq>`).
+    Name,
+}
+
+/// Backfill a single identity field (owner `user` or friendly `name`) onto an
+/// existing node entry in the shared registry (`registry/nodes.toml`), then
+/// push — mirroring the [`register_node_full`] CAS push-wins loop. When `id`
+/// matches the running clone's `.aida/node.toml`, the same field is updated on
+/// the local node config too, so the legacy clone becomes identity-coherent.
+///
+/// Errors clearly if `id` is absent from the registry. Solo (no `origin`)
+/// writes locally and lets the next `aida push` upload.
+// trace:STORY-654 | ai:claude
+pub fn set_node_identity_field(
+    aida_repo: &Path,
+    id: &str,
+    field: NodeIdentityField,
+    value: &str,
+) -> Result<()> {
+    use crate::node::{NodeConfig, NodeRegistry};
+
+    let registry_path = aida_repo.join("registry").join("nodes.toml");
+    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
+    let local_only = !has_remote(aida_repo, "origin");
+
+    // Apply the local node.toml update once, after the registry write succeeds.
+    // Returns Ok(true) when the running clone's node.toml was the target.
+    let apply_local = |id: &str| -> Result<bool> {
+        let node_config_path = aida_repo.join(".aida").join("node.toml");
+        if !node_config_path.exists() {
+            return Ok(false);
+        }
+        let mut config = NodeConfig::load(&node_config_path)?;
+        if config.node_id != id {
+            return Ok(false);
+        }
+        match field {
+            NodeIdentityField::Owner => config.user = Some(value.to_string()),
+            NodeIdentityField::Name => config.name = Some(value.to_string()),
+        }
+        config.save(&node_config_path)?;
+        Ok(true)
+    };
+
+    for attempt in 0..MAX_CAS_RETRIES {
+        // Step 1: pull latest (skip first attempt / solo).
+        if attempt > 0 && !local_only {
+            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                anyhow::bail!(
+                    "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
+                    attempt,
+                    e
+                );
+            }
+        }
+
+        // Step 2: load → find the entry (error if absent) → set the field.
+        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+        let entry = registry
+            .nodes
+            .iter_mut()
+            .find(|n| n.id.as_str() == id)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Node id {} is not in the shared registry (registry/nodes.toml) — \
+                     nothing to update. Run `aida node list` to see registered nodes.",
+                    id
+                )
+            })?;
+        match field {
+            NodeIdentityField::Owner => entry.user = Some(value.to_string()),
+            NodeIdentityField::Name => entry.name = Some(value.to_string()),
+        }
+        registry.save(&registry_path)?;
+
+        // Step 3: stage + commit.
+        add(aida_repo, &["registry/nodes.toml"])?;
+        let field_label = match field {
+            NodeIdentityField::Owner => "owner",
+            NodeIdentityField::Name => "name",
+        };
+        let msg = format!(
+            "chore(registry): set node {} {} = {}",
+            id, field_label, value
+        );
+        commit(aida_repo, &msg)?;
+
+        // Step 4: push (or stop here when solo).
+        if local_only {
+            apply_local(id)?;
+            return Ok(());
+        }
+        match push(aida_repo, "origin", &branch) {
+            Ok(true) => {
+                apply_local(id)?;
+                return Ok(());
+            }
+            Ok(false) => {
+                // Push rejected — discard our stale commit + tree so the next
+                // pull --rebase applies cleanly. trace:BUG-1-069
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(aida_repo)
+                    .output();
+                eprintln!(
+                    "Node identity update: push rejected (attempt {}), retrying...",
+                    attempt + 1
+                );
+                continue;
+            }
+            Err(e) => anyhow::bail!("Node identity update failed: {}", e),
+        }
+    }
+
+    anyhow::bail!(
+        "Node identity update failed after {} attempts — too much contention on the registry",
+        MAX_CAS_RETRIES
+    );
+}
+
 /// Outcome of [`hijack_node`]. Tells the CLI whether a stale-clone marker
 /// was successfully dropped or whether we just re-attributed silently
 /// (because the old clone is unreachable from this machine).
@@ -1847,5 +1974,84 @@ mod tests {
         }
         // Distinct → no within-run double-allocation.
         assert_ne!(agreed[0], agreed[1]);
+    }
+
+    /// STORY-654: `set_node_identity_field(Owner)` backfills the owner on an
+    /// existing registry entry AND, when the id is the current node, the local
+    /// `.aida/node.toml`. trace:STORY-654 | ai:claude
+    #[test]
+    fn test_set_node_owner_updates_registry_and_current_local() {
+        use crate::node::{NodeConfig, NodeRegistry};
+        let dir = tempfile::tempdir().unwrap();
+        let (_bare, aida, _branch) = setup_remote_and_clone(dir.path(), "aida");
+
+        // Register node "1" for this clone (writes registry + local node.toml).
+        register_node(&aida, 1, "test-laptop").unwrap();
+        let registry_path = aida.join("registry/nodes.toml");
+        let node_config_path = aida.join(".aida/node.toml");
+        // Pre: no owner string yet (register_node doesn't set one).
+        assert!(NodeRegistry::load(&registry_path)
+            .unwrap()
+            .get("1")
+            .unwrap()
+            .user
+            .is_none());
+
+        set_node_identity_field(&aida, "1", NodeIdentityField::Owner, "joe").unwrap();
+
+        // Registry entry now carries the owner.
+        let entry = NodeRegistry::load(&registry_path).unwrap();
+        assert_eq!(entry.get("1").unwrap().user.as_deref(), Some("joe"));
+        // And so does the local node.toml (id "1" IS the current node).
+        assert_eq!(
+            NodeConfig::load(&node_config_path).unwrap().user.as_deref(),
+            Some("joe")
+        );
+    }
+
+    /// STORY-654: `set_node_identity_field(Name)` backfills the friendly name;
+    /// and a non-current id leaves the local node.toml's name untouched.
+    /// trace:STORY-654 | ai:claude
+    #[test]
+    fn test_set_node_name_registry_and_noncurrent_skips_local() {
+        use crate::node::{NodeConfig, NodeRegistry};
+        let dir = tempfile::tempdir().unwrap();
+        let (_bare, aida, _branch) = setup_remote_and_clone(dir.path(), "aida");
+
+        // This clone is node "1"; backfill a SEPARATE legacy node "2".
+        register_node(&aida, 1, "test-laptop").unwrap();
+        register_node_remote_only(&aida, "2".into(), 2, "spock", "spock@example.com".into())
+            .unwrap();
+        let registry_path = aida.join("registry/nodes.toml");
+        let node_config_path = aida.join(".aida/node.toml");
+        let local_name_before = NodeConfig::load(&node_config_path).unwrap().name;
+
+        set_node_identity_field(&aida, "2", NodeIdentityField::Name, "spock-box").unwrap();
+
+        // Node "2" entry carries the name.
+        let registry = NodeRegistry::load(&registry_path).unwrap();
+        assert_eq!(
+            registry.get("2").unwrap().name.as_deref(),
+            Some("spock-box")
+        );
+        // Current clone's node.toml (id "1") is untouched.
+        assert_eq!(
+            NodeConfig::load(&node_config_path).unwrap().name,
+            local_name_before
+        );
+    }
+
+    /// STORY-654: setting a field on an absent id errors clearly.
+    /// trace:STORY-654 | ai:claude
+    #[test]
+    fn test_set_node_owner_absent_id_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_bare, aida, _branch) = setup_remote_and_clone(dir.path(), "aida");
+        register_node(&aida, 1, "test-laptop").unwrap();
+
+        let err = set_node_identity_field(&aida, "99", NodeIdentityField::Owner, "ghost")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("not in the shared registry"), "got: {err}");
     }
 }

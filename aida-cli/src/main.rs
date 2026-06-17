@@ -12457,6 +12457,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     handle_team_set_role(store_path, user, role)
                 }
                 Some(TeamCommand::MyRole { json }) => handle_team_my_role(store_path, *json),
+                Some(TeamCommand::UnsetRole { user }) => handle_team_unset_role(store_path, user),
             };
         }
         Command::Usage {
@@ -26676,6 +26677,60 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                     id_policy.as_str()
                 );
             }
+        }
+
+        NodeCommand::SetOwner { id, user } => {
+            // Backfill the owner field on a legacy node entry (+ local
+            // node.toml if current). trace:STORY-654 | ai:claude
+            aida_core::git_ops::set_node_identity_field(
+                store_path,
+                id,
+                aida_core::git_ops::NodeIdentityField::Owner,
+                user,
+            )?;
+            let touched_local = node_config_path.exists()
+                && aida_core::NodeConfig::load(&node_config_path)
+                    .map(|c| c.node_id == *id)
+                    .unwrap_or(false);
+            let local_note = if touched_local {
+                " (also updated this clone's .aida/node.toml)"
+            } else {
+                ""
+            };
+            println!(
+                "{} set owner for node {}: {}{}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                id.bold(),
+                user.cyan(),
+                local_note.dimmed()
+            );
+        }
+
+        NodeCommand::SetName { id, name } => {
+            // Backfill the friendly name on a legacy node entry (+ local
+            // node.toml if current). trace:STORY-654 | ai:claude
+            aida_core::git_ops::set_node_identity_field(
+                store_path,
+                id,
+                aida_core::git_ops::NodeIdentityField::Name,
+                name,
+            )?;
+            let touched_local = node_config_path.exists()
+                && aida_core::NodeConfig::load(&node_config_path)
+                    .map(|c| c.node_id == *id)
+                    .unwrap_or(false);
+            let local_note = if touched_local {
+                " (also updated this clone's .aida/node.toml)"
+            } else {
+                ""
+            };
+            println!(
+                "{} set name for node {}: {}{}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                id.bold(),
+                name.cyan(),
+                local_note.dimmed()
+            );
         }
 
         NodeCommand::Release { id, yes } => {
@@ -92788,6 +92843,23 @@ fn handle_team_set_role(store_path: &std::path::Path, user: &str, role: &str) ->
          still edit any spec directly with raw git. It is NOT an access-control boundary."
             .dimmed()
     );
+    Ok(())
+}
+
+/// `aida team unset-role <user>` (STORY-654): remove a member entry from the
+/// roster (CAS push), to clean stray / duplicate keys. Friendly no-op if the
+/// user isn't present. trace:STORY-654 | ai:claude
+fn handle_team_unset_role(store_path: &std::path::Path, user: &str) -> Result<()> {
+    let removed = team::unset_role_cas(store_path, user)?;
+    if removed {
+        println!(
+            "{} removed team role entry: {}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            user.bold()
+        );
+    } else {
+        println!("No roster entry for {} — nothing to remove.", user.bold());
+    }
     Ok(())
 }
 

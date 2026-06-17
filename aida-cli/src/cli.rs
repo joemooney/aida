@@ -2297,6 +2297,16 @@ pub enum TeamCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Remove a user's entry from the roster (`registry/team.toml`, CAS push).
+    /// A friendly no-op if the user isn't present. Use this to clean stray /
+    /// duplicate keys — e.g. an orphaned integer key left by an older roster.
+    // trace:STORY-654 | ai:claude
+    UnsetRole {
+        /// The user id to remove (the person key — matches `current_user_id`,
+        /// `$AIDA_USER` / `$USER`; may also be a stray integer key).
+        user: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -2376,6 +2386,31 @@ pub enum NodeCommand {
         // trace:FR-265 | ai:claude
         #[clap(long, conflicts_with_all = ["hijack", "force"])]
         remote_only: bool,
+    },
+
+    /// Backfill the owner ($USER string) on an existing node entry in the
+    /// shared registry, then push (CAS). If the id is the CURRENT node, the
+    /// local `.aida/node.toml` is updated too. Errors clearly if the id is
+    /// absent. For legacy nodes that predate the owner/name identity fields.
+    // trace:STORY-654 | ai:claude
+    SetOwner {
+        /// Node id whose owner to set.
+        id: String,
+        /// The owner's `current_user_id` string ($USER / $AIDA_USER).
+        #[clap(long)]
+        user: String,
+    },
+
+    /// Backfill the friendly name on an existing node entry in the shared
+    /// registry, then push (CAS). If the id is the CURRENT node, the local
+    /// `.aida/node.toml` is updated too. Errors clearly if the id is absent.
+    // trace:STORY-654 | ai:claude
+    SetName {
+        /// Node id whose name to set.
+        id: String,
+        /// The friendly node name (e.g. `imac-joe-1`).
+        #[clap(long)]
+        name: String,
     },
 
     /// Remove a node entry from the shared registry. Does not invalidate

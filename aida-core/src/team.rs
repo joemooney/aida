@@ -216,6 +216,71 @@ pub fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> std::io::Re
     )))
 }
 
+/// Remove `user_id`'s entry from `registry/team.toml` with the same CAS
+/// push-wins loop as [`set_role_cas`]. Used by `aida team unset-role` to clean
+/// stray / duplicate keys (e.g. the orphaned integer `1` from a pre-STORY-653
+/// roster). Returns `Ok(true)` if a member entry was removed, `Ok(false)` if
+/// the user wasn't present (a friendly no-op — no commit is made). Solo (no
+/// `origin`) writes locally and lets the next `aida push` upload.
+// trace:STORY-654 | ai:claude
+pub fn unset_role_cas(store_root: &Path, user_id: &str) -> std::io::Result<bool> {
+    use crate::git_ops;
+
+    const MAX_RETRIES: u32 = 10;
+    let registry_path = TeamRoster::path(store_root);
+    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
+    let local_only = !git_ops::has_remote(store_root, "origin");
+
+    let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
+
+    for attempt in 0..MAX_RETRIES {
+        // Step 1: pull latest (skip first attempt / solo).
+        if attempt > 0 && !local_only {
+            git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
+        }
+
+        // Step 2: load → remove the key. No-op (and no commit) if absent.
+        let mut roster = TeamRoster::load(store_root);
+        if roster.members.remove(user_id).is_none() {
+            return Ok(false);
+        }
+        let content = toml::to_string_pretty(&roster)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        if let Some(parent) = registry_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&registry_path, content)?;
+
+        // Step 3: stage + commit.
+        git_ops::add(store_root, &["registry/team.toml"]).map_err(io_err)?;
+        let msg = format!("chore(registry): unset team role for {}", user_id);
+        git_ops::commit(store_root, &msg).map_err(io_err)?;
+
+        // Step 4: push (or stop here when solo).
+        if local_only {
+            return Ok(true);
+        }
+        match git_ops::push(store_root, "origin", &branch) {
+            Ok(true) => return Ok(true),
+            Ok(false) => {
+                // Push rejected — discard our stale commit + tree so the next
+                // pull --rebase applies cleanly.
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+                continue;
+            }
+            Err(e) => return Err(io_err(e)),
+        }
+    }
+    Err(std::io::Error::other(format!(
+        "could not remove the team role after {} attempts (store push kept being rejected) — \
+         run `aida db sync --pull` and retry",
+        MAX_RETRIES
+    )))
+}
+
 /// Canonicalize a role string for display: the deprecated `dialog` token maps
 /// to the canonical `advisor`. Other roles pass through unchanged. Mirrors the
 /// aida-cli role-name normalization at the read boundary. trace:STORY-648
@@ -812,5 +877,62 @@ ttl_secs = 1800
         let members = build_team_members(dir.path());
         assert_eq!(members.len(), 1);
         assert_eq!(members[0].active_claim.as_deref(), Some("FR-1"));
+    }
+
+    /// STORY-654: `unset_role_cas` removes the member entry (local-only repo, so
+    /// no push) and is a friendly no-op when the user is absent. The classic
+    /// case: cleaning the orphaned integer "1" key while a real "joe" stays.
+    /// trace:STORY-654 | ai:claude
+    #[test]
+    fn unset_role_removes_key_and_noop_when_absent() {
+        use crate::git_ops;
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path();
+        // A local-only git store (no origin) so the CAS loop writes + commits
+        // locally and skips the push.
+        git_ops::init(store).unwrap();
+        git_ops::configure_user(store, "Test", "test@example.com").unwrap();
+        write(
+            &store.join("registry/team.toml"),
+            "[members]\njoe = \"advisor\"\n1 = \"advisor\"\n",
+        );
+
+        // Remove the stray integer key.
+        let removed = unset_role_cas(store, "1").unwrap();
+        assert!(removed, "the stray '1' key existed → removed");
+        let roster = TeamRoster::load(store);
+        assert!(!roster.members.contains_key("1"), "stray key gone");
+        assert_eq!(
+            roster.role_for("joe"),
+            Some("advisor"),
+            "real role preserved"
+        );
+
+        // Removing again (now absent) is a friendly no-op.
+        let removed_again = unset_role_cas(store, "1").unwrap();
+        assert!(!removed_again, "absent key → no-op");
+
+        // Removing a user that was never present is a no-op too.
+        assert!(!unset_role_cas(store, "nobody").unwrap());
+    }
+
+    /// STORY-654: round-trip — set a role, then unset it, leaving an empty
+    /// roster. trace:STORY-654 | ai:claude
+    #[test]
+    fn set_then_unset_role_roundtrip() {
+        use crate::git_ops;
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path();
+        git_ops::init(store).unwrap();
+        git_ops::configure_user(store, "Test", "test@example.com").unwrap();
+
+        set_role_cas(store, "alice", "implementer").unwrap();
+        assert_eq!(
+            TeamRoster::load(store).role_for("alice"),
+            Some("implementer")
+        );
+
+        assert!(unset_role_cas(store, "alice").unwrap());
+        assert!(TeamRoster::load(store).members.is_empty());
     }
 }
