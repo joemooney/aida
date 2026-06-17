@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     status TEXT NOT NULL,
     priority TEXT NOT NULL,
     owner TEXT NOT NULL DEFAULT '',
+    assignee TEXT,                         -- STORY-639: team-member this spec is assigned to; NULL when unassigned
     feature TEXT NOT NULL DEFAULT '',
     req_type TEXT NOT NULL,
     tags_json TEXT NOT NULL DEFAULT '[]', -- JSON array, queried via LIKE for tag filters
@@ -39,6 +40,7 @@ CREATE INDEX IF NOT EXISTS idx_cache_spec_id ON requirements_cache(spec_id);
 CREATE INDEX IF NOT EXISTS idx_cache_agreed_id ON requirements_cache(agreed_id);
 CREATE INDEX IF NOT EXISTS idx_cache_status ON requirements_cache(status);
 CREATE INDEX IF NOT EXISTS idx_cache_owner ON requirements_cache(owner);
+CREATE INDEX IF NOT EXISTS idx_cache_assignee ON requirements_cache(assignee);
 CREATE INDEX IF NOT EXISTS idx_cache_modified ON requirements_cache(modified_at);
 CREATE INDEX IF NOT EXISTS idx_cache_type ON requirements_cache(req_type);
 CREATE INDEX IF NOT EXISTS idx_cache_feature ON requirements_cache(feature);

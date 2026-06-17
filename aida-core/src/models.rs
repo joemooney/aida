@@ -2117,6 +2117,10 @@ pub struct RequirementSnapshot {
     /// Owner at snapshot time
     pub owner: String,
 
+    /// Assignee at snapshot time. trace:STORY-639 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
+
     /// Feature at snapshot time
     pub feature: String,
 
@@ -2158,6 +2162,8 @@ impl RequirementSnapshot {
             status: req.status.clone(),
             priority: req.priority.clone(),
             owner: req.owner.clone(),
+            // trace:STORY-639 | ai:claude
+            assignee: req.assignee.clone(),
             feature: req.feature.clone(),
             req_type: req.req_type.clone(),
             tags: req.tags.clone(),
@@ -3650,6 +3656,15 @@ pub struct Requirement {
     /// Person responsible for the requirement
     pub owner: String,
 
+    /// The team member this spec is *assigned* to (the durable "who works on
+    /// this" pointer). Distinct from `owner`, which records the creator/author
+    /// of the spec and drives contributions analytics — assignment is mutable
+    /// work-division metadata set by `aida assign <spec> --to <user>` and
+    /// cleared by `aida unassign`. `None` ⇒ unassigned ⇒ current single-user
+    /// behavior (renders nothing). trace:STORY-639 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
+
     /// The feature this requirement belongs to
     pub feature: String,
 
@@ -3871,6 +3886,8 @@ impl Requirement {
             status: RequirementStatus::Draft,
             priority: RequirementPriority::Medium,
             owner: String::new(),
+            // trace:STORY-639 | ai:claude
+            assignee: None,
             feature: default_feature,
             created_at: now,
             created_by: None,
@@ -6609,6 +6626,14 @@ impl RequirementsStore {
                 new_value: current.owner.clone(),
             });
         }
+        // trace:STORY-639 | ai:claude
+        if snapshot.assignee != current.assignee {
+            changes.push(FieldChange {
+                field_name: "assignee".to_string(),
+                old_value: snapshot.assignee.clone().unwrap_or_default(),
+                new_value: current.assignee.clone().unwrap_or_default(),
+            });
+        }
         if snapshot.feature != current.feature {
             changes.push(FieldChange {
                 field_name: "feature".to_string(),
@@ -6667,6 +6692,14 @@ impl RequirementsStore {
                 field_name: "owner".to_string(),
                 old_value: source.owner.clone(),
                 new_value: target.owner.clone(),
+            });
+        }
+        // trace:STORY-639 | ai:claude
+        if source.assignee != target.assignee {
+            changes.push(FieldChange {
+                field_name: "assignee".to_string(),
+                old_value: source.assignee.clone().unwrap_or_default(),
+                new_value: target.assignee.clone().unwrap_or_default(),
             });
         }
         if source.feature != target.feature {

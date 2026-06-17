@@ -1083,6 +1083,7 @@ mod tests {
             status,
             priority: prio,
             owner: "test".into(),
+            assignee: None,
             feature: "fixture".into(),
             created_at: Utc::now(),
             created_by: None,

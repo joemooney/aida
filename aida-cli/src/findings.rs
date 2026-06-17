@@ -462,6 +462,7 @@ mod tests {
             status: "Draft".to_string(),
             priority: "Medium".to_string(),
             owner: "tester".to_string(),
+            assignee: None,
             feature: "Uncategorized".to_string(),
             req_type: "Task".to_string(),
             tags: tags.iter().map(|t| t.to_string()).collect(),

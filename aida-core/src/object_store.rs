@@ -432,6 +432,34 @@ mod tests {
         assert!(loaded.tags.contains("test"));
     }
 
+    /// STORY-639: the assignee field round-trips through the YAML object store,
+    /// and an unassigned spec omits the key entirely (skip_serializing_if), so
+    /// the on-disk shape is unchanged for pre-assignment specs.
+    /// trace:STORY-639 | ai:claude
+    #[cfg(feature = "native")]
+    #[test]
+    fn assignee_yaml_roundtrip_and_omitted_when_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        // Unassigned spec: the `assignee:` key must NOT appear in the YAML.
+        let mut unassigned = Requirement::new("Unassigned".into(), "body".into());
+        unassigned.spec_id = Some("TASK-700".into());
+        let yaml = serde_yaml::to_string(&unassigned).expect("serialize");
+        assert!(
+            !yaml.contains("assignee"),
+            "unassigned spec must omit the assignee key:\n{yaml}"
+        );
+
+        // Assigned spec: the field round-trips through write/read.
+        let mut assigned = Requirement::new("Assigned".into(), "body".into());
+        assigned.spec_id = Some("TASK-701".into());
+        assigned.assignee = Some("alice".into());
+        write_object(&objects_root, &assigned).unwrap();
+        let loaded = read_object(&objects_root, "TASK-701").unwrap();
+        assert_eq!(loaded.assignee.as_deref(), Some("alice"));
+    }
+
     /// SPIKE-46 conformance gate: AIDA's on-disk YAML format must stay stable,
     /// because a drift in our serializer breaks every external tool's
     /// byte-identical writes (and makes `write_object_if_changed` see spurious
