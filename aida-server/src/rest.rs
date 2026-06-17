@@ -68,6 +68,9 @@ pub fn create_rest_router(project_manager: Arc<ProjectManager>) -> Router {
         // Team dashboard (read-only) — trace:STORY-648
         .route("/api/v2/team", get(get_team))
         .route("/api/v2/coordination", get(get_coordination))
+        // Team dashboard write endpoints — trace:STORY-650
+        .route("/api/v2/requirements/:id/assignee", put(set_assignee))
+        .route("/api/v2/team/:user/role", put(set_team_role))
         .with_state(state)
 }
 
@@ -168,6 +171,12 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         // Team dashboard (read-only) — trace:STORY-648
         .route("/api/v2/team", get(get_team_legacy))
         .route("/api/v2/coordination", get(get_coordination_legacy))
+        // Team dashboard write endpoints — trace:STORY-650
+        .route(
+            "/api/v2/requirements/:id/assignee",
+            put(set_assignee_legacy),
+        )
+        .route("/api/v2/team/:user/role", put(set_team_role_legacy))
         // Jira sync endpoint
         .route("/api/v2/jira/sync", get(get_jira_sync))
         .with_state(state)
@@ -980,6 +989,255 @@ async fn get_coordination_legacy(
     Ok(Json(CoordinationResponse {
         claims: aida_core::team::list_coordination_claims(&store_root),
     }))
+}
+
+// ============================================================================
+// Team dashboard write endpoints (STORY-650, slice C1 of EPIC-47).
+//
+// Two write endpoints that let the web Team page ACT, each mirroring the
+// matching CLI op by reusing the shared aida-core mechanics (no duplication):
+//   PUT /api/v2/requirements/:id/assignee  ≈  aida assign <id> --to <user>
+//   PUT /api/v2/team/:user/role            ≈  aida team set-role <user> --role
+// Both respect the existing auth/CORS/X-Project middleware (they ride the same
+// routers as the other v2 PUTs). trace:STORY-650 | ai:claude
+// ============================================================================
+
+/// Body for `PUT /api/v2/requirements/:id/assignee`. `assignee: null` (or
+/// omitted) unassigns. trace:STORY-650 | ai:claude
+#[derive(Deserialize)]
+struct SetAssigneeRequest {
+    #[serde(default)]
+    assignee: Option<String>,
+}
+
+/// Body for `PUT /api/v2/team/:user/role`. trace:STORY-650 | ai:claude
+#[derive(Deserialize)]
+struct SetRoleRequest {
+    role: String,
+}
+
+/// `{ requirement, caveat? }` for the role write — `caveat` carries the
+/// guardrail-not-security framing so the UI can show it. trace:STORY-650
+#[derive(Serialize)]
+struct SetRoleResponse {
+    user: String,
+    role: String,
+    caveat: String,
+}
+
+/// Mirror `aida assign`: set the durable assignee on a spec, route it into that
+/// user's queue, AND send the assignment mailbox notification — all reusing the
+/// shared aida-core mechanics. `assignee: null` clears the assignee (the
+/// unassign equivalent), which does NOT remove the spec from the former
+/// assignee's queue (matching the CLI default). Returns the updated
+/// requirement. trace:STORY-650 | ai:claude
+async fn set_assignee_impl(
+    state: Arc<ServerState>,
+    id: String,
+    body: SetAssigneeRequest,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
+
+    let target = body
+        .assignee
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let mut store = state.store.write().await;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {id}"),
+        )
+    })?;
+
+    let req_uuid = store.requirements[idx].id;
+    let display_id = store.requirements[idx]
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| id.clone());
+    let title = store.requirements[idx].title.clone();
+    let previous = store.requirements[idx].assignee.clone();
+
+    let new_assignee = target.map(str::to_string);
+    let changed = store.requirements[idx].assignee != new_assignee;
+    if changed {
+        store.requirements[idx].assignee = new_assignee.clone();
+        store.requirements[idx].modified_at = chrono::Utc::now();
+    }
+
+    let updated = store.requirements[idx].clone();
+
+    if changed {
+        if let Err(e) = state.backend.save(&store) {
+            return Err(ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            ));
+        }
+    }
+    drop(store);
+    if changed {
+        state.mark_saved().await;
+    }
+
+    // Assigning to a user: route the spec into that user's queue (idempotent —
+    // skip if already there) and notify them via the mailbox. Mirrors
+    // `handle_assign_command`. trace:STORY-650 | ai:claude
+    if let Some(target_user) = target {
+        let already_queued = state
+            .backend
+            .queue_list(target_user, false)
+            .unwrap_or_default()
+            .iter()
+            .any(|e| e.requirement_id == req_uuid);
+        if !already_queued {
+            let entry = QueueEntry {
+                user_id: target_user.to_string(),
+                requirement_id: req_uuid,
+                position: i64::MAX, // sentinel: queue_add auto-assigns max+1000
+                added_by: "web".to_string(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: None,
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            };
+            if let Err(e) = state.backend.queue_add(entry) {
+                tracing::warn!(
+                    "assigned {display_id} but could not add it to {target_user}'s queue: {e}"
+                );
+            }
+        }
+
+        // Notify the assignee via the mailbox (best-effort). Skip a no-op
+        // re-assign that changed nothing. trace:STORY-650 | ai:claude
+        if changed {
+            send_assignment_notification(&state, target_user, &display_id, &title);
+        }
+    } else if changed {
+        // Unassign: leave the spec in the former assignee's queue (the queue is
+        // the now-doing list, not the assignment of record) — matches the CLI
+        // `aida unassign` default. `previous` is informational only.
+        let _ = previous;
+    }
+
+    Ok(Json(updated))
+}
+
+/// Write an assignment FYI to the assignee's local mailbox, reusing the shared
+/// aida-core writer (the same layer `aida assign` writes). The mailbox project
+/// root is the parent of the store worktree (mirroring the CLI's
+/// `store_path.parent()`), falling back to the store root itself.
+/// trace:STORY-650 | ai:claude
+fn send_assignment_notification(
+    state: &ServerState,
+    recipient: &str,
+    display_id: &str,
+    title: &str,
+) {
+    use aida_core::mailbox::{Intent, Message, Recipient};
+    let store_root = project_root(state);
+    let project_dir = store_root.parent().unwrap_or(&store_root);
+    let id = uuid::Uuid::new_v4().to_string();
+    let msg = Message {
+        id: id.clone(),
+        thread_id: id,
+        from: "web".to_string(),
+        to: Recipient::Agent(recipient.to_string()),
+        timestamp: chrono::Utc::now().timestamp_millis(),
+        in_reply_to: None,
+        body: format!("You were assigned {display_id}: {title}"),
+        urgent: false,
+        intent: Intent::Fyi,
+        retracted: false,
+        deleted: false,
+    };
+    if let Err(e) = aida_core::mailbox::write_local_message(project_dir, &msg) {
+        tracing::warn!("could not send mailbox notice to {recipient}: {e}");
+    }
+}
+
+async fn set_assignee(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<SetAssigneeRequest>,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    let backend = get_project_backend(&state, &headers).await?;
+    set_assignee_impl(backend, id, body).await
+}
+
+async fn set_assignee_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+    Json(body): Json<SetAssigneeRequest>,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    set_assignee_impl(state, id, body).await
+}
+
+/// Mirror `aida team set-role`: validate the role, write the per-user role to
+/// `registry/team.toml` (CAS push), and return the guardrail-not-security
+/// caveat so the UI can surface it. trace:STORY-650 | ai:claude
+async fn set_team_role_impl(
+    state: Arc<ServerState>,
+    user: String,
+    body: SetRoleRequest,
+) -> Result<Json<SetRoleResponse>, (StatusCode, Json<ApiError>)> {
+    let canonical = aida_core::team::canonical_role(&body.role);
+    if canonical.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "a role name is required (e.g. \"advisor\")",
+        ));
+    }
+    // The server validates against the core role set (it has no view of the
+    // caller's local `~/.aida/roles/`). trace:STORY-650 | ai:claude
+    let known = aida_core::team::core_role_names();
+    if !known.iter().any(|r| r.eq_ignore_ascii_case(&canonical)) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            format!(
+                "unknown role `{}`. Known roles: {}.",
+                body.role,
+                known.join(", ")
+            ),
+        ));
+    }
+
+    let store_root = project_root(&state);
+    if let Err(e) = aida_core::team::set_role_cas(&store_root, &user, &canonical) {
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("setting team role failed: {e}"),
+        ));
+    }
+
+    Ok(Json(SetRoleResponse {
+        user,
+        role: canonical,
+        caveat: aida_core::team::ROLE_GUARDRAIL_CAVEAT.to_string(),
+    }))
+}
+
+async fn set_team_role(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(user): Path<String>,
+    Json(body): Json<SetRoleRequest>,
+) -> Result<Json<SetRoleResponse>, (StatusCode, Json<ApiError>)> {
+    let backend = get_project_backend(&state, &headers).await?;
+    set_team_role_impl(backend, user, body).await
+}
+
+async fn set_team_role_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(user): Path<String>,
+    Json(body): Json<SetRoleRequest>,
+) -> Result<Json<SetRoleResponse>, (StatusCode, Json<ApiError>)> {
+    set_team_role_impl(state, user, body).await
 }
 
 async fn auth_config_legacy(
@@ -4161,5 +4419,209 @@ ttl_secs = 1800
             Err(_) => panic!("coordination endpoint errored"),
         };
         assert!(coord.claims.is_empty(), "no claims → empty array");
+    }
+
+    // ── STORY-650: write endpoints (PUT assignee, PUT role) ─────────────────
+
+    /// Build a `ServerState` backed by a SQLite store under `root/store/req.db`
+    /// (sqlite supports the queue, unlike the YAML backend), seeded with `req`.
+    /// `project_root(state)` then resolves to `root/store`, whose parent (`root`)
+    /// is the mailbox project root. Returns (state, req_uuid).
+    fn sqlite_state_with(
+        root: &std::path::Path,
+        req: aida_core::Requirement,
+    ) -> (Arc<ServerState>, uuid::Uuid) {
+        let store_dir = root.join("store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+        let db_path = store_dir.join("req.db");
+        let backend = create_backend(&db_path, None).expect("sqlite backend");
+        let mut store = RequirementsStore::new();
+        let uuid = req.id;
+        store.add_requirement(req);
+        backend.save(&store).expect("save store");
+        (
+            Arc::new(ServerState::new(backend).expect("server state")),
+            uuid,
+        )
+    }
+
+    #[tokio::test]
+    async fn put_assignee_sets_field_queues_and_notifies() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let req = aida_core::Requirement::new("Ship the thing".to_string(), "desc".to_string());
+        let (state, uuid) = sqlite_state_with(root, req);
+
+        let resp = match set_assignee_legacy(
+            State(state.clone()),
+            Path(uuid.to_string()),
+            Json(SetAssigneeRequest {
+                assignee: Some("alice".to_string()),
+            }),
+        )
+        .await
+        {
+            Ok(Json(r)) => r,
+            Err(_) => panic!("assignee endpoint errored"),
+        };
+
+        // 1. The returned requirement carries the new assignee.
+        assert_eq!(resp.assignee.as_deref(), Some("alice"));
+
+        // 2. The spec is routed into alice's queue.
+        let queued = state
+            .backend
+            .queue_list("alice", false)
+            .expect("queue list");
+        assert!(
+            queued.iter().any(|e| e.requirement_id == uuid),
+            "the spec was added to alice's queue"
+        );
+
+        // 3. An assignment notification was written to alice's local mailbox.
+        // The mailbox project root is the parent of the store dir (= `root`).
+        let mailbox = aida_core::mailbox::local_mailbox_dir(root);
+        let files: Vec<_> = std::fs::read_dir(&mailbox)
+            .expect("mailbox dir exists")
+            .flatten()
+            .map(|e| std::fs::read_to_string(e.path()).unwrap())
+            .collect();
+        assert_eq!(files.len(), 1, "exactly one mailbox message written");
+        assert!(
+            files[0].contains("alice") && files[0].contains("assigned"),
+            "the message is the assignment FYI to alice: {}",
+            files[0]
+        );
+    }
+
+    #[tokio::test]
+    async fn put_assignee_null_unassigns() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut req =
+            aida_core::Requirement::new("Already assigned".to_string(), "desc".to_string());
+        req.assignee = Some("bob".to_string());
+        let (state, uuid) = sqlite_state_with(root, req);
+
+        let resp = match set_assignee_legacy(
+            State(state.clone()),
+            Path(uuid.to_string()),
+            Json(SetAssigneeRequest { assignee: None }),
+        )
+        .await
+        {
+            Ok(Json(r)) => r,
+            Err(_) => panic!("unassign errored"),
+        };
+        assert!(resp.assignee.is_none(), "assignee cleared");
+
+        // Unassign sends no notification.
+        let mailbox = aida_core::mailbox::local_mailbox_dir(root);
+        assert!(
+            std::fs::read_dir(&mailbox).map(|d| d.count()).unwrap_or(0) == 0,
+            "unassign writes no mailbox message"
+        );
+    }
+
+    #[tokio::test]
+    async fn put_assignee_not_found_is_404() {
+        let dir = tempfile::tempdir().unwrap();
+        let req = aida_core::Requirement::new("x".to_string(), "y".to_string());
+        let (state, _uuid) = sqlite_state_with(dir.path(), req);
+        let status = match set_assignee_legacy(
+            State(state),
+            Path(uuid::Uuid::new_v4().to_string()),
+            Json(SetAssigneeRequest {
+                assignee: Some("alice".to_string()),
+            }),
+        )
+        .await
+        {
+            Ok(_) => panic!("missing spec should error"),
+            Err((status, _)) => status,
+        };
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn put_role_writes_team_toml_and_returns_caveat() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // A git store at root/store so set_role_cas's git ops have a repo + the
+        // role lands in registry/team.toml under the store root.
+        let store_dir = root.join("store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+        init_git_store(&store_dir);
+        let db_path = store_dir.join("store.yaml");
+        let backend = create_backend(&db_path, None).expect("yaml backend");
+        backend.save(&RequirementsStore::new()).expect("save store");
+        let state = Arc::new(ServerState::new(backend).expect("server state"));
+
+        let resp = match set_team_role_legacy(
+            State(state.clone()),
+            Path("alice".to_string()),
+            Json(SetRoleRequest {
+                role: "advisor".to_string(),
+            }),
+        )
+        .await
+        {
+            Ok(Json(r)) => r,
+            Err((_, e)) => panic!("set role errored: {}", e.0.error),
+        };
+
+        assert_eq!(resp.user, "alice");
+        assert_eq!(resp.role, "advisor");
+        assert!(
+            resp.caveat.contains("Guardrail, not security"),
+            "the response surfaces the guardrail caveat: {}",
+            resp.caveat
+        );
+
+        // The role landed in registry/team.toml under the store root.
+        let roster = aida_core::team::TeamRoster::load(&store_dir);
+        assert_eq!(roster.role_for("alice"), Some("advisor"));
+    }
+
+    #[tokio::test]
+    async fn put_role_rejects_unknown_role() {
+        let dir = tempfile::tempdir().unwrap();
+        let store_dir = dir.path().join("store");
+        std::fs::create_dir_all(&store_dir).unwrap();
+        let db_path = store_dir.join("store.yaml");
+        let backend = create_backend(&db_path, None).expect("yaml backend");
+        backend.save(&RequirementsStore::new()).expect("save store");
+        let state = Arc::new(ServerState::new(backend).expect("server state"));
+
+        let status = match set_team_role_legacy(
+            State(state),
+            Path("alice".to_string()),
+            Json(SetRoleRequest {
+                role: "wizard".to_string(),
+            }),
+        )
+        .await
+        {
+            Ok(_) => panic!("unknown role should be rejected"),
+            Err((status, _)) => status,
+        };
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    /// Initialize a minimal git repo in `dir` so the team.toml CAS write (which
+    /// stages + commits) has a repository to operate in. No remote → `set_role_cas`
+    /// takes the solo (local-only) path. trace:STORY-650
+    fn init_git_store(dir: &std::path::Path) {
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir)
+                .output()
+                .expect("git command");
+        };
+        run(&["init", "-q"]);
+        run(&["config", "user.email", "test@example.com"]);
+        run(&["config", "user.name", "Test"]);
+        run(&["commit", "--allow-empty", "-q", "-m", "init"]);
     }
 }

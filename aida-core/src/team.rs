@@ -66,16 +66,105 @@ impl TeamRoster {
     pub fn role_for(&self, user_id: &str) -> Option<&str> {
         self.members.get(user_id).map(String::as_str)
     }
+
+    /// Set (or replace) a user's role.
+    fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
+        self.members.insert(user_id.to_string(), role.to_string());
+        self
+    }
+}
+
+/// The guardrail-not-security caveat surfaced wherever a role is written.
+///
+/// The `aida-store` branch is a shared git branch — anyone with push access can
+/// edit any YAML directly, so the role roster can never be an access-control
+/// boundary. What it CAN be: a guardrail against *accidents* (an implementer
+/// accidentally approving a spec), an encoding of team structure, and an audit
+/// signal (bypasses show up in git history). Both `aida team set-role` and the
+/// REST `PUT /api/v2/team/:user/role` endpoint surface this so the operator is
+/// never misled about what the roster guarantees. trace:STORY-650 | ai:claude
+pub const ROLE_GUARDRAIL_CAVEAT: &str =
+    "Guardrail, not security: this records team structure and stops accidental \
+     role-violating edits via the CLI/UI, but anyone with push access to the store can \
+     still edit any spec directly with raw git. It is NOT an access-control boundary.";
+
+/// The core role names a role write is always allowed to record. Project- or
+/// machine-installed role files (`~/.aida/roles/`) add to this set; the CLI's
+/// `known_role_names()` layers those on. The server validates against this core
+/// set (it has no view of the caller's local roles dir). trace:STORY-650
+pub fn core_role_names() -> [&'static str; 3] {
+    ["advisor", "implementer", "human"]
+}
+
+/// Write `user_id = role` into `registry/team.toml` on the store with a
+/// CAS push-wins loop (mirrors `git_ops::register_node_full` and the aida-cli
+/// `set_role_cas`): pull → load → merge our edit → save → commit → push; on a
+/// rejected push, hard-reset the stale commit and retry. Solo (no `origin`)
+/// writes locally and lets the next `aida push` upload. The CALLER is
+/// responsible for validating/canonicalizing `role` first. trace:STORY-650
+pub fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> std::io::Result<()> {
+    use crate::git_ops;
+
+    const MAX_RETRIES: u32 = 10;
+    let registry_path = TeamRoster::path(store_root);
+    if let Some(parent) = registry_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
+    let local_only = !git_ops::has_remote(store_root, "origin");
+
+    let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
+
+    for attempt in 0..MAX_RETRIES {
+        // Step 1: pull latest (skip first attempt / solo).
+        if attempt > 0 && !local_only {
+            git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
+        }
+
+        // Step 2: load → merge our edit → save.
+        let roster = TeamRoster::load(store_root).with_role_set(user_id, role);
+        let content = toml::to_string_pretty(&roster)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(&registry_path, content)?;
+
+        // Step 3: stage + commit.
+        git_ops::add(store_root, &["registry/team.toml"]).map_err(io_err)?;
+        let msg = format!("chore(registry): set team role {} = {}", user_id, role);
+        git_ops::commit(store_root, &msg).map_err(io_err)?;
+
+        // Step 4: push (or stop here when solo).
+        if local_only {
+            return Ok(());
+        }
+        match git_ops::push(store_root, "origin", &branch) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {
+                // Push rejected — someone else wrote first. Discard our stale
+                // commit + tree so the next pull --rebase applies cleanly.
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+                continue;
+            }
+            Err(e) => return Err(io_err(e)),
+        }
+    }
+    Err(std::io::Error::other(format!(
+        "could not write the team role after {} attempts (store push kept being rejected) — \
+         run `aida db sync --pull` and retry",
+        MAX_RETRIES
+    )))
 }
 
 /// Canonicalize a role string for display: the deprecated `dialog` token maps
 /// to the canonical `advisor`. Other roles pass through unchanged. Mirrors the
 /// aida-cli role-name normalization at the read boundary. trace:STORY-648
-fn canonical_role(raw: &str) -> String {
+pub fn canonical_role(raw: &str) -> String {
     if raw.eq_ignore_ascii_case("dialog") {
         "advisor".to_string()
     } else {
-        raw.to_string()
+        raw.trim().to_string()
     }
 }
 
