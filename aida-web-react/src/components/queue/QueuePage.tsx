@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { Inbox } from 'lucide-react';
 import { useQueue, useRemoveFromQueue, useReorderQueue } from '../../hooks/useQueue';
-import { useRequirements } from '../../hooks/useRequirements';
+import { useRequirementSummaries } from '../../hooks/useRequirements';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
 import { useListSelection } from '../../hooks/useListSelection';
 import { useAuth } from '../../hooks/useAuth';
@@ -44,7 +44,7 @@ export function QueuePage() {
   const { data, isLoading, error } = useQueue(userId);
   const removeFromQueue = useRemoveFromQueue(userId);
   const reorderQueue = useReorderQueue(userId);
-  const { data: requirements } = useRequirements();
+  const { data: requirements } = useRequirementSummaries();
   const { open } = useDetailPanel();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);

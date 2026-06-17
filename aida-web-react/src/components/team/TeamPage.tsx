@@ -1,6 +1,6 @@
 import { Users } from 'lucide-react';
 import { useTeam, useCoordination } from '../../hooks/useTeam';
-import { useRequirements } from '../../hooks/useRequirements';
+import { useRequirementSummaries } from '../../hooks/useRequirements';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { RosterPanel } from './RosterPanel';
@@ -16,7 +16,7 @@ import { TeamBurndown } from './TeamBurndown';
 export function TeamPage() {
   const { data: teamData, isLoading: teamLoading, error: teamError } = useTeam();
   const { data: coordData, isLoading: coordLoading } = useCoordination();
-  const { data: requirements, isLoading: reqLoading } = useRequirements();
+  const { data: requirements, isLoading: reqLoading } = useRequirementSummaries();
 
   if (teamLoading || coordLoading || reqLoading) {
     return (

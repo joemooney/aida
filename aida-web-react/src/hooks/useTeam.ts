@@ -53,23 +53,31 @@ export function useReassign() {
       return setAssignee(id, assignee);
     },
     onMutate: async ({ id, assignee }) => {
+      // Patch BOTH list flavors so the board updates whether it is reading the
+      // summary or the full list. trace:BUG-571
       await queryClient.cancelQueries({ queryKey: ['requirements'] });
       const previous = queryClient.getQueryData<Requirement[]>(['requirements']);
+      const previousSummaries = queryClient.getQueryData<Requirement[]>(['requirements', 'summary']);
 
-      queryClient.setQueryData<Requirement[]>(['requirements'], (old) =>
+      const patch = (old: Requirement[] | undefined) =>
         old?.map((req) =>
           req.id === id || req.spec_id === id ? { ...req, assignee } : req,
-        ),
-      );
+        );
+      queryClient.setQueryData<Requirement[]>(['requirements'], patch);
+      queryClient.setQueryData<Requirement[]>(['requirements', 'summary'], patch);
 
-      return { previous };
+      return { previous, previousSummaries };
     },
     onError: (_err, _vars, context) => {
       if (context?.previous) {
         queryClient.setQueryData(['requirements'], context.previous);
       }
+      if (context?.previousSummaries) {
+        queryClient.setQueryData(['requirements', 'summary'], context.previousSummaries);
+      }
     },
     onSettled: () => {
+      // Partial-match invalidation refreshes both list flavors. trace:BUG-571
       queryClient.invalidateQueries({ queryKey: ['requirements'] });
       queryClient.invalidateQueries({ queryKey: ['team'] });
     },

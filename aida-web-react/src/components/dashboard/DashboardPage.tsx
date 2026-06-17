@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useRequirements } from '../../hooks/useRequirements';
+import { useRequirementSummaries } from '../../hooks/useRequirements';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { MetricsCards } from './MetricsCards';
@@ -11,7 +11,7 @@ import { LayoutDashboard } from 'lucide-react';
 import { getSprintState, getSprintAssignmentTarget } from '../../lib/sprint-utils';
 
 export function DashboardPage() {
-  const { data: requirements, isLoading, error } = useRequirements();
+  const { data: requirements, isLoading, error } = useRequirementSummaries();
 
   const activeSprint = useMemo(() => {
     if (!requirements) return null;

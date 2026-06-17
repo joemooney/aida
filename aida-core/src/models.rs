@@ -3867,6 +3867,107 @@ pub struct Requirement {
     pub version: i64,
 }
 
+/// A lightweight projection of [`Requirement`] for list / board / dashboard
+/// views. It carries only the fields those views render or group by, and
+/// **deliberately omits the heavy nested arrays** — `comments`, `history`,
+/// and `processing_record` — plus the long `description` and the other bulky
+/// optional payloads (AI evaluation, attachments, trace links, …).
+///
+/// On a real store (~700 specs) the full `Requirement[]` blob is ~6.5MB
+/// (thousands of nested comment/history objects); this summary is a small
+/// fraction of that, so the web dashboard can list/group/chart without
+/// downloading, parsing, and holding the whole graph on every view. The full
+/// object is still fetched on demand for a single opened spec via
+/// `GET /api/v2/requirements/:id`. trace:BUG-571 | ai:claude
+///
+/// `relationships` and `custom_fields` ARE retained: they are small (typically
+/// 0–3 entries per spec) and load-bearing for the parent tree and sprint
+/// views. The genuine weight is the comment/history/processing arrays, which
+/// are excluded.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct RequirementSummaryDto {
+    pub id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spec_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agreed_id: Option<String>,
+    pub title: String,
+    pub status: RequirementStatus,
+    pub priority: RequirementPriority,
+    pub owner: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
+    pub feature: String,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
+    pub req_type: RequirementType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta_subtype: Option<MetaSubtype>,
+    #[serde(
+        default,
+        skip_serializing_if = "HashSet::is_empty",
+        serialize_with = "crate::yaml_helpers::serialize_sorted_string_set"
+    )]
+    pub tags: HashSet<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<f32>,
+    /// Retained (light): drives the parent tree + sprint-assignment views.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relationships: Vec<Relationship>,
+    /// Retained (light): drives sprint metadata (number/goal/dates).
+    #[serde(
+        default,
+        skip_serializing_if = "std::collections::HashMap::is_empty",
+        serialize_with = "crate::yaml_helpers::serialize_sorted_string_map"
+    )]
+    pub custom_fields: std::collections::HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_priority: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub archived: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub deferred: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_until: Option<String>,
+}
+
+impl From<&Requirement> for RequirementSummaryDto {
+    fn from(r: &Requirement) -> Self {
+        RequirementSummaryDto {
+            id: r.id,
+            spec_id: r.spec_id.clone(),
+            agreed_id: r.agreed_id.clone(),
+            title: r.title.clone(),
+            status: r.status.clone(),
+            priority: r.priority.clone(),
+            owner: r.owner.clone(),
+            assignee: r.assignee.clone(),
+            feature: r.feature.clone(),
+            created_at: r.created_at,
+            modified_at: r.modified_at,
+            req_type: r.req_type.clone(),
+            meta_subtype: r.meta_subtype.clone(),
+            tags: r.tags.clone(),
+            weight: r.weight,
+            relationships: r.relationships.clone(),
+            custom_fields: r.custom_fields.clone(),
+            custom_status: r.custom_status.clone(),
+            custom_priority: r.custom_priority.clone(),
+            archived: r.archived,
+            archived_at: r.archived_at,
+            deferred: r.deferred,
+            deferred_at: r.deferred_at,
+            deferred_until: r.deferred_until.clone(),
+        }
+    }
+}
+
 impl Requirement {
     /// Creates a new requirement with the specified title and description
     pub fn new(title: String, description: String) -> Self {

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Inbox, Users, Activity, Columns3, List, Zap, Clock, Sparkles, FileText, MessageCircle, ArrowLeftRight, Settings, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useRequirements } from '../../hooks/useRequirements';
+import { useRequirementSummaries } from '../../hooks/useRequirements';
 import { useSavedViews } from '../../hooks/useSavedViews';
 import {
   getSprintNumber,
@@ -34,7 +34,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const { data: requirements } = useRequirements();
+  const { data: requirements } = useRequirementSummaries();
   const { views } = useSavedViews();
 
   const pinnedViews = useMemo(
