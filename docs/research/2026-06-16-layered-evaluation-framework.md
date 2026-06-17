@@ -163,6 +163,25 @@ This is the strategic crux, and it reframes the whole evaluation. **The durable 
 
 **Investment implication.** This is the argument for spending at L1 (and protecting L3/L5 ownership) even when the cost/benefit of any individual tool looks marginal: you are not buying a tool, you are *compounding an asset and buying optionality*. The per-tool decision (§2–4) should be weighted by the answer to one question — **does this choice grow the shared substrate, or fragment it?**
 
+### 5.1 The synergy experiment — test the thesis before betting on it
+
+The thesis above is falsifiable, and it should be *falsified or confirmed cheaply* before an org commits major resources. The following is a concrete, one-quarter within-org design that measures whether owning the substrate actually surfaces synergy a siloed org misses — at *your* org's synergy density, which is the variable that should drive *your* decision.
+
+- **Arms (matched on team size, domain adjacency, current AI-tool adoption):**
+  - **S — substrate:** 3–5 teams whose work all lands in one shared intent + coordination graph (stable IDs, typed relationships, traces, history).
+  - **C — control / siloed:** 3–5 comparable teams keep their existing per-team tools; no shared graph.
+  - **W — write-it-down:** 3–5 teams share an *unstructured* doc/wiki but no typed graph. **This arm is essential** — it separates "the graph helped" from "writing intent down at all helped" (the confound the theory paper flags in §3). Without W, a positive S result is uninterpretable.
+- **Duration:** one quarter — long enough for cross-team dependencies to arise, short enough to stay cheap.
+- **The probe — "synergy events."** Pre-define a synergy event as any of: (a) duplicated effort caught before both shipped; (b) a reusable component adopted across teams; (c) a cross-team dependency or conflict surfaced before it caused rework; (d) a decision in one team that changed another's plan. Count them in every arm.
+- **How each arm surfaces events:** S runs standing graph queries (cross-program duplication scan, shared-dependency closure, conflicting-decision detector) on a cadence — each hit is a *candidate* event the teams validate. C surfaces events the way it does today (meetings, review, accidental discovery), logged when noticed. W surfaces them by search/reading the shared doc.
+- **Primary metrics:** synergy events per team-month, and — the one that matters most — **lead time** (how early before impact each was caught). The thesis predicts S > W > C on both count and earliness; the *earliness* gap is the real value (a duplication caught in week 1 vs month 3).
+- **Secondary metrics:** rework-hours avoided (attributable to early catches); and the **false-positive rate** on graph-surfaced candidates — does the query produce noise teams must wade through? A high false-positive rate is itself a finding (the graph is not yet worth the attention tax).
+- **Pre-registered decision rule (write it before running):** e.g. *"proceed to org-wide substrate investment iff S surfaces ≥2× C's synergy events at ≥30 days better median lead time, false-positive rate < X, **and** S beats W (the graph adds value beyond writing-down)."* If S ≈ W, the win is discipline, not the substrate — buy the cheap version. If S ≈ C, the thesis fails at this org/scale — do not bet.
+- **Threats to control:** Hawthorne effect (S knows it's watched → instrument C and W's discovery equally); selection bias (do not cherry-pick already-adjacent teams into S); and the discipline confound (handled by the W arm).
+- **Cost:** one quarter, ~9–15 teams, the standing-query setup, and an analyst to validate candidate events — cheap relative to an org-wide commitment, which is the entire point: **measure before you bet.**
+
+A single-org result does not generalize to other orgs — but it is not meant to. It tells you about *your* synergy density, and that is exactly what your allocation decision turns on.
+
 ---
 
 ## 6. Cadence — a living evaluation
@@ -175,4 +194,51 @@ The stack's value distribution shifts during any decision cycle, so this framewo
 
 ---
 
-*Working draft. To develop with: a worked scoring of 2–3 real candidate tools per layer, the §5 synergy experiment design, and a one-page decision-record template teams can fill per adoption.*
+## Appendix A — Per-adoption decision record (template)
+
+One record per tool-or-build decision. Copy the block, fill it in, commit it next to the thing it governs, and revisit on the trigger. The point is not bureaucracy — it is that the *reasoning* (and the revisit trigger) survives the person who made the call, and the rubric forces the lock-in / substrate questions to be answered, not skipped.
+
+```markdown
+# Decision record — <candidate name>
+
+- **Decision ID:** DR-<n>          **Date:** <YYYY-MM-DD>
+- **Owner:** <name>               **Reviewers:** <names>
+- **Candidate:** <tool / internal build>
+- **Layer(s):** L<0–5>            **Primary layer:** L<n>
+- **Decision:** ☐ Build  ☐ Buy  ☐ Ride-native  ☐ Wait
+- **Revisit trigger:** <event or date that reopens this — MANDATORY, especially for Wait>
+
+## Rubric score (§2, each 0–3; ★ = heavily weighted)
+| # | Criterion | Score | Note / red flag |
+|---|-----------|:-:|-----------------|
+| 2.1★ | Lock-in / exit cost        |  | <export fidelity? who holds the graph? weeks-to-replace?> |
+| 2.2  | Interoperability           |  | <open protocols / silo?> |
+| 2.3★ | Substrate ownership        |  | <can we query our state without this tool?> |
+| 2.4★ | Composability / synergy    |  | <links across programs? stable shared IDs?> |
+| 2.5  | Neutrality                 |  | <vendor-agnostic / single-vendor binding?> |
+| 2.6  | Governance / auditability  |  | <gate we control, or policy we hope for?> |
+| 2.7  | Reversibility / blast radius |  | <can we back out? what breaks?> |
+| 2.8  | TCO incl. churn risk       |  | <will a platform ship this free in ~12mo?> |
+| 2.9  | Strategic optionality      |  | <preserves or forecloses future moves?> |
+|      | **Composite (weight 2.1/2.3/2.4)** |  | |
+
+## Substrate impact (§5) — the weighting question
+- **Grows or fragments the shared substrate?**  ☐ Grows  ☐ Neutral  ☐ Fragments
+- **Who holds the system of record after this decision?** <us / vendor / split>
+- **Exit cost / how we would back out:** <…>
+
+## Rationale (2–3 sentences)
+<why this move, this layer, now>
+
+## Risks accepted + mitigations
+- <risk> → <mitigation / who owns it>
+
+## Sign-off
+- Owner: <name / date>   ·   Reviewer: <name / date>
+```
+
+A "Fragments" answer on the substrate-impact line, or a low score on any of 2.1 / 2.3 / 2.4, is not an automatic veto — but it must be *consciously accepted in the rationale*, never silently. That single discipline is what keeps a thousand small convenient choices from quietly fragmenting the asset (§5) the org is trying to compound.
+
+---
+
+*Working draft. Remaining stub to develop: a worked scoring of 2–3 real candidate tools per layer, as a filled-in example of Appendix A.*
