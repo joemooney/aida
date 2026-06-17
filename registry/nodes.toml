@@ -12,6 +12,7 @@ user_id = 1
 hostname = "spock"
 email = "Joe.Mooney@work.example"
 clone_path = "/home/joe.mooney/ai/aida_github"
+user = "joe"
 registered = "2026-05-11T17:02:46.962824194Z"
 
 [[nodes]]
