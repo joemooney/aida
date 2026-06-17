@@ -669,6 +669,38 @@ mod tests {
         );
     }
 
+    // trace:STORY-643 | ai:claude
+    #[test]
+    fn merge_dedup_surfaces_a_canonical_message_addressed_to_an_identity() {
+        // The auto-sync receive side: a foreign message exists ONLY in the
+        // canonical layer (another clone published it; we pulled it down). With
+        // an empty local layer, merge_dedup + inbox_for must still surface it to
+        // its addressee — this is what makes a pulled message visible without a
+        // manual digest. A broadcast must likewise reach a clone that never sent
+        // or received locally.
+        let local: Vec<Message> = Vec::new();
+        let canonical = vec![
+            msg("direct", "t", "alice", Recipient::Agent("bob".into()), 10),
+            msg("bcast", "t", "alice", Recipient::Broadcast, 20),
+        ];
+        let merged = merge_dedup(&local, &canonical);
+        let bob_inbox: Vec<&str> = inbox_for("bob", &merged)
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect();
+        assert_eq!(
+            bob_inbox,
+            vec!["direct", "bcast"],
+            "canonical-only direct + broadcast reach bob after a pull"
+        );
+        // A third clone (never the recipient of the direct) still sees the broadcast.
+        let carol_inbox: Vec<&str> = inbox_for("carol", &merged)
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect();
+        assert_eq!(carol_inbox, vec!["bcast"], "broadcast reaches carol too");
+    }
+
     #[test]
     fn recipient_serde_roundtrips() {
         for r in [Recipient::Agent("claude".into()), Recipient::Broadcast] {

@@ -23938,14 +23938,39 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             ),
             None => ("surface-and-recommend".to_string(), PolicySource::Default),
         };
+        // STORY-643: auto mailbox sync on the pull/push store legs. Env wins
+        // over config; default on. trace:STORY-643
+        let (autosync_value, autosync_source) =
+            match std::env::var("AIDA_MAILBOX_AUTOSYNC").ok().as_deref() {
+                Some(v) if !v.is_empty() => {
+                    let on = !matches!(
+                        v.trim().to_ascii_lowercase().as_str(),
+                        "false" | "0" | "no" | "off"
+                    );
+                    (on.to_string(), PolicySource::Env("AIDA_MAILBOX_AUTOSYNC"))
+                }
+                _ => match config_lookup(cfg.as_ref(), "mailbox", "autosync")
+                    .and_then(|v| v.as_bool())
+                {
+                    Some(b) => (b.to_string(), PolicySource::ProjectConfig),
+                    None => ("true".to_string(), PolicySource::Default),
+                },
+            };
         PolicySection {
             section: "mailbox",
             header: "[mailbox]".to_string(),
-            rows: vec![PolicyRow {
-                key: "act_on_mail",
-                value,
-                source,
-            }],
+            rows: vec![
+                PolicyRow {
+                    key: "act_on_mail",
+                    value,
+                    source,
+                },
+                PolicyRow {
+                    key: "autosync",
+                    value: autosync_value,
+                    source: autosync_source,
+                },
+            ],
         }
     });
 
@@ -83032,6 +83057,67 @@ fn digest_mailbox_to_canonical(
     Ok(n)
 }
 
+/// STORY-643: project-wide opt-out for the auto mailbox sync wired into the
+/// `aida pull` / `aida push` store legs. Defaults to on; disable with
+/// `AIDA_MAILBOX_AUTOSYNC=0` (or `false` / `no` / `off`) or
+/// `[mailbox] autosync = false` in `.aida/config.toml`. The env knob wins over
+/// the config file (matching the rest of the AIDA_* surface). trace:STORY-643
+fn mailbox_autosync_enabled(project_root: &std::path::Path) -> bool {
+    // Env first — an explicit AIDA_MAILBOX_AUTOSYNC overrides the config file.
+    if let Ok(v) = std::env::var("AIDA_MAILBOX_AUTOSYNC") {
+        return !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "no" | "off"
+        );
+    }
+    // Then the project config; absent / unparseable / unset → default on.
+    if let Ok(body) = std::fs::read_to_string(project_root.join(".aida").join("config.toml")) {
+        if let Ok(value) = body.parse::<toml::Value>() {
+            if let Some(b) =
+                config_lookup(Some(&value), "mailbox", "autosync").and_then(|v| v.as_bool())
+            {
+                return b;
+            }
+        }
+    }
+    true
+}
+
+/// STORY-643: best-effort PUBLISH leg for the auto mailbox sync. Digests the
+/// local `.aida/mailbox/` layer into the canonical `<store>/mailbox/` WITHOUT
+/// committing — the caller's store leg already commits pending orphan changes,
+/// so the digested files fold into that single commit (no second commit/push).
+/// Idempotent + id-keyed, so it is safe to call on every sync. Honors the
+/// `mailbox_autosync_enabled` opt-out and never errors out the host command:
+/// any failure is logged as a warning and swallowed. Returns the number of
+/// messages newly staged (0 = nothing new / disabled / no local layer).
+/// trace:STORY-643 | ai:claude
+fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reason: &str) -> usize {
+    let Some(project_root) = store_path.parent() else {
+        return 0;
+    };
+    if !mailbox_autosync_enabled(project_root) {
+        return 0;
+    }
+    match mailbox_store::digest_local_to_canonical(store_path, project_root) {
+        Ok(0) => 0,
+        Ok(n) => {
+            eprintln!(
+                "  {} published {n} mailbox message(s) to the canonical store ({reason})",
+                crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
+            );
+            n
+        }
+        Err(e) => {
+            eprintln!(
+                "  {} mailbox publish skipped ({reason}): {e}",
+                "Warning:".yellow().bold()
+            );
+            0
+        }
+    }
+}
+
 /// Best-effort mailbox digest at a lifecycle boundary (session-end, drain-end).
 /// A digest failure must NOT abort session cleanup or break the drain, so any
 /// error is logged as a warning and swallowed. No-ops cleanly when there is no
@@ -83160,6 +83246,63 @@ mod mailbox_digest_autotrigger_tests {
         // the wrapper must log + continue, not propagate.
         mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
         maybe_digest_mailbox_best_effort(&store_root, "test"); // must not panic
+    }
+
+    // ── STORY-643: auto mailbox sync (publish leg) ────────────────────────
+
+    /// The publish leg writes the local layer into canonical WITHOUT committing
+    /// (the store leg's own commit folds it in) and is idempotent + id-keyed:
+    /// re-running stages nothing new. trace:STORY-643 | ai:claude
+    #[test]
+    fn publish_for_sync_stages_canonical_without_committing_and_is_idempotent() {
+        let (proj, store_root) = project_with_store();
+        mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
+        mailbox_store::write_message(proj.path(), &msg("b")).unwrap();
+
+        let n = maybe_publish_mailbox_for_sync(&store_root, "test");
+        assert_eq!(n, 2, "both local messages publish into the canonical store");
+        let canon = mailbox_store::read_canonical_messages(&store_root).unwrap();
+        assert_eq!(canon.len(), 2);
+        // Publish does NOT commit on its own — the canonical files are left as
+        // a pending change for the store leg's commit to pick up.
+        assert!(
+            aida_core::git_ops::has_changes(&store_root).unwrap(),
+            "publish leaves the digested files uncommitted for the store leg"
+        );
+        // Idempotent: re-running stages nothing new (id-keyed).
+        assert_eq!(maybe_publish_mailbox_for_sync(&store_root, "test"), 0);
+    }
+
+    /// The opt-out (env or config) disables the publish leg entirely. trace:STORY-643
+    #[test]
+    fn publish_for_sync_honors_the_opt_out() {
+        let (proj, store_root) = project_with_store();
+        mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
+
+        // Env opt-out wins; nothing is published.
+        std::env::set_var("AIDA_MAILBOX_AUTOSYNC", "0");
+        assert!(!mailbox_autosync_enabled(proj.path()));
+        assert_eq!(maybe_publish_mailbox_for_sync(&store_root, "test"), 0);
+        assert!(mailbox_store::read_canonical_messages(&store_root)
+            .unwrap()
+            .is_empty());
+        std::env::remove_var("AIDA_MAILBOX_AUTOSYNC");
+
+        // Default (no env, no config) is on.
+        assert!(mailbox_autosync_enabled(proj.path()));
+
+        // Config opt-out is honored when the env is unset.
+        std::fs::create_dir_all(proj.path().join(".aida")).unwrap();
+        std::fs::write(
+            proj.path().join(".aida").join("config.toml"),
+            "[mailbox]\nautosync = false\n",
+        )
+        .unwrap();
+        assert!(!mailbox_autosync_enabled(proj.path()));
+        // Env presence overrides the config-file false.
+        std::env::set_var("AIDA_MAILBOX_AUTOSYNC", "1");
+        assert!(mailbox_autosync_enabled(proj.path()));
+        std::env::remove_var("AIDA_MAILBOX_AUTOSYNC");
     }
 }
 
@@ -83657,6 +83800,12 @@ fn handle_push_command(
                 "Note:".dimmed()
             );
         }
+        // STORY-643: PUBLISH the local mailbox into the canonical store BEFORE
+        // committing pending changes, so locally-sent messages fold into the
+        // single store commit below and propagate with this push — no manual
+        // `aida mailbox sync`. Best-effort + idempotent; folded into the same
+        // commit (no second push). trace:STORY-643 | ai:claude
+        let _ = maybe_publish_mailbox_for_sync(store_path, "push");
         // Commit any pending orphan-branch changes regardless of origin —
         // the user's local edits should land in a commit either way so
         // subsequent operations have a clean tree. trace:BUG-44 | ai:claude
@@ -84007,6 +84156,15 @@ fn handle_pull_command(
             }
             return Ok(());
         }
+        // STORY-643: PUBLISH the local mailbox into the canonical store BEFORE
+        // the pre-pull commit, so this clone's locally-sent messages are
+        // committed onto the orphan branch (and propagate on the next push)
+        // while the rebase below brings DOWN other clones' canonical messages.
+        // Together with `read_inbox`/`mailbox inbox` merging canonical, this
+        // makes messages flow both ways on a normal `aida pull` — no manual
+        // digest. Best-effort + idempotent; folded into the pre-pull commit
+        // (no separate commit). trace:STORY-643 | ai:claude
+        let _ = maybe_publish_mailbox_for_sync(store_path, "pull");
         // Mirror `aida db sync --pull`: commit any pending orphan
         // changes first, then pull --rebase. Without the pre-commit
         // step, rebase refuses on a dirty tree and leaves the user
