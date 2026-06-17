@@ -219,9 +219,9 @@ This table is the spine; almost every case is a consequence of it.
 
 ### MU-504 — two clones lease the SAME spec simultaneously
 - **Setup:** A `aida session start --owns FR-1`; B `aida session start --owns FR-1`.
-- **Expected (today):** **Both succeed** — leases are per-clone-local (`.aida/sessions/*.toml`); B never sees A's lease. Within one clone a second owner is refused (`find_scope_lease_conflict`), but **across clones there is no shared lock**.
+- **Expected:** A acquires; **B is REFUSED** with the holder's host / clone path / agent / age (pass `--force` to override). A shared lease claim lives at `coordination/leases/<scope>.toml` on the `aida-store` branch; `session start --owns` (and `aida agent new --spec`) pull-check-claim-push it. Liveness: same-host pid for process-backed claims + a universal TTL/heartbeat backstop; an `aida session end` deletes the claim. Best-effort: no remote / unreachable store WARNs and proceeds local-only.
 - **Validates:** Cross-clone double-work prevention.
-- **Status:** 🐛 **gap** — no cross-clone lease coordination → two agents in two clones can implement the same spec unaware. **The most important multi-user gap to decide on.** *(File a spec: shared lease registry on the store, or accept + document.)*
+- **Status:** ✅ **closed by STORY-637** (slice 1) — `aida-cli/src/coordination.rs` (`decide_claim` pure decision + `acquire_claim`/`release_claim`/`list_claims`); harness `case_MU-504` is `EXPECT=pass`. Foreign claims are surfaced in `aida session leases`. trace:STORY-637
 
 ### MU-505 — two clones run drains simultaneously
 - **Setup:** A `aida burndown run`; B `aida queue work --auto-complete`.
