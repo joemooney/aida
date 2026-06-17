@@ -1,0 +1,18 @@
+id: 019ed2f1-d1ca-7212-9df1-56394d8ba3db
+spec_id: EPIC-46
+agreed_id: EPIC-46
+title: Multi-user / multi-clone test coverage
+description: 'Enumerate, document, and test how AIDA behaves when multiple users/clones share one aida-store. Phase 1: same-host clones (catalog delivered: docs/testing/multi-user-test-cases.md). Phase 2: multi-host / multi-OS-user. Phase 3: multi-repo to one store (see SPIKE-62). The catalog grounds every case in code (file:symbol) and classifies works / works-untested / accepted-limitation / gap. Headline finding: cross-clone COORDINATION is the weak axis — leases + drain/solo locks are per-clone-local, so two clones can double-lease and double-drain the same spec with no shared safety. Children: the same-host harness, lifting untested two-clone flows into automated tests, and disposition of the coordination gaps (MU-504/505/506) + history union-merge (MU-204).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T00:18:43.786395352Z
+modified_at: 2026-06-17T00:18:43.786395352Z
+req_type: Epic
+tags:
+- from-operator
+- multi-clone
+- multi-user
+- quality
+- testing
