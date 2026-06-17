@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T01:15:54.865325049Z
-modified_at: 2026-06-17T01:15:54.865325049Z
+modified_at: 2026-06-17T01:53:00.280862429Z
 req_type: Story
 tags:
 - coordination
@@ -16,3 +16,9 @@ tags:
 - multi-clone
 - multi-user
 - parent:EPIC-46
+comments:
+- id: 019ed348-2178-76d2-8356-93ea66033ca7
+  author: joe
+  content: Commit ea29f9e92 references this requirement
+  created_at: 2026-06-17T01:53:00.280862429Z
+  modified_at: 2026-06-17T01:53:00.280862429Z
