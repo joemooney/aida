@@ -242,7 +242,10 @@ impl TeamRoster {
         self.members.get(user_id).map(String::as_str)
     }
 
-    /// Set (or replace) a user's role and serialize to TOML.
+    /// Set (or replace) a user's role and serialize to TOML. The CAS write now
+    /// lives in `aida_core::team::set_role_cas`; this remains for the round-trip
+    /// unit test below. trace:STORY-650 | ai:claude
+    #[cfg(test)]
     fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
         self.members.insert(user_id.to_string(), role.to_string());
         self
@@ -302,55 +305,11 @@ pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (Stri
 /// stale commit and retry. Solo (no `origin`) writes locally and lets the next
 /// `aida push` upload. Returns the canonicalized role written. trace:STORY-646
 pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyhow::Result<()> {
-    use aida_core::git_ops;
-
-    const MAX_RETRIES: u32 = 10;
-    let registry_path = TeamRoster::path(store_root);
-    if let Some(parent) = registry_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
-    let local_only = !git_ops::has_remote(store_root, "origin");
-
-    for attempt in 0..MAX_RETRIES {
-        // Step 1: pull latest (skip first attempt / solo).
-        if attempt > 0 && !local_only {
-            git_ops::pull_rebase(store_root, "origin", &branch)?;
-        }
-
-        // Step 2: load → merge our edit → save.
-        let roster = TeamRoster::load(store_root).with_role_set(user_id, role);
-        let content = toml::to_string_pretty(&roster)?;
-        std::fs::write(&registry_path, content)?;
-
-        // Step 3: stage + commit.
-        git_ops::add(store_root, &["registry/team.toml"])?;
-        let msg = format!("chore(registry): set team role {} = {}", user_id, role);
-        git_ops::commit(store_root, &msg)?;
-
-        // Step 4: push (or stop here when solo).
-        if local_only {
-            return Ok(());
-        }
-        match git_ops::push(store_root, "origin", &branch) {
-            Ok(true) => return Ok(()),
-            Ok(false) => {
-                // Push rejected — someone else wrote first. Discard our stale
-                // commit + tree so the next pull --rebase applies cleanly.
-                let _ = std::process::Command::new("git")
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .current_dir(store_root)
-                    .output();
-                continue;
-            }
-            Err(e) => anyhow::bail!("setting team role failed: {}", e),
-        }
-    }
-    anyhow::bail!(
-        "could not write the team role after {} attempts (store push kept being rejected) — \
-         run `aida db sync --pull` and retry",
-        MAX_RETRIES
-    )
+    // Delegate to the shared aida-core implementation so the CLI and the REST
+    // `PUT /api/v2/team/:user/role` endpoint write team.toml identically.
+    // trace:STORY-650 | ai:claude
+    aida_core::team::set_role_cas(store_root, user_id, role)
+        .map_err(|e| anyhow::anyhow!("setting team role failed: {}", e))
 }
 
 /// A roster member row joined with the role recorded for its user_id, for the
