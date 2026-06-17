@@ -1,0 +1,17 @@
+id: 019ed45b-d8c7-79f1-9fad-fa7dc40e6302
+spec_id: STORY-647
+agreed_id: STORY-647
+title: 'Team RBAC slice 2: finer-grained op gating + protected specs/tags + strict mode (Tier 3)'
+description: 'Tier-3 slice 2 of EPIC-47 (design docs/plans/2026-06-16-team-rbac.md §3). Builds on slice-1 effective_role. (1) A small config-driven permission map: gated operation -> minimum role (defaults: status approve/plan/reject = advisor [slice 1]; add merge-gate/integrate + drain-start [burndown run / queue work --auto-complete] as advisor-gated; tunable under [team] in config). (2) Protected specs/tags: [team] protected_tags = [...]; editing/transitioning a spec carrying a protected tag requires advisor (guardrail). (3) [team] strict mode: when true, NON-rostered users get least-privilege for gated ops (default-deny) instead of the permissive env-fallback, and refusals are not bypassable by unsetting env (only --force, audited). Still a guardrail not security (document). Backward-compatible: no [team] config / strict=false = slice-1 behavior. Harness: strict-mode non-rostered user refused a gated op; protected-tag spec requires advisor. Unit-test the permission resolution.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T06:54:09.607904503Z
+modified_at: 2026-06-17T06:54:09.607904503Z
+req_type: Story
+tags:
+- parent:EPIC-47
+- rbac
+- roles
+- team
