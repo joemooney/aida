@@ -3,12 +3,12 @@ spec_id: STORY-649
 agreed_id: STORY-649
 title: 'Team dashboard slice B: web Team page (roster, assignment board, who-holds-what, burndown) (Tier 3)'
 description: 'Slice B of the team dashboard (design docs/plans/2026-06-17-team-dashboard.md), depends on slice A endpoints + DTOs. Add a /team route + Sidebar entry in aida-web-react; useTeam() + useCoordination() React Query hooks over the new endpoints; four panels reusing existing dashboard idioms: roster table (user, role badge, host, last-seen, active dot), assignment board (specs grouped by assignee, columns per member + Unassigned), who-holds-what (active coordination claims with age/stale), team burndown (reuse StatusChart + /analytics). Read-only (drag-to-reassign is slice C). tsc + vite build green; absent data = friendly empty state.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T07:32:31.426113351Z
-modified_at: 2026-06-17T08:05:59.355558839Z
+modified_at: 2026-06-17T08:13:08.818982003Z
 req_type: Story
 tags:
 - aida-web-react
@@ -21,3 +21,21 @@ comments:
   content: Commit 71fb48d3b references this requirement
   created_at: 2026-06-17T08:05:59.355558839Z
   modified_at: 2026-06-17T08:05:59.355558839Z
+history:
+- id: 019ed4a4-294e-79e3-bbf1-3f2cc73aa14d
+  author: aida-auto-bump
+  timestamp: 2026-06-17T08:13:08.814301918Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed4a4-2952-7e62-b099-878a2d5623e9
+  timestamp: 2026-06-17T08:13:08.818981398Z
+  agent: aida
+  commit_sha: e68762d6730cc08ac7ea7612054e636ea2d6a7b2
+  summary: Completed via merge e68762d6
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T08:13:08.660381611Z
+  completion_sha: e68762d6730cc08ac7ea7612054e636ea2d6a7b2
