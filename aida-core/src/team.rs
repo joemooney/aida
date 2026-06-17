@@ -72,6 +72,59 @@ impl TeamRoster {
         self.members.insert(user_id.to_string(), role.to_string());
         self
     }
+
+    /// Migrate stray integer role keys (the STORY-653 bug: the dashboard wrote
+    /// roles under the node's integer `user_id`, e.g. `1 = "advisor"`, but
+    /// `effective_role`/queues/assignees key on the person-key string) to the
+    /// person key, using the node roster to map `user_id → owner()`.
+    ///
+    /// Conservative: only a key that is a bare integer AND maps to exactly one
+    /// distinct non-integer person key in the roster is migrated; the new key is
+    /// only taken if it isn't already present (never clobbers a real role).
+    /// Returns whether anything changed. An ambiguous / unmappable integer is
+    /// left untouched (no data loss). trace:STORY-653 | ai:claude
+    fn migrate_integer_keys(&mut self, nodes: &NodeRegistry) -> bool {
+        use std::collections::BTreeSet;
+        // Map each integer user_id (as a string) to the set of distinct person
+        // keys it resolves to across the node roster.
+        let mut int_to_persons: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for node in &nodes.nodes {
+            let person = node.owner();
+            // Only useful when the owner differs from the bare integer (i.e. the
+            // node actually carries a user/email we can remap to).
+            if person != node.user_id.to_string() {
+                int_to_persons
+                    .entry(node.user_id.to_string())
+                    .or_default()
+                    .insert(person);
+            }
+        }
+
+        let mut changed = false;
+        let int_keys: Vec<String> = self
+            .members
+            .keys()
+            .filter(|k| k.parse::<u64>().is_ok())
+            .cloned()
+            .collect();
+        for int_key in int_keys {
+            let Some(persons) = int_to_persons.get(&int_key) else {
+                continue; // can't determine the person → leave it (no data loss)
+            };
+            if persons.len() != 1 {
+                continue; // ambiguous → leave it
+            }
+            let person = persons.iter().next().unwrap().clone();
+            if self.members.contains_key(&person) {
+                continue; // a real role already exists under the person key
+            }
+            if let Some(role) = self.members.remove(&int_key) {
+                self.members.insert(person, role);
+                changed = true;
+            }
+        }
+        changed
+    }
 }
 
 /// The guardrail-not-security caveat surfaced wherever a role is written.
@@ -121,8 +174,14 @@ pub fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> std::io::Re
             git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
         }
 
-        // Step 2: load → merge our edit → save.
-        let roster = TeamRoster::load(store_root).with_role_set(user_id, role);
+        // Step 2: load → migrate any stray integer keys to the person key →
+        // merge our edit → save. The migration self-heals the STORY-653 bug
+        // (roles written under the cryptic integer user_id) opportunistically on
+        // the next role write. trace:STORY-653
+        let mut roster = TeamRoster::load(store_root);
+        let nodes = load_node_roster(store_root);
+        roster.migrate_integer_keys(&nodes);
+        let roster = roster.with_role_set(user_id, role);
         let content = toml::to_string_pretty(&roster)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         std::fs::write(&registry_path, content)?;
@@ -187,23 +246,37 @@ fn canon(path: &Path) -> String {
         .to_string()
 }
 
-/// A team member for the dashboard: one row per `user_id`, with the user's
-/// registered clones grouped together. trace:STORY-648 | ai:claude
+/// A team member for the dashboard: one row per **person identity**, with the
+/// person's registered clones grouped together. trace:STORY-648 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberDto {
-    /// The person's identity (the `current_user_id` / `nodes.toml` user id as a
-    /// string). A user may register several clones, all grouped under this id.
+    /// The person's identity — the **person key** that roles / queues /
+    /// assignees all key on: the node owner `$USER` string captured at
+    /// registration (STORY-652's node `user` field = `current_user_id`),
+    /// falling back to the email local-part, then the integer `user_id` for
+    /// old nodes that lack it. This MATCHES the `registry/team.toml` role key,
+    /// `effective_role_for_user`, and the spec `assignee` field — so a role or
+    /// assignment set in the UI under this id actually enforces. A person may
+    /// register several clones, all grouped under this id. trace:STORY-653
     pub user_id: String,
-    /// The user's role from `registry/team.toml`, if any (canonicalized).
+    /// A friendly display label for the person — their email if recorded, else
+    /// the person key. Shown in the UI instead of the cryptic integer id.
+    /// trace:STORY-653 | ai:claude
+    pub display_label: String,
+    /// The friendly node names (STORY-652) for this person's registered clones,
+    /// e.g. `["imac-joe-1", "spock-joe-2"]`. trace:STORY-653 | ai:claude
+    pub node_names: Vec<String>,
+    /// The person's role from `registry/team.toml`, if any (canonicalized),
+    /// resolved via the person key. trace:STORY-653
     pub role: Option<String>,
-    /// Distinct hostnames this user is registered on.
+    /// Distinct hostnames this person is registered on.
     pub hosts: Vec<String>,
-    /// Absolute clone paths this user has registered.
+    /// Absolute clone paths this person has registered.
     pub clone_paths: Vec<String>,
-    /// The most recent registration timestamp across the user's clones (RFC3339).
+    /// The most recent registration timestamp across the person's clones (RFC3339).
     pub last_seen: Option<String>,
-    /// One coordination claim scope this user currently holds, if any (the
+    /// One coordination claim scope this person currently holds, if any (the
     /// roster "active now" signal). The full claim set is on `/coordination`.
     pub active_claim: Option<String>,
 }
@@ -356,19 +429,35 @@ pub fn list_coordination_claims_at(
     out
 }
 
-/// Build the dashboard team view: every registered clone grouped by `user_id`,
-/// each row joined with the user's role + one active coordination claim it
-/// holds. Best-effort — absent files yield an empty vec. trace:STORY-648
+/// The person identity for a node — the key that roles / queues / assignees all
+/// key on. Delegates to [`NodeRegistryEntry::owner`] (STORY-652): the registered
+/// owner `$USER` string if present, else the email local-part, else the integer
+/// `user_id` stringified for pre-STORY-652 rows. This is the join key between the
+/// dashboard team layer and `effective_role_for_user` / the spec assignee, fixing
+/// the integer-vs-string mismatch (STORY-653). trace:STORY-653 | ai:claude
+pub fn person_key(node: &crate::node::NodeRegistryEntry) -> String {
+    // trace:STORY-653 | ai:claude
+    node.owner()
+}
+
+/// Build the dashboard team view: every registered clone grouped by the
+/// **person key** (the owner identity that roles/queues/assignees use), each row
+/// joined with that person's role + one active coordination claim it holds, plus
+/// a friendly display label and the person's node names. Best-effort — absent
+/// files yield an empty vec. trace:STORY-648 trace:STORY-653
 pub fn build_team_members(store_root: &Path) -> Vec<TeamMemberDto> {
     let node_roster = load_node_roster(store_root);
     let roles = TeamRoster::load(store_root);
     let claims = list_coordination_claims(store_root);
 
-    // Group nodes by user_id (a user may have several clones).
+    // Group nodes by the person key (a person may have several clones, possibly
+    // with different integer user_ids across machines). trace:STORY-653
     let mut by_user: BTreeMap<String, TeamMemberDto> = BTreeMap::new();
     for node in node_roster.nodes {
-        let user_id = node.user_id.to_string();
+        let user_id = person_key(&node);
+        let node_name = node.display_name();
         let host = node.hostname.clone();
+        let email = node.email.clone();
         let clone_path = node
             .clone_path
             .as_ref()
@@ -380,6 +469,10 @@ pub fn build_team_members(store_root: &Path) -> Vec<TeamMemberDto> {
             .entry(user_id.clone())
             .or_insert_with(|| TeamMemberDto {
                 user_id: user_id.clone(),
+                // Default the display label to the person key; a node carrying an
+                // email upgrades it below (first email wins).
+                display_label: user_id.clone(),
+                node_names: Vec::new(),
                 role: roles.role_for(&user_id).map(canonical_role),
                 hosts: Vec::new(),
                 clone_paths: Vec::new(),
@@ -387,6 +480,16 @@ pub fn build_team_members(store_root: &Path) -> Vec<TeamMemberDto> {
                 active_claim: None,
             });
 
+        // Prefer an email as the friendly display label (e.g.
+        // `joe.mooney@gmail.com`); fall back to the person key. trace:STORY-653
+        if entry.display_label == entry.user_id {
+            if let Some(e) = email.as_deref().filter(|s| !s.is_empty()) {
+                entry.display_label = e.to_string();
+            }
+        }
+        if !node_name.is_empty() && !entry.node_names.contains(&node_name) {
+            entry.node_names.push(node_name);
+        }
         if !host.is_empty() && !entry.hosts.contains(&host) {
             entry.hosts.push(host);
         }
@@ -444,7 +547,8 @@ mod tests {
     #[test]
     fn members_grouped_by_user_with_roles() {
         let dir = tempfile::tempdir().unwrap();
-        // Two clones for user 1, one for user 2.
+        // Two clones for user 1, one for user 2. No `user`/`email` field → the
+        // person key falls back to the integer user_id (pre-STORY-652 rows).
         write(
             &dir.path().join("registry/nodes.toml"),
             r#"
@@ -481,10 +585,143 @@ registered = "2026-06-17T03:00:00Z"
         assert_eq!(u1.role.as_deref(), Some("advisor"));
         assert_eq!(u1.hosts.len(), 2, "two distinct hosts");
         assert_eq!(u1.clone_paths.len(), 2, "two distinct clones");
+        // Node names are backfilled from host/owner/id for pre-STORY-652 rows.
+        assert_eq!(u1.node_names.len(), 2, "two node names");
+        // No email → display label falls back to the person key.
+        assert_eq!(u1.display_label, "1");
         // last_seen is the most recent registration across the user's clones.
         assert_eq!(u1.last_seen.as_deref(), Some("2026-06-17T02:00:00+00:00"));
         let u2 = members.iter().find(|m| m.user_id == "2").unwrap();
         assert_eq!(u2.role.as_deref(), Some("implementer"));
+    }
+
+    #[test]
+    fn person_key_prefers_owner_string_then_email_then_integer() {
+        use crate::node::NodeRegistryEntry;
+        use chrono::Utc;
+        let base = NodeRegistryEntry {
+            id: "1".to_string(),
+            user_id: 7,
+            hostname: "imac".to_string(),
+            email: None,
+            clone_path: None,
+            name: None,
+            user: None,
+            registered: Utc::now(),
+        };
+        // Owner string wins.
+        let mut n = base.clone();
+        n.user = Some("joe".to_string());
+        n.email = Some("joe.mooney@gmail.com".to_string());
+        assert_eq!(person_key(&n), "joe");
+        // No owner string → email local-part.
+        let mut n = base.clone();
+        n.email = Some("joe.mooney@gmail.com".to_string());
+        assert_eq!(person_key(&n), "joe.mooney");
+        // Neither → integer user_id.
+        assert_eq!(person_key(&base), "7");
+    }
+
+    #[test]
+    fn members_keyed_on_owner_string_with_email_label_and_node_names() {
+        let dir = tempfile::tempdir().unwrap();
+        // Two machines for the same human "joe" but DIFFERENT integer user_ids
+        // (joe@imac vs joe@spock). The person key (owner string) collapses them
+        // into one row — and the role keyed on "joe" is read back. trace:STORY-653
+        write(
+            &dir.path().join("registry/nodes.toml"),
+            r#"
+[[nodes]]
+id = "1"
+user_id = 1
+user = "joe"
+name = "imac-joe-1"
+email = "joe.mooney@gmail.com"
+hostname = "imac"
+clone_path = "/home/joe/ai/aida"
+registered = "2026-06-17T01:00:00Z"
+
+[[nodes]]
+id = "2"
+user_id = 5
+user = "joe"
+name = "spock-joe-2"
+hostname = "spock"
+clone_path = "/home/joe/ai/aida-b"
+registered = "2026-06-17T02:00:00Z"
+"#,
+        );
+        // Role written under the person key "joe" (as the UI now does).
+        write(
+            &dir.path().join("registry/team.toml"),
+            "[members]\njoe = \"advisor\"\n",
+        );
+
+        let members = build_team_members(dir.path());
+        assert_eq!(members.len(), 1, "one person across two machines");
+        let m = &members[0];
+        assert_eq!(m.user_id, "joe", "keyed on the person key, not the integer");
+        assert_eq!(
+            m.role.as_deref(),
+            Some("advisor"),
+            "role keyed on the person key resolves"
+        );
+        assert_eq!(
+            m.display_label, "joe.mooney@gmail.com",
+            "email is the label"
+        );
+        assert_eq!(m.node_names, vec!["imac-joe-1", "spock-joe-2"]);
+        assert_eq!(m.hosts.len(), 2);
+    }
+
+    #[test]
+    fn migrate_integer_keys_remaps_stray_integer_to_person_key() {
+        use crate::node::{NodeRegistry, NodeRegistryEntry};
+        use chrono::Utc;
+        let mut nodes = NodeRegistry::default();
+        nodes.nodes.push(NodeRegistryEntry {
+            id: "1".to_string(),
+            user_id: 1,
+            hostname: "imac".to_string(),
+            email: None,
+            clone_path: None,
+            name: None,
+            user: Some("joe".to_string()),
+            registered: Utc::now(),
+        });
+
+        // Stray integer key (the bug) → migrates to "joe".
+        let mut roster = TeamRoster::default().with_role_set("1", "advisor");
+        assert!(roster.migrate_integer_keys(&nodes));
+        assert_eq!(roster.role_for("joe"), Some("advisor"));
+        assert_eq!(roster.role_for("1"), None);
+
+        // Idempotent: a second pass changes nothing.
+        assert!(!roster.migrate_integer_keys(&nodes));
+
+        // Ambiguous (one integer → two persons) is left untouched (no data loss).
+        let mut nodes2 = nodes.clone();
+        nodes2.nodes.push(NodeRegistryEntry {
+            id: "2".to_string(),
+            user_id: 1,
+            hostname: "spock".to_string(),
+            email: None,
+            clone_path: None,
+            name: None,
+            user: Some("joey".to_string()),
+            registered: Utc::now(),
+        });
+        let mut roster2 = TeamRoster::default().with_role_set("1", "advisor");
+        assert!(!roster2.migrate_integer_keys(&nodes2));
+        assert_eq!(roster2.role_for("1"), Some("advisor"));
+
+        // A pre-existing person-key role is never clobbered.
+        let mut roster3 = TeamRoster::default()
+            .with_role_set("1", "advisor")
+            .with_role_set("joe", "implementer");
+        assert!(!roster3.migrate_integer_keys(&nodes));
+        assert_eq!(roster3.role_for("joe"), Some("implementer"));
+        assert_eq!(roster3.role_for("1"), Some("advisor"));
     }
 
     #[test]

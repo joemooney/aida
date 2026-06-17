@@ -43,7 +43,7 @@ function RoleEditor({ member, canEdit, onCaveat }: RoleEditorProps) {
   return (
     <div className="flex items-center gap-2">
       <select
-        aria-label={`Role for ${member.userId}`}
+        aria-label={`Role for ${member.displayLabel}`}
         value={value}
         disabled={setRole.isPending}
         onChange={(e) => {
@@ -124,7 +124,22 @@ export function RosterPanel({ members }: RosterPanelProps) {
                       ) : (
                         <span className="h-2 w-2 rounded-full bg-gray-600" title="Idle" />
                       )}
-                      <span className="font-medium text-content">{member.userId}</span>
+                      <div className="min-w-0">
+                        <span
+                          className="block truncate font-medium text-content"
+                          title={member.userId}
+                        >
+                          {member.displayLabel}
+                        </span>
+                        {member.nodeNames.length > 0 && (
+                          <span
+                            className="block truncate text-[11px] text-content-muted"
+                            title={member.nodeNames.join(', ')}
+                          >
+                            {member.nodeNames.join(', ')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="py-2.5 pr-4">
