@@ -203,6 +203,8 @@ We state plainly that we do **not** have a verdict on whether a home-grown coord
 
 **What would settle it.** The §13 ablations — especially the cross-vendor portability test and the multi-team field study — plus the simple passage of time: watch whether vendor surfaces converge on the upper layers within roughly a year. Until then, the verdict is open, and saying so is the finding.
 
+A companion decision framework — `2026-06-16-layered-evaluation-framework.md` — operationalizes this open verdict into a per-layer **build / buy / ride-native / wait** rubric with lock-in safeguards, a cross-cutting scoring checklist, and the *substrate-as-organizational-asset* thesis (the shared intent+coordination graph as a compounding, non-purchasable competitive advantage).
+
 ## 13. What a real study would measure
 
 To move claims from (M)(D) to confirmed empirical results:
