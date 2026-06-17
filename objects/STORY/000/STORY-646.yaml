@@ -3,12 +3,12 @@ spec_id: STORY-646
 agreed_id: STORY-646
 title: 'Team RBAC slice 1: per-user roles in the roster + effective_role enforcement (Tier 3)'
 description: 'Tier-3 of EPIC-47 (design docs/plans/2026-06-16-team-rbac.md). registry/team.toml on the store maps user_id -> role (CAS push-wins). effective_role(current_user_id) = roster role ELSE AIDA_SESSION_ROLE ELSE default — so a rostered user gets their durable role even with no env set. Wire the existing advisor-gated operations (status transitions to approved/planned/rejected, role-gated queue grooming) to consult effective_role, refusing a non-advisor with a clear message (--force / env opt-out remains). aida team set-role <user> --role <role>; show role in aida team. GUARDRAIL not security (git push = full edit) — document the caveat in help + output + docs. Backward-compatible (no roster / user absent = current env-based behavior). Harness: a non-advisor rostered user is refused an advisor-only transition; an advisor is allowed.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T06:03:07.380706752Z
-modified_at: 2026-06-17T06:30:22.476827870Z
+modified_at: 2026-06-17T06:38:41.194763210Z
 req_type: Story
 tags:
 - parent:EPIC-47
@@ -21,3 +21,21 @@ comments:
   content: Commit 02600d3a9 references this requirement
   created_at: 2026-06-17T06:30:22.476827870Z
   modified_at: 2026-06-17T06:30:22.476827870Z
+history:
+- id: 019ed44d-ae25-7792-be03-1f6ddfb2c5f8
+  author: aida-auto-bump
+  timestamp: 2026-06-17T06:38:41.189789863Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed44d-ae2a-7ec2-8844-ee898c8715a5
+  timestamp: 2026-06-17T06:38:41.194762085Z
+  agent: aida
+  commit_sha: 4dc8fa6905cb9f29e98b94f788f72b174684fc35
+  summary: Completed via merge 4dc8fa69
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T06:38:41.029092804Z
+  completion_sha: 4dc8fa6905cb9f29e98b94f788f72b174684fc35
