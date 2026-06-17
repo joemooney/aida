@@ -159,7 +159,7 @@ use crate::cli::{
     RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
     RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand, SessionCommand,
     SessionManifestCommand, SessionWakeupCommand, SkillCommand, SoloAction, StackCommand,
-    TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
+    TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12443,9 +12443,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 &backend,
             );
         }
-        Command::Team { json } => {
+        Command::Team { json, cmd } => {
             // trace:STORY-640 | ai:claude
-            return handle_team_command(store_path, *json);
+            // trace:STORY-646 | ai:claude
+            return match cmd {
+                None => handle_team_command(store_path, *json),
+                Some(TeamCommand::SetRole { user, role }) => {
+                    handle_team_set_role(store_path, user, role)
+                }
+                Some(TeamCommand::MyRole { json }) => handle_team_my_role(store_path, *json),
+            };
         }
         Command::Usage {
             since,
@@ -14837,9 +14844,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         anyhow::bail!(
                             "promoting a {} spec to {} needs advisor authority (advisor role or \
                              an interactive session). Leave it for advisor triage, or run as \
-                             the advisor.",
+                             the advisor.{}",
                             req.status,
-                            canonical
+                            canonical,
+                            team_role_refusal_clause()
                         );
                     }
                     // BUG-498: a gated promotion that went through is advisor
@@ -69146,6 +69154,24 @@ fn effective_role_resolved() -> (String, bool) {
     resolve_effective_role(std::env::var("AIDA_SESSION_ROLE").ok().as_deref())
 }
 
+/// STORY-646: the effective role for the *guardrail*, consulting the durable
+/// per-user roster (`registry/team.toml`) FIRST, then `AIDA_SESSION_ROLE`, then
+/// the default. So a rostered user gets their role even with no env set; a
+/// non-rostered user (or an absent/unreachable store) resolves exactly as
+/// [`effective_role`] does today (backward-compatible). Best-effort — never
+/// blocks. Returns the role plus where it came from (for the refusal message).
+/// trace:STORY-646 | ai:claude
+fn effective_role_with_roster() -> (String, team::RoleSource) {
+    let user_id = current_user_id(None);
+    match find_project_root().map(|root| root.join(".aida-store")) {
+        Ok(store_root) if store_root.join("objects").is_dir() => {
+            team::effective_role_for_user(&store_root, &user_id)
+        }
+        // No attached store → fall straight through to env / default.
+        _ => team::resolve_effective_role(None, std::env::var("AIDA_SESSION_ROLE").ok().as_deref()),
+    }
+}
+
 /// TASK-647 (ADR-3): a status whose *production* requires advisor authority —
 /// anything that places a spec into the active execution pipeline (Approved
 /// and beyond). Draft / Rejected / NeedsAttention don't gate (they are not
@@ -69247,6 +69273,23 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || is_tty || orchestrated
 }
 
+/// STORY-646: a one-line clause for an advisor-authority refusal that names the
+/// caller's *durable team role* when the roster supplies one. Empty when the
+/// effective role came from the env/default (the refusal message already covers
+/// that case). The guardrail-not-security caveat lives in `aida team set-role`,
+/// not here. trace:STORY-646 | ai:claude
+fn team_role_refusal_clause() -> String {
+    let (role, source) = effective_role_with_roster();
+    if source == team::RoleSource::Roster && role != "advisor" {
+        format!(
+            " Your team role is `{}` — ask an advisor, or fix it with `aida team set-role`.",
+            role
+        )
+    } else {
+        String::new()
+    }
+}
+
 fn has_advisor_authority() -> bool {
     // BUG-460: a CLI op spawned by (or under) a live --auto-complete drain
     // inherits AIDA_AUTO_COMPLETE + the run token, so `orchestrator::detect`
@@ -69261,8 +69304,11 @@ fn has_advisor_authority() -> bool {
             )
         })
         .unwrap_or(false);
+    // STORY-646: consult the durable per-user roster first so the guardrail
+    // survives a forgotten `AIDA_SESSION_ROLE`. Non-rostered users / absent
+    // store resolve identically to the pre-646 env-only behavior.
     advisor_authority_from(
-        &effective_role(),
+        &effective_role_with_roster().0,
         std::io::stdin().is_terminal(),
         orchestrated,
     )
@@ -92261,10 +92307,12 @@ fn maybe_team_identity_guard(store_path: &std::path::Path, command: &Command) ->
 fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
     let our_clone = team::our_clone_path(store_path);
     let members = team::build_team_view(store_path, &our_clone);
+    // STORY-646: per-user roles from the RBAC roster (`registry/team.toml`).
+    let roles = team::roles_by_user(store_path);
     let now = chrono::Utc::now();
 
     if json {
-        let rows: Vec<serde_json::Value> = members
+        let nodes: Vec<serde_json::Value> = members
             .iter()
             .map(|m| {
                 serde_json::json!({
@@ -92280,7 +92328,12 @@ fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&rows)?);
+        let role_rows: Vec<serde_json::Value> = roles
+            .iter()
+            .map(|(user, role)| serde_json::json!({ "user": user, "role": role }))
+            .collect();
+        let out = serde_json::json!({ "nodes": nodes, "roles": role_rows });
+        println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
 
@@ -92341,6 +92394,115 @@ fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
     } else {
         println!("  {} nodes registered.", n.to_string().bold());
     }
+
+    // STORY-646: per-user role roster (RBAC guardrail). Only shown when at
+    // least one role is recorded — a fresh store has none and stays uncluttered.
+    if !roles.is_empty() {
+        println!();
+        println!("{}", "Roles".bold());
+        println!();
+        let me = current_user_id(None);
+        for (user, role) in &roles {
+            let you = if *user == me { " (you)" } else { "" };
+            println!("  {:<20} {}{}", user, role.cyan(), you.dimmed());
+        }
+        println!();
+        println!(
+            "  {}",
+            "Roles are a guardrail, not security — anyone with store push access can edit \
+             directly. Manage with `aida team set-role`."
+                .dimmed()
+        );
+    }
+    Ok(())
+}
+
+/// STORY-646: the canonical role names a `set-role` write is allowed to record —
+/// the core roles plus any role files installed under `~/.aida/roles/` (or the
+/// project roles dir). Validating against this catches a typo'd role before it
+/// lands in the durable roster. Best-effort: an unreadable roles dir still
+/// admits the core roles. trace:STORY-646 | ai:claude
+fn known_role_names() -> std::collections::BTreeSet<String> {
+    let mut names: std::collections::BTreeSet<String> = ["advisor", "implementer", HUMAN_ROUTE]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    if let Ok(root) = find_project_root() {
+        if let Ok(roles) = list_roles(&root) {
+            for r in roles {
+                names.insert(canonical_role_name(&r.name));
+            }
+        }
+    }
+    names
+}
+
+/// `aida team set-role <user> --role <role>` (STORY-646). Validate the role
+/// against the known set, write `registry/team.toml` with a CAS push, and print
+/// the guardrail-not-security caveat once. trace:STORY-646 | ai:claude
+fn handle_team_set_role(store_path: &std::path::Path, user: &str, role: &str) -> Result<()> {
+    let canonical = canonical_role_name(role.trim());
+    if canonical.is_empty() {
+        anyhow::bail!("a role name is required (e.g. --role advisor)");
+    }
+    let known = known_role_names();
+    if !known.contains(&canonical) {
+        anyhow::bail!(
+            "unknown role `{}`. Known roles: {}. (Install more with `aida role scaffold`.)",
+            role,
+            known.iter().cloned().collect::<Vec<_>>().join(", ")
+        );
+    }
+
+    team::set_role_cas(store_path, user, &canonical)?;
+
+    println!(
+        "{} set team role: {} = {}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        user.bold(),
+        canonical.cyan()
+    );
+    // The caveat, surfaced on every write (cheap, and the honest model matters).
+    println!();
+    println!(
+        "  {}",
+        "Guardrail, not security: this records team structure and stops accidental \
+         role-violating edits via the CLI, but anyone with push access to the store can \
+         still edit any spec directly with raw git. It is NOT an access-control boundary."
+            .dimmed()
+    );
+    Ok(())
+}
+
+/// `aida team my-role` (STORY-646): show the caller's effective role and where
+/// it resolved from (roster / env / default). trace:STORY-646 | ai:claude
+fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> Result<()> {
+    let user = current_user_id(None);
+    let (role, source) = team::effective_role_for_user(store_path, &user);
+    let source_str = match source {
+        team::RoleSource::Roster => "roster",
+        team::RoleSource::Env => "env (AIDA_SESSION_ROLE)",
+        team::RoleSource::Default => "default",
+    };
+    if json {
+        let out = serde_json::json!({
+            "user": user,
+            "role": role,
+            "source": match source {
+                team::RoleSource::Roster => "roster",
+                team::RoleSource::Env => "env",
+                team::RoleSource::Default => "default",
+            },
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+    println!(
+        "{} {} (from {})",
+        format!("{}:", user).dimmed(),
+        role.cyan().bold(),
+        source_str
+    );
     Ok(())
 }
 

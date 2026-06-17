@@ -2258,6 +2258,41 @@ pub enum DbCommand {
     },
 }
 
+// Team RBAC: manage durable per-user roles in the shared roster
+// (`registry/team.toml`). trace:STORY-646 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum TeamCommand {
+    /// Set a user's durable team role in the roster (`registry/team.toml`,
+    /// CAS push-wins). A rostered role is the user's effective role even with
+    /// no `AIDA_SESSION_ROLE` set, so the advisor guardrail survives a
+    /// forgotten env var.
+    ///
+    /// GUARDRAIL, NOT SECURITY: the store is a shared git branch, so anyone
+    /// with push access can edit any spec directly with raw git regardless of
+    /// their role. This roster prevents *accidents* (an implementer
+    /// accidentally approving a spec) and records team structure + an audit
+    /// trail — it is NOT an access-control boundary.
+    // trace:STORY-646 | ai:claude
+    SetRole {
+        /// The user id (the person — matches `current_user_id`: `$AIDA_USER`
+        /// / `$USER`). Not a node id.
+        user: String,
+        /// The role to grant (e.g. `advisor`, `implementer`). Validated
+        /// against the known role set.
+        #[clap(long)]
+        role: String,
+    },
+
+    /// Show YOUR effective role: the roster role for your user id if present,
+    /// else `AIDA_SESSION_ROLE`, else the default. Says where it came from.
+    // trace:STORY-646 | ai:claude
+    MyRole {
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum NodeCommand {
     /// List all nodes registered in the shared registry. The current node
@@ -6535,11 +6570,16 @@ pub enum Command {
     /// (`registry/nodes.toml`) — node id, host, email, clone path, when it
     /// registered, and whether it currently holds a coordination claim
     /// (lease / drain / solo). The roster that makes a team visible.
+    ///
+    /// With a subcommand, manage per-user roles (`set-role`, `my-role`).
     // trace:STORY-640 | ai:claude
+    // trace:STORY-646 | ai:claude
     Team {
-        /// Machine-readable JSON output.
+        /// Machine-readable JSON output (bare `aida team` roster view only).
         #[clap(long)]
         json: bool,
+        #[clap(subcommand)]
+        cmd: Option<TeamCommand>,
     },
 
     /// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`
