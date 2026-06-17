@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T15:38:17.743456130Z
-modified_at: 2026-06-17T15:38:17.743456130Z
+modified_at: 2026-06-17T16:00:29.467310137Z
 req_type: Story
 tags:
 - cli
 - node-identity
 - parent:EPIC-47
 - team
+comments:
+- id: 019ed650-071b-7461-af11-04f19fb1b355
+  author: joe
+  content: Commit e7268fc26 references this requirement
+  created_at: 2026-06-17T16:00:29.467310137Z
+  modified_at: 2026-06-17T16:00:29.467310137Z
