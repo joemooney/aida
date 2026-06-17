@@ -4369,19 +4369,28 @@ ttl_secs = 1800
     async fn coordination_endpoint_returns_claim_with_age_and_stale() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
+        // Heartbeat must be RELATIVE to now, not a fixed timestamp: `stale` is
+        // computed as (now - heartbeat) > ttl, so a hardcoded date silently
+        // becomes stale once real time passes the TTL (a time-bomb that fails
+        // this "fresh claim" case hours later). A recent heartbeat keeps it
+        // fresh whenever the test runs.
+        let recent = (chrono::Utc::now() - chrono::Duration::seconds(60))
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         write(
             &root.join("coordination/leases/fr-1-abc.toml"),
-            r#"
+            &format!(
+                r#"
 scope = "FR-1"
 node_id = "2"
 clone_path = "/home/joe/ai/aida-b"
 host = "laptop"
 pid = 4242
 agent = "claude-implementer"
-started_at = "2026-06-17T11:59:00Z"
-heartbeat_at = "2026-06-17T11:59:00Z"
+started_at = "{recent}"
+heartbeat_at = "{recent}"
 ttl_secs = 1800
-"#,
+"#
+            ),
         );
 
         let state = server_state_in(root);

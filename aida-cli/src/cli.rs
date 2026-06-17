@@ -2337,6 +2337,14 @@ pub enum NodeCommand {
         #[clap(long)]
         email: Option<String>,
 
+        /// Friendly name for this node, recorded alongside the node id in the
+        /// shared roster (`aida team`). Defaults to `<host>-<user>-<seq>` (e.g.
+        /// `imac-joe-1`). At a TTY with no flag you are prompted with the
+        /// default pre-filled; non-interactive use takes the default silently.
+        // trace:STORY-652 | ai:claude
+        #[clap(long, value_name = "NAME")]
+        node_name: Option<String>,
+
         /// Re-acquire even if `.aida/node.toml` already exists (default: refuse)
         #[clap(long)]
         force: bool,
@@ -7607,6 +7615,14 @@ pub enum Command {
         // trace:BUG-570 | ai:claude
         #[clap(long)]
         commit_scaffold: bool,
+
+        /// Friendly name for this node, recorded alongside the node id in the
+        /// shared roster (`aida team`). Defaults to `<host>-<user>-<seq>` (e.g.
+        /// `imac-joe-1`). At a TTY with no flag you are prompted with the
+        /// default pre-filled; non-interactive init uses the default silently.
+        // trace:STORY-652 | ai:claude
+        #[clap(long, value_name = "NAME")]
+        node_name: Option<String>,
     },
 
     /// Starter-memory-pack drift discovery (`aida memories check`)
