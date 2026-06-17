@@ -6,9 +6,10 @@ description: 'Each node gets a friendly NAME in addition to the integer node id.
 status: Completed
 priority: High
 owner: ''
+assignee: joe.mooney
 feature: Uncategorized
 created_at: 2026-06-17T13:34:55.631776162Z
-modified_at: 2026-06-17T14:15:05.647467189Z
+modified_at: 2026-06-17T14:46:59.506688753Z
 req_type: Story
 tags:
 - node-identity
