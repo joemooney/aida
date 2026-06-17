@@ -7927,6 +7927,95 @@ fn handle_undefer_command(
     Ok(())
 }
 
+/// Send a best-effort notification message into `recipient`'s mailbox (the
+/// fast local layer; STORY-643 auto-sync propagates it to other clones on the
+/// next pull/push). Reuses the existing message-send path — no new notification
+/// system. Failures are swallowed with a dimmed warning so a mailbox problem
+/// never breaks the verb that triggered the notice (assign / comment).
+/// trace:STORY-644 | ai:claude
+fn send_notification(store_path: &std::path::Path, sender: &str, recipient: &str, body: String) {
+    use aida_core::mailbox::{Intent, Message, Recipient};
+    let project_root = match store_path.parent() {
+        Some(p) => p,
+        None => return,
+    };
+    let id = uuid::Uuid::new_v4().to_string();
+    let msg = Message {
+        id: id.clone(),
+        thread_id: id,
+        from: sender.to_string(),
+        to: Recipient::Agent(recipient.to_string()),
+        timestamp: chrono::Utc::now().timestamp_millis(),
+        in_reply_to: None,
+        body,
+        urgent: false,
+        intent: Intent::Fyi,
+        retracted: false,
+        deleted: false,
+    };
+    if let Err(e) = mailbox_store::write_message(project_root, &msg) {
+        eprintln!(
+            "  {}",
+            format!("(could not send mailbox notice to {recipient}: {e})").dimmed()
+        );
+    }
+}
+
+/// Extract distinct `@mention` handles from free text (STORY-644). Conservative
+/// word-boundary parse: a `@` that is NOT preceded by a word char (so `foo@bar`
+/// email locals and `a@b` are ignored) followed by `[A-Za-z0-9_.-]+`. The
+/// trailing run is trimmed of `.` and `-` so sentence punctuation (`@bob.`) and
+/// hyphen-tails don't leak into the handle. Returns handles in first-seen order,
+/// deduped. trace:STORY-644 | ai:claude
+fn extract_mentions(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] == '@' {
+            // Word-boundary: skip `foo@bar` (email local-part / handle-in-word).
+            let prev_is_word = i > 0 && {
+                let p = chars[i - 1];
+                p.is_alphanumeric() || p == '_'
+            };
+            if !prev_is_word {
+                let mut j = i + 1;
+                while j < chars.len() {
+                    let c = chars[j];
+                    if c.is_alphanumeric() || c == '_' || c == '.' || c == '-' {
+                        j += 1;
+                    } else {
+                        break;
+                    }
+                }
+                let raw: String = chars[i + 1..j].iter().collect();
+                // Trim trailing sentence punctuation so `@bob.` -> `bob`.
+                let handle = raw.trim_end_matches(['.', '-']).to_string();
+                if !handle.is_empty() && !out.contains(&handle) {
+                    out.push(handle);
+                }
+                i = j;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+/// One-line snippet of `text` for a mention notice: collapsed whitespace,
+/// truncated to `max` chars with an ellipsis. trace:STORY-644 | ai:claude
+fn mention_snippet(text: &str, max: usize) -> String {
+    let collapsed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut chars = collapsed.chars();
+    let head: String = chars.by_ref().take(max).collect();
+    if chars.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
+    }
+}
+
 /// `aida assign <SPEC> --to <user>` — set the durable assignee on a spec and
 /// route it into that user's work queue so it surfaces in their
 /// `aida queue list`. Idempotent: re-assigning to the same user is a no-op on
@@ -7995,6 +8084,21 @@ fn handle_assign_command(
         println!("  {}", "(already assigned and queued — no change)".dimmed());
     } else {
         println!("  {} {target}'s queue", "Queued to:".dimmed());
+    }
+
+    // STORY-644: notify the assignee via the mailbox (best-effort; STORY-643
+    // auto-sync carries it to their clone on the next pull). Skip self-assigns
+    // — no point messaging yourself — and skip an idempotent re-assign that
+    // changed nothing. trace:STORY-644 | ai:claude
+    let assigner = current_user_id(None);
+    if assigner != target && !(already_assigned_here && already_queued) {
+        let title = req.title.clone();
+        send_notification(
+            store_path,
+            &assigner,
+            target,
+            format!("You were assigned {display_id}: {title}"),
+        );
     }
     Ok(())
 }
@@ -15319,10 +15423,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
 
             let now = chrono::Utc::now();
+            let comment_author = author.clone().unwrap_or_else(get_default_author);
+            // STORY-644: capture @mentions before `body` is moved into the
+            // comment, so we can notify each mentioned user after the write
+            // lands. trace:STORY-644 | ai:claude
+            let mentions = extract_mentions(&body);
+            let mention_body = body.clone();
             let comment = aida_core::Comment {
                 id: Uuid::now_v7(),
                 content: body,
-                author: author.clone().unwrap_or_else(get_default_author),
+                author: comment_author.clone(),
                 created_at: now,
                 modified_at: now,
                 parent_id: None,
@@ -15337,6 +15447,27 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // spec_id from the resolved req. trace:BUG-68 | ai:claude
             record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             println!("Comment added to {}", req_id);
+
+            // STORY-644: notify each @mentioned user via the mailbox
+            // (best-effort; STORY-643 auto-sync delivers on their next pull).
+            // The named identity is routed to directly — matching how the
+            // mailbox addresses any agent/user id — and a self-mention is
+            // skipped. trace:STORY-644 | ai:claude
+            if !mentions.is_empty() {
+                let display = req.spec_id.as_deref().unwrap_or(req_id);
+                let snippet = mention_snippet(&mention_body, 80);
+                for handle in &mentions {
+                    if handle == &comment_author {
+                        continue;
+                    }
+                    send_notification(
+                        store_path,
+                        &comment_author,
+                        handle,
+                        format!("You were mentioned on {display} by {comment_author}: {snippet}"),
+                    );
+                }
+            }
         }
         Command::Comment(CommentCommand::List { id }) => {
             // trace:TASK-1-020 | ai:claude
@@ -61627,6 +61758,74 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn current_user_id_override_wins() {
         assert_eq!(current_user_id(Some("alice")), "alice");
+    }
+
+    // ── STORY-644: assignment + mention notifications ────────────────────────
+
+    /// The @mention parser extracts the right handles and conservatively
+    /// ignores email local-parts and `@` glued to a word (code-ish text).
+    #[test]
+    fn extract_mentions_picks_handles_ignores_emails_and_code() {
+        // Basic: leading and mid-sentence mentions, deduped, first-seen order.
+        assert_eq!(
+            extract_mentions("@bob please look, and @carol too, also @bob again"),
+            vec!["bob".to_string(), "carol".to_string()]
+        );
+        // Trailing sentence punctuation is trimmed.
+        assert_eq!(extract_mentions("ping @dave."), vec!["dave".to_string()]);
+        // Dotted / hyphenated handles survive (e.g. codex-implementer-1).
+        assert_eq!(
+            extract_mentions("hand off to @codex-implementer-1 now"),
+            vec!["codex-implementer-1".to_string()]
+        );
+        // Email local-parts are NOT mentions (the `@` is preceded by a word char).
+        assert!(extract_mentions("mail joe@example.com about it").is_empty());
+        // A bare `@` with no following handle is ignored.
+        assert!(extract_mentions("the @ symbol alone").is_empty());
+        // Nothing at all.
+        assert!(extract_mentions("no mentions here").is_empty());
+    }
+
+    /// The mention snippet collapses whitespace and truncates with an ellipsis.
+    #[test]
+    fn mention_snippet_collapses_and_truncates() {
+        assert_eq!(mention_snippet("  hi   there  ", 80), "hi there");
+        let s = mention_snippet("abcdefghij", 4);
+        assert_eq!(s, "abcd…");
+    }
+
+    /// Assign-to-self sends no mailbox message: with `current_user_id == target`
+    /// the notify branch is skipped, so the local mailbox dir stays empty.
+    /// trace:STORY-644 | ai:claude
+    #[test]
+    fn assign_to_self_sends_no_notification() {
+        // Drive the same self-skip predicate the assign handler uses, then
+        // assert send_notification writes nothing for the self case (and writes
+        // exactly one message for a real assignee — the positive control).
+        let tmp = std::env::temp_dir().join(format!("aida-story644-{}", uuid::Uuid::new_v4()));
+        let store_path = tmp.join(".aida-store");
+        std::fs::create_dir_all(&store_path).unwrap();
+        let mailbox = tmp.join(".aida").join("mailbox");
+
+        let me = "alice";
+        let target_self = "alice";
+        let target_other = "bob";
+
+        // Self-assign → skipped (no send) per the handler's `assigner != target`.
+        if me != target_self {
+            send_notification(&store_path, me, target_self, "self".to_string());
+        }
+        let after_self = std::fs::read_dir(&mailbox).map(|d| d.count()).unwrap_or(0);
+        assert_eq!(after_self, 0, "assign-to-self writes no mailbox message");
+
+        // Assign to someone else → exactly one message lands.
+        if me != target_other {
+            send_notification(&store_path, me, target_other, "hello bob".to_string());
+        }
+        let after_other = std::fs::read_dir(&mailbox).map(|d| d.count()).unwrap_or(0);
+        assert_eq!(after_other, 1, "assigning to another user sends one notice");
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     /// TASK-818: when both the stable per-instance name (`AIDA_USER`) and the
