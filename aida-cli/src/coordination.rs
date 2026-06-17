@@ -594,6 +594,20 @@ pub(crate) fn list_claims(store_root: &Path) -> Vec<Claim> {
     out
 }
 
+/// List the per-repo process-lock claims (drain + solo) currently recorded on
+/// the store. Returns the live `Claim` records — empty when neither lock is
+/// held. Surfaced alongside the lease claims by the `aida status` cross-clone
+/// coordination view (STORY-640). trace:STORY-640 | ai:claude
+pub(crate) fn list_lock_claims(store_root: &Path) -> Vec<Claim> {
+    let mut out = Vec::new();
+    for kind in [LockKind::Drain, LockKind::Solo] {
+        if let Some(claim) = read_claim(&lock_claim_path(store_root, kind)) {
+            out.push(claim);
+        }
+    }
+    out
+}
+
 // =========================================================================
 // Process-backed per-repo coordination locks (STORY-638, slice 2).
 //

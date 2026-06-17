@@ -77,6 +77,8 @@ mod stacks;
 mod state_snapshot;
 mod status_cleanup;
 mod status_display;
+// trace:STORY-640 | ai:claude — team roster + distinct-identity guard + onboarding.
+mod team;
 #[cfg(test)]
 mod test_env;
 // trace:TASK-661 | ai:claude
@@ -2274,6 +2276,16 @@ fn run() -> Result<()> {
             no_hygiene: _,
         } => {
             handle_status_command(*no_dev_context, None, &storage)?;
+        }
+        // STORY-640: `aida team` reads the shared node roster on the orphan
+        // `aida-store` branch — a distributed-mode concept. Legacy
+        // --centralized stores have no roster. trace:STORY-640 | ai:claude
+        Command::Team { .. } => {
+            anyhow::bail!(
+                "`aida team` is available in the default (distributed) mode — it lists the \
+                 nodes sharing the orphan `aida-store` branch. Legacy --centralized mode has \
+                 no node roster."
+            );
         }
         Command::Usage {
             since,
@@ -12200,6 +12212,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         warn_if_periodic_auto_push(project_root);
     }
 
+    // STORY-640: team identity hygiene. In a TEAM context (a roster with >1
+    // node, or a node other than this clone), a shared `"default"` identity
+    // collides queues + attribution — flag it loudly; a fresh clone that joined
+    // an existing roster gets a one-time onboarding nudge. Best-effort: solo /
+    // single-own-node context is silent, and an unreadable roster never blocks.
+    // Skips the `team` command itself (it surfaces the same facts) and the
+    // machine-readable JSON status path. trace:STORY-640 | ai:claude
+    maybe_team_identity_guard(store_path, command)?;
+
     match command {
         Command::Cache(cache_cmd) => {
             return handle_cache_command(cache_cmd, &backend);
@@ -12317,6 +12338,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 store_path,
                 &backend,
             );
+        }
+        Command::Team { json } => {
+            // trace:STORY-640 | ai:claude
+            return handle_team_command(store_path, *json);
         }
         Command::Usage {
             since,
@@ -91777,6 +91802,235 @@ mod bug415_status_count_tests {
     }
 }
 
+/// Whether a command MUTATES the shared store / queue (so a shared `"default"`
+/// identity in a team context is genuinely hazardous — collides queues +
+/// attribution). Reads only get a warning; writes can be refused behind
+/// `AIDA_TEAM_REQUIRE_USER=1`. Conservative: anything not clearly a read is a
+/// write. trace:STORY-640 | ai:claude
+fn is_write_command(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::Add { .. }
+            | Command::Edit { .. }
+            | Command::Comment(_)
+            | Command::Queue(_)
+            | Command::Session(_)
+            | Command::Defer { .. }
+            | Command::Undefer { .. }
+            | Command::Archive { .. }
+            | Command::Unarchive { .. }
+            | Command::Brief { .. }
+    )
+}
+
+/// STORY-640: the team distinct-identity guard + join-the-team onboarding hint.
+/// Both key off the shared node roster and are silent outside a team context.
+/// Best-effort — never returns an error except the explicit opt-in refusal.
+/// trace:STORY-640 | ai:claude
+fn maybe_team_identity_guard(store_path: &std::path::Path, command: &Command) -> Result<()> {
+    // `aida team` surfaces the same facts; the JSON status path must stay clean
+    // for machine consumers. Skip both so the guard never pollutes them.
+    if matches!(command, Command::Team { .. }) {
+        return Ok(());
+    }
+    if let Command::Status { json: true, .. } = command {
+        return Ok(());
+    }
+
+    let our_clone = team::our_clone_path(store_path);
+    let registry = team::load_roster(store_path);
+    let team_context = team::is_team_context(&registry, &our_clone);
+    if !team_context {
+        return Ok(()); // solo / single-own-node — no nag, ever.
+    }
+
+    // Onboarding: a fresh clone that joined an existing roster but never
+    // acquired its own node id. One-time per command; a light hint, not a
+    // wizard. Suppressible idempotently via a marker so we don't nag forever.
+    if !team::clone_is_registered(&registry, &our_clone) {
+        let project_root = store_path.parent().unwrap_or(store_path);
+        let marker = project_root.join(".aida").join("team-onboarded");
+        if !marker.exists() {
+            eprintln!(
+                "{} You've joined a shared AIDA store with {} other node(s). To keep your \
+                 work attributable + your queue separate:\n  • set a distinct identity:  {}\n  \
+                 • claim a node id:           {}",
+                "Welcome:".cyan().bold(),
+                registry.nodes.len(),
+                "export AIDA_USER=<your-name>".cyan(),
+                "aida node acquire".cyan(),
+            );
+            eprintln!();
+            // Best-effort one-time suppression (dir may not exist yet).
+            if let Some(parent) = marker.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::write(&marker, "1\n");
+        }
+    }
+
+    // Distinct-identity guard (BUG-89 hardening).
+    let user_id = current_user_id(None);
+    if team::identity_verdict(&user_id, team_context) == team::IdentityVerdict::DefaultInTeam {
+        let require = std::env::var("AIDA_TEAM_REQUIRE_USER")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let writes = is_write_command(command);
+        eprintln!(
+            "{} This is a shared (team) store, but no distinct identity is set — you are \
+             the BUG-89 '{}' fallback. A shared '{}' id collides queues + commit \
+             attribution across machines.\n  Fix it for this shell:  {}",
+            "warning:".yellow().bold(),
+            "default".bold(),
+            "default".bold(),
+            "export AIDA_USER=<your-name>".cyan(),
+        );
+        if require && writes {
+            anyhow::bail!(
+                "refusing a write op on a team store with the shared '{}' identity \
+                 (AIDA_TEAM_REQUIRE_USER=1). Set a distinct AIDA_USER, or unset \
+                 AIDA_TEAM_REQUIRE_USER to downgrade this to a warning.",
+                "default"
+            );
+        }
+        eprintln!();
+    }
+    Ok(())
+}
+
+/// `aida team` — the roster of every node/clone sharing this store, joined with
+/// the `coordination/` claims each currently holds. trace:STORY-640 | ai:claude
+fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
+    let our_clone = team::our_clone_path(store_path);
+    let members = team::build_team_view(store_path, &our_clone);
+    let now = chrono::Utc::now();
+
+    if json {
+        let rows: Vec<serde_json::Value> = members
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "node_id": m.entry.id,
+                    "host": m.entry.hostname,
+                    "email": m.entry.email,
+                    "clone_path": m.entry.clone_path
+                        .as_ref()
+                        .map(|p| p.display().to_string()),
+                    "registered": m.entry.registered.to_rfc3339(),
+                    "active_claims": m.active_claims,
+                    "is_self": m.is_self,
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+        return Ok(());
+    }
+
+    if members.is_empty() {
+        println!("{}", "Team roster".bold());
+        println!();
+        println!(
+            "  No nodes registered yet. Claim one with {} (or {} for a full bootstrap).",
+            "aida node acquire".cyan(),
+            "aida init".cyan()
+        );
+        return Ok(());
+    }
+
+    println!("{}", "Team roster".bold());
+    println!();
+    println!(
+        "{:<8} {:<14} {:<26} {:<12} claims",
+        "node", "host", "email", "registered"
+    );
+    println!("{}", "─".repeat(78));
+    for m in &members {
+        let marker = if m.is_self { " (you)" } else { "" };
+        let node_label = format!("{}{}", m.entry.id, marker);
+        let email = m.entry.email.as_deref().unwrap_or("-");
+        let registered = m
+            .entry
+            .registered
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d")
+            .to_string();
+        let claims = if m.active_claims.is_empty() {
+            "-".dimmed().to_string()
+        } else {
+            m.active_claims.join(", ").yellow().to_string()
+        };
+        println!(
+            "{:<8} {:<14} {:<26} {:<12} {}",
+            truncate(&node_label, 8),
+            truncate(&m.entry.hostname, 14),
+            truncate(email, 26),
+            registered,
+            claims,
+        );
+        if let Some(p) = &m.entry.clone_path {
+            println!("  {}", p.display().to_string().dimmed());
+        }
+    }
+    let _ = now; // reserved for a future last-seen column
+    println!();
+    let n = members.len();
+    if n == 1 {
+        println!(
+            "  {} node registered. {}",
+            n,
+            "Solo store — add a teammate with their own clone + `aida node acquire`.".dimmed()
+        );
+    } else {
+        println!("  {} nodes registered.", n.to_string().bold());
+    }
+    Ok(())
+}
+
+/// `aida status` cross-clone coordination view (STORY-640, coordination slice
+/// 3): the ACTIVE `coordination/` claims (leases + drain + solo) held across
+/// all clones — distinct from the LOCAL leases section. Silent when there are
+/// no claims. trace:STORY-640 | ai:claude
+fn print_status_coordination_section(
+    store_root: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) {
+    let mut claims = coordination::list_claims(store_root);
+    claims.extend(coordination::list_lock_claims(store_root));
+    if claims.is_empty() {
+        return;
+    }
+    println!("{}", "─── Cross-clone coordination ───".bold());
+    println!();
+    println!(
+        "  {:<16} {:<10} {:<14} {:<14} age",
+        "scope", "host", "agent", "node"
+    );
+    for c in &claims {
+        let age = chrono::DateTime::parse_from_rfc3339(&c.heartbeat_at)
+            .ok()
+            .map(|t| {
+                let secs = now
+                    .signed_duration_since(t.with_timezone(&chrono::Utc))
+                    .num_seconds()
+                    .max(0);
+                format!("{secs}s")
+            })
+            .unwrap_or_else(|| "?".to_string());
+        println!(
+            "  {:<16} {:<10} {:<14} {:<14} {}",
+            truncate(&c.scope, 16),
+            truncate(&c.host, 10),
+            truncate(if c.agent.is_empty() { "-" } else { &c.agent }, 14),
+            truncate(&c.node_id, 14),
+            age,
+        );
+        if !c.clone_path.is_empty() {
+            println!("    {}", c.clone_path.dimmed());
+        }
+    }
+    println!();
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_status_command_distributed(
     no_dev_context: bool,
@@ -91973,6 +92227,12 @@ fn handle_status_command_distributed(
     // the "Active agents" section. Read-only; silent when no remote signal.
     // trace:STORY-452 | ai:claude
     print_status_remote_activity_section(&project_root, 5);
+
+    // STORY-640 (coordination slice 3): active cross-clone `coordination/`
+    // claims (leases + drain + solo) held across all clones — who holds what,
+    // where. Distinct from the LOCAL leases above; silent when no claims exist.
+    // trace:STORY-640 | ai:claude
+    print_status_coordination_section(store_path, chrono::Utc::now());
 
     // STORY-405: live state-affecting advisor/external activity recorded by
     // AIDA verbs such as `aida pr ship`. Read-only and silent when absent or
