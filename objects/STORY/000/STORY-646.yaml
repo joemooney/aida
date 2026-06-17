@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T06:03:07.380706752Z
-modified_at: 2026-06-17T06:03:07.380706752Z
+modified_at: 2026-06-17T06:30:22.476827870Z
 req_type: Story
 tags:
 - parent:EPIC-47
 - rbac
 - roles
 - team
+comments:
+- id: 019ed446-120c-7471-b118-c08d93395d9c
+  author: joe
+  content: Commit 02600d3a9 references this requirement
+  created_at: 2026-06-17T06:30:22.476827870Z
+  modified_at: 2026-06-17T06:30:22.476827870Z
