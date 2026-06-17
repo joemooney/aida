@@ -3,15 +3,33 @@ spec_id: STORY-643
 agreed_id: STORY-643
 title: 'Auto mailbox sync: messages flow between users on pull/push (Tier 2)'
 description: 'Tier-2 of EPIC-47 (roadmap docs/plans/2026-06-16-team-support-roadmap.md). Today cross-user mailbox visibility needs a MANUAL digest->push->pull (mailbox_store::digest_local_to_canonical + merge_dedup exist but are not wired into sync). Wire auto-digest into the aida pull/push store legs: on the store sync, digest local .aida/mailbox -> canonical <store>/mailbox (idempotent, id-keyed) so a sender publishes automatically, and ensure pull brings canonical down + read_inbox merges it so a recipient sees foreign messages with no manual step. Best-effort (never break pull/push on a mailbox error); opt-out env/config. Harness case MU-502: clone A send_message to an identity B holds, A push, B pull -> B read_inbox shows it. Catalog MU-502 flips to a tested PASS.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T04:36:21.723343556Z
-modified_at: 2026-06-17T04:36:21.723343556Z
+modified_at: 2026-06-17T05:01:57.645052163Z
 req_type: Story
 tags:
 - mailbox
 - parent:EPIC-47
 - sync
 - team
+history:
+- id: 019ed3f5-2008-79d1-ac99-bf4359995662
+  author: aida-auto-bump
+  timestamp: 2026-06-17T05:01:57.640183566Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed3f5-200d-78a3-b72e-59b6cfc884f8
+  timestamp: 2026-06-17T05:01:57.645051519Z
+  agent: aida
+  commit_sha: 009df931a7855dce224057c2813a0c00ea4d24e1
+  summary: Completed via merge 009df931
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T05:01:57.484163513Z
+  completion_sha: 009df931a7855dce224057c2813a0c00ea4d24e1
