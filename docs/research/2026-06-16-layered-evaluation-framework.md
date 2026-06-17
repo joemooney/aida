@@ -241,4 +241,31 @@ A "Fragments" answer on the substrate-impact line, or a low score on any of 2.1 
 
 ---
 
-*Working draft. Remaining stub to develop: a worked scoring of 2–3 real candidate tools per layer, as a filled-in example of Appendix A.*
+## Appendix B — Worked example: scoring three candidates across the stack
+
+> **Illustrative, not authoritative.** These score *tool classes* on publicly-known characteristics as of mid-2026, to show the rubric in motion — they are not audits of named products, and a real evaluation must re-score the specific product version against the org's own weighting. The scores are arguable by design; the value is the *shape of the tradeoff* they expose, not the exact numbers. (Scale: 3 owned/strong · 2 partial · 1 weak · 0 absent/captive. ★ = heavily weighted.)
+
+| # | Criterion | **C1 — Frontier model API** (L0) | **C2 — Single-vendor coordination suite** (L4–L5) | **C3 — Git-canonical program-owned graph** (L1/L3) |
+|---|---|:-:|:-:|:-:|
+| 2.1★ | Lock-in / exit cost | 2 *(swappable if abstracted; behavior couples)* | 1 *(coordination state is the vendor's)* | 3 *(your git, open format, full export)* |
+| 2.2 | Interoperability | 2 *(std API, per-vendor shape)* | 1 *(within the vendor's ecosystem)* | 3 *(git / files / open protocol)* |
+| 2.3★ | Substrate ownership | 3 *(stateless to you; you keep I/O)* | 1 *(record is the vendor's)* | 3 *(system of record is yours)* |
+| 2.4★ | Composability / synergy | 2 *(a capability, composes via API)* | 1 *(that vendor's agents only)* | 3 *(stable IDs, cross-program graph)* |
+| 2.5 | Neutrality | 2 *(single-vendor, but multi-sourceable)* | 0 *(single-vendor by definition)* | 3 *(vendor-agnostic)* |
+| 2.6 | Governance / audit | 2 *(you log around a black box)* | 1 *(audit inside the vendor's tools)* | 3 *(gates + traces you control)* |
+| 2.7 | Reversibility / blast radius | 2 *(swap models with effort)* | 1 *(backing out loses the record)* | 3 *(it's files; trivially portable)* |
+| 2.8 | TCO incl. churn risk | 2 *(low build; vendor-priced)* | 2 *(cheap to adopt; high churn exposure)* | **1** *(the substrate tax + maturity risk)* |
+| 2.9 | Strategic optionality | 3 *(multi-sourcing preserves it)* | 1 *(deep adoption forecloses multi-vendor)* | 3 *(swap anything around it)* |
+| | **Weighted read (2.1/2.3/2.4)** | solid | **weak** | **strong** |
+
+**C1 — Frontier model API (L0).** *Decision: **Buy, multi-source.*** Capability is the point; lock-in is managed by keeping ≥2 providers swappable behind an abstraction. **Substrate impact: Neutral** — it never touches the graph. The only failure mode is coupling app logic to one provider's quirks.
+
+**C2 — Single-vendor coordination suite (L4–L5).** *Decision: **Ride-native — but never make it the system of record.*** Its *unscored* strength is real: it is the best-integrated, lowest-friction experience, and where you are already in that vendor's session the exit cost is low. But it fails the weighted criteria hard — the coordination record is the vendor's. **Substrate impact: Fragments** (if it becomes the record). Use it for convenience; keep the durable copy in your own substrate (C3).
+
+**C3 — Git-canonical program-owned graph (L1/L3).** *Decision: **Build / adopt-portable at the asset line — accepting the substrate tax consciously.*** It dominates ownership, neutrality, composability, and optionality — and **its one low score (2.8) is the honest one:** the substrate tax (build + maintain) and, for a home-grown or early-maturity instance, real reliability/support risk and the theory §12 churn exposure. **Substrate impact: Grows.** You own it not because it's cheap but because it's the asset and the lock-in safeguard (§5).
+
+**The lesson from the contrast.** No candidate is "best" — they serve different layers, and a healthy portfolio uses **all three**: *buy* the model, *ride* the suite for convenience, *own* the substrate as the record. C2 wins on capability/UX and loses on ownership; C3 wins on ownership and loses on cost/maturity; the framework's job is to make that tradeoff **explicit and layer-dependent** rather than letting the best demo (usually C2) silently become the system of record — which is exactly how an org fragments the asset it is trying to compound.
+
+---
+
+*Working draft. Companion to the theory paper and research proposal; develop alongside them as real candidate tools are evaluated and the §5.1 experiment is run.*
