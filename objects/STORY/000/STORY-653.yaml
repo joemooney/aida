@@ -1,0 +1,18 @@
+id: 019ed5ca-e855-7162-9c03-e06621de25bf
+spec_id: STORY-653
+agreed_id: STORY-653
+title: 'Dashboard roster identity coherence: group/key on the person identity matching roles+queues, friendly labels + node names'
+description: 'Fix: the dashboard roster groups nodes by integer node user_id (shows a cryptic "1") and the role editor writes team.toml under that integer key, but effective_role/queues/assignees key on the $USER string (current_user_id), so dashboard-set roles never enforce (team.toml currently has stray 1=advisor). Reconcile: the aida-core team read module + GET /api/v2/team group + key on the person identity that MATCHES roles/queues — the node owner $USER string (STORY A field), falling back to email then integer for old nodes; TeamMemberDto carries a friendly user label + the user node friendly names. The role editor (PUT /team/:user/role) + assignment (PUT assignee) write under that same identity so they actually enforce + display. Migrate/normalize the stray team.toml integer key. Web RosterPanel shows the friendly label + node names instead of the raw id. FLAG as a follow-up (do NOT solve here): cross-machine person unification — the same human may have different $USER on different machines (joe@imac vs joe.mooney@spock) + an integer user_id that collapsed them; deciding who is one person across accounts is a separate design question.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T13:35:05.301679863Z
+modified_at: 2026-06-17T13:35:05.301679863Z
+req_type: Story
+tags:
+- bug
+- dashboard
+- node-identity
+- parent:EPIC-47
+- team
