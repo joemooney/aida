@@ -1,0 +1,17 @@
+id: 019ed63b-b50f-74e1-92df-52dffe708dc0
+spec_id: STORY-654
+agreed_id: STORY-654
+title: 'aida node set-owner / set-name + aida team unset-role: backfill legacy node identity + clean stray role keys'
+description: 'Backfill commands for legacy nodes that predate the node user/name fields (STORY-652), so an existing clone can become identity-coherent without re-acquiring. (1) aida node set-owner <id> --user <name>: set the owner $USER string on an existing nodes.toml entry (CAS push); if <id> is the current node, also update the local .aida-store/.aida/node.toml. (2) aida node set-name <id> --name <name>: set the friendly name on an existing node similarly. (3) aida team unset-role <user>: remove a member entry from registry/team.toml (CAS push) — to clean stray/duplicate keys (e.g. the orphaned integer "1" from the pre-STORY-653 roster). Validate the node id exists; reuse the node-registry CAS + set_role_cas patterns in aida-core. Tests for each. These resolve the cross-machine/legacy-node person_key gap on a per-node basis (the full multi-$USER person-unification stays the deferred follow-up).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T15:38:17.743456130Z
+modified_at: 2026-06-17T15:38:17.743456130Z
+req_type: Story
+tags:
+- cli
+- node-identity
+- parent:EPIC-47
+- team
