@@ -1,0 +1,17 @@
+id: 019ed5ca-c28f-7a51-80ef-84fe4faa1f52
+spec_id: STORY-652
+agreed_id: STORY-652
+title: 'Node friendly names + owner identity: name (<host>-<user>-<seq>) + $USER string on each node, settable at init/acquire'
+description: 'Each node gets a friendly NAME in addition to the integer node id. aida-core node model (NodeConfig + nodes.toml NodeRegistry entry) gains name: Option<String> (default <hostname>-<user>-<seq>, e.g. imac-joe-1; <user>=current_user_id, <seq>=node id) AND user: Option<String> = the current_user_id ($USER/AIDA_USER) string captured at registration (so the team roster can join nodes to the same person-identity that roles/queues/assignees use — they currently key on the integer user_id, which does not match). aida init + aida node acquire accept --node-name <NAME>; at a TTY prompt with the default pre-filled; non-interactive uses the default. aida team CLI shows the friendly name column. Provide node_display_name() + node_owner() helpers with backfill for existing nodes lacking the fields (derive name from <host>-<id>, owner from email local-part or the integer). Backward-compatible (optional fields). Add an AIDA_* doc row if a new env is read.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T13:34:55.631776162Z
+modified_at: 2026-06-17T13:34:55.631776162Z
+req_type: Story
+tags:
+- node-identity
+- onboarding
+- parent:EPIC-47
+- team
