@@ -3,6 +3,7 @@ id = "1"
 user_id = 1
 hostname = "imac"
 email = "joe.mooney@gmail.com"
+user = "joe"
 registered = "2026-05-06T04:46:47.705839785Z"
 
 [[nodes]]
