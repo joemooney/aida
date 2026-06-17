@@ -2147,8 +2147,17 @@ impl<'a> McpServer<'a> {
             .get("mark_seen")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        let all = crate::mailbox_store::read_local_messages(&self.project_root)
+        // STORY-643: merge the canonical (orphan-store) layer with the local
+        // one so foreign messages another clone published and we pulled down
+        // surface here — matching `aida mailbox inbox` on the CLI. Without this
+        // an MCP agent only ever saw its own clone's locally-sent mail.
+        // trace:STORY-643 | ai:claude
+        let local = crate::mailbox_store::read_local_messages(&self.project_root)
             .map_err(|e| e.to_string())?;
+        let store_root = self.project_root.join(".aida-store");
+        let canonical =
+            crate::mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
+        let all = aida_core::mailbox::merge_dedup(&local, &canonical);
         let watermark = crate::mailbox_store::read_watermark(&self.project_root, &agent);
         let full = inbox_for(&agent, &all);
         // `--unread`/`unread` filters to messages past the watermark; the

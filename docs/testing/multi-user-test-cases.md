@@ -208,11 +208,12 @@ This table is the spine; almost every case is a consequence of it.
 - **Validates:** Briefs are per-clone local; cross-clone handoff must use the mailbox.
 - **Status:** ⚠️ **accepted limitation** — `resolve_brief_directories`, `brief_root_dir` are local. Document loudly: **do not** rely on briefs for cross-clone routing.
 
-### MU-502 — mailbox local→canonical digest visibility
-- **Setup:** A `send_message` (writes local `.aida/mailbox/`). B reads before digest.
-- **Expected:** Before `digest_local_to_canonical` + push + B pull → B sees nothing. After digest+sync → both see it (id-keyed union, canonical wins).
-- **Validates:** Hybrid mailbox (STORY-493).
-- **Status:** 🟡 — `mailbox_store` digest/merge tested in isolation; cross-clone digest→sync→read not end-to-end tested.
+### MU-502 — auto mailbox sync: messages flow between users on pull/push
+- **Setup:** A `aida mailbox send --to <id>` (writes local `.aida/mailbox/`).
+- **Steps:** A `aida push` → B `aida pull` → B `aida mailbox inbox <id>`. **No manual `aida mailbox sync`.**
+- **Expected:** The push store leg PUBLISHES the local mailbox into the canonical `<store>/mailbox/` (idempotent, id-keyed) and folds it into the store commit; B's pull rebases the canonical message down; B's read path merges canonical+local so the message surfaces. Both legs also publish on `aida pull`, so a sender that only ever pulls still propagates. Best-effort — a mailbox failure never breaks pull/push. Opt out with `AIDA_MAILBOX_AUTOSYNC=0` or `[mailbox] autosync = false`.
+- **Validates:** Hybrid mailbox (STORY-493) auto-wired into sync (STORY-643). Tier-2 of EPIC-47.
+- **Status:** ✅ **closed by STORY-643** — publish leg `maybe_publish_mailbox_for_sync` in the `handle_push_command` / `handle_pull_command` store legs (gated by `mailbox_autosync_enabled`); receive side already merges canonical in `aida mailbox inbox` and now also in the MCP `read_inbox`. Harness `case_MU-502` is `EXPECT=pass`. trace:STORY-643
 
 ### MU-503 — addressing by agent type reaches the mailbox
 - **Expected:** `--to <type>` reaches an agent whose `AIDA_AGENT_TYPE` matches (unioned into `inbox_identities`).
@@ -261,7 +262,7 @@ This table is the spine; almost every case is a consequence of it.
 1. **Coordination is the weak axis.** ID allocation, store sync, and cache are robust (CAS, rebase, stale-detect, collision guards). The gaps are all in **cross-clone coordination**: leases (MU-504), drain lock (MU-505), solo lock (MU-506) are per-clone-local and provide *zero* cross-clone safety. Two same-host clones can silently double-work the same spec. **This is the headline decision** — either put a shared lease/lock registry on the store branch, or explicitly document the single-driver assumption.
 2. **Same-spec concurrent edits now AUTO-MERGE on pull** (MU-204, STORY-641). `git_ops::pull_rebase_auto_merge` reconciles conflicting spec objects (`conflict::merge_spec_three_way`: history/comments/processing_record union by id + scalar LWW + tag union) and the oplog (`OpLog::merge`) during the store-leg rebase, so concurrent same-spec edits no longer stop for manual resolution. Conflicts in files with no union rule still defer to manual (MU-203).
 3. **Queue is shared + OS-user-keyed** (MU-401/404) — intuitive for same-user, surprising for the `"default"` fallback (BUG-89).
-4. **Briefs are local-only** (MU-501) — a real cross-clone routing trap; the mailbox is the sanctioned cross-clone channel (MU-502).
+4. **Briefs are local-only** (MU-501) — a real cross-clone routing trap; the mailbox is the sanctioned cross-clone channel, and after STORY-643 it **auto-syncs on the normal `aida pull` / `aida push`** (MU-502) — no manual digest, so a teammate's message arrives with the next pull.
 
 ## Suggested next steps (for discussion)
 

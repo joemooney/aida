@@ -91,6 +91,7 @@ close.
 | `AIDA_AUTO_BUMP` | Auto-promotes `done → completed` on `aida pull` when a referencing commit lands on main. | enabled. Opt-out with `false`/`0`/`no`/`off`. | user | process env |
 | `AIDA_AUTO_MERGE_GATE` | Runs the merge-gate (short-ID assignment) after a pull. | enabled. Opt-out with `false`/`0`/`no`/`off`. | user | process env |
 | `AIDA_AUTO_ARCHIVE` | Auto-sweeps old completed/rejected specs on `aida pull` (gated on `[archive] auto_after_days`). | enabled when the config gate is set. Opt-out with `false`/`0`/`no`/`off`. | user | process env |
+| `AIDA_MAILBOX_AUTOSYNC` | Auto-publishes the local mailbox into the canonical store on the `aida pull` / `aida push` store legs so messages flow between users without a manual `aida mailbox sync` (STORY-643). Best-effort: a mailbox failure never breaks pull/push. Env wins over `[mailbox] autosync`. | enabled. Opt-out with `false`/`0`/`no`/`off`. | user | process env |
 | `AIDA_CAPTURE_INTERFACE_CHANGES` | Captures interface-change notes at the close checkpoint. | enabled. Opt-out with `0`/`false`/`no`. | user | process env |
 | `AIDA_PR_SHIP_NO_CI_WAIT` | Skips the CI wait on `aida pr ship`. | unset = wait for CI. Opt-in (truthy). | user | process env |
 | `AIDA_TEE_HEADLESS` | Streams a headless child's chatter to the console (failures always stream regardless). | enabled. Opt-out with `0`/`false`/`off`. | user (`--no-tee-headless`) | process env |
