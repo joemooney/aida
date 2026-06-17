@@ -1,0 +1,17 @@
+id: 019ed47e-d744-7502-bbce-8153858edd50
+spec_id: STORY-648
+agreed_id: STORY-648
+title: 'Team dashboard slice A: aida-server /team + /coordination endpoints + ts-rs DTOs (Tier 3)'
+description: Slice A of the team dashboard (design docs/plans/2026-06-17-team-dashboard.md). Add read-only REST endpoints GET /api/v2/team (roster from nodes.toml + roles from team.toml + active coordination claim per member) and GET /api/v2/coordination (active leases + drain + solo claims with holder/scope/age/stale). Prefer moving the pure read logic (roster+roles, coordination listing) into aida-core so aida-cli + aida-server share one source (avoids STORY-82-style drift); fallback = server reads the registry files directly. DTOs derive ts-rs TS, exported via aida-generate-types into shared/types.ts. Respect existing auth/CORS/X-Project. Absent team.toml/coordination = empty arrays, never error. Endpoint tests. No web changes (slice B).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T07:32:22.980237253Z
+modified_at: 2026-06-17T07:32:22.980237253Z
+req_type: Story
+tags:
+- aida-server
+- dashboard
+- parent:EPIC-47
+- team
