@@ -1574,6 +1574,12 @@ pub enum BurndownCommand {
         // trace:TASK-804 | ai:claude
         #[clap(long)]
         verbose: bool,
+        // trace:STORY-647 | ai:claude
+        /// Bypass the team RBAC guardrail (`[team.permissions] drain_start`).
+        /// Starting an autonomous drain is an advisor-gated op by default; the
+        /// gate is a guardrail, not security — the bypass is recorded in history.
+        #[clap(long)]
+        force: bool,
     },
     /// Is a drain running, and what is it doing? The read-side companion to
     /// `burndown run`. Reads the global drain lock — pid, start time, the
@@ -4425,6 +4431,11 @@ pub enum QueueCommand {
         ///   .aida/config.toml, then `per-item`.
         #[clap(long, value_enum)]
         strategy: Option<crate::integrate::IntegrateStrategy>,
+        // trace:STORY-647 | ai:claude
+        /// Bypass the team RBAC guardrail (`[team.permissions] integrate`). The
+        /// gate is a guardrail, not security — the bypass is recorded in history.
+        #[clap(long)]
+        force: bool,
         /// User ID (defaults to AIDA_USER or system user).
         #[clap(long)]
         user: Option<String>,

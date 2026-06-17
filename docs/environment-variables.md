@@ -368,6 +368,31 @@ use shell `${VAR:-default}` defaulting.
 
 ---
 
+## Team RBAC config knobs (`[team]`, not env vars)
+
+The team RBAC guardrail (EPIC-47; slice 1 STORY-646, slice 2 STORY-647) is
+configured under `[team]` in `.aida/config.toml` — there are no `AIDA_*` env
+vars for it. **GUARDRAIL, NOT SECURITY:** the store is a shared git branch, so
+anyone with push access can edit any YAML directly; these knobs stop *accidents*,
+encode team structure, and leave an audit trail — they are not access control.
+`--force` (where the op exposes it) always bypasses, and the bypass is recorded
+in git history. `aida config show` renders the resolved `[team]` policy.
+
+| Knob | What it does | Default |
+|---|---|---|
+| `[team] strict` | When `true`, the roster is authoritative: a NON-rostered user gets least-privilege (default-deny) for gated ops, and refusals are NOT bypassable by setting/unsetting `AIDA_SESSION_ROLE`. When `false`, behavior is exactly slice 1 (roster → env → default fallback). | `false` |
+| `[team] protected_tags` | A list of tags marking a spec "protected"; editing or transitioning a spec carrying ANY of these tags requires the `protected_role`. Empty = no protected specs. Case-insensitive, any-match. | `[]` |
+| `[team] protected_role` | The role required to edit/transition a protected spec. | `advisor` |
+| `[team.permissions] status_transition` | Minimum role to promote a spec into the approved pipeline. | `advisor` |
+| `[team.permissions] merge_gate` | Minimum role to run `aida db merge-gate`. | `advisor` |
+| `[team.permissions] integrate` | Minimum role to run `aida queue integrate`. | `advisor` |
+| `[team.permissions] drain_start` | Minimum role to start an autonomous drain (`aida burndown run` / `aida queue work --auto-complete`). | `advisor` |
+
+Interactive (TTY) sessions and live-orchestrator re-entry hold authority
+regardless of role (so a human at a terminal and a drain's own phase children
+are never blocked). Per-user roles live in `registry/team.toml` on the
+`aida-store` branch; set them with `aida team set-role <user> --role <role>`.
+
 ## Not environment variables
 
 A grep for `AIDA_*` also surfaces these — they are **not** environment
