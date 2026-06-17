@@ -108,14 +108,14 @@ rationale?: string | null,
  * 0-based index of the chosen answer. `None` while the request is
  * pending (unanswered).
  */
-answered?: number | null,
+answered?: number | null, 
 /**
  * Free-text counter-proposal recorded ALONGSIDE the chosen option — the
  * "1, but name it list-claude-sessions" escape. A pure data op: no LLM at
  * answer-time; the implementer later reads choice + note. `None` when the
  * human took the pure-pick path.
  */
-note?: string | null,
+note?: string | null, 
 /**
  * When the question was first posed.
  */
@@ -810,6 +810,78 @@ modified_at: string | null,
  */
 archived?: boolean, };
 
+export type ProcessingRecord = { 
+/**
+ * Unique identifier for this record entry.
+ */
+id: string, 
+/**
+ * When the spec was processed to completion.
+ */
+timestamp: string, 
+/**
+ * The agent that did the work (e.g. `claude`, `codex`), best-effort from
+ * the brief's `generated_by` / the session lease role / a fallback.
+ */
+agent: string, 
+/**
+ * Project-relative path of the pickup brief this work was routed by, when
+ * one existed (`.aida/agent-briefs/...`). Promotes the gitignored brief
+ * outcome into the durable record.
+ */
+brief_ref?: string | null, 
+/**
+ * The merge/commit SHA that completed the spec, when known.
+ */
+commit_sha?: string | null, 
+/**
+ * The PR/MR number that carried the work, when known.
+ */
+pr?: bigint | null, 
+/**
+ * One-line human-readable summary of what was done.
+ */
+summary: string, 
+/**
+ * Key decisions + rationale (the WHY) — typically promoted from the
+ * review verdict summary and the implementer's recorded notes.
+ */
+decisions?: Array<string>, 
+/**
+ * What was punted or escalated during the work (follow-up TASK ids,
+ * design-fork punts) — so the deferred tail is auditable, not lost.
+ */
+punted?: Array<string>, 
+/**
+ * The reviewer's verdict (`Approved` / `RequestChanges` / `Rejected`),
+ * promoted from the gitignored `.aida/review-verdicts/<spec>.json`.
+ */
+review_verdict?: string | null, };
+
+export type SpecIntent = { 
+/**
+ * Layman register: plain prose for a human skimmer.
+ */
+layman: string, 
+/**
+ * LLM register: denser/structured comprehension an agent loads BEFORE
+ * working the spec.
+ */
+llm: string, 
+/**
+ * RFC3339 timestamp of when this comprehension was generated.
+ */
+generated_at: string, 
+/**
+ * Hash of the graph-neighborhood inputs at generation time. Compared
+ * against a freshly-computed hash at read to detect drift (staleness).
+ */
+source_hash: string, 
+/**
+ * The model identifier that produced the comprehension.
+ */
+model: string, };
+
 export type Requirement = { 
 /**
  * Unique identifier for the requirement (UUID)
@@ -852,6 +924,15 @@ priority: RequirementPriority,
  * Person responsible for the requirement
  */
 owner: string, 
+/**
+ * The team member this spec is *assigned* to (the durable "who works on
+ * this" pointer). Distinct from `owner`, which records the creator/author
+ * of the spec and drives contributions analytics — assignment is mutable
+ * work-division metadata set by `aida assign <spec> --to <user>` and
+ * cleared by `aida unassign`. `None` ⇒ unassigned ⇒ current single-user
+ * behavior (renders nothing). trace:STORY-639 | ai:claude
+ */
+assignee?: string | null, 
 /**
  * The feature this requirement belongs to
  */
@@ -901,6 +982,14 @@ comments?: Array<Comment>,
  * History of changes to this requirement
  */
 history?: Array<HistoryEntry>, 
+/**
+ * STORY-582: durable processing records — the committed audit trail of
+ * what was done + why each time this spec was processed to completion.
+ * Parallel to `history:` (which holds structured field deltas); this holds
+ * the human-meaningful outcome promoted from the brief / review verdict.
+ * trace:STORY-582 | ai:claude
+ */
+processing_record?: Array<ProcessingRecord>, 
 /**
  * Whether this requirement is archived
  */
@@ -1023,7 +1112,16 @@ decision_request?: DecisionRequest | null,
  * `--interface-{cli,mcp,tui,other}` flags non-interactively) and readable
  * by the digest's capabilities lens. trace:STORY-542 | ai:claude
  */
-interface_changes?: InterfaceChanges | null, };
+interface_changes?: InterfaceChanges | null, 
+/**
+ * AI-generated plain-terms comprehension of WHY this spec exists — its
+ * intent, distilled from the spec + its graph neighborhood. Generated
+ * on-demand by `aida intent <spec>`, cached here, and drift-stamped via
+ * `source_hash`. `None` until first generated. Deliberately NOT in the
+ * `diff_snapshots` history allow-list — regeneration writes ZERO history
+ * rows. trace:STORY-631 | ai:claude
+ */
+intent?: SpecIntent | null, };
 
 export type RequirementSnapshot = { 
 /**
@@ -1054,6 +1152,10 @@ priority: RequirementPriority,
  * Owner at snapshot time
  */
 owner: string, 
+/**
+ * Assignee at snapshot time. trace:STORY-639 | ai:claude
+ */
+assignee?: string | null, 
 /**
  * Feature at snapshot time
  */
@@ -1332,6 +1434,77 @@ export type ImproveDescriptionResponse = { improved_description: string, changes
 export type GeneratedChild = { title: string, description: string, type: string, rationale: string, };
 
 export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChild>, };
+
+export type TeamMemberDto = { 
+/**
+ * The person's identity (the `current_user_id` / `nodes.toml` user id as a
+ * string). A user may register several clones, all grouped under this id.
+ */
+userId: string, 
+/**
+ * The user's role from `registry/team.toml`, if any (canonicalized).
+ */
+role: string | null, 
+/**
+ * Distinct hostnames this user is registered on.
+ */
+hosts: Array<string>, 
+/**
+ * Absolute clone paths this user has registered.
+ */
+clonePaths: Array<string>, 
+/**
+ * The most recent registration timestamp across the user's clones (RFC3339).
+ */
+lastSeen: string | null, 
+/**
+ * One coordination claim scope this user currently holds, if any (the
+ * roster "active now" signal). The full claim set is on `/coordination`.
+ */
+activeClaim: string | null, };
+
+export type CoordinationClaimDto = { 
+/**
+ * `"lease"` (a leased spec/worktree scope), `"drain"`, or `"solo"`.
+ */
+kind: string, 
+/**
+ * The leased scope (a SPEC-ID / worktree scope) for a lease; `None` for the
+ * drain/solo process locks (their scope is the kind itself).
+ */
+scope: string | null, 
+/**
+ * The node id holding the claim.
+ */
+holderUser: string, 
+/**
+ * Host the holder runs on.
+ */
+host: string, 
+/**
+ * Absolute path of the holding clone.
+ */
+clonePath: string, 
+/**
+ * Agent / command context, if recorded.
+ */
+agent: string | null, 
+/**
+ * RFC3339 UTC when the claim was taken.
+ */
+startedAt: string, 
+/**
+ * RFC3339 UTC of the last heartbeat.
+ */
+heartbeatAt: string, 
+/**
+ * Seconds since the heartbeat (computed at read time).
+ */
+ageSecs: bigint, 
+/**
+ * True when the heartbeat has aged past the claim's TTL (reclaimable).
+ */
+stale: boolean, };
 
 export type QueueEntry = {
     requirementId: string;
