@@ -8,6 +8,12 @@ export function useRequirements() {
     queryKey: ['requirements'],
     queryFn: fetchRequirements,
     staleTime: 30_000,
+    // Live refresh: background refetch keeps the team dashboard's assignment
+    // board (and other live views) current as the team works. React Query
+    // serves cached data while it refetches, so there is no foreground flicker.
+    // trace:STORY-651 | ai:claude
+    refetchInterval: 12_000,
+    refetchIntervalInBackground: false,
   });
 }
 
