@@ -476,9 +476,12 @@ case_MU-402() {
     fi
 }
 
-# --- MU-504: two clones lease the SAME spec -> DESIRED refusal (gap) -----
+# --- MU-504: two clones lease the SAME spec -> REFUSED (STORY-637) --------
 case_MU-504() {
-    EXPECT=known-gap
+    # STORY-637 closed this gap: a shared lease registry on the aida-store
+    # branch (coordination/leases/<scope>.toml) makes B's cross-clone
+    # `session start --owns <same spec>` refuse a lease A already holds.
+    EXPECT=pass
     # A creates a spec + leases it; B attempts to lease the same spec.
     local id
     id="$(add_spec "$CLONE_A" "mu504 contended lease" task)"
