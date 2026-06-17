@@ -21,6 +21,7 @@ user_id = 1
 hostname = "spock"
 email = "Joe.Mooney@work.example"
 clone_path = "/home/joe.mooney/ai/aida"
+user = "joe"
 registered = "2026-05-24T01:16:51.404669049Z"
 
 [[nodes]]
