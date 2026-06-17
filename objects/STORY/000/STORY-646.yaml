@@ -1,0 +1,17 @@
+id: 019ed42d-1ef4-7f10-bf28-44b327fc8e91
+spec_id: STORY-646
+agreed_id: STORY-646
+title: 'Team RBAC slice 1: per-user roles in the roster + effective_role enforcement (Tier 3)'
+description: 'Tier-3 of EPIC-47 (design docs/plans/2026-06-16-team-rbac.md). registry/team.toml on the store maps user_id -> role (CAS push-wins). effective_role(current_user_id) = roster role ELSE AIDA_SESSION_ROLE ELSE default — so a rostered user gets their durable role even with no env set. Wire the existing advisor-gated operations (status transitions to approved/planned/rejected, role-gated queue grooming) to consult effective_role, refusing a non-advisor with a clear message (--force / env opt-out remains). aida team set-role <user> --role <role>; show role in aida team. GUARDRAIL not security (git push = full edit) — document the caveat in help + output + docs. Backward-compatible (no roster / user absent = current env-based behavior). Harness: a non-advisor rostered user is refused an advisor-only transition; an advisor is allowed.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T06:03:07.380706752Z
+modified_at: 2026-06-17T06:03:07.380706752Z
+req_type: Story
+tags:
+- parent:EPIC-47
+- rbac
+- roles
+- team
