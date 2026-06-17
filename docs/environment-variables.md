@@ -52,6 +52,7 @@ spawns an agent.
 | Variable | What it does | Default | Who sets it | Scope |
 | --- | --- | --- | --- | --- |
 | `AIDA_USER` | Queue identity — the `user_id` the work queue shards on. | Resolution cascade: `AIDA_USER` → `USER` → `USERNAME` → `"default"`. | user | process env |
+| `AIDA_TEAM_REQUIRE_USER` | In a team context (a `registry/nodes.toml` roster with >1 node, or a node other than this clone), upgrades the distinct-identity guard from a warning to a hard refusal of WRITE ops while the resolved id is the shared `"default"` fallback (STORY-640). Reads are never blocked. | unset = warn only. Override with `1`/`true`. | user | process env |
 | `AIDA_AUTHOR` | Default author stamped on work items and comments. | Cascade: `AIDA_AUTHOR` → `USER` → `USERNAME` → `"Unknown"`. | user | process env |
 | `AIDA_SESSION_ROLE` | Active role persona for the shell (`implementer` / `advisor` / `reviewer` …). Gates role-restricted writes (e.g. `queue add` is advisor-only). | unset = no role. | launch-path (`aida role enter` export) | shell session |
 | `AIDA_SESSION_PROJECT` | Project root for the active session. | unset = derived from the statusline project root. | launch-path (`aida role enter`) | process env |

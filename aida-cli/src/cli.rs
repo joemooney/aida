@@ -6531,6 +6531,17 @@ pub enum Command {
         no_hygiene: bool,
     },
 
+    /// List the team: every registered node/clone sharing this store
+    /// (`registry/nodes.toml`) — node id, host, email, clone path, when it
+    /// registered, and whether it currently holds a coordination claim
+    /// (lease / drain / solo). The roster that makes a team visible.
+    // trace:STORY-640 | ai:claude
+    Team {
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`
     /// (written one line per `aida ...` invocation when telemetry is
     /// enabled — opt out via `[telemetry] enabled = false` or

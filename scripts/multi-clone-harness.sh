@@ -939,10 +939,40 @@ EOF
     remove_shared_lock_claim "drain.lock.toml"
 }
 
+# --- MU-521: `aida team` in clone B lists BOTH clones' nodes (STORY-640) ----
+case_MU-521() {
+    # STORY-640: `aida team` is the team roster — it reads registry/nodes.toml on
+    # the shared aida-store branch and lists every registered node/clone. After
+    # setup both A and B are registered (distinct node ids), so B's `aida team`
+    # must surface BOTH node ids. Also assert the --json shape parses + carries
+    # both rows. trace:STORY-640
+    EXPECT=pass
+    local a_node b_node
+    a_node="$(run_in "$CLONE_A" cat .aida-store/.aida/node.toml 2>/dev/null | grep -oE 'node_id *= *"[^"]+"' | head -1 | sed 's/.*"\(.*\)"/\1/')"
+    b_node="$(run_in "$CLONE_B" cat .aida-store/.aida/node.toml 2>/dev/null | grep -oE 'node_id *= *"[^"]+"' | head -1 | sed 's/.*"\(.*\)"/\1/')"
+    local out json_out
+    out="$(aida_in "$CLONE_B" team 2>&1 || true)"
+    json_out="$(aida_in "$CLONE_B" team --json 2>&1 || true)"
+    # JSON must carry both node ids as distinct rows.
+    local json_has_both=0
+    if [[ "$json_out" == *"\"node_id\""* && "$json_out" == *"\"$a_node\""* && "$json_out" == *"\"$b_node\""* ]]; then
+        json_has_both=1
+    fi
+    CASE_DETAIL="B team lists A=$a_node B=$b_node; json_both=$json_has_both"
+    if assert_contains "$out" "$a_node" "team roster lists A's node" \
+        && assert_contains "$out" "$b_node" "team roster lists B's node" \
+        && assert_eq "$json_has_both" "1" "team --json carries both rows"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="team roster missing a node; out=[${out:0:200}] json=[${json_out:0:200}]"
+    fi
+}
+
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
 
 list_cases() {
     echo "Available cases:"
