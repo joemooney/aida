@@ -49,6 +49,9 @@ mod metrics;
 mod network_retry;
 mod not_found;
 mod orchestrator;
+// trace:STORY-647 | ai:claude — team RBAC slice 2: gated-op permission map +
+// protected specs + strict mode (guardrail, not security).
+mod permissions;
 mod pr_rebase;
 mod pr_ship;
 mod presence;
@@ -14788,6 +14791,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // an agreed_id). trace:BUG-68 | ai:claude
             record_role_activity(req.spec_id.as_deref().unwrap_or(id), "edit");
 
+            // STORY-647 (team RBAC slice 2): a spec carrying any `[team]
+            // protected_tags` entry may only be edited/transitioned by the
+            // configured `protected_role` (advisor by default). Checked here,
+            // before any field mutation, against the spec's CURRENT tags so a
+            // non-advisor cannot edit OR un-protect a protected spec. `--force`
+            // and advisor authority (TTY / live drain / advisor role) bypass.
+            // Best-effort; no `[team] protected_tags` => no-op (slice-1 behavior).
+            // trace:STORY-647 | ai:claude
+            enforce_protected_spec_gate(req.tags.iter(), *force)?;
+
             let mut changed = false;
             if let Some(t) = title {
                 req.title = t.clone();
@@ -16064,6 +16077,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if !aida_core::git_ops::is_git_repo(store_path) {
                 anyhow::bail!("Not a git repository: {}", store_path.display());
             }
+
+            // STORY-647: team RBAC guardrail — the merge gate assigns the agreed
+            // short IDs (an advisor act by default, tunable via
+            // `[team.permissions] merge_gate`). Advisor authority (TTY / live
+            // drain / advisor role) bypasses; `merge-gate` carries no `--force`
+            // flag, so a non-advisor seats the role to proceed. trace:STORY-647
+            enforce_team_gate(permissions::GatedOp::MergeGate, false)?;
 
             let assignments = aida_core::git_ops::merge_gate(store_path)?;
 
@@ -23903,6 +23923,9 @@ const KNOWN_CONFIG_SECTIONS: &[&str] = &[
     "hints",
     "ui",
     "seats",
+    // STORY-647: team RBAC guardrail knobs (permission map / protected specs /
+    // strict mode). trace:STORY-647 | ai:claude
+    "team",
 ];
 
 /// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
@@ -24378,6 +24401,80 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             section: "seats",
             header: "[seats] — operator (aida human) vs advisor (aida advisor) worklist"
                 .to_string(),
+            rows,
+        }
+    });
+
+    // --- Team RBAC guardrail (STORY-647): the gated-op permission map, the
+    // protected-tag set + its required role, and strict mode. GUARDRAIL, NOT
+    // SECURITY — the store is a shared branch; this stops accidents + leaves an
+    // audit trail, it is not access control. Resolution reuses the same
+    // `permissions::TeamPermissions` reader the gates consult, so `config show`
+    // reflects what the binary actually enforces. trace:STORY-647 | ai:claude
+    sections.push({
+        let team = permissions::TeamPermissions::from_config(cfg.as_ref());
+        let mut rows = Vec::new();
+        let team_present = cfg
+            .as_ref()
+            .map(|c| c.get("team").is_some())
+            .unwrap_or(false);
+        let src = |configured: bool| {
+            if configured {
+                PolicySource::ProjectConfig
+            } else {
+                PolicySource::Default
+            }
+        };
+        rows.push(PolicyRow {
+            key: "strict",
+            value: if team.strict {
+                "true (non-rostered = least-privilege; refusals roster-authoritative)".to_string()
+            } else {
+                "false (slice-1: env/default fallback)".to_string()
+            },
+            source: src(team_present
+                && cfg
+                    .as_ref()
+                    .and_then(|c| c.get("team"))
+                    .and_then(|t| t.get("strict"))
+                    .is_some()),
+        });
+        rows.push(PolicyRow {
+            key: "protected_tags",
+            value: team.protected_tags_display(),
+            source: src(cfg
+                .as_ref()
+                .and_then(|c| c.get("team"))
+                .and_then(|t| t.get("protected_tags"))
+                .is_some()),
+        });
+        // The per-op minimum roles (the permission map).
+        for (op, key) in permissions::POLICY_DISPLAY_OPS {
+            rows.push(PolicyRow {
+                key,
+                value: team.min_role(*op),
+                source: src(cfg
+                    .as_ref()
+                    .and_then(|c| c.get("team"))
+                    .and_then(|t| t.get("permissions"))
+                    .and_then(|p| p.get(key))
+                    .is_some()),
+            });
+        }
+        rows.push(PolicyRow {
+            key: "protected_role",
+            value: team.min_role(permissions::GatedOp::ProtectedSpec),
+            source: src(cfg
+                .as_ref()
+                .and_then(|c| c.get("team"))
+                .and_then(|t| t.get("protected_role"))
+                .is_some()),
+        });
+        PolicySection {
+            section: "team",
+            header:
+                "[team] — RBAC guardrail (NOT security: shared store; stops accidents + audits)"
+                    .to_string(),
             rows,
         }
     });
@@ -69172,6 +69269,104 @@ fn effective_role_with_roster() -> (String, team::RoleSource) {
     }
 }
 
+/// STORY-647 (team RBAC slice 2): enforce the team permission map for a gated
+/// op. Resolves the `[team]` policy + the caller's gated effective role (strict
+/// mode honored), and bails with a clear, role-naming refusal when the role
+/// doesn't satisfy the op's minimum role — UNLESS `force` is set (the audited
+/// guardrail escape hatch). Best-effort: an unreachable store/config falls back
+/// to the all-default (non-strict) policy and never hard-blocks. The
+/// advisor-authority TTY/orchestrator carve-outs of [`has_advisor_authority`]
+/// are honored first so interactive humans and live drains are never blocked by
+/// this finer gate. trace:STORY-647 | ai:claude
+fn enforce_team_gate(op: permissions::GatedOp, force: bool) -> Result<()> {
+    if force {
+        return Ok(());
+    }
+    let project_root = match find_project_root() {
+        Ok(r) => r,
+        // No project root → degraded; don't block. trace:STORY-647
+        Err(_) => return Ok(()),
+    };
+    let config = permissions::TeamPermissions::load(&project_root);
+    // Interactive humans + live orchestrators keep their slice-1 carve-out: they
+    // hold advisor authority regardless of role, so the finer gate never blocks
+    // them. CRUCIAL for strict mode: we must NOT reuse `has_advisor_authority()`
+    // here — its role leg consults the NON-strict env fallback, so an env
+    // `AIDA_SESSION_ROLE=advisor` would slip a non-rostered user past the strict
+    // gate. Bypass ONLY on the TTY / live-orchestrator carve-outs; the role is
+    // resolved strict-aware below. trace:STORY-647 | ai:claude
+    if authority_carveout_active() {
+        return Ok(());
+    }
+    let user_id = current_user_id(None);
+    let store_root = project_root.join(".aida-store");
+    let (role, source) =
+        permissions::gated_effective_role_for_user(Some(&store_root), &user_id, &config);
+    if permissions::permits(op, &role, &config) {
+        return Ok(());
+    }
+    anyhow::bail!(permissions::refusal_message(op, &role, source, &config));
+}
+
+/// STORY-647: the non-role half of [`has_advisor_authority`] — an interactive
+/// (TTY) session OR a corroborated live orchestrator. These are legitimate
+/// authority in the guardrail model regardless of role, so the finer RBAC gates
+/// bypass them. Kept distinct from `has_advisor_authority` so the team gates do
+/// NOT inherit its env-role leg (which would let `AIDA_SESSION_ROLE=advisor`
+/// bypass strict mode). trace:STORY-647 | ai:claude
+fn authority_carveout_active() -> bool {
+    let orchestrated = find_main_worktree_root()
+        .map(|root| {
+            matches!(
+                orchestrator::detect(&root),
+                orchestrator::OrchestratorContext::Orchestrated
+            )
+        })
+        .unwrap_or(false);
+    std::io::stdin().is_terminal() || orchestrated
+}
+
+/// STORY-647: the protected-spec variant of [`enforce_team_gate`] — gates
+/// editing/transitioning a spec carrying any `[team] protected_tags` entry on
+/// the configured `protected_role` (advisor by default). A no-op when the spec
+/// carries no protected tag, when `force` is set, or when the caller holds
+/// advisor authority (TTY / live drain / advisor role). Best-effort.
+/// trace:STORY-647 | ai:claude
+fn enforce_protected_spec_gate<'a, I>(tags: I, force: bool) -> Result<()>
+where
+    I: IntoIterator<Item = &'a String>,
+{
+    if force {
+        return Ok(());
+    }
+    let project_root = match find_project_root() {
+        Ok(r) => r,
+        Err(_) => return Ok(()),
+    };
+    let config = permissions::TeamPermissions::load(&project_root);
+    if !config.spec_is_protected(tags) {
+        return Ok(());
+    }
+    // TTY / live-orchestrator carve-out only — not the env-role leg (strict mode
+    // must not be env-bypassable). trace:STORY-647
+    if authority_carveout_active() {
+        return Ok(());
+    }
+    let user_id = current_user_id(None);
+    let store_root = project_root.join(".aida-store");
+    let (role, source) =
+        permissions::gated_effective_role_for_user(Some(&store_root), &user_id, &config);
+    if permissions::permits(permissions::GatedOp::ProtectedSpec, &role, &config) {
+        return Ok(());
+    }
+    anyhow::bail!(permissions::refusal_message(
+        permissions::GatedOp::ProtectedSpec,
+        &role,
+        source,
+        &config
+    ));
+}
+
 /// TASK-647 (ADR-3): a status whose *production* requires advisor authority —
 /// anything that places a spec into the active execution pipeline (Approved
 /// and beyond). Draft / Rejected / NeedsAttention don't gate (they are not
@@ -77581,6 +77776,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             permission_mode,
             dry_run,
             verbose,
+            force,
         } => handle_burndown_run(
             status,
             tag.as_deref(),
@@ -77590,6 +77786,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             permission_mode.as_deref(),
             *dry_run,
             *verbose,
+            *force,
         ),
         crate::cli::BurndownCommand::Status { json } => handle_burndown_status(*json),
     }
@@ -77905,7 +78102,16 @@ fn handle_burndown_run(
     // teed to `.aida/burndown/<drain-id>.jsonl` + rendered live. Control flow is
     // identical to the quiet launch — visibility only. trace:TASK-804 | ai:claude
     verbose: bool,
+    // STORY-647: bypass the team RBAC drain-start guardrail.
+    force: bool,
 ) -> Result<()> {
+    // STORY-647: team RBAC guardrail — starting an autonomous drain is an
+    // advisor-gated op by default (tunable via `[team.permissions] drain_start`).
+    // Checked FIRST, before any sync/preflight, so even `--dry-run` (the safe
+    // gate-probe path the harness uses) is refused for a non-advisor. `--force` /
+    // advisor authority (TTY / live drain / advisor role) bypass. trace:STORY-647
+    enforce_team_gate(permissions::GatedOp::DrainStart, force)?;
+
     // BUG-530: sync the orphan store before computing the blessed set. The
     // preflight reads the local `.aida-store/` worktree (via
     // resolve_burndown_sets → load_store_for_lookup → GitBackend), which can
@@ -106505,6 +106711,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             {
                 anyhow::bail!(msg);
             }
+            // STORY-647: team RBAC guardrail — starting an autonomous drain
+            // (`--auto-complete`) is an advisor-gated op by default (tunable via
+            // `[team.permissions] drain_start`). A live-orchestrator re-entry
+            // (`--resume-drain`, and the phase children the orchestrator spawns)
+            // holds advisor authority via `has_advisor_authority()`'s
+            // orchestrator carve-out, so the gate bypasses those and only the
+            // FRESH launch is checked. Advisor authority (TTY / advisor role)
+            // bypasses; there is no `--force` on this path, so a non-advisor
+            // seats the role. trace:STORY-647 | ai:claude
+            if auto_complete.is_some() && !*resume_drain {
+                enforce_team_gate(permissions::GatedOp::DrainStart, false)?;
+            }
             // TASK-307: propagate the headless-tee flag the same way
             // `--zen` propagates via `AIDA_ZEN` — set the env var once at
             // the top and every downstream child (the direct headless
@@ -107252,8 +107470,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             max,
             rebase,
             strategy,
+            force,
             user,
         } => {
+            // STORY-647: team RBAC guardrail — integrating ready PRs into the
+            // default branch is an advisor-gated op by default (tunable via
+            // `[team.permissions] integrate`). Checked before any work, including
+            // dry-run, so the gate is what the harness probes. `--force` /
+            // advisor authority bypass. trace:STORY-647 | ai:claude
+            enforce_team_gate(permissions::GatedOp::Integrate, *force)?;
             let user_id = current_user_id(user.as_deref());
             handle_queue_integrate(
                 storage, &user_id, *dry_run, *watch, *interval, *max, *rebase, *strategy,
