@@ -39,4 +39,5 @@ user_id = 1
 hostname = "imac"
 email = "joe.mooney@gmail.com"
 clone_path = "/home/joe/ai/aida_dup"
+user = "joe"
 registered = "2026-06-16T22:02:56.035862116Z"
