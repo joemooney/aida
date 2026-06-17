@@ -3,12 +3,12 @@ spec_id: STORY-640
 agreed_id: STORY-640
 title: 'Team identity & awareness: aida team roster + status coordination view + distinct-identity guard + onboarding'
 description: 'Tier-1 of EPIC-47 (folds identity+visibility+onboarding — they share the roster). aida team: list registered nodes/users (from registry/nodes.toml) with host/last-seen; aida status gains a cross-clone coordination view (the deferred slice 3: active coordination/ claims with holder host/clone/agent/age). BUG-89 hardening: in a team context (>1 node registered / roster present), refuse or loudly warn the default user identity and guide setting a distinct AIDA_USER. Onboarding: when a fresh clone joins an existing store with a roster, guide AIDA_USER + node acquire. Best-effort; backward-compatible.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:36.228662309Z
-modified_at: 2026-06-17T04:23:47.305117308Z
+modified_at: 2026-06-17T04:30:41.656952055Z
 req_type: Story
 tags:
 - identity
@@ -27,3 +27,21 @@ comments:
   content: Commit ac7d634ab references this requirement
   created_at: 2026-06-17T04:23:47.305117308Z
   modified_at: 2026-06-17T04:23:47.305117308Z
+history:
+- id: 019ed3d8-7ff4-7642-b63f-0e7bedce4b9a
+  author: aida-auto-bump
+  timestamp: 2026-06-17T04:30:41.652166529Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed3d8-7ff8-7f11-8aa8-99c6f754dd18
+  timestamp: 2026-06-17T04:30:41.656950993Z
+  agent: aida
+  commit_sha: 88c731c453a0b6a3c8251676747bc03810e1c4e9
+  summary: Completed via merge 88c731c4
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T04:30:41.484682794Z
+  completion_sha: 88c731c453a0b6a3c8251676747bc03810e1c4e9
