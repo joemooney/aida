@@ -1,0 +1,19 @@
+id: 019ed351-68df-77a3-bd84-18f4b5a8af0e
+spec_id: STORY-638
+agreed_id: STORY-638
+title: 'Cross-clone drain + solo locks: shared coordination (slice 2, closes MU-505/506)'
+description: 'Slice 2 of cross-clone coordination (docs/plans/2026-06-16-cross-clone-coordination.md). Promote drain.lock + solo.lock to coordination/drain.lock.toml + coordination/solo.lock.toml on the aida-store branch, reusing the slice-1 coordination module. acquire_drain_lock / acquire_solo_lock consult the shared claim first (pull-check-claim-push); a live cross-clone drain/solo is refused. Drain/solo ARE process-backed, so same-host pid liveness governs reclaim (+ TTL backstop); heartbeat refresh on the loop tick. Keep a local mirror for fast probe. Best-effort if store unreachable (warn + proceed). Gate: harness MU-505 flips GAP to PASS + a new MU-506 (solo) case passes.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T02:03:08.383617507Z
+modified_at: 2026-06-17T02:03:08.383617507Z
+req_type: Story
+tags:
+- coordination
+- drain
+- multi-clone
+- multi-user
+- parent:EPIC-46
+- solo
