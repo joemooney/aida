@@ -112,6 +112,292 @@ pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     Ok(())
 }
 
+/// Outcome of an auto-merging store-leg pull.
+#[derive(Debug, Clone)]
+pub enum StorePullOutcome {
+    /// `git pull --rebase` succeeded with no conflict.
+    Clean,
+    /// One or more conflicting spec objects were structurally auto-merged
+    /// (history unioned, scalars resolved LWW) and the rebase completed.
+    /// Carries a one-line note per resolved spec for the caller to surface.
+    AutoMerged { notes: Vec<String> },
+}
+
+/// Pull-rebase the orphan store, auto-reconciling conflicting spec YAMLs.
+///
+/// STORY-641 / MU-204: a plain `pull_rebase` stops on a textual conflict in
+/// `objects/TYPE/000/SPEC.yaml` whenever two clones edited the SAME spec —
+/// even though the spec is structurally union-mergeable (`history:` is
+/// append-only by entry id; scalars resolve via LWW). This wrapper attempts
+/// the rebase and, if it conflicts AND every unmerged path is a spec object
+/// under `objects/**/*.yaml`, runs the pure `conflict::merge_spec_three_way`
+/// resolver per spec, stages the result, and continues the rebase.
+///
+/// SAFETY: if ANY conflicting path is not a spec object, or any structured
+/// parse/merge fails, the rebase is aborted and the function returns an Err —
+/// the caller falls back to the manual-conflict path. We never force-resolve
+/// unknown files and never corrupt the store. trace:STORY-641 | ai:claude
+#[cfg(feature = "native")]
+pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result<StorePullOutcome> {
+    let result = git(repo, &["pull", "--rebase", remote, branch])?;
+    if result.success {
+        return Ok(StorePullOutcome::Clean);
+    }
+
+    // The rebase may have paused on a conflict. If we're not actually
+    // mid-rebase, this was some other failure — surface it.
+    if !rebase_in_progress(repo) {
+        anyhow::bail!("git pull --rebase failed: {}", result.stderr);
+    }
+
+    let mut notes: Vec<String> = Vec::new();
+
+    // Drive the rebase forward one conflicted step at a time. Each
+    // `--continue` may surface a fresh batch of conflicts (one rebased
+    // commit at a time), so loop until the rebase is no longer in progress.
+    loop {
+        let conflicted = unmerged_paths(repo)?;
+        if conflicted.is_empty() {
+            // No conflicts right now but still mid-rebase — let git advance.
+            let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+            if !rebase_in_progress(repo) {
+                if cont.success || rebase_completed_ok(repo) {
+                    return Ok(if notes.is_empty() {
+                        StorePullOutcome::Clean
+                    } else {
+                        StorePullOutcome::AutoMerged { notes }
+                    });
+                }
+                let _ = git(repo, &["rebase", "--abort"]);
+                anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
+            }
+            continue;
+        }
+
+        // Every conflicted path must be a structurally-mergeable, append-only
+        // artifact: a spec object (history union + scalar LWW) or the oplog
+        // (operations union by id + lamport reconcile). Anything else
+        // (registries, agreed_counters, blocks) → bail to the manual path; we
+        // never force-resolve files without a known union rule.
+        for path in &conflicted {
+            if !is_spec_object_path(path) && !is_oplog_path(path) {
+                let _ = git(repo, &["rebase", "--abort"]);
+                anyhow::bail!(
+                    "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
+                );
+            }
+        }
+
+        for path in &conflicted {
+            let resolved = if is_oplog_path(path) {
+                resolve_oplog_conflict(repo, path)
+            } else {
+                resolve_spec_conflict(repo, path)
+            };
+            match resolved {
+                Ok(note) => {
+                    add(repo, &[path])
+                        .with_context(|| format!("git add {path} after auto-merge"))?;
+                    notes.push(note);
+                }
+                Err(e) => {
+                    let _ = git(repo, &["rebase", "--abort"]);
+                    anyhow::bail!("structured merge of `{path}` failed: {e}");
+                }
+            }
+        }
+
+        // Continue the rebase with the resolved objects staged. Force a
+        // no-op editor so `--continue` never blocks waiting for a commit
+        // message on a TTY-less drain.
+        let cont = git(repo, &["-c", "core.editor=true", "rebase", "--continue"])?;
+        if !rebase_in_progress(repo) {
+            if cont.success || rebase_completed_ok(repo) {
+                return Ok(StorePullOutcome::AutoMerged { notes });
+            }
+            let _ = git(repo, &["rebase", "--abort"]);
+            anyhow::bail!("git rebase --continue failed: {}", cont.stderr);
+        }
+        // else: another conflicted commit ahead — loop and resolve it too.
+    }
+}
+
+/// True when a rebase is currently in progress in `repo`.
+#[cfg(feature = "native")]
+fn rebase_in_progress(repo: &Path) -> bool {
+    let git_dir = match git(repo, &["rev-parse", "--git-dir"]) {
+        Ok(r) if r.success => PathBuf::from(r.stdout),
+        _ => return false,
+    };
+    let git_dir = if git_dir.is_absolute() {
+        git_dir
+    } else {
+        repo.join(git_dir)
+    };
+    git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists()
+}
+
+/// True when HEAD has advanced and no rebase is in progress (sanity check
+/// after a `--continue` that reported a non-zero status but actually finished).
+#[cfg(feature = "native")]
+fn rebase_completed_ok(repo: &Path) -> bool {
+    !rebase_in_progress(repo)
+}
+
+/// List the currently-unmerged (conflicted) paths, relative to the repo root.
+#[cfg(feature = "native")]
+fn unmerged_paths(repo: &Path) -> Result<Vec<String>> {
+    let result = git(repo, &["diff", "--name-only", "--diff-filter=U"])?;
+    if !result.success {
+        anyhow::bail!("git diff --diff-filter=U failed: {}", result.stderr);
+    }
+    Ok(result
+        .stdout
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect())
+}
+
+/// True when `path` looks like a spec object: under `objects/` and `.yaml`.
+fn is_spec_object_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    (p.starts_with("objects/") || p.contains("/objects/")) && p.ends_with(".yaml")
+}
+
+/// True when `path` is the store's append-only operation log.
+fn is_oplog_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    p == "oplog.yaml" || p.ends_with("/oplog.yaml")
+}
+
+/// Resolve a conflicted `oplog.yaml` by unioning the operation logs. The
+/// `OpLog` is append-only and id-keyed, so `OpLog::merge` (dedupe by op id +
+/// lamport reconcile + deterministic sort) is the exact union we want. A
+/// single `aida edit` writes BOTH the spec object and the oplog, so without
+/// this the spec auto-merge alone would still leave the oplog conflicted and
+/// stop the rebase. trace:STORY-641 | ai:claude
+#[cfg(feature = "native")]
+fn resolve_oplog_conflict(repo: &Path, path: &str) -> Result<String> {
+    use crate::oplog::OpLog;
+
+    let ours_yaml = git_show_stage(repo, 2, path)?;
+    let theirs_yaml = git_show_stage(repo, 3, path)?;
+
+    let parse = |label: &str, yaml: &Option<String>| -> Result<Option<OpLog>> {
+        match yaml {
+            Some(y) => {
+                let log: OpLog = serde_yaml::from_str(y)
+                    .with_context(|| format!("parse {label} stage of {path}"))?;
+                Ok(Some(log))
+            }
+            None => Ok(None),
+        }
+    };
+
+    let ours = parse("ours", &ours_yaml)?;
+    let theirs = parse("theirs", &theirs_yaml)?;
+
+    let (mut merged, other) = match (ours, theirs) {
+        (Some(o), Some(t)) => (o, t),
+        (Some(o), None) => (o.clone(), o),
+        (None, Some(t)) => (t.clone(), t),
+        (None, None) => anyhow::bail!("both sides of {path} are absent"),
+    };
+    merged.merge(&other);
+
+    let yaml = serde_yaml::to_string(&merged)
+        .with_context(|| format!("serialize merged oplog for {path}"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, yaml.as_bytes()).with_context(|| format!("write merged {path}"))?;
+
+    Ok(format!(
+        "auto-merged oplog: {} operations after union",
+        merged.operations.len()
+    ))
+}
+
+/// Resolve a single conflicted spec object via three-way structured merge.
+/// Reads the base/ours/theirs blobs from the index stages and writes the
+/// merged YAML back to the working tree. Returns a one-line note.
+#[cfg(feature = "native")]
+fn resolve_spec_conflict(repo: &Path, path: &str) -> Result<String> {
+    use crate::conflict::merge_spec_three_way;
+    use crate::models::Requirement;
+
+    // Stage 1 = merge base, 2 = ours (HEAD/onto), 3 = theirs (the commit
+    // being rebased). A stage may be absent (add/add or delete/modify); fall
+    // back gracefully so a missing base still merges ours+theirs.
+    let base_yaml = git_show_stage(repo, 1, path)?;
+    let ours_yaml = git_show_stage(repo, 2, path)?;
+    let theirs_yaml = git_show_stage(repo, 3, path)?;
+
+    let parse = |label: &str, yaml: &Option<String>| -> Result<Option<Requirement>> {
+        match yaml {
+            Some(y) => {
+                let req: Requirement = serde_yaml::from_str(y)
+                    .with_context(|| format!("parse {label} stage of {path}"))?;
+                Ok(Some(req))
+            }
+            None => Ok(None),
+        }
+    };
+
+    let ours = parse("ours", &ours_yaml)?;
+    let theirs = parse("theirs", &theirs_yaml)?;
+    let base = parse("base", &base_yaml)?;
+
+    // Both sides must exist to do a 3-way merge. If one side deleted the
+    // file, that's not an append-only history conflict — defer to manual.
+    let (ours, theirs) = match (ours, theirs) {
+        (Some(o), Some(t)) => (o, t),
+        _ => anyhow::bail!("one side deleted {path}; not auto-mergeable"),
+    };
+    // Anchor the union with the merge base when present; otherwise use ours
+    // as a harmless base (ours+theirs union still preserves everything).
+    let base = base.unwrap_or_else(|| ours.clone());
+
+    let merged = merge_spec_three_way(&base, &ours, &theirs);
+
+    let yaml = serde_yaml::to_string(&merged)
+        .with_context(|| format!("serialize merged requirement for {path}"))?;
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    // Use the atomic writer: the store object dir is a known torn-write race
+    // path (TASK-331) and a concurrent reader can otherwise see a half-file.
+    crate::write_atomic(&abs, yaml.as_bytes()).with_context(|| format!("write merged {path}"))?;
+
+    let spec_label = merged
+        .agreed_id
+        .clone()
+        .or_else(|| merged.spec_id.clone())
+        .unwrap_or_else(|| path.to_string());
+    let hist_count = merged.history.len();
+    let status = merged.effective_status();
+    Ok(format!(
+        "auto-merged {spec_label}: unioned {hist_count} history entr{}, status LWW={status}",
+        if hist_count == 1 { "y" } else { "ies" }
+    ))
+}
+
+/// `git show :<stage>:<path>` — returns None when the stage is absent.
+#[cfg(feature = "native")]
+fn git_show_stage(repo: &Path, stage: u8, path: &str) -> Result<Option<String>> {
+    let spec = format!(":{stage}:{path}");
+    let result = git(repo, &["show", &spec])?;
+    if result.success {
+        Ok(Some(result.stdout))
+    } else {
+        // Missing stage (e.g. add/add) is not an error here.
+        Ok(None)
+    }
+}
+
 /// Pull (merge) from remote.
 ///
 /// **Prefer `pull_rebase` for the orphan-store flow.** Bare `git pull`

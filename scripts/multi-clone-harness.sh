@@ -362,54 +362,118 @@ case_MU-202() {
     fi
 }
 
-# --- MU-203: edits to SAME spec -> store-leg rebase CONFLICT surfaced -----
+# --- MU-203: NON-MERGEABLE store conflict still surfaces for manual resolve -
+# Before STORY-641, same-spec edits surfaced a manual conflict. STORY-641 now
+# AUTO-MERGES spec objects + the oplog (see MU-204), so the same-spec status
+# case no longer conflicts. MU-203 now pins the COMPLEMENT: a conflict in a
+# store file with NO known union rule (here `metadata.yaml`) must STILL fall
+# back to the manual-resolution path (non-zero exit / rebase hint), proving the
+# auto-merger never force-resolves unknown files. trace:STORY-641
 case_MU-203() {
     EXPECT=pass
-    # Create one spec, sync both clones onto it.
-    local id
-    id="$(add_spec "$CLONE_A" "mu203 contended spec" task)"
-    push_from "$CLONE_A"; pull_into "$CLONE_B"
-    # Both edit the SAME spec's status, both commit locally (no push yet).
-    aida_in "$CLONE_A" edit "$id" --status in-progress >/dev/null 2>&1 || true
-    aida_in "$CLONE_B" edit "$id" --status planned >/dev/null 2>&1 || true
-    # A pushes first (wins).
+    # Force a textual conflict on a non-mergeable tracked store file by writing
+    # divergent content from each clone directly on the aida-store branch.
+    # (We bypass `aida edit` here because edits target spec objects + oplog,
+    # which now auto-merge — the point is the *unknown-file* fallback.)
+    run_in "$CLONE_A" sh -c 'printf "harness_marker: A-%s\n" "$$" >> .aida-store/metadata.yaml \
+        && git -C .aida-store add metadata.yaml \
+        && git -C .aida-store commit -q -m "mu203: A edits metadata"' >/dev/null 2>&1 || true
+    run_in "$CLONE_B" sh -c 'printf "harness_marker: B-%s\n" "$$" >> .aida-store/metadata.yaml \
+        && git -C .aida-store add metadata.yaml \
+        && git -C .aida-store commit -q -m "mu203: B edits metadata"' >/dev/null 2>&1 || true
+    # A pushes first (wins the push race).
     push_from "$CLONE_A"
-    # B pulls -> store-leg rebase should hit a conflict in id.yaml.
+    # B pulls -> store-leg rebase hits a conflict on metadata.yaml that the
+    # auto-merger refuses (no union rule) -> falls back to manual resolution.
     local pull_out pull_rc
     set +e
     pull_out="$(aida_in "$CLONE_B" pull 2>&1)"
     pull_rc=$?
     set -e
-    # Desired/today behavior: conflict is SURFACED (non-zero rc OR a
-    # conflict/rebase hint in output), and B is left to resolve -- the edit is
-    # NOT silently lost. We assert surfacing, not auto-merge.
+    # The conflict must be SURFACED (non-zero rc and/or a conflict/rebase hint).
     local conflict_marker=""
     if [[ $pull_rc -ne 0 ]]; then conflict_marker="rc=$pull_rc"; fi
-    if [[ "$pull_out" == *[Cc]onflict* || "$pull_out" == *rebase* || "$pull_out" == *CONFLICT* ]]; then
+    if [[ "$pull_out" == *[Cc]onflict* || "$pull_out" == *rebase* || "$pull_out" == *CONFLICT* || "$pull_out" == *non-mergeable* ]]; then
         conflict_marker="${conflict_marker} text-hint"
     fi
-    # Verify A's edit survived on the store and B's mid-rebase state is recoverable:
-    # the spec must still exist and A's status must be present in the store HEAD.
-    CASE_DETAIL="conflict surfaced ($id): ${conflict_marker:-none}"
-    if assert_ne "" "$id" "spec id" \
-        && assert_ne "" "$conflict_marker" "same-spec contention surfaces a conflict/rebase hint or non-zero exit"; then
+    # Crucially it must NOT claim an auto-merge for the unknown file.
+    CASE_DETAIL="non-mergeable conflict surfaced: ${conflict_marker:-none}"
+    if assert_ne "" "$conflict_marker" "non-mergeable store conflict surfaces (non-zero exit or hint)" \
+        && assert_not_contains "$pull_out" "auto-merged metadata" "unknown file is NOT force-resolved"; then
         CASE_OK=1
     else
         CASE_OK=0
-        CASE_DETAIL="no conflict surfaced; pull rc=$pull_rc out=[${pull_out:0:120}]"
+        CASE_DETAIL="expected manual-fallback; pull rc=$pull_rc out=[${pull_out:0:140}]"
     fi
-    # Recover B so later cases aren't wedged mid-rebase: abort the store-leg
-    # rebase, then re-sync B onto A's store head (A won the push). We accept A's
-    # version (theirs) since the point of the case was to surface the conflict,
-    # not to resolve it.
+    # Recover B (abort the rebase, reset onto A's store head) so later cases
+    # aren't wedged. A won the push, so adopt A's metadata.
     recover_store_rebase "$CLONE_B"
     push_from "$CLONE_A"
     pull_into "$CLONE_B"
-    # Verify recovery actually cleared the rebase; if not, the suite shouldn't
-    # silently carry a wedged store into later cases.
     if run_in "$CLONE_B" git -C .aida-store status 2>/dev/null | grep -q "rebase in progress"; then
         CASE_OK=0
         CASE_DETAIL="conflict surfaced but B's store could not be recovered (still mid-rebase)"
+    fi
+}
+
+# --- MU-204: concurrent SAME-spec edits AUTO-MERGE on pull (no conflict) --
+# STORY-641: a same-spec edit writes BOTH the spec object YAML and the
+# append-only oplog. Both are union-mergeable (oplog operations by id + lamport
+# reconcile; spec scalars by LWW; spec history/comments by id). B's `aida pull`
+# reconciles WITHOUT a manual conflict (rc==0), BOTH clones' edits survive in
+# the unioned oplog, and the scalar status is the deterministic LWW winner.
+case_MU-204() {
+    EXPECT=pass
+    # One spec, sync both clones onto it.
+    local id
+    id="$(add_spec "$CLONE_A" "mu204 auto-merge spec" task)"
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+    # Both edit the SAME spec's status (each appends an oplog SetStatus op),
+    # both commit locally. Different targets so the LWW winner is observable.
+    aida_in "$CLONE_A" edit "$id" --status in-progress >/dev/null 2>&1 || true
+    aida_in "$CLONE_B" edit "$id" --status planned >/dev/null 2>&1 || true
+    # A pushes first (wins the push race).
+    push_from "$CLONE_A"
+    # B pulls -> should AUTO-MERGE the spec YAML + oplog (no manual conflict).
+    local pull_out pull_rc
+    set +e
+    pull_out="$(aida_in "$CLONE_B" pull 2>&1)"
+    pull_rc=$?
+    set -e
+    # Assert: B is NOT left mid-rebase (auto-merge completed it).
+    local mid_rebase="no"
+    if run_in "$CLONE_B" git -C .aida-store status 2>/dev/null | grep -q "rebase in progress"; then
+        mid_rebase="yes"
+    fi
+    # BOTH clones' edits must survive: the unioned oplog carries A's SetStatus
+    # (In Progress) AND B's SetStatus (Planned) — neither is dropped. Count the
+    # SetStatus ops for this spec's window: both target-statuses must appear.
+    local has_a has_b op_count
+    op_count="$(run_in "$CLONE_B" sh -c "grep -c '^- id:' .aida-store/oplog.yaml 2>/dev/null")"
+    has_a="$(run_in "$CLONE_B" sh -c "grep -c 'status: In Progress' .aida-store/oplog.yaml 2>/dev/null")"
+    has_b="$(run_in "$CLONE_B" sh -c "grep -c 'status: Planned' .aida-store/oplog.yaml 2>/dev/null")"
+    # Scalar LWW winner in the merged spec object (B edited later -> Planned).
+    local obj_path status_line
+    obj_path="$(run_in "$CLONE_B" sh -c "find .aida-store/objects -name '${id}.yaml' 2>/dev/null | head -1")"
+    status_line="$(run_in "$CLONE_B" sh -c "grep -E '^status:' \"$obj_path\" 2>/dev/null | head -1")"
+    CASE_DETAIL="auto-merged ($id): rc=$pull_rc ops=$op_count A=$has_a B=$has_b status=[${status_line}]"
+    if assert_ne "" "$id" "spec id" \
+        && assert_eq "0" "$pull_rc" "B pull exits 0 (auto-merged, no manual conflict)" \
+        && assert_eq "no" "$mid_rebase" "B's store is NOT left mid-rebase" \
+        && assert_ne "0" "$has_a" "A's edit (In Progress) survived the oplog union" \
+        && assert_ne "0" "$has_b" "B's edit (Planned) survived the oplog union" \
+        && assert_eq "$status_line" "status: Planned" "scalar status is the LWW winner (B, later)" ; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+    fi
+    # Re-sync so later cases see a clean, converged store in both clones.
+    push_from "$CLONE_B"
+    pull_into "$CLONE_A"
+    pull_into "$CLONE_B"
+    # Safety: ensure neither clone is wedged mid-rebase for later cases.
+    if run_in "$CLONE_B" git -C .aida-store status 2>/dev/null | grep -q "rebase in progress"; then
+        recover_store_rebase "$CLONE_B"
     fi
 }
 
@@ -663,7 +727,7 @@ case_MU-507() {
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507)
 
 list_cases() {
     echo "Available cases:"
