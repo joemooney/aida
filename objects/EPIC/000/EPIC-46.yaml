@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T00:18:43.786395352Z
-modified_at: 2026-06-17T00:18:43.786395352Z
+modified_at: 2026-06-17T00:19:14.944236436Z
 req_type: Epic
 tags:
 - from-operator
@@ -16,3 +16,9 @@ tags:
 - multi-user
 - quality
 - testing
+comments:
+- id: 019ed2f2-4b80-79c2-8393-5a8a4b412ad1
+  author: joe
+  content: Commit 2309aa62f references this requirement
+  created_at: 2026-06-17T00:19:14.944236436Z
+  modified_at: 2026-06-17T00:19:14.944236436Z
