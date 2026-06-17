@@ -15,7 +15,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import type { Requirement, RequirementStatus } from '@shared/types';
 import { STATUS_ORDER } from '../../lib/constants';
-import { useRequirements, useUpdateRequirement } from '../../hooks/useRequirements';
+import { useRequirementSummaries, useUpdateRequirement } from '../../hooks/useRequirements';
 import { useFilters } from '../../hooks/useFilters';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
 import { useHotkeys, type HotkeyBinding } from '../../hooks/useHotkeys';
@@ -51,7 +51,7 @@ function emptyColumns(): Record<RequirementStatus, string[]> {
 const EMPTY_ADVANCED_QUERY: RuleGroupType = { combinator: 'and', rules: [] };
 
 export function KanbanBoard() {
-  const { data: requirements, isLoading, error } = useRequirements();
+  const { data: requirements, isLoading, error } = useRequirementSummaries();
   const updateReq = useUpdateRequirement();
   const [searchParams, setSearchParams] = useSearchParams();
   const { applyFilters } = useFilters();

@@ -919,14 +919,41 @@ async fn list_users(
     Ok(Json(store.users.clone()))
 }
 
+/// Query for `GET /api/v2/requirements`. `view=summary` returns the lightweight
+/// [`models::RequirementSummaryDto`] projection (no comments/history/processing
+/// records / long description) so the web list / board / dashboard views stop
+/// downloading the ~6.5MB full graph on every render. Any other value (or
+/// absence) returns the full `Requirement[]` as before. trace:BUG-571 | ai:claude
+#[derive(Deserialize, Default)]
+struct RequirementsListQuery {
+    #[serde(default)]
+    view: Option<String>,
+}
+
+fn requirements_v2_response(
+    requirements: &[models::Requirement],
+    query: &RequirementsListQuery,
+) -> serde_json::Value {
+    if query.view.as_deref() == Some("summary") {
+        let summaries: Vec<models::RequirementSummaryDto> = requirements
+            .iter()
+            .map(models::RequirementSummaryDto::from)
+            .collect();
+        serde_json::json!(summaries)
+    } else {
+        serde_json::json!(requirements)
+    }
+}
+
 async fn list_requirements_v2(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-) -> Result<Json<Vec<models::Requirement>>, (StatusCode, Json<ApiError>)> {
+    Query(query): Query<RequirementsListQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let backend = get_project_backend(&state, &headers).await?;
     let store = backend.store.read().await;
 
-    Ok(Json(store.requirements.clone()))
+    Ok(Json(requirements_v2_response(&store.requirements, &query)))
 }
 
 // ============================================================================
@@ -2432,10 +2459,11 @@ fn parse_req_type(s: &str) -> aida_core::RequirementType {
 // trace:FR-0227 | ai:claude
 async fn list_requirements_v2_legacy(
     State(state): State<Arc<ServerState>>,
-) -> Result<Json<Vec<models::Requirement>>, (StatusCode, Json<ApiError>)> {
+    Query(query): Query<RequirementsListQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     state.check_reload().await;
     let store = state.store.read().await;
-    Ok(Json(store.requirements.clone()))
+    Ok(Json(requirements_v2_response(&store.requirements, &query)))
 }
 
 async fn get_requirement_v2_legacy(
@@ -4632,5 +4660,108 @@ ttl_secs = 1800
         run(&["config", "user.email", "test@example.com"]);
         run(&["config", "user.name", "Test"]);
         run(&["commit", "--allow-empty", "-q", "-m", "init"]);
+    }
+}
+
+// ============================================================================
+// BUG-571: the `?view=summary` projection on GET /api/v2/requirements. The
+// summary must drop the heavy nested arrays (comments / history /
+// processing_record) and the long description so the web list / board /
+// dashboard views stop downloading the ~6.5MB full graph on every render.
+// These tests exercise the pure `requirements_v2_response` projector.
+// ============================================================================
+#[cfg(test)]
+mod summary_endpoint_tests {
+    use super::*;
+    use aida_core::models::{Comment, FieldChange, HistoryEntry, Requirement};
+
+    fn heavy_requirement() -> Requirement {
+        let mut r = Requirement::new(
+            "A spec".to_string(),
+            "A very long description that the summary deliberately drops to keep \
+             the payload small."
+                .to_string(),
+        );
+        r.spec_id = Some("BUG-571".to_string());
+        r.comments
+            .push(Comment::new("alice".to_string(), "a comment".to_string()));
+        r.history.push(HistoryEntry::new(
+            "alice".to_string(),
+            vec![FieldChange {
+                field_name: "status".to_string(),
+                old_value: "Draft".to_string(),
+                new_value: "Approved".to_string(),
+            }],
+        ));
+        r
+    }
+
+    #[test]
+    fn summary_view_omits_heavy_fields_and_keeps_light_ones() {
+        let reqs = vec![heavy_requirement()];
+        let query = RequirementsListQuery {
+            view: Some("summary".to_string()),
+        };
+        let value = requirements_v2_response(&reqs, &query);
+        let arr = value.as_array().expect("summary is an array");
+        assert_eq!(arr.len(), 1);
+        let obj = arr[0].as_object().expect("summary item is an object");
+
+        // The heavy fields must be ABSENT from the summary projection.
+        assert!(!obj.contains_key("comments"), "comments must be omitted");
+        assert!(!obj.contains_key("history"), "history must be omitted");
+        assert!(
+            !obj.contains_key("processing_record"),
+            "processing_record must be omitted"
+        );
+        assert!(
+            !obj.contains_key("description"),
+            "long description must be omitted"
+        );
+
+        // The light fields the list/board/dashboard views need must be present.
+        assert_eq!(obj.get("spec_id").and_then(|v| v.as_str()), Some("BUG-571"));
+        assert!(obj.contains_key("title"));
+        assert!(obj.contains_key("status"));
+        assert!(obj.contains_key("priority"));
+        assert!(obj.contains_key("req_type"));
+        assert!(obj.contains_key("feature"));
+    }
+
+    #[test]
+    fn default_view_returns_the_full_requirement() {
+        let reqs = vec![heavy_requirement()];
+        let query = RequirementsListQuery::default();
+        let value = requirements_v2_response(&reqs, &query);
+        let arr = value.as_array().expect("full list is an array");
+        let obj = arr[0].as_object().expect("full item is an object");
+
+        // The full view keeps everything, including the heavy nested arrays and
+        // the description.
+        assert!(obj.contains_key("comments"), "full view keeps comments");
+        assert!(obj.contains_key("history"), "full view keeps history");
+        assert!(
+            obj.contains_key("description"),
+            "full view keeps description"
+        );
+    }
+
+    #[test]
+    fn summary_payload_is_much_smaller_than_full() {
+        // 50 specs each carrying comments + history (the real-store shape).
+        let reqs: Vec<Requirement> = (0..50).map(|_| heavy_requirement()).collect();
+        let full = requirements_v2_response(&reqs, &RequirementsListQuery::default());
+        let summary = requirements_v2_response(
+            &reqs,
+            &RequirementsListQuery {
+                view: Some("summary".to_string()),
+            },
+        );
+        let full_bytes = serde_json::to_vec(&full).unwrap().len();
+        let summary_bytes = serde_json::to_vec(&summary).unwrap().len();
+        assert!(
+            summary_bytes * 2 < full_bytes,
+            "summary ({summary_bytes}) should be far smaller than full ({full_bytes})"
+        );
     }
 }

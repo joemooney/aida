@@ -15,7 +15,7 @@ import {
 import { ArrowUpDown, List, GitBranch, ChevronsDownUp, ChevronsUpDown, ListPlus, XCircle, SlidersHorizontal } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
-import { useRequirements, useSetParent, useUpdateRequirement } from '../../hooks/useRequirements';
+import { useRequirementSummaries, useSetParent, useUpdateRequirement } from '../../hooks/useRequirements';
 import { useFilters } from '../../hooks/useFilters';
 import { useAdvancedQuery } from '../../hooks/useAdvancedQuery';
 import { useAddToQueue } from '../../hooks/useQueue';
@@ -105,7 +105,7 @@ const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 const EMPTY_ADVANCED_QUERY: RuleGroupType = { combinator: 'and', rules: [] };
 
 export function RequirementsList() {
-  const { data: requirements, isLoading, error } = useRequirements();
+  const { data: requirements, isLoading, error } = useRequirementSummaries();
   const [searchParams, setSearchParams] = useSearchParams();
   const { applyFilters } = useFilters();
   const {
