@@ -1,0 +1,17 @@
+id: 019ed5fd-1119-78f0-88e2-3459faaafb2f
+spec_id: TASK-845
+agreed_id: TASK-845
+title: 'Cross-machine person unification: reconcile one human across different $USER/user_id per machine'
+description: 'Follow-up flagged by STORY-653. The dashboard team layer now keys on the person key (node owner \$USER string, falling back to email local-part, then integer user_id). But the same human may register under different \$USER on different machines (joe@imac vs joe.mooney@spock), and a shared integer user_id may have historically collapsed two distinct people into one row. Deciding who is one person across accounts is a separate design question: needs a person<->account mapping (e.g. aida team link <a> <b>), or git-email/identity reconciliation. STORY-653 honest floor: group by owner string, surface email + node-name labels so the split is visible, let the operator set a consistent AIDA_USER per person. See docs/plans/2026-06-16-team-rbac.md section 5.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T14:29:52.537672722Z
+modified_at: 2026-06-17T14:29:52.537672722Z
+req_type: Task
+tags:
+- deferred:design
+- node-identity
+- parent:EPIC-47
+- team
