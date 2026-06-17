@@ -15,10 +15,12 @@
 #   - EXPECT=known-gap that PASSES -> "GAP CLOSED -- flip EXPECT to pass"
 #                                (does not fail; a signal to update this script).
 #
-# The known-gap cases (MU-504/505) are the cross-clone coordination gaps from
-# EPIC-46: leases and drain locks are per-clone-local, so they provide zero
-# cross-clone safety today. They are red-by-design until a shared-coordination
-# fix lands, at which point they turn green and we flip EXPECT.
+# The cross-clone coordination cases from EPIC-46 — MU-504 (leases, STORY-637),
+# MU-505 (drain lock) + MU-506 (solo lock, both STORY-638) — were the original
+# red-by-design gaps: leases and drain/solo locks were per-clone-local, so they
+# provided zero cross-clone safety. The shared coordination registry on the
+# aida-store branch (coordination/leases/<scope>.toml + coordination/{drain,solo}
+# .lock.toml) closed all three; they are now EXPECT=pass.
 #
 # Usage:
 #   scripts/multi-clone-harness.sh                 # run all cases
@@ -516,34 +518,111 @@ case_MU-504() {
     rm -rf "$WORKDIR/wtA-$id" "$WORKDIR/wtB-$id" 2>/dev/null || true
 }
 
-# --- MU-505: drain lock is per-clone-local -> DESIRED cross-clone refusal (gap)
-case_MU-505() {
-    EXPECT=known-gap
-    # Test the LOCK MECHANICS structurally -- do NOT run a real drain (it would
-    # mutate specs/files). Simulate A holding a live drain lock by writing the
-    # same on-disk lock file the drain writes (.aida/drain.lock), with this
-    # script's own pid (guaranteed alive). Then assert the cross-clone fact:
-    # B has no drain.lock and cannot see A's -> a B drain would NOT be blocked.
-    local lock_a="$CLONE_A/.aida/drain.lock"
-    local now
+# --- write a shared process-lock claim (coordination/<kind>.lock.toml) on the
+# store as if clone A holds it, and push it so clone B sees it on pull. Pid is
+# this script's own ($$, guaranteed alive); clone_path is A's canonicalized
+# project root (so it's FOREIGN to B); host is this host (so B's same-host pid
+# probe applies). Used by MU-505 (drain) and MU-506 (solo). trace:STORY-638
+write_shared_lock_claim() {
+    # $1 = kind file stem (drain.lock.toml | solo.lock.toml)
+    # $2 = scope label  (drain | solo loop)
+    # $3 = command
+    local kind="$1" scope="$2" command="$3"
+    local store="$CLONE_A/.aida-store"
+    local now canon
     now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    mkdir -p "$CLONE_A/.aida"
-    printf '{"pid":%d,"started_at_utc":"%s","command":"burndown run (harness sim)","host":"%s"}\n' \
-        "$$" "$now" "$(hostname)" > "$lock_a"
-    # Structural cross-clone facts:
-    local a_has b_has
-    [[ -f "$CLONE_A/.aida/drain.lock" ]] && a_has=1 || a_has=0
-    [[ -f "$CLONE_B/.aida/drain.lock" ]] && b_has=1 || b_has=0
-    # DESIRED (cross-clone coordination): A holding a drain lock should be
-    # VISIBLE to B (shared store), so b_has would be 1 (or a shared registry
-    # records A's drain). Today the lock is per-clone-local -> b_has=0 = GAP.
-    CASE_DETAIL="A drain.lock present=$a_has; B sees a drain lock=$b_has (desired=1)"
-    if assert_eq "$b_has" "1" "B sees A's drain lock cross-clone"; then
+    canon="$( cd "$CLONE_A" && pwd -P )"
+    mkdir -p "$store/coordination"
+    cat > "$store/coordination/$kind" <<EOF
+scope = "$scope"
+node_id = "1"
+clone_path = "$canon"
+host = "$(hostname)"
+pid = $$
+agent = "$command"
+started_at = "$now"
+heartbeat_at = "$now"
+ttl_secs = 1800
+process_backed = true
+review_verb = false
+EOF
+    ( cd "$store" && HOME="$WORKDIR/home" git add "coordination/$kind" >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git commit -q -m "test: harness $scope claim" >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git push -q origin aida-store >/dev/null 2>&1 ) || true
+}
+
+# --- remove a shared process-lock claim from the store (cleanup). -----------
+remove_shared_lock_claim() {
+    local kind="$1"
+    local store="$CLONE_A/.aida-store"
+    rm -f "$store/coordination/$kind" 2>/dev/null || true
+    ( cd "$store" && HOME="$WORKDIR/home" git add -A "coordination/$kind" >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git commit -q -m "test: harness remove claim" >/dev/null 2>&1 \
+        && HOME="$WORKDIR/home" git push -q origin aida-store >/dev/null 2>&1 ) || true
+}
+
+# --- MU-505: A holds the shared DRAIN claim -> B's drain is REFUSED (STORY-638)
+case_MU-505() {
+    # STORY-638 closed this gap: the drain lock is promoted to a shared claim on
+    # the aida-store branch (coordination/drain.lock.toml). With clone A holding
+    # a LIVE drain claim, clone B's drain entry (queue work --auto-complete)
+    # consults the shared claim BEFORE the local lock and must REFUSE.
+    EXPECT=pass
+    # Test LOCK MECHANICS structurally: simulate A's live drain by writing the
+    # shared claim with this script's own (alive) pid; do NOT run a real drain.
+    write_shared_lock_claim "drain.lock.toml" "drain" "burndown run (harness sim)"
+    # B attempts a drain on an EMPTY queue. With a live cross-clone drain claim
+    # present, the entry point must refuse BEFORE doing any work.
+    local out rc
+    set +e
+    out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" "$AIDA_BIN" queue work --auto-complete 2>&1 )"
+    rc=$?
+    set -e
+    # Refusal = mentions a drain running in another clone / a holder / non-zero.
+    local refused=0
+    if [[ "$out" == *drain* && ( "$out" == *"another clone"* || "$out" == *"already running"* || "$out" == *holder* || "$out" == *pid* ) ]]; then
+        refused=1
+    fi
+    CASE_DETAIL="B's cross-clone drain refused=$refused (rc=$rc)"
+    if assert_eq "$refused" "1" "B refuses a cross-clone drain while A holds the shared claim"; then
         CASE_OK=1     # gap closed
     else
-        CASE_OK=0     # still a gap (expected): locks are per-clone-local
+        CASE_OK=0
+        CASE_DETAIL="cross-clone drain not refused; rc=$rc out=[${out:0:200}]"
     fi
-    rm -f "$lock_a" 2>/dev/null || true
+    remove_shared_lock_claim "drain.lock.toml"
+}
+
+# --- MU-506: A holds the shared SOLO claim -> B's solo run is REFUSED (STORY-638)
+case_MU-506() {
+    # Same class as MU-505 for the solo loop: coordination/solo.lock.toml on the
+    # store. With clone A holding a LIVE solo claim, clone B's `aida solo run`
+    # consults the shared claim before the local lock and must REFUSE.
+    EXPECT=pass
+    write_shared_lock_claim "solo.lock.toml" "solo loop" "solo run (harness sim)"
+    # B attempts `aida solo run`. A live cross-clone solo claim must refuse it
+    # before the loop starts. Use a short interval so a (wrongly) non-refused run
+    # can't hang the harness; the refusal happens at lock-acquire, before any
+    # cycle. Run with a timeout as a belt-and-braces guard.
+    local out rc
+    set +e
+    out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" timeout 30 "$AIDA_BIN" solo run --interval 1 2>&1 )"
+    rc=$?
+    set -e
+    local refused=0
+    if [[ "$out" == *"solo loop"* && ( "$out" == *"another clone"* || "$out" == *"already running"* || "$out" == *holder* || "$out" == *pid* ) ]]; then
+        refused=1
+    fi
+    CASE_DETAIL="B's cross-clone solo run refused=$refused (rc=$rc)"
+    if assert_eq "$refused" "1" "B refuses a cross-clone solo run while A holds the shared claim"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="cross-clone solo not refused; rc=$rc out=[${out:0:200}]"
+    fi
+    remove_shared_lock_claim "solo.lock.toml"
+    # Make sure B didn't leave a solo flag/loop running.
+    ( cd "$CLONE_B" && HOME="$WORKDIR/home" "$AIDA_BIN" solo stop >/dev/null 2>&1 ) || true
 }
 
 # --- MU-507: within ONE clone, a second drain is refused (lock works) ----
@@ -584,7 +663,7 @@ case_MU-507() {
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-301 MU-401 MU-402 MU-504 MU-505 MU-507)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-301 MU-401 MU-402 MU-504 MU-505 MU-506 MU-507)
 
 list_cases() {
     echo "Available cases:"

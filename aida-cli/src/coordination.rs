@@ -583,6 +583,339 @@ pub(crate) fn list_claims(store_root: &Path) -> Vec<Claim> {
     out
 }
 
+// =========================================================================
+// Process-backed per-repo coordination locks (STORY-638, slice 2).
+//
+// The drain (`burndown run` / `queue work --auto-complete` / `queue integrate`)
+// and the solo loop (`aida solo run`) are SINGLE-DRIVER per repo: they merge to
+// the default branch, fan out worktrees, and share `target/`. Intra-clone this
+// is enforced by `.aida/drain.lock` / `.aida/solo.lock`; cross-clone those files
+// are invisible. These promote the claim to `coordination/<kind>.lock.toml` on
+// the shared `aida-store` branch so a second CLONE is refused while one holds it.
+//
+// Unlike session leases (slice 1), drain/solo claims ARE process-backed: the
+// holding process lives for the whole drain/solo, so SAME-HOST pid liveness is
+// the authoritative reclaim signal (a dead pid → reclaim now), with the TTL /
+// heartbeat as the cross-host / pid-recycle backstop. The TTL folds in the old
+// `AIDA_DRAIN_LOCK_STALE_SECS` age-backstop semantics. The drain/solo loops
+// refresh `heartbeat_at` on each tick so a long drain never looks stale.
+// trace:STORY-638 | ai:claude
+// =========================================================================
+
+/// Subdir (under the store worktree root) holding the per-repo process locks.
+const LOCKS_SUBDIR: &str = "coordination";
+
+/// Which per-repo process lock — drives the file name + the human label.
+/// trace:STORY-638 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LockKind {
+    /// `coordination/drain.lock.toml` — one active drain across all clones.
+    Drain,
+    /// `coordination/solo.lock.toml` — one active solo loop across all clones.
+    Solo,
+}
+
+impl LockKind {
+    /// File stem on disk (`drain.lock.toml` / `solo.lock.toml`).
+    fn file_name(self) -> &'static str {
+        match self {
+            LockKind::Drain => "drain.lock.toml",
+            LockKind::Solo => "solo.lock.toml",
+        }
+    }
+
+    /// Human label for refusal / commit messages.
+    fn label(self) -> &'static str {
+        match self {
+            LockKind::Drain => "drain",
+            LockKind::Solo => "solo loop",
+        }
+    }
+}
+
+/// Path of the shared process-lock claim file under the store worktree.
+pub(crate) fn lock_claim_path(store_root: &Path, kind: LockKind) -> PathBuf {
+    store_root.join(LOCKS_SUBDIR).join(kind.file_name())
+}
+
+/// Build the process-backed claim we want to write for `kind`. `command` is the
+/// launching command (e.g. `burndown run --status approved`), carried in the
+/// `agent` field so a refusal can name what is running. `ttl_secs` folds in the
+/// drain's age-backstop horizon. trace:STORY-638 | ai:claude
+fn build_lock_claim(
+    store_root: &Path,
+    kind: LockKind,
+    clone_path: &Path,
+    command: &str,
+    ttl_secs: u64,
+) -> Claim {
+    let now = Utc::now().to_rfc3339();
+    Claim {
+        scope: kind.label().to_string(),
+        node_id: node_id_for_clone(store_root, clone_path),
+        clone_path: canonical_clone_path(clone_path),
+        host: hostname(),
+        pid: std::process::id(),
+        agent: command.to_string(),
+        started_at: now.clone(),
+        heartbeat_at: now,
+        ttl_secs,
+        // Drain/solo ARE process-backed: the pid is the long-lived loop, so a
+        // dead pid on our host is an exact reclaim signal. trace:STORY-638
+        process_backed: true,
+        review_verb: false,
+    }
+}
+
+/// Outcome of [`acquire_lock_claim`] — mirrors [`AcquireOutcome`] but typed for
+/// the process-lock path so the call site can print the right note.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum LockAcquireOutcome {
+    /// Claimed cleanly (no prior claim, or our own clone re-claiming).
+    Acquired,
+    /// Reclaimed a stale/dead foreign claim. Carries the reason for a note.
+    Reclaimed(String),
+    /// Cross-clone coordination unavailable (no remote / store unreachable);
+    /// the call site WARNs and proceeds local-only. Carries a one-line reason.
+    Unavailable(String),
+}
+
+/// Acquire the shared per-repo process lock for `kind` on the store.
+///
+/// `store_root` is the `.aida-store` worktree; `clone_path` the project root;
+/// `command` the launching command; `ttl_secs` the staleness horizon (the drain
+/// folds in `AIDA_DRAIN_LOCK_STALE_SECS`). `force` short-circuits the decision
+/// (the `AIDA_DRAIN_FORCE=1` / `--force` escape).
+///
+/// On a live foreign claim, returns `Err` whose message names the holder. On no
+/// remote / unreachable store, returns `Ok(Unavailable(..))` — the caller WARNs
+/// and proceeds local-only (a drain must never be brittle on the network).
+/// trace:STORY-638 | ai:claude
+pub(crate) fn acquire_lock_claim(
+    store_root: &Path,
+    kind: LockKind,
+    clone_path: &Path,
+    command: &str,
+    ttl_secs: u64,
+    force: bool,
+) -> Result<LockAcquireOutcome> {
+    if !store_root.exists() {
+        return Ok(LockAcquireOutcome::Unavailable(
+            "no .aida-store worktree attached".to_string(),
+        ));
+    }
+    if !aida_core::git_ops::has_remote(store_root, "origin") {
+        return Ok(LockAcquireOutcome::Unavailable(
+            "store has no origin remote (solo clone)".to_string(),
+        ));
+    }
+    let branch =
+        aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    let ours = build_lock_claim(store_root, kind, clone_path, command, ttl_secs);
+    let our_host = ours.host.clone();
+    let path = lock_claim_path(store_root, kind);
+    let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
+
+    for _attempt in 0..MAX_CAS_RETRIES {
+        if let Err(e) = aida_core::git_ops::pull_rebase(store_root, "origin", &branch) {
+            return Ok(LockAcquireOutcome::Unavailable(format!(
+                "store unreachable ({e})"
+            )));
+        }
+
+        let existing = read_claim(&path);
+        let outcome_note = if force {
+            existing
+                .as_ref()
+                .filter(|h| h.clone_path.is_empty() || h.clone_path != ours.clone_path)
+                .map(|h| {
+                    format!(
+                        "--force overriding {}'s {} ({})",
+                        h.host,
+                        kind.label(),
+                        h.clone_path
+                    )
+                })
+        } else {
+            match decide_claim(
+                existing.as_ref(),
+                &ours,
+                Utc::now(),
+                &our_host,
+                crate::process_probe::pid_is_alive,
+            ) {
+                ClaimDecision::Refuse { holder } => {
+                    anyhow::bail!("{}", lock_refusal_message(kind, &holder, &path));
+                }
+                ClaimDecision::Acquire => None,
+                ClaimDecision::Reclaim { stale_reason } => Some(stale_reason),
+            }
+        };
+
+        std::fs::create_dir_all(store_root.join(LOCKS_SUBDIR)).ok();
+        let toml = toml::to_string_pretty(&ours)
+            .map_err(|e| anyhow::anyhow!("could not serialize {} claim: {e}", kind.label()))?;
+        std::fs::write(&path, toml).map_err(|e| {
+            anyhow::anyhow!(
+                "could not write {} claim {}: {e}",
+                kind.label(),
+                path.display()
+            )
+        })?;
+
+        aida_core::git_ops::add(store_root, &[&rel])?;
+        let msg = format!(
+            "chore(coordination): claim {} lock (node {})",
+            kind.label(),
+            ours.node_id
+        );
+        let committed = aida_core::git_ops::commit(store_root, &msg).unwrap_or(true);
+        if !committed {
+            return Ok(match outcome_note {
+                Some(reason) => LockAcquireOutcome::Reclaimed(reason),
+                None => LockAcquireOutcome::Acquired,
+            });
+        }
+
+        match aida_core::git_ops::push(store_root, "origin", &branch) {
+            Ok(true) => {
+                return Ok(match outcome_note {
+                    Some(reason) => LockAcquireOutcome::Reclaimed(reason),
+                    None => LockAcquireOutcome::Acquired,
+                });
+            }
+            Ok(false) => {
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+                continue;
+            }
+            Err(e) => {
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+                return Ok(LockAcquireOutcome::Unavailable(format!(
+                    "could not push {} claim ({e})",
+                    kind.label()
+                )));
+            }
+        }
+    }
+
+    anyhow::bail!(
+        "could not claim the {} lock after {MAX_CAS_RETRIES} attempts — \
+         too much contention on the shared coordination registry",
+        kind.label()
+    )
+}
+
+/// Compose the refusal message naming the holder of a process lock.
+fn lock_refusal_message(kind: LockKind, holder: &Claim, path: &Path) -> String {
+    let age = DateTime::parse_from_rfc3339(&holder.started_at)
+        .ok()
+        .map(|t| {
+            let secs = Utc::now()
+                .signed_duration_since(t.with_timezone(&Utc))
+                .num_seconds()
+                .max(0);
+            format!("{secs}s ago")
+        })
+        .unwrap_or_else(|| holder.started_at.clone());
+    let cmd = if holder.agent.is_empty() {
+        String::new()
+    } else {
+        format!(", cmd `{}`", holder.agent)
+    };
+    format!(
+        "a {} is already running in another clone (host {}, {} (pid {}){}, started {age}).\n  \
+         Wait for it to finish, or — if you're certain it's dead — pass --force \
+         / set AIDA_DRAIN_FORCE=1 to override (you are then responsible for \
+         avoiding double-drive).\n  Shared claim: {}",
+        kind.label(),
+        if holder.host.is_empty() {
+            "?".to_string()
+        } else {
+            holder.host.clone()
+        },
+        holder.clone_path,
+        holder.pid,
+        cmd,
+        path.display(),
+    )
+}
+
+/// Refresh `heartbeat_at` on OUR process-lock claim so a long-running drain/solo
+/// never ages past its TTL. Best-effort and CHEAP-ish (one pull + commit + push
+/// per tick): only rewrites when the on-disk claim is still ours. A successor
+/// that reclaimed it (different clone_path) is left intact — we no longer hold
+/// the lock. trace:STORY-638 | ai:claude
+pub(crate) fn heartbeat_lock_claim(store_root: &Path, kind: LockKind, clone_path: &Path) {
+    if !store_root.exists() || !aida_core::git_ops::has_remote(store_root, "origin") {
+        return;
+    }
+    let branch =
+        aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
+    let path = lock_claim_path(store_root, kind);
+    let our_clone = canonical_clone_path(clone_path);
+    let Some(mut claim) = read_claim(&path) else {
+        return;
+    };
+    if !claim.clone_path.is_empty() && claim.clone_path != our_clone {
+        // A successor reclaimed it — we don't own it anymore; don't stomp.
+        return;
+    }
+    claim.heartbeat_at = Utc::now().to_rfc3339();
+    let Ok(toml) = toml::to_string_pretty(&claim) else {
+        return;
+    };
+    if std::fs::write(&path, toml).is_err() {
+        return;
+    }
+    let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
+    if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
+        return;
+    }
+    let msg = format!("chore(coordination): heartbeat {} lock", kind.label());
+    if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
+        let _ = aida_core::git_ops::push(store_root, "origin", &branch);
+    }
+}
+
+/// Release OUR per-repo process lock claim: delete the file, commit, push.
+/// Best-effort (staleness covers a crash). Only deletes a claim recorded by OUR
+/// clone (matched by `clone_path`). trace:STORY-638 | ai:claude
+pub(crate) fn release_lock_claim(store_root: &Path, kind: LockKind, clone_path: &Path) {
+    if !store_root.exists() || !aida_core::git_ops::has_remote(store_root, "origin") {
+        return;
+    }
+    let path = lock_claim_path(store_root, kind);
+    let our_clone = canonical_clone_path(clone_path);
+    if let Some(existing) = read_claim(&path) {
+        if !existing.clone_path.is_empty() && existing.clone_path != our_clone {
+            return;
+        }
+    } else if !path.exists() {
+        return;
+    }
+    let branch =
+        aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
+    if std::fs::remove_file(&path).is_err() && path.exists() {
+        return;
+    }
+    let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
+    if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
+        return;
+    }
+    let msg = format!("chore(coordination): release {} lock", kind.label());
+    if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
+        let _ = aida_core::git_ops::push(store_root, "origin", &branch);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -847,5 +1180,131 @@ mod tests {
         let listed = list_claims(dir.path());
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].node_id, "2");
+    }
+
+    // ── process-lock (drain/solo) decision table (STORY-638) ──
+    //
+    // Drain/solo claims ARE process-backed, so `decide_claim` is exercised here
+    // exactly as it governs the shared drain/solo lock: a fresh foreign claim is
+    // built via `build_lock_claim` (process_backed = true) and decided.
+
+    /// A foreign process-lock claim on `host`/`pid`, heartbeat now-ish.
+    fn lock_claim(host: &str, pid: u32, heartbeat_at: &str) -> Claim {
+        Claim {
+            scope: "drain".to_string(),
+            node_id: "2".to_string(),
+            clone_path: "/home/joe/ai/aida-b".to_string(),
+            host: host.to_string(),
+            pid,
+            agent: "burndown run".to_string(),
+            started_at: heartbeat_at.to_string(),
+            heartbeat_at: heartbeat_at.to_string(),
+            ttl_secs: 1800,
+            process_backed: true,
+            review_verb: false,
+        }
+    }
+
+    #[test]
+    fn drain_dead_pid_same_host_reclaims_immediately() {
+        // The slice-2 fast path: a drain holder whose pid is dead on OUR host
+        // → reclaim now (the process IS the drain), even with a fresh heartbeat.
+        let existing = lock_claim("imac", 4242, "2026-06-16T11:59:55Z");
+        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
+            false
+        });
+        assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
+    }
+
+    #[test]
+    fn drain_live_pid_same_host_refuses() {
+        // A live drain in another clone, same host → refuse.
+        let existing = lock_claim("imac", 4242, "2026-06-16T11:59:30Z");
+        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| true);
+        assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
+    }
+
+    #[test]
+    fn drain_stale_ttl_reclaims_even_when_pid_alive() {
+        // Heartbeat aged past the TTL (pid-recycle / cross-host backstop) →
+        // reclaim even with the pid reported alive.
+        let existing = lock_claim("imac", 4242, "2026-06-16T11:00:00Z"); // 3600s
+        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| true);
+        assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
+    }
+
+    #[test]
+    fn drain_cross_host_live_within_ttl_refuses() {
+        // A drain holder on a DIFFERENT host within TTL: pid probe is meaningless
+        // → refuse (no fast-path reclaim of a remote live drain).
+        let existing = lock_claim("otherhost", 4242, "2026-06-16T11:59:00Z");
+        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
+            false
+        });
+        assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
+    }
+
+    #[test]
+    fn build_lock_claim_is_process_backed_and_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = build_lock_claim(
+            dir.path(),
+            LockKind::Drain,
+            dir.path(),
+            "burndown run --status approved",
+            1800,
+        );
+        assert!(c.process_backed, "drain/solo claims must be process-backed");
+        assert_eq!(c.scope, "drain");
+        assert_eq!(c.agent, "burndown run --status approved");
+        assert_eq!(c.pid, std::process::id());
+    }
+
+    #[test]
+    fn lock_claim_path_names_per_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            lock_claim_path(dir.path(), LockKind::Drain).ends_with("coordination/drain.lock.toml")
+        );
+        assert!(
+            lock_claim_path(dir.path(), LockKind::Solo).ends_with("coordination/solo.lock.toml")
+        );
+    }
+
+    #[test]
+    fn acquire_lock_is_unavailable_without_a_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join(".aida-store");
+        let out = acquire_lock_claim(
+            &missing,
+            LockKind::Drain,
+            dir.path(),
+            "burndown run",
+            1800,
+            false,
+        )
+        .unwrap();
+        assert!(
+            matches!(out, LockAcquireOutcome::Unavailable(_)),
+            "got {out:?}"
+        );
+    }
+
+    #[test]
+    fn acquire_lock_is_unavailable_without_origin_remote() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&store)
+            .output()
+            .unwrap();
+        let out = acquire_lock_claim(&store, LockKind::Solo, dir.path(), "solo run", 1800, false)
+            .unwrap();
+        assert!(
+            matches!(out, LockAcquireOutcome::Unavailable(_)),
+            "got {out:?}"
+        );
     }
 }
