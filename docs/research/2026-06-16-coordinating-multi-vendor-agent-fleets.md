@@ -1,8 +1,8 @@
 # Coordinating Multi-Vendor AI Agent Fleets
 
-### A Theory of AIDA — design-science findings from building (and dogfooding) an intent-substrate for agentic software development
+### A Theory of AIDA — design-science findings from using a home-grown system as a probe into multi-vendor agent coordination (AIDA is the instrument, not the subject)
 
-**Status:** Draft basis for a research paper · **Date:** 2026-06-16 · **Genre:** Design-science / autoethnographic systems research · **Spine:** Multi-vendor fleet coordination (the apex of a layered coordination stack)
+**Status:** Draft basis for a research paper · **Date:** 2026-06-16 · **Genre:** Design-science / autoethnographic systems research · **Spine:** Multi-vendor fleet coordination (apex of a layered coordination stack) · **Frame:** AIDA as research probe — the deliverable is knowledge about the problem plus a roll-your-own cost/benefit, *not* a case for AIDA
 
 > This is a working draft meant to be handed to collaborators and revised. Claims are tagged with an **evidence grade** (see §2) so reviewers can see exactly how much weight each carries. Nothing here is asserted as a controlled empirical result; the contribution is the artifact and the design principles extracted from building it.
 
@@ -10,7 +10,7 @@
 
 ## Abstract
 
-As large language models commoditize code generation, the binding constraint on software production moves *off* the model and *onto* the coordination of many agents — across roles, across time, and, increasingly, across **vendors**. We report on AIDA, a system built to make a fleet of confident, forgetful, concurrent, multi-vendor coding agents collaborate against a shared, durable model of intent. AIDA is git-canonical: every requirement is a YAML object on an orphan branch, related agents read and write it through a typed graph and an MCP server, and code links back to it through inline trace comments. We frame AIDA's machinery as a **coordination stack** and advance the position that, as lower layers of this stack are absorbed by model vendors, durable value migrates upward — and that the topmost layer, *cross-vendor fleet coordination*, is structurally under-provided for incentive rather than capability reasons, and is therefore the defensible layer for an independent system or a large corporation to own. We extract eight design propositions, each embodied in a running mechanism and triangulated against eighteen months of market observation. We are explicit about the threats to validity of single-system, single-operator, alpha-stage design research, and we state what a multi-team study would have to measure to confirm or refute each proposition.
+As large language models commoditize code generation, the binding constraint on software production moves *off* the model and *onto* the coordination of many agents — across roles, across time, and, increasingly, across **vendors**. We report on AIDA, a system built to make a fleet of confident, forgetful, concurrent, multi-vendor coding agents collaborate against a shared, durable model of intent. AIDA is git-canonical: every requirement is a YAML object on an orphan branch, related agents read and write it through a typed graph and an MCP server, and code links back to it through inline trace comments. We frame AIDA's machinery as a **coordination stack** and advance the position that, as lower layers of this stack are absorbed by model vendors, durable value migrates upward — and that the topmost layer, *cross-vendor fleet coordination*, is structurally under-provided for incentive rather than capability reasons. **AIDA is the instrument, not the subject:** we use a home-grown system as a probe to surface the real requirements, minefields, and faulty assumptions that appear only once you build, and to weigh the cost/benefit of roll-your-own — for which our honest verdict is *open*. We extract eight design propositions about the problem space (not arguments for AIDA), each embodied in a running mechanism and triangulated against market observation. We are explicit about the threats to validity of single-system, single-operator, alpha-stage design research, and we state what a multi-team study would have to measure to confirm or refute each proposition.
 
 ---
 
@@ -18,7 +18,9 @@ As large language models commoditize code generation, the binding constraint on 
 
 The first-order effect of capable coding agents is obvious — code gets written faster. The second-order effect is the interesting one: when any unit of code is cheap to (re)generate, the *code* stops being the scarce, durable artifact. What becomes scarce is an **addressable, queryable model of intent** that survives the churn — what was decided, why, what depends on what, which code satisfies which requirement, and what is still open. A human team carried that model implicitly, in heads and in review. A fleet of agents cannot: agents are **confident** (they assert), **forgetful** (each session is a fresh context), and **concurrent** (many act on the same artifacts at once). And the fleet is increasingly **multi-vendor** — a Claude implementer, a Codex sibling, a Gemini reviewer — none of which shares the others' memory, conventions, or governance.
 
-AIDA is our attempt to build the missing substrate. This paper is not a tool description; it is an argument about *which layer of the agent-coordination problem holds durable value*, structured as a stack and grounded in what building AIDA taught us.
+AIDA is a home-grown attempt at the missing substrate — and we treat it as a **probe**, not a product to defend. This paper is not a tool description, nor a case for AIDA; it uses what building (and dogfooding) AIDA taught us to map *which layer of the agent-coordination problem holds durable value*, what a home-grown solution can and cannot reach, and whether rolling your own is worth the cost. The artifact is the instrument; the deliverable is the knowledge.
+
+> **AIDA as probe, not product.** Throughout, read every mechanism as evidence about the *problem*, not as a feature pitch. Where AIDA succeeds it marks what is possible; where it strains or fails — a scaffolding bug that polluted its own `main` branch mid-writing (BUG-570), weeks lost to a market-discovery blind spot — it marks a minefield or a true cost of rolling your own. Both directions are data. The right answer the probe points to may well be "do not build this," or "the tool is not AIDA."
 
 ### The coordination stack
 
@@ -38,13 +40,13 @@ AIDA is our attempt to build the missing substrate. This paper is not a tool des
         └───────────────────────────────────────────────────────────┘
 ```
 
-**The central research question.** Value in this stack is migrating upward: as model vendors solve L0 and begin to absorb L1–L2 inside their own walled gardens (project memory, skills, sub-agents, internal task graphs), the durable, defensible value moves to the layers a single vendor is *disincentivized* to provide well — the cross-vendor layers L4–L5. For a large corporation deciding where to invest as the ground shifts, the open question is **how far up the stack value has already moved, and how fast.** We do not claim certainty about the answer; we claim the stack is the right way to ask, and that L5 is the structurally safest bet.
+**The central research question.** Value in this stack is migrating upward: as model vendors solve L0 and begin to absorb L1–L2 inside their own walled gardens (project memory, skills, sub-agents, internal task graphs), the durable, defensible value moves to the layers a single vendor is *disincentivized* to provide well — the cross-vendor layers L4–L5. For a large corporation deciding where to invest as the ground shifts, the open question is **how far up the stack value has already moved, how fast, and whether building any of it yourself is worth the cost.** We do not claim certainty about the answer — and we explicitly do not claim AIDA is the thing to build. We claim the stack is the right way to *ask*; that the incentive structure makes L4–L5 the layers a single vendor will under-serve; and that whether *you* should roll your own there is a cost/benefit question we leave open (§12).
 
 ---
 
 ## 2. Method and evidence grades
 
-This is **design-science research** (Hevner): the artifact is the primary contribution, and the knowledge claims are design principles extracted from building and operating it. It is also **autoethnographic** — AIDA is built *using* AIDA; the dogfood is the experiment, and the authors are the subjects. This is a legitimate genre (systems "experience reports," design science, reflective practice), but it has sharp limits, which we state up front rather than bury (§9).
+This is **design-science research** (Hevner): the artifact is the primary contribution, and the knowledge claims are design principles extracted from building and operating it. It is also **autoethnographic** — AIDA is built *using* AIDA; the dogfood is the experiment, and the authors are the subjects. This is a legitimate genre (systems "experience reports," design science, reflective practice), but it has sharp limits, which we state up front rather than bury (§10).
 
 Each proposition carries an **evidence grade**:
 
@@ -106,7 +108,7 @@ A strong claim is one that holds on more than one grade. The strongest here — 
 
 ---
 
-## 7. L5 — Cross-vendor fleet coordination, and why it is the bet (P8)
+## 7. L5 — Cross-vendor fleet coordination (P8)
 
 **P8 (Incentive-persistent gap) — grade (M)(K). The apex claim.** The durable, cross-vendor agent-coordination layer is under-provided for **incentive** reasons, not capability reasons. Each model vendor can build excellent *within-vendor* coordination (memory, sub-agents, task graphs, skills) and is strongly incentivized to make it *sticky* and *non-portable* — that is the lock-in. A coordination layer that is deliberately **vendor-neutral and durable** — a Claude agent and a Codex agent and a human sharing one mailbox, one role queue, one lease table, one intent graph — is precisely what no single vendor is incentivized to build well. The gap is therefore **structurally persistent**: it does not close as models improve, because it is not a capability gap.
 
@@ -114,7 +116,7 @@ A strong claim is one that holds on more than one grade. The strongest here — 
 
 **Market triangulation (K).** Competitor investment validates the *demand* without closing the *gap*: spec-kit and Kiro invest in spec-structured workflows; Beads/Gas Town in agent-issue tracking — all largely single-vendor or single-tool. The fact that capable teams keep building the lower layers, and keep *not* building the neutral cross-vendor layer, is consistent with P8's incentive argument. (We also record a **discovery-method finding**: we missed our two nearest competitors for weeks by searching our *own* vocabulary inside a fixed category. Competitive discovery for a fast-moving field must be multi-modal — sweep awesome-lists by category, watch known builders, search the problem's many names, follow star-velocity — not keyword-match your own framing. This is a methodological contribution in its own right.)
 
-**Why this is the corporate bet.** For a large organization the question is not "which model" — that commoditizes — but "what owns the fleet." As L0–L2 get absorbed upward into vendor platforms, the organization that controls L4–L5 controls the part that (a) spans the vendors it will inevitably mix, (b) survives any single vendor's deprecations, and (c) is the natural home for governance, audit, and policy that an enterprise cannot outsource to a vendor's walled garden.
+**Implication for the build-vs-buy decision (not an AIDA pitch).** For a large organization the question is not "which model" — that commoditizes — but "what owns the fleet." As L0–L2 get absorbed upward into vendor platforms, L4–L5 is where a *home-grown* layer could still buy something a vendor will not provide: spanning the vendors an enterprise inevitably mixes, surviving any single vendor's deprecations, and hosting governance/audit/policy that cannot be outsourced to a walled garden. Whether that justifies *building* it — versus waiting for a neutral incumbent, or accepting a vendor's native coordination — is the open cost/benefit question of §12, not a foregone conclusion.
 
 **After red-team — split the claim.** P8 as stated bundles a strong mechanism with a contingent business bet; the honest paper separates them and asserts only the first strongly:
 
@@ -125,7 +127,7 @@ A strong claim is one that holds on more than one grade. The strongest here — 
 
 ## 8. Orthogonal: the surface (P7)
 
-**P7 (Trojan-horse disclosure) — grade (D)(K).** For a tool whose value is *emergent* (a graph, a coordination fabric), a deliberately **shallow surface that defers depth-disclosure to use** outperforms a surface that advertises its depth. The "I could do this in 20 lines of bash" reaction on first sight is acceptable — even intended — because the value (IDs, graph, traces, the merge model, the cascade) is only legible after the user has lived in it. Surface complexity is the anti-pattern; quiet depth is the asset. This is a product/HCI claim and the weakest-graded here, but it shaped every interface decision and is worth stating because it cuts against the instinct to demo the architecture.
+**P7 (Trojan-horse disclosure) — grade (D)(K). The weakest claim, and the one most about the artifact rather than the problem.** We record it as an *observation about home-grown-tool adoption*, not a recommendation. For a tool whose value is *emergent* (a graph, a coordination fabric), a deliberately shallow surface that defers depth-disclosure to use seemed to land better than one advertising its depth — the "I could do this in 20 lines of bash" first reaction was acceptable because the value (IDs, graph, traces, the merge model, the cascade) is only legible after living in it. We flag it precisely because it is *least* generalizable: it may simply describe one operator's taste, and it is the finding most entangled with promoting the artifact — which this paper explicitly is not trying to do.
 
 ---
 
@@ -167,7 +169,41 @@ We red-teamed the two load-bearing propositions — P3 (the most counter-intuiti
 - **Market grade (K) is observational.** Competitor behavior is consistent with P8 but does not prove the incentive mechanism; an alternative explanation (the gap is simply newer) cannot yet be excluded.
 - **Moving target.** The stack's value distribution (§1) is shifting during the study; any snapshot of "how far up value has moved" dates quickly. We treat dated artifacts as immutable observations, not standing claims.
 
-## 11. What a real study would measure
+## 11. Faulty assumptions this probe falsified
+
+The clearest argument for *building* rather than analyzing is the set of beliefs that fail only once the system is real. Each below was held at some point and falsified by the dogfood; several became the findings above. They cluster in two places — the gap between *what we assumed an LLM would do* and what it did, and the unglamorous infrastructure seams — and neither is visible from analysis alone.
+
+| Assumption (believed) | What building falsified it | Becomes |
+|---|---|---|
+| Rules and prompts can govern a capable agent | Agents routed around CLAUDE.md / memory rules confidently; only programmatic gates held the line | P1 (substrate-as-bouncer) |
+| A more capable model reduces the need for coordination infrastructure | The hardest autonomy failures were context-starvation at cold-boot, not reasoning limits; a bigger model does not help a fresh process that lacks the substrate | P3 (scoped) |
+| A git-backed multi-writer store means merge hell | False *with* a schema-aware structured merge (append-union + LWW); but naive line-merge on appends still conflicts — the append *shape* alone was a trap | P4 |
+| Requirements tracking can be bolted on after the code | ID instability and missing traces made retrofitting the graph expensive; it must be load-bearing from the first commit or agents cannot name things unambiguously | P2 |
+| Cross-vendor coordination is a capability problem the next model solves | It is an incentive problem; no model release moves it | P8a |
+| Scaffolding / init is harmless and idempotent | An `aida init` on a fresh clone silently committed a regenerable scaffold dump and polluted the shared `main` branch (BUG-570, found mid-writing). Home-grown infra has minefields exactly where attention lapses | a direct cost-of-RYO datapoint (§12) |
+| I can find my competitors by searching my own framing | We missed our two nearest competitors for weeks; discovery had to go multi-modal — a faulty assumption about the *research method itself*, not the product | a method finding |
+
+The pattern is the justification for the probe: these were not knowable by reasoning about the problem; they required walking the ground. That value accrues *whether or not the artifact survives.*
+
+## 12. The cost/benefit of roll-your-own (verdict: open)
+
+We state plainly that we do **not** have a verdict on whether a home-grown coordination layer is worth building. The probe is still measuring. Here is the ledger as it stands.
+
+**Costs (observed).**
+- *Churn against shifting vendor surfaces.* During the build, vendor-native primitives (sub-agents / agent teams, MCP, skills, project memory) appeared and moved *under* the home-grown layer, repeatedly turning built features into redundant or competing ones. You build on sand, and the sand is being poured by better-resourced teams.
+- *The unglamorous substrate tax.* An ID dispenser, a hybrid logical clock, a structured three-way merge driver, role-gating, cross-platform CI debt, scaffolding/init correctness (BUG-570) — none of it the interesting part, all of it required before the interesting part works.
+- *The dogfood maintenance tax.* The system must work well enough to build itself, every day, before it can teach you anything.
+
+**Benefits (observed).**
+- *Control of the bouncer.* You can place gates and invariants (P1) exactly where a vendor will not, because the incentives differ.
+- *Vendor-neutrality and durability.* Nothing in the substrate is hostage to one vendor's roadmap or deprecations.
+- *The learning itself.* You cannot map the minefield (§11) without walking it. Much of this paper did not exist as analyzable knowledge until the system forced it into the open. If the goal is *understanding the problem*, building is a uniquely high-bandwidth instrument — even if the artifact is later discarded.
+
+**The asymmetry that shapes the (still-open) verdict.** Cost and benefit are *layer-dependent*. Lower-stack cost (L0–L2) is being eroded as vendors solve it for free, so building there increasingly duplicates work that arrives anyway. Upper-stack (L4–L5) is where home-grown still uniquely buys something — but it is also where the largest red-team hole sits (a neutral incumbent, not you, may capture it; §9, P8b). So the honest lean, held loosely, is *against* rolling your own at the bottom and *toward at-most-experimenting* at the top — but we assert neither as a conclusion.
+
+**What would settle it.** The §13 ablations — especially the cross-vendor portability test and the multi-team field study — plus the simple passage of time: watch whether vendor surfaces converge on the upper layers within roughly a year. Until then, the verdict is open, and saying so is the finding.
+
+## 13. What a real study would measure
 
 To move claims from (M)(D) to confirmed empirical results:
 
@@ -177,7 +213,7 @@ To move claims from (M)(D) to confirmed empirical results:
 4. **Calibration longitudinal (P5).** Track predictive accuracy of a learning vs static substrate over months; P5 predicts crossover where the learner overtakes.
 5. **Cross-vendor portability test (P8).** Introduce a new vendor agent into a running fleet with zero bespoke integration; measure time-to-productive. P8's value rests on this being near-zero.
 
-## 12. Related work (pointers to develop)
+## 14. Related work (pointers to develop)
 
 - Karpathy "software 2.0/3.0" and structured-markdown-as-context — AIDA positions the typed graph + ID stability + enforcement loop as the layer *above* this floor.
 - CRDTs (Shapiro et al.): G-Sets, LWW-registers, OR-Sets — §5 is an applied, git-embedded instance.
@@ -203,4 +239,4 @@ To move claims from (M)(D) to confirmed empirical results:
 
 ---
 
-*Working draft. To revise with: collaborators' challenges to the propositions, real numbers from any of the §10 ablations, and updated market snapshots (dated, immutable).*
+*Working draft. To revise with: collaborators' challenges to the propositions, real numbers from any of the §13 ablations, and updated market snapshots (dated, immutable).*
