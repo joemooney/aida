@@ -1,0 +1,18 @@
+id: 019ed2f2-1ccf-7121-8b19-de0bf7d40130
+spec_id: STORY-635
+agreed_id: STORY-635
+title: Enumerate + document same-host multi-clone test cases (Phase 1 catalog)
+description: 'Phase 1 of EPIC-46: a code-grounded, enumerated catalog of same-host multi-clone interactions at docs/testing/multi-user-test-cases.md. ~30 cases (MU-1xx identity/IDs, MU-2xx store sync/conflict, MU-3xx cache, MU-4xx queue identity, MU-5xx briefs/mailbox/leases/locks, MU-6xx completion) each with setup/steps/expected/validates/status/refs and a per-clone-vs-shared model table. Grounded via four-pass code exploration (2026-06-16). Delivered.'
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T00:19:02.991949309Z
+modified_at: 2026-06-17T00:19:02.991949309Z
+req_type: Story
+tags:
+- docs
+- multi-clone
+- multi-user
+- parent:EPIC-46
+- testing
