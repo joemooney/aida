@@ -312,6 +312,15 @@ pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyh
         .map_err(|e| anyhow::anyhow!("setting team role failed: {}", e))
 }
 
+/// Remove `user_id`'s entry from `registry/team.toml` via the shared aida-core
+/// CAS push-wins loop. Returns `Ok(true)` if an entry was removed, `Ok(false)`
+/// if absent (friendly no-op). Used by `aida team unset-role` to clean stray /
+/// duplicate keys. trace:STORY-654 | ai:claude
+pub(crate) fn unset_role_cas(store_root: &Path, user_id: &str) -> anyhow::Result<bool> {
+    aida_core::team::unset_role_cas(store_root, user_id)
+        .map_err(|e| anyhow::anyhow!("removing team role failed: {}", e))
+}
+
 /// A roster member row joined with the role recorded for its user_id, for the
 /// extended `aida team` view. trace:STORY-646 | ai:claude
 pub(crate) fn roles_by_user(store_root: &Path) -> BTreeMap<String, String> {
