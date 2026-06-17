@@ -2,9 +2,9 @@
 
 ### A layered decision framework — feature requirements, risks/benefits, and lock-in safeguards for allocating money and internal resources
 
-**Status:** Draft · **Date:** 2026-06-16 · **Companion to:** `2026-06-16-coordinating-multi-vendor-agent-fleets.md` (the theory) · **Audience:** decision-makers allocating budget / internal development to AI tooling · **Frame:** vendor-neutral; AIDA appears only as a worked existence-proof, never as a recommendation
+**Status:** Draft · **Date:** 2026-06-16 · **Companion to:** `2026-06-16-coordinating-multi-vendor-agent-fleets.md` (the theory) and `2026-06-16-research-proposal-multi-vendor-coordination.md` (the proposal) · **Audience:** decision-makers allocating budget / internal development to AI tooling · **Frame:** vendor-neutral; AIDA appears only as a worked existence-proof, never as a recommendation
 
-> The theory paper argues *what is true* about the multi-vendor agent-coordination problem and leaves the roll-your-own verdict **open**. This document is the operational other half: a portable rubric for deciding, per layer, **build vs buy vs ride-native vs wait** — designed to (1) inform resource allocation, (2) safeguard against lock-in, and (3) build deliberately toward the one durable competitive asset (§5). It is a *living* instrument: the ground shifts, so re-score on a cadence (§6).
+> The theory paper argues *what is true* about the multi-vendor agent-coordination problem and leaves the roll-your-own verdict **open**. This document is the operational other half: a portable rubric for deciding, per layer, **build vs buy vs ride-native vs wait** — designed to (1) inform resource allocation, (2) safeguard against lock-in, and (3) build deliberately toward the one durable competitive asset (§5). It is a *living* instrument: the ground shifts, so re-score on a cadence (§7).
 
 ---
 
@@ -17,7 +17,7 @@ For any candidate tool or internal build:
 3. **Run the per-layer checklist** (§3) — "what good looks like" + the layer's specific capture risk.
 4. **Apply the decision lens** (§4) — build / buy / ride-native / wait, given today's ground.
 5. **Test it against the asset thesis** (§5) — does this choice grow or erode the shared substrate that becomes your competitive advantage?
-6. **Diary the decision** and re-evaluate on cadence (§6) — record *why* now, so the next review can see what changed.
+6. **Diary the decision** in a per-adoption decision record (Appendix A template) and re-evaluate on cadence (§7) — record *why* now, so the next review can see what changed. A worked example of the rubric in motion is Appendix B.
 
 Scoring scale used throughout: **3** = strong/owned · **2** = partial · **1** = weak · **0** = absent/captive. A low score is not a veto; it is a *flag* that must be consciously accepted or mitigated.
 
@@ -184,7 +184,22 @@ A single-org result does not generalize to other orgs — but it is not meant to
 
 ---
 
-## 6. Cadence — a living evaluation
+## 6. Anti-patterns and failure modes
+
+The framework fails in characteristic ways. Each is a real trap observed or predicted; the mitigation is what keeps the instrument honest.
+
+- **Half-adoption (the worst state).** A partially-populated substrate is *worse than none*: a cross-program query that silently misses because one team isn't on the graph produces false confidence that the graph is complete. → *Adopt by complete, bounded units; mark coverage explicitly; never trust a query over a partially-covered set.*
+- **The decision record as bureaucracy.** Records become a compliance ritual nobody reads, and scores get back-rationalized to justify a call already made. → *The record exists to make the lock-in / ownership question (§2.1, §2.3, §5) un-skippable, not to gate. Keep it one page; review only the "Fragments" and low-2.1/2.3/2.4 cases.*
+- **False precision / score gaming.** The 0–3 numbers look objective; people anchor on the composite and stop thinking. → *The notes matter more than the number. A single 0 on lock-in or substrate-ownership can override a high composite; weights are explicit for that reason.*
+- **The "neutral" layer that is secretly a silo (the L5 irony).** Building vendor-neutral coordination that in practice only your one vendor's agents use — you have paid the build cost *and* still have lock-in, now self-inflicted. → *Test neutrality empirically: actually run a second vendor's agent through it (the cross-vendor portability proof point). Neutral-on-the-roadmap is not neutral.*
+- **Premature standardization.** Committing to your own coordination schema/protocol just before an industry standard converges — now you maintain a fork forever. → *Prefer the "wait" move at L5 while standards are in flux; build on the standard's primitives where they exist rather than inventing parallel ones.*
+- **Substrate-tax denial.** Underbudgeting the unglamorous maintenance (theory §12) so the substrate rots — and a rotted substrate is a half-adopted one. → *Fund maintenance as a standing line item, not heroics.*
+- **Owning the wrong layer.** Building at L0–L2, where vendors will commoditize the work for free, instead of the L1 asset and the L4–L5 frontier. → *Follow the per-layer lean (§3); re-test it every cadence (§7) as the commoditization line moves up.*
+- **Optionality theater.** Claiming "we can swap any time" while never exercising the exit — exit cost is only real once tested. → *Periodically rehearse the swap: export + re-import the substrate, and run a second vendor's agent against it.*
+
+---
+
+## 7. Cadence — a living evaluation
 
 The stack's value distribution shifts during any decision cycle, so this framework is run repeatedly, not once:
 
