@@ -3,12 +3,12 @@ spec_id: STORY-638
 agreed_id: STORY-638
 title: 'Cross-clone drain + solo locks: shared coordination (slice 2, closes MU-505/506)'
 description: 'Slice 2 of cross-clone coordination (docs/plans/2026-06-16-cross-clone-coordination.md). Promote drain.lock + solo.lock to coordination/drain.lock.toml + coordination/solo.lock.toml on the aida-store branch, reusing the slice-1 coordination module. acquire_drain_lock / acquire_solo_lock consult the shared claim first (pull-check-claim-push); a live cross-clone drain/solo is refused. Drain/solo ARE process-backed, so same-host pid liveness governs reclaim (+ TTL backstop); heartbeat refresh on the loop tick. Keep a local mirror for fast probe. Best-effort if store unreachable (warn + proceed). Gate: harness MU-505 flips GAP to PASS + a new MU-506 (solo) case passes.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:03:08.383617507Z
-modified_at: 2026-06-17T02:03:08.383617507Z
+modified_at: 2026-06-17T02:29:05.113215846Z
 req_type: Story
 tags:
 - coordination
@@ -17,3 +17,21 @@ tags:
 - multi-user
 - parent:EPIC-46
 - solo
+history:
+- id: 019ed369-29d4-7480-a4c8-84e36eb4136f
+  author: aida-auto-bump
+  timestamp: 2026-06-17T02:29:05.108435661Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed369-29d9-7ed0-8654-488f32de489b
+  timestamp: 2026-06-17T02:29:05.113214705Z
+  agent: aida
+  commit_sha: d29b57bd5ef6afd07f8bae05e95158bb6be6ab7a
+  summary: Completed via merge d29b57bd
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T02:29:04.952700585Z
+  completion_sha: d29b57bd5ef6afd07f8bae05e95158bb6be6ab7a
