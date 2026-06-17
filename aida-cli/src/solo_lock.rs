@@ -116,6 +116,44 @@ pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
     let path = solo_lock_path(project_root);
     let existing = read_lock(&path);
 
+    // STORY-638: consult the SHARED solo claim on the `aida-store` branch BEFORE
+    // the local lock, so a second CLONE is refused while one holds an active solo
+    // loop (MU-506). Solo is process-backed → same-host pid liveness is the
+    // authoritative reclaim signal (no age backstop; the loop runs for hours, so
+    // a long TTL is the cross-host floor). A live cross-clone solo loop errors
+    // here; no remote / unreachable store WARNs and proceeds local-only.
+    // `AIDA_DRAIN_FORCE=1` is the shared escape (one drain/solo override knob).
+    // trace:STORY-638 | ai:claude
+    let store_root = project_root.join(".aida-store");
+    let forced = std::env::var("AIDA_DRAIN_FORCE")
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+    let store_claimed = match crate::coordination::acquire_lock_claim(
+        &store_root,
+        crate::coordination::LockKind::Solo,
+        project_root,
+        "solo run",
+        crate::coordination::DEFAULT_TTL_SECS,
+        forced,
+    ) {
+        Ok(crate::coordination::LockAcquireOutcome::Acquired) => true,
+        Ok(crate::coordination::LockAcquireOutcome::Reclaimed(reason)) => {
+            eprintln!("  ℹ reclaiming a stale cross-clone solo claim ({reason})");
+            true
+        }
+        Ok(crate::coordination::LockAcquireOutcome::Unavailable(reason)) => {
+            eprintln!(
+                "  {} cross-clone coordination unavailable: {reason}, proceeding",
+                crate::glyphs::get(
+                    crate::glyphs::Glyph::Warning,
+                    crate::find_project_root().ok().as_deref(),
+                )
+            );
+            false
+        }
+        Err(e) => anyhow::bail!("{e}"),
+    };
+
     match decide_lock(existing.clone(), process_probe::pid_is_alive) {
         LockDecision::Refuse(holder) => {
             anyhow::bail!(
@@ -156,6 +194,12 @@ pub(crate) fn acquire_solo_lock(project_root: &Path) -> Result<SoloGuard> {
             Ok(SoloGuard {
                 path,
                 pid: record.pid,
+                store_root: if store_claimed {
+                    Some(store_root)
+                } else {
+                    None
+                },
+                project_root: project_root.to_path_buf(),
             })
         }
     }
@@ -233,10 +277,39 @@ pub(crate) fn signal_stop(pid: u32) -> bool {
 pub(crate) struct SoloGuard {
     path: PathBuf,
     pid: u32,
+    /// Set when we hold the SHARED cross-clone solo claim on the store (STORY-638).
+    /// `None` when cross-clone coordination was unavailable (local-only).
+    /// trace:STORY-638 | ai:claude
+    store_root: Option<PathBuf>,
+    project_root: PathBuf,
+}
+
+impl SoloGuard {
+    /// Refresh the shared solo claim's heartbeat on each loop tick so a
+    /// long-running solo loop never ages past its TTL. No-op when cross-clone
+    /// coordination is unavailable. Best-effort. trace:STORY-638 | ai:claude
+    pub(crate) fn heartbeat(&self) {
+        if let Some(store_root) = &self.store_root {
+            crate::coordination::heartbeat_lock_claim(
+                store_root,
+                crate::coordination::LockKind::Solo,
+                &self.project_root,
+            );
+        }
+    }
 }
 
 impl Drop for SoloGuard {
     fn drop(&mut self) {
+        // Release the shared cross-clone claim first (best-effort; staleness
+        // covers a crash). trace:STORY-638 | ai:claude
+        if let Some(store_root) = &self.store_root {
+            crate::coordination::release_lock_claim(
+                store_root,
+                crate::coordination::LockKind::Solo,
+                &self.project_root,
+            );
+        }
         if read_lock(&self.path).map(|l| l.pid) == Some(self.pid) {
             let _ = std::fs::remove_file(&self.path);
         }
