@@ -472,6 +472,55 @@ mod tests {
     }
 
     #[test]
+    fn dashboard_person_key_role_is_read_by_effective_role() {
+        // The crux of STORY-653: the dashboard groups/keys on the person key
+        // (`aida_core::team::person_key`), and a role written under that key is
+        // exactly what `effective_role_for_user` reads back — so a role set in
+        // the UI actually enforces. trace:STORY-653
+        let entry = NodeRegistryEntry {
+            id: "1".to_string(),
+            user_id: 1, // the OLD cryptic integer the bug keyed on
+            hostname: "imac".to_string(),
+            email: Some("joe.mooney@gmail.com".to_string()),
+            clone_path: Some(PathBuf::from("/home/joe/ai/aida")),
+            name: Some("imac-joe-1".to_string()),
+            user: Some("joe".to_string()),
+            registered: Utc::now(),
+        };
+        let key = aida_core::team::person_key(&entry);
+        assert_eq!(
+            key, "joe",
+            "person key is the owner string, not the integer"
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let registry = dir.path().join("registry");
+        std::fs::create_dir_all(&registry).unwrap();
+        // The UI writes the role under the person key (what TeamMemberDto.user_id
+        // now carries).
+        std::fs::write(
+            registry.join("team.toml"),
+            format!("[members]\n{key} = \"advisor\"\n"),
+        )
+        .unwrap();
+
+        // effective_role_for_user, called with the same person key, reads it.
+        let (role, src) = effective_role_for_user(dir.path(), &key);
+        assert_eq!(role, "advisor");
+        assert_eq!(src, RoleSource::Roster);
+
+        // The OLD integer key (the bug) does NOT resolve — proving the fix is the
+        // key, not luck.
+        let (role_int, src_int) = effective_role_for_user(dir.path(), "1");
+        assert_ne!(
+            src_int,
+            RoleSource::Roster,
+            "integer key is not in the roster"
+        );
+        let _ = role_int;
+    }
+
+    #[test]
     fn node_with_no_clone_path_counts_toward_team() {
         // A pre-EPIC-9 entry has no clone_path; it can't be matched as "ours",
         // so a single such node reads as a team (conservative).

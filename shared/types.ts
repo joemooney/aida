@@ -1437,28 +1437,46 @@ export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChil
 
 export type TeamMemberDto = { 
 /**
- * The person's identity (the `current_user_id` / `nodes.toml` user id as a
- * string). A user may register several clones, all grouped under this id.
+ * The person's identity — the **person key** that roles / queues /
+ * assignees all key on: the node owner `$USER` string captured at
+ * registration (STORY-652's node `user` field = `current_user_id`),
+ * falling back to the email local-part, then the integer `user_id` for
+ * old nodes that lack it. This MATCHES the `registry/team.toml` role key,
+ * `effective_role_for_user`, and the spec `assignee` field — so a role or
+ * assignment set in the UI under this id actually enforces. A person may
+ * register several clones, all grouped under this id. trace:STORY-653
  */
 userId: string, 
 /**
- * The user's role from `registry/team.toml`, if any (canonicalized).
+ * A friendly display label for the person — their email if recorded, else
+ * the person key. Shown in the UI instead of the cryptic integer id.
+ * trace:STORY-653 | ai:claude
+ */
+displayLabel: string, 
+/**
+ * The friendly node names (STORY-652) for this person's registered clones,
+ * e.g. `["imac-joe-1", "spock-joe-2"]`. trace:STORY-653 | ai:claude
+ */
+nodeNames: Array<string>, 
+/**
+ * The person's role from `registry/team.toml`, if any (canonicalized),
+ * resolved via the person key. trace:STORY-653
  */
 role: string | null, 
 /**
- * Distinct hostnames this user is registered on.
+ * Distinct hostnames this person is registered on.
  */
 hosts: Array<string>, 
 /**
- * Absolute clone paths this user has registered.
+ * Absolute clone paths this person has registered.
  */
 clonePaths: Array<string>, 
 /**
- * The most recent registration timestamp across the user's clones (RFC3339).
+ * The most recent registration timestamp across the person's clones (RFC3339).
  */
 lastSeen: string | null, 
 /**
- * One coordination claim scope this user currently holds, if any (the
+ * One coordination claim scope this person currently holds, if any (the
  * roster "active now" signal). The full claim set is on `/coordination`.
  */
 activeClaim: string | null, };
