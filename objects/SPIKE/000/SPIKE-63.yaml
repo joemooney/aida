@@ -1,0 +1,38 @@
+id: 019ed3f5-94a5-7f12-807a-ffbd0ce83393
+spec_id: SPIKE-63
+agreed_id: SPIKE-63
+title: 'Consider: tags G-Set loses concurrent removals (OR-Set upgrade?) — exploratory'
+description: |-
+  STATUS: EXPLORATORY — thinking out loud, NOT a request or demand. Filed so the idea is not lost; dispose freely (park, reject, or revisit later). No urgency implied.
+
+  CONTEXT
+  While discussing how the aida store merges concurrent edits, we noted that tags: is merged as a grow-only set (G-Set): conflict.rs::merge_spec_three_way unions both sides tags. That is great for conflict-freedom but has the classic G-Set limitation.
+
+  OBSERVATION (potential correctness gap)
+  A tag REMOVED on one node can REAPPEAR after a concurrent union merge, because a set union cannot represent a delete. Node A removes tag X, node B (which still has X) edits something else, the two merge, and X comes back. The removal is silently lost.
+
+  POSSIBLE DIRECTION (one option, not a mandate)
+  Upgrade tags from a G-Set to an OR-Set (observed-remove set): tag each add with a unique token and track removals, so a delete that observed a given add wins over that add on merge. Standard CRDT pattern; well understood. Cost: per-tag metadata + more complex merge.
+
+  OPEN QUESTIONS TO WEIGH BEFORE ANY WORK
+  - Does this actually bite in practice? How often are two nodes concurrently editing the same spec where one removes a tag? May be rare enough to not be worth the complexity.
+  - Cheaper alternatives: last-writer-wins on the whole tag-set keyed by modified_at (loses concurrent adds instead), or a small tombstone list, or simply documenting the behavior and leaving it.
+  - Does any other array field (none today) want the same treatment, so a reusable OR-Set helper would pay off?
+
+  ACCEPTANCE (only if it is ever pursued)
+  - Decide: keep G-Set (document the reappear-on-remove behavior) vs adopt OR-Set vs an interim cheaper fix.
+  - If OR-Set: a tag removed on one side and untouched on the other stays removed after a three-way merge; concurrent adds still both survive; existing union tests still pass.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T05:02:27.493253004Z
+modified_at: 2026-06-17T05:02:27.493253004Z
+req_type: Spike
+tags:
+- conflict-merge
+- crdt
+- exploratory
+- store
+- thinking-out-loud
+human_only: true
