@@ -259,6 +259,8 @@ A "Fragments" answer on the substrate-impact line, or a low score on any of 2.1 
 ## Appendix B — Worked example: scoring three candidates across the stack
 
 > **Illustrative, not authoritative.** These score *tool classes* on publicly-known characteristics as of mid-2026, to show the rubric in motion — they are not audits of named products, and a real evaluation must re-score the specific product version against the org's own weighting. The scores are arguable by design; the value is the *shape of the tradeoff* they expose, not the exact numbers. (Scale: 3 owned/strong · 2 partial · 1 weak · 0 absent/captive. ★ = heavily weighted.)
+>
+> *Real instances, June 2026 — **C1** ≈ Claude / GPT / Gemini model APIs; **C2** ≈ Claude Code Agent Teams, Codex sub-agents, Cursor multi-agent (each single-vendor); **C3** ≈ GNAP or Beads + Gas Town (and AIDA is one such instance). These shift fast — re-check before relying on them.*
 
 | # | Criterion | **C1 — Frontier model API** (L0) | **C2 — Single-vendor coordination suite** (L4–L5) | **C3 — Git-canonical program-owned graph** (L1/L3) |
 |---|---|:-:|:-:|:-:|
