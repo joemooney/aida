@@ -1,0 +1,18 @@
+id: 019ed372-cb24-7190-948b-2083330553f9
+spec_id: STORY-640
+agreed_id: STORY-640
+title: 'Team identity & awareness: aida team roster + status coordination view + distinct-identity guard + onboarding'
+description: 'Tier-1 of EPIC-47 (folds identity+visibility+onboarding — they share the roster). aida team: list registered nodes/users (from registry/nodes.toml) with host/last-seen; aida status gains a cross-clone coordination view (the deferred slice 3: active coordination/ claims with holder host/clone/agent/age). BUG-89 hardening: in a team context (>1 node registered / roster present), refuse or loudly warn the default user identity and guide setting a distinct AIDA_USER. Onboarding: when a fresh clone joins an existing store with a roster, guide AIDA_USER + node acquire. Best-effort; backward-compatible.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-17T02:39:36.228662309Z
+modified_at: 2026-06-17T02:39:36.228662309Z
+req_type: Story
+tags:
+- identity
+- onboarding
+- parent:EPIC-47
+- team
+- visibility
