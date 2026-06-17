@@ -19,12 +19,17 @@
 //! roster with ≤1 node, means "not a team" — every guard is silent and reads
 //! never hard-block. trace:STORY-640 | ai:claude
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use aida_core::node::{NodeRegistry, NodeRegistryEntry};
 
 /// Filename of the shared node roster under the store worktree.
 const NODES_TOML_REL: &[&str] = &["registry", "nodes.toml"];
+
+/// Filename of the shared per-user role roster under the store worktree.
+/// trace:STORY-646 | ai:claude
+const TEAM_TOML_REL: &[&str] = &["registry", "team.toml"];
 
 /// Load the shared node roster from `<store_root>/registry/nodes.toml`.
 /// Returns an empty roster when the file is absent or unreadable — a missing
@@ -182,6 +187,178 @@ pub(crate) fn our_clone_path(store_root: &Path) -> String {
     canon(project_root)
 }
 
+// ── Team RBAC: per-user roles (STORY-646) ───────────────────────────────────
+//
+// GUARDRAIL, NOT SECURITY. The store is a shared git branch — anyone with push
+// access to `aida-store` can edit any YAML directly, so this role roster can
+// never be an access-control boundary. What it CAN be: a guardrail that stops
+// *accidents* (an implementer accidentally approving a spec), an encoding of
+// team structure, and an audit signal (bypasses show up in git history). The
+// caveat is surfaced in `aida team set-role` --help, its output, and the docs.
+// trace:STORY-646 | ai:claude
+
+/// The shared per-user role roster — `registry/team.toml` on the `aida-store`
+/// branch. Maps a `user_id` (the person, per `current_user_id`) to a role
+/// string. An absent file / absent user = unranked → falls back to
+/// `AIDA_SESSION_ROLE` / the current default (backward-compatible).
+///
+/// ```toml
+/// [members]
+/// alice = "advisor"
+/// bob   = "implementer"
+/// ```
+/// trace:STORY-646 | ai:claude
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub(crate) struct TeamRoster {
+    /// user_id -> role string. `BTreeMap` keeps the file deterministically
+    /// sorted so a CAS round-trip is stable across writers.
+    #[serde(default)]
+    pub members: BTreeMap<String, String>,
+}
+
+impl TeamRoster {
+    /// Absolute path to `registry/team.toml` under a store worktree root.
+    fn path(store_root: &Path) -> PathBuf {
+        let mut path = store_root.to_path_buf();
+        for seg in TEAM_TOML_REL {
+            path.push(seg);
+        }
+        path
+    }
+
+    /// Load the roster from `<store_root>/registry/team.toml`. A missing or
+    /// unreadable file yields an empty roster — "no RBAC configured" is never
+    /// an error (best-effort, backward-compatible). trace:STORY-646
+    pub(crate) fn load(store_root: &Path) -> Self {
+        let path = Self::path(store_root);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            return Self::default();
+        };
+        toml::from_str(&content).unwrap_or_default()
+    }
+
+    /// The roster role for `user_id`, if one is recorded.
+    pub(crate) fn role_for(&self, user_id: &str) -> Option<&str> {
+        self.members.get(user_id).map(String::as_str)
+    }
+
+    /// Set (or replace) a user's role and serialize to TOML.
+    fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
+        self.members.insert(user_id.to_string(), role.to_string());
+        self
+    }
+}
+
+/// Pure resolution of a user's effective role for the guardrail.
+///
+/// Priority: the **roster** role for the user (durable, survives a forgotten
+/// env var) → ELSE the session env (`AIDA_SESSION_ROLE`) → ELSE the read-side
+/// default (`implementer`). So a rostered user gets their role with no env set;
+/// a non-rostered user behaves exactly as today (backward-compatible).
+///
+/// Pure over its inputs (roster role + raw env value) so it is directly
+/// unit-testable without touching the process env or the filesystem.
+/// trace:STORY-646 | ai:claude
+pub(crate) fn resolve_effective_role(
+    roster_role: Option<&str>,
+    env_role: Option<&str>,
+) -> (String, RoleSource) {
+    if let Some(r) = roster_role.map(str::trim).filter(|s| !s.is_empty()) {
+        return (super::canonical_role_name(r), RoleSource::Roster);
+    }
+    match env_role.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(r) => (super::canonical_role_name(r), RoleSource::Env),
+        None => ("implementer".to_string(), RoleSource::Default),
+    }
+}
+
+/// Where an effective role came from — lets call sites tailor the refusal
+/// message (a roster role is the durable team role; an env role is per-shell).
+/// trace:STORY-646 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RoleSource {
+    /// From `registry/team.toml` (the durable team role).
+    Roster,
+    /// From the `AIDA_SESSION_ROLE` env var (per-shell, self-declared).
+    Env,
+    /// Neither set — the read-side `implementer` default.
+    Default,
+}
+
+/// Resolve the effective role for `user_id` against the store at `store_root`,
+/// reading `AIDA_SESSION_ROLE` from the process env. Best-effort: an
+/// unreachable / unreadable store yields an empty roster, so resolution falls
+/// straight through to the env / default (never blocks). trace:STORY-646
+pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (String, RoleSource) {
+    let roster = TeamRoster::load(store_root);
+    let roster_role = roster.role_for(user_id).map(str::to_string);
+    let env_role = std::env::var("AIDA_SESSION_ROLE").ok();
+    resolve_effective_role(roster_role.as_deref(), env_role.as_deref())
+}
+
+/// Write `user_id = role` into `registry/team.toml` on the store with a
+/// CAS push-wins loop (mirrors `git_ops::register_node_full`): pull → load →
+/// merge our edit → save → commit → push; on a rejected push, hard-reset the
+/// stale commit and retry. Solo (no `origin`) writes locally and lets the next
+/// `aida push` upload. Returns the canonicalized role written. trace:STORY-646
+pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyhow::Result<()> {
+    use aida_core::git_ops;
+
+    const MAX_RETRIES: u32 = 10;
+    let registry_path = TeamRoster::path(store_root);
+    if let Some(parent) = registry_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
+    let local_only = !git_ops::has_remote(store_root, "origin");
+
+    for attempt in 0..MAX_RETRIES {
+        // Step 1: pull latest (skip first attempt / solo).
+        if attempt > 0 && !local_only {
+            git_ops::pull_rebase(store_root, "origin", &branch)?;
+        }
+
+        // Step 2: load → merge our edit → save.
+        let roster = TeamRoster::load(store_root).with_role_set(user_id, role);
+        let content = toml::to_string_pretty(&roster)?;
+        std::fs::write(&registry_path, content)?;
+
+        // Step 3: stage + commit.
+        git_ops::add(store_root, &["registry/team.toml"])?;
+        let msg = format!("chore(registry): set team role {} = {}", user_id, role);
+        git_ops::commit(store_root, &msg)?;
+
+        // Step 4: push (or stop here when solo).
+        if local_only {
+            return Ok(());
+        }
+        match git_ops::push(store_root, "origin", &branch) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {
+                // Push rejected — someone else wrote first. Discard our stale
+                // commit + tree so the next pull --rebase applies cleanly.
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+                continue;
+            }
+            Err(e) => anyhow::bail!("setting team role failed: {}", e),
+        }
+    }
+    anyhow::bail!(
+        "could not write the team role after {} attempts (store push kept being rejected) — \
+         run `aida db sync --pull` and retry",
+        MAX_RETRIES
+    )
+}
+
+/// A roster member row joined with the role recorded for its user_id, for the
+/// extended `aida team` view. trace:STORY-646 | ai:claude
+pub(crate) fn roles_by_user(store_root: &Path) -> BTreeMap<String, String> {
+    TeamRoster::load(store_root).members
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,6 +431,83 @@ mod tests {
         assert!(!clone_is_registered(&r, "/home/joe/ai/aida"));
         r.nodes.push(node("2", Some("/home/joe/ai/aida")));
         assert!(clone_is_registered(&r, "/home/joe/ai/aida"));
+    }
+
+    // ── STORY-646: effective_role + team.toml CAS round-trip ────────────────
+
+    #[test]
+    fn roster_role_wins_over_env() {
+        // A rostered advisor stays advisor even with an implementer env set.
+        let (role, src) = resolve_effective_role(Some("advisor"), Some("implementer"));
+        assert_eq!(role, "advisor");
+        assert_eq!(src, RoleSource::Roster);
+    }
+
+    #[test]
+    fn env_used_when_not_rostered() {
+        let (role, src) = resolve_effective_role(None, Some("advisor"));
+        assert_eq!(role, "advisor");
+        assert_eq!(src, RoleSource::Env);
+    }
+
+    #[test]
+    fn default_when_neither_set() {
+        let (role, src) = resolve_effective_role(None, None);
+        assert_eq!(role, "implementer");
+        assert_eq!(src, RoleSource::Default);
+    }
+
+    #[test]
+    fn blank_roster_and_env_fall_through_to_default() {
+        // Empty/whitespace strings are treated as unset at each tier.
+        let (role, src) = resolve_effective_role(Some("  "), Some(""));
+        assert_eq!(role, "implementer");
+        assert_eq!(src, RoleSource::Default);
+    }
+
+    #[test]
+    fn roster_role_dialog_canonicalizes_to_advisor() {
+        // The deprecated `dialog` token normalizes to `advisor` like everywhere.
+        let (role, src) = resolve_effective_role(Some("dialog"), None);
+        assert_eq!(role, "advisor");
+        assert_eq!(src, RoleSource::Roster);
+    }
+
+    #[test]
+    fn team_toml_round_trips() {
+        let roster = TeamRoster::default()
+            .with_role_set("alice", "advisor")
+            .with_role_set("bob", "implementer");
+        let toml_str = toml::to_string_pretty(&roster).unwrap();
+        let parsed: TeamRoster = toml::from_str(&toml_str).unwrap();
+        assert_eq!(parsed.role_for("alice"), Some("advisor"));
+        assert_eq!(parsed.role_for("bob"), Some("implementer"));
+        assert_eq!(parsed.role_for("carol"), None);
+        // `[members]` section is the on-disk shape the design doc specifies.
+        assert!(toml_str.contains("[members]"), "got: {toml_str}");
+        assert!(toml_str.contains("alice = \"advisor\""), "got: {toml_str}");
+    }
+
+    #[test]
+    fn missing_team_toml_is_empty_roster() {
+        let dir = tempfile::tempdir().unwrap();
+        let roster = TeamRoster::load(dir.path());
+        assert!(roster.members.is_empty());
+        assert_eq!(roster.role_for("anyone"), None);
+    }
+
+    #[test]
+    fn load_reads_what_was_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let registry = dir.path().join("registry");
+        std::fs::create_dir_all(&registry).unwrap();
+        std::fs::write(
+            registry.join("team.toml"),
+            "[members]\nalice = \"advisor\"\n",
+        )
+        .unwrap();
+        let roster = TeamRoster::load(dir.path());
+        assert_eq!(roster.role_for("alice"), Some("advisor"));
     }
 
     #[test]

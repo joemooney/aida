@@ -1085,10 +1085,87 @@ case_MU-521() {
     fi
 }
 
+# --- MU-551: per-user team roles gate advisor-only ops (STORY-646) ----------
+case_MU-551() {
+    # STORY-646 (team RBAC slice 1): a durable per-user role in the shared
+    # roster (registry/team.toml) is the user's EFFECTIVE role even with no
+    # AIDA_SESSION_ROLE set — so the advisor guardrail survives a forgotten env
+    # var, and a non-advisor rostered user is refused an advisor-only op.
+    #
+    # Verified gated verb (via `aida edit --help`): `aida edit <spec> --status
+    # approved` — promoting Draft → Approved needs advisor authority (TASK-647).
+    #
+    # Two distinct user ids (set via AIDA_USER so current_user_id is fixed):
+    #   - mu551-impl  rostered `implementer` -> approve REFUSED (no env advisor)
+    #   - mu551-adv   rostered `advisor`     -> approve ALLOWED (no env advisor)
+    # Both run non-TTY with NO AIDA_SESSION_ROLE, so the ONLY thing flipping the
+    # verdict is the durable roster role. trace:STORY-646
+    EXPECT=pass
+    local impl_user="mu551-impl" adv_user="mu551-adv"
+
+    # The MU-51x coordination cases push synthetic claim commits that can leave a
+    # clone's store mid-rebase; recover both before we touch the store here.
+    recover_store_rebase "$CLONE_A"
+    recover_store_rebase "$CLONE_B"
+
+    # A files a Draft spec for the implementer to (try to) approve, and a second
+    # for the advisor to approve. add_spec lands Approved, so reset to Draft.
+    local id_impl id_adv
+    id_impl="$(add_spec "$CLONE_A" "mu551 impl-gated spec" task)"
+    id_adv="$(add_spec "$CLONE_A" "mu551 adv-allowed spec" task)"
+    aida_in "$CLONE_A" edit "$id_impl" --status draft >/dev/null 2>&1 || true
+    aida_in "$CLONE_A" edit "$id_adv" --status draft >/dev/null 2>&1 || true
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+
+    # B rosters the two users (set-role is self-service by guardrail design).
+    aida_in "$CLONE_B" team set-role "$impl_user" --role implementer >/dev/null 2>&1 || true
+    aida_in "$CLONE_B" team set-role "$adv_user" --role advisor >/dev/null 2>&1 || true
+    push_from "$CLONE_B"; pull_into "$CLONE_A"
+
+    # The rostered IMPLEMENTER attempts the advisor-only promotion (no env role,
+    # non-TTY): DESIRED -> refused (non-zero exit / advisor-authority message).
+    local impl_out impl_rc impl_refused=0
+    set +e
+    impl_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_USER="$impl_user" \
+        env -u AIDA_SESSION_ROLE "$AIDA_BIN" edit "$id_impl" --status approved 2>&1 )"
+    impl_rc=$?
+    set -e
+    if [[ $impl_rc -ne 0 || "$impl_out" == *"advisor authority"* ]]; then impl_refused=1; fi
+
+    # The rostered ADVISOR attempts the same promotion (no env role, non-TTY):
+    # DESIRED -> allowed (exit 0, spec becomes Approved).
+    local adv_out adv_rc adv_allowed=0
+    set +e
+    adv_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_USER="$adv_user" \
+        env -u AIDA_SESSION_ROLE "$AIDA_BIN" edit "$id_adv" --status approved 2>&1 )"
+    adv_rc=$?
+    set -e
+    local adv_status
+    adv_status="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_USER="$adv_user" \
+        env -u AIDA_SESSION_ROLE "$AIDA_BIN" show "$id_adv" 2>/dev/null | grep -iE '^Status:' | head -1 || true )"
+    if [[ $adv_rc -eq 0 && "$adv_status" == *[Aa]pproved* ]]; then adv_allowed=1; fi
+
+    # The refusal also names the durable team role (the STORY-646 message).
+    local names_role=0
+    if [[ "$impl_out" == *"team role"* ]]; then names_role=1; fi
+
+    CASE_DETAIL="impl_refused=$impl_refused adv_allowed=$adv_allowed names_role=$names_role"
+    if assert_ne "" "$id_impl" "impl spec id" \
+        && assert_ne "" "$id_adv" "adv spec id" \
+        && assert_eq "$impl_refused" "1" "rostered implementer is refused the approve" \
+        && assert_eq "$adv_allowed" "1" "rostered advisor is allowed the approve" \
+        && assert_eq "$names_role" "1" "refusal names the durable team role"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="impl_refused=$impl_refused (rc=$impl_rc) adv_allowed=$adv_allowed (rc=$adv_rc, status=[$adv_status]); impl_out=[${impl_out:0:200}]"
+    fi
+}
+
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521 MU-551)
 
 list_cases() {
     echo "Available cases:"
