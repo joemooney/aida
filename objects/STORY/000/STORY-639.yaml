@@ -3,15 +3,33 @@ spec_id: STORY-639
 agreed_id: STORY-639
 title: 'Assignment + my-work: aida assign --to, --mine/--assigned views, queue routing'
 description: Tier-1 of EPIC-47. aida assign <spec> --to <user> sets the assignee (reuse the existing owner field if it fits, else add assignee:Option<String>) and routes the spec into that user queue. aida list --mine (assignee==current_user_id) and --assigned <user>; assignee shown in aida show + list. aida unassign. Backward-compatible (no assignee = current behavior). Verify owner-field semantics before choosing reuse-vs-add.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:29.862336060Z
-modified_at: 2026-06-17T02:39:29.862336060Z
+modified_at: 2026-06-17T03:30:41.104044428Z
 req_type: Story
 tags:
 - assignment
 - parent:EPIC-47
 - team
 - workflow
+history:
+- id: 019ed3a1-8f4b-76b0-8519-b4e8916c4b49
+  author: aida-auto-bump
+  timestamp: 2026-06-17T03:30:41.099281814Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed3a1-8f50-7940-a2ce-89afe60ae64b
+  timestamp: 2026-06-17T03:30:41.104043777Z
+  agent: aida
+  commit_sha: caf8607133ac23c1a8b83493a74a30a6029142ba
+  summary: Completed via merge caf86071
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T03:30:40.943860263Z
+  completion_sha: caf8607133ac23c1a8b83493a74a30a6029142ba
