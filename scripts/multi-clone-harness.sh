@@ -688,10 +688,13 @@ case_MU-505() {
     # shared claim with this script's own (alive) pid; do NOT run a real drain.
     write_shared_lock_claim "drain.lock.toml" "drain" "burndown run (harness sim)"
     # B attempts a drain on an EMPTY queue. With a live cross-clone drain claim
-    # present, the entry point must refuse BEFORE doing any work.
+    # present, the entry point must refuse BEFORE doing any work. Run as advisor:
+    # STORY-647's drain-start RBAC gate (advisor-only by default) would otherwise
+    # refuse first; this case tests the LOCK mechanics, which only a legitimate
+    # drain-starter (advisor) reaches. trace:STORY-647
     local out rc
     set +e
-    out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" "$AIDA_BIN" queue work --auto-complete 2>&1 )"
+    out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor "$AIDA_BIN" queue work --auto-complete 2>&1 )"
     rc=$?
     set -e
     # Refusal = mentions a drain running in another clone / a holder / non-zero.
@@ -754,9 +757,12 @@ case_MU-507() {
     printf '{"pid":%d,"started_at_utc":"%s","command":"burndown run (harness sim)","host":"%s"}\n' \
         "$$" "$now" "$(hostname)" > "$lock_a"
     # Second drain attempt in the SAME clone -> must refuse (holder pid alive).
+    # Run as advisor: STORY-647's drain-start RBAC gate (advisor-only by default)
+    # would otherwise refuse first; this case tests the LOCK mechanics, reached
+    # only by a legitimate drain-starter (advisor). trace:STORY-647
     local out rc
     set +e
-    out="$( cd "$CLONE_A" && HOME="$WORKDIR/home" AIDA_DRAIN_LOCK_STALE_SECS=3600 "$AIDA_BIN" queue work --auto-complete 2>&1 )"
+    out="$( cd "$CLONE_A" && HOME="$WORKDIR/home" AIDA_SESSION_ROLE=advisor AIDA_DRAIN_LOCK_STALE_SECS=3600 "$AIDA_BIN" queue work --auto-complete 2>&1 )"
     rc=$?
     set -e
     rm -f "$lock_a" 2>/dev/null || true
@@ -1162,10 +1168,141 @@ case_MU-551() {
     fi
 }
 
+# --- MU-552: strict mode default-denies a non-rostered user a gated op -------
+case_MU-552() {
+    # STORY-647 (team RBAC slice 2): `[team] strict = true` makes the roster
+    # authoritative. A NON-rostered user (no registry/team.toml entry) gets
+    # LEAST-PRIVILEGE for gated ops (default-deny) instead of the permissive
+    # env/default fallback — and the refusal is NOT bypassable by setting
+    # AIDA_SESSION_ROLE. An advisor-ROSTERED user is allowed.
+    #
+    # Gated op probed: `aida burndown run --dry-run` (drain-start). The gate
+    # fires FIRST, before the dry-run preview, so we exercise the gate WITHOUT
+    # launching a real drain (no `--auto-complete`, no merge). trace:STORY-647
+    EXPECT=pass
+
+    # The MU-51x coordination cases can leave a clone mid-rebase; recover first.
+    recover_store_rebase "$CLONE_A"
+    recover_store_rebase "$CLONE_B"
+
+    # Enable strict mode in clone B's project config (per-clone .aida/config.toml).
+    local cfg="$CLONE_B/.aida/config.toml"
+    if ! grep -q '^\[team\]' "$cfg" 2>/dev/null; then
+        printf '\n[team]\nstrict = true\n' >> "$cfg"
+    fi
+
+    # Roster ONLY the advisor user; the non-rostered user is deliberately absent.
+    local rostered_adv="mu552-adv" nonrostered="mu552-ghost"
+    aida_in "$CLONE_B" team set-role "$rostered_adv" --role advisor >/dev/null 2>&1 || true
+    push_from "$CLONE_B"; pull_into "$CLONE_A"
+
+    # NON-rostered user, strict mode, with AIDA_SESSION_ROLE=advisor set anyway:
+    # DESIRED -> still REFUSED (env can't grant authority in strict mode).
+    local ghost_out ghost_rc ghost_refused=0
+    set +e
+    ghost_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_USER="$nonrostered" \
+        AIDA_SESSION_ROLE=advisor "$AIDA_BIN" burndown run --dry-run 2>&1 )"
+    ghost_rc=$?
+    set -e
+    if [[ $ghost_rc -ne 0 && ( "$ghost_out" == *"advisor"* || "$ghost_out" == *"drain"* ) ]]; then
+        ghost_refused=1
+    fi
+
+    # ADVISOR-rostered user, strict mode, NO env role: DESIRED -> allowed (the
+    # dry-run preview runs and exits 0; it never launches a drain).
+    local adv_out adv_rc adv_allowed=0
+    set +e
+    adv_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_USER="$rostered_adv" \
+        env -u AIDA_SESSION_ROLE "$AIDA_BIN" burndown run --dry-run 2>&1 )"
+    adv_rc=$?
+    set -e
+    if [[ $adv_rc -eq 0 ]]; then adv_allowed=1; fi
+
+    CASE_DETAIL="ghost_refused=$ghost_refused adv_allowed=$adv_allowed"
+    if assert_eq "$ghost_refused" "1" "strict non-rostered (env=advisor) is default-denied the drain-start" \
+        && assert_eq "$adv_allowed" "1" "strict advisor-rostered is allowed the drain-start dry path"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="ghost_refused=$ghost_refused (rc=$ghost_rc) adv_allowed=$adv_allowed (rc=$adv_rc); ghost_out=[${ghost_out:0:200}]; adv_out=[${adv_out:0:160}]"
+    fi
+}
+
+# --- MU-553: a protected-tag spec requires advisor to transition -------------
+case_MU-553() {
+    # STORY-647 (team RBAC slice 2): a spec carrying any `[team] protected_tags`
+    # entry may only be edited/transitioned by the configured protected_role
+    # (advisor by default). A rostered IMPLEMENTER is refused the transition; a
+    # rostered ADVISOR is allowed. Both run non-TTY with NO AIDA_SESSION_ROLE so
+    # only the durable roster role + the protected tag flip the verdict.
+    # trace:STORY-647
+    EXPECT=pass
+
+    recover_store_rebase "$CLONE_A"
+    recover_store_rebase "$CLONE_B"
+
+    # Configure the protected-tag set in clone B's project config.
+    local cfg="$CLONE_B/.aida/config.toml"
+    if ! grep -q 'protected_tags' "$cfg" 2>/dev/null; then
+        if grep -q '^\[team\]' "$cfg" 2>/dev/null; then
+            # Append the key under the existing [team] section header.
+            awk '1; /^\[team\]/ && !done { print "protected_tags = [\"protected\"]"; done=1 }' \
+                "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+        else
+            printf '\n[team]\nprotected_tags = ["protected"]\n' >> "$cfg"
+        fi
+    fi
+
+    # A protected spec in In-Progress (a non-advisor-only transition target so
+    # the ONLY gate exercised is the protected-tag gate, not TASK-647's
+    # approved-pipeline gate). add_spec lands Approved; tag it + move to draft so
+    # implementer→approved would also be gated — instead test edit of the TAGGED
+    # spec's title, which the protected gate refuses for a non-advisor.
+    local id
+    id="$(add_spec "$CLONE_A" "mu553 protected spec" task)"
+    aida_in "$CLONE_A" edit "$id" --add-tag protected >/dev/null 2>&1 || true
+    push_from "$CLONE_A"; pull_into "$CLONE_B"
+
+    # Roster the two users.
+    local impl_user="mu553-impl" adv_user="mu553-adv"
+    aida_in "$CLONE_B" team set-role "$impl_user" --role implementer >/dev/null 2>&1 || true
+    aida_in "$CLONE_B" team set-role "$adv_user" --role advisor >/dev/null 2>&1 || true
+    push_from "$CLONE_B"; pull_into "$CLONE_A"
+
+    # Rostered IMPLEMENTER tries to edit the protected spec (title change, a
+    # non-status edit so only the protected-tag gate applies): DESIRED -> refused.
+    local impl_out impl_rc impl_refused=0
+    set +e
+    impl_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_USER="$impl_user" \
+        env -u AIDA_SESSION_ROLE "$AIDA_BIN" edit "$id" --title "impl tries to edit" 2>&1 )"
+    impl_rc=$?
+    set -e
+    if [[ $impl_rc -ne 0 && "$impl_out" == *"protected"* ]]; then impl_refused=1; fi
+
+    # Rostered ADVISOR makes the same edit: DESIRED -> allowed (exit 0).
+    local adv_out adv_rc adv_allowed=0
+    set +e
+    adv_out="$( cd "$CLONE_B" && HOME="$WORKDIR/home" AIDA_USER="$adv_user" \
+        env -u AIDA_SESSION_ROLE "$AIDA_BIN" edit "$id" --title "advisor edits protected" 2>&1 )"
+    adv_rc=$?
+    set -e
+    if [[ $adv_rc -eq 0 ]]; then adv_allowed=1; fi
+
+    CASE_DETAIL="impl_refused=$impl_refused adv_allowed=$adv_allowed"
+    if assert_ne "" "$id" "protected spec id" \
+        && assert_eq "$impl_refused" "1" "rostered implementer is refused the protected-spec edit" \
+        && assert_eq "$adv_allowed" "1" "rostered advisor is allowed the protected-spec edit"; then
+        CASE_OK=1
+    else
+        CASE_OK=0
+        CASE_DETAIL="impl_refused=$impl_refused (rc=$impl_rc) adv_allowed=$adv_allowed (rc=$adv_rc); impl_out=[${impl_out:0:200}]"
+    fi
+}
+
 # =========================================================================
 # Case registry (ordered).
 # =========================================================================
-ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521 MU-551)
+ALL_CASES=(MU-101 MU-103 MU-201 MU-202 MU-203 MU-204 MU-208 MU-301 MU-401 MU-402 MU-502 MU-541 MU-504 MU-505 MU-506 MU-507 MU-511 MU-512 MU-513 MU-521 MU-551 MU-552 MU-553)
 
 list_cases() {
     echo "Available cases:"
