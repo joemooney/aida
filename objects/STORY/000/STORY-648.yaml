@@ -6,9 +6,10 @@ description: Slice A of the team dashboard (design docs/plans/2026-06-17-team-da
 status: Completed
 priority: High
 owner: ''
+assignee: joe.mooney
 feature: Uncategorized
 created_at: 2026-06-17T07:32:22.980237253Z
-modified_at: 2026-06-17T07:58:49.987547347Z
+modified_at: 2026-06-17T14:46:50.739873109Z
 req_type: Story
 tags:
 - aida-server
