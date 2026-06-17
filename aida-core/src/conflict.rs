@@ -151,6 +151,122 @@ pub fn resolve_conflict(
     }
 }
 
+/// Three-way structured merge of one spec YAML during a store-leg rebase.
+///
+/// MU-204 / STORY-641: when two clones concurrently edit the SAME spec, the
+/// store-leg rebase hits a textual conflict in `objects/TYPE/000/SPEC.yaml`
+/// even though the spec is structurally reconcilable: the `history:`,
+/// `comments:`, and `processing_record:` arrays are append-only (each entry
+/// carries an immutable `id`), and the scalar fields can be resolved with the
+/// same last-write-wins policy `resolve_conflict` already uses.
+///
+/// This is a PURE function so it is unit-testable in isolation; the git
+/// plumbing (reading the three stages, writing the result, continuing the
+/// rebase) lives in the pull path.
+///
+/// Policy, matching `conflict.rs::resolve_conflict` (LastWriteWins by
+/// `modified_at`) and never silently dropping an edit:
+/// - **Scalar fields** (title, description, status, priority, owner, …):
+///   take the whole `ours`/`theirs` requirement that has the later
+///   `modified_at` as the scalar base (LWW). Ties → `ours`.
+/// - **`history:`** — union by `HistoryEntry.id` (dedupe), ordered by
+///   `timestamp` then `id` for determinism. Both clones' entries survive.
+/// - **`comments:`** — union by `Comment.id`, ordered by `created_at` then
+///   `id`. (`base` may contain comments removed on neither side; the union of
+///   ours+theirs preserves everything either side has.)
+/// - **`processing_record:`** — union by `ProcessingRecord.id`, ordered by
+///   `timestamp` then `id`.
+/// - **`tags:`** — union of both sides (a `HashSet`, so a set union).
+///
+/// `base` is the merge-base version; it is currently used only to anchor the
+/// id-keyed unions implicitly (ours+theirs is a superset of base for
+/// append-only arrays). It is accepted so the signature is a true three-way
+/// merge and so future field-level policies can diff against the base.
+pub fn merge_spec_three_way(
+    base: &Requirement,
+    ours: &Requirement,
+    theirs: &Requirement,
+) -> Requirement {
+    // Scalar base: last-write-wins by modified_at (ties → ours). This carries
+    // title / description / status / priority / owner / feature / weight /
+    // relationships / dependencies / archived / etc. from whichever side wrote
+    // most recently — the same rule resolve_conflict applies.
+    let mut merged = if ours.modified_at >= theirs.modified_at {
+        ours.clone()
+    } else {
+        theirs.clone()
+    };
+
+    // History: union by entry id, deterministic order. base contributes
+    // nothing new (append-only ⇒ ours+theirs ⊇ base) but we fold it in too so
+    // an entry present only in base (e.g. one side rewrote the array) is never
+    // dropped.
+    merged.history = union_history(&[&base.history, &ours.history, &theirs.history]);
+
+    // Comments: union by comment id, deterministic order.
+    merged.comments = union_comments(&[&base.comments, &ours.comments, &theirs.comments]);
+
+    // Processing records: union by record id, deterministic order.
+    merged.processing_record = union_processing_records(&[
+        &base.processing_record,
+        &ours.processing_record,
+        &theirs.processing_record,
+    ]);
+
+    // Tags: set union across both edited sides.
+    let mut tags = ours.tags.clone();
+    tags.extend(theirs.tags.iter().cloned());
+    merged.tags = tags;
+
+    merged
+}
+
+/// Union HistoryEntry arrays by `id`, ordered by `(timestamp, id)`.
+fn union_history(
+    sources: &[&Vec<crate::models::HistoryEntry>],
+) -> Vec<crate::models::HistoryEntry> {
+    use std::collections::HashMap;
+    let mut by_id: HashMap<Uuid, crate::models::HistoryEntry> = HashMap::new();
+    for src in sources {
+        for entry in src.iter() {
+            by_id.entry(entry.id).or_insert_with(|| entry.clone());
+        }
+    }
+    let mut out: Vec<_> = by_id.into_values().collect();
+    out.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then(a.id.cmp(&b.id)));
+    out
+}
+
+/// Union Comment arrays by `id`, ordered by `(created_at, id)`.
+fn union_comments(sources: &[&Vec<crate::models::Comment>]) -> Vec<crate::models::Comment> {
+    use std::collections::HashMap;
+    let mut by_id: HashMap<Uuid, crate::models::Comment> = HashMap::new();
+    for src in sources {
+        for c in src.iter() {
+            by_id.entry(c.id).or_insert_with(|| c.clone());
+        }
+    }
+    let mut out: Vec<_> = by_id.into_values().collect();
+    out.sort_by(|a, b| a.created_at.cmp(&b.created_at).then(a.id.cmp(&b.id)));
+    out
+}
+
+/// Union ProcessingRecord arrays by `id`, ordered by `(timestamp, id)`.
+fn union_processing_records(
+    sources: &[&Vec<crate::models::ProcessingRecord>],
+) -> Vec<crate::models::ProcessingRecord> {
+    use std::collections::HashMap;
+    let mut by_id: HashMap<Uuid, crate::models::ProcessingRecord> = HashMap::new();
+    for src in sources {
+        for r in src.iter() {
+            by_id.entry(r.id).or_insert_with(|| r.clone());
+        }
+    }
+    let mut out: Vec<_> = by_id.into_values().collect();
+    out.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then(a.id.cmp(&b.id)));
+    out
+}
+
 /// Detect conflicts between a local store and a set of remote requirements.
 /// Returns all detected conflicts.
 pub fn detect_store_conflicts(
@@ -362,6 +478,152 @@ mod tests {
         let s2 = "a".repeat(100) + "é";
         let out2 = truncate(&s2, 100);
         assert_eq!(out2, format!("{}...", "a".repeat(100)));
+    }
+
+    // ----- STORY-641: three-way structured merge (MU-204) -----
+
+    use crate::models::{Comment, FieldChange, HistoryEntry};
+
+    fn hist(author: &str, ts: &str) -> HistoryEntry {
+        HistoryEntry {
+            id: Uuid::now_v7(),
+            author: author.to_string(),
+            timestamp: DateTime::parse_from_rfc3339(ts)
+                .unwrap()
+                .with_timezone(&Utc),
+            changes: vec![FieldChange {
+                field_name: "status".to_string(),
+                old_value: "draft".to_string(),
+                new_value: "approved".to_string(),
+            }],
+        }
+    }
+
+    // trace:STORY-641 — concurrent same-spec history appends union by id.
+    #[test]
+    fn test_merge_unions_history_by_id_dedupe() {
+        let mut base = make_req("Title", "Draft");
+        let shared = hist("base", "2026-01-01T00:00:00Z");
+        base.history = vec![shared.clone()];
+
+        let mut ours = base.clone();
+        let ours_entry = hist("a", "2026-01-02T00:00:00Z");
+        ours.history = vec![shared.clone(), ours_entry.clone()];
+        ours.set_status_from_str("Approved");
+        ours.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut theirs = base.clone();
+        let theirs_entry = hist("b", "2026-01-03T00:00:00Z");
+        theirs.history = vec![shared.clone(), theirs_entry.clone()];
+        theirs.set_status_from_str("In Progress");
+        theirs.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+
+        // All three unique entries present, deduped (shared appears once).
+        assert_eq!(merged.history.len(), 3);
+        let ids: std::collections::HashSet<_> = merged.history.iter().map(|h| h.id).collect();
+        assert!(ids.contains(&shared.id));
+        assert!(ids.contains(&ours_entry.id));
+        assert!(ids.contains(&theirs_entry.id));
+        // Ordered by timestamp.
+        assert_eq!(merged.history[0].id, shared.id);
+        assert_eq!(merged.history[1].id, ours_entry.id);
+        assert_eq!(merged.history[2].id, theirs_entry.id);
+    }
+
+    // trace:STORY-641 — scalar fields resolve last-write-wins by modified_at.
+    #[test]
+    fn test_merge_scalar_lww_by_modified_at() {
+        let base = make_req("Title", "Draft");
+
+        let mut ours = base.clone();
+        ours.set_status_from_str("Approved");
+        ours.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut theirs = base.clone();
+        theirs.set_status_from_str("In Progress");
+        theirs.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        // theirs is newer → its status wins.
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(merged.effective_status(), "In Progress");
+
+        // Flip: ours newer → ours status wins.
+        let mut ours2 = ours.clone();
+        ours2.modified_at = DateTime::parse_from_rfc3339("2026-01-04T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let merged2 = merge_spec_three_way(&base, &ours2, &theirs);
+        assert_eq!(merged2.effective_status(), "Approved");
+    }
+
+    // trace:STORY-641 — tags union across both sides.
+    #[test]
+    fn test_merge_tags_union() {
+        let mut base = make_req("Title", "Draft");
+        base.tags.insert("shared".to_string());
+
+        let mut ours = base.clone();
+        ours.tags.insert("ours-only".to_string());
+        ours.modified_at = Utc::now();
+
+        let mut theirs = base.clone();
+        theirs.tags.insert("theirs-only".to_string());
+        theirs.modified_at = Utc::now();
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert!(merged.tags.contains("shared"));
+        assert!(merged.tags.contains("ours-only"));
+        assert!(merged.tags.contains("theirs-only"));
+        assert_eq!(merged.tags.len(), 3);
+    }
+
+    // trace:STORY-641 — identical-on-both-sides merge is a no-op.
+    #[test]
+    fn test_merge_identical_is_noop() {
+        let mut base = make_req("Title", "Draft");
+        base.history = vec![hist("base", "2026-01-01T00:00:00Z")];
+        base.tags.insert("t".to_string());
+        let ours = base.clone();
+        let theirs = base.clone();
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(merged.title, base.title);
+        assert_eq!(merged.effective_status(), base.effective_status());
+        assert_eq!(merged.history.len(), 1);
+        assert_eq!(merged.history[0].id, base.history[0].id);
+        assert_eq!(merged.tags, base.tags);
+    }
+
+    // trace:STORY-641 — comments union by id (append-only thread).
+    #[test]
+    fn test_merge_unions_comments_by_id() {
+        let base = make_req("Title", "Draft");
+
+        let mut ours = base.clone();
+        let c_ours = Comment::new("a".to_string(), "ours comment".to_string());
+        ours.comments = vec![c_ours.clone()];
+        ours.modified_at = Utc::now();
+
+        let mut theirs = base.clone();
+        let c_theirs = Comment::new("b".to_string(), "theirs comment".to_string());
+        theirs.comments = vec![c_theirs.clone()];
+        theirs.modified_at = Utc::now();
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(merged.comments.len(), 2);
+        let ids: std::collections::HashSet<_> = merged.comments.iter().map(|c| c.id).collect();
+        assert!(ids.contains(&c_ours.id));
+        assert!(ids.contains(&c_theirs.id));
     }
 
     // trace:BUG-475 — emoji (4-byte) at the cutoff truncates on a char boundary.

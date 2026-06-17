@@ -116,18 +116,19 @@ This table is the spine; almost every case is a consequence of it.
 - **Validates:** Per-file object layout (`object_store.rs`).
 - **Status:** 🟡 — expected-clean by file isolation; untested end-to-end.
 
-### MU-203 — concurrent edits to the *same* spec → rebase conflict
-- **Setup:** A sets `FR-1.status = approved`; B sets `FR-1.status = in-progress`; both commit.
-- **Steps:** A pushes; B `aida pull` → store-leg rebase hits a conflict in `FR-1.yaml`.
-- **Expected (today):** Rebase pauses with conflict markers; `aida pull` prints a recovery hint and leaves B mid-rebase for manual resolution. **No automatic 3-way/field merge.**
-- **Validates:** Conflict surfacing, recovery messaging.
-- **Status:** ⚠️ **accepted limitation** — `conflict.rs` has field-level `detect_conflict` + LWW `resolve_conflict`, but the live pull path does NOT auto-apply them; it defers to git rebase + manual resolve. Oplog-replay CRDT is foundation-only (`oplog.rs`). **Candidate for a spec** if same-spec contention becomes common.
+### MU-203 — NON-mergeable store conflict still surfaces for manual resolve
+- **Setup:** Two clones make divergent edits to a store file with **no known union rule** (e.g. `metadata.yaml`); both commit on the `aida-store` branch.
+- **Steps:** A pushes; B `aida pull` → store-leg rebase hits a conflict the auto-merger refuses.
+- **Expected:** The conflict is **surfaced** (non-zero exit + recovery hint, "conflict in non-mergeable path …"); the auto-merger never force-resolves an unknown file. (After STORY-641 the *same-spec status edit* no longer reaches this path — see MU-204; MU-203 now pins the **complement**: the fallback must still surface a genuinely-unresolvable conflict.)
+- **Validates:** The STORY-641 auto-merger's safety boundary — only spec objects + the oplog are auto-resolved; everything else defers to manual.
+- **Status:** ✅ — `git_ops::pull_rebase_auto_merge` bails to the manual path for any conflicted path that is neither a spec object nor `oplog.yaml`; harness `case_MU-203` is `EXPECT=pass`. trace:STORY-641
 
-### MU-204 — concurrent `history:` append on the same spec
-- **Setup:** A and B each make a status change on FR-1 (each appends a `HistoryEntry`).
-- **Expected (today):** Both append at the array tail → rebase conflict in the YAML; manual resolve. Entries are immutable + append-only, so a *3-way array-union* merge would be safe and automatic — but isn't implemented.
-- **Validates:** History-array merge behavior.
-- **Status:** 🐛 **gap** — append-only history is structurally union-mergeable; AIDA doesn't do it. Good first target for an oplog/array-merge driver. *(File a spec.)*
+### MU-204 — concurrent same-spec edits AUTO-MERGE on pull (history union + LWW)
+- **Setup:** A and B each make a status change on FR-1 (each writes the spec object YAML + an append-only oplog op), both commit.
+- **Steps:** A pushes; B `aida pull` → store-leg rebase conflicts on `FR-1.yaml` **and** `oplog.yaml`; the auto-merger reconciles both.
+- **Expected:** B's pull completes with **no manual conflict** (rc==0, not left mid-rebase). The spec object's append-only arrays (`history:`/`comments:`/`processing_record:`) are unioned by entry id; scalar fields resolve last-write-wins by `modified_at`; tags union. The oplog is unioned by operation id (lamport reconcile). **Neither clone's edit is dropped** — both `SetStatus` ops survive in the unioned oplog; the merged spec status is the LWW winner.
+- **Validates:** Structured three-way merge of spec objects + oplog on the pull path.
+- **Status:** ✅ **closed by STORY-641** — pure `conflict::merge_spec_three_way` (history/comments/processing_record union by id + scalar LWW + tag union) + `OpLog::merge` for the oplog, driven by `git_ops::pull_rebase_auto_merge` in the store-leg pull. A one-line note per auto-resolved file is printed; non-mergeable conflicts still fall back to manual (MU-203). Harness `case_MU-204` is `EXPECT=pass`. trace:STORY-641
 
 ### MU-205 — fresh-clone auto-attach
 - **Setup:** Brand-new `git clone`; first `aida list`.
@@ -258,7 +259,7 @@ This table is the spine; almost every case is a consequence of it.
 ## Cross-cutting findings (the "so what")
 
 1. **Coordination is the weak axis.** ID allocation, store sync, and cache are robust (CAS, rebase, stale-detect, collision guards). The gaps are all in **cross-clone coordination**: leases (MU-504), drain lock (MU-505), solo lock (MU-506) are per-clone-local and provide *zero* cross-clone safety. Two same-host clones can silently double-work the same spec. **This is the headline decision** — either put a shared lease/lock registry on the store branch, or explicitly document the single-driver assumption.
-2. **Same-spec concurrent edits fall back to git rebase + manual resolve** (MU-203/204). `conflict.rs` and `oplog.rs` exist but aren't wired into the live pull path. Append-only `history:` arrays are union-mergeable in principle (MU-204) — a cheap win.
+2. **Same-spec concurrent edits now AUTO-MERGE on pull** (MU-204, STORY-641). `git_ops::pull_rebase_auto_merge` reconciles conflicting spec objects (`conflict::merge_spec_three_way`: history/comments/processing_record union by id + scalar LWW + tag union) and the oplog (`OpLog::merge`) during the store-leg rebase, so concurrent same-spec edits no longer stop for manual resolution. Conflicts in files with no union rule still defer to manual (MU-203).
 3. **Queue is shared + OS-user-keyed** (MU-401/404) — intuitive for same-user, surprising for the `"default"` fallback (BUG-89).
 4. **Briefs are local-only** (MU-501) — a real cross-clone routing trap; the mailbox is the sanctioned cross-clone channel (MU-502).
 
