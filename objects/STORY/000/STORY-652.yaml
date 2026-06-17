@@ -3,15 +3,33 @@ spec_id: STORY-652
 agreed_id: STORY-652
 title: 'Node friendly names + owner identity: name (<host>-<user>-<seq>) + $USER string on each node, settable at init/acquire'
 description: 'Each node gets a friendly NAME in addition to the integer node id. aida-core node model (NodeConfig + nodes.toml NodeRegistry entry) gains name: Option<String> (default <hostname>-<user>-<seq>, e.g. imac-joe-1; <user>=current_user_id, <seq>=node id) AND user: Option<String> = the current_user_id ($USER/AIDA_USER) string captured at registration (so the team roster can join nodes to the same person-identity that roles/queues/assignees use — they currently key on the integer user_id, which does not match). aida init + aida node acquire accept --node-name <NAME>; at a TTY prompt with the default pre-filled; non-interactive uses the default. aida team CLI shows the friendly name column. Provide node_display_name() + node_owner() helpers with backfill for existing nodes lacking the fields (derive name from <host>-<id>, owner from email local-part or the integer). Backward-compatible (optional fields). Add an AIDA_* doc row if a new env is read.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T13:34:55.631776162Z
-modified_at: 2026-06-17T13:34:55.631776162Z
+modified_at: 2026-06-17T14:15:05.647467189Z
 req_type: Story
 tags:
 - node-identity
 - onboarding
 - parent:EPIC-47
 - team
+history:
+- id: 019ed5ef-88aa-7e62-ab9e-d4e73349b71c
+  author: aida-auto-bump
+  timestamp: 2026-06-17T14:15:05.642737154Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed5ef-88af-75d2-8ba0-2f0339781edd
+  timestamp: 2026-06-17T14:15:05.647465859Z
+  agent: aida
+  commit_sha: 22ec99c7bd32e2cef5dadb873e21f9c78e4d810f
+  summary: Completed via merge 22ec99c7
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-17T14:15:05.479263210Z
+  completion_sha: 22ec99c7bd32e2cef5dadb873e21f9c78e4d810f
