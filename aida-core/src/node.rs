@@ -236,6 +236,17 @@ pub struct NodeConfig {
     /// optional for entries written before EPIC-1-052).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    /// Friendly node name (default `<host>-<user>-<seq>`, e.g. `imac-joe-1`).
+    /// Optional so entries written before STORY-652 deserialize cleanly.
+    // trace:STORY-652 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The owner's `current_user_id()` string ($USER/AIDA_USER) captured at
+    /// registration, so the team roster can join nodes to the same person-
+    /// identity that roles/queues/assignees use. Optional for back-compat.
+    // trace:STORY-652 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
     /// When this node was registered
     pub registered_at: DateTime<Utc>,
 }
@@ -290,8 +301,93 @@ pub struct NodeRegistryEntry {
     /// blocks. Optional so pre-EPIC-9 entries deserialize cleanly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clone_path: Option<PathBuf>,
+    /// Friendly node name (default `<host>-<user>-<seq>`, e.g. `imac-joe-1`).
+    /// Optional so entries written before STORY-652 deserialize cleanly; the
+    /// `node_display_name` helper backfills a sensible default for older rows.
+    // trace:STORY-652 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The owner's `current_user_id()` string ($USER/AIDA_USER) captured at
+    /// registration. Lets the team roster join nodes to the person-identity
+    /// that roles/queues/assignees key on (those use the string id, while
+    /// `user_id` here is the legacy integer). Optional for back-compat.
+    // trace:STORY-652 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
     /// Registration timestamp
     pub registered: DateTime<Utc>,
+}
+
+/// Slugify a component of a default node name: lowercase, keep `[a-z0-9_-]`,
+/// collapse every other run into a single `-`, and trim leading/trailing `-`.
+/// Used to derive `<host>-<user>-<seq>` from raw hostname / user strings.
+/// trace:STORY-652 | ai:claude
+pub fn slug_component(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut last_dash = false;
+    for c in s.trim().chars() {
+        let lc = c.to_ascii_lowercase();
+        if lc.is_ascii_alphanumeric() || lc == '_' {
+            out.push(lc);
+            last_dash = false;
+        } else if !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
+/// Compute the default friendly node name `<host>-<user>-<seq>` (e.g.
+/// `imac-joe-1`). Each component is slugged; empty components are dropped so a
+/// missing user or host still yields a sensible name. trace:STORY-652
+pub fn default_node_name(hostname: &str, user: &str, seq: &str) -> String {
+    [
+        slug_component(hostname),
+        slug_component(user),
+        slug_component(seq),
+    ]
+    .into_iter()
+    .filter(|c| !c.is_empty())
+    .collect::<Vec<_>>()
+    .join("-")
+}
+
+impl NodeRegistryEntry {
+    /// The friendly display name for this node: the stored `name` if present,
+    /// else a backfilled default derived from host/owner/id so existing rows
+    /// (no `name`) still render sensibly without a migration. trace:STORY-652
+    pub fn display_name(&self) -> String {
+        if let Some(n) = self.name.as_deref() {
+            if !n.is_empty() {
+                return n.to_string();
+            }
+        }
+        let owner = self.owner();
+        default_node_name(&self.hostname, &owner, &self.id)
+    }
+
+    /// The owner identity for this node: the stored `user` string if present,
+    /// else the email local-part, else the integer `user_id` stringified. The
+    /// fallbacks let pre-STORY-652 rows attribute to a person sensibly.
+    /// trace:STORY-652 | ai:claude
+    pub fn owner(&self) -> String {
+        if let Some(u) = self.user.as_deref() {
+            if !u.is_empty() {
+                return u.to_string();
+            }
+        }
+        if let Some(email) = self.email.as_deref() {
+            if let Some((local, _)) = email.split_once('@') {
+                if !local.is_empty() {
+                    return local.to_string();
+                }
+            } else if !email.is_empty() {
+                return email.to_string();
+            }
+        }
+        self.user_id.to_string()
+    }
 }
 
 /// The shared node registry (committed to git, append-only).
@@ -391,12 +487,42 @@ impl NodeRegistry {
         email: Option<String>,
         clone_path: Option<PathBuf>,
     ) {
+        self.register_specific_full_named(id, user_id, hostname, email, clone_path, None, None);
+    }
+
+    /// Register with full provenance plus the STORY-652 friendly `name` and
+    /// owner `user` string. When `name` is None a `<host>-<user>-<seq>` default
+    /// is computed (the owner component prefers the `user` string, falling back
+    /// to the email local-part / integer `user_id`).
+    /// trace:STORY-652 | ai:claude
+    #[allow(clippy::too_many_arguments)]
+    pub fn register_specific_full_named(
+        &mut self,
+        id: String,
+        user_id: u32,
+        hostname: String,
+        email: Option<String>,
+        clone_path: Option<PathBuf>,
+        name: Option<String>,
+        user: Option<String>,
+    ) {
+        let owner = user.clone().unwrap_or_else(|| {
+            email
+                .as_deref()
+                .and_then(|e| e.split_once('@').map(|(l, _)| l.to_string()))
+                .unwrap_or_else(|| user_id.to_string())
+        });
+        let name = name
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| default_node_name(&hostname, &owner, &id));
         self.nodes.push(NodeRegistryEntry {
             id,
             user_id,
             hostname,
             email,
             clone_path,
+            name: Some(name),
+            user,
             registered: Utc::now(),
         });
     }
@@ -1129,6 +1255,8 @@ registered = "2026-05-09T00:00:00Z"
             user_id: 102,
             hostname: "joe-laptop".into(),
             email: Some("joe@example.com".into()),
+            name: None,
+            user: None,
             registered_at: Utc::now(),
         };
         config.save(&path).unwrap();
@@ -1154,6 +1282,133 @@ registered = "2026-05-09T00:00:00Z"
         assert_eq!(loaded.nodes.len(), 2);
         assert_eq!(loaded.nodes[0].hostname, "joe-laptop");
         assert_eq!(loaded.nodes[1].hostname, "joe-workstation");
+    }
+
+    // ---- STORY-652: friendly node name + owner identity ----
+
+    #[test]
+    fn default_node_name_is_host_user_seq() {
+        // trace:STORY-652 | ai:claude
+        assert_eq!(default_node_name("imac", "joe", "1"), "imac-joe-1");
+        // Slugging: uppercase + dots/spaces collapse to dashes, lowercase.
+        assert_eq!(
+            default_node_name("Joe.MacBook Pro", "Joe_M", "JM"),
+            "joe-macbook-pro-joe_m-jm"
+        );
+        // Missing components are dropped, not left as empty dashes.
+        assert_eq!(default_node_name("imac", "", "2"), "imac-2");
+    }
+
+    #[test]
+    fn register_named_uses_explicit_name_and_user() {
+        // trace:STORY-652 | ai:claude
+        let mut reg = NodeRegistry::default();
+        reg.register_specific_full_named(
+            "1".into(),
+            1,
+            "imac".into(),
+            Some("joe@example.com".into()),
+            None,
+            Some("my-box".into()),
+            Some("joe".into()),
+        );
+        let e = &reg.nodes[0];
+        assert_eq!(e.name.as_deref(), Some("my-box"));
+        assert_eq!(e.user.as_deref(), Some("joe"));
+        assert_eq!(e.display_name(), "my-box");
+        assert_eq!(e.owner(), "joe");
+    }
+
+    #[test]
+    fn register_named_computes_default_when_name_omitted() {
+        // trace:STORY-652 | ai:claude — owner string drives the name slug.
+        let mut reg = NodeRegistry::default();
+        reg.register_specific_full_named(
+            "3".into(),
+            1,
+            "imac".into(),
+            Some("joe@example.com".into()),
+            None,
+            None,
+            Some("joe".into()),
+        );
+        assert_eq!(reg.nodes[0].name.as_deref(), Some("imac-joe-3"));
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn entry_name_and_user_round_trip_through_serde() {
+        // trace:STORY-652 | ai:claude
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nodes.toml");
+        let mut reg = NodeRegistry::default();
+        reg.register_specific_full_named(
+            "1".into(),
+            5,
+            "imac".into(),
+            Some("joe@example.com".into()),
+            None,
+            Some("imac-joe-1".into()),
+            Some("joe".into()),
+        );
+        reg.save(&path).unwrap();
+        let loaded = NodeRegistry::load(&path).unwrap();
+        assert_eq!(loaded.nodes[0].name.as_deref(), Some("imac-joe-1"));
+        assert_eq!(loaded.nodes[0].user.as_deref(), Some("joe"));
+    }
+
+    #[test]
+    fn old_entry_backfills_name_and_owner_via_helpers() {
+        // trace:STORY-652 | ai:claude — a pre-STORY-652 row (no name/user)
+        // still renders a sensible name + owner via the helpers, no migration.
+        let entry = NodeRegistryEntry {
+            id: "7".into(),
+            user_id: 42,
+            hostname: "spock".into(),
+            email: Some("alice@corp.io".into()),
+            clone_path: None,
+            name: None,
+            user: None,
+            registered: Utc::now(),
+        };
+        // owner falls back to the email local-part …
+        assert_eq!(entry.owner(), "alice");
+        // … and the display name is derived from host + that owner + id.
+        assert_eq!(entry.display_name(), "spock-alice-7");
+
+        // No email either → owner falls back to the integer user_id.
+        let bare = NodeRegistryEntry {
+            id: "9".into(),
+            user_id: 42,
+            hostname: "imac".into(),
+            email: None,
+            clone_path: None,
+            name: None,
+            user: None,
+            registered: Utc::now(),
+        };
+        assert_eq!(bare.owner(), "42");
+        assert_eq!(bare.display_name(), "imac-42-9");
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn old_nodes_toml_without_name_user_parses() {
+        // trace:STORY-652 | ai:claude — backward-compat: a registry file
+        // predating the fields deserializes cleanly (Option defaults to None).
+        let toml_str = r#"
+[[nodes]]
+id = "1"
+user_id = 1
+hostname = "imac"
+email = "joe@example.com"
+registered = "2026-01-01T00:00:00Z"
+"#;
+        let reg: NodeRegistry = toml::from_str(toml_str).unwrap();
+        assert_eq!(reg.nodes.len(), 1);
+        assert!(reg.nodes[0].name.is_none());
+        assert!(reg.nodes[0].user.is_none());
+        assert_eq!(reg.nodes[0].display_name(), "imac-joe-1");
     }
 
     #[cfg(feature = "native")]

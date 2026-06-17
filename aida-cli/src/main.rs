@@ -1140,6 +1140,7 @@ fn run() -> Result<()> {
         focus,
         git_init,
         commit_scaffold,
+        node_name,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -1175,6 +1176,7 @@ fn run() -> Result<()> {
                 name.as_deref(),
                 *git_init,
                 *commit_scaffold,
+                node_name.as_deref(),
             )?;
         }
         // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
@@ -20396,6 +20398,7 @@ fn git_init_decision(git_init_flag: bool, at_tty: bool) -> GitInitDecision {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_init_distributed_worktree(
     force: bool,
     no_skills: bool,
@@ -20407,6 +20410,10 @@ fn handle_init_distributed_worktree(
     // BUG-570: forwarded to the bootstrap-clone path so `--commit-scaffold`
     // can opt into a deliberate scaffold commit on a clone. trace:BUG-570
     commit_scaffold: bool,
+    // STORY-652: friendly node name for the auto-acquire at init time. None →
+    // computed default (`<host>-<user>-<seq>`); at a TTY we prompt with the
+    // default pre-filled. trace:STORY-652
+    node_name: Option<&str>,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -20506,6 +20513,7 @@ fn handle_init_distributed_worktree(
             no_hooks,
             verbose,
             commit_scaffold,
+            node_name,
         );
     }
 
@@ -20543,6 +20551,7 @@ fn handle_init_distributed_worktree(
                 no_hooks,
                 verbose,
                 commit_scaffold,
+                node_name,
             );
         }
         eprintln!(
@@ -20790,7 +20799,35 @@ fn handle_init_distributed_worktree(
             None => None,
         };
 
-        match git_ops::register_node_full(&store_path, requested_id, 1, &hn, email.clone()) {
+        // STORY-652: capture the owner $USER string + resolve the friendly
+        // node name. The seq used for the default-name preview is the
+        // requested id when known, else the registry's predicted next id; if
+        // the user accepts the default we pass None so core stamps the name
+        // with the actually-assigned id. trace:STORY-652 | ai:claude
+        let owner_user = current_user_id(None);
+        let predicted_seq = requested_id.clone().unwrap_or_else(|| {
+            aida_core::node::NodeRegistry::load(&store_path.join("registry").join("nodes.toml"))
+                .map(|r| r.next_node_id())
+                .unwrap_or_else(|_| "1".to_string())
+        });
+        let resolved_name = resolve_node_name(node_name, &hn, &owner_user, &predicted_seq)?;
+        let default_name = aida_core::node::default_node_name(&hn, &owner_user, &predicted_seq);
+        let identity = git_ops::NodeIdentity {
+            name: if resolved_name == default_name {
+                None
+            } else {
+                Some(resolved_name)
+            },
+            user: Some(owner_user.clone()),
+        };
+        match git_ops::register_node_full_identity(
+            &store_path,
+            requested_id,
+            1,
+            &hn,
+            email.clone(),
+            identity,
+        ) {
             Ok(new_id) => {
                 let suffix = if has_origin {
                     ""
@@ -20957,6 +20994,7 @@ fn handle_init_distributed_worktree(
 /// to set the project up locally. We fetch the orphan, attach a worktree,
 /// run scaffolding, and prompt for node-id acquisition.
 /// trace:EPIC-1-052 Phase 4 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn handle_init_post_clone(
     cwd: &std::path::Path,
     worktree_dir: &str,
@@ -20970,6 +21008,9 @@ fn handle_init_post_clone(
     // so a clone never pushes a scaffold dump to the shared default branch.
     // trace:BUG-570 | ai:claude
     commit_scaffold: bool,
+    // STORY-652: friendly node name for the clone's node acquisition. None →
+    // computed default; prompted at a TTY. trace:STORY-652
+    node_name: Option<&str>,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -21171,12 +21212,30 @@ fn handle_init_post_clone(
         hn,
         email.as_deref().unwrap_or("-")
     );
-    let new_id = match git_ops::register_node_full(
+    // STORY-652: owner $USER + friendly node name. trace:STORY-652
+    let owner_user = current_user_id(None);
+    let predicted_seq = requested_id.clone().unwrap_or_else(|| {
+        aida_core::node::NodeRegistry::load(&store_path.join("registry").join("nodes.toml"))
+            .map(|r| r.next_node_id())
+            .unwrap_or_else(|_| "1".to_string())
+    });
+    let resolved_name = resolve_node_name(node_name, &hn, &owner_user, &predicted_seq)?;
+    let default_name = aida_core::node::default_node_name(&hn, &owner_user, &predicted_seq);
+    let identity = git_ops::NodeIdentity {
+        name: if resolved_name == default_name {
+            None
+        } else {
+            Some(resolved_name)
+        },
+        user: Some(owner_user.clone()),
+    };
+    let new_id = match git_ops::register_node_full_identity(
         &store_path,
         requested_id,
         1, // user_id placeholder — see Phase 1 commit message
         &hn,
         email.clone(),
+        identity,
     ) {
         Ok(id) => {
             println!(
@@ -26365,6 +26424,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             id: requested_id,
             hostname: hn_override,
             email: email_override,
+            node_name,
             force,
             yes,
             hijack,
@@ -26543,12 +26603,34 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                 user_id
             );
 
-            let new_id = aida_core::git_ops::register_node_full(
+            // STORY-652: owner $USER + friendly node name. The seq for the
+            // default-name preview is the effective id when known, else the
+            // registry's predicted next id; accepting the default passes None
+            // so core stamps the actually-assigned id. trace:STORY-652
+            let owner_user = current_user_id(None);
+            let predicted_seq = effective_id.clone().unwrap_or_else(|| {
+                aida_core::node::NodeRegistry::load(&store_path.join("registry").join("nodes.toml"))
+                    .map(|r| r.next_node_id())
+                    .unwrap_or_else(|_| "1".to_string())
+            });
+            let resolved_name =
+                resolve_node_name(node_name.as_deref(), &hn, &owner_user, &predicted_seq)?;
+            let default_name = aida_core::node::default_node_name(&hn, &owner_user, &predicted_seq);
+            let identity = aida_core::git_ops::NodeIdentity {
+                name: if resolved_name == default_name {
+                    None
+                } else {
+                    Some(resolved_name)
+                },
+                user: Some(owner_user.clone()),
+            };
+            let new_id = aida_core::git_ops::register_node_full_identity(
                 store_path,
                 effective_id,
                 user_id,
                 &hn,
                 email.clone(),
+                identity,
             )?;
 
             println!(
@@ -61840,6 +61922,28 @@ mod bug_231_findings_promote_tests {
         assert_eq!(entry.for_role.as_deref(), Some("implementer"));
     }
 
+    /// STORY-652: `--node-name` is used verbatim (validated). trace:STORY-652
+    #[test]
+    fn resolve_node_name_flag_override_wins() {
+        let got = resolve_node_name(Some("my-box"), "imac", "joe", "1").unwrap();
+        assert_eq!(got, "my-box");
+    }
+
+    /// STORY-652: with no flag and no TTY (the test harness has no terminal on
+    /// stdin), resolve_node_name returns the computed default WITHOUT blocking
+    /// on stdin. trace:STORY-652
+    #[test]
+    fn resolve_node_name_non_interactive_uses_default() {
+        let got = resolve_node_name(None, "imac", "joe", "1").unwrap();
+        assert_eq!(got, "imac-joe-1");
+    }
+
+    /// STORY-652: an invalid (non-slug) name is rejected. trace:STORY-652
+    #[test]
+    fn resolve_node_name_rejects_invalid() {
+        assert!(resolve_node_name(Some("bad name!"), "imac", "joe", "1").is_err());
+    }
+
     /// `--for <role>` overrides the default queue route. trace:BUG-231
     #[test]
     fn promote_honors_for_override() {
@@ -92523,6 +92627,10 @@ fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
             .map(|m| {
                 serde_json::json!({
                     "node_id": m.entry.id,
+                    // STORY-652: friendly name + owner string (backfilled for
+                    // pre-STORY-652 rows). trace:STORY-652
+                    "name": m.entry.display_name(),
+                    "owner": m.entry.owner(),
                     "host": m.entry.hostname,
                     "email": m.entry.email,
                     "clone_path": m.entry.clone_path
@@ -92556,14 +92664,16 @@ fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
 
     println!("{}", "Team roster".bold());
     println!();
+    // STORY-652: friendly name column (stored name, else backfilled default).
     println!(
-        "{:<8} {:<14} {:<26} {:<12} claims",
-        "node", "host", "email", "registered"
+        "{:<8} {:<20} {:<14} {:<22} {:<12} claims",
+        "node", "name", "host", "email", "registered"
     );
-    println!("{}", "─".repeat(78));
+    println!("{}", "─".repeat(86));
     for m in &members {
         let marker = if m.is_self { " (you)" } else { "" };
         let node_label = format!("{}{}", m.entry.id, marker);
+        let name = m.entry.display_name();
         let email = m.entry.email.as_deref().unwrap_or("-");
         let registered = m
             .entry
@@ -92577,10 +92687,11 @@ fn handle_team_command(store_path: &std::path::Path, json: bool) -> Result<()> {
             m.active_claims.join(", ").yellow().to_string()
         };
         println!(
-            "{:<8} {:<14} {:<26} {:<12} {}",
+            "{:<8} {:<20} {:<14} {:<22} {:<12} {}",
             truncate(&node_label, 8),
+            truncate(&name, 20),
             truncate(&m.entry.hostname, 14),
-            truncate(email, 26),
+            truncate(email, 22),
             registered,
             claims,
         );
@@ -103143,6 +103254,45 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
             .or_else(|_| std::env::var("USERNAME"))
             .unwrap_or_else(|_| "default".to_string())
     })
+}
+
+/// Resolve the friendly node name to record at registration (STORY-652).
+///
+/// Resolution order:
+/// 1. an explicit `--node-name` flag (validated, used as-is);
+/// 2. at a TTY with no flag: prompt `Node name [<default>]: ` and accept the
+///    default on empty input;
+/// 3. non-interactive (no TTY) with no flag: the computed default silently.
+///
+/// The default is `<host>-<user>-<seq>` (e.g. `imac-joe-1`). The chosen name is
+/// validated with the same charset rule as node ids so it stays slug-clean.
+/// trace:STORY-652 | ai:claude
+fn resolve_node_name(flag: Option<&str>, hostname: &str, user: &str, seq: &str) -> Result<String> {
+    let default = aida_core::node::default_node_name(hostname, user, seq);
+    let chosen = match flag {
+        Some(f) if !f.trim().is_empty() => f.trim().to_string(),
+        _ => {
+            if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                use std::io::Write;
+                print!("Node name [{}]: ", default);
+                std::io::stdout().flush()?;
+                let mut answer = String::new();
+                std::io::stdin().read_line(&mut answer)?;
+                let answer = answer.trim();
+                if answer.is_empty() {
+                    default.clone()
+                } else {
+                    answer.to_string()
+                }
+            } else {
+                default.clone()
+            }
+        }
+    };
+    if let Err(msg) = aida_core::node::validate_node_id(&chosen) {
+        anyhow::bail!("Invalid node name: {}", msg);
+    }
+    Ok(chosen)
 }
 
 /// TASK-618: detect the silent cross-machine queue-collision hazard.

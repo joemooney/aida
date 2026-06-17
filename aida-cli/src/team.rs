@@ -332,6 +332,8 @@ mod tests {
             hostname: "imac".to_string(),
             email: None,
             clone_path: clone.map(PathBuf::from),
+            name: None,
+            user: None,
             registered: Utc::now(),
         }
     }

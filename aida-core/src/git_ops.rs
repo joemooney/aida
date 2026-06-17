@@ -691,6 +691,20 @@ pub fn register_node_with_email(
     register_node_full(aida_repo, None, user_id, hostname, email)
 }
 
+/// Identity captured at node registration time for the STORY-652 friendly
+/// name + owner fields. `user` is the registering shell's `current_user_id()`
+/// string (threaded down from aida-cli rather than read from the environment
+/// here, so aida-core stays free of CLI identity resolution); `name` is the
+/// caller-provided friendly name, or None to let the registry compute the
+/// `<host>-<user>-<seq>` default. trace:STORY-652 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub struct NodeIdentity {
+    /// Caller-provided friendly node name (None → computed default).
+    pub name: Option<String>,
+    /// The owner's `current_user_id()` string captured at registration.
+    pub user: Option<String>,
+}
+
 /// Probe whether a candidate node id is in use, and if so return the next
 /// free id formed by suffixing the requested base with `2`, `3`, … This is
 /// the read half of STORY-42's auto-suffix UX: callers (e.g., `aida node
@@ -765,7 +779,28 @@ pub fn register_node_full(
     hostname: &str,
     email: Option<String>,
 ) -> Result<String> {
-    use crate::node::{BlockRegistry, NodeConfig, NodeRegistry};
+    register_node_full_identity(
+        aida_repo,
+        requested_id,
+        user_id,
+        hostname,
+        email,
+        NodeIdentity::default(),
+    )
+}
+
+/// As [`register_node_full`] but also stamps the STORY-652 friendly `name` and
+/// owner `user` string onto both the shared registry entry (nodes.toml) and the
+/// local `.aida/node.toml`. trace:STORY-652 | ai:claude
+pub fn register_node_full_identity(
+    aida_repo: &Path,
+    requested_id: Option<String>,
+    user_id: u32,
+    hostname: &str,
+    email: Option<String>,
+    identity: NodeIdentity,
+) -> Result<String> {
+    use crate::node::{default_node_name, BlockRegistry, NodeConfig, NodeRegistry};
 
     let registry_dir = aida_repo.join("registry");
     std::fs::create_dir_all(&registry_dir)?;
@@ -834,12 +869,28 @@ pub fn register_node_full(
         // in-place support (STORY-43). The clone path is the parent of the
         // .aida-store worktree (i.e., the project root). trace:STORY-41
         let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
-        registry.register_specific_full(
+        // STORY-652: compute the friendly name once so both nodes.toml and the
+        // local node.toml agree. Owner string prefers the threaded `user`,
+        // falling back to the email local-part / integer for the name slug.
+        let owner_for_name = identity.user.clone().unwrap_or_else(|| {
+            email
+                .as_deref()
+                .and_then(|e| e.split_once('@').map(|(l, _)| l.to_string()))
+                .unwrap_or_else(|| user_id.to_string())
+        });
+        let node_name = identity
+            .name
+            .clone()
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| default_node_name(hostname, &owner_for_name, &node_id));
+        registry.register_specific_full_named(
             node_id.clone(),
             user_id,
             hostname.to_string(),
             email.clone(),
             clone_path,
+            Some(node_name.clone()),
+            identity.user.clone(),
         );
         registry.save(&registry_path)?;
 
@@ -863,6 +914,8 @@ pub fn register_node_full(
                 user_id,
                 hostname: hostname.to_string(),
                 email: email.clone(),
+                name: Some(node_name.clone()),
+                user: identity.user.clone(),
                 registered_at: chrono::Utc::now(),
             };
             let node_config_path = aida_repo.join(".aida").join("node.toml");
@@ -877,6 +930,8 @@ pub fn register_node_full(
                     user_id,
                     hostname: hostname.to_string(),
                     email: email.clone(),
+                    name: Some(node_name.clone()),
+                    user: identity.user.clone(),
                     registered_at: chrono::Utc::now(),
                 };
                 let node_config_path = aida_repo.join(".aida").join("node.toml");
@@ -1149,6 +1204,12 @@ pub fn hijack_node(
         entry.email = email.clone();
         entry.clone_path = clone_path.clone();
         entry.registered = chrono::Utc::now();
+        // STORY-652: the node now belongs to a new clone — recompute the
+        // friendly name from the new host/owner so the roster reflects the
+        // new owner rather than the prior clone's name. trace:STORY-652
+        let recomputed_name = entry.display_name();
+        entry.name = Some(recomputed_name.clone());
+        let recomputed_user = entry.user.clone();
         registry.save(&registry_path)?;
 
         // Stage + commit + push.
@@ -1167,6 +1228,8 @@ pub fn hijack_node(
                     user_id,
                     hostname: hostname.to_string(),
                     email: email.clone(),
+                    name: Some(recomputed_name.clone()),
+                    user: recomputed_user.clone(),
                     registered_at: chrono::Utc::now(),
                 };
                 let node_config_path = aida_repo.join(".aida").join("node.toml");
