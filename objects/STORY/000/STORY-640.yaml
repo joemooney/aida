@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:36.228662309Z
-modified_at: 2026-06-17T04:12:47.948725303Z
+modified_at: 2026-06-17T04:23:47.305117308Z
 req_type: Story
 tags:
 - identity
@@ -22,3 +22,8 @@ comments:
   content: Commit 4a605309d references this requirement
   created_at: 2026-06-17T04:12:47.948725303Z
   modified_at: 2026-06-17T04:12:47.948725303Z
+- id: 019ed3d2-2d69-7e10-9272-2790944e41b5
+  author: joe
+  content: Commit ac7d634ab references this requirement
+  created_at: 2026-06-17T04:23:47.305117308Z
+  modified_at: 2026-06-17T04:23:47.305117308Z
