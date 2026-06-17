@@ -86,6 +86,10 @@ fn generate_types_content() -> String {
         models::ProcessingRecord::decl(),
         models::SpecIntent::decl(),
         models::Requirement::decl(),
+        // BUG-571: lightweight web-DTO projection of Requirement (list/board/
+        // dashboard fetch this via GET /api/v2/requirements?view=summary so the
+        // client stops downloading the ~6.5MB full graph on every view).
+        models::RequirementSummaryDto::decl(),
         models::RequirementSnapshot::decl(),
         models::Baseline::decl(),
         models::BaselineComparison::decl(),

@@ -1,8 +1,25 @@
-import type { Requirement } from '@shared/types';
+import type { Requirement, RequirementSummaryDto } from '@shared/types';
 import { apiFetch } from './client';
 
 export function fetchRequirements(): Promise<Requirement[]> {
   return apiFetch<Requirement[]>('/v2/requirements');
+}
+
+// BUG-571: the lightweight summary projection. The server omits the heavy
+// nested arrays (comments / history / processing records) and the long
+// description, so this payload is a small fraction of the full ~6.5MB blob.
+// List / board / dashboard / team views fetch this; the single full record is
+// loaded on demand when a spec is opened (fetchRequirement).
+//
+// The returned objects are a structural subset of `Requirement` (every field
+// they carry has the same shape), so we type the result as `Requirement[]` for
+// the views that only read summary fields — the omitted heavy fields read as
+// `undefined`, which those views never touch. Views that DO need history /
+// comments (Activity, Timeline, Sprint) keep using `fetchRequirements`.
+export function fetchRequirementSummaries(): Promise<Requirement[]> {
+  return apiFetch<RequirementSummaryDto[]>('/v2/requirements?view=summary') as Promise<
+    Requirement[]
+  >;
 }
 
 export function fetchRequirement(id: string): Promise<Requirement> {

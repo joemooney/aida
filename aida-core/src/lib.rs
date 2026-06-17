@@ -240,6 +240,8 @@ pub use models::{
     RequirementPriority,
     RequirementSnapshot,
     RequirementStatus,
+    // Lightweight web-DTO projection (BUG-571)
+    RequirementSummaryDto,
     RequirementType,
     RequirementTypeDefinition,
     RequirementsStore,

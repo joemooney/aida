@@ -1123,6 +1123,16 @@ interface_changes?: InterfaceChanges | null,
  */
 intent?: SpecIntent | null, };
 
+export type RequirementSummaryDto = { id: string, spec_id: string | null, agreed_id?: string | null, title: string, status: RequirementStatus, priority: RequirementPriority, owner: string, assignee?: string | null, feature: string, created_at: string, modified_at: string, req_type: RequirementType, meta_subtype?: MetaSubtype | null, tags?: Array<string>, weight?: number | null, 
+/**
+ * Retained (light): drives the parent tree + sprint-assignment views.
+ */
+relationships?: Array<Relationship>, 
+/**
+ * Retained (light): drives sprint metadata (number/goal/dates).
+ */
+custom_fields?: { [key in string]?: string }, custom_status?: string | null, custom_priority?: string | null, archived?: boolean, archived_at?: string | null, deferred?: boolean, deferred_at?: string | null, deferred_until?: string | null, };
+
 export type RequirementSnapshot = { 
 /**
  * The original requirement's UUID (for linking back)
