@@ -621,9 +621,17 @@ impl DatabaseBackend for GitBackend {
             // Load metadata to get counters, assign ID, save metadata back
             let meta = self.load_metadata()?;
             let mut temp_store = self.assemble_store(meta, Vec::new());
+            // TASK-856: derive the type prefix from the store's id_config the
+            // same way the full-store add path does (the CLI add handler used
+            // to pass `store.get_type_prefix(req_type)` into update_atomically).
+            // Without it a single-row add fell back to the generic "REQ"/"GEN"
+            // prefix instead of the type-correct one (TASK-N, BUG-N, …). The
+            // requirement's own `prefix_override`, when set, still wins inside
+            // add_requirement_with_id. trace:TASK-856 | ai:claude
+            let type_prefix = temp_store.get_type_prefix(&req.req_type);
             // Generate ID using the store's configured strategy
             let req_clone = req.clone();
-            temp_store.add_requirement_with_id(req_clone, None, None);
+            temp_store.add_requirement_with_id(req_clone, None, type_prefix.as_deref());
             // The pushed req has the assigned spec_id
             if let Some(last) = temp_store.requirements.last() {
                 req.spec_id = last.spec_id.clone();
