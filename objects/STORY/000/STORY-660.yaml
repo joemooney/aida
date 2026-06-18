@@ -3,12 +3,12 @@ spec_id: STORY-660
 agreed_id: STORY-660
 title: 'aida compete slice 2: rubric judge + clean diff signal (the gate alone cannot pick a winner)'
 description: 'Dogfood finding: on TASK-853 BOTH vendors gate-passed (build+test) — the objective gate is necessary but NOT sufficient to pick the winner (it cannot tell a 40-line scoped impl from an over-reaching one). Slice 2: add a judge — first the cheap deterministic signal (diff-lines, files-touched, once BUG-575 stops the log polluting it) + then a rubric LLM judge (reuse the bake-off judge pattern) scoring spec-adherence/simplicity/test-coverage, producing a ranked verdict + a recommended winner. Embodies the research: competition value = quality-variance, and quality needs a judge, not just a gate. Optionally a --judge flag; keep report-only (no auto-merge) until trusted.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T17:12:01.759916984Z
-modified_at: 2026-06-18T17:12:01.759916984Z
+modified_at: 2026-06-18T18:18:20.514966414Z
 req_type: Story
 tags:
 - aida:compete
@@ -17,3 +17,21 @@ tags:
 - niche
 - parent:EPIC-48
 - parent:STORY-659
+history:
+- id: 019edbf4-97de-79c2-8889-c6471a3f8c26
+  author: aida-auto-bump
+  timestamp: 2026-06-18T18:18:20.510461579Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edbf4-97e2-72a1-871a-82f769e83130
+  timestamp: 2026-06-18T18:18:20.514965936Z
+  agent: aida
+  commit_sha: 8565855761f711b176458b42fa78dddd8523ea6e
+  summary: Completed via merge 85658557
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T18:18:20.353209140Z
+  completion_sha: 8565855761f711b176458b42fa78dddd8523ea6e
