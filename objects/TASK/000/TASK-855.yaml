@@ -3,15 +3,33 @@ spec_id: TASK-855
 agreed_id: TASK-855
 title: Weave the run findings into the theory paper (P1 scoping, substrate-drives-convergence, competition=QA, attention-distance)
 description: 'Several ablation/experiment docs now exist (competitive Claude-vs-Codex, open-brief convergence, gate-vs-rule pilot). Fold their findings into docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md: scope P1 in section 4 (attention-distance, gate selectively); add the substrate-drives-convergence finding to L1/L5; add competition=quality-QA to section 15; update section 11 (faulty assumptions) + section 12 (verdict). Keep dated ablation docs immutable; the paper cites them.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T16:00:31.052720222Z
-modified_at: 2026-06-18T16:00:31.052720222Z
+modified_at: 2026-06-18T16:29:14.284711535Z
 req_type: Task
 tags:
 - parent:EPIC-48
 - probe
 - research
 - theory-paper
+history:
+- id: 019edb90-b4a7-7cf3-8585-c098eaa8ad29
+  author: aida-auto-bump
+  timestamp: 2026-06-18T16:29:14.280020970Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edb90-b4ac-7112-bc04-9186d4959864
+  timestamp: 2026-06-18T16:29:14.284711069Z
+  agent: aida
+  commit_sha: 7bdf9d31cce911af2bf74f106666a6726a738cda
+  summary: Completed via merge 7bdf9d31
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T16:29:14.124138570Z
+  completion_sha: 7bdf9d31cce911af2bf74f106666a6726a738cda
