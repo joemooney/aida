@@ -1,5 +1,7 @@
 # AIDA — Overview
 
+> **What this is — read first.** AIDA is a **research probe** into how AI agents coordinate — especially across vendors — and an existence-proof for a home-grown coordination substrate. **The artifact is the instrument; the deliverable is knowledge.** Promoting AIDA-the-product is explicitly *not* the goal: the honest verdict on roll-your-own is **open** (it may be "don't build this," or "the right tool isn't AIDA"), and AIDA's own failures are first-class data. The thesis, evidence grades, threats-to-validity, and the open verdict live in [docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md](docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md) (tracked as EPIC-48); falsifiable experiments are in [docs/research/ablations/](docs/research/ablations/). Everything below describes the *instrument*.
+
 **AIDA is your project's missing index — of intent, not just code.** A hidden kernel that maintains a stable, queryable graph of what exists *and why*, served to AI through MCP and to you through a small CLI. (Auto-derived code-graph tools index what the code *is*; AIDA indexes what it was *for* — and keeps the two linked.)
 
 **Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
