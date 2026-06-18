@@ -1,0 +1,17 @@
+id: 019edd03-b138-7a62-b242-a667a355412e
+spec_id: TASK-857
+agreed_id: TASK-857
+title: 'aida add network floor: replace unconditional pull+rebase/push with a lighter id-collision check (batched/deferred push)'
+description: 'Follow-up to TASK-856 (single-row add landed, local floor cut ~1.8x). Remaining multi-second component is the unconditional git pull --rebase (before id allocation) + git push (after) against the remote, guarding cross-clone duplicate spec ids. Options: (a) lighter ls-remote-based collision check instead of full pull+rebase, (b) batched/deferred push (allocate locally, push opportunistically). Must preserve the duplicate-id guarantee. Bigger change, deferred from the TASK-856 PR by design.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T23:14:27.256574923Z
+modified_at: 2026-06-18T23:14:27.256574923Z
+req_type: Task
+tags:
+- aida:add
+- depends-on:TASK-856
+- from-telemetry
+- performance
