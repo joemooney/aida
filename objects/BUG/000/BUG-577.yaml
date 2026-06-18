@@ -1,0 +1,18 @@
+id: 019edcd3-58f4-7753-9fee-7b0525b2198d
+spec_id: BUG-577
+agreed_id: BUG-577
+title: rel list rejects --spec/--id (clap exit 2) though --spec is valid elsewhere — likely bulk of the 50% rel-list error rate
+description: 'Telemetry (30d): rel list = 8103 calls, 4057 non-zero exits (~50%). Live repro: rel list --spec EPIC-48 -> clap "unexpected argument --spec", exit 2. rel list only accepts the positional ID, --source, --target. But --spec is a real flag on other commands (db reconcile-status --spec, etc.), so agents carry it over and fail. Failed-flag-attempt = UX signal. Fix: accept --spec and --id as aliases of the positional source on rel list (align with the dominant ID-flag convention), and/or make the unknown-arg error hint at the positional form. Low-risk; should sharply cut the error rate. Verify post-fix that the telemetry error rate drops.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T22:21:38.932438271Z
+modified_at: 2026-06-18T22:21:38.932438271Z
+req_type: Bug
+tags:
+- aida:rel
+- bug
+- from-telemetry
+- papercut
+- ux-signal
