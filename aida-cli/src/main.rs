@@ -23,8 +23,10 @@ mod deep_link;
 mod digest;
 mod docs;
 mod drain_lock;
+// trace:STORY-656 | ai:claude
 mod drain_resume;
 mod drain_state;
+mod dryrun;
 mod effort_calibration;
 mod exit_signal;
 mod external_import_bleed;
@@ -161,8 +163,8 @@ use crate::cli::{
     PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelDefCommand,
     RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand, RolePromptCommand,
     RoleScopeCommand, ScaffoldCommand, ScheduleCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, SessionWakeupCommand, SkillCommand, SoloAction, StackCommand,
-    TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
+    SessionManifestCommand, SessionWakeupCommand, SkillCommand, SoloAction, SpecCommand,
+    StackCommand, TeamCommand, TraceCommand, TriageCommand, TypeCommand, WorkerCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1423,6 +1425,14 @@ fn run() -> Result<()> {
         return handle_intent(id, audience, *refresh, *json);
     }
 
+    // STORY-656: `aida spec dryrun <ID>` self-loads the store (read-only) for
+    // the deterministic pre-check, and with `--ai` may shell out to a headless
+    // `claude -p`. Like `aida intent`, it needs no shared storage handle —
+    // dispatch early. trace:STORY-656 | ai:claude
+    if let Command::Spec(SpecCommand::Dryrun { id, ai, json }) = &cli.command {
+        return handle_spec_dryrun(id, *ai, *json);
+    }
+
     // STORY-563: `aida human <subcommand>` self-loads the store like `aida why`
     // / `burndown explain`, or delegates to the top-level presence handlers.
     // Dispatch early, no shared storage handle needed.
@@ -2369,6 +2379,7 @@ fn run() -> Result<()> {
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
+        Command::Spec(_) => unreachable!("spec dryrun is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -12605,6 +12616,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
+        Command::Spec(_) => unreachable!("spec dryrun is dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -80715,6 +80727,212 @@ fn handle_human_unblock(copy: bool, stdout: bool, json: bool) -> Result<()> {
 /// plain-terms comprehension of WHY a spec exists. Distinct from `aida why`
 /// (the deterministic state classifier): this is an LLM synthesis over the spec
 /// + its graph neighborhood, generated on first call (or `--refresh`), printed
+/// `aida spec dryrun <ID>` — the implementer-readiness pre-check.
+///
+/// Loads the spec, ALWAYS runs the deterministic [`dryrun::score`] pre-check,
+/// and (with `--ai`) appends a headless AI gap report. The pure scorer +
+/// JSON/parse contracts are unit-tested in `dryrun.rs`; this is the integration
+/// boundary (store load + the gated `claude -p` spawn), mirroring how
+/// `handle_intent` pairs with `intent.rs`. trace:STORY-656 | ai:claude
+fn handle_spec_dryrun(id: &str, ai: bool, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+
+    let want = id.trim().to_ascii_uppercase();
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| {
+            [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| s.eq_ignore_ascii_case(&want))
+        })
+        .cloned()
+        .ok_or_else(|| {
+            anyhow::anyhow!("no spec found matching `{id}` — check the ID with `aida list`.")
+        })?;
+    let disp = req.display_id();
+
+    // The deterministic pre-check ALWAYS runs. This is the pure core.
+    let snapshot = dryrun::SpecSnapshot::from_requirement(&req);
+    let readiness = dryrun::score(&snapshot);
+
+    // Optional AI gap report. Gated behind --ai AND an interactive context,
+    // exactly like `aida intent` fences its spawn.
+    let ai_report = if ai {
+        Some(run_dryrun_ai_pass(&project_root, &disp)?)
+    } else {
+        None
+    };
+
+    if json {
+        let payload = dryrun::dryrun_json(&disp, &readiness, ai_report.as_ref());
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+
+    print_dryrun_human(&disp, &req.title, &readiness, ai_report.as_ref());
+    Ok(())
+}
+
+/// Render the human view of a dryrun verdict: the headline score, a pass/fail
+/// line per dimension with its reason, the failing-dimension callout, and (when
+/// present) the AI gap report. trace:STORY-656 | ai:claude
+fn print_dryrun_human(
+    disp: &str,
+    title: &str,
+    readiness: &dryrun::Readiness,
+    ai: Option<&dryrun::AiReport>,
+) {
+    use colored::Colorize;
+
+    let score = readiness.score;
+    let colored_score = match score {
+        s if s >= 80 => format!("{s}/100").green().bold(),
+        s if s >= 50 => format!("{s}/100").yellow().bold(),
+        s => format!("{s}/100").red().bold(),
+    };
+    println!(
+        "{} {} — readiness {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        disp.cyan().bold(),
+        colored_score
+    );
+    println!("  {}", title.dimmed());
+    println!();
+
+    for d in &readiness.dimensions {
+        let (mark, name) = if d.pass {
+            (
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                d.name.green(),
+            )
+        } else {
+            (
+                crate::glyph(crate::glyphs::Glyph::Cross).red(),
+                d.name.red(),
+            )
+        };
+        println!("  {mark} {name} — {}", d.reason.dimmed());
+    }
+
+    let failing: Vec<&dryrun::Dimension> = readiness.failing().collect();
+    if failing.is_empty() {
+        println!();
+        println!(
+            "  {} ready for an implementer to pick up.",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold()
+        );
+    } else {
+        println!();
+        let names: Vec<String> = failing.iter().map(|d| d.name.clone()).collect();
+        println!(
+            "  {} fix before queuing: {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            names.join(", ").yellow()
+        );
+    }
+
+    if let Some(ai) = ai {
+        let section = |label: &str, items: &[String]| {
+            if items.is_empty() {
+                return;
+            }
+            println!();
+            println!("  {}", label.cyan().bold());
+            for it in items {
+                println!(
+                    "    {} {it}",
+                    crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+                );
+            }
+        };
+        println!();
+        println!(
+            "  {}",
+            format!("AI gap report · model={}", ai.model).dimmed()
+        );
+        section("Questions an implementer would ask", &ai.questions);
+        section("Assumptions they'd make", &ai.assumptions);
+        section("Ambiguities / missing acceptance", &ai.ambiguities);
+    }
+}
+
+/// Run the gated headless `/aida-dryrun` AI pass: spawn `claude -p`, read the
+/// JSON sidecar it writes, and parse it into a [`dryrun::AiReport`]. The spawn
+/// is fenced behind a TTY / non-headless context exactly like `generate_intent`
+/// — without a human to authorize tools the pass has no value. The parse
+/// contract is unit-tested in `dryrun.rs`; tests never reach this function.
+/// trace:STORY-656 | ai:claude
+fn run_dryrun_ai_pass(project_root: &std::path::Path, disp: &str) -> Result<dryrun::AiReport> {
+    let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let headless = std::env::var("AIDA_HEADLESS").as_deref() == Ok("1");
+    if !interactive || headless {
+        anyhow::bail!(
+            "the --ai dryrun report shells out to `claude -p`, which needs an interactive (TTY) \
+             context — run it from your terminal, or drop --ai for the deterministic pre-check \
+             alone."
+        );
+    }
+
+    let dir = project_root.join(".aida").join("dryrun");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating dryrun artifact dir {}", dir.display()))?;
+    let sidecar_path = dir.join(format!("{disp}.json"));
+    let _ = std::fs::remove_file(&sidecar_path);
+
+    let prompt = format!(
+        "/aida-dryrun {disp}\n\n\
+         You are pre-checking spec {disp} for implementer-readiness. DO NOT implement anything \
+         and DO NOT modify the spec. Read the spec and its immediate graph neighborhood, then \
+         write a JSON object to `{}` with keys `questions` (string array — what an implementer \
+         would need answered before starting), `assumptions` (string array — what they'd have to \
+         assume to proceed), `ambiguities` (string array — ambiguities or missing acceptance \
+         criteria), and `model` (your model id).",
+        sidecar_path.display()
+    );
+
+    println!(
+        "{} {disp} — running AI gap report (headless /aida-dryrun)…",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
+    );
+
+    let session_id = Uuid::now_v7().to_string();
+    let date = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    let log_path = dir.join(format!("{disp}-{date}.log"));
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+        .with_label(format!("dryrun:{disp}"));
+    let status =
+        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
+            .context("spawning headless /aida-dryrun agent")?;
+    if !status.success() {
+        anyhow::bail!(
+            "dryrun AI agent exited with {} — see log {}",
+            status.code().unwrap_or(-1),
+            log_path.display()
+        );
+    }
+
+    let raw = std::fs::read_to_string(&sidecar_path).with_context(|| {
+        format!(
+            "dryrun AI agent did not produce the sidecar at {} — see log {}",
+            sidecar_path.display(),
+            log_path.display()
+        )
+    })?;
+    let report = dryrun::parse_ai_sidecar(&raw)?;
+    let _ = std::fs::remove_file(&sidecar_path);
+    Ok(report)
+}
+
 /// from cache otherwise, and marked STALE when the neighborhood drifted.
 /// trace:STORY-631 | ai:claude
 fn handle_intent(id: &str, audience: &str, refresh: bool, json: bool) -> Result<()> {

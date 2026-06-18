@@ -1699,6 +1699,36 @@ pub enum CacheCommand {
     Status,
 }
 
+/// Spec-quality tooling — checks you run ON a spec before work begins.
+// trace:STORY-656 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum SpecCommand {
+    /// Implementer-readiness pre-check: report whether a spec is ready to be
+    /// picked up BEFORE it is queued, WITHOUT implementing anything. Always
+    /// runs a deterministic 0-100 readiness score across weighted dimensions
+    /// (description depth, an acceptance section, implementable type, priority,
+    /// a linked parent, a not-too-vague heuristic), each with a pass/fail and a
+    /// one-line reason. With `--ai`, also shells an AI pass (gated like
+    /// `aida intent`, needs a TTY) that lists the questions an implementer
+    /// would ask, the assumptions they'd make, and the ambiguities / missing
+    /// acceptance it found.
+    Dryrun {
+        /// The SPEC-ID to pre-check (any story/task/bug/feature id).
+        id: String,
+
+        /// Also run the optional AI gap-report pass (shells `claude -p`; needs
+        /// an interactive terminal). The deterministic pre-check runs either
+        /// way — this only appends the AI report.
+        #[clap(long)]
+        ai: bool,
+
+        /// Machine-readable JSON
+        /// (`{spec, readiness_score, dimensions:[{name,pass,reason,weight}], ai_report?}`).
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// Inspect / prune the durable processing-record audit trail.
 // trace:STORY-582 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -7026,6 +7056,12 @@ pub enum Command {
         #[clap(long)]
         json: bool,
     },
+
+    // trace:STORY-656 | ai:claude
+    /// Spec-quality tooling — checks you run ON a spec before work begins.
+    /// Today: `aida spec dryrun <SPEC>` (an implementer-readiness pre-check).
+    #[clap(subcommand)]
+    Spec(SpecCommand),
 
     // trace:STORY-631 | ai:claude
     /// Show the AI-generated plain-terms comprehension of WHY a spec exists —
