@@ -3,12 +3,12 @@ spec_id: EPIC-47
 agreed_id: EPIC-47
 title: Team-of-users support
 description: 'Workflow layer for a team of distinct users sharing one store, on top of EPIC-46 coordination. Roadmap: docs/plans/2026-06-16-team-support-roadmap.md. Tier 1 (now): assignment + my-work; team identity & awareness (roster + status coordination view + BUG-89 distinct-identity guard + onboarding); history union-merge (MU-204); multi-host harness cases. Tier 2 (medium): field-level conflict auto-merge (MU-203); auto mailbox sync + assignment notifications. Tier 3 (strategic, flag): RBAC (TASK-749); team web dashboard.'
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T02:39:20.129434778Z
-modified_at: 2026-06-18T04:36:28.623791826Z
+modified_at: 2026-06-18T04:36:29.792736444Z
 req_type: Epic
 tags:
 - from-operator
