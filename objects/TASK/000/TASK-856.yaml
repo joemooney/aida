@@ -1,0 +1,17 @@
+id: 019edcd3-78a4-72d3-bfa6-0a3fb2fe60b7
+spec_id: TASK-856
+agreed_id: TASK-856
+title: aida add latency ~8s avg (telemetry) — profile and trim the spec-add write path
+description: 'Telemetry (30d): add avg_ms 8155 over 1841 calls — slowest common write. pull 7831ms, session end 6725ms also slow. Profile the add path (git write + cache write-through + any fetch) and trim. Target sub-2s for a single add.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T22:21:47.044841594Z
+modified_at: 2026-06-18T22:21:47.044841594Z
+req_type: Task
+tags:
+- aida:add
+- from-telemetry
+- papercut
+- performance
