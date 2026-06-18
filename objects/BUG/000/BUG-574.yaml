@@ -1,0 +1,17 @@
+id: 019edaef-a4d8-7391-986d-137fcd3469e5
+spec_id: BUG-574
+agreed_id: BUG-574
+title: 'Reliability papercuts: pr ship 25% err (avg 207s) + session start 35% err — root-cause'
+description: 'EPIC-49 W4 (from the usage audit). pr ship: 75/297 non-zero (25%), avg 207s — root-cause the failures (forge/CI/merge race?) + the slowness. session start: 62/179 (35%) — likely lease/worktree contention. Both are core-loop reliability papercuts. Instrument + verify the actual failure modes before fixing (do not infer). Confirm queue works 84% err is exit-2 drain-park semantics (not UX) + that the exit-code taxonomy keeps drain-parks out of --errors.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T13:33:18.936174326Z
+modified_at: 2026-06-18T13:33:18.936174326Z
+req_type: Bug
+tags:
+- from-advisor
+- papercut
+- parent:EPIC-49
+- reliability
