@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:12:11.226673112Z
-modified_at: 2026-06-14T18:25:17.828881205Z
+modified_at: 2026-06-18T04:37:12.195220197Z
 req_type: Epic
 tags:
 - cli-manual
@@ -126,6 +126,3 @@ comments:
   content: Commit bca2e4888 references this requirement
   created_at: 2026-06-13T19:26:33.466932208Z
   modified_at: 2026-06-13T19:26:33.466932208Z
-deferred: true
-deferred_at: 2026-06-14T18:25:17.828881205Z
-deferred_until: 'post-stabilization: complete the drift-guard (597) + machine-digestible (601) hardening; the manual chapters themselves are already shipped'
