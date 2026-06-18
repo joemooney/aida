@@ -17,12 +17,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:44:06.203846384Z
-modified_at: 2026-06-15T17:41:13.817856791Z
+modified_at: 2026-06-18T04:37:11.690242039Z
 req_type: Task
 tags:
 - aida:cli
 - docs
 - parent:EPIC-40
-deferred: true
-deferred_at: 2026-06-15T15:00:55.501158882Z
-deferred_until: CLI-addition burst settles (statusline/identity batch landed) / stabilization declared
