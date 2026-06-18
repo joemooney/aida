@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:06:10.714880117Z
-modified_at: 2026-06-18T21:20:12.038410526Z
+modified_at: 2026-06-18T21:51:54.608776154Z
 req_type: Story
 tags:
 - ablation
@@ -46,6 +46,11 @@ comments:
   content: Commit 62363828e references this requirement
   created_at: 2026-06-18T21:20:12.038410526Z
   modified_at: 2026-06-18T21:20:12.038410526Z
+- id: 019edcb8-1ef0-7200-a4f4-55de5a2cbfeb
+  author: joe
+  content: Commit 2d81b95e9 references this requirement
+  created_at: 2026-06-18T21:51:54.608776154Z
+  modified_at: 2026-06-18T21:51:54.608776154Z
 history:
 - id: 019edb62-e27c-7bc1-b178-9a11c3267f33
   author: aida-auto-bump
