@@ -1,0 +1,17 @@
+id: 019edb76-694c-7902-b3b1-a6964dbdc020
+spec_id: TASK-855
+agreed_id: TASK-855
+title: Weave the run findings into the theory paper (P1 scoping, substrate-drives-convergence, competition=QA, attention-distance)
+description: 'Several ablation/experiment docs now exist (competitive Claude-vs-Codex, open-brief convergence, gate-vs-rule pilot). Fold their findings into docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md: scope P1 in section 4 (attention-distance, gate selectively); add the substrate-drives-convergence finding to L1/L5; add competition=quality-QA to section 15; update section 11 (faulty assumptions) + section 12 (verdict). Keep dated ablation docs immutable; the paper cites them.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T16:00:31.052720222Z
+modified_at: 2026-06-18T16:00:31.052720222Z
+req_type: Task
+tags:
+- parent:EPIC-48
+- probe
+- research
+- theory-paper
