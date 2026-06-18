@@ -13971,15 +13971,26 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // above for TASK-59 — preserves BUG-62, BUG-64, STORY-48
             // guards while preventing phantom-id leaks.)
 
-            // Use update_atomically to generate the ID with store's config
-            let store = backend.update_atomically(|store| {
-                let type_prefix = store.get_type_prefix(&req.req_type);
-                store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
-            })?;
+            // TASK-856: file the new spec through the single-row write path
+            // rather than `update_atomically`. The old path did a FULL-STORE
+            // save on every add — `git add objects` + commit over the entire
+            // object tree (~2.3k files in this repo), a serialize-read-compare
+            // of every requirement, AND a full cache rebuild (DELETE + reinsert
+            // every cache row) — making `aida add` scale O(store size) when the
+            // work is O(1): exactly one new object. `backend.add_requirement`
+            // assigns the spec_id with the SAME store-configured strategy
+            // (`add_requirement_with_id`, via GitBackend::add_requirement),
+            // writes ONLY the new object, does a TARGETED commit (new YAML +
+            // metadata.yaml), and an incremental cache upsert — git-canonical
+            // write + cache write-through stay correct. Measured: full-scale
+            // store add dropped from ~1.5s to ~0.4s for this step (≈1.8x
+            // faster end-to-end median at full scale). This also removes the
+            // redundant second `write_object` (GitBackend::add_requirement
+            // already writes it). trace:TASK-856 | ai:claude
+            let added = backend.add_requirement(req.clone())?;
 
-            if let Some(last) = store.requirements.last() {
-                // Write the individual object file
-                aida_core::object_store::write_object(&store_path.join("objects"), last)?;
+            {
+                let last = &added;
                 println!(
                     "Added: {} - {}",
                     last.spec_id.as_deref().unwrap_or("?"),
