@@ -40083,6 +40083,19 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     out
 }
 
+/// BUG-574: pure decision — does THIS clone already hold a lease for `scope`?
+/// Returns the existing lease (the first by start time, matching `list_leases`'
+/// sort) so `aida session start` can treat a re-run as benign idempotent
+/// re-entry (exit 0, report the live session) rather than a hard error.
+/// Case-insensitive on the raw scope string, mirroring the old guard.
+/// trace:BUG-574 | ai:claude
+fn existing_lease_for_scope<'a>(
+    leases: &'a [SessionLease],
+    scope: &str,
+) -> Option<&'a SessionLease> {
+    leases.iter().find(|l| l.scope.eq_ignore_ascii_case(scope))
+}
+
 /// BUG-483: pure decision — does any lease OTHER than the one being ended
 /// share `worktree_path`? `aida agent new` can land two sessions in one
 /// worktree (BUG-416), and `session end` force-removes the worktree
@@ -42705,16 +42718,48 @@ fn session_start(
     std::fs::create_dir_all(&leases)?;
 
     // Don't double-claim the same scope from this project root.
-    for existing in list_leases(&project_root) {
-        if existing.scope.eq_ignore_ascii_case(owns) {
-            anyhow::bail!(
-                "scope `{}` is already owned by session {} ({}). \
-                 Run `aida session end {}` first.",
+    //
+    // BUG-574: re-running `aida session start <scope>` when THIS clone already
+    // holds a lease for that scope is benign idempotent re-entry — the agent /
+    // loop / wrapper just wants the session it already has, not a second one.
+    // Treating it as a hard error (exit 1) poisoned `session start`'s usage
+    // telemetry (35% non-zero) and papercut every retry-on-resume path. A
+    // read-of-existing-state that COMPLETES exits 0: we report the existing
+    // session (id + worktree + how to enter/end) and emit the eval line so a
+    // wrapped caller still gets `AIDA_SESSION_ID` set to the live session.
+    // Genuine create failures (worktree add, fetch, bad arg) stay non-zero.
+    // Mirrors the BUG-573 contract (a completing read-only op exits 0).
+    // trace:BUG-574 | ai:claude
+    let existing_leases = list_leases(&project_root);
+    if let Some(existing) = existing_lease_for_scope(&existing_leases, owns) {
+        {
+            eprintln!(
+                "{} scope `{}` is already owned by session {} ({}) — re-entering it.",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
                 owns,
-                existing.id,
+                &existing.id[..existing.id.len().min(8)],
                 existing.worktree_path.display(),
-                existing.id
             );
+            eprintln!();
+            eprintln!("Next:");
+            eprintln!(
+                "  {}",
+                format!("cd {}", existing.worktree_path.display()).cyan()
+            );
+            eprintln!(
+                "  {}",
+                format!(
+                    "aida session end {}    # when done",
+                    &existing.id[..existing.id.len().min(8)]
+                )
+                .dimmed()
+            );
+            if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+                // Wrapped in eval — point the caller's shell at the existing
+                // session rather than failing the re-entry.
+                println!("export AIDA_SESSION_ID='{}'", existing.id);
+            }
+            return Ok(());
         }
     }
 
@@ -50139,9 +50184,28 @@ fn pr_ship_handler(
         branch
     );
 
+    // BUG-574: track whether the PR we resolve has ALREADY been merged. Re-running
+    // `aida pr ship` on a spec that already shipped (the agent/loop retries, or a
+    // sibling already merged it) is a benign no-op, not a failure: there is
+    // nothing left to merge, so the merge step would otherwise error non-zero
+    // (`gh pr merge` on a merged PR) and poison `pr ship`'s usage telemetry. When
+    // already-merged, we skip CI-watch + merge and fall through to the idempotent
+    // pull + cleanup steps, exiting 0. trace:BUG-574 | ai:claude
+    let mut already_merged = false;
+
     let pr_number = match opts.pr_number {
         Some(explicit) => {
             eprintln!("  step 1: using explicit PR-{}", explicit);
+            // BUG-574: an explicit PR-N that is already merged is "already
+            // shipped" — not a failure. Detect now so the merge step is skipped.
+            if !dry_run {
+                let mut probe_sink = crate::network_retry::NoopSink;
+                if pr_is_merged_with_sink(&project_root, explicit as u32, &mut probe_sink)
+                    == Some(true)
+                {
+                    already_merged = true;
+                }
+            }
             log_ship_activity(
                 &main_worktree,
                 Some(explicit),
@@ -50200,6 +50264,26 @@ fn pr_ship_handler(
                 // Use a placeholder so the rest of the dry-run plan
                 // still has a coherent N to print.
                 0
+            } else if let Some(merged_n) = latest_merged_pr_for_branch(&project_root, &branch) {
+                // BUG-574: no OPEN PR for the branch, but a merged one exists —
+                // the branch already shipped. `pr_ship_create_pr` would fail with
+                // "no commits between" (a benign already-shipped state reported as
+                // a hard error). Treat it as already-merged and exit 0 after the
+                // idempotent pull/cleanup steps. trace:BUG-574 | ai:claude
+                eprintln!(
+                    "  step 1: no open PR for branch {} — PR-{} already merged",
+                    branch, merged_n
+                );
+                already_merged = true;
+                log_ship_activity(
+                    &main_worktree,
+                    Some(merged_n),
+                    &ShipStep::ResolvePr {
+                        create_if_needed: false,
+                    },
+                    &StepOutcome::Skipped("PR already merged for this branch".into()),
+                );
+                merged_n
             } else {
                 let new_n = pr_ship_create_pr(&project_root, &branch)?;
                 eprintln!(
@@ -50348,16 +50432,29 @@ fn pr_ship_handler(
         return Ok(());
     }
 
-    // ---- Step 2: watch CI. Stream directly to the terminal so the
-    // user sees live progress — capture-output via the retry wrapper
-    // would swallow the streaming output, which is the whole point of
-    // `--watch`. CI failures are real (not transient), so no retry.
-    //
-    // BUG-417: a repo with no `.github/workflows` will never register checks, so
-    // the register-wait below would block for the full timeout and then bail.
-    // Detect that (or an explicit `AIDA_PR_SHIP_NO_CI_WAIT` / `lifecycle:no-ci-wait`
-    // opt-out) and skip straight to merge. trace:BUG-417 | ai:claude
-    if let Some(reason) = pr_ship_ci_wait_skip_reason(&project_root) {
+    // BUG-574: if the PR is already merged (re-run on an already-shipped spec,
+    // or a sibling beat us to the merge) there is nothing to watch or merge.
+    // Skip straight to the idempotent pull + cleanup so the re-run exits 0
+    // instead of erroring out of a no-op `gh pr merge`. trace:BUG-574 | ai:claude
+    if already_merged {
+        eprintln!(
+            "  {} PR-{} is already merged — nothing to ship; running post-merge sync + cleanup",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            pr_number
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::WatchCi,
+            &StepOutcome::Skipped("PR already merged".into()),
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::Merge { delete_branch },
+            &StepOutcome::Skipped("PR already merged".into()),
+        );
+    } else if let Some(reason) = pr_ship_ci_wait_skip_reason(&project_root) {
         eprintln!(
             "  step 2: {} — skipping CI wait for PR-{}",
             reason, pr_number
@@ -50417,79 +50514,85 @@ fn pr_ship_handler(
 
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
+    // BUG-574: skipped entirely when the PR is already merged — the activity
+    // log for the merge step was already recorded as Skipped above, and the
+    // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
     let delete_branch = !branch_in_sibling;
-    if branch_in_sibling {
+    if !already_merged {
+        if branch_in_sibling {
+            eprintln!(
+                "  step 3: branch {} is checked out in a sibling worktree — \
+                 skipping `--delete-branch`; `aida session end` will clean it up",
+                branch
+            );
+        }
         eprintln!(
-            "  step 3: branch {} is checked out in a sibling worktree — \
-             skipping `--delete-branch`; `aida session end` will clean it up",
-            branch
+            "  step 3: merging PR-{} (squash{})",
+            pr_number,
+            if delete_branch { ", delete-branch" } else { "" }
         );
-    }
-    eprintln!(
-        "  step 3: merging PR-{} (squash{})",
-        pr_number,
-        if delete_branch { ", delete-branch" } else { "" }
-    );
-    let explicit_squash_subject = derive_pr_ship_squash_subject(&project_root, pr_number, &branch)?;
-    if let Some(subject) = &explicit_squash_subject {
-        eprintln!(
-            "  step 3: preserving spec ID in squash subject: {}",
-            subject
-        );
-    }
+        let explicit_squash_subject =
+            derive_pr_ship_squash_subject(&project_root, pr_number, &branch)?;
+        if let Some(subject) = &explicit_squash_subject {
+            eprintln!(
+                "  step 3: preserving spec ID in squash subject: {}",
+                subject
+            );
+        }
 
-    // STORY-516: route the merge through the Forge trait instead of an inline
-    // `gh pr merge`. GitHubForge::merge_change reuses the SPEC-410-pinned
-    // `merge_args` (byte-identical argv) and the same network_retry wrapper, so
-    // this is behaviour-preserving on GitHub; a GitLab / pure-git repo now gets
-    // its own provider's merge. The unified contract returns Err (with stderr)
-    // on a failed merge, which we map to the existing activity-log + recovery
-    // hint + bail. trace:STORY-516 | ai:claude
-    let merge_opts = crate::forge::MergeOptions {
-        method: crate::forge::MergeMethod::Squash,
-        squash_subject: explicit_squash_subject.clone(),
-        delete_branch,
-    };
-    let change_ref = crate::forge::ChangeRef {
-        id: pr_number,
-        url: String::new(),
-        branch: branch.clone(),
-        base: String::new(),
-        title: None,
-    };
-    let mut merge_sink = crate::network_retry::StderrSink;
-    if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
-        &change_ref,
-        &merge_opts,
-        &mut merge_sink,
-    ) {
-        let stderr_text = format!("{e:#}");
+        // STORY-516: route the merge through the Forge trait instead of an inline
+        // `gh pr merge`. GitHubForge::merge_change reuses the SPEC-410-pinned
+        // `merge_args` (byte-identical argv) and the same network_retry wrapper, so
+        // this is behaviour-preserving on GitHub; a GitLab / pure-git repo now gets
+        // its own provider's merge. The unified contract returns Err (with stderr)
+        // on a failed merge, which we map to the existing activity-log + recovery
+        // hint + bail. trace:STORY-516 | ai:claude
+        let merge_opts = crate::forge::MergeOptions {
+            method: crate::forge::MergeMethod::Squash,
+            squash_subject: explicit_squash_subject.clone(),
+            delete_branch,
+        };
+        let change_ref = crate::forge::ChangeRef {
+            id: pr_number,
+            url: String::new(),
+            branch: branch.clone(),
+            base: String::new(),
+            title: None,
+        };
+        let mut merge_sink = crate::network_retry::StderrSink;
+        if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
+            &change_ref,
+            &merge_opts,
+            &mut merge_sink,
+        ) {
+            let stderr_text = format!("{e:#}");
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &ShipStep::Merge { delete_branch },
+                &StepOutcome::Failed(stderr_text.clone()),
+            );
+            let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
+            eprintln!(
+                "{} merge failed: {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                stderr_text
+            );
+            eprintln!("  {}", hint);
+            return Err(e.context("`gh pr merge` failed"));
+        }
+        eprintln!(
+            "  {} merged PR-{}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            pr_number
+        );
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &ShipStep::Merge { delete_branch },
-            &StepOutcome::Failed(stderr_text.clone()),
+            &StepOutcome::Ok,
         );
-        let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
-        eprintln!(
-            "{} merge failed: {}",
-            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-            stderr_text
-        );
-        eprintln!("  {}", hint);
-        return Err(e.context("`gh pr merge` failed"));
     }
-    eprintln!(
-        "  {} merged PR-{}",
-        crate::glyph(crate::glyphs::Glyph::Check).green(),
-        pr_number
-    );
-    log_ship_activity(
-        &main_worktree,
-        Some(pr_number),
-        &ShipStep::Merge { delete_branch },
-        &StepOutcome::Ok,
-    );
 
     // STORY-439: ship-side calibration capture. Resolve every spec the PR
     // credits (title → branch → body, the same precedence the squash
@@ -50814,6 +50917,41 @@ fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
 /// `gh pr create` with title/body derived from the latest commit on
 /// `branch`. Returns the new PR's number, parsed from the URL `gh`
 /// prints on success. Branch must already be pushed; we push it first.
+/// BUG-574: return the most-recent MERGED PR number for `branch`, if any.
+/// Used by `aida pr ship` to recognize an already-shipped branch (no open PR
+/// but a merged one) and exit 0 instead of failing in `pr_ship_create_pr`'s
+/// "no commits between" path. Best-effort: any `gh` failure (missing binary,
+/// auth, network) returns `None`, so a probe blip never converts an otherwise-
+/// fine create into a spurious already-merged short-circuit. trace:BUG-574 | ai:claude
+fn latest_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Option<u64> {
+    let gh = resolve_gh_binary()?;
+    let out = std::process::Command::new(&gh)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "merged",
+            "--limit",
+            "1",
+            "--json",
+            "number",
+            "--jq",
+            ".[0].number",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<u64>()
+        .ok()
+}
+
 fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) -> Result<u64> {
     // STORY-516: PR-number parsing now lives in GitHubForge::open_change, so
     // `parse_pr_number_from_create_output` is no longer needed here.
@@ -62459,6 +62597,81 @@ mod bug_231_findings_promote_tests {
             msg.contains("not promoted") && msg.contains("implementer"),
             "error must name the failed route and the not-promoted outcome: {msg}"
         );
+    }
+}
+
+/// BUG-574: reliability papercuts — spurious non-zero exits on the idempotent
+/// re-entry paths of `aida session start` (re-running for a scope this clone
+/// already leases) and `aida pr ship` (re-running on an already-merged PR).
+/// Both are benign no-ops that completed, so they must exit 0 — reserving
+/// non-zero for real failures — exactly like the BUG-573 read-only contract.
+/// These tests pin the pure decision points that drive the exit-0 behavior.
+/// trace:BUG-574 | ai:claude
+#[cfg(test)]
+mod bug_574_spurious_exit_tests {
+    use super::*;
+
+    fn lease_for(scope: &str) -> SessionLease {
+        SessionLease {
+            id: "019ebug574xyz".to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_ascii_lowercase(),
+            owner: "tester".to_string(),
+            worktree_path: std::path::PathBuf::from("/tmp/aida-bug574"),
+            branch: scope.to_ascii_lowercase(),
+            started_at: chrono::Utc::now(),
+            hostname: "host".to_string(),
+            role: Some("implementer".to_string()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+        }
+    }
+
+    /// Re-running `aida session start <scope>` when THIS clone already holds a
+    /// lease for that scope is benign idempotent re-entry. The handler resolves
+    /// the existing lease via this pure predicate and exits 0 (reporting it)
+    /// rather than bailing — that decision is what these assertions pin.
+    /// trace:BUG-574 | ai:claude
+    #[test]
+    fn existing_lease_for_scope_recognizes_reentry() {
+        let leases = vec![lease_for("STORY-574"), lease_for("TASK-100")];
+
+        // Exact match → re-entry recognized.
+        let found = existing_lease_for_scope(&leases, "STORY-574");
+        assert!(
+            found.is_some(),
+            "an existing lease for the scope must be recognized so re-entry exits 0"
+        );
+        assert_eq!(found.unwrap().scope, "STORY-574");
+
+        // Case-insensitive on the raw scope (mirrors the old guard).
+        assert!(
+            existing_lease_for_scope(&leases, "story-574").is_some(),
+            "scope match is case-insensitive"
+        );
+    }
+
+    /// A scope with NO existing lease must NOT be treated as re-entry — the
+    /// handler proceeds to actually create the worktree/lease, and a genuine
+    /// failure there stays non-zero. trace:BUG-574 | ai:claude
+    #[test]
+    fn existing_lease_for_scope_none_when_unleased() {
+        let leases = vec![lease_for("TASK-100")];
+        assert!(
+            existing_lease_for_scope(&leases, "STORY-574").is_none(),
+            "an unleased scope is a fresh start, not re-entry"
+        );
+        // Empty registry: also no re-entry.
+        assert!(existing_lease_for_scope(&[], "ANYTHING-1").is_none());
     }
 }
 
