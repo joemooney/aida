@@ -33,6 +33,7 @@ mod external_import_bleed;
 mod findings;
 mod forge;
 mod global_queue;
+mod interview;
 // trace:STORY-633 | ai:claude — toml_edit writer for `aida config glyph`.
 mod glyph_config;
 mod glyphs;
@@ -1442,6 +1443,21 @@ fn run() -> Result<()> {
         return handle_spec_dryrun(id, *ai, *json);
     }
 
+    // STORY-657: `aida spec interview <ID>` reuses dryrun's scorer to derive
+    // clarifying questions, prompts the human (TTY) or emits them as JSON
+    // (headless), and with `--apply` folds the answers back into the spec. Like
+    // dryrun it self-loads the store; dispatch early. trace:STORY-657 | ai:claude
+    if let Command::Spec(SpecCommand::Interview {
+        id,
+        apply,
+        ai,
+        answers,
+        json,
+    }) = &cli.command
+    {
+        return handle_spec_interview(id, *apply, *ai, answers.as_deref(), *json);
+    }
+
     // STORY-563: `aida human <subcommand>` self-loads the store like `aida why`
     // / `burndown explain`, or delegates to the top-level presence handlers.
     // Dispatch early, no shared storage handle needed.
@@ -2399,7 +2415,7 @@ fn run() -> Result<()> {
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
-        Command::Spec(_) => unreachable!("spec dryrun is dispatched before storage init"),
+        Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -12637,7 +12653,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Assess { .. } => unreachable!("assess (intake) is dispatched before storage init"),
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
-        Command::Spec(_) => unreachable!("spec dryrun is dispatched before storage init"),
+        Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
         Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
@@ -81276,6 +81292,336 @@ fn run_dryrun_ai_pass(project_root: &std::path::Path, disp: &str) -> Result<dryr
     let report = dryrun::parse_ai_sidecar(&raw)?;
     let _ = std::fs::remove_file(&sidecar_path);
     Ok(report)
+}
+
+/// `aida spec interview <ID>` — resolve a spec's `dryrun` readiness gaps INTO
+/// the spec via clarifying questions.
+///
+/// Closes the L1 intent-quality loop dryrun opens: dryrun *surfaces* the gaps,
+/// interview *resolves* them. The pure core lives in `interview.rs` (gap →
+/// question mapping + answer → spec-edit folding, fully unit-tested); this is
+/// the integration boundary — store load, the propose/apply split, TTY
+/// prompting, the headless JSON emit, and the actual write. trace:STORY-657
+fn handle_spec_interview(
+    id: &str,
+    apply: bool,
+    ai: bool,
+    answers_file: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    use colored::Colorize;
+
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let store = load_store_for_lookup(&project_root).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no requirement store reachable from {} — run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            project_root.display()
+        )
+    })?;
+
+    let want = id.trim().to_ascii_uppercase();
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| {
+            [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|s| s.eq_ignore_ascii_case(&want))
+        })
+        .cloned()
+        .ok_or_else(|| {
+            anyhow::anyhow!("no spec found matching `{id}` — check the ID with `aida list`.")
+        })?;
+    let disp = req.display_id();
+
+    // Score the spec (same deterministic check dryrun runs) and derive the
+    // questions from the FAILING dimensions (+ optional AI gap report).
+    let snapshot = dryrun::SpecSnapshot::from_requirement(&req);
+    let readiness = dryrun::score(&snapshot);
+    let ai_report = if ai {
+        Some(run_dryrun_ai_pass(&project_root, &disp)?)
+    } else {
+        None
+    };
+    let questions = interview::questions_for(&readiness, ai_report.as_ref());
+
+    if questions.is_empty() {
+        if json {
+            let payload = interview::interview_json(&disp, &readiness, &questions);
+            println!("{}", serde_json::to_string_pretty(&payload)?);
+        } else {
+            println!(
+                "{} {} — readiness {} — no gaps to interview; spec is ready.",
+                crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+                disp.cyan().bold(),
+                format!("{}/100", readiness.score).green().bold()
+            );
+        }
+        return Ok(());
+    }
+
+    // Gather answers: from a --answers file (headless feedback), interactively
+    // from a TTY, or none (headless propose — just emit the questions).
+    let answers: Vec<interview::Answer> = if let Some(path) = answers_file {
+        let raw = std::fs::read_to_string(path)
+            .with_context(|| format!("reading --answers file {path}"))?;
+        interview::parse_answers(&raw)?
+    } else {
+        let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+        let headless = std::env::var("AIDA_HEADLESS").as_deref() == Ok("1");
+        if interactive && !headless {
+            prompt_interview_answers(&disp, &req.title, &readiness, &questions)?
+        } else {
+            // Headless with no answers supplied: emit the structured question
+            // list and exit WITHOUT blocking on stdin. The agent/advisor seat.
+            let payload = interview::interview_json(&disp, &readiness, &questions);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+            } else {
+                println!(
+                    "{} {} — readiness {} — {} open question(s). \
+                     No terminal: answer them and feed back with \
+                     `aida spec interview {} --answers <file> --apply`.",
+                    crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+                    disp.cyan().bold(),
+                    format!("{}/100", readiness.score).yellow().bold(),
+                    questions.len(),
+                    disp,
+                );
+                for q in &questions {
+                    println!(
+                        "  {} [{}] {}",
+                        crate::glyph(crate::glyphs::Glyph::Bullet).dimmed(),
+                        q.dimension.dimmed(),
+                        q.prompt
+                    );
+                }
+            }
+            return Ok(());
+        }
+    };
+
+    // Fold the answers into a concrete edit (pure). The same computation drives
+    // both the propose preview and the --apply write — this is the heart of the
+    // non-destructive-by-default split.
+    let date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let edit = interview::apply_answers(&req.description, &questions, &answers, &date);
+
+    if edit.is_noop() {
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "spec": disp,
+                    "applied": false,
+                    "changes": [],
+                }))?
+            );
+        } else {
+            println!(
+                "  {} no answers folded in — nothing to apply.",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+        }
+        return Ok(());
+    }
+
+    if !apply {
+        // Propose-by-default: show what WOULD change, write nothing.
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "spec": disp,
+                    "applied": false,
+                    "changes": edit.changes,
+                    "new_description": edit.new_description,
+                    "parent_spec_id": edit.parent_spec_id,
+                    "priority": edit.priority.as_ref().map(|p| p.to_string()),
+                }))?
+            );
+        } else {
+            println!(
+                "{} {} — proposed edits (run again with {} to write):",
+                crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+                disp.cyan().bold(),
+                "--apply".cyan()
+            );
+            for c in &edit.changes {
+                println!(
+                    "  {} {c}",
+                    crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+                );
+            }
+        }
+        return Ok(());
+    }
+
+    // --apply: write the resolved spec. Resolve the parent (if named) up front
+    // so a bad id fails before any write.
+    let Some(store_path) = detect_distributed_store_from(&project_root) else {
+        anyhow::bail!(
+            "aida spec interview --apply writes to the git-canonical store, but no distributed \
+             store was found — run `aida init` (this verb is not supported on the deprecated \
+             centralized backend)."
+        );
+    };
+    let parent_req = match &edit.parent_spec_id {
+        Some(pid) if pid.eq_ignore_ascii_case(&disp) => {
+            anyhow::bail!("a spec cannot be its own parent ({disp}).");
+        }
+        Some(pid) => Some(
+            store
+                .requirements
+                .iter()
+                .find(|r| {
+                    [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .any(|s| s.eq_ignore_ascii_case(pid))
+                })
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "named parent `{pid}` not found — check the ID with `aida list`."
+                    )
+                })?,
+        ),
+        None => None,
+    };
+
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let mut to_save = req.clone();
+    to_save.description = edit.new_description.clone();
+    if let Some(p) = &edit.priority {
+        to_save.priority = p.clone();
+    }
+    // Link the parent bidirectionally (same convention as `aida add --parent`).
+    if let Some(parent) = &parent_req {
+        use aida_core::models::{Relationship, RelationshipType};
+        let now = chrono::Utc::now();
+        let already_linked = to_save
+            .relationships
+            .iter()
+            .any(|r| r.target_id == parent.id && r.rel_type == RelationshipType::Child);
+        if !already_linked {
+            to_save.relationships.push(Relationship {
+                target_id: parent.id,
+                rel_type: RelationshipType::Child,
+                created_at: Some(now),
+                created_by: None,
+            });
+            let mut parent_mut = parent.clone();
+            parent_mut.relationships.push(Relationship {
+                target_id: to_save.id,
+                rel_type: RelationshipType::Parent,
+                created_at: Some(now),
+                created_by: None,
+            });
+            backend.update_requirement(&parent_mut)?;
+        }
+    }
+    to_save.modified_at = chrono::Utc::now();
+    backend.update_requirement(&to_save)?;
+
+    // Re-score the now-resolved spec so the readiness improvement is visible.
+    let after_snapshot = dryrun::SpecSnapshot::from_requirement(&to_save);
+    let after = dryrun::score(&after_snapshot);
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "spec": disp,
+                "applied": true,
+                "changes": edit.changes,
+                "readiness_before": readiness.score,
+                "readiness_after": after.score,
+            }))?
+        );
+    } else {
+        println!(
+            "{} {} — applied {} edit(s):",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            disp.cyan().bold(),
+            edit.changes.len()
+        );
+        for c in &edit.changes {
+            println!(
+                "  {} {c}",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            );
+        }
+        println!(
+            "  readiness {} {} {}",
+            format!("{}/100", readiness.score).yellow(),
+            crate::glyph(crate::glyphs::Glyph::Arrow).dimmed(),
+            format!("{}/100", after.score).green().bold()
+        );
+    }
+    Ok(())
+}
+
+/// Interactive (TTY) interview: prompt for each gap in turn, reading one line of
+/// free-text per question from stdin. A blank line is a skip. Mirrors the
+/// line-read pattern used elsewhere (`read_line`); kept out of the pure core so
+/// tests never touch stdin. trace:STORY-657 | ai:claude
+fn prompt_interview_answers(
+    disp: &str,
+    title: &str,
+    readiness: &dryrun::Readiness,
+    questions: &[interview::InterviewQuestion],
+) -> Result<Vec<interview::Answer>> {
+    use colored::Colorize;
+    use std::io::Write;
+
+    println!(
+        "{} {} — readiness {} — {} gap(s) to resolve",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        disp.cyan().bold(),
+        format!("{}/100", readiness.score).yellow().bold(),
+        questions.len()
+    );
+    println!("  {}", title.dimmed());
+    println!(
+        "  {}",
+        "Answer each (blank line = skip). Answers fold into the spec on --apply.".dimmed()
+    );
+    println!();
+
+    let mut answers = Vec::with_capacity(questions.len());
+    for (i, q) in questions.iter().enumerate() {
+        println!(
+            "  {} {}",
+            format!("{}/{}", i + 1, questions.len()).cyan().bold(),
+            q.prompt
+        );
+        print!("  > ");
+        std::io::stdout().flush().ok();
+        let mut line = String::new();
+        let n = std::io::stdin().read_line(&mut line)?;
+        if n == 0 {
+            // EOF mid-interview — stop reading, keep what we have.
+            println!();
+            break;
+        }
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            answers.push(interview::Answer {
+                dimension: q.dimension.clone(),
+                answer: trimmed.to_string(),
+            });
+        }
+        println!();
+    }
+    Ok(answers)
 }
 
 /// from cache otherwise, and marked STALE when the neighborhood drifted.
