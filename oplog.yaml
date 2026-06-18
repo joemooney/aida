@@ -18759,5 +18759,17 @@ operations:
   timestamp: 2026-06-18T15:57:33.483021665Z
   kind: !SetStatus
     status: Rejected
-clock: 1854
+- id: 019edd20-866c-7ca3-96a5-44c931ac6ae9
+  target_id: 019edd20-8262-70f1-9d03-81578e55d519
+  author: aida
+  node_id: '1'
+  lamport: 1855
+  timestamp: 2026-06-18T23:45:56.844494809Z
+  kind: !Create
+    title: 'HLC is dead code: scalar merge uses wall-clock LWW with ours-wins tie-break (non-deterministic across clones), not the HLC the docs claim'
+    description: 'Red-team of P4 (TASK-846), verified directly against code: hlc.rs implements a hybrid logical clock but has ZERO non-test call sites (only a pub use re-export in lib.rs:148); Requirement carries no HLC field. The real scalar merge (conflict.rs:199) is ours.modified_at >= theirs.modified_at — raw wall-clock LWW, ties resolve to ours. Consequences: (1) cross-clone merges are NON-DETERMINISTIC — two clones merging the same pair of concurrent same-field edits in opposite roles pick opposite winners (last-puller-wins), since the tie-break is ours not a data-function; (2) under clock skew the wall-clock-later edit wins over the causally-later one — the exact failure the HLC was built to prevent; (3) genuine ms-collision ties resolve order-dependently. The append-union/G-Set half (union_history/comments/processing_records by UUID) is sound and unaffected. Options: (a) WIRE the HLC into the scalar comparator + add HlcTimestamp to the model + a cross-clone-skew determinism test; or (b) if HLC is not worth wiring, REMOVE the dead module and make the tie-break deterministic by a data-function (e.g. node-id, not ours). Low real-world frequency (partition-friendly workload) but a latent correctness issue + dead code + a paper/doc/code-comment claim that is false. Also fix the doc comments in conflict.rs and the theory paper P4 section that credit the HLC.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1855
 node_id: '1'
