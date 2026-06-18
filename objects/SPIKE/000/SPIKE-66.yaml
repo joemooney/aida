@@ -3,12 +3,12 @@ spec_id: SPIKE-66
 agreed_id: SPIKE-66
 title: Flagship TUI unused 33d in telemetry despite "the TUI is the product" framing — is it discoverable/used?
 description: 'Telemetry: tui last used 33d ago, in the unused-candidates list. EPIC-26 framing is "the TUI is the public face / the product". A flagship surface unused for a month (even by the dev) is a legibility/discoverability signal: either it is not surfaced in onboarding, or the daily workflow never routes through it. Investigate: is tui offered at init / in the statusline / in first-run? Decide: invest in discoverability, or honestly de-emphasize the "TUI is the product" framing. W5 legibility.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T22:21:52.767541560Z
-modified_at: 2026-06-18T23:33:18.067150659Z
+modified_at: 2026-06-18T23:41:14.036794353Z
 req_type: Spike
 tags:
 - aida:tui
@@ -35,4 +35,22 @@ comments:
   content: Commit fbccaf2eb references this requirement
   created_at: 2026-06-18T23:33:18.067150659Z
   modified_at: 2026-06-18T23:33:18.067150659Z
+history:
+- id: 019edd1c-35b0-71f2-b7f8-80707f0bf450
+  author: aida-auto-bump
+  timestamp: 2026-06-18T23:41:14.032169258Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edd1c-35b4-75e3-8e76-b13ee3371726
+  timestamp: 2026-06-18T23:41:14.036793598Z
+  agent: aida
+  commit_sha: a6a3770a93c805f87929f900777c341057cfc449
+  summary: Completed via merge a6a3770a
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T23:41:13.871392783Z
+  completion_sha: a6a3770a93c805f87929f900777c341057cfc449
 human_only: true
