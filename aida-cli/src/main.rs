@@ -76935,6 +76935,15 @@ fn print_tiered_help() {
     for (name, desc) in GETTING_STARTED {
         println!("  {:<10} {}", name.green(), desc);
     }
+    // The TUI is the flagship surface (EPIC-26) — invite it from the first
+    // screen, but only when it's actually compiled in so a --no-default-features
+    // build doesn't list a command that errors. trace:SPIKE-66 | ai:claude
+    #[cfg(feature = "tui")]
+    println!(
+        "  {:<10} {}",
+        "tui".green(),
+        "Launch the terminal UI — the at-a-glance home for your project"
+    );
     println!();
 
     println!("{}", "More, grouped by topic".cyan().bold());
@@ -76955,6 +76964,12 @@ fn print_tiered_help() {
     println!(
         "{} is the best entry point for \"what's going on here?\"",
         "`aida status`".bold()
+    );
+    // trace:SPIKE-66 | ai:claude
+    #[cfg(feature = "tui")]
+    println!(
+        "{} opens the visual home for your project — at a glance, all at once.",
+        "`aida tui`".bold()
     );
 }
 
