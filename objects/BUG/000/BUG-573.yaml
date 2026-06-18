@@ -1,0 +1,18 @@
+id: 019edaef-1c2e-7031-bdce-7b365ed190c2
+spec_id: BUG-573
+agreed_id: BUG-573
+title: rel list (+ read-only verbs) exit non-zero on dangling-relationship warnings — poisons usage telemetry + papercuts hooks
+description: 'Streamlining audit (EPIC-49): aida rel list shows ~50% non-zero exit across 8089 calls (4050 errs) — the single biggest distortion in aida usage --errors. Root cause (VERIFY first): a read-only LIST surfacing dangling-relationship warnings sets a non-zero exit, so any hook/loop calling it logs a phantom error. A read-only query that found warnings should exit 0 (warnings to stderr), reserving non-zero for real failures (bad args, store unreadable). Audit the exit-code contract for rel list + sibling read-only verbs; warnings != failure. Add a test pinning exit 0 on a store with dangling rels. Fixes the telemetry data-integrity for all future audits.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T13:32:43.950665715Z
+modified_at: 2026-06-18T13:32:43.950665715Z
+req_type: Bug
+tags:
+- cli-consistency
+- exit-codes
+- from-advisor
+- parent:EPIC-49
+- reliability
