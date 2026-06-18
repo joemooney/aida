@@ -17,6 +17,8 @@ fn validate_token(token: &str) -> Result<Session> { ... }
 
 Every line of code links back to a requirement. Every commit references what it implements. The MCP server exposes the whole graph to any agent.
 
+The niche the probe's evidence points to: a **neutral, cross-vendor intent + coordination substrate** any vendor's agent reads and writes — and because the [shared substrate shapes every vendor's output](docs/research/ablations/2026-06-18-open-brief-convergence.md), running a spec through N vendors (`aida compete`) pays as quality-variance QA, a capability only a neutral substrate-owner can offer.
+
 ## What makes AIDA distinct
 
 <!-- trace:TASK-289 | ai:claude -->
