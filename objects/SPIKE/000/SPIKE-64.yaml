@@ -1,0 +1,20 @@
+id: 019ed967-36e4-79c0-a012-89553818996d
+spec_id: SPIKE-64
+agreed_id: SPIKE-64
+title: Cross-vendor competitive implementation + synthesis (Claude vs Codex headless; Antigravity human-arm) — L5 probe experiment
+description: 'EPIC-48 L5 flagship experiment. Implement the SAME bounded spec independently via Claude (Agent worktree) and Codex (codex exec worktree) with an IDENTICAL brief; judge both against a rubric (compiles, tests pass, spec-adherence, simplicity, diff size, edge-cases); then attempt a SYNTHESIS (best-of + graft) and judge whether it beats both individuals. Antigravity is the human-run third arm via aida brief (exercises the cross-vendor coordination substrate). DELIVERABLE: a finding (which vendor won on which dimension; does synthesis beat individuals; is iterate-improve worth it) folded into the theory paper L5/section, + a reusable eval rubric/harness. First subject: aida spec dryrun (the Thread-B feature) so we get the feature AND the finding.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T06:24:40.676715832Z
+modified_at: 2026-06-18T06:24:40.676715832Z
+req_type: Spike
+tags:
+- ablation
+- competitive
+- multi-vendor
+- parent:EPIC-48
+- probe
+- research
+human_only: true
