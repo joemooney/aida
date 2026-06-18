@@ -2369,6 +2369,48 @@ pub enum NodeCommand {
         #[clap(long, short = 'y')]
         yes: bool,
     },
+
+    /// List the team: every registered node/clone sharing this store, with
+    /// each member's role. Identity introspection under the `node` namespace.
+    /// Equivalent to the top-level `aida team` (kept visible because the
+    /// multi-clone harness invokes it); with a subcommand, manage per-user
+    /// roles (`set-role`, `my-role`).
+    // trace:TASK-851 | ai:claude
+    Team {
+        /// Machine-readable JSON output (bare roster view only).
+        #[clap(long)]
+        json: bool,
+        #[clap(subcommand)]
+        cmd: Option<TeamCommand>,
+    },
+
+    /// Print the caller identity AIDA resolved — role, agent-type, agent-name,
+    /// user-id, headless flag, ai-tool, and active session/scope. Read-only.
+    /// Identity introspection under the `node` namespace; equivalent to the
+    /// hidden top-level `aida whoami`.
+    // trace:TASK-851 | ai:claude
+    Whoami,
+}
+
+/// Subcommands under `aida presence` — the canonical surface for the operator
+/// presence state (collapsing the old top-level `away`/`home`/`presence` verbs
+/// into one). Bare `aida presence` shows status. The top-level `aida away` /
+/// `aida home` remain as hidden aliases for muscle memory.
+// trace:TASK-851 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum PresenceCommand {
+    /// Mark yourself away from the keyboard (sets the machine-global presence
+    /// state with a TTL). Same as the hidden top-level `aida away`.
+    // trace:TASK-851 | ai:claude
+    Away,
+    /// Mark yourself back at the keyboard (clears any away state). Same as the
+    /// hidden top-level `aida home`.
+    // trace:TASK-851 | ai:claude
+    Home,
+    /// Show current effective presence: home/away, how long ago it was set,
+    /// and TTL-remaining when away. Same as bare `aida presence`.
+    // trace:TASK-851 | ai:claude
+    Status,
 }
 
 #[derive(Subcommand, Debug)]
@@ -6299,7 +6341,8 @@ pub enum Command {
     /// mismatches`; the broader autonomy-report views land alongside
     /// the autonomy-metric work that owns them.
     // trace:STORY-439 | ai:claude
-    #[clap(subcommand)]
+    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(subcommand, hide = true)]
     Autonomy(AutonomyCommand),
 
     // trace:TASK-394 | ai:claude
@@ -6312,7 +6355,8 @@ pub enum Command {
     /// Quantitative effort/load views. Effort buckets are 15m, 1h, 4h,
     /// 1d (8 work-hours), and 1w (5 work-days / 40 work-hours).
     // trace:STORY-451 | ai:codex
-    #[clap(subcommand)]
+    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(subcommand, hide = true)]
     Load(LoadCommand),
 
     /// Mark one or more requirements as archived (hidden from default
@@ -6653,6 +6697,8 @@ pub enum Command {
     ///
     // trace:STORY-477 | ai:claude — plain `//` so the SPEC-ID stays out of
     // `--help` output (TASK-268).
+    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(hide = true)]
     Metrics {
         #[clap(subcommand)]
         cmd: crate::cli::MetricsCommand,
@@ -7138,7 +7184,8 @@ pub enum Command {
     /// show` / `list` render the chains. Pairs with the auto-rebase
     /// cascade that `aida pull --auto` runs when a base merges.
     // trace:STORY-248 | ai:claude
-    #[clap(subcommand)]
+    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(subcommand, hide = true)]
     Stack(StackCommand),
 
     /// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
@@ -7263,19 +7310,31 @@ pub enum Command {
     ///   consumers  = "on" | "off"            (master switch; default on)
     ///   away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
     ///   home_offer = "surface" | "dont-block" (home-side; default surface)
+    ///
+    /// Hidden alias for `aida presence away` (kept for muscle memory).
     // trace:TASK-756 trace:STORY-561 | ai:claude
+    // trace:TASK-851 | ai:claude
+    #[clap(hide = true)]
     Away,
 
-    /// Mark yourself back at the keyboard (clears any away state). While home,
-    /// `aida status` surfaces the decision inbox (`aida questions`) and the
-    /// keystone set as "ready for `--zen`" (tune via `[presence] home_offer`).
+    /// Mark yourself back at the keyboard (clears any away state). Hidden alias
+    /// for `aida presence home` (kept for muscle memory).
     // trace:TASK-756 trace:STORY-561 | ai:claude
+    // trace:TASK-851 | ai:claude
+    #[clap(hide = true)]
     Home,
 
-    /// Show current effective presence: home/away, how long ago it was set,
-    /// and TTL-remaining when away.
+    /// Operator presence — the home/away state the autonomy ladder keys on.
+    /// `aida presence` (or `aida presence status`) shows the current state;
+    /// `aida presence away` / `aida presence home` set it. While away, an
+    /// `aida queue work --auto-complete` with no explicit mode flag defaults to
+    /// a headless drain (advisory; integrity gates always apply).
     // trace:TASK-756 | ai:claude
-    Presence,
+    // trace:TASK-851 | ai:claude
+    Presence {
+        #[clap(subcommand)]
+        action: Option<PresenceCommand>,
+    },
 
     /// Enter solo mode — mark this session as the advisor+integrator working the
     /// SAFE backlog end-to-end with maximum discretion (groom → implement →
@@ -7327,7 +7386,12 @@ pub enum Command {
     /// resolved to a default, not advisor, tripping the advisor-gate) and
     /// "why is my queue empty?" (your user/role identity differs from what
     /// queued the items). No project store is loaded; no state is written.
+    ///
+    /// Hidden alias for `aida node whoami` (identity introspection lives under
+    /// the `node` namespace; kept top-level for muscle memory).
     // trace:TASK-784
+    // trace:TASK-851 | ai:claude
+    #[clap(hide = true)]
     Whoami,
 
     /// (internal) Background fetch worker spawned by `aida statusline`.
@@ -8046,6 +8110,8 @@ pub enum Command {
     /// committed block instead. Phase 1 is purely additive — no guard
     /// enforcement, no empirical diffing.
     // trace:TASK-737 | ai:claude
+    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(hide = true)]
     Lifecycle {
         /// Emit the Mermaid `stateDiagram-v2` generated from the declared
         /// transition model.
@@ -8126,6 +8192,8 @@ pub enum Command {
     /// source — this is the rationale. Exits non-zero with a clear message
     /// when no manual entry matches.
     // trace:STORY-600 | ai:claude
+    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+    #[clap(hide = true)]
     Manual {
         /// The command whose manual entry to print, e.g. `graph` (or
         /// `aida graph` — the leading `aida ` is optional).
