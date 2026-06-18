@@ -1,0 +1,17 @@
+id: 019edaef-830f-7392-898e-ae90dcc3106a
+spec_id: TASK-852
+agreed_id: TASK-852
+title: 'Streamline surface: hide reporting/power verbs behind parents/--advanced (metrics/load/autonomy/lifecycle/solo/stack/manual; intent→why --intent)'
+description: 'EPIC-49 W2. Demote rarely-used real surface off the top level (keep capability): group reporting (metrics/load/autonomy/lifecycle diagrams) under an aida report parent or --advanced; move solo under aida autonomy; stack under queue; manual into --help/help; fold intent into why --intent (near-zero demand, overlaps deterministic why). Largest visible-surface reduction; needs alias/flag plumbing so nothing breaks.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T13:33:10.287892147Z
+modified_at: 2026-06-18T13:33:10.287892147Z
+req_type: Task
+tags:
+- from-advisor
+- parent:EPIC-49
+- streamlining
+- surface
