@@ -27,7 +27,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:02:27.493253004Z
-modified_at: 2026-06-18T05:10:36.808592707Z
+modified_at: 2026-06-18T05:10:37.108522618Z
 req_type: Spike
 tags:
 - conflict-merge
@@ -41,3 +41,6 @@ comments:
   content: 'Advisor groomed (2026-06-17): exploratory/Low. The tag union-merge (STORY-645) uses G-Set (grow-only) semantics, so a tag REMOVED on one clone concurrently with an edit on another is re-added by the union (lost removal). Real but rare; the common-case merge is correct. Not worth a speculative OR-Set CRDT upgrade now. Deferring with a concrete trigger rather than approving speculative work.'
   created_at: 2026-06-18T05:05:52.905044957Z
   modified_at: 2026-06-18T05:05:52.905044957Z
+deferred: true
+deferred_at: 2026-06-18T05:10:37.108522618Z
+deferred_until: a concurrent tag-removal is observably lost in a real multi-clone merge, or tag-set correctness becomes load-bearing
