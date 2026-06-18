@@ -3,12 +3,12 @@ spec_id: STORY-659
 agreed_id: STORY-659
 title: 'aida compete <spec>: run a spec through N vendors headless + objective gate (competition-as-QA, slice 1)'
 description: 'Productize the multi-vendor competition-as-QA the bake-offs proved (SPIKE-64: competition value = quality-variance QA, only a neutral substrate-owner can offer). aida compete <SPEC> --vendors claude,codex [--gate "<cmd>"]: for each vendor, create an isolated worktree, assemble the implementer brief from the spec (reuse the pickup/ultraplan brief logic), run the vendor HEADLESS (claude -p for claude; codex exec --dangerously-bypass-approvals-and-sandbox for codex; antigravity has no headless CLI -> emit an aida brief for the human + note it, the cross-vendor coordination path), commit on a per-vendor branch; then run a deterministic GATE per worktree (default: cargo build + test, configurable) and report a table (vendor | built | gate-passed | diff-size | branch). Slice 1 = orchestration + objective gate + REPORT-ONLY (no auto-merge, no rubric judge — those are later slices). This is the flagship niche feature: AIDA as the neutral cross-vendor quality layer.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T16:30:30.162820920Z
-modified_at: 2026-06-18T16:30:30.162820920Z
+modified_at: 2026-06-18T16:51:02.982495272Z
 req_type: Story
 tags:
 - aida:compete
@@ -17,3 +17,21 @@ tags:
 - niche
 - parent:EPIC-48
 - parent:EPIC-49
+history:
+- id: 019edba4-acc1-78b0-b392-06aad94667b3
+  author: aida-auto-bump
+  timestamp: 2026-06-18T16:51:02.977745703Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edba4-acc6-7423-bebc-ff32a9415e4f
+  timestamp: 2026-06-18T16:51:02.982494704Z
+  agent: aida
+  commit_sha: e7f125918ea4474986bb26dc181f95f7b9ebdfd8
+  summary: Completed via merge e7f12591
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T16:51:02.820807916Z
+  completion_sha: e7f125918ea4474986bb26dc181f95f7b9ebdfd8
