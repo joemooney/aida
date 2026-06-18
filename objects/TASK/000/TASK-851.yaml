@@ -1,0 +1,17 @@
+id: 019edaef-69ee-7953-94ab-e59fe287e165
+spec_id: TASK-851
+agreed_id: TASK-851
+title: 'Streamline surface: collapse presence + identity verbs (away/home → presence; team/whoami under node)'
+description: EPIC-49 W2. away/home/presence are three top-level verbs for one concept → aida presence [away|home] (keep away/home as hidden aliases for muscle memory). team/whoami are identity introspection → group under aida node (team/whoami subcommands). Reduces top-level clutter without losing capability.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T13:33:03.854268036Z
+modified_at: 2026-06-18T13:33:03.854268036Z
+req_type: Task
+tags:
+- from-advisor
+- parent:EPIC-49
+- streamlining
+- surface
