@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:24:40.676715832Z
-modified_at: 2026-06-18T06:46:13.411417977Z
+modified_at: 2026-06-18T14:36:51.895685848Z
 req_type: Spike
 tags:
 - ablation
@@ -28,4 +28,9 @@ comments:
   content: 'Run 1 complete: Claude vs Codex headless on aida spec dryrun. Claude won 28-22 (Codex skipped the named --ai TTY gate + left the AI path untested). Findings: docs/research/ablations/2026-06-17-competitive-claude-vs-codex.md. Method proven (headless cross-vendor bake-off + rubric judge). Winner ships as STORY-656 (PR #991). Non-obvious finding: a prescriptive brief makes the contest measure conscientiousness not creativity, so synthesis=selection+verification not halves-make-whole — the intent substrate is a control surface for what competition measures. Next: rerun on an OPEN brief to test whether synthesis emerges.'
   created_at: 2026-06-18T06:46:12.689872992Z
   modified_at: 2026-06-18T06:46:12.689872992Z
+- id: 019edb29-d337-7131-bc7f-a05f3b5a556f
+  author: joe
+  content: 'Run 2 (OPEN brief, subject aida health): Claude won 4.5-3.5 (Codex re-derived lease liveness + shipped a Dormant-lease regression). KEY FINDING (falsifies the run-1 conjecture): an open brief did NOT cause divergence — both converged on aida health + same axes + same philosophy. Convergence is driven by the problem+SUBSTRATE constraint surface (substitutable with brief prescriptiveness), not brief openness; divergence survives only in the substrate-unspecified judgment layer, which is where the quality gap opened. Consequences: (research) own the substrate -> shape the fleet; (product) multi-vendor competition is quality-variance QA, not design diversity — to induce divergence vary the SUBSTRATE not the brief. Doc: docs/research/ablations/2026-06-18-open-brief-convergence.md.'
+  created_at: 2026-06-18T14:36:51.895685848Z
+  modified_at: 2026-06-18T14:36:51.895685848Z
 human_only: true
