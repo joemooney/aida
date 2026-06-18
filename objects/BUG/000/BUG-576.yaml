@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T18:04:28.414758968Z
-modified_at: 2026-06-18T18:04:28.414758968Z
+modified_at: 2026-06-18T18:27:05.125145141Z
 req_type: Bug
 tags:
 - aida:compete
 - bug
 - from-dogfood
 - parent:STORY-659
+comments:
+- id: 019edbfc-9925-7b42-99d8-36b2a26b82a9
+  author: joe
+  content: Commit ab9228a84 references this requirement
+  created_at: 2026-06-18T18:27:05.125145141Z
+  modified_at: 2026-06-18T18:27:05.125145141Z
