@@ -3,12 +3,12 @@ spec_id: STORY-656
 agreed_id: STORY-656
 title: 'aida spec dryrun <id>: implementer readiness pre-check + AI gap report before work'
 description: 'Spec-quality gate (EPIC-48 L1). aida spec dryrun <SPEC> [--json] reports implementer-readiness BEFORE work: (1) a DETERMINISTIC pre-check (pure, testable) — has description, has an Acceptance section, type/priority set, linked parent, not-too-vague heuristics — yielding a 0-100 readiness score + the failing dimensions; (2) an optional AI pass (gated like aida intent; shells claude -p, mockable in tests) listing the questions an implementer would need answered, the assumptions it would make, and the ambiguities/missing acceptance — WITHOUT implementing. Purpose: catch underspecification before queuing (improves spec quality + reduces downstream punts — the research finding). Deterministic core is the testable part.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:24:46.354078951Z
-modified_at: 2026-06-18T06:46:26.603893434Z
+modified_at: 2026-06-18T06:52:31.172679894Z
 req_type: Story
 tags:
 - aida:spec
@@ -27,3 +27,21 @@ comments:
   content: Commit 54314555c references this requirement
   created_at: 2026-06-18T06:46:26.603893434Z
   modified_at: 2026-06-18T06:46:26.603893434Z
+history:
+- id: 019ed980-b440-7bd3-ba7f-dce3396bdd84
+  author: aida-auto-bump
+  timestamp: 2026-06-18T06:52:31.168034293Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed980-b444-7633-9f05-c60b6c2e7153
+  timestamp: 2026-06-18T06:52:31.172678562Z
+  agent: aida
+  commit_sha: 834264aea7bf5f8ef945774c018b48895c3986a8
+  summary: Completed via merge 834264ae
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T06:52:31.013296759Z
+  completion_sha: 834264aea7bf5f8ef945774c018b48895c3986a8
