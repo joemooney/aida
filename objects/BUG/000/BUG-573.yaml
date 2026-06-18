@@ -3,12 +3,12 @@ spec_id: BUG-573
 agreed_id: BUG-573
 title: rel list (+ read-only verbs) exit non-zero on dangling-relationship warnings — poisons usage telemetry + papercuts hooks
 description: 'Streamlining audit (EPIC-49): aida rel list shows ~50% non-zero exit across 8089 calls (4050 errs) — the single biggest distortion in aida usage --errors. Root cause (VERIFY first): a read-only LIST surfacing dangling-relationship warnings sets a non-zero exit, so any hook/loop calling it logs a phantom error. A read-only query that found warnings should exit 0 (warnings to stderr), reserving non-zero for real failures (bad args, store unreadable). Audit the exit-code contract for rel list + sibling read-only verbs; warnings != failure. Add a test pinning exit 0 on a store with dangling rels. Fixes the telemetry data-integrity for all future audits.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:32:43.950665715Z
-modified_at: 2026-06-18T13:43:38.031022502Z
+modified_at: 2026-06-18T13:51:20.695369443Z
 req_type: Bug
 tags:
 - cli-consistency
@@ -22,3 +22,21 @@ comments:
   content: Commit 2502f3fef references this requirement
   created_at: 2026-06-18T13:43:38.031022502Z
   modified_at: 2026-06-18T13:43:38.031022502Z
+history:
+- id: 019edb00-2672-74a3-93b1-88be4488ba27
+  author: aida-auto-bump
+  timestamp: 2026-06-18T13:51:20.690689022Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edb00-2677-7610-90c0-b8f4090c4b8a
+  timestamp: 2026-06-18T13:51:20.695368858Z
+  agent: aida
+  commit_sha: 9d441c0573dbd7403f6a571f346793801605a5e5
+  summary: Completed via merge 9d441c05
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T13:51:20.535632370Z
+  completion_sha: 9d441c0573dbd7403f6a571f346793801605a5e5
