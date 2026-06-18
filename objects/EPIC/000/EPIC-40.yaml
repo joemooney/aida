@@ -31,12 +31,12 @@ description: |-
   ## Plan
 
   docs/plans/2026-06-12-cli-reference-manual.md (branch cli-manual).
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:12:11.226673112Z
-modified_at: 2026-06-18T04:53:48.021190434Z
+modified_at: 2026-06-18T04:53:48.979977612Z
 req_type: Epic
 tags:
 - cli-manual
