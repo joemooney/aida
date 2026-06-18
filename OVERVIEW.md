@@ -16,6 +16,20 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 
 ---
 
+## The niche, concretely
+
+> Stated in the probe's voice: this is the niche the *evidence* points to, not a sales claim. Backing: the theory paper [§7 (the apex claim) + §15](docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md) and the two ablations cited below.
+
+**What it's for.** AIDA is the neutral, **cross-vendor intent + coordination substrate** for a multi-vendor agent fleet — the shared graph of *why* (specs, typed relationships, code-to-spec traces, an enforced lifecycle) that any vendor's agent (Claude, Codex, …) reads and writes through one CLI/MCP surface, plus the coordination layer that lets those agents and a human share one workspace: leases, queue, mailbox, role/RBAC gates. One mailbox, one role queue, one lease table, one intent graph — vendor-agnostic by construction.
+
+**Why it's defensible.** Neutrality. No single model vendor is incentivized to build *portable* cross-vendor coordination, because portability dissolves the within-vendor lock-in that vendor coordination exists to create (P8a, grade (M) — the apex claim). And the substrate is the lever: the open-brief bake-off ([2026-06-18-open-brief-convergence.md](docs/research/ablations/2026-06-18-open-brief-convergence.md)) found two vendors handed the same open brief **converge on the same design because the shared substrate dictates the shape** — so owning the substrate shapes the fleet's output regardless of which vendor executes. That makes the neutral substrate-owner, not any one vendor, the party positioned to coordinate the fleet.
+
+**The concrete embodiment.** `aida compete` runs a spec through N vendors in isolated worktrees and lets an objective gate + a judge pick the best. The same bake-off found designs converge but *execution quality varies* — so multi-vendor competition pays as **quality-variance QA** (selection + verification + regression-catching), not as design diversity, and only a neutral substrate-owner can offer it. Around it sits the spec-quality loop (`aida spec dryrun` / `aida spec interview`, which pre-check and resolve a spec's implementer-readiness) and code-to-spec inline traces (`// trace:SPEC-ID`, machine-checkable from either direction) — the latter the uncontested wedge ([§15 Tier 1](docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md): found in *none* of the dozen-odd tools surveyed).
+
+**Honest scope.** The roll-your-own verdict stays open (§12) and AIDA is one member of a small family (Gas Town/Beads, GNAP) — not a singular insight. Selective gating, not blanket: a programmatic gate beats a stated rule only when the invariant sits *far from the point of action* (attention-distance; [2026-06-18-gate-vs-rule-pilot.md](docs/research/ablations/2026-06-18-gate-vs-rule-pilot.md) falsified the blanket form). Every claim above traces to a finding or a shipped command.
+
+---
+
 ## Public face: the TUI is the product (the platform is what makes it work)
 
 The visible product — what users install, what they look at, what they tell their friends about — is **a TUI that wraps Claude Code sessions** ([EPIC-26](docs/positioning/) for the implementation track). It hosts Claude Code as a child process. Drop out to a status overlay. Drop back in to the same conversation. Quick-action review, queue, merge, pull. List and switch between multiple Claude sessions. *That's the visible product.*
