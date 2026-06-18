@@ -1,0 +1,18 @@
+id: 019ed967-4d12-73a0-9523-5bbbf9b473cf
+spec_id: STORY-656
+agreed_id: STORY-656
+title: 'aida spec dryrun <id>: implementer readiness pre-check + AI gap report before work'
+description: 'Spec-quality gate (EPIC-48 L1). aida spec dryrun <SPEC> [--json] reports implementer-readiness BEFORE work: (1) a DETERMINISTIC pre-check (pure, testable) — has description, has an Acceptance section, type/priority set, linked parent, not-too-vague heuristics — yielding a 0-100 readiness score + the failing dimensions; (2) an optional AI pass (gated like aida intent; shells claude -p, mockable in tests) listing the questions an implementer would need answered, the assumptions it would make, and the ambiguities/missing acceptance — WITHOUT implementing. Purpose: catch underspecification before queuing (improves spec quality + reduces downstream punts — the research finding). Deterministic core is the testable part.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T06:24:46.354078951Z
+modified_at: 2026-06-18T06:24:46.354078951Z
+req_type: Story
+tags:
+- aida:spec
+- intent-substrate
+- parent:EPIC-48
+- probe
+- spec-quality
