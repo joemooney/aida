@@ -1,0 +1,17 @@
+id: 019edaef-33c4-7062-81e2-113a88f9c249
+spec_id: TASK-850
+agreed_id: TASK-850
+title: 'Streamline surface: hide deprecated `intake` alias + cut 5 zero-call verbs'
+description: 'EPIC-49 W2. (a) intake is a deprecated visible_alias of assess (identical help) — demote to a hidden alias so the top level shows only `assess`. (b) CUT the zero-call verbs after a harness/MCP-dep grep: session wakeup, session manifest, session forget, role repair, queue rework (confirm queue rework MCP tool + harness have no dep first). Pure surface reduction; behavior preserved for kept paths.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T13:32:49.988682655Z
+modified_at: 2026-06-18T13:32:49.988682655Z
+req_type: Task
+tags:
+- from-advisor
+- parent:EPIC-49
+- streamlining
+- surface
