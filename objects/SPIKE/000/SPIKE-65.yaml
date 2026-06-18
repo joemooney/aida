@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:25:10.999323390Z
-modified_at: 2026-06-18T06:25:10.999323390Z
+modified_at: 2026-06-18T06:46:15.263421612Z
 req_type: Spike
 tags:
 - beads
@@ -17,4 +17,10 @@ tags:
 - probe
 - research
 - storage-abstraction
+comments:
+- id: 019ed97a-f7df-7be1-8b15-ddf4d6854b3c
+  author: joe
+  content: 'Done: docs/research/2026-06-17-aida-on-beads.md. Composing on Beads NOT recommended (3-4x thick adapter, Dolt-schema churn, lossy round-trip); one-way Beads->AIDA importer is the right compose play; owning the store buys portability+inspectability not cost; traces are the wedge. Verify live bd export schema before any importer work.'
+  created_at: 2026-06-18T06:46:15.263421612Z
+  modified_at: 2026-06-18T06:46:15.263421612Z
 human_only: true
