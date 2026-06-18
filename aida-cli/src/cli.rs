@@ -918,19 +918,6 @@ pub enum SessionCommand {
         cmd: SessionManifestCommand,
     },
 
-    /// Track fallback wakeups so a re-entered skill can deterministically
-    /// skip a zombie fire. An agent schedules a harness wakeup as
-    /// insurance against a hung event (CI watch, build poll), `register`s
-    /// the tag here, and `cancel`s it when the protected event completes
-    /// cleanly. The harness wakeup still fires, but the re-entered skill
-    /// checks `wakeup check <tag>` and exits immediately when cancelled —
-    /// deterministic, instead of relying on a `gh pr view`-style probe.
-    // trace:TASK-228 | ai:claude
-    Wakeup {
-        #[command(subcommand)]
-        cmd: SessionWakeupCommand,
-    },
-
     /// Delete Claude Code session metadata (`.jsonl` files under
     /// `~/.claude/projects/<encoded>/`) older than N days. Walks the
     /// current project + the parent project (when run inside a session
@@ -979,84 +966,13 @@ pub enum SessionCommand {
         #[clap(long, conflicts_with = "orphans")]
         escalations: bool,
     },
-
-    /// Forget a single tracked Claude Code session — delete its `.jsonl`
-    /// metadata file so it drops out of `aida session list`. Sibling of
-    /// `aida session prune`: `prune` is bulk disk-cleanup by age/orphan-ness,
-    /// `forget` is single-target display-management addressed by session id.
-    ///
-    /// Two guards protect mid-work artifacts, each overridable with
-    /// `--force`: it refuses to forget the session currently running this
-    /// command, and any session whose anchor spec is still in flight (In
-    /// Progress, or Done-but-not-yet-merged). `--dry-run` previews without
-    /// acting; `--yes` skips the confirmation. Each removal is appended to
-    /// `<project>/.aida/session-prune.log`, the same audit trail
-    /// `aida session prune` writes.
-    Forget {
-        /// Session id to forget — the full id or an 8-char prefix, as
-        /// shown in the first column of `aida session list`.
-        id: String,
-
-        /// Forget even when a guard would otherwise refuse — the
-        /// currently-active session, or one whose anchor spec is still
-        /// in flight.
-        #[clap(long)]
-        force: bool,
-
-        /// Show what would be forgotten without deleting anything.
-        #[clap(long)]
-        dry_run: bool,
-
-        /// Skip the y/N confirmation (for scripting / autonomous flows).
-        #[clap(long, short = 'y')]
-        yes: bool,
-    },
 }
 
-/// Fallback-wakeup registry subcommands. Records live at
-/// `.aida/wakeups/<tag>.toml`. The agent owns the lifecycle: `register`
-/// at schedule time, `cancel` on clean completion, `check` from the
-/// re-entered skill's early-exit guard.
-// trace:TASK-228 | ai:claude
-// trace:TASK-487 | ai:claude
-#[derive(Subcommand, Debug)]
-pub enum SessionWakeupCommand {
-    /// Register a fallback wakeup as active. Call this right after
-    /// scheduling the harness wakeup it protects.
-    Register {
-        /// Stable tag identifying this wakeup (e.g. `pr-23-ci`).
-        tag: String,
-
-        /// The prompt / command the harness wakeup will re-enter, kept
-        /// for the `list` view (informational).
-        #[clap(long)]
-        prompt: Option<String>,
-
-        /// Free-form note describing what event this wakeup protects.
-        #[clap(long)]
-        note: Option<String>,
-    },
-
-    /// Cancel a registered wakeup — call this when the protected event
-    /// completes cleanly. Idempotent: cancelling an unknown or
-    /// already-cancelled tag is a no-op.
-    Cancel {
-        /// Tag passed to `register`.
-        tag: String,
-    },
-
-    /// Check whether a wakeup is still active. Prints `active` /
-    /// `cancelled` / `unknown` and exits 0 only when active — so a
-    /// re-entered skill can guard with `if aida session wakeup check
-    /// <tag>; then …`.
-    Check {
-        /// Tag passed to `register`.
-        tag: String,
-    },
-
-    /// List registered wakeups (active first, then cancelled).
-    List,
-}
+// `session forget` (single-target .jsonl removal) and `session wakeup`
+// (fallback-wakeup registry) were cut as orphaned zero-call verbs — no
+// skill, harness, MCP tool, or internal command invoked them. `session
+// prune` covers bulk cleanup; `session manifest` (MCP-wired) stays.
+// trace:TASK-850 | ai:claude
 
 /// Planned-cluster manifest subcommands. The manifest is a per-session
 /// file at `.aida/sessions/<id>.manifest.toml` listing the SPEC-IDs the
@@ -7007,7 +6923,10 @@ pub enum Command {
     /// Caveat: the headless advisor is a COLD-BOOT `claude -p`, not your live
     /// session — same model, less context. Autonomy-eligible is not the same as
     /// worth-doing; keep the propose-mode review load-bearing before `--apply`.
-    #[command(visible_alias = "intake")]
+    // `intake` is the deprecated alias of `assess`; kept working for back-compat
+    // but hidden from top-level help so only `assess` (canonical) is advertised.
+    // trace:TASK-850 | ai:claude
+    #[command(alias = "intake")]
     Assess {
         /// Execute the proposed approvals + queue groom. Without it, `intake`
         /// is propose-only (the value judgment stays reviewable). Even with
