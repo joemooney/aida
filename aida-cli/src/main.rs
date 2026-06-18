@@ -62511,6 +62511,111 @@ mod bug_231_findings_promote_tests {
         aida_core::CachedGitBackend::with_inner(inner, &cache_path).unwrap()
     }
 
+    /// Seed a single spec that carries one DANGLING relationship — an edge
+    /// whose `target_id` resolves to no requirement in the store. Mirrors the
+    /// real-world state `aida rel list --dangling` reports.
+    /// trace:BUG-573 | ai:claude
+    #[cfg(test)]
+    fn seed_spec_with_dangling_rel(root: &std::path::Path, spec_id: &str) {
+        let backend = aida_core::GitBackend::new(root).unwrap();
+        let mut store = RequirementsStore::new();
+        let mut req = Requirement::new("Has a dangling edge".into(), "desc".into());
+        req.spec_id = Some(spec_id.to_string());
+        req.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::References,
+            // A random UUID that no requirement in the store owns → dangling.
+            target_id: uuid::Uuid::new_v4(),
+            created_at: None,
+            created_by: None,
+        });
+        store.requirements.push(req);
+        backend.save(&store).unwrap();
+    }
+
+    /// BUG-573: `aida rel list` is a READ-ONLY query, so it must exit 0 (return
+    /// `Ok`) whenever it COMPLETES — even when it surfaces dangling-relationship
+    /// warnings or when the named spec doesn't resolve. Reserving a non-zero
+    /// exit for warnings/empty-results was the single biggest distortion in
+    /// `aida usage --errors` (~50% phantom failures across 8k calls) and
+    /// papercut every hook/loop that called it. Genuine bad-arguments still
+    /// bail non-zero. trace:BUG-573 | ai:claude
+    #[test]
+    fn rel_list_exits_zero_on_dangling_and_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        seed_spec_with_dangling_rel(&root, "TASK-573");
+        let backend = test_cached_backend(&root);
+
+        // Global listing over a store that CONTAINS a dangling edge: the
+        // warning is surfaced (in the row output) but the query completed, so
+        // it must return Ok — not a non-zero exit.
+        handle_rel_list_modern(&backend, &root, None, None, None, false, true, Some(0))
+            .expect("global rel list over a store with a dangling edge must exit 0");
+
+        // `--dangling` explicitly asks for the dangling edges; finding them is a
+        // successful read, not a failure.
+        handle_rel_list_modern(&backend, &root, None, None, None, true, true, Some(0))
+            .expect("`rel list --dangling` finding dangling edges must exit 0");
+
+        // Source-scoped query whose spec resolves: trivially Ok.
+        handle_rel_list_modern(
+            &backend,
+            &root,
+            Some("TASK-573"),
+            None,
+            None,
+            false,
+            true,
+            Some(0),
+        )
+        .expect("rel list for a resolvable source must exit 0");
+
+        // BUG-573 core: a source spec that DOESN'T resolve is an empty
+        // read-only result (the not-found message goes to stderr), NOT a
+        // non-zero exit.
+        handle_rel_list_modern(
+            &backend,
+            &root,
+            Some("NOPE-999"),
+            None,
+            None,
+            false,
+            true,
+            Some(0),
+        )
+        .expect("rel list for a not-found source must exit 0 (empty read-only result)");
+
+        // Same for an unresolvable --target.
+        handle_rel_list_modern(
+            &backend,
+            &root,
+            None,
+            Some("NOPE-999"),
+            None,
+            false,
+            true,
+            Some(0),
+        )
+        .expect("rel list for a not-found target must exit 0 (empty read-only result)");
+
+        // Guardrail: a genuine bad-argument (source AND target both) STILL
+        // fails — the fix must not swallow real errors.
+        let bad = handle_rel_list_modern(
+            &backend,
+            &root,
+            Some("TASK-573"),
+            Some("TASK-573"),
+            None,
+            false,
+            true,
+            Some(0),
+        );
+        assert!(
+            bad.is_err(),
+            "passing both source and target is a real bad-argument error and must stay non-zero"
+        );
+    }
+
     /// STORY-639: `aida assign --to <user>` sets the assignee AND routes the
     /// spec into that user's queue. Re-running is idempotent (no duplicate
     /// queue entry). `aida unassign` clears the assignee and, by default,
@@ -96108,15 +96213,27 @@ fn handle_rel_list_modern(
     // query is "find every edge whose target_id resolves to this UUID".
     let all_reqs = backend.list_requirements(false)?;
 
+    // BUG-573: `aida rel list` is a READ-ONLY query. When the named source /
+    // target spec doesn't resolve there are simply no edges to list — that's
+    // an empty result, not a failure. Emitting a non-zero exit here was the
+    // single biggest distortion in `aida usage --errors` (loops/agents query
+    // relationships for specs that may be archived/removed) and papercut every
+    // hook that called it. Surface the "not found" message to stderr (still
+    // visible) and exit 0 — consistent with the existing empty-result branch
+    // below, which also prints a "(no … match)" line and returns Ok. Genuine
+    // bad-arguments (source AND target both passed) still bail above with a
+    // non-zero exit. trace:BUG-573 | ai:claude
+    //
     // For target mode we need the target's UUID up front to compare against
     // each edge's target_id field.
     let target_uuid: Option<uuid::Uuid> = if let Some(t) = target {
-        Some(
-            backend
-                .get_requirement_by_spec_id(t)?
-                .ok_or_else(|| not_found::requirement_not_found(t, Some(store_path)))?
-                .id,
-        )
+        match backend.get_requirement_by_spec_id(t)? {
+            Some(req) => Some(req.id),
+            None => {
+                eprintln!("{}", not_found::requirement_not_found(t, Some(store_path)));
+                return Ok(());
+            }
+        }
     } else {
         None
     };
@@ -96125,12 +96242,13 @@ fn handle_rel_list_modern(
     // requirement"; we keep that shape, just routed through the same
     // emitter. trace:TASK-65 | ai:claude
     let source_uuid: Option<uuid::Uuid> = if let Some(s) = source {
-        Some(
-            backend
-                .get_requirement_by_spec_id(s)?
-                .ok_or_else(|| not_found::requirement_not_found(s, Some(store_path)))?
-                .id,
-        )
+        match backend.get_requirement_by_spec_id(s)? {
+            Some(req) => Some(req.id),
+            None => {
+                eprintln!("{}", not_found::requirement_not_found(s, Some(store_path)));
+                return Ok(());
+            }
+        }
     } else {
         None
     };
