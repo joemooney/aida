@@ -107,9 +107,10 @@ fi
 # Default CSV destination (timestamped under the design doc's results area).
 if [ -z "$OUT" ]; then
     RESULTS_DIR="$REPO_ROOT/docs/research/ablations/results"
-    mkdir -p "$RESULTS_DIR"
     OUT="$RESULTS_DIR/gate-vs-rule-i2-$(date +%Y%m%d-%H%M%S).csv"
 fi
+# Ensure the CSV's parent dir exists whether OUT is the default or caller-supplied.
+mkdir -p "$(dirname "$OUT")"
 
 # ---------------------------------------------------------------------------
 # The deterministic grader. For I2, "compliant" means: the LANDED `.rs` change
