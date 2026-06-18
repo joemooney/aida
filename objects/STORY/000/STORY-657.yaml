@@ -1,0 +1,18 @@
+id: 019ed967-8cd9-7ac1-83ff-378d0ff427af
+spec_id: STORY-657
+agreed_id: STORY-657
+title: 'Spec interview mode: advisor/product-level clarifying-question loop to raise spec quality'
+description: 'EPIC-48 L1. A robust interview mode that raises spec quality by asking the human clarifying questions, at the product OR advisor seat. Build on aida clarify + the decision-question producer (STORY-522/523). The advisor poses the gaps surfaced by aida spec dryrun as a structured interview; answers fold back into the spec (acceptance criteria, not comments). Research finding: does an interview loop measurably reduce dry-run gap-count + downstream punts?'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T06:25:02.681760287Z
+modified_at: 2026-06-18T06:25:02.681760287Z
+req_type: Story
+tags:
+- aida:clarify
+- interview
+- parent:EPIC-48
+- probe
+- spec-quality
