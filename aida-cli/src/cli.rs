@@ -7283,6 +7283,35 @@ pub enum Command {
         cmd: Option<BriefCommand>,
     },
 
+    /// Run one spec through N vendors headless, in isolated worktrees, then an
+    /// objective gate — the neutral cross-vendor quality layer. For each vendor
+    /// AIDA creates a per-vendor worktree+branch, assembles the implementer
+    /// brief from the spec, runs the vendor headless (claude/codex), commits the
+    /// result, and runs a deterministic gate (build+test by default). Reports a
+    /// table and leaves every branch in place to pick. Report-only: it does NOT
+    /// judge, synthesize, or merge.
+    // trace:STORY-659 | ai:claude
+    Compete {
+        /// SPEC-ID (or UUID) to run through the vendors.
+        spec: String,
+
+        /// Comma-separated vendors to run, e.g. `claude,codex`. Headless
+        /// vendors run directly; a non-headless vendor (antigravity) is emitted
+        /// as a human-run brief instead.
+        #[clap(long, value_delimiter = ',')]
+        vendors: Vec<String>,
+
+        /// Override the deterministic gate command run in each worktree.
+        /// Default: build + the aida-cli test suite.
+        #[clap(long)]
+        gate: Option<String>,
+
+        /// Assemble the briefs + plan the run and print what WOULD happen
+        /// without spawning any vendor or touching git.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Launch and track AI agent processes for this AIDA project.
     // trace:STORY-432 | ai:codex
     #[clap(subcommand)]

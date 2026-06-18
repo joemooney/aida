@@ -17,6 +17,7 @@ mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod compete;
 mod complexity_calibration;
 mod coordination;
 mod deep_link;
@@ -1636,6 +1637,20 @@ fn run() -> Result<()> {
         return handle_ultraplan_command(spec, *stdout, *json, *no_comments);
     }
 
+    // `aida compete` self-loads the store (to assemble the brief) and
+    // orchestrates worktrees + headless vendor runs + the objective gate.
+    // Dispatch early alongside ultraplan — it doesn't need the shared storage
+    // handle. trace:STORY-659 | ai:claude
+    if let Command::Compete {
+        spec,
+        vendors,
+        gate,
+        dry_run,
+    } = &cli.command
+    {
+        return handle_compete_command(spec, vendors, gate.as_deref(), *dry_run);
+    }
+
     // `aida goal` is a pure condition generator — no store needed.
     // trace:TASK-242 | ai:claude
     if let Command::Goal {
@@ -2430,6 +2445,7 @@ fn run() -> Result<()> {
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Manual { .. } => unreachable!("manual is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
+        Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
@@ -12668,6 +12684,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Manual { .. } => unreachable!("manual is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
+        Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
@@ -76102,6 +76119,413 @@ fn handle_ultraplan_command(
         eprintln!("{} {}", "Warning:".yellow().bold(), w);
     }
     Ok(())
+}
+
+/// Assemble the implementer brief a compete arm hands to a vendor: the rich
+/// spec context (reusing the `/ultraplan` assembly) wrapped in compete-specific
+/// marching orders — implement, build+test, commit on the CURRENT branch, no
+/// PR. The vendor runs headless in its own worktree, so "current branch" is the
+/// per-vendor branch we already checked out for it. trace:STORY-659 | ai:claude
+fn assemble_compete_brief(
+    store: &aida_core::RequirementsStore,
+    target: &aida_core::models::Requirement,
+    project_root: &std::path::Path,
+    gate: &str,
+) -> String {
+    let helpers = build_reusable_helpers_section(store, project_root, target);
+    let (reservations, _warnings) = read_reserved_paths(project_root);
+    let (context, _warnings) =
+        assemble_ultraplan_prompt(store, target, helpers.as_deref(), true, &reservations);
+    let display = target.display_id();
+    let mut brief = String::new();
+    brief.push_str(&format!(
+        "You are competing to implement {display} in this worktree. Another vendor is \
+         implementing the SAME spec in a separate worktree; your work will be judged on \
+         correctness and quality, not speed.\n\n"
+    ));
+    brief.push_str("## Your task\n\n");
+    brief.push_str(
+        "1. Implement the spec below in THIS worktree (you are already on the correct branch).\n",
+    );
+    brief.push_str(&format!(
+        "2. Build and test as you go. The objective gate that will be run is:\n   `{gate}`\n"
+    ));
+    brief.push_str(
+        "3. Commit ALL your work on the CURRENT branch with a clear conventional-commit \
+         message. Do NOT open a pull request — the operator collects every vendor's branch.\n",
+    );
+    brief.push_str(
+        "4. Prefer reusing the codebase's existing helpers over re-deriving parallel logic.\n\n",
+    );
+    brief.push_str("---\n\n");
+    brief.push_str(&context);
+    brief
+}
+
+/// `aida compete <SPEC> --vendors <csv> [--gate <cmd>]` — run one spec through N
+/// vendors headless, in isolated worktrees, then a deterministic objective gate;
+/// report a table and leave every branch in place. Slice 1: report-only (no
+/// judge, no synthesis, no merge). trace:STORY-659 | ai:claude
+fn handle_compete_command(
+    spec_arg: &str,
+    vendors: &[String],
+    gate: Option<&str>,
+    dry_run: bool,
+) -> Result<()> {
+    use compete::{ArmResult, Ran, ReportGlyphs, VendorAdapter};
+
+    if vendors.is_empty() {
+        anyhow::bail!(
+            "no vendors given — pass --vendors claude,codex (slice 1 supports claude + codex \
+             headless; antigravity is emitted as a human-run brief)"
+        );
+    }
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_by_spec_id(spec_arg)
+    }
+    .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+    let spec_id = target.display_id();
+
+    let gate_cmd = gate.unwrap_or(compete::DEFAULT_GATE);
+    let brief = assemble_compete_brief(&store, target, &project_root, gate_cmd);
+
+    // Guard the obvious: a dirty starting tree means a vendor worktree branched
+    // off HEAD won't include the operator's uncommitted work — warn, don't fail.
+    if working_tree_is_dirty(&project_root) {
+        eprintln!(
+            "{} starting tree has uncommitted changes — vendor worktrees branch off HEAD and \
+             will NOT see them. Commit or stash first for a clean comparison.",
+            glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+
+    println!(
+        "{} competing {} across {} vendor(s): {}",
+        glyph(crate::glyphs::Glyph::Robot),
+        spec_id.bold(),
+        vendors.len(),
+        vendors.join(", ").cyan()
+    );
+    println!("  gate: {}", gate_cmd.dimmed());
+    if dry_run {
+        println!(
+            "  {}",
+            "(dry run — no vendor spawned, no git touched)".dimmed()
+        );
+    }
+    println!();
+
+    let mut results: Vec<ArmResult> = Vec::new();
+    for vendor in vendors {
+        let adapter = match compete::vendor_adapter(vendor) {
+            Some(a) => a,
+            None => {
+                eprintln!(
+                    "{} unknown vendor `{}` — skipping (known: claude, codex, antigravity)",
+                    glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    vendor
+                );
+                results.push(ArmResult {
+                    vendor: vendor.clone(),
+                    ran: Ran::Skipped,
+                    built: None,
+                    gate_passed: None,
+                    diff_lines: None,
+                    branch: String::new(),
+                });
+                continue;
+            }
+        };
+
+        // Non-headless vendor (antigravity): emit a human-run brief instead of
+        // trying to spawn it. This is the cross-vendor coordination path.
+        if matches!(adapter, VendorAdapter::HumanBriefed) {
+            if !dry_run {
+                match create_agent_brief(
+                    &project_root,
+                    &store,
+                    vendor,
+                    &spec_id,
+                    Some(&brief),
+                    None,
+                ) {
+                    Ok(path) => println!(
+                        "  {} {}: no headless CLI — wrote human-run brief at {}",
+                        glyph(crate::glyphs::Glyph::Mailbox),
+                        vendor.cyan(),
+                        path.display()
+                    ),
+                    Err(e) => eprintln!(
+                        "{} {}: failed to write brief: {e}",
+                        glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        vendor
+                    ),
+                }
+            } else {
+                println!(
+                    "  {}: would write a human-run brief (no headless CLI)",
+                    vendor
+                );
+            }
+            results.push(ArmResult {
+                vendor: vendor.clone(),
+                ran: Ran::Briefed,
+                built: None,
+                gate_passed: None,
+                diff_lines: None,
+                branch: String::new(),
+            });
+            continue;
+        }
+
+        let VendorAdapter::Headless { command, .. } = &adapter else {
+            unreachable!("non-headless handled above");
+        };
+
+        // Vendor CLI missing → skip with a clear note, keep the run going.
+        if !binary_on_path(command) {
+            eprintln!(
+                "{} {}: `{}` not found on PATH — skipping this arm",
+                glyph(crate::glyphs::Glyph::Warning).yellow(),
+                vendor,
+                command
+            );
+            results.push(ArmResult {
+                vendor: vendor.clone(),
+                ran: Ran::Skipped,
+                built: None,
+                gate_passed: None,
+                diff_lines: None,
+                branch: String::new(),
+            });
+            continue;
+        }
+
+        let branch = compete::vendor_branch(&spec_id, vendor);
+        let argv = compete::headless_argv(&adapter, &brief).expect("headless adapter");
+
+        if dry_run {
+            println!(
+                "  {}: would create worktree on `{}` and run: {} {}",
+                vendor,
+                branch,
+                command,
+                argv.iter()
+                    .take(argv.len().saturating_sub(1))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
+            results.push(ArmResult {
+                vendor: vendor.clone(),
+                ran: Ran::Ok,
+                built: None,
+                gate_passed: None,
+                diff_lines: None,
+                branch,
+            });
+            continue;
+        }
+
+        match run_compete_arm(&project_root, vendor, command, &argv, &branch, gate_cmd) {
+            Ok(arm) => results.push(arm),
+            Err(e) => {
+                eprintln!(
+                    "{} {}: arm errored: {e}",
+                    glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    vendor
+                );
+                results.push(ArmResult {
+                    vendor: vendor.clone(),
+                    ran: Ran::Failed,
+                    built: None,
+                    gate_passed: None,
+                    diff_lines: None,
+                    branch,
+                });
+            }
+        }
+    }
+
+    println!();
+    let g = ReportGlyphs {
+        check: glyph(crate::glyphs::Glyph::Check).to_string(),
+        cross: glyph(crate::glyphs::Glyph::Cross).to_string(),
+        pending: glyph(crate::glyphs::Glyph::Pending).to_string(),
+    };
+    print!("{}", compete::render_report(&spec_id, &results, &g));
+    println!();
+    println!(
+        "{}",
+        "Branches left in place for review — pick the best, then merge it yourself \
+         (slice 1 does not judge or merge)."
+            .dimmed()
+    );
+    Ok(())
+}
+
+/// Run a single headless vendor arm: create the worktree, spawn the vendor,
+/// ensure its work is committed, then run the objective gate and measure the
+/// diff. Returns the assembled [`compete::ArmResult`]. Any I/O failure bubbles
+/// up so the caller records the arm as `Failed` and continues. trace:STORY-659
+fn run_compete_arm(
+    project_root: &std::path::Path,
+    vendor: &str,
+    command: &str,
+    argv: &[String],
+    branch: &str,
+    gate_cmd: &str,
+) -> Result<compete::ArmResult> {
+    use compete::{ArmResult, Ran};
+
+    let worktree_dir = project_root
+        .parent()
+        .unwrap_or(project_root)
+        .join(format!("aida-compete-{}", branch.replace('/', "-")));
+    let worktree_str = worktree_dir.to_string_lossy().to_string();
+
+    // Fresh start: drop any stale worktree/branch from a prior compete run.
+    let _ = std::process::Command::new("git")
+        .args(["worktree", "remove", "--force", &worktree_str])
+        .current_dir(project_root)
+        .output();
+    let _ = std::process::Command::new("git")
+        .args(["worktree", "prune"])
+        .current_dir(project_root)
+        .output();
+    let _ = std::process::Command::new("git")
+        .args(["branch", "-D", branch])
+        .current_dir(project_root)
+        .output();
+
+    let add = std::process::Command::new("git")
+        .args(["worktree", "add", "-b", branch, &worktree_str, "HEAD"])
+        .current_dir(project_root)
+        .output()
+        .context("failed to run `git worktree add`")?;
+    if !add.status.success() {
+        anyhow::bail!(
+            "git worktree add failed: {}",
+            String::from_utf8_lossy(&add.stderr).trim()
+        );
+    }
+
+    println!(
+        "  {} {}: worktree {} on `{}` — running headless...",
+        glyph(crate::glyphs::Glyph::InFlight),
+        vendor.cyan(),
+        worktree_dir.display(),
+        branch
+    );
+
+    // Spawn the vendor headless in its worktree; tee stdout+stderr to a log.
+    let log_path = worktree_dir.join(format!(".aida-compete-{vendor}.log"));
+    let vendor_out = std::process::Command::new(command)
+        .args(argv)
+        .current_dir(&worktree_dir)
+        .output();
+    let ran = match &vendor_out {
+        Ok(o) if o.status.success() => Ran::Ok,
+        Ok(_) => Ran::Failed,
+        Err(_) => Ran::Failed,
+    };
+    if let Ok(o) = &vendor_out {
+        let mut combined = o.stdout.clone();
+        combined.extend_from_slice(&o.stderr);
+        let _ = std::fs::write(&log_path, &combined);
+    }
+    println!(
+        "     {} vendor exited ({}) — log: {}",
+        glyph(crate::glyphs::Glyph::SubArrow),
+        ran.label(),
+        log_path.display()
+    );
+
+    // Ensure the work is committed on the per-vendor branch even if the vendor
+    // left changes uncommitted.
+    let _ = std::process::Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(&worktree_dir)
+        .output();
+    let has_staged = !std::process::Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .current_dir(&worktree_dir)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(true);
+    if has_staged {
+        let _ = std::process::Command::new("git")
+            .args([
+                "commit",
+                "-m",
+                &format!("[AI:{vendor}] compete arm: uncommitted vendor work (auto-committed)"),
+            ])
+            .current_dir(&worktree_dir)
+            .output();
+    }
+
+    // Diff vs the base (HEAD the worktree branched from) — coarse "how much".
+    let numstat = std::process::Command::new("git")
+        .args(["diff", "--numstat", "HEAD", branch])
+        .current_dir(project_root)
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    let diff_lines = Some(compete::count_diff_lines(&numstat));
+
+    // Run the deterministic objective gate in the worktree.
+    println!(
+        "     {} running gate...",
+        glyph(crate::glyphs::Glyph::Hourglass)
+    );
+    let gate_out = std::process::Command::new("sh")
+        .args(["-c", gate_cmd])
+        .current_dir(&worktree_dir)
+        .output()
+        .context("failed to run the gate command")?;
+    let mut gate_combined = String::from_utf8_lossy(&gate_out.stdout).to_string();
+    gate_combined.push_str(&String::from_utf8_lossy(&gate_out.stderr));
+    let gate_log = worktree_dir.join(format!(".aida-compete-{vendor}-gate.log"));
+    let _ = std::fs::write(&gate_log, &gate_combined);
+    let (built, gate_passed) =
+        compete::parse_gate_result(gate_out.status.success(), &gate_combined);
+
+    Ok(ArmResult {
+        vendor: vendor.to_string(),
+        ran,
+        built: Some(built),
+        gate_passed: Some(gate_passed),
+        diff_lines,
+        branch: branch.to_string(),
+    })
+}
+
+/// Is `name` an executable on PATH? Cheap probe via `<name> --version`, matching
+/// every other launcher's availability check in this crate. trace:STORY-659
+fn binary_on_path(name: &str) -> bool {
+    std::process::Command::new(name)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Does the project's working tree have uncommitted changes? Conservative: any
+/// `git status --porcelain` output (excluding the gitignored store/cache noise
+/// git already omits) counts as dirty. trace:STORY-659
+fn working_tree_is_dirty(project_root: &std::path::Path) -> bool {
+    std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(project_root)
+        .output()
+        .map(|o| !o.stdout.is_empty())
+        .unwrap_or(false)
 }
 
 /// The curated "Getting started" set — the core spec loop a newcomer needs to
