@@ -7288,9 +7288,10 @@ pub enum Command {
     /// AIDA creates a per-vendor worktree+branch, assembles the implementer
     /// brief from the spec, runs the vendor headless (claude/codex), commits the
     /// result, and runs a deterministic gate (build+test by default). Reports a
-    /// table and leaves every branch in place to pick. Report-only: it does NOT
-    /// judge, synthesize, or merge.
-    // trace:STORY-659 | ai:claude
+    /// table, ranks the gate-passers (smaller/focused diff first), optionally
+    /// runs a rubric LLM judge (--judge), and leaves every branch in place to
+    /// pick. Report-only: it recommends a winner but never merges.
+    // trace:STORY-659 trace:STORY-660 | ai:claude
     Compete {
         /// SPEC-ID (or UUID) to run through the vendors.
         spec: String,
@@ -7310,6 +7311,16 @@ pub enum Command {
         /// without spawning any vendor or touching git.
         #[clap(long)]
         dry_run: bool,
+
+        /// Add a rubric LLM judge after the gate: spawn a `claude -p` judge over
+        /// the spec + each candidate's diff, scoring spec-adherence / correctness
+        /// / simplicity / test-coverage (1-5) and recommending a winner. Opt-in
+        /// and REPORT-ONLY — it never merges; the human/advisor still picks. The
+        /// cheap deterministic ranking (smaller, focused diff first) is always
+        /// shown regardless of this flag.
+        // trace:STORY-660 | ai:claude
+        #[clap(long)]
+        judge: bool,
     },
 
     /// Launch and track AI agent processes for this AIDA project.
