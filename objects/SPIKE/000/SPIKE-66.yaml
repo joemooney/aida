@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T22:21:52.767541560Z
-modified_at: 2026-06-18T23:24:26.860757824Z
+modified_at: 2026-06-18T23:33:18.067150659Z
 req_type: Spike
 tags:
 - aida:tui
@@ -30,4 +30,9 @@ comments:
     2. STRATEGIC (operator's call, not mine): whether to double-down on "the TUI is the product" or re-weight toward CLI-first reality is a positioning decision. The discoverability fix supports the current framing either way, so it ships now; the framing question is flagged for the operator.
   created_at: 2026-06-18T23:24:26.860757824Z
   modified_at: 2026-06-18T23:24:26.860757824Z
+- id: 019edd14-f273-7601-b3c4-3dfd815a825a
+  author: joe
+  content: Commit fbccaf2eb references this requirement
+  created_at: 2026-06-18T23:33:18.067150659Z
+  modified_at: 2026-06-18T23:33:18.067150659Z
 human_only: true
