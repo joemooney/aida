@@ -94,10 +94,18 @@ pub fn vendor_branch(spec_id: &str, vendor: &str) -> String {
     format!("compete/{}-{}", spec_id.to_ascii_lowercase(), vendor)
 }
 
-/// The default deterministic gate for THIS repo: build, then run the aida-cli
-/// test suite with the advisor's role env unset (it leaks into role-gated tests
-/// and causes false failures — see the project memory on `AIDA_SESSION_ROLE`).
-pub const DEFAULT_GATE: &str = "cargo build && env -u AIDA_SESSION_ROLE cargo test -p aida-cli";
+/// The default deterministic gate for THIS repo. It MIRRORS the PR CI surface
+/// (`.github/workflows/ci.yml`) so a gate-passing arm is actually mergeable —
+/// fmt-check, build, the aida-cli test suite, the `clippy::correctness` lint,
+/// and the glyph-lint guard. A narrower build+test-only gate gives false-green
+/// "winners" that then fail CI at `cargo fmt --check` (the BUG-576 dogfood).
+///
+/// The aida-cli test step unsets the advisor's role env (it leaks into
+/// role-gated tests and causes false failures — see the project memory on
+/// `AIDA_SESSION_ROLE`). The `--gate "<cmd>"` flag overrides this wholesale for
+/// non-Rust repos / custom CI surfaces.
+// trace:BUG-576 | ai:claude
+pub const DEFAULT_GATE: &str = "cargo fmt --all -- --check && cargo build && env -u AIDA_SESSION_ROLE cargo test -p aida-cli && cargo clippy -- -D clippy::correctness && bash scripts/glyph-lint.sh --block";
 
 /// Outcome of one vendor arm. Pure data — assembled by the orchestrator, then
 /// handed to [`render_report`] for formatting.
@@ -142,13 +150,14 @@ impl Ran {
     }
 }
 
-/// Parse a gate run into (built?, gate_passed?). The gate is one shell command
-/// of the shape `cargo build && <tests>`; we treat a zero overall exit as a full
-/// pass, and infer the build sub-result from whether the combined stderr/stdout
-/// shows a build failure. We keep this conservative and HONEST: if the overall
-/// command passed, the build necessarily passed (it's the first `&&` clause);
-/// if it failed, we look for the cargo build-failure marker to attribute the
-/// failure to the build vs. the tests.
+/// Parse a gate run into (built?, gate_passed?). The default gate is one shell
+/// command of the shape `<fmt> && cargo build && <tests> && <clippy> && <glyph>`
+/// (a custom `--gate` may differ); we treat a zero overall exit as a full pass,
+/// and infer the build sub-result from whether the combined stderr/stdout shows
+/// a build failure. We keep this conservative and HONEST: if the overall command
+/// passed, the build necessarily passed (every clause ran green); if it failed,
+/// we look for the cargo build-failure marker to attribute the failure to the
+/// build specifically (a fmt/clippy/glyph failure leaves `built = true`).
 pub fn parse_gate_result(exit_ok: bool, combined_output: &str) -> (bool, bool) {
     if exit_ok {
         // A `cargo build && cargo test` that exits 0 means both built and tested.
@@ -753,6 +762,33 @@ mod tests {
     fn default_gate_unsets_session_role() {
         assert!(DEFAULT_GATE.contains("env -u AIDA_SESSION_ROLE"));
         assert!(DEFAULT_GATE.contains("cargo build"));
+    }
+
+    // The default gate must MIRROR PR CI so a gate-passing arm is mergeable:
+    // a build+test-only gate gives false-green winners that fail CI at
+    // `cargo fmt --check` / clippy / glyph-lint (BUG-576). trace:BUG-576 | ai:claude
+    #[test]
+    fn default_gate_mirrors_ci_surface() {
+        // fmt-check (the BUG-576 false-green step)
+        assert!(
+            DEFAULT_GATE.contains("cargo fmt --all -- --check"),
+            "default gate must run fmt --check: {DEFAULT_GATE}"
+        );
+        // build + test
+        assert!(DEFAULT_GATE.contains("cargo build"));
+        assert!(DEFAULT_GATE.contains("cargo test -p aida-cli"));
+        // clippy correctness lint (CI gate)
+        assert!(
+            DEFAULT_GATE.contains("cargo clippy -- -D clippy::correctness"),
+            "default gate must run clippy correctness: {DEFAULT_GATE}"
+        );
+        // glyph-lint guard (CI gate)
+        assert!(
+            DEFAULT_GATE.contains("bash scripts/glyph-lint.sh --block"),
+            "default gate must run glyph-lint: {DEFAULT_GATE}"
+        );
+        // every step is &&-chained so the gate is a single fail-fast command
+        assert_eq!(DEFAULT_GATE.matches("&&").count(), 4);
     }
 
     // ---- STORY-660: judge + deterministic ranking ----
