@@ -1,0 +1,17 @@
+id: 019edb29-a53e-7392-8eba-6986bc5b9b58
+spec_id: TASK-853
+agreed_id: TASK-853
+title: 'aida health polish: severity-order the issue list (graft from the Codex arm)'
+description: 'From SPIKE-64 run-2 synthesis: ship-Claude-as-is won, graft one thing from the Codex arm — order the non-healthy vitals by severity (worst first) before printing, and optionally fold in a dimmed per-status/finding-severity detail line. ~30 lines. Do NOT take Codex 0-100 score or its duplicate lease/queue readers (the regression).'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T14:36:40.126326533Z
+modified_at: 2026-06-18T14:36:40.126326533Z
+req_type: Task
+tags:
+- aida:health
+- from-synthesis
+- parent:STORY-658
+- polish
