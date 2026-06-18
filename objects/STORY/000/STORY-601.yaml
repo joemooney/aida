@@ -3,12 +3,12 @@ spec_id: STORY-601
 agreed_id: STORY-601
 title: 'CLI manual: keep entries machine-digestible so aida-tutor can generate tutorials from them'
 description: 'Operator intent (2026-06-12): the aida-tutor project should digest this manual to generate better tutorials. So the manual is not just human prose — it''s STRUCTURED SOURCE. Constraint on all chapters: every command entry uses the SAME parseable shape — an `### `aida <cmd>`` header, then the fixed labeled fields (One line / Mental model / Reach for it when / Don''t reach for it when / Key options / Gotchas / Chains with). Consistent labels = a tutor (or `aida manual`) can extract per-command, per-field. Acceptance: a downstream parser can split any chapter into {command → {field → text}} without heuristics. Add a one-line ''structured for downstream consumers (aida-tutor)'' note to docs/cli/README.md.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:31:35.301243821Z
-modified_at: 2026-06-18T04:37:13.672058677Z
+modified_at: 2026-06-18T04:54:08.145511214Z
 req_type: Story
 tags:
 - aida-tutor
