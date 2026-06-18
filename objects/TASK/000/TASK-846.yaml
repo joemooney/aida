@@ -1,0 +1,17 @@
+id: 019ed956-6a0f-7f11-a0d9-a61a1445e265
+spec_id: TASK-846
+agreed_id: TASK-846
+title: Red-team the remaining load-bearing probe findings (P1, P2, P4, P5)
+description: 'EPIC-48: P3 and P8 already adversarially scoped. Red-team the rest of the load-bearing findings in the theory paper — P1 (substrate-as-bouncer, also tested empirically by the gate-vs-rule ablation), P2 (intent substrate / IDs load-bearing-from-first-commit), P4 (conflict-light merge), P5 (substrate-as-governance). For each: state the strongest objection + an alternative explanation, then either scope the claim or fold the rebuttal in. Keep the self-evaluation-bias caveat (section 10) honest — prefer an outside/second-model perspective where possible.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T06:06:19.663555725Z
+modified_at: 2026-06-18T06:06:19.663555725Z
+req_type: Task
+tags:
+- parent:EPIC-48
+- probe
+- red-team
+- research
