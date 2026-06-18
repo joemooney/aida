@@ -1,0 +1,19 @@
+id: 019edbb7-e1df-7100-90f4-ddad8904aac7
+spec_id: STORY-660
+agreed_id: STORY-660
+title: 'aida compete slice 2: rubric judge + clean diff signal (the gate alone cannot pick a winner)'
+description: 'Dogfood finding: on TASK-853 BOTH vendors gate-passed (build+test) — the objective gate is necessary but NOT sufficient to pick the winner (it cannot tell a 40-line scoped impl from an over-reaching one). Slice 2: add a judge — first the cheap deterministic signal (diff-lines, files-touched, once BUG-575 stops the log polluting it) + then a rubric LLM judge (reuse the bake-off judge pattern) scoring spec-adherence/simplicity/test-coverage, producing a ranked verdict + a recommended winner. Embodies the research: competition value = quality-variance, and quality needs a judge, not just a gate. Optionally a --judge flag; keep report-only (no auto-merge) until trusted.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T17:12:01.759916984Z
+modified_at: 2026-06-18T17:12:01.759916984Z
+req_type: Story
+tags:
+- aida:compete
+- from-dogfood
+- multi-vendor
+- niche
+- parent:EPIC-48
+- parent:STORY-659
