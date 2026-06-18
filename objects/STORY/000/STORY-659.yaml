@@ -1,0 +1,19 @@
+id: 019edb91-dd12-71a1-b0cb-185f7407664c
+spec_id: STORY-659
+agreed_id: STORY-659
+title: 'aida compete <spec>: run a spec through N vendors headless + objective gate (competition-as-QA, slice 1)'
+description: 'Productize the multi-vendor competition-as-QA the bake-offs proved (SPIKE-64: competition value = quality-variance QA, only a neutral substrate-owner can offer). aida compete <SPEC> --vendors claude,codex [--gate "<cmd>"]: for each vendor, create an isolated worktree, assemble the implementer brief from the spec (reuse the pickup/ultraplan brief logic), run the vendor HEADLESS (claude -p for claude; codex exec --dangerously-bypass-approvals-and-sandbox for codex; antigravity has no headless CLI -> emit an aida brief for the human + note it, the cross-vendor coordination path), commit on a per-vendor branch; then run a deterministic GATE per worktree (default: cargo build + test, configurable) and report a table (vendor | built | gate-passed | diff-size | branch). Slice 1 = orchestration + objective gate + REPORT-ONLY (no auto-merge, no rubric judge — those are later slices). This is the flagship niche feature: AIDA as the neutral cross-vendor quality layer.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T16:30:30.162820920Z
+modified_at: 2026-06-18T16:30:30.162820920Z
+req_type: Story
+tags:
+- aida:compete
+- from-research
+- multi-vendor
+- niche
+- parent:EPIC-48
+- parent:EPIC-49
