@@ -3,12 +3,12 @@ spec_id: BUG-572
 agreed_id: BUG-572
 title: Ungroomed to-groom draft with human_only=true leaks onto aida human as a phantom decision (no question) — should stay advisor grooming work
 description: 'Operator caught: aida list human / aida human showed an ungroomed exploratory Draft (a to-groom item) under "1 open item need a decision, review, or triage from you" — but there was no question to answer, because an ungroomed draft is not a decision. Root cause: the spec carried human_only=true, and the handle_list_human filter (main.rs ~79875: f.human_only || bucket.operator_seat() || (configurable && seat_of==Operator)) lets human_only OVERRIDE the to-groom→advisor seat routing (to-groom defaults to advisor per seats.rs). So a draft you cannot yet decide on is forced onto the operator seat + counted as a decision. SEAT-SEPARATION PRINCIPLE: grooming is advisor work; you cannot make a human decision on an ungroomed draft — it must be groomed first, and only a GROOMED genuine-operator-call gets a formulated question (DecisionRequest, which aida questions answers). FIX: the Ungroomed (to-groom) bucket is advisor work REGARDLESS of human_only — human_only must not pull a to-groom draft onto aida human (change the filter human_only clause to exclude the Ungroomed bucket); ensure aida advisor surfaces such specs under to-groom; the "needs a decision" banner/count then stops counting grooming items. Optionally warn when --human-only is set on a Draft (premature — groom first). There is a test untagged_spike_is_research_lane_not_human_only that already encodes the intent. Unit-test: an Ungroomed spec with human_only=true is advisor-routed, NOT operator-routed.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T05:11:16.972865259Z
-modified_at: 2026-06-18T05:11:16.972865259Z
+modified_at: 2026-06-18T05:33:10.318475729Z
 req_type: Bug
 tags:
 - aida:human
@@ -16,3 +16,21 @@ tags:
 - from-operator
 - parent:EPIC-42
 - seats
+history:
+- id: 019ed938-0f29-7d80-9e8b-e352eb1fd046
+  author: aida-auto-bump
+  timestamp: 2026-06-18T05:33:10.313686901Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed938-0f2e-78c0-b1ec-1831bd896f05
+  timestamp: 2026-06-18T05:33:10.318475174Z
+  agent: aida
+  commit_sha: 58eb3ae8ab9927aff220763f3b0a405631ad72dc
+  summary: Completed via merge 58eb3ae8
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T05:33:10.155214295Z
+  completion_sha: 58eb3ae8ab9927aff220763f3b0a405631ad72dc
