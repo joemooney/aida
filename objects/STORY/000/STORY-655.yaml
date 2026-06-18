@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:06:10.714880117Z
-modified_at: 2026-06-18T06:06:10.714880117Z
+modified_at: 2026-06-18T15:20:08.831200241Z
 req_type: Story
 tags:
 - ablation
 - parent:EPIC-48
 - probe
 - research
+comments:
+- id: 019edb51-737f-7863-8def-200a377a9b87
+  author: joe
+  content: Commit 1168671fc references this requirement
+  created_at: 2026-06-18T15:20:08.831200241Z
+  modified_at: 2026-06-18T15:20:08.831200241Z
