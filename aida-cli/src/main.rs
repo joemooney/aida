@@ -79328,6 +79328,12 @@ fn handle_health_vitals_command(json: bool, brief: bool) -> Result<()> {
                 value,
                 width = label_w
             );
+            // Fold in the one-line meaning as a dimmed detail line for any
+            // non-healthy vital, so the worst-first issue list reads with
+            // context inline; a healthy read stays quiet. trace:TASK-853
+            if v.grade != Grade::Healthy {
+                println!("      {}", v.detail.dimmed());
+            }
             // Surface the remedy only when there's something to act on, so a
             // healthy read stays quiet (honest, not noisy). trace:STORY-658
             if let Some(remedy) = v.remedy {

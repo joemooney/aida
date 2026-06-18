@@ -375,6 +375,13 @@ impl HealthReport {
             .map(|v| v.grade)
             .max()
             .unwrap_or(Grade::Healthy);
+        // Severity-order the issue list: worst (Critical) first, healthy last.
+        // `sort_by_key` is stable, so within one grade the original per-axis
+        // vital order is preserved — the things to act on bubble to the top of
+        // each axis section while the green readings sink, without ever hiding
+        // them. The grouped human view filters by axis afterward, so each axis
+        // section inherits this worst-first order. trace:TASK-853 | ai:claude
+        backlog.sort_by_key(|v| std::cmp::Reverse(v.grade));
         HealthReport {
             overall,
             vitals: backlog,
@@ -599,6 +606,41 @@ mod tests {
             v.iter().find(|x| x.key == "needs_attention").unwrap().grade,
             Grade::Critical
         );
+    }
+
+    #[test]
+    fn vitals_are_severity_ordered_worst_first() {
+        // A spread of grades across both axes: stale/blocked piles (Critical),
+        // a moderate ready backlog (Watch), and several green readings.
+        let specs: Vec<OpenSpec> = (0..20)
+            .map(|_| spec("Approved", 30, true, false))
+            .collect();
+        let r = HealthReport::build(
+            backlog_vitals(&specs, Some(1.0), &Thresholds::default()),
+            coordination_vitals(
+                &CoordinationInputs {
+                    drain_stale: true,
+                    ..Default::default()
+                },
+                &Thresholds::default(),
+            ),
+        );
+        // The whole vital list must be non-increasing in severity (worst first).
+        let grades: Vec<Grade> = r.vitals.iter().map(|v| v.grade).collect();
+        let mut expected = grades.clone();
+        expected.sort_by_key(|g| std::cmp::Reverse(*g));
+        assert_eq!(grades, expected, "vitals must be ordered worst-first");
+        // The lead vital is the worst, and it matches the rolled-up overall.
+        assert_eq!(r.vitals.first().unwrap().grade, r.overall);
+        // Stable within a grade: among the Critical backlog vitals the original
+        // definition order survives — stale_specs precedes blocked_specs.
+        let crit_keys: Vec<&str> = r
+            .vitals
+            .iter()
+            .filter(|v| v.axis == Axis::Backlog && v.grade == Grade::Critical)
+            .map(|v| v.key)
+            .collect();
+        assert_eq!(crit_keys, vec!["stale_specs", "blocked_specs"]);
     }
 
     #[test]
