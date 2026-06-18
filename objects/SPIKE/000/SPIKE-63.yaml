@@ -27,7 +27,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-17T05:02:27.493253004Z
-modified_at: 2026-06-17T05:02:27.493253004Z
+modified_at: 2026-06-18T05:05:52.905044957Z
 req_type: Spike
 tags:
 - conflict-merge
@@ -35,4 +35,10 @@ tags:
 - exploratory
 - store
 - thinking-out-loud
+comments:
+- id: 019ed91f-1309-7e11-8059-80296aaf445d
+  author: joe
+  content: 'Advisor groomed (2026-06-17): exploratory/Low. The tag union-merge (STORY-645) uses G-Set (grow-only) semantics, so a tag REMOVED on one clone concurrently with an edit on another is re-added by the union (lost removal). Real but rare; the common-case merge is correct. Not worth a speculative OR-Set CRDT upgrade now. Deferring with a concrete trigger rather than approving speculative work.'
+  created_at: 2026-06-18T05:05:52.905044957Z
+  modified_at: 2026-06-18T05:05:52.905044957Z
 human_only: true
