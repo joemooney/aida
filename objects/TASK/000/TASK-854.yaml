@@ -15,9 +15,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T15:56:57.362596550Z
-modified_at: 2026-06-18T15:57:33.365249205Z
+modified_at: 2026-06-18T15:57:34.554342561Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019ed405-459e-7c32-bfb9-c0c2360e7208
   created_at: 2026-06-18T15:57:17.560772412Z
+archived: true
+archived_at: 2026-06-18T15:57:34.554342561Z
