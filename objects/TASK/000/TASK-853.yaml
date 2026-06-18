@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T14:36:40.126326533Z
-modified_at: 2026-06-18T14:36:40.126326533Z
+modified_at: 2026-06-18T17:01:03.142145706Z
 req_type: Task
 tags:
 - aida:health
 - from-synthesis
 - parent:STORY-658
 - polish
+comments:
+- id: 019edbad-d526-7612-9773-e3320c0a3f3e
+  author: joe
+  content: Commit 799b17e4f references this requirement
+  created_at: 2026-06-18T17:01:03.142145706Z
+  modified_at: 2026-06-18T17:01:03.142145706Z
