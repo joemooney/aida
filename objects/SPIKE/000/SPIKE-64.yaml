@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:24:40.676715832Z
-modified_at: 2026-06-18T06:44:53.763757899Z
+modified_at: 2026-06-18T06:46:12.689872992Z
 req_type: Spike
 tags:
 - ablation
@@ -23,4 +23,9 @@ comments:
   content: Commit c3ae623bb references this requirement
   created_at: 2026-06-18T06:44:53.763757899Z
   modified_at: 2026-06-18T06:44:53.763757899Z
+- id: 019ed97a-edd1-7850-9463-9e7d0f6f257c
+  author: joe
+  content: 'Run 1 complete: Claude vs Codex headless on aida spec dryrun. Claude won 28-22 (Codex skipped the named --ai TTY gate + left the AI path untested). Findings: docs/research/ablations/2026-06-17-competitive-claude-vs-codex.md. Method proven (headless cross-vendor bake-off + rubric judge). Winner ships as STORY-656 (PR #991). Non-obvious finding: a prescriptive brief makes the contest measure conscientiousness not creativity, so synthesis=selection+verification not halves-make-whole — the intent substrate is a control surface for what competition measures. Next: rerun on an OPEN brief to test whether synthesis emerges.'
+  created_at: 2026-06-18T06:46:12.689872992Z
+  modified_at: 2026-06-18T06:46:12.689872992Z
 human_only: true
