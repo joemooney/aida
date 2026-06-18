@@ -13,12 +13,12 @@ description: |-
   RECONCILED (advisor grooming 2026-06-14): the original clause #5 (interface_changes-vs-docs reflection) is now covered by STORY-603 (Completed — the doc-intent gate). Dropped from this spec to avoid duplicate work. Branch note corrected: the original 'cli-manual' branch is merged; do this on a fresh branch off main.
 
   Acceptance: CI fails on an undocumented clap command (clap-derived, not help-all); no false-positive subcommand WARNs; SPEC-ID-leak still fails the build.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:14:47.911828063Z
-modified_at: 2026-06-18T04:37:12.958363066Z
+modified_at: 2026-06-18T04:54:06.051838118Z
 req_type: Story
 tags:
 - cli-manual
