@@ -153,6 +153,23 @@ jobs:
           git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
           python3 docs/cli/verify-interface-changes.py "${BASE}" HEAD
 
+      # STORY-597: CLI-manual drift-guard (substrate-as-bouncer). Asserts every
+      # command the live binary exposes (`aida help-all`) has a `### `aida <cmd>``
+      # rationale entry in some docs/cli/*.md chapter — a new command can't merge
+      # without a manual entry. Also hard-fails on SPEC-ID leakage into the
+      # user-facing manual and on a surface-changing spec whose declared
+      # `interface_changes` delta is absent from the docs. Flag-accuracy mismatches
+      # print as WARNs (subcommand flags are checked only against the parent
+      # --help) and do NOT fail the build. The binary is already built above; put
+      # the release dir on PATH so the verifier's `aida ... --help` shell-outs
+      # resolve to it. The orphan `aida-store` branch (fetched by the gates above)
+      # backs the reflection check; it SKIPs non-failing when the store can't
+      # resolve. trace:STORY-597
+      - name: CLI-manual drift-guard (every command documented)
+        run: |
+          export PATH="$PWD/target/release:$PATH"
+          python3 docs/cli/verify-manual.py
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 

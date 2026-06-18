@@ -173,6 +173,27 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ---
 
+### `aida intent`
+
+**One line** — show a plain-terms read of *why this spec exists* — its purpose, distilled from the spec and its graph neighborhood.
+
+**Mental model.** Where `aida why` is a deterministic state classifier (a heuristic over store signals: blocked? awaiting decision? un-queued?), `intent` is an AI synthesis of *meaning*: it reads the spec plus the specs around it and writes a short comprehension of what the work is really for. The result is cached and drift-stamped — generated on first call, printed from cache after, with a STALE marker when the neighborhood has moved since it was generated. So `why` answers "what's keeping this from being done?" and `intent` answers "what is this even for, in human terms?"
+
+**Reach for it when** — you've just loaded an unfamiliar spec (or an agent has) and the title plus description don't yet add up to *why it matters*. It's the orientation pass before you plan or implement: get the gist, then dig into the contract.
+
+**Don't reach for it when** — you want the spec's literal contract, status, and git linkage (that's `aida show`), or you want the deterministic "why is it stuck" classification (that's `aida why`). `intent` is interpretive synthesis, not a substrate fact — treat it as a strong summary, not the source of truth.
+
+**Key options (rationale only).**
+- `--audience` — `layman` (default) writes prose for a human skimmer; `llm` writes a denser, structured register for an agent loading the spec into context. Pick by who's reading.
+- `--refresh` — force regeneration when the cached comprehension is stale or the spec changed in ways the drift stamp didn't catch.
+- `--json` — machine-readable envelope (`spec`, `audience`, `comprehension`, `generated_at`, `model`, `stale`) for downstream consumers.
+
+**Gotchas.** The output is an LLM synthesis, so it costs a generation on the first call (and on `--refresh`); thereafter it's a cache read. The STALE marker is your cue that the neighborhood drifted — re-run with `--refresh` if the cached read no longer fits.
+
+**Chains with** — pairs with `aida show <ID>` (the literal contract) and `aida why <ID>` (the stuck-state classifier): `intent` for the *why it exists*, `why` for the *why it's still open*, `show` for the facts.
+
+---
+
 ### `aida user-guide`
 
 **One line** — open the rendered user guide in the default browser.
