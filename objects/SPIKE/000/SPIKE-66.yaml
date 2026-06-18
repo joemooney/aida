@@ -8,11 +8,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T22:21:52.767541560Z
-modified_at: 2026-06-18T22:21:52.767541560Z
+modified_at: 2026-06-18T23:24:26.860757824Z
 req_type: Spike
 tags:
 - aida:tui
 - from-telemetry
 - legibility
 - parent:EPIC-26
+comments:
+- id: 019edd0c-d76c-7e41-b0b6-c1723d0a6ed4
+  author: joe
+  content: |-
+    Investigation (advisor, 2026-06-18). Discoverability gap CONFIRMED, with a caveat on the signal.
+
+    Caveat first: the 33d-unused telemetry is the DEV/advisor's own usage (we work headless via CLI/MCP). The probe has ~no external users, so this is weak evidence about user behavior — it mostly says we do not dogfood our own flagship surface.
+
+    The concrete gap (code-verified): the TUI is ABSENT from the newcomer funnel. GETTING_STARTED (main.rs) = init/add/list/show/done — no tui. print_tiered_help (bare `aida` / `aida help`) lists topic groups + points at `aida status`, but never invites `aida tui`. README mentions the TUI only in the trojan-horse bullet (line 33), not as a "start here." So a newcomer running bare `aida` is never told the surface OVERVIEW.md calls "the product" exists. That is an inconsistency between the positioning ("the TUI is the public face") and the actual onboarding path (CLI-first, TUI invisible).
+
+    Resolution (two parts):
+    1. SHIPPABLE (this spike): surface `aida tui` in the getting-started view — add it to GETTING_STARTED (cfg-gated to the tui feature, mirroring command_groups) and a one-line "at a glance, run `aida tui`" invite in print_tiered_help. Low-risk; directly serves the existing positioning.
+    2. STRATEGIC (operator's call, not mine): whether to double-down on "the TUI is the product" or re-weight toward CLI-first reality is a positioning decision. The discoverability fix supports the current framing either way, so it ships now; the framing question is flagged for the operator.
+  created_at: 2026-06-18T23:24:26.860757824Z
+  modified_at: 2026-06-18T23:24:26.860757824Z
 human_only: true
