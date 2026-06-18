@@ -3,12 +3,12 @@ spec_id: TASK-852
 agreed_id: TASK-852
 title: 'Streamline surface: hide reporting/power verbs behind parents/--advanced (metrics/load/autonomy/lifecycle/solo/stack/manual; intent→why --intent)'
 description: 'EPIC-49 W2. Demote rarely-used real surface off the top level (keep capability): group reporting (metrics/load/autonomy/lifecycle diagrams) under an aida report parent or --advanced; move solo under aida autonomy; stack under queue; manual into --help/help; fold intent into why --intent (near-zero demand, overlaps deterministic why). Largest visible-surface reduction; needs alias/flag plumbing so nothing breaks.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:33:10.287892147Z
-modified_at: 2026-06-18T14:51:11.715966171Z
+modified_at: 2026-06-18T15:12:39.883373494Z
 req_type: Task
 tags:
 - from-advisor
@@ -21,3 +21,21 @@ comments:
   content: Commit 6ddcce629 references this requirement
   created_at: 2026-06-18T14:51:11.715966171Z
   modified_at: 2026-06-18T14:51:11.715966171Z
+history:
+- id: 019edb4a-99c6-74b0-86a5-09482b63c1f3
+  author: aida-auto-bump
+  timestamp: 2026-06-18T15:12:39.878794687Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edb4a-99cb-76c0-a0c7-d12e32633509
+  timestamp: 2026-06-18T15:12:39.883372580Z
+  agent: aida
+  commit_sha: a3d144ac355d5c8eb15e87e1a12d675732fd97fc
+  summary: Completed via merge a3d144ac
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T15:12:39.719528520Z
+  completion_sha: a3d144ac355d5c8eb15e87e1a12d675732fd97fc
