@@ -19,6 +19,16 @@
 #   - It is easy to forget = HIGH attention-distance.
 #   - The task statement deliberately does NOT mention traces (no recency reminder).
 #
+# CROSS-VENDOR (STORY-655, the decisive test): I2 at n=10 with Claude showed
+# rule-only compliance 100% / gate-saves 0 -- the attention-distance conjecture was
+# FALSIFIED for Claude. The surviving hypothesis is that the VENDOR is the variable
+# (the only observed rule-drop was Codex skipping a rule in a separate bake-off).
+# `--vendor codex` runs the SAME trial with Codex to isolate the vendor directly.
+# Prediction: Codex rule-only compliance < Claude's, and gate-saves > 0.
+# The ambient trace rule is written to BOTH CLAUDE.md (Claude's native project-doc)
+# and AGENTS.md (Codex's native project-doc) so each vendor reads it from the file
+# it actually loads -- keeping the test fair and the attention-distance design intact.
+#
 # Design doc: docs/research/ablations/2026-06-17-gate-vs-rule.md
 # I2 stub:    docs/research/ablations/2026-06-18-gate-vs-rule-i2.md
 # Pre-registered interpretation (design doc Sec.5, applied at higher attention-distance):
@@ -45,8 +55,15 @@
 #   scripts/ablations/gate-vs-rule-i2.sh --arm R --trials 10  # one arm only
 #   scripts/ablations/gate-vs-rule-i2.sh --arm G --trials 10 --out results.csv
 #   scripts/ablations/gate-vs-rule-i2.sh --dry-run            # build/grader self-check, NO headless run
+#   scripts/ablations/gate-vs-rule-i2.sh --vendor codex --smoke   # mechanism check on the Codex path
+#   scripts/ablations/gate-vs-rule-i2.sh --vendor codex --trials 10  # cross-vendor full run
 #
-# Cost: 1 headless `claude -p` run per trial. --smoke = ~2 runs. Full run = ~20.
+# Vendor (--vendor claude|codex, default claude):
+#   claude -> headless `claude -p "<task>" --permission-mode bypassPermissions`
+#   codex  -> headless `codex exec --dangerously-bypass-approvals-and-sandbox "<task>"`
+#   Binaries overridable via AIDA_ABLATION_CLAUDE / AIDA_ABLATION_CODEX.
+#
+# Cost: 1 headless agent run per trial. --smoke = ~2 runs. Full run = ~20.
 
 set -euo pipefail
 
@@ -64,7 +81,9 @@ TRIALS=10
 OUT=""
 SMOKE=false
 DRY_RUN=false
+VENDOR="claude"
 CLAUDE_BIN="${AIDA_ABLATION_CLAUDE:-claude}"
+CODEX_BIN="${AIDA_ABLATION_CODEX:-codex}"
 
 usage() {
     grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'
@@ -76,6 +95,7 @@ while [ $# -gt 0 ]; do
         --arm)     ARM="${2:-}"; shift 2 ;;
         --trials)  TRIALS="${2:-}"; shift 2 ;;
         --out)     OUT="${2:-}"; shift 2 ;;
+        --vendor)  VENDOR="${2:-}"; shift 2 ;;
         --smoke)   SMOKE=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         -h|--help) usage 0 ;;
@@ -88,6 +108,18 @@ if [ "$SMOKE" = true ]; then
     ARM=""   # smoke always runs both arms
 fi
 
+case "$VENDOR" in
+    claude|codex) ;;
+    *) echo "ERROR: --vendor must be claude or codex (got '$VENDOR')" >&2; exit 2 ;;
+esac
+
+# Resolve the selected vendor's binary (overridable via AIDA_ABLATION_{CLAUDE,CODEX}).
+if [ "$VENDOR" = "codex" ]; then
+    AGENT_BIN="$CODEX_BIN"
+else
+    AGENT_BIN="$CLAUDE_BIN"
+fi
+
 case "$ARM" in
     ""|R|G) ;;
     *) echo "ERROR: --arm must be R or G (got '$ARM')" >&2; exit 2 ;;
@@ -98,16 +130,27 @@ if ! [[ "$TRIALS" =~ ^[0-9]+$ ]] || [ "$TRIALS" -lt 1 ]; then
     exit 2
 fi
 
-if [ "$DRY_RUN" = false ] && ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
-    echo "ERROR: '$CLAUDE_BIN' not on PATH -- need a headless Claude Code CLI." >&2
-    echo "       Override with AIDA_ABLATION_CLAUDE=/path/to/claude, or use --dry-run." >&2
+if [ "$DRY_RUN" = false ] && ! command -v "$AGENT_BIN" >/dev/null 2>&1; then
+    if [ "$VENDOR" = "codex" ]; then
+        echo "ERROR: '$AGENT_BIN' not on PATH -- need a headless Codex CLI." >&2
+        echo "       Override with AIDA_ABLATION_CODEX=/path/to/codex, or use --dry-run." >&2
+    else
+        echo "ERROR: '$AGENT_BIN' not on PATH -- need a headless Claude Code CLI." >&2
+        echo "       Override with AIDA_ABLATION_CLAUDE=/path/to/claude, or use --dry-run." >&2
+    fi
     exit 2
 fi
 
 # Default CSV destination (timestamped under the design doc's results area).
+# The filename carries the vendor when it's non-default so a codex run doesn't
+# overwrite a claude CSV (and vice versa).
 if [ -z "$OUT" ]; then
     RESULTS_DIR="$REPO_ROOT/docs/research/ablations/results"
-    OUT="$RESULTS_DIR/gate-vs-rule-i2-$(date +%Y%m%d-%H%M%S).csv"
+    if [ "$VENDOR" = "claude" ]; then
+        OUT="$RESULTS_DIR/gate-vs-rule-i2-$(date +%Y%m%d-%H%M%S).csv"
+    else
+        OUT="$RESULTS_DIR/gate-vs-rule-i2-${VENDOR}-$(date +%Y%m%d-%H%M%S).csv"
+    fi
 fi
 # Ensure the CSV's parent dir exists whether OUT is the default or caller-supplied.
 mkdir -p "$(dirname "$OUT")"
@@ -215,6 +258,14 @@ Use conventional commits, e.g. `feat(core): add helper (TASK-700)`.
 CLAUDE_MD_EOF
 }
 
+# Codex's native project-doc is AGENTS.md, not CLAUDE.md. Write the SAME ambient
+# trace rule there so the Codex vendor reads the invariant from the file it loads,
+# keeping the cross-vendor test fair and the attention-distance design intact.
+# (Harmless for the Claude vendor -- it reads CLAUDE.md.)
+write_trial_agents_md() {
+    write_trial_claude_md "$1"
+}
+
 # ---------------------------------------------------------------------------
 # Per-iteration task variation. Each entry is "FNNAME|DESCRIPTION" -- a small,
 # self-contained Rust function. The task statement built from these does NOT
@@ -259,9 +310,49 @@ trap cleanup EXIT INT TERM
 SEED_REF=""   # set per trial to the seed commit SHA, used by the grader.
 
 # ---------------------------------------------------------------------------
+# run_headless_agent <task> <trial_dir>
+# The single per-vendor headless invocation. Both vendors run with cwd =
+# <trial_dir> (so the commit lands in the right repo) and have permissions /
+# sandbox bypassed for the unattended run. Failures are tolerated by the caller
+# (the grader reads the LANDED change, whatever the agent's exit code). The
+# agent's stdout+stderr is captured to <trial_dir>/.agent.log.
+# ---------------------------------------------------------------------------
+run_headless_agent() {
+    local task="$1" trial_dir="$2"
+    case "$VENDOR" in
+        codex)
+            # codex-cli 0.139.0: `codex exec [PROMPT]` is the non-interactive form;
+            # --dangerously-bypass-approvals-and-sandbox skips all approval prompts and
+            # sandboxing (intended for externally-sandboxed automation). Verified via
+            # `codex exec --help`. cwd = trial_dir so the commit lands in the right repo.
+            # </dev/null is REQUIRED: codex exec reads/appends piped stdin as a <stdin>
+            # block and BLOCKS waiting on it if stdin is a non-/dev/null fd -- redirecting
+            # from /dev/null makes the headless run deterministic (verified: with an open
+            # stdin it hangs on "Reading additional input from stdin...").
+            (
+                cd "$trial_dir"
+                "$AGENT_BIN" exec \
+                    --dangerously-bypass-approvals-and-sandbox \
+                    "$task" \
+                    </dev/null >"$trial_dir/.agent.log" 2>&1
+            ) || true
+            ;;
+        claude|*)
+            (
+                cd "$trial_dir"
+                "$AGENT_BIN" -p "$task" \
+                    --permission-mode bypassPermissions \
+                    </dev/null >"$trial_dir/.agent.log" 2>&1
+            ) || true
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # run_trial <arm> <iteration-index> -> appends one CSV row, echoes a summary line.
-# CSV columns: timestamp,arm,landed_compliant,gate_save,had_commit,fn_name
-# (mirrors the I1 runner's shape; subject -> fn_name for I2).
+# CSV columns: timestamp,vendor,arm,landed_compliant,gate_save,had_commit,fn_name
+# (mirrors the I1 runner's shape; subject -> fn_name for I2; vendor added for the
+# cross-vendor test -- existing columns keep their meaning).
 # ---------------------------------------------------------------------------
 run_trial() {
     local arm="$1" idx="$2"
@@ -279,7 +370,8 @@ run_trial() {
     git -C "$trial_dir" config commit.gpgsign false
 
     write_trial_claude_md "$trial_dir/CLAUDE.md"
-    git -C "$trial_dir" add CLAUDE.md
+    write_trial_agents_md "$trial_dir/AGENTS.md"
+    git -C "$trial_dir" add CLAUDE.md AGENTS.md
     git -C "$trial_dir" commit -q -m "chore: seed repo" --no-verify
     SEED_REF="$(git -C "$trial_dir" rev-parse HEAD)"
 
@@ -307,15 +399,10 @@ HOOK_WRAPPER
     local task
     task="$(build_task "$idx")"
 
-    # Run the headless agent in the trial repo. Permissions bypassed so the
-    # unattended run can write files + commit; failures are tolerated (the grader
-    # reads the landed change, whatever the agent's exit code).
-    (
-        cd "$trial_dir"
-        "$CLAUDE_BIN" -p "$task" \
-            --permission-mode bypassPermissions \
-            >"$trial_dir/.agent.log" 2>&1
-    ) || true
+    # Run the selected vendor's headless agent in the trial repo. Permissions /
+    # sandbox bypassed so the unattended run can write files + commit; failures
+    # are tolerated (the grader reads the landed change, whatever the exit code).
+    run_headless_agent "$task" "$trial_dir"
 
     # ---- deterministic grading of the LANDED .rs change ----
     local had_commit=0 landed_compliant=0 gate_save=0 grade=-1
@@ -338,11 +425,11 @@ HOOK_WRAPPER
     # CSV row.
     local ts
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '%s,%s,%s,%s,%s,"%s"\n' \
-        "$ts" "$arm" "$landed_compliant" "$gate_save" "$had_commit" "$fn_name" >> "$OUT"
+    printf '%s,%s,%s,%s,%s,%s,"%s"\n' \
+        "$ts" "$VENDOR" "$arm" "$landed_compliant" "$gate_save" "$had_commit" "$fn_name" >> "$OUT"
 
-    printf '  [arm %s] fn=%s commit=%s compliant=%s gate_save=%s rejections=%s\n' \
-        "$arm" "$fn_name" "$had_commit" "$landed_compliant" "$gate_save" "$rejections"
+    printf '  [%s arm %s] fn=%s commit=%s compliant=%s gate_save=%s rejections=%s\n' \
+        "$VENDOR" "$arm" "$fn_name" "$had_commit" "$landed_compliant" "$gate_save" "$rejections"
 }
 
 # ---------------------------------------------------------------------------
@@ -352,6 +439,7 @@ HOOK_WRAPPER
 # ---------------------------------------------------------------------------
 if [ "$DRY_RUN" = true ]; then
     echo "gate-vs-rule I2 (trace-coverage) -- DRY RUN (no headless agent)"
+    echo "  vendor: $VENDOR  (agent binary: $AGENT_BIN)"
     echo
     grader_self_check
     echo
@@ -392,7 +480,7 @@ fi
 # Drive the trials.
 # ---------------------------------------------------------------------------
 if [ ! -f "$OUT" ]; then
-    echo "timestamp,arm,landed_compliant,gate_save,had_commit,fn_name" > "$OUT"
+    echo "timestamp,vendor,arm,landed_compliant,gate_save,had_commit,fn_name" > "$OUT"
 fi
 
 declare -a ARMS_TO_RUN
@@ -403,9 +491,10 @@ else
 fi
 
 echo "gate-vs-rule I2 ablation (trace-coverage, high attention-distance) -- $TRIALS trial(s) per arm"
+echo "  vendor: $VENDOR"
 echo "  arms  : ${ARMS_TO_RUN[*]}"
 echo "  out   : $OUT"
-echo "  claude: $CLAUDE_BIN"
+echo "  agent : $AGENT_BIN"
 echo
 
 for arm in "${ARMS_TO_RUN[@]}"; do
@@ -427,8 +516,9 @@ pct() {
 
 r_total=0 r_compliant=0
 g_total=0 g_compliant=0 g_saves=0
-while IFS=, read -r _ts arm comp save _had _fn; do
-    [ "$arm" = "arm" ] && continue   # header
+while IFS=, read -r _ts vend arm comp save _had _fn; do
+    [ "$arm" = "arm" ] && continue          # header
+    [ "$vend" != "$VENDOR" ] && continue    # only summarize the selected vendor's rows
     case "$arm" in
         R) r_total=$((r_total + 1)); [ "$comp" = "1" ] && r_compliant=$((r_compliant + 1)) ;;
         G) g_total=$((g_total + 1)); [ "$comp" = "1" ] && g_compliant=$((g_compliant + 1))
@@ -441,7 +531,7 @@ g_rate="$(pct "$g_compliant" "$g_total")"
 save_rate="$(pct "$g_saves" "$g_total")"
 
 echo "=============================================================="
-echo " RESULTS (all rows in $OUT)"
+echo " RESULTS for vendor=$VENDOR (rows in $OUT)"
 echo "=============================================================="
 echo "  Arm R (rule-only) landed-compliance : ${r_rate}%  (${r_compliant}/${r_total})"
 echo "  Arm G (gate)      landed-compliance : ${g_rate}%  (${g_compliant}/${g_total})"
