@@ -1,0 +1,19 @@
+TASK-853 implemented, tested, and committed on `compete/task-853-claude`.
+
+## What I did
+
+The graft the bake-off chose, scoped tightly to ~30 lines:
+
+1. **Severity-ordered the issue list** — `HealthReport::build` now does one stable `sort_by_key(|v| Reverse(v.grade))` after the existing worst-anchored rollup. Worst (Critical) bubbles to the top, healthy sinks to the bottom. Because the sort is *stable*, within-grade definition order is preserved, and because the human renderer re-groups by axis with a `filter`, each axis section inherits worst-first order for free. `--json` is worst-first too now, for consistency.
+
+2. **Folded in a dimmed detail line** — the renderer prints the existing `Vital.detail` field (previously JSON-only, never shown to humans) dimmed under each *non-healthy* vital, above its remedy. Healthy reads stay a single quiet line.
+
+3. **Deliberately did NOT take** Codex's 0-100 score or its duplicate lease/queue readers (the flagged regression).
+
+## Verification
+
+- `cargo build` — clean (only pre-existing warnings).
+- `env -u AIDA_SESSION_ROLE cargo test -p aida-cli` — **2776 passed, 0 failed**, including the new `vitals_are_severity_ordered_worst_first` test (asserts non-increasing severity, lead == overall, and within-grade stability).
+- Live smoke test confirmed each axis section renders Critical → Watch → Healthy with dimmed detail/remedy lines on issues only.
+
+A structured plan is archived at `docs/plans/2026-06-18-task-853-health-severity-order.md`. Reused existing helpers (`Grade`'s derived `Ord`, `Vital.detail`, the `.dimmed()`/glyph styling) rather than re-deriving any severity rank or readers. No PR opened, per the competition protocol.
