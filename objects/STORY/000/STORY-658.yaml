@@ -3,12 +3,12 @@ spec_id: STORY-658
 agreed_id: STORY-658
 title: 'aida health: at-a-glance project health read (OPEN-brief bake-off subject)'
 description: 'Subject for the OPEN-brief cross-vendor experiment (SPIKE-64 follow-up). Deliberately under-specified: a capability giving a fast, honest, at-a-glance read on whether a project is healthy across backlog + coordination/agent state — command name, signals, shape, output are the implementers design call. Tests whether vendors DIVERGE architecturally (vs the prescriptive dryrun bake-off where they converged) + whether synthesis beats the best single arm when there IS design freedom. Also a real W5 legibility win if good.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:57:25.562354522Z
-modified_at: 2026-06-18T14:18:59.475312637Z
+modified_at: 2026-06-18T14:34:25.926238480Z
 req_type: Story
 tags:
 - aida:health
@@ -27,3 +27,21 @@ comments:
   content: Commit ebe35943c references this requirement
   created_at: 2026-06-18T14:18:59.475312637Z
   modified_at: 2026-06-18T14:18:59.475312637Z
+history:
+- id: 019edb27-9901-74b0-a988-0e57cde7f1df
+  author: aida-auto-bump
+  timestamp: 2026-06-18T14:34:25.921336443Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edb27-9906-74c2-9645-85c6b414d505
+  timestamp: 2026-06-18T14:34:25.926237842Z
+  agent: aida
+  commit_sha: b9a90a55c1f21bd2fd7cb2147bc8edd7eea6af8e
+  summary: Completed via merge b9a90a55
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T14:34:25.765712355Z
+  completion_sha: b9a90a55c1f21bd2fd7cb2147bc8edd7eea6af8e
