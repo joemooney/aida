@@ -2,7 +2,15 @@ id: 019edb29-a53e-7392-8eba-6986bc5b9b58
 spec_id: TASK-853
 agreed_id: TASK-853
 title: 'aida health polish: severity-order the issue list (graft from the Codex arm)'
-description: 'From SPIKE-64 run-2 synthesis: ship-Claude-as-is won, graft one thing from the Codex arm — order the non-healthy vitals by severity (worst first) before printing, and optionally fold in a dimmed per-status/finding-severity detail line. ~30 lines. Do NOT take Codex 0-100 score or its duplicate lease/queue readers (the regression).'
+description: |-
+  From SPIKE-64 run-2 synthesis: ship-Claude-as-is won, graft one thing from the Codex arm — order the non-healthy vitals by severity (worst first) before printing, and optionally fold in a dimmed per-status/finding-severity detail line. ~30 lines. Do NOT take Codex 0-100 score or its duplicate lease/queue readers (the regression).
+
+  ## Acceptance
+
+  - `aida health` renders non-healthy vitals before healthy vitals, with Critical rows before Watch rows.
+  - Equal-severity vitals preserve the scorer's existing stable order.
+  - The polish reuses the existing `HealthReport`/`Vital` data and does not add alternate lease, queue, or findings readers.
+  - `cargo build && env -u AIDA_SESSION_ROLE cargo test -p aida-cli` passes.
 status: Approved
 priority: Low
 owner: ''
