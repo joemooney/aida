@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T06:12:11.226673112Z
-modified_at: 2026-06-18T04:37:12.195220197Z
+modified_at: 2026-06-18T04:53:48.021190434Z
 req_type: Epic
 tags:
 - cli-manual
@@ -126,3 +126,8 @@ comments:
   content: Commit bca2e4888 references this requirement
   created_at: 2026-06-13T19:26:33.466932208Z
   modified_at: 2026-06-13T19:26:33.466932208Z
+- id: 019ed914-0375-72e0-9262-8090010dd434
+  author: joe
+  content: 'Completed: the 12-chapter CLI manual (docs/cli/) is on main + caught up to the current surface (all 78 help-all commands documented, aida intent was the last gap), the drift-guard (verify-manual.py) is wired into CI as a hard gate (STORY-597), and entries keep the machine-digestible labeled-field shape for aida-tutor (STORY-601). TASK-787 finalize done. — advisor'
+  created_at: 2026-06-18T04:53:48.021190434Z
+  modified_at: 2026-06-18T04:53:48.021190434Z
