@@ -612,9 +612,7 @@ mod tests {
     fn vitals_are_severity_ordered_worst_first() {
         // A spread of grades across both axes: stale/blocked piles (Critical),
         // a moderate ready backlog (Watch), and several green readings.
-        let specs: Vec<OpenSpec> = (0..20)
-            .map(|_| spec("Approved", 30, true, false))
-            .collect();
+        let specs: Vec<OpenSpec> = (0..20).map(|_| spec("Approved", 30, true, false)).collect();
         let r = HealthReport::build(
             backlog_vitals(&specs, Some(1.0), &Thresholds::default()),
             coordination_vitals(
