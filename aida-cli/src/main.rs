@@ -1684,7 +1684,17 @@ fn run() -> Result<()> {
     match &cli.command {
         Command::Away => return handle_away_command(),
         Command::Home => return handle_home_command(),
-        Command::Presence => return handle_presence_command(),
+        // TASK-851: `aida presence [away|home|status]` is the canonical surface;
+        // bare `aida presence` shows status (back-compat). The top-level
+        // `aida away` / `aida home` stay as hidden aliases above.
+        // trace:TASK-851 | ai:claude
+        Command::Presence { action } => {
+            return match action {
+                Some(cli::PresenceCommand::Away) => handle_away_command(),
+                Some(cli::PresenceCommand::Home) => handle_home_command(),
+                Some(cli::PresenceCommand::Status) | None => handle_presence_command(),
+            };
+        }
         // STORY-624: solo-mode flag — machine-global ~/.aida/solo.toml, no
         // requirement store needed (mirrors the away/home early dispatch).
         Command::Solo {
@@ -2409,7 +2419,7 @@ fn run() -> Result<()> {
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
-        Command::Away | Command::Home | Command::Presence | Command::Solo { .. } => {
+        Command::Away | Command::Home | Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784
@@ -12647,7 +12657,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
-        Command::Away | Command::Home | Command::Presence | Command::Solo { .. } => {
+        Command::Away | Command::Home | Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784
@@ -26789,6 +26799,23 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                 println!("Node {} was not in the registry (already removed?).", id);
             }
         }
+
+        // TASK-851: identity introspection under the `node` namespace. Shares
+        // the same handlers as the top-level `aida team` / `aida whoami`.
+        // trace:TASK-851 | ai:claude
+        NodeCommand::Team { json, cmd } => {
+            return match cmd {
+                None => handle_team_command(store_path, *json),
+                Some(TeamCommand::SetRole { user, role }) => {
+                    handle_team_set_role(store_path, user, role)
+                }
+                Some(TeamCommand::MyRole { json }) => handle_team_my_role(store_path, *json),
+                Some(TeamCommand::UnsetRole { user }) => handle_team_unset_role(store_path, user),
+            };
+        }
+
+        // trace:TASK-851 | ai:claude
+        NodeCommand::Whoami => return handle_whoami_command(),
     }
 
     Ok(())
