@@ -1,0 +1,17 @@
+id: 019ed956-471a-74f0-8119-7262eac56d13
+spec_id: STORY-655
+agreed_id: STORY-655
+title: 'Run the gate-vs-rule ablation (P1: does substrate-as-bouncer beat a stated rule?)'
+description: 'EPIC-48 first experiment. Design: docs/research/ablations/2026-06-17-gate-vs-rule.md. Build scripts/ablations/gate-vs-rule.sh (throwaway repo per trial; claude -p a small commit task; toggle AIDA_COMMIT_STRICT for the gate arm; deterministic regex grading; CSV of landed-compliance + gate-saves). Run K=15/arm on invariant I1 (commit format). Pre-registered interpretation: Arm-R landed-compliance <=80% => P1 holds; >=95% => P1 weakened (scope to semantic/multi-step invariants); 80-95% => partial, run I2. Fold the result (EITHER outcome) into the theory paper section 4 (P1). Costs ~30 headless runs — operator opts in to the spend.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T06:06:10.714880117Z
+modified_at: 2026-06-18T06:06:10.714880117Z
+req_type: Story
+tags:
+- ablation
+- parent:EPIC-48
+- probe
+- research
