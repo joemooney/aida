@@ -3,12 +3,12 @@ spec_id: SPIKE-65
 agreed_id: SPIKE-65
 title: 'AIDA on Beads: storage abstraction layer — can AIDA compose on top of Beads instead of owning the store?'
 description: 'EPIC-48 build-vs-buy-vs-compose probe. AIDA already has a DatabaseBackend trait (GitBackend/SqliteBackend/Postgres). Spike: can AIDA sit ON TOP of Beads via a storage-abstraction layer — a BeadsBackend impl (or an adapter) mapping AIDAs object/graph model to Beads? What maps cleanly, what does not (typed relationships, history arrays, the orphan-branch model, IDs)? Relates to SPIKE-44/46 (multi-vendor store interop). DELIVERABLE: a design recommendation + the honest compose-vs-own cost/benefit (a real EPIC-48 finding: does composing on a neighbor reduce RYO cost or trade one lock-in for another?). Read aida-core/src/db/ + the Beads data model before recommending.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:25:10.999323390Z
-modified_at: 2026-06-18T06:46:15.263421612Z
+modified_at: 2026-06-18T06:46:15.932349525Z
 req_type: Spike
 tags:
 - beads
