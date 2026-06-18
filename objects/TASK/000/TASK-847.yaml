@@ -1,0 +1,17 @@
+id: 019ed956-8f24-7160-be0d-c31fd2b7ae7c
+spec_id: TASK-847
+agreed_id: TASK-847
+title: Develop the theory paper related-work (section 14) into real citations
+description: 'EPIC-48: turn the related-work section into proper citations (CRDTs/OR-Set, design-science method, multi-agent coordination, the named competitors Beads/Gas Town + the marketplace roster). Grounds the probe in the literature so the findings are positioned, not free-floating.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T06:06:29.156126154Z
+modified_at: 2026-06-18T06:06:29.156126154Z
+req_type: Task
+tags:
+- citations
+- parent:EPIC-48
+- probe
+- research
