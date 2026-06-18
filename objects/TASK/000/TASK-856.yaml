@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T22:21:47.044841594Z
-modified_at: 2026-06-18T22:21:47.044841594Z
+modified_at: 2026-06-18T23:13:01.931204158Z
 req_type: Task
 tags:
 - aida:add
 - from-telemetry
 - papercut
 - performance
+comments:
+- id: 019edd02-63eb-7da3-99f9-6dc6f65817c3
+  author: joe
+  content: Commit b78e24512 references this requirement
+  created_at: 2026-06-18T23:13:01.931204158Z
+  modified_at: 2026-06-18T23:13:01.931204158Z
