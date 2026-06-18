@@ -3037,6 +3037,8 @@ pub enum RelationshipCommand {
     ///   aida rel list                      # all edges in the graph
     ///   aida rel list <spec-id>            # outgoing edges from a spec
     ///   aida rel list --source <spec-id>   # same as positional form
+    ///   aida rel list --spec <spec-id>     # alias of --source
+    ///   aida rel list --id <spec-id>       # alias of --source
     ///   aida rel list --target <spec-id>   # incoming edges (what points AT it)
     ///   aida rel list --type child         # filter by edge type
     ///   aida rel list --dangling           # only edges with unresolved targets
@@ -3052,8 +3054,11 @@ pub enum RelationshipCommand {
         id: Option<String>,
 
         /// Source requirement — same as the positional. Explicit form for
-        /// scripts that want to be unambiguous.
-        #[clap(long)]
+        /// scripts that want to be unambiguous. `--spec` and `--id` are
+        /// accepted as aliases so the dominant ID-flag convention (used by
+        /// `db reconcile-status --spec`, etc.) Just Works here too.
+        // trace:BUG-577 | ai:claude
+        #[clap(long, visible_alias = "spec", visible_alias = "id")]
         source: Option<String>,
 
         /// Target requirement — inverts the query to "what edges point AT
