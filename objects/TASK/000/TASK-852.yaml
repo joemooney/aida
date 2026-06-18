@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:33:10.287892147Z
-modified_at: 2026-06-18T13:33:10.287892147Z
+modified_at: 2026-06-18T14:51:11.715966171Z
 req_type: Task
 tags:
 - from-advisor
 - parent:EPIC-49
 - streamlining
 - surface
+comments:
+- id: 019edb36-f1e4-7350-a09c-b3e5140f551b
+  author: joe
+  content: Commit 6ddcce629 references this requirement
+  created_at: 2026-06-18T14:51:11.715966171Z
+  modified_at: 2026-06-18T14:51:11.715966171Z
