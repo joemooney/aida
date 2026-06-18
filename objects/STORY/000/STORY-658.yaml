@@ -1,0 +1,18 @@
+id: 019edb05-b7ba-7972-b251-b758717549cd
+spec_id: STORY-658
+agreed_id: STORY-658
+title: 'aida health: at-a-glance project health read (OPEN-brief bake-off subject)'
+description: 'Subject for the OPEN-brief cross-vendor experiment (SPIKE-64 follow-up). Deliberately under-specified: a capability giving a fast, honest, at-a-glance read on whether a project is healthy across backlog + coordination/agent state — command name, signals, shape, output are the implementers design call. Tests whether vendors DIVERGE architecturally (vs the prescriptive dryrun bake-off where they converged) + whether synthesis beats the best single arm when there IS design freedom. Also a real W5 legibility win if good.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T13:57:25.562354522Z
+modified_at: 2026-06-18T13:57:25.562354522Z
+req_type: Story
+tags:
+- aida:health
+- from-advisor
+- legibility
+- parent:EPIC-49
+- probe
