@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:24:40.676715832Z
-modified_at: 2026-06-18T06:24:40.676715832Z
+modified_at: 2026-06-18T06:44:53.763757899Z
 req_type: Spike
 tags:
 - ablation
@@ -17,4 +17,10 @@ tags:
 - parent:EPIC-48
 - probe
 - research
+comments:
+- id: 019ed979-b983-7461-9618-ea5bfaa9afd5
+  author: joe
+  content: Commit c3ae623bb references this requirement
+  created_at: 2026-06-18T06:44:53.763757899Z
+  modified_at: 2026-06-18T06:44:53.763757899Z
 human_only: true
