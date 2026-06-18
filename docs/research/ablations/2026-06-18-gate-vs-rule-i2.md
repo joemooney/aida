@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-18
 - **Probe:** EPIC-48, L2/P1 (substrate-as-bouncer). Spec STORY-655. Runner: `scripts/ablations/gate-vs-rule-i2.sh`. Design: `2026-06-17-gate-vs-rule.md`. Pilot it follows: `2026-06-18-gate-vs-rule-pilot.md`.
-- **Status:** **COMPLETE — n=10/arm, 20 live headless `claude -p` runs (2026-06-18).** Result is a strong, honest **negative**: the attention-distance conjecture is **falsified for Claude on this invariant.** CSV: `results/i2-trace-coverage-e114c8a36.csv`.
+- **Status:** **COMPLETE + CROSS-VENDOR (2026-06-18).** Claude n=10/arm + Codex n=10/arm = 40 live headless runs. Two conjectures pre-registered and **both falsified**: attention-distance (by I2) and vendor (by cross-vendor I2). Both vendors honored the buried ambient rule at 100%, gate idle in all four cells. The surviving axis is **invariant type (output-shape vs procedural)**. CSVs: `results/i2-trace-coverage-e114c8a36.csv` (Claude), `results/i2-trace-coverage-codex-1cece44a3.csv` (Codex).
 
 ## Why I2 exists — the decisive test of the attention-distance conjecture
 
@@ -61,20 +61,51 @@ Put all three data points on one table:
 
 Attention-distance was my conjecture to explain the bake-off miss. I2 was engineered to be the high-attention-distance case where, if the conjecture were right, the rule should leak — and **it held at the ceiling.** So attention-distance does **not** separate the held cases from the dropped one. The variable that *does* track the split is the **vendor**: both Claude runs held regardless of attention-distance; the only observed drop was a different model (Codex). 
 
-> **Restated claim (sharper, and now honestly negative for P1): for a capable, rule-adherent model (Claude, 2026), a stated invariant is honored across both immediate AND buried/semantic cases — the gate does zero work in both. Substrate-as-bouncer is not justified by attention-distance; it is justified by (a) the *vendor* you cannot trust to be adherent, (b) safety-critical invariants where even a rare miss is intolerable, and (c) unattended drains where no human catches the rare miss. Rule-vs-gate and near-vs-far are both the wrong axis. The right axis is *adherence-confidence* — and that is mostly a property of the model, secondarily of stakes.**
+> **[SUPERSEDED by the cross-vendor run below — kept for the honest record.]** *Restated claim (at the time): for a capable, rule-adherent model (Claude, 2026), a stated invariant is honored across both immediate AND buried/semantic cases — the gate does zero work in both. Substrate-as-bouncer is justified by (a) the vendor you cannot trust, (b) safety-critical invariants, (c) unattended drains. The right axis is adherence-confidence — mostly a property of the model.* **The "vendor is the axis" half of this was a fresh inference from a single Codex data point; the cross-vendor I2 run was built to test it, and falsified it too.**
 
-This is a real loss for the original P1 ("you need a gate to hold an invariant against a capable LLM"): on two invariants spanning the attention-distance range, a capable LLM needed no gate. P1 survives only in its narrowed, conditional form — gate the few invariants where you can't tolerate the tail risk *or* where a less-adherent vendor executes.
+This is a real loss for the original P1 ("you need a gate to hold an invariant against a capable LLM"): on two invariants spanning the attention-distance range, a capable LLM needed no gate. P1 survives only in its narrowed, conditional form.
 
-### The decisive next test (cross-vendor I2)
+## Cross-vendor I2 — the vendor hypothesis is ALSO falsified (Codex, n=10/arm)
 
-The single experiment that would settle this: **run I2 unchanged with Codex** as the implementer. Prediction (from the bake-off): Codex's rule-only adherence drops below Claude's, and the gate logs real saves — i.e. **the gate's value is vendor-conditional, not attention-distance-conditional.** That isolates vendor as the variable directly, on the same invariant. The I2 runner is `CLAUDE_BIN`-parameterized (`AIDA_ABLATION_CLAUDE`); a `codex exec` adapter is the only build work needed. This is now the highest-value research follow-up in the probe.
+I built the `--vendor codex` adapter and ran I2 unchanged with **Codex** as the implementer (`codex exec --dangerously-bypass-approvals-and-sandbox`, AGENTS.md+CLAUDE.md carrying the same ambient trace rule, identical task set, deterministic grader). Prediction (from the vendor hypothesis): Codex rule-only adherence drops below Claude's, gate logs real saves.
 
-## Why this matters for the product (honest, and it changes a design instinct)
+| Arm | Vendor | Landed-compliance | Gate-saves |
+|---|---|---|---|
+| R (rule-only) | Codex | **100% (10/10)** | — |
+| G (gate) | Codex | **100% (10/10)** | **0% (0/10)** |
 
-The instinct "make the substrate enforce every rule" is now doubly contradicted by evidence. For the vendor we mostly run (Claude), rules in CLAUDE.md are honored at the ceiling — so a reflexive gate is pure surface bloat + false confidence + a maintenance tax, with **no measured benefit**. The defensible posture: **author invariants as clear CLAUDE.md rules by default; add a programmatic gate only for the narrow set where the tail risk is unacceptable (safety/data-loss/unattended-merge) or where an untrusted vendor executes.** AIDA's existing hard gates (approve-your-own-spec, merge-over-RequestChanges, the unattended-drain rails) all fit that narrow set — they are load-bearing-for-safety, not enforce-everything. That is the design this evidence supports, and it is *less* substrate-as-bouncer than the probe started out believing.
+**Identical to Claude.** Codex honored the buried, never-restated ambient trace rule on every single trial; the gate fired zero rejections. CSV: `results/i2-trace-coverage-codex-1cece44a3.csv`. **The vendor hypothesis is falsified for this invariant** — two vendors, both at the ceiling, gate idle in all four cells (I1-Claude, I2-Claude, I2-Codex).
+
+## The synthesis that finally survives — it's the *invariant type*, not vendor and not distance
+
+Four data points now bracket the question:
+
+| Run | Vendor | Invariant **type** | Rule-only adherence |
+|---|---|---|---|
+| I1 (commit-format) | Claude | **output-shape** | 100% |
+| I2 (trace-coverage) | Claude | **output-shape** | 100% |
+| I2 cross-vendor | Codex | **output-shape** | 100% |
+| Bake-off (`--ai` gate) | Codex | **procedural / tool-use** | **dropped** |
+
+Two conjectures have now been pre-registered and falsified — attention-distance (by I2) and vendor (by cross-vendor I2). What is left is the one axis the four points actually separate on: **the *kind* of invariant.**
+
+- **Output-shape invariants** — rules about how the model shapes *its own output* (format the commit message, tag the code with `// trace:`, name the function this way). These are inseparable from producing the answer at all, so a capable model self-complies at the ceiling — **across both vendors and the entire attention-distance range.** All three controlled trials are this type; all three hit 100%, gate idle.
+- **Procedural / tool-use invariants** — rules to perform an *extra external step* that is not part of naturally producing the answer (call this specific gate, run the reviewer, push-and-open-the-PR, invoke this flag). This is the *one* place leakage was ever observed (the bake-off's `--ai` gate, skipped as fine print).
+
+> **The surviving claim (third conjecture, now the best-supported): for a capable 2026 model, a stated *output-shape* invariant is honored at the ceiling regardless of vendor or attention-distance — substrate-as-bouncer buys nothing for this whole class. The gate earns its place only for *procedural / tool-use* invariants — "did you actually perform the extra step" — and even then chiefly under unattended autonomy or low-tolerance stakes. The axis is output-shape-vs-procedural, not rule-vs-gate, not near-vs-far, not vendor.**
+
+This is not yet proven: it rests on **three controlled "output-shape holds" points + one uncontrolled "procedural drops" hint.** The honest status is a well-isolated hypothesis, not a result — but it is the only one of the three conjectures that all four data points are consistent with.
+
+### The decisive next test (I3 — a procedural invariant, controlled)
+
+Run the same R-vs-G design on a **procedural** invariant: e.g. "after editing code you must run `<tool>` and paste its output into the commit" (an extra step, not an output shape), graded on whether the step was actually performed. Prediction: rule-only adherence drops below 95% and the gate logs real saves — i.e. the gate finally earns its place, and it does so on *procedural* invariants specifically. Cross-vendor I3 (both vendors) would test whether the procedural-leak is vendor-sensitive. This is now the highest-value research follow-up.
+
+## Why this matters for the product (it sharpens the design rule)
+
+The instinct "make the substrate enforce every rule" is contradicted by three controlled trials for the **output-shape** class. The defensible posture, now evidence-backed: **author output-shape invariants as plain CLAUDE.md rules — never gate them (pure surface bloat + false confidence, with zero measured benefit across two vendors). Reserve programmatic gates for *procedural* invariants** — and even there, gate the narrow set that runs unattended or is safety/data-loss-critical. Tellingly, AIDA's actual hard gates are nearly all procedural: did-you-push-and-PR (BUG-269), don't-merge-over-RequestChanges, run-the-reviewer-phase, the unattended-drain rails. The output-shape nudges AIDA ships (the trace-comment pre-commit *nudge*, the commit-format check) are exactly the class this evidence says don't need to be hard gates. The probe's design instinct moves from "gate invariants" to "gate *procedures*."
 
 ## Honesty / limits
 
-n=10, one invariant, **one vendor** (Claude) — which is exactly the limit that makes the cross-vendor I2 decisive. Deterministic grading (no judge bias — good). Tasks are deliberately small; a harder, multi-step task might still leak even for Claude (untested). The three-point synthesis (vendor > attention-distance) rests on two Claude points + one Codex point from a *different* experiment (the bake-off, different task + different rule) — the cross-vendor I2 is what turns that from a strong inference into a controlled result. Until then: the attention-distance conjecture is falsified *as a general claim*; vendor-as-the-variable is the surviving hypothesis, not yet a proven one.
+n=10/arm/vendor, deterministic grading (no judge bias — good). The output-shape-vs-procedural synthesis rests on three controlled output-shape points (all at 100%) + a single uncontrolled procedural data point (the bake-off, different task + different rule + different harness) — I3 is what turns it from inference into a controlled result. Tasks are deliberately small; a harder multi-step task might leak even for output-shape (untested). What is now firmly established: **both the attention-distance and the vendor conjectures are falsified for output-shape invariants** — that part is a clean, replicated, two-vendor negative.
 
 <!-- trace:STORY-655 EPIC-48 | ai:claude -->
