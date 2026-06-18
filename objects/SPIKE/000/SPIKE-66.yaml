@@ -1,0 +1,18 @@
+id: 019edcd3-8eff-7ae2-a1b5-6fa1fc18d8d4
+spec_id: SPIKE-66
+agreed_id: SPIKE-66
+title: Flagship TUI unused 33d in telemetry despite "the TUI is the product" framing — is it discoverable/used?
+description: 'Telemetry: tui last used 33d ago, in the unused-candidates list. EPIC-26 framing is "the TUI is the public face / the product". A flagship surface unused for a month (even by the dev) is a legibility/discoverability signal: either it is not surfaced in onboarding, or the daily workflow never routes through it. Investigate: is tui offered at init / in the statusline / in first-run? Decide: invest in discoverability, or honestly de-emphasize the "TUI is the product" framing. W5 legibility.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T22:21:52.767541560Z
+modified_at: 2026-06-18T22:21:52.767541560Z
+req_type: Spike
+tags:
+- aida:tui
+- from-telemetry
+- legibility
+- parent:EPIC-26
+human_only: true
