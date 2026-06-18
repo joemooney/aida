@@ -79880,7 +79880,18 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
             // (the init scaffolding-commit task is High/Approved → a non-human
             // bucket) was invisible here while the queue showed it.
             // trace:BUG-564 | ai:claude
-            f.human_only
+            //
+            // BUG-572: but `human_only` must NOT override the to-groom→advisor
+            // seat routing. An ungroomed Draft (the `Ungroomed` / to-groom
+            // bucket) carrying `human_only=true` is still advisor grooming work —
+            // you cannot make a human decision on a draft that has no formulated
+            // question. Excluding `Ungroomed` here keeps it off the operator seat;
+            // `handle_advisor_worklist` still surfaces it under to-groom (its
+            // filter gates on `advisor_seat()`, not `human_only`). A GROOMED
+            // human_only spec (any non-`Ungroomed` bucket — e.g. BUG-564's
+            // High/Approved scaffolding task) still reaches the operator.
+            // trace:BUG-572 | ai:claude
+            (f.human_only && !matches!(bucket, burndown::OpenBucket::Ungroomed))
                 || bucket.operator_seat()
                 || (seats::CONFIGURABLE_KEYS.contains(&bucket.key())
                     && seat_policy.seat_of(bucket.key()) == seats::Seat::Operator)
