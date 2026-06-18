@@ -3,15 +3,33 @@ spec_id: BUG-575
 agreed_id: BUG-575
 title: aida compete commits the vendor run-log into the candidate branch — pollutes the diff + corrupts diff-size signal + leaks on merge
 description: 'Dogfood of aida compete on TASK-853 found it: each vendor worktree gets a .aida-compete-<vendor>.log written INSIDE it, which the vendor then commits — codex committed an 8138-line log, making its diff 8178 lines vs claude 190 for the same ~40-line change, and the log would land on main if that arm were merged. FIX: write the per-vendor run-log OUTSIDE the candidate worktree (e.g. a sibling temp dir or ~/.aida), or add it to the worktree .gitignore + exclude from the auto-commit, so the candidate diff contains ONLY the vendor work. The diff-lines metric must measure code, not log verbosity.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T17:11:53.137997298Z
-modified_at: 2026-06-18T17:11:53.137997298Z
+modified_at: 2026-06-18T18:18:20.510427408Z
 req_type: Bug
 tags:
 - aida:compete
 - bug
 - from-dogfood
 - parent:STORY-659
+history:
+- id: 019edbf4-97d9-7d80-914f-d186fc461756
+  author: aida-auto-bump
+  timestamp: 2026-06-18T18:18:20.505853861Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edbf4-97de-79c2-8889-c63db038b05a
+  timestamp: 2026-06-18T18:18:20.510426726Z
+  agent: aida
+  commit_sha: ad5048355e19d6877f15661898dc5f6893218da0
+  summary: Completed via merge ad504835
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T18:18:20.353209140Z
+  completion_sha: ad5048355e19d6877f15661898dc5f6893218da0

@@ -11,12 +11,12 @@ description: |-
   - Equal-severity vitals preserve the scorer's existing stable order.
   - The polish reuses the existing `HealthReport`/`Vital` data and does not add alternate lease, queue, or findings readers.
   - `cargo build && env -u AIDA_SESSION_ROLE cargo test -p aida-cli` passes.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T14:36:40.126326533Z
-modified_at: 2026-06-18T17:01:03.142145706Z
+modified_at: 2026-06-18T18:18:20.519405895Z
 req_type: Task
 tags:
 - aida:health
@@ -29,3 +29,21 @@ comments:
   content: Commit 799b17e4f references this requirement
   created_at: 2026-06-18T17:01:03.142145706Z
   modified_at: 2026-06-18T17:01:03.142145706Z
+history:
+- id: 019edbf4-97e2-72a1-871a-83095185a7a4
+  author: aida-auto-bump
+  timestamp: 2026-06-18T18:18:20.514979428Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edbf4-97e7-75f3-9597-b0401d7ceec0
+  timestamp: 2026-06-18T18:18:20.519405299Z
+  agent: aida
+  commit_sha: ad5048355e19d6877f15661898dc5f6893218da0
+  summary: Completed via merge ad504835
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T18:18:20.353209140Z
+  completion_sha: ad5048355e19d6877f15661898dc5f6893218da0
