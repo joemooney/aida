@@ -1,0 +1,17 @@
+id: 019edbe7-e57e-7961-b0a1-f336be04744d
+spec_id: BUG-576
+agreed_id: BUG-576
+title: aida compete default gate is narrower than CI (build+test only) — a winner can pass the gate but fail CI on fmt/clippy/glyph-lint
+description: 'Dogfood follow-on: the claude compete-arm for TASK-853 PASSED competes gate (cargo build && cargo test) but FAILED PR CI at cargo fmt --check. competes default gate must MIRROR CI so a recommended winner is actually mergeable: default gate = cargo fmt --all -- --check && cargo build && env -u AIDA_SESSION_ROLE cargo test -p aida-cli && cargo clippy -- -D clippy::correctness && bash scripts/glyph-lint.sh --block. Keep --gate override. The gates job is to predict CI; a build+test-only gate gives false-green winners.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-18T18:04:28.414758968Z
+modified_at: 2026-06-18T18:04:28.414758968Z
+req_type: Bug
+tags:
+- aida:compete
+- bug
+- from-dogfood
+- parent:STORY-659
