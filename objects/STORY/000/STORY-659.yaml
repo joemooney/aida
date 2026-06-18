@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T16:30:30.162820920Z
-modified_at: 2026-06-18T16:51:02.982495272Z
+modified_at: 2026-06-18T17:12:08.157607087Z
 req_type: Story
 tags:
 - aida:compete
@@ -17,6 +17,12 @@ tags:
 - niche
 - parent:EPIC-48
 - parent:EPIC-49
+comments:
+- id: 019edbb7-fadd-7750-964f-3c3e5abe4486
+  author: joe
+  content: 'Dogfooded on TASK-853 (claude vs codex, real headless run): VALIDATED end-to-end — both vendors ran, built, gate-passed, reported. Two findings: (1) BUG-575 — the per-vendor run-log is committed into the candidate (codex 8138-line log inflated its diff to 8178 vs claude 190); (2) the build+test gate alone cannot pick a winner (both passed) → slice 2 needs a judge. Winner (claude arm) ships TASK-853.'
+  created_at: 2026-06-18T17:12:08.157607087Z
+  modified_at: 2026-06-18T17:12:08.157607087Z
 history:
 - id: 019edba4-acc1-78b0-b392-06aad94667b3
   author: aida-auto-bump
