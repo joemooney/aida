@@ -12,14 +12,32 @@ description: |-
   4. Then merge cli-manual to main with the guard green.
 
   Branch-rot is NOT a concern (all-new files, zero conflict) — only content drift, which step 1 fixes. Children/related: STORY-600 (aida manual <cmd>), STORY-601 (machine-digestible for aida-tutor), BUG-523 (--help SPEC-ID leak — fasttrack separately), TASK-778 (consistency checklist). trace:EPIC-40
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T15:44:06.203846384Z
-modified_at: 2026-06-18T04:37:11.690242039Z
+modified_at: 2026-06-18T04:53:43.251427906Z
 req_type: Task
 tags:
 - aida:cli
 - docs
 - parent:EPIC-40
+history:
+- id: 019ed913-f0ce-7123-899a-53f7fb4442a2
+  author: aida-auto-bump
+  timestamp: 2026-06-18T04:53:43.246682638Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ed913-f0d3-76a0-a30e-15419e320cee
+  timestamp: 2026-06-18T04:53:43.251427192Z
+  agent: aida
+  commit_sha: b485abbba50bc81cac227ae62a813e5dda1cc317
+  summary: Completed via merge b485abbb
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-18T04:53:43.085640428Z
+  completion_sha: b485abbba50bc81cac227ae62a813e5dda1cc317
