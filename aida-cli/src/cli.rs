@@ -7287,7 +7287,9 @@ pub enum Command {
     /// objective gate — the neutral cross-vendor quality layer. For each vendor
     /// AIDA creates a per-vendor worktree+branch, assembles the implementer
     /// brief from the spec, runs the vendor headless (claude/codex), commits the
-    /// result, and runs a deterministic gate (build+test by default). Reports a
+    /// result, and runs a deterministic gate that mirrors PR CI by default
+    /// (fmt-check + build + tests + clippy + glyph-lint, so a gate-passing
+    /// winner is actually mergeable). Reports a
     /// table, ranks the gate-passers (smaller/focused diff first), optionally
     /// runs a rubric LLM judge (--judge), and leaves every branch in place to
     /// pick. Report-only: it recommends a winner but never merges.
@@ -7303,7 +7305,9 @@ pub enum Command {
         vendors: Vec<String>,
 
         /// Override the deterministic gate command run in each worktree.
-        /// Default: build + the aida-cli test suite.
+        /// Default mirrors PR CI: fmt-check + build + the aida-cli test suite +
+        /// clippy correctness + glyph-lint, so a gate-passing winner is
+        /// mergeable. Pass your own command for non-Rust repos / custom CI.
         #[clap(long)]
         gate: Option<String>,
 
