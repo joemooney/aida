@@ -6909,6 +6909,24 @@ pub enum Command {
     #[clap(subcommand)]
     Burndown(BurndownCommand),
 
+    /// Vital-signs read: is this project HEALTHY right now? One screen across
+    /// backlog state (ready/stale/blocked/aging work, burn-down direction) and
+    /// coordination state (queue depth, live/stale leases, drains, open
+    /// findings, parked work). Worst-anchored verdict, a remedy per warning.
+    /// Pure + cache-backed; safe to glance at once a day.
+    // trace:STORY-658 | ai:claude
+    Health {
+        /// Machine-readable JSON (overall grade + every vital with its grade,
+        /// value, and remedy).
+        // trace:STORY-658 | ai:claude
+        #[clap(long)]
+        json: bool,
+        /// Print only the one-line headline verdict (good for prompts/scripts).
+        // trace:STORY-658 | ai:claude
+        #[clap(long, conflicts_with = "json")]
+        brief: bool,
+    },
+
     // trace:STORY-560 trace:STORY-623 | ai:claude
     /// ASSESS the open specs: fire a cold-boot advisor agent that reads all open
     /// specs, applies worth-doing judgment, and proposes approve/reject/park/
