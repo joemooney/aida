@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T05:11:16.972865259Z
-modified_at: 2026-06-18T05:33:10.318475729Z
+modified_at: 2026-06-18T05:56:52.891071965Z
 req_type: Bug
 tags:
 - aida:human
@@ -16,6 +16,12 @@ tags:
 - from-operator
 - parent:EPIC-42
 - seats
+comments:
+- id: 019ed94d-c41b-7e31-91fc-cf573daea6c1
+  author: joe
+  content: Commit c70f34029 references this requirement
+  created_at: 2026-06-18T05:56:52.891071965Z
+  modified_at: 2026-06-18T05:56:52.891071965Z
 history:
 - id: 019ed938-0f29-7d80-9e8b-e352eb1fd046
   author: aida-auto-bump
