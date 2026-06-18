@@ -1646,9 +1646,10 @@ fn run() -> Result<()> {
         vendors,
         gate,
         dry_run,
+        judge,
     } = &cli.command
     {
-        return handle_compete_command(spec, vendors, gate.as_deref(), *dry_run);
+        return handle_compete_command(spec, vendors, gate.as_deref(), *dry_run, *judge);
     }
 
     // `aida goal` is a pure condition generator — no store needed.
@@ -76164,13 +76165,15 @@ fn assemble_compete_brief(
 
 /// `aida compete <SPEC> --vendors <csv> [--gate <cmd>]` — run one spec through N
 /// vendors headless, in isolated worktrees, then a deterministic objective gate;
-/// report a table and leave every branch in place. Slice 1: report-only (no
-/// judge, no synthesis, no merge). trace:STORY-659 | ai:claude
+/// report a table, rank the gate-passers, optionally run a rubric LLM judge
+/// (`--judge`), and leave every branch in place. Report-only: it recommends a
+/// winner but never merges. trace:STORY-659 trace:STORY-660 | ai:claude
 fn handle_compete_command(
     spec_arg: &str,
     vendors: &[String],
     gate: Option<&str>,
     dry_run: bool,
+    judge: bool,
 ) -> Result<()> {
     use compete::{ArmResult, Ran, ReportGlyphs, VendorAdapter};
 
@@ -76221,6 +76224,8 @@ fn handle_compete_command(
     println!();
 
     let mut results: Vec<ArmResult> = Vec::new();
+    // Per-vendor files-touched, gathered for the deterministic ranking. trace:STORY-660
+    let mut files_touched: Vec<(String, usize)> = Vec::new();
     for vendor in vendors {
         let adapter = match compete::vendor_adapter(vendor) {
             Some(a) => a,
@@ -76333,7 +76338,10 @@ fn handle_compete_command(
         }
 
         match run_compete_arm(&project_root, vendor, command, &argv, &branch, gate_cmd) {
-            Ok(arm) => results.push(arm),
+            Ok((arm, files)) => {
+                files_touched.push((vendor.clone(), files));
+                results.push(arm);
+            }
             Err(e) => {
                 eprintln!(
                     "{} {}: arm errored: {e}",
@@ -76360,13 +76368,136 @@ fn handle_compete_command(
     };
     print!("{}", compete::render_report(&spec_id, &results, &g));
     println!();
+
+    // STORY-660: after the gate, a judge step. On a dry run there are no real
+    // diffs to rank/judge, so skip both and keep the report-only message.
+    if dry_run {
+        println!(
+            "{}",
+            "Branches left in place for review — pick the best, then merge it yourself \
+             (report-only — no auto-merge)."
+                .dimmed()
+        );
+        return Ok(());
+    }
+
+    // 1. Cheap deterministic ranking — ALWAYS. Smaller, focused diff first (an
+    //    honest tie-breaker on its own now that BUG-575 cleaned the diff signal).
+    let ranked = compete::deterministic_ranking(&results, &files_touched);
+    print!("{}", compete::render_deterministic_ranking(&ranked));
+    println!();
+
+    // 2. Rubric LLM judge — opt-in (`--judge`), report-only. Gated like every
+    //    other LLM call: never in tests, and it needs the claude CLI on PATH.
+    if judge {
+        run_compete_judge(&project_root, &spec_id, &brief, &results);
+    } else if !ranked.is_empty() {
+        println!(
+            "{}",
+            "Tip: re-run with --judge for a rubric LLM verdict (spec-adherence / \
+             correctness / simplicity / test-coverage) and a recommended winner."
+                .dimmed()
+        );
+    }
+
     println!(
         "{}",
         "Branches left in place for review — pick the best, then merge it yourself \
-         (slice 1 does not judge or merge)."
+         (report-only — no auto-merge)."
             .dimmed()
     );
     Ok(())
+}
+
+/// Run the opt-in rubric LLM judge over the gate-passing candidates and print
+/// its verdict. REPORT-ONLY: it never merges. Gathers each gate-passing arm's
+/// diff, builds the judge prompt, spawns a one-shot `claude -p` judge, parses
+/// the structured verdict, and renders the score table + recommended winner.
+/// Any failure degrades gracefully to a note (the deterministic ranking still
+/// stands). trace:STORY-660 | ai:claude
+fn run_compete_judge(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    spec_context: &str,
+    results: &[compete::ArmResult],
+) {
+    if !binary_on_path("claude") {
+        eprintln!(
+            "{} --judge needs the `claude` CLI on PATH — skipping the rubric judge \
+             (the deterministic ranking above still applies).",
+            glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        return;
+    }
+
+    // Only judge gate-passers — a failing arm isn't a ship candidate. Collect
+    // each one's diff vs the base it branched from.
+    let mut candidates: Vec<(String, String)> = Vec::new();
+    for r in results.iter().filter(|r| r.gate_passed == Some(true)) {
+        if r.branch.is_empty() {
+            continue;
+        }
+        let diff = std::process::Command::new("git")
+            .args(["diff", "HEAD", &r.branch])
+            .current_dir(project_root)
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+        if !diff.trim().is_empty() {
+            candidates.push((r.vendor.clone(), diff));
+        }
+    }
+    if candidates.len() < 2 {
+        eprintln!(
+            "{} fewer than 2 gate-passing candidates — nothing for the judge to rank.",
+            glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+        return;
+    }
+
+    println!(
+        "{} running rubric judge over {} candidate(s)...",
+        glyph(crate::glyphs::Glyph::Hourglass),
+        candidates.len()
+    );
+    let prompt = compete::build_judge_prompt(spec_id, spec_context, &candidates);
+    let out = std::process::Command::new("claude")
+        .args(["-p", "--permission-mode", "bypassPermissions", &prompt])
+        .current_dir(project_root)
+        .output();
+    let raw = match out {
+        Ok(o) => {
+            let mut s = String::from_utf8_lossy(&o.stdout).to_string();
+            s.push_str(&String::from_utf8_lossy(&o.stderr));
+            s
+        }
+        Err(e) => {
+            eprintln!(
+                "{} judge invocation failed: {e} — deterministic ranking above stands.",
+                glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            return;
+        }
+    };
+    match compete::parse_judge_verdict(&raw) {
+        Some(verdict) => {
+            println!();
+            print!("{}", compete::render_judge_verdict(&verdict));
+            println!();
+            println!(
+                "{}",
+                compete::render_recommended_winner(&verdict, results).bold()
+            );
+        }
+        None => {
+            eprintln!(
+                "{} could not parse a structured verdict from the judge — \
+                 deterministic ranking above stands.",
+                glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+        }
+    }
 }
 
 /// Run a single headless vendor arm: create the worktree, spawn the vendor,
@@ -76380,7 +76511,7 @@ fn run_compete_arm(
     argv: &[String],
     branch: &str,
     gate_cmd: &str,
-) -> Result<compete::ArmResult> {
+) -> Result<(compete::ArmResult, usize)> {
     use compete::{ArmResult, Ran};
 
     let worktree_dir = project_root
@@ -76415,6 +76546,12 @@ fn run_compete_arm(
         );
     }
 
+    // BUG-575 defense-in-depth: even though the logs now live outside the
+    // worktree, belt-and-suspenders exclude the legacy log glob in the worktree's
+    // private exclude file so a stray run-log never lands in the candidate's
+    // `git add -A` auto-commit. trace:BUG-575 | ai:claude
+    exclude_compete_logs_in_worktree(&worktree_dir);
+
     println!(
         "  {} {}: worktree {} on `{}` — running headless...",
         glyph(crate::glyphs::Glyph::InFlight),
@@ -76423,8 +76560,16 @@ fn run_compete_arm(
         branch
     );
 
-    // Spawn the vendor headless in its worktree; tee stdout+stderr to a log.
-    let log_path = worktree_dir.join(format!(".aida-compete-{vendor}.log"));
+    // BUG-575: the vendor run-log and gate-log must live OUTSIDE the candidate
+    // worktree, otherwise the `git add -A` auto-commit below sweeps them into the
+    // vendor's branch — inflating its diff (a verbose vendor committed an
+    // 8138-line log) and leaking the log onto main if that arm is merged. Write
+    // both logs to a sibling run-log dir under ~/.aida/compete/<run>/ (falls back
+    // to a sibling temp dir) so the candidate branch contains ONLY vendor work.
+    // trace:BUG-575 | ai:claude
+    let log_dir = compete_log_dir(project_root, branch);
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_path = log_dir.join(format!("{vendor}.log"));
     let vendor_out = std::process::Command::new(command)
         .args(argv)
         .current_dir(&worktree_dir)
@@ -76478,6 +76623,9 @@ fn run_compete_arm(
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();
     let diff_lines = Some(compete::count_diff_lines(&numstat));
+    // Files touched = non-empty `--numstat` rows (BUG-575 keeps run-logs out of
+    // this count, so it's an honest "how many files" signal for the ranking).
+    let files_touched = numstat.lines().filter(|l| !l.trim().is_empty()).count();
 
     // Run the deterministic objective gate in the worktree.
     println!(
@@ -76491,19 +76639,76 @@ fn run_compete_arm(
         .context("failed to run the gate command")?;
     let mut gate_combined = String::from_utf8_lossy(&gate_out.stdout).to_string();
     gate_combined.push_str(&String::from_utf8_lossy(&gate_out.stderr));
-    let gate_log = worktree_dir.join(format!(".aida-compete-{vendor}-gate.log"));
+    let gate_log = log_dir.join(format!("{vendor}-gate.log"));
     let _ = std::fs::write(&gate_log, &gate_combined);
     let (built, gate_passed) =
         compete::parse_gate_result(gate_out.status.success(), &gate_combined);
 
-    Ok(ArmResult {
-        vendor: vendor.to_string(),
-        ran,
-        built: Some(built),
-        gate_passed: Some(gate_passed),
-        diff_lines,
-        branch: branch.to_string(),
-    })
+    Ok((
+        ArmResult {
+            vendor: vendor.to_string(),
+            ran,
+            built: Some(built),
+            gate_passed: Some(gate_passed),
+            diff_lines,
+            branch: branch.to_string(),
+        },
+        files_touched,
+    ))
+}
+
+/// Where a compete run's per-vendor logs live — OUTSIDE every candidate
+/// worktree so they never get auto-committed into a vendor branch (BUG-575).
+/// Prefers `~/.aida/compete/<run>/`; falls back to a sibling temp dir next to
+/// the project when the home dir can't be resolved. `<run>` is derived from the
+/// branch (which is namespaced per spec+vendor) so concurrent runs don't clash.
+/// trace:BUG-575 | ai:claude
+fn compete_log_dir(project_root: &std::path::Path, branch: &str) -> std::path::PathBuf {
+    let run_slug = branch.replace('/', "-");
+    if let Some(home) = dirs::home_dir() {
+        return home.join(".aida").join("compete").join(run_slug);
+    }
+    project_root
+        .parent()
+        .unwrap_or(project_root)
+        .join(format!("aida-compete-logs-{run_slug}"))
+}
+
+/// Belt-and-suspenders: add the legacy run-log glob to the worktree's private
+/// `.git/info/exclude` so a stray `.aida-compete-*.log` is never swept into the
+/// candidate's `git add -A` auto-commit. Idempotent. trace:BUG-575 | ai:claude
+fn exclude_compete_logs_in_worktree(worktree_dir: &std::path::Path) {
+    // In a linked worktree, `.git` is a file pointing at the real gitdir; resolve
+    // it via `git rev-parse --git-path info/exclude` so we write the right file.
+    let exclude_path = std::process::Command::new("git")
+        .args(["rev-parse", "--git-path", "info/exclude"])
+        .current_dir(worktree_dir)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|p| !p.is_empty());
+    let Some(rel) = exclude_path else { return };
+    let abs = if std::path::Path::new(&rel).is_absolute() {
+        std::path::PathBuf::from(&rel)
+    } else {
+        worktree_dir.join(&rel)
+    };
+    let entry = ".aida-compete-*.log";
+    let existing = std::fs::read_to_string(&abs).unwrap_or_default();
+    if existing.lines().any(|l| l.trim() == entry) {
+        return;
+    }
+    if let Some(parent) = abs.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut contents = existing;
+    if !contents.is_empty() && !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents.push_str(entry);
+    contents.push('\n');
+    let _ = std::fs::write(&abs, contents);
 }
 
 /// Is `name` an executable on PATH? Cheap probe via `<name> --version`, matching
