@@ -1,5 +1,7 @@
 # AIDA — Your project's missing index — *of intent, not just code*
 
+> **What this is — read first.** AIDA is a **research probe** into how AI agents coordinate (especially across vendors) — the artifact is the *instrument*, the deliverable is *knowledge*. Promoting it as a product isn't the goal; the roll-your-own verdict is honestly **open**, and its own failures are data. Thesis + open verdict: [docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md](docs/research/2026-06-16-coordinating-multi-vendor-agent-fleets.md) (EPIC-48). The rest of this README describes the instrument.
+
 **A hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.**
 
 **Without it**, *"why did we choose X?"* gets re-debated; cross-references between code and intent rot silently; coding agents (when you use them) start every session cold. **With it**, both questions are one query away — and AI-assisted work becomes auditable instead of opaque, since every line traces to a spec and every commit names what it implements.
