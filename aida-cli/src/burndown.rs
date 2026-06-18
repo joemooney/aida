@@ -1413,6 +1413,49 @@ mod tests {
         assert!(BuildSupervised.operator_seat());
     }
 
+    // BUG-572: the `aida human` operator-view filter ORs in the `human_only`
+    // marker (BUG-564) so a human-only spec surfaces even when its derived
+    // bucket isn't a needs-human one. But the marker must NOT override the
+    // to-groom→advisor routing: an ungroomed Draft (the `Ungroomed` bucket) with
+    // `human_only=true` is grooming work, not a decision — it belongs on the
+    // advisor, never on the operator. A GROOMED human_only spec (any non-
+    // `Ungroomed` bucket — e.g. BUG-564's High/Approved scaffolding task) STILL
+    // reaches the operator. This encodes the exact `human_only` clause from
+    // `handle_list_human`'s `classified` filter. trace:BUG-572 | ai:claude
+    #[test]
+    fn human_only_does_not_pull_ungroomed_draft_onto_operator_seat() {
+        // The operator-view `human_only` clause, lifted from
+        // `handle_list_human`: human_only-marked specs surface here EXCEPT when
+        // their bucket is the to-groom (`Ungroomed`) bucket.
+        let human_clause =
+            |human_only: bool, bucket: OpenBucket| human_only && bucket != OpenBucket::Ungroomed;
+
+        // An ungroomed to-groom draft marked human_only stays OFF the operator
+        // seat — grooming is advisor work.
+        assert!(
+            !human_clause(true, OpenBucket::Ungroomed),
+            "an ungroomed (to-groom) human_only draft must not reach the operator"
+        );
+        // ...and it IS routed to the advisor: the advisor-worklist filter gates
+        // on advisor_seat(), which Ungroomed satisfies — so it is not dropped
+        // from both views.
+        assert!(
+            OpenBucket::Ungroomed.advisor_seat(),
+            "the ungroomed draft must surface on the advisor seat instead"
+        );
+
+        // BUG-564 regression guard: a GROOMED human_only spec (non-Ungroomed
+        // bucket) STILL reaches the operator via the human_only clause.
+        assert!(
+            human_clause(true, OpenBucket::HeldForReview),
+            "a groomed human_only spec must still reach the operator (BUG-564)"
+        );
+        assert!(
+            human_clause(true, OpenBucket::Actionable),
+            "a groomed (non-Ungroomed) human_only spec must still reach the operator"
+        );
+    }
+
     #[test]
     fn classify_skips_archived_deferred_and_status_mismatch() {
         assert_eq!(
