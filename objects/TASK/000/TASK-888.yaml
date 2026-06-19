@@ -12,14 +12,32 @@ description: |-
   3. Very long title (5000 chars) accepted without truncation/warning — not harmful, just unbounded.
 
   These three are cosmetic/UX-polish; filing as one task per the group-the-nits guidance. The genuinely-bad error paths (misleading version-mismatch text, exit-0-on-error, graph wrong-store guidance, silent custom rel) are filed individually as BUG-599/600/601 and TASK-887.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T17:29:35.533750638Z
-modified_at: 2026-06-19T17:29:35.533750638Z
+modified_at: 2026-06-19T17:50:43.804981991Z
 req_type: Task
 tags:
 - error-paths
 - from-dogfood
 - ux
+history:
+- id: 019ee101-ac58-7001-b702-1f82ad7a4d60
+  author: aida-auto-bump
+  timestamp: 2026-06-19T17:50:43.800180338Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee101-ac5c-7fb1-934f-45ff091660fe
+  timestamp: 2026-06-19T17:50:43.804981142Z
+  agent: aida
+  commit_sha: 6f5f2444a97d4b92173ef9d01dae9fb25cf69258
+  summary: Completed via merge 6f5f2444
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T17:50:43.631880428Z
+  completion_sha: 6f5f2444a97d4b92173ef9d01dae9fb25cf69258

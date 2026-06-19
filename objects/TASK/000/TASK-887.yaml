@@ -8,14 +8,32 @@ description: |-
   Note: --type accepting arbitrary strings may be intentional for genuine custom relationships, so the fix is a warning, not a hard reject — e.g. when the value doesn't match a known relationship type, print "Warning: 'bogusrel' is not a standard relationship type (blocks, blocked-by, depends-on, parent-of, ...); created as a custom relationship. Did you mean <nearest>?" so a typo is visible.
 
   This is the one finding in the rel family worth surfacing; the rest of rel's error handling is clean (missing --type, nonexistent target, missing args all error correctly).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T17:29:17.398938668Z
-modified_at: 2026-06-19T17:29:17.398938668Z
+modified_at: 2026-06-19T17:50:43.800169203Z
 req_type: Task
 tags:
 - error-paths
 - from-dogfood
 - ux
+history:
+- id: 019ee101-ac53-7a12-aa31-100d6716a0c9
+  author: aida-auto-bump
+  timestamp: 2026-06-19T17:50:43.795260529Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee101-ac58-7001-b702-1f7f2db3fb95
+  timestamp: 2026-06-19T17:50:43.800167765Z
+  agent: aida
+  commit_sha: 6f5f2444a97d4b92173ef9d01dae9fb25cf69258
+  summary: Completed via merge 6f5f2444
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T17:50:43.631880428Z
+  completion_sha: 6f5f2444a97d4b92173ef9d01dae9fb25cf69258
