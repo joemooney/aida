@@ -15,9 +15,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T18:52:58.595299580Z
-modified_at: 2026-06-19T18:52:58.595299580Z
+modified_at: 2026-06-19T18:58:38.908324670Z
 req_type: Bug
 tags:
 - conflict-merge
 - from-dogfood
 - stress
+comments:
+- id: 019ee13f-dabc-71f3-a689-df8780475e15
+  author: joe
+  content: Commit 2752429a7 references this requirement
+  created_at: 2026-06-19T18:58:38.908324670Z
+  modified_at: 2026-06-19T18:58:38.908324670Z
