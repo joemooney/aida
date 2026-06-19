@@ -81105,20 +81105,17 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
     // (same specs, richer output: the actual choices). Keeping both would
     // double-list every pending decision, exactly the conflation the
     // REFINEMENT comment warns against. trace:STORY-611
-    use burndown::OpenBucket::*;
     // STORY-618/620: render order for the derived buckets. The fixed-operator
     // buckets (held-for-review, build-supervised) always belong here; the
     // configurable ones (ready-to-close / to-groom / decompose) appear only when
     // the seat policy moved them to the operator — the `classified` filter above
     // already dropped the rest, so listing them here just sets their order.
     // trace:STORY-620 (was BUG-543's ReadyToClose-leads order)
-    let order = [
-        ReadyToClose,
-        HeldForReview,
-        BuildSupervised,
-        Ungroomed,
-        Umbrella,
-    ];
+    // BUG-579: the render order is the shared `HUMAN_DERIVED_BUCKET_ORDER`
+    // constant so the catch-all below (and its test) check against the SAME
+    // source of truth — count and render can never silently disagree.
+    // trace:BUG-579 | ai:claude
+    let order = burndown::HUMAN_DERIVED_BUCKET_ORDER;
     for bucket in order {
         let rows: Vec<&(
             burndown::OpenFacts,
@@ -81169,6 +81166,50 @@ fn handle_list_human(short: bool, backend: &aida_core::CachedGitBackend) -> Resu
                     burndown::ReasonSource::Derived => continue,
                 };
                 println!("      {} {}", tag, r.text.dimmed());
+            }
+        }
+    }
+
+    // BUG-579: catch-all — render EVERY classified row that the ordered loop and
+    // the first-class decisions-awaiting bucket did NOT already show. Without
+    // this, any classified spec whose bucket isn't in `order` and which lacks a
+    // posed `DecisionRequest` (the canonical case: an `AwaitingDecision` Spike
+    // with no formal question) is COUNTED in `total` but never RENDERED — the
+    // phantom "N items need a human" with no bucket to act on. This restores the
+    // count==render invariant and future-proofs against any new OpenBucket
+    // variant. The `has_pending_decision` rows are deliberately NOT re-rendered
+    // here (the decisions-awaiting bucket already lists them, richer).
+    // trace:BUG-579 | ai:claude
+    let needs_attention: Vec<&(
+        burndown::OpenFacts,
+        burndown::OpenBucket,
+        Vec<burndown::Reason>,
+    )> = classified
+        .iter()
+        .filter(|(f, b, _)| !burndown::classified_row_is_rendered(*b, f.has_pending_decision))
+        .collect();
+    if !needs_attention.is_empty() {
+        println!(
+            "\n{} {} — {}",
+            "●".yellow(),
+            "needs-attention".bold(),
+            "counted above — surface or groom so nothing is invisible".dimmed()
+        );
+        for (f, bucket, reasons) in needs_attention {
+            let title = spec_title_cell(&titles, &f.id);
+            println!("    {}{}", f.id.cyan(), title);
+            // Lead with the bucket-specific hint (AwaitingDecision-without-a-
+            // posed-question gets the actionable "pose a question / groom" line);
+            // then fold in any derived reason for context.
+            println!(
+                "      {} {}",
+                "?".magenta(),
+                burndown::needs_attention_hint(*bucket).dimmed()
+            );
+            if let Some(r) = reasons.first() {
+                if !r.text.is_empty() {
+                    println!("      {} {}", "note".yellow(), r.text.dimmed());
+                }
             }
         }
     }
