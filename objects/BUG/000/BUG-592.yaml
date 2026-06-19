@@ -1,0 +1,25 @@
+id: 019ee068-077e-7be0-8ac6-1a0906f3360b
+spec_id: BUG-592
+agreed_id: BUG-592
+title: Fresh project's advisor surface shows phantom advisor-decisions (TASK-340/403/440) backfilled from AIDA's own dev punts
+description: |-
+  Dogfooding the advisor seat in a throwaway aida init repo: aida findings list shows an "Advisor decisions (recent)" block citing TASK-340, TASK-403, TASK-440 — AIDA-internal spec IDs that do not exist in the new store (aida show TASK-440 → not found).
+
+  Root cause: aida-cli/src/punt.rs read_ledger() — when .aida/punts.jsonl is absent it auto-backfills get_backfill_seeds() (three hard-coded fixtures comment-labelled "the three empirical design forks of the day", from AIDA repos own development) into EVERY new project, gated only on telemetry being enabled (the default). So every downstream advisor sees fabricated advisor-decision history referencing specs they never created.
+
+  Impact: confusing, credibility-damaging first-run for the advisor seat (the niche-defining surface). An advisor cannot trust the decisions/findings view.
+
+  Expected: a fresh project shows zero advisor decisions; dev-corpus fixtures must never leak into downstream stores. Either drop the auto-backfill, or gate it behind an explicit dev/demo flag.
+
+  Repro: git init + aida init --no-skills; AIDA_SESSION_ROLE=advisor aida findings list.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T15:02:54.590200161Z
+modified_at: 2026-06-19T15:02:54.590200161Z
+req_type: Bug
+tags:
+- advisor
+- from-dogfood
+- intake
