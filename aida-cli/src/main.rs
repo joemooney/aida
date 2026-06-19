@@ -3985,9 +3985,19 @@ impl QuestionSweepScope {
             Self::Approved => matches!(status, RequirementStatus::Approved),
             Self::Planned => matches!(status, RequirementStatus::Planned),
             Self::InProgress => matches!(status, RequirementStatus::InProgress),
+            // BUG-596: `all` includes DRAFTS. The advisor's distill section
+            // points at under-specified drafts (the groom worklist), but the
+            // old `all` scope excluded Draft by status, so `aida questions
+            // clarify` (which defaults to the swept `all` set) could never
+            // reach the very specs the hint flagged — the hint and the sweep
+            // contradicted each other. Drafts are exactly where acceptance
+            // criteria are missing, so the broadest scope must reach them.
+            // (`backlog`/`approved`/etc. still exclude drafts by design.)
+            // trace:BUG-596 | ai:claude
             Self::All => matches!(
                 status,
-                RequirementStatus::Approved
+                RequirementStatus::Draft
+                    | RequirementStatus::Approved
                     | RequirementStatus::Planned
                     | RequirementStatus::InProgress
                     | RequirementStatus::NeedsAttention
@@ -4139,8 +4149,14 @@ fn question_sweep_candidate(
     // would actually implement and that aren't already built/in-flight.
     // Strategic/organizational/knowledge types and built-or-held specs have a
     // moot acceptance gap — excluding them strips false positives. trace:BUG-495
+    // BUG-596: a SPIKE legitimately has no `## Acceptance` section — its
+    // deliverable is an analysis + a decision under a timebox, not a mergeable
+    // PR with pass/fail criteria. Flagging spikes for "missing acceptance" is
+    // noise (BUG-495 cleaned up non-implementable handling but spikes escaped),
+    // so exclude the Spike type from THIS check. trace:BUG-596 | ai:claude
     if !has_acceptance
         && is_implementable_type(&req.req_type)
+        && !matches!(req.req_type, RequirementType::Spike)
         && !is_built_or_held(req, in_flight_scopes)
     {
         return Some(QuestionSweepCandidate {
@@ -7603,12 +7619,21 @@ fn handle_advisor_dashboard(
     // --- Intake: drafts to triage (same status filter /aida-triage uses) ---
     // Reuses the cache-backed status-filter query — no reimplemented count.
     // The cache excludes archived rows by default.
+    // BUG-593: exclude META + the other standing-artifact types the SAME way
+    // `aida status` does (BUG-464 / TASK-773) — a fresh `aida init` seeds 6 META
+    // prompts that are NOT intake work. The status draft-count already strips
+    // them; the advisor surface must agree or it over-reports the inbox.
+    // trace:BUG-593 | ai:claude
     let drafts = backend
         .list_summaries(&aida_core::ListFilter {
             status: Some("draft".to_string()),
             ..Default::default()
         })
-        .map(|s| s.len())
+        .map(|s| {
+            s.iter()
+                .filter(|r| !is_standing_artifact_type(&r.req_type))
+                .count()
+        })
         .unwrap_or(0);
 
     // --- Decisions: pending questions (reuses `aida questions` query) ------
@@ -81169,6 +81194,14 @@ fn handle_intake_command(
         if req.archived {
             continue;
         }
+        // BUG-593: standing-artifact types (meta / folder / vision / principle /
+        // term / constraint) are perpetual reference rows, NOT intake work — the
+        // same set `aida status` / `aida advisor` / `aida list` exclude. A fresh
+        // `aida init` seeds 6 META prompts; without this they surfaced as assess
+        // candidates the cold-boot advisor could approve/queue. trace:BUG-593
+        if is_standing_artifact_type(&format!("{:?}", req.req_type)) {
+            continue;
+        }
         let is_draft = matches!(req.status, aida_core::RequirementStatus::Draft);
         let is_approved_unqueued = matches!(req.status, aida_core::RequirementStatus::Approved)
             && !queued_ids.contains(&req.id);
@@ -81181,7 +81214,9 @@ fn handle_intake_command(
             .or_else(|| req.spec_id.clone())
             .unwrap_or_else(|| req.id.to_string());
         let has_plan = !find_plan_files_for_spec(&project_root, &disp).is_empty();
-        let risk = backlog::classify_risk(req, has_plan);
+        // BUG-595: carry the per-spec risk REASON so the assess fence is legible
+        // (a fenced spec shows WHY, not just an opaque chip). trace:BUG-595
+        let (risk, risk_reason) = backlog::classify_risk_with_reason(req, has_plan);
         let tags: Vec<String> = req.tags.iter().cloned().collect();
         // BUG-561: mirror the `aida list` honor-both deferred predicate
         // (STORY-584) so the operator's deferral shelf is fenced out, not
@@ -81193,6 +81228,7 @@ fn handle_intake_command(
             tags,
             deferred,
             risk,
+            risk_reason,
         });
     }
     // Deterministic output order.
@@ -81239,7 +81275,7 @@ fn handle_intake_command(
     );
     if !fenced.is_empty() {
         println!(
-            "  {} {} fenced out (do-not-approve class / needs-human / deferred / tag / risk):",
+            "  {} {} fenced out (do-not-approve class / needs-human / keystone / deferred / tag / risk):",
             "·".dimmed(),
             fenced.len()
         );
@@ -82801,6 +82837,16 @@ fn collect_open_facts(
         if req.deferred {
             continue;
         }
+        // BUG-593: standing-artifact types (meta / folder / vision / principle /
+        // term / constraint) are perpetual reference rows, NOT backlog work —
+        // the same set `aida list` and `aida status` (BUG-464 / TASK-773) hide
+        // from open-work views. Without this, a fresh `aida init`'s 6 seeded
+        // META prompts surfaced on the advisor worklist's GROOM bucket (and on
+        // `aida human`) as if an advisor should approve/reject AI-prompt
+        // templates. trace:BUG-593 | ai:claude
+        if is_standing_artifact_type(&format!("{:?}", req.req_type)) {
+            continue;
+        }
         // "Open" = not yet terminal. Completed/Rejected are done with.
         if matches!(
             req.status,
@@ -84145,8 +84191,13 @@ fn handle_advisor_worklist(
             "\n{} {} — {}",
             "●".yellow(),
             "distill".bold(),
+            // BUG-596: the hint must print a RUNNABLE command — `aida clarify`
+            // does not exist (errors as an unrecognized subcommand). The real
+            // verbs are `aida questions clarify` (interactive, defaults to the
+            // swept set) and `aida decide <SPEC>` (smart-routes per spec).
+            // trace:BUG-596 | ai:claude
             format!(
-                "{} spec{} under-specified — pose a question: `aida questions sweep` / `aida clarify`",
+                "{} spec{} under-specified — author acceptance: `aida questions clarify` (or `aida decide <SPEC>`)",
                 distill.len(),
                 if distill.len() == 1 { "" } else { "s" }
             )
@@ -97585,7 +97636,10 @@ fn handle_status_command_distributed(
     // `aida list` hides META by default — otherwise a fresh `aida init` reports
     // its 6 seeded META prompts as "6 untriaged drafts", sending a brand-new
     // user to /aida-triage for AI-prompt templates that aren't real intake.
-    // trace:BUG-464 | ai:claude
+    // BUG-593: widened from a meta-only check to the shared standing-artifact
+    // helper so this count and the advisor dashboard's draft count derive the
+    // groomable-draft set from a SINGLE source of truth and can never disagree.
+    // trace:BUG-464 trace:BUG-593 | ai:claude
     let draft_inbox = backend
         .list_summaries(&aida_core::ListFilter {
             status: Some("draft".to_string()),
@@ -97593,7 +97647,7 @@ fn handle_status_command_distributed(
         })
         .map(|v| {
             v.iter()
-                .filter(|r| !r.req_type.eq_ignore_ascii_case("meta"))
+                .filter(|r| !is_standing_artifact_type(&r.req_type))
                 .count()
         })
         .unwrap_or(0);

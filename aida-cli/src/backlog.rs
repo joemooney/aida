@@ -153,14 +153,40 @@ pub(crate) struct AnalyzeReport {
     pub pairs: Vec<AnalyzePair>,
 }
 
-/// Classify a backlog candidate's blast radius from its type, priority,
-/// tags, and relationships. Heuristic, not gating — `groom` always defers
-/// to the operator. trace:STORY-444 | ai:claude
+/// BUG-595: is this spec well-specified — does it carry the structure a ready
+/// spec has (an `## Acceptance` section and a substantive description body, not
+/// a one-line title-restatement)? A well-specified spec is LOWER risk for the
+/// advisor to act on, not higher: the work is bounded and the success condition
+/// is written down. The old heuristic had NO quality signal — it rated a Story
+/// High purely for being a Story, so a complete spec was fenced while an empty
+/// one-liner passed. trace:BUG-595 | ai:claude
+fn is_well_specified(req: &Requirement) -> bool {
+    let body = req.description.trim();
+    let has_acceptance = {
+        let lo = body.to_ascii_lowercase();
+        lo.contains("## acceptance") || lo.contains("acceptance criteria")
+    };
+    // "Substantive" = the body says materially more than the title. A one-line
+    // draft ("fix the thing with the search", empty body) is NOT substantive.
+    let substantive =
+        body.len() >= 80 && body.lines().filter(|l| !l.trim().is_empty()).count() >= 2;
+    has_acceptance && substantive
+}
+
+/// Classify a backlog candidate's blast radius from its type, priority, tags,
+/// relationships, AND its specification quality. Heuristic, not gating —
+/// `groom` always defers to the operator. Thin wrapper over
+/// [`classify_risk_with_reason`]. trace:STORY-444 trace:BUG-595 | ai:claude
 pub(crate) fn classify_risk(req: &Requirement, has_plan: bool) -> RiskLevel {
-    let high_type = matches!(
-        req.req_type,
-        RequirementType::Story | RequirementType::Epic | RequirementType::Spike
-    );
+    classify_risk_with_reason(req, has_plan).0
+}
+
+/// BUG-595: classify risk AND return a one-line human reason so the advisor's
+/// disposition is legible (`aida assess` surfaces it per fenced spec). The
+/// quality signal is the headline fix: specification completeness LOWERS risk;
+/// a thin/empty draft (no acceptance, ~one line) RAISES it — the inverse of the
+/// old behavior that admitted only the worst specs. trace:BUG-595 | ai:claude
+pub(crate) fn classify_risk_with_reason(req: &Requirement, has_plan: bool) -> (RiskLevel, String) {
     let high_priority = matches!(req.priority, RequirementPriority::High);
     let blocked_by_or_child = req.relationships.iter().any(|r: &Relationship| {
         matches!(
@@ -168,29 +194,78 @@ pub(crate) fn classify_risk(req: &Requirement, has_plan: bool) -> RiskLevel {
             RelationshipType::BlockedBy | RelationshipType::Child
         )
     });
-    if high_type || high_priority || blocked_by_or_child {
-        return RiskLevel::High;
+    // An epic is architecture-shaped by definition — it decomposes, it does not
+    // get groomed onto the queue as a leaf. It stays high regardless of body.
+    let umbrella_type = matches!(req.req_type, RequirementType::Epic);
+
+    // Real blast-radius signals that a well-written body does NOT excuse: an
+    // epic, a high-priority spec, or cross-spec coupling (blocked-by / child).
+    if umbrella_type {
+        return (RiskLevel::High, "epic — decompose, don't groom".to_string());
+    }
+    if high_priority {
+        return (
+            RiskLevel::High,
+            "high priority — blast radius warrants human sign-off".to_string(),
+        );
+    }
+    if blocked_by_or_child {
+        return (
+            RiskLevel::High,
+            "coupled to other specs (blocked-by / child)".to_string(),
+        );
     }
 
-    let low_type = matches!(req.req_type, RequirementType::Task | RequirementType::Doc);
-    let low_priority = matches!(req.priority, RequirementPriority::Low);
+    // BUG-595: thinness raises risk; specification quality lowers it. A
+    // well-specified spec (acceptance section + substantive body) is bounded
+    // work with a written success condition — admit it, don't fence it.
+    let well_specified = is_well_specified(req);
+
     let lowered = req
         .tags
         .iter()
         .map(|t| t.to_ascii_lowercase())
         .collect::<HashSet<_>>();
     let has_low_tag = LOW_RISK_TAGS.iter().any(|t| lowered.contains(*t));
-    if low_type && low_priority && has_low_tag {
-        return RiskLevel::Low;
+    let low_type = matches!(req.req_type, RequirementType::Task | RequirementType::Doc);
+    let low_priority = matches!(req.priority, RequirementPriority::Low);
+    if (low_type && low_priority && has_low_tag) || (well_specified && low_type) {
+        return (
+            RiskLevel::Low,
+            if well_specified {
+                "well-specified, low blast radius".to_string()
+            } else {
+                "low-risk tag + low priority".to_string()
+            },
+        );
     }
 
+    // A well-specified spec of any non-umbrella type, or a Task/Bug at medium
+    // priority, or a spec with a saved plan, is medium — actionable, not a
+    // human-judgment call.
     let med_type = matches!(req.req_type, RequirementType::Task | RequirementType::Bug);
     let med_priority = matches!(req.priority, RequirementPriority::Medium);
-    if (med_type && med_priority) || has_plan {
-        return RiskLevel::Medium;
+    if well_specified {
+        return (
+            RiskLevel::Medium,
+            "well-specified (acceptance + body)".to_string(),
+        );
+    }
+    if has_plan {
+        return (RiskLevel::Medium, "has a saved plan".to_string());
+    }
+    if med_type && med_priority {
+        return (RiskLevel::Medium, "task/bug, medium priority".to_string());
     }
 
-    RiskLevel::Unknown
+    // Everything left is under-specified — a thin draft with no acceptance, no
+    // plan, no clear blast radius. This is the genuinely-risky-to-auto-act case
+    // (the advisor can't tell what success looks like), so it is NOT admitted
+    // under the default medium ceiling. trace:BUG-595
+    (
+        RiskLevel::Unknown,
+        "under-specified — no acceptance / plan to anchor scope".to_string(),
+    )
 }
 
 fn collect_backlog_candidates(
@@ -845,6 +920,11 @@ pub(crate) enum ParkReason {
     /// / parking-tag). Carries the gate's own human-readable reason — single
     /// source of truth with the burndown.
     Gate(String),
+    /// BUG-594: keystone / supervised work the operator reserved for human
+    /// judgment — fenced INDEPENDENT of the risk ceiling, the same invariant
+    /// `aida queue integrate` + `aida assess` enforce. Carries the marker.
+    /// trace:BUG-594 | ai:claude
+    Keystone(String),
     /// Passed the gate but is riskier than the `--risk <max>` ceiling.
     RiskCeiling(RiskLevel),
 }
@@ -853,6 +933,9 @@ impl ParkReason {
     fn label(&self) -> String {
         match self {
             ParkReason::Gate(r) => r.clone(),
+            ParkReason::Keystone(marker) => {
+                format!("keystone/supervised (`{marker}`) — reserved for human review")
+            }
             ParkReason::RiskCeiling(level) => {
                 format!("risk {} exceeds ceiling", level.chip())
             }
@@ -861,9 +944,10 @@ impl ParkReason {
 }
 
 /// Pure auto-selection: apply the burndown pickability gate (reused verbatim via
-/// [`burndown::classify`]) then the `--risk <max>` ceiling, partitioning the
-/// backlog into the would-groom ids and the would-park items with reasons.
-/// Order-preserving so output mirrors the input ranking. trace:STORY-554
+/// [`burndown::classify`]) then the keystone/supervised fence (BUG-594), then
+/// the `--risk <max>` ceiling, partitioning the backlog into the would-groom ids
+/// and the would-park items with reasons. Order-preserving so output mirrors the
+/// input ranking. trace:STORY-554 trace:BUG-594
 pub(crate) fn select_pickable(
     items: &[PickableItem],
     max_risk: RiskLevel,
@@ -880,6 +964,19 @@ pub(crate) fn select_pickable(
             }
             Pickability::Ready => {}
         }
+        // BUG-594: keystone / supervised work is fenced independent of risk —
+        // a low-risk keystone spec must NOT be auto-groomed onto the queue.
+        // Reuses the canonical `presence::is_keystone_class` detector so the
+        // pickable gate, `aida assess`, and `queue integrate` agree.
+        // trace:BUG-594 | ai:claude
+        if crate::presence::is_keystone_class(
+            &item.candidate.req_type,
+            item.candidate.tags.iter().map(|s| s.as_str()),
+        ) {
+            let marker = keystone_marker_label(&item.candidate.req_type, &item.candidate.tags);
+            park.push((item.id.clone(), ParkReason::Keystone(marker)));
+            continue;
+        }
         if item.risk.within_ceiling(max_risk) {
             groom.push(item.id.clone());
         } else {
@@ -887,6 +984,27 @@ pub(crate) fn select_pickable(
         }
     }
     (groom, park)
+}
+
+/// BUG-594: the most-informative keystone marker for the park reason — the
+/// triggering tag, or `epic` for the umbrella type. trace:BUG-594 | ai:claude
+fn keystone_marker_label(req_type: &str, tags: &[String]) -> String {
+    if req_type.trim().eq_ignore_ascii_case("epic") {
+        return "epic".to_string();
+    }
+    const KEYSTONE_TAGS: &[&str] = &[
+        "keystone",
+        "supervised",
+        "architecture",
+        "security",
+        "needs-supervised-build",
+        "blast-radius:high",
+        "risk:high",
+    ];
+    tags.iter()
+        .find(|t| KEYSTONE_TAGS.contains(&t.trim().to_ascii_lowercase().as_str()))
+        .map(|t| t.trim().to_string())
+        .unwrap_or_else(|| "keystone".to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1150,8 +1268,15 @@ mod tests {
         assert_eq!(classify_risk(&r, false), RiskLevel::Low);
     }
 
+    // BUG-595: a Story is NO LONGER rated High purely for being a Story. The
+    // old heuristic did exactly that, which inverted the quality signal — a
+    // complete spec was fenced while an empty one passed. Story type alone is
+    // now a weak signal; real blast-radius (priority / coupling / epic) and
+    // spec quality drive the level. A thin, low-priority Story with no
+    // acceptance / plan is `Unknown` (under-specified), not High.
+    // trace:BUG-595 | ai:claude
     #[test]
-    fn classify_risk_high_for_story_even_at_low_priority() {
+    fn classify_risk_story_type_alone_is_not_high() {
         let r = req_fixture(
             "STORY-7",
             RequirementType::Story,
@@ -1159,7 +1284,11 @@ mod tests {
             RequirementStatus::Approved,
             &["papercut"],
         );
-        assert_eq!(classify_risk(&r, false), RiskLevel::High);
+        assert_ne!(
+            classify_risk(&r, false),
+            RiskLevel::High,
+            "story type alone must not force High"
+        );
     }
 
     #[test]
@@ -1508,5 +1637,145 @@ mod tests {
         ];
         let (groom, _) = select_pickable(&items, RiskLevel::Medium);
         assert_eq!(groom, vec!["TASK-A".to_string(), "TASK-B".to_string()]);
+    }
+
+    // BUG-594: a keystone/supervised spec is fenced from --pickable even when
+    // it is gate-clean AND its risk sits under the ceiling. Reserved for the
+    // human, same as `aida queue integrate` / `aida assess`.
+    #[test]
+    fn select_pickable_parks_keystone_independent_of_risk() {
+        // Gate-clean task, LOW risk, but tagged keystone+supervised.
+        let items = vec![pickable(
+            "STORY-11",
+            RiskLevel::Low,
+            cand(
+                "STORY-11",
+                "task",
+                &["keystone", "supervised"],
+                false,
+                false,
+            ),
+        )];
+        // Even --risk high (most permissive) must not auto-groom it.
+        let (groom, park) = select_pickable(&items, RiskLevel::High);
+        assert!(groom.is_empty(), "keystone must never be auto-groomed");
+        assert!(
+            matches!(park[0].1, ParkReason::Keystone(_)),
+            "expected keystone park, got {:?}",
+            park[0].1
+        );
+    }
+
+    // BUG-594: a bare `supervised` tag alone is enough to fence.
+    #[test]
+    fn select_pickable_parks_supervised_alone() {
+        let items = vec![pickable(
+            "TASK-S",
+            RiskLevel::Low,
+            cand("TASK-S", "task", &["supervised"], false, false),
+        )];
+        let (groom, park) = select_pickable(&items, RiskLevel::High);
+        assert!(groom.is_empty());
+        assert!(matches!(park[0].1, ParkReason::Keystone(_)));
+    }
+}
+
+// BUG-595: the risk heuristic must not rate a well-specified spec higher than a
+// thin one. A fully-specified, low-blast-radius spec is admitted under the
+// default ceiling; an empty one-liner is NOT. trace:BUG-595 | ai:claude
+#[cfg(test)]
+mod bug_595_risk_signal_tests {
+    use super::*;
+    use aida_core::{Requirement, RequirementPriority, RequirementType};
+
+    fn req(ty: RequirementType, priority: RequirementPriority, body: &str) -> Requirement {
+        let mut r = Requirement::new("Title".to_string(), body.to_string());
+        r.req_type = ty;
+        r.priority = priority;
+        r
+    }
+
+    fn well_specified_body() -> String {
+        "When a user requests a password reset, the system SHALL email a single-use \
+         token that expires after 15 minutes.\n\n\
+         ## Acceptance\n\
+         - token expires after 15 minutes\n\
+         - token is single-use\n\
+         - reset requests are rate-limited to 3 per hour"
+            .to_string()
+    }
+
+    #[test]
+    fn well_specified_story_is_not_high_risk() {
+        // A fully-specified Story (EARS trigger + ## Acceptance, medium priority,
+        // no coupling) must NOT be rated High — the old heuristic rated it High
+        // purely for being a Story, fencing it out of the default assess pass.
+        let r = req(
+            RequirementType::Story,
+            RequirementPriority::Medium,
+            &well_specified_body(),
+        );
+        let (level, reason) = classify_risk_with_reason(&r, false);
+        assert_ne!(
+            level,
+            RiskLevel::High,
+            "well-specified story rated: {reason}"
+        );
+        // It is admitted under the default medium ceiling.
+        assert!(
+            level.within_ceiling(RiskLevel::Medium),
+            "well-specified story should pass the default medium ceiling, got {level:?} ({reason})"
+        );
+    }
+
+    #[test]
+    fn well_specified_is_never_riskier_than_a_thin_spec_of_same_type() {
+        // The headline BUG-595 invariant: specification quality must not make a
+        // spec LOOK riskier. A well-specified Story must rank no higher than the
+        // same thin Story. (The old heuristic rated both Story=High, but the
+        // well-specified one should be admitted while the thin one is not.)
+        let thin = req(
+            RequirementType::Story,
+            RequirementPriority::Medium,
+            "Make it",
+        );
+        let full = req(
+            RequirementType::Story,
+            RequirementPriority::Medium,
+            &well_specified_body(),
+        );
+        let (thin_level, _) = classify_risk_with_reason(&thin, false);
+        let (full_level, full_reason) = classify_risk_with_reason(&full, false);
+        // Well-specified is admitted under the default ceiling; thin is not.
+        assert!(
+            full_level.within_ceiling(RiskLevel::Medium),
+            "well-specified story must pass the default ceiling, got {full_level:?} ({full_reason})"
+        );
+        assert!(
+            !thin_level.within_ceiling(RiskLevel::Medium),
+            "thin story should be fenced at the default ceiling, got {thin_level:?}"
+        );
+    }
+
+    #[test]
+    fn risk_reason_is_surfaced() {
+        let r = req(
+            RequirementType::Task,
+            RequirementPriority::Medium,
+            "fix the thing with the search",
+        );
+        let (_, reason) = classify_risk_with_reason(&r, false);
+        assert!(!reason.trim().is_empty(), "risk reason must be non-empty");
+    }
+
+    #[test]
+    fn epic_stays_high_regardless_of_body() {
+        let r = req(
+            RequirementType::Epic,
+            RequirementPriority::Medium,
+            &well_specified_body(),
+        );
+        let (level, _) = classify_risk_with_reason(&r, false);
+        assert_eq!(level, RiskLevel::High, "an epic decomposes, never grooms");
     }
 }
