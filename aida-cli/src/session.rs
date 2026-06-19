@@ -1109,11 +1109,38 @@ fn destructive_command_deny_rules() -> Vec<&'static str> {
 /// absent, malformed, or the config can't be read — the OS boundary is strictly
 /// opt-in, mirroring the slice-1 `allowed_hosts` rule. trace:STORY-612 | ai:claude
 /// trace:TASK-866 | ai:claude
+///
+/// The `AIDA_OS_WRAP` environment variable takes PRECEDENCE over the config
+/// value (TASK-876): `bwrap` availability is a per-MACHINE property, so its
+/// enable switch must be per-machine too. Committing `os_wrap = true` to the
+/// tracked `.aida/config.toml` would enable it repo-wide and, being fail-closed,
+/// would ERROR on every clone whose host lacks working bwrap. The env override
+/// lets an operator enable confinement per-host (`export AIDA_OS_WRAP=1` in a
+/// shell / `.bashrc`) with NO shared-config change and NO risk to other clones.
+/// Accepts `1`/`true`/`yes` (on) and `0`/`false`/`no` (off), case-insensitive;
+/// an unrecognized value is ignored (falls through to config).
+/// trace:TASK-876 | ai:claude
 pub(crate) fn os_wrap_enabled(worktree_root: &Path) -> bool {
+    if let Some(over) = os_wrap_env_override() {
+        return over;
+    }
     let cfg = crate::read_project_config_value(worktree_root);
     crate::config_lookup(cfg.as_ref(), "contained", "os_wrap")
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+/// Parse the `AIDA_OS_WRAP` per-host override. Returns `Some(true)`/`Some(false)`
+/// for a recognized truthy/falsey value, `None` when the var is unset or holds
+/// an unrecognized value (so the config value is consulted). Case-insensitive;
+/// surrounding whitespace tolerated. trace:TASK-876 | ai:claude
+fn os_wrap_env_override() -> Option<bool> {
+    let raw = std::env::var("AIDA_OS_WRAP").ok()?;
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" => Some(true),
+        "0" | "false" | "no" => Some(false),
+        _ => None,
+    }
 }
 
 /// Build the bubblewrap argv that goes BETWEEN the `bwrap` program name and the
@@ -1231,9 +1258,29 @@ fn claude_program_and_args(
     worktree_root: &Path,
     claude_args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
+    os_wrapped_program_and_args(worktree_root, "claude", claude_args)
+}
+
+/// Generalized form of `claude_program_and_args` that wraps an ARBITRARY program
+/// (the headless paths pass the bare `"claude"`; the interactive `aida agent new`
+/// path passes the PATH-resolved claude binary). Same fail-closed contract:
+///
+/// - os_wrap OFF (default, incl. no `AIDA_OS_WRAP`) → `(program, args)` unchanged,
+///   so a normal launch is byte-identical to today's behavior.
+/// - os_wrap ON  → `("bwrap", [confinement-flags…, program, args…])`. Errors
+///   (fail-closed) if `bwrap` is not on PATH or the userns preflight fails —
+///   never launches unconfined when the OS boundary was requested.
+///
+/// trace:TASK-864 | ai:claude
+pub(crate) fn os_wrapped_program_and_args(
+    worktree_root: &Path,
+    program: &str,
+    program_args: Vec<String>,
+) -> Result<(String, Vec<String>)> {
     if !os_wrap_enabled(worktree_root) {
-        return Ok(("claude".to_string(), claude_args));
+        return Ok((program.to_string(), program_args));
     }
+    let claude_args = program_args;
     if which_on_path("bwrap").is_none() {
         anyhow::bail!(
             "[contained] os_wrap is enabled but `bwrap` (bubblewrap) was not found on PATH — \
@@ -1295,7 +1342,7 @@ fn claude_program_and_args(
         full.push(managed_path.to_string_lossy().into_owned());
         full.push("/etc/claude-code/managed-settings.json".to_string());
     }
-    full.push("claude".to_string());
+    full.push(program.to_string());
     full.extend(claude_args);
     Ok(("bwrap".to_string(), full))
 }
@@ -3268,6 +3315,143 @@ mod tests {
                 "claude --version must run inside the wrapper: {:?}",
                 String::from_utf8_lossy(&st.stderr)
             );
+        }
+    }
+
+    /// TASK-876: the `AIDA_OS_WRAP` per-host override takes PRECEDENCE over the
+    /// tracked config value, in BOTH directions, and recognizes the documented
+    /// truthy/falsey spellings (case-insensitive). An unrecognized value falls
+    /// through to the config. These tests mutate a process-global env var, so
+    /// they run serially under a shared mutex. trace:TASK-876 | ai:claude
+    #[test]
+    fn aida_os_wrap_env_overrides_config() {
+        // Serialize env mutation across the os_wrap env tests.
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+        // Config says OFF (no config at all).
+        let off_dir = tempfile::tempdir().unwrap();
+        // Config says ON.
+        let on_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(on_dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            on_dir.path().join(".aida/config.toml"),
+            "[contained]\nos_wrap = true\n",
+        )
+        .unwrap();
+
+        // Save + restore the ambient value so the rest of the suite is unaffected.
+        let saved = std::env::var_os("AIDA_OS_WRAP");
+        let restore = || match &saved {
+            Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
+            None => std::env::remove_var("AIDA_OS_WRAP"),
+        };
+
+        // Override ON forces true even when config is off.
+        for truthy in ["1", "true", "TRUE", "Yes", " yes "] {
+            std::env::set_var("AIDA_OS_WRAP", truthy);
+            assert!(
+                os_wrap_enabled(off_dir.path()),
+                "AIDA_OS_WRAP={truthy:?} must force os_wrap ON over an off config"
+            );
+        }
+
+        // Override OFF forces false even when config is on.
+        for falsey in ["0", "false", "FALSE", "No", " no "] {
+            std::env::set_var("AIDA_OS_WRAP", falsey);
+            assert!(
+                !os_wrap_enabled(on_dir.path()),
+                "AIDA_OS_WRAP={falsey:?} must force os_wrap OFF over an on config"
+            );
+        }
+
+        // Unrecognized value → ignored → config wins.
+        std::env::set_var("AIDA_OS_WRAP", "maybe");
+        assert!(
+            !os_wrap_enabled(off_dir.path()),
+            "garbage AIDA_OS_WRAP must fall through to the (off) config"
+        );
+        assert!(
+            os_wrap_enabled(on_dir.path()),
+            "garbage AIDA_OS_WRAP must fall through to the (on) config"
+        );
+
+        // Unset → config wins in both directions.
+        std::env::remove_var("AIDA_OS_WRAP");
+        assert!(!os_wrap_enabled(off_dir.path()));
+        assert!(os_wrap_enabled(on_dir.path()));
+
+        restore();
+    }
+
+    /// TASK-864: the INTERACTIVE launch path (which calls
+    /// `os_wrapped_program_and_args` with the PATH-resolved claude binary) is
+    /// byte-identical to a bare exec when os_wrap is OFF, and produces a
+    /// `bwrap … <binary> …` wrap (or a fail-closed Err on a userns-restricted
+    /// host) when os_wrap is ON. trace:TASK-864 | ai:claude
+    #[test]
+    fn interactive_path_wraps_when_enabled_unchanged_when_off() {
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _g = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+        let saved = std::env::var_os("AIDA_OS_WRAP");
+        // Force a known state independent of the ambient shell.
+        std::env::remove_var("AIDA_OS_WRAP");
+
+        let resolved_binary = "/usr/local/bin/claude";
+        let args = vec![
+            "--dangerously-skip-permissions".to_string(),
+            "--settings".to_string(),
+            "/tmp/x.json".to_string(),
+        ];
+
+        // OFF (no config, no env) → bare program + args unchanged.
+        let off_dir = tempfile::tempdir().unwrap();
+        let (program, out_args) =
+            os_wrapped_program_and_args(off_dir.path(), resolved_binary, args.clone())
+                .expect("off path never errors");
+        assert_eq!(
+            program, resolved_binary,
+            "os_wrap OFF must exec the resolved binary directly"
+        );
+        assert_eq!(out_args, args, "args unchanged when off");
+
+        // ON via the env override.
+        std::env::set_var("AIDA_OS_WRAP", "1");
+        let on_dir = tempfile::tempdir().unwrap();
+        match os_wrapped_program_and_args(on_dir.path(), resolved_binary, args.clone()) {
+            Ok((program, out_args)) => {
+                // userns-capable host: bwrap wrap with the resolved binary inside.
+                assert_eq!(program, "bwrap", "enabled => wrap with bwrap");
+                assert!(
+                    out_args.iter().any(|a| a == resolved_binary),
+                    "wrapped argv must invoke the resolved binary: {out_args:?}"
+                );
+                let bin_pos = out_args.iter().position(|a| a == resolved_binary).unwrap();
+                assert_eq!(
+                    &out_args[bin_pos + 1..],
+                    &args[..],
+                    "the claude args must follow the binary unchanged"
+                );
+                assert!(
+                    out_args.iter().any(|a| a == "--die-with-parent"),
+                    "confinement flags must be present: {out_args:?}"
+                );
+            }
+            Err(e) => {
+                // userns-restricted host: fail-closed, never a silent unconfined run.
+                let msg = format!("{e:#}");
+                assert!(
+                    msg.contains("Refusing to launch the drain unconfined")
+                        || msg.contains("os_wrap"),
+                    "enabled-but-unrunnable must fail closed with remediation: {msg}"
+                );
+            }
+        }
+
+        match &saved {
+            Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
+            None => std::env::remove_var("AIDA_OS_WRAP"),
         }
     }
 }
