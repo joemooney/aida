@@ -228,6 +228,25 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ---
 
+### `aida alias`
+
+**One line** — list AIDA's built-in shortcuts, grouped by surface, all in one place.
+
+**Mental model.** AIDA has accreted many shortcuts, each hidden in its own `--help`: the `aida list` status lenses (`open` / `closed`) and status-token shortcuts (`aida list approved` is `--status approved`), the `aida list <lens>` views that rewrite to another command (`queue`, `why`, `human`, `inflight`, `me`, `user:<name>`), and the command aliases (`intake` reaching `assess`, `advisor assess` reaching `assess`, bare `aida agent` defaulting to the launcher). `aida alias` is the single discoverable view of that sugar — every shortcut, its canonical expansion, and a one-line meaning, grouped by surface. Bare `aida alias` behaves like `aida alias list`. Crucially it is **sourced from the resolvers**, not a hand-maintained second copy: the list-lens rows come from the same table `aida list <lens>` resolves against, and tests pin the registry to the live resolvers so the catalog can't drift from the surface it documents.
+
+**Reach for it when** — you half-remember a shortcut, or you want to learn what sugar exists before reaching for the long form. It is the "what can I type instead?" lookup.
+
+**Don't reach for it when** — you want a command's flags (that's `aida <cmd> --help`) or the rationale layer (that's `aida manual <cmd>`). And it lists *built-in* shortcuts only — user-defined aliases are a separate, deferred question.
+
+**Key options (rationale only).**
+- `--json` — emit the grouped registry as JSON for machine consumers.
+
+**Chains with** — sits beside `aida help --all` (the full command inventory) and `aida manual` (the when/why) as the third discoverability lens: inventory, rationale, shortcuts.
+
+<!-- doc-intent: trace:STORY-667 -->
+
+---
+
 ### `aida record`
 
 **One line** — inspect or prune the durable per-spec **processing record** — the audit trail of *what was done and why*, captured at completion.

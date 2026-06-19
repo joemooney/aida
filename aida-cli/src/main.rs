@@ -6,6 +6,7 @@
 mod advisor;
 mod advisor_watch;
 mod agent_registry;
+mod alias;
 mod auto_complete;
 mod auto_complete_telemetry;
 mod awaiting_you;
@@ -1139,16 +1140,53 @@ fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
     args.to_vec()
 }
 
+/// One `aida list <lens>` argv-rewrite row. See [`LIST_LENS_ALIASES`].
+/// trace:STORY-667 | ai:claude
+pub(crate) struct ListLensAlias {
+    /// The positional lens token(s) that trigger this rewrite (first is canonical).
+    pub tokens: &'static [&'static str],
+    /// The canonical command tokens the lens expands to (after `aida`).
+    pub canonical: &'static [&'static str],
+    /// One-line human meaning for the `aida alias` registry.
+    pub meaning: &'static str,
+}
+
+/// The `aida list <lens>` argv-rewrite table — the SINGLE SOURCE OF TRUTH for
+/// the list-lens aliases. Each row maps the positional lens token(s) it accepts
+/// to the canonical command tokens it expands to, plus a one-line meaning for
+/// the `aida alias` registry. `rewrite_list_alias` resolves against this table
+/// and the `aida alias` registry enumerates it — so the surface and its catalog
+/// can't drift. trace:STORY-667 | ai:claude
+pub(crate) const LIST_LENS_ALIASES: &[ListLensAlias] = &[
+    ListLensAlias {
+        tokens: &["queue"],
+        canonical: &["queue", "list"],
+        meaning: "your personal work queue",
+    },
+    ListLensAlias {
+        tokens: &["why"],
+        canonical: &["burndown", "explain"],
+        meaning: "why each open spec sits where it does",
+    },
+    ListLensAlias {
+        tokens: &["advisor"],
+        canonical: &["advisor"],
+        meaning: "the live-advisor registration view",
+    },
+    // TASK-831: active work — leased specs + drain in-flight status.
+    ListLensAlias {
+        tokens: &["inflight", "in-flight"],
+        canonical: &["burndown", "status"],
+        meaning: "active work — leased specs + drain in-flight status",
+    },
+];
+
 fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "list" {
-        let target: Option<&[&str]> = match args[2].as_str() {
-            "queue" => Some(&["queue", "list"]),
-            "why" => Some(&["burndown", "explain"]),
-            "advisor" => Some(&["advisor"]),
-            // TASK-831: active work — leased specs + drain in-flight status.
-            "inflight" | "in-flight" => Some(&["burndown", "status"]),
-            _ => None,
-        };
+        let target: Option<&[&str]> = LIST_LENS_ALIASES
+            .iter()
+            .find(|a| a.tokens.contains(&args[2].as_str()))
+            .map(|a| a.canonical);
         if let Some(tokens) = target {
             let mut out = Vec::with_capacity(args.len());
             out.push(args[0].clone());
@@ -1680,6 +1718,18 @@ fn run() -> Result<()> {
     if let Command::HelpAll = &cli.command {
         print_help_all();
         return Ok(());
+    }
+
+    // `aida alias` / `aida alias list` is a static, built-in-shortcut registry —
+    // it reads no store and needs no storage handle, so dispatch it early like
+    // help-all. Bare `aida alias` defaults to `list`. The top-level `--json`
+    // and the `list --json` spelling are equivalent. trace:STORY-667 | ai:claude
+    if let Command::Alias { json, command } = &cli.command {
+        let want_json = match command {
+            Some(crate::cli::AliasCommand::List { json: sub_json }) => *json || *sub_json,
+            None => *json,
+        };
+        return alias::run(want_json);
     }
 
     // Plan tooling is self-contained: `verify` reads a markdown file +
@@ -2618,6 +2668,7 @@ fn run() -> Result<()> {
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
@@ -12917,6 +12968,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
@@ -78192,6 +78244,8 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("user-guide", "Open the user guide in the default browser"),
                 // trace:STORY-600 — the CLI manual's when/why beside --help's what.
                 ("manual", "Print a command's CLI-manual rationale section"),
+                // trace:STORY-667 — the discoverable registry of built-in shortcuts.
+                ("alias", "List AIDA's built-in shortcuts"),
             ],
         ),
         (
