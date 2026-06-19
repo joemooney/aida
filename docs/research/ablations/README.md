@@ -28,6 +28,14 @@ The question: *what does running N vendors on the same work actually buy?*
 | `2026-06-17-competitive-claude-vs-codex.md` | prescriptive brief, Claude vs Codex, rubric judge | Claude won; the contest measured **conscientiousness, not creativity** — the loser lost at the fine print (skipped a named gate). This is the program's one observed rule-drop, and it is uncontrolled (real-ish task, n=1) — the anchor the gate-vs-rule program kept failing to reproduce. |
 | `2026-06-18-open-brief-convergence.md` | **open** brief (conjecture: open briefs diverge) | Conjecture **falsified** — convergence is **substrate-driven**, not brief-driven. Multi-vendor competition pays as **quality-variance QA**, not design diversity. Productized as `aida compete`. |
 
+## Program 3 — roll-your-own friction (P2b, does the rich layer pay over markdown+git+grep?): COMPLETE
+
+The question: *does AIDA's typed graph actually pay over plain markdown + git + grep at fleet scale, or is the rich layer dead weight?* The verdict (section 12) marks this as **the biggest open question**. Two arms, the same synthetic spec set, at 50/200/500 specs, deterministic grading.
+
+| File | Setup | Finding |
+|---|---|---|
+| `2026-06-19-ryo-friction-benchmark.md` | RYO (one md/spec + grep) vs AIDA (typed graph), same specs, 5 tasks incl. fairness | The axis is **question-shape, not graph-vs-grep.** Graph pays on **relational** (blocked-closure latency: ~80x at 500) + **rename** (silent ref-rot: RYO leaves 2 dangling refs at every scale ≥50; AIDA id-stable, 0). grep **wins** on **full-text** + **flat-list** (faster, zero-install). "Dead weight" reading **falsified for relational/rename work**; honest both/and by task. Cannot escape the section-10 team-adoption confound — measures capability-friction only. |
+
 ## How to read a result honestly
 
 - **Pre-registered interpretation** sections were fixed *before* the run — check them against the result; a finding that matches a pre-registered threshold is stronger than a post-hoc story.
