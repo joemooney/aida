@@ -1601,6 +1601,57 @@ registered = "2026-01-01T00:00:00Z"
         assert_eq!(loaded.blocks[0].node_id, "2");
     }
 
+    // TASK-889: a new block must start strictly above BOTH the highest
+    // existing block range_end AND the agreed-counter floor (the highest
+    // already-issued agreed id, e.g. post-merge-gate). Otherwise a fresh
+    // block would re-issue an id that an existing spec already holds — a
+    // collision. Covers the off-by-one at the floor boundary directly.
+    // trace:TASK-889 | ai:claude
+    #[test]
+    fn new_block_starts_above_both_blocks_and_counter_floor() {
+        let mut registry = BlockRegistry::default();
+        // No blocks yet, but merge-gate already issued FR-1..FR-42.
+        // A new block must begin at 43, never at 1.
+        let b1 = registry.claim_block_with_floor(
+            "1".into(),
+            "a".into(),
+            "h".into(),
+            "FR".into(),
+            10,
+            42, // counter_floor
+        );
+        assert_eq!(b1.range_start, 43, "new block collided with issued counter");
+        assert_eq!(b1.range_end, 52);
+
+        // Next block: now max(range_end+1 = 53, floor+1). With a LOWER stale
+        // floor (say 40), block packing wins → 53, never back to 41.
+        let b2 = registry.claim_block_with_floor(
+            "2".into(),
+            "b".into(),
+            "h".into(),
+            "FR".into(),
+            10,
+            40,
+        );
+        assert_eq!(
+            b2.range_start, 53,
+            "block packing regressed below max range"
+        );
+        assert_eq!(b2.range_end, 62);
+
+        // And a HIGHER floor than the blocks (counter raced ahead, e.g. a
+        // concurrent merge-gate) wins over block packing.
+        let b3 = registry.claim_block_with_floor(
+            "1".into(),
+            "a".into(),
+            "h".into(),
+            "FR".into(),
+            10,
+            100,
+        );
+        assert_eq!(b3.range_start, 101, "higher counter floor must dominate");
+    }
+
     // BUG-474: two serialized load→dispense→save sequences under
     // `with_dispense_lock` must yield distinct ids. This is the unit-level
     // proof that the lock-wrapped read-modify-write advances the persisted
