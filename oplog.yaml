@@ -18819,5 +18819,17 @@ operations:
     req_type: Spike
     status: Approved
     priority: High
-clock: 1859
+- id: 019eddb9-7a15-7c60-8afe-fa93e10bd7e1
+  target_id: 019eddb9-76b5-7601-af4e-cf698f066143
+  author: aida
+  node_id: '1'
+  lamport: 1860
+  timestamp: 2026-06-19T02:33:00.693282293Z
+  kind: !Create
+    title: aida config menu — a navigable TUI menu of configurable items
+    description: 'A navigable TUI (aida config menu, or aida config --menu) listing every configurable item (the AIDA_* env knobs + .aida/config.toml fields) with current value, default, scope, and a one-line explanation, editable inline. Smallest-valuable-slice first: a read+navigate view over the known config surface (reuse the canonical list from docs/environment-variables.md + the config struct), then make the highest-value items settable. Ties to the TUI (EPIC-26) and complements aida init prompting.'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 1860
 node_id: '1'
