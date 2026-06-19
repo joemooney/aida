@@ -17143,7 +17143,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // only ever compared against spec_id. Resolve a UUID (or agreed_id)
             // to its canonical spec_id here so the documented invocation works.
             // trace:BUG-588 | ai:claude
-            let id_filter = id.as_ref().map(|raw| resolve_history_id_filter(&backend, raw));
+            let id_filter = id
+                .as_ref()
+                .map(|raw| resolve_history_id_filter(&backend, raw));
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
