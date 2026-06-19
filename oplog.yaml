@@ -18879,5 +18879,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 1864
+- id: 019eddba-3e52-7522-b2e7-d7346a6e7bd1
+  target_id: 019eddba-3b20-7522-85ce-046a33a6f1f8
+  author: aida
+  node_id: '1'
+  lamport: 1865
+  timestamp: 2026-06-19T02:33:50.930160046Z
+  kind: !Create
+    title: 'aida list --help: document lens aliases + statuses one-per-line; add me / user:<name> filters'
+    description: 'Two parts. (1) aida list --help should enumerate the status/lens shortcuts ONE PER LINE with a one-line explanation each: open, closed, draft, approved, queue, human, etc. - today they are buried in prose. (2) Add a user filter: me as an alias for user:$USER, plus user:<name> support, so aida list me / aida list --user joe / aida list user:alice work. NOTE current state: aida list of requirements does NOT default to the current user (only the QUEUE is user-scoped, BUG-89) - so this is ADDING filters, not changing a default. See the companion mylist/myqueue task for the personal-view shortcuts.'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 1865
 node_id: '1'
