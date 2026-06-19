@@ -3,12 +3,12 @@ spec_id: TASK-869
 agreed_id: TASK-869
 title: Cross-vendor judge for aida compete (kill the self-evaluation caveat on the apex evidence)
 description: 'MOVE 3. Augment/replace the Claude-grading-Claude-vs-Codex judge with a SECOND-vendor judge (Codex/Gemini) or a deterministic rubric. WHY: both bake-offs carry the same fatal caveat (self-evaluating Claude judge, section 10) that caps the substrate-shapes-output finding (the deepest statement of AIDAs bet). Removing it upgrades P2/L5s strongest evidence from "pilot, self-graded" toward credible. EVIDENCE: re-run the open-brief bake-off with a cross-vendor judge; if Claude still wins on the same correctness axis, the finding survives its sharpest objection. Size S-M (harness is vendor-parameterized; rubric design is the work). PRECEDES move 9 (compete regression-rate).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:17.020661297Z
-modified_at: 2026-06-19T02:45:17.020661297Z
+modified_at: 2026-06-19T03:52:58.217281268Z
 req_type: Task
 tags:
 - compete
@@ -17,3 +17,21 @@ tags:
 - from-discovery-0619
 - parent:EPIC-50
 - tilt-verdict
+history:
+- id: 019ede02-ae64-7ce1-93b4-740094ac2a4b
+  author: aida-auto-bump
+  timestamp: 2026-06-19T03:52:58.212728175Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ede02-ae69-70c1-8e30-4e7a8ef77599
+  timestamp: 2026-06-19T03:52:58.217280840Z
+  agent: aida
+  commit_sha: c58df92e50cb727115925bc9c53f37e1d5d022b0
+  summary: Completed via merge c58df92e
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T03:52:58.047793679Z
+  completion_sha: c58df92e50cb727115925bc9c53f37e1d5d022b0
