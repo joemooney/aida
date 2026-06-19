@@ -10,12 +10,12 @@ description: |-
   2. aida advisor worklist header describes partitioning into decompose/distill/bless/triage, but a draft EPIC (EPIC-6) appears in NO section — not groom, and there is no rendered decompose lane. A draft epic that needs breaking into children is invisible on the advisor worklist (it is correctly fenced from assess, but nothing surfaces it for the decompose action). Render a decompose lane (or list draft epics with the aida decompose hint).
 
   Minor copy nit: aida questions answer <spec> 1 prints both "✓ no spec change (noop)" and "✓ bound the decision into ## Acceptance" — contradictory.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:04:20.571684004Z
-modified_at: 2026-06-19T16:23:31.630084173Z
+modified_at: 2026-06-19T16:31:09.470854552Z
 req_type: Task
 tags:
 - advisor
@@ -27,3 +27,21 @@ comments:
   content: Commit b75f93f13 references this requirement
   created_at: 2026-06-19T16:23:31.630084173Z
   modified_at: 2026-06-19T16:23:31.630084173Z
+history:
+- id: 019ee0b8-d299-77f0-9342-827c3b91b6fe
+  author: aida-auto-bump
+  timestamp: 2026-06-19T16:31:09.465760828Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee0b8-d29e-7ce1-8be6-f1ce50d75a08
+  timestamp: 2026-06-19T16:31:09.470853494Z
+  agent: aida
+  commit_sha: bd955e07fbb0e9b5c07f4dcc0b3b8aa68b4c0570
+  summary: Completed via merge bd955e07
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T16:31:09.302361109Z
+  completion_sha: bd955e07fbb0e9b5c07f4dcc0b3b8aa68b4c0570
