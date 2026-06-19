@@ -10,12 +10,12 @@ description: |-
   EXPECTED: bare `aida queue` defaults to `aida queue list` (the read view), matching `aida list`/`aida status` ergonomics. Low severity but a clean consistency papercut on a core daily verb.
 
   SEVERITY: low (cosmetic/consistency).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T12:06:42.050463020Z
-modified_at: 2026-06-19T12:34:00.361115193Z
+modified_at: 2026-06-19T12:41:23.724005471Z
 req_type: Task
 tags:
 - from-dogfood
@@ -27,3 +27,21 @@ comments:
   content: Commit 71f9200ad references this requirement
   created_at: 2026-06-19T12:34:00.361115193Z
   modified_at: 2026-06-19T12:34:00.361115193Z
+history:
+- id: 019edfe6-7807-7d61-b9be-dfbd6c3cae7e
+  author: aida-auto-bump
+  timestamp: 2026-06-19T12:41:23.719401747Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edfe6-780c-7981-867e-54d23216899a
+  timestamp: 2026-06-19T12:41:23.724004385Z
+  agent: aida
+  commit_sha: a7269ae72a5b7efd1d7213c6a0f712396ef7440b
+  summary: Completed via merge a7269ae7
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T12:41:23.559822994Z
+  completion_sha: a7269ae72a5b7efd1d7213c6a0f712396ef7440b
