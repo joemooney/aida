@@ -147,6 +147,19 @@ impl ForgeKind {
         }
     }
 
+    /// Whether this forge's CLI binary (`gh` / `glab`) is on `PATH`. Pure-git
+    /// needs no CLI, so it is trivially "present". This is the load-bearing
+    /// detection behind the `aida doctor` / `aida init` forge-CLI status line:
+    /// `aida pr auto-queue-review` (and the rest of the PR/CI lifecycle) fails
+    /// hard when the needed CLI is absent, so we want to surface it up front
+    /// rather than silently at the first `pr` command. trace:TASK-860 | ai:claude
+    pub fn cli_on_path(self) -> bool {
+        match self.cli_name() {
+            "" => true, // pure-git: no CLI required
+            name => binary_on_path(name),
+        }
+    }
+
     /// View a change by id (display string — number or `"<N>"`).
     /// trace:TASK-651 | ai:claude
     pub fn view_cmd(self, change_id: &str) -> Option<String> {
@@ -635,6 +648,53 @@ pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
         }
     }
     None
+}
+
+/// Is `name` an executable on `PATH`? A small, dependency-free `which` —
+/// scans the `PATH` dirs for a file named `name`. Used by [`ForgeKind::cli_on_path`]
+/// to detect the forge CLI (`gh` / `glab`). trace:TASK-860 | ai:claude
+fn binary_on_path(name: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|dir| dir.join(name).is_file())
+}
+
+/// The forge-CLI status line for `aida doctor` / `aida init`: which forge the
+/// project uses and whether its CLI is on `PATH`, with install guidance when it
+/// is missing. Returns `(resolved_kind, status_message)`. The message is a
+/// single human-facing line that names the CLI, says OK / missing, and (when
+/// missing) carries the install URL — so a new user learns up front rather than
+/// hitting "gh CLI not on PATH" at the first `pr` command. trace:TASK-860 | ai:claude
+pub fn forge_cli_status(project_root: &Path) -> (ForgeKind, String) {
+    let kind = resolve_forge_kind(project_root);
+    let msg = match kind {
+        ForgeKind::None => {
+            // Pure-git: no forge CLI is needed at all. But if neither gh nor
+            // glab is installed and there is no recognized origin, the operator
+            // who later adds a GitHub/GitLab remote will want to know. Keep it
+            // honest and low-noise: report pure-git, no nag.
+            "forge CLI: none needed (pure-git — merge = git ancestry + (SPEC-ID)-trailer \
+             auto-complete)"
+                .to_string()
+        }
+        kind => {
+            let cli = kind.cli_name();
+            if kind.cli_on_path() {
+                format!("forge CLI: {cli} OK")
+            } else {
+                let url = kind
+                    .cli_install_hint()
+                    .map(|(_, url)| url)
+                    .unwrap_or("https://cli.github.com");
+                format!(
+                    "forge CLI: {cli} NOT found on PATH — needed for PR/review automation \
+                     (install: {url})"
+                )
+            }
+        }
+    };
+    (kind, msg)
 }
 
 /// Read `origin`'s URL via `git remote get-url origin`.
@@ -2232,6 +2292,57 @@ mod tests {
         assert_eq!(ForgeKind::from_config_token("none"), Some(ForgeKind::None));
         assert_eq!(ForgeKind::from_config_token("git"), Some(ForgeKind::None));
         assert_eq!(ForgeKind::from_config_token("bogus"), None);
+    }
+
+    #[test]
+    fn pure_git_needs_no_cli() {
+        // trace:TASK-860 — pure-git has no forge CLI, so it is trivially present.
+        assert!(ForgeKind::None.cli_on_path());
+    }
+
+    #[test]
+    fn binary_on_path_detects_absent() {
+        // trace:TASK-860 — a binary that cannot plausibly exist is not on PATH.
+        assert!(!binary_on_path("aida-no-such-binary-xyzzy-9999"));
+    }
+
+    #[test]
+    fn forge_cli_status_message_shapes() {
+        // trace:TASK-860 — GitHub origin, message names `gh` (OK or missing-hint).
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        let (kind, msg) = forge_cli_status(tmp.path());
+        assert_eq!(kind, ForgeKind::GitHub);
+        assert!(msg.contains("forge CLI:"));
+        assert!(msg.contains("gh"));
+
+        // GitLab config → names `glab`.
+        std::fs::write(
+            tmp.path().join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"gitlab\"\n",
+        )
+        .unwrap();
+        let (kind, msg) = forge_cli_status(tmp.path());
+        assert_eq!(kind, ForgeKind::GitLab);
+        assert!(msg.contains("glab"));
+        // GitLab must never make a GitHub user install glab and vice versa —
+        // the message names exactly one CLI, scoped to the resolved forge.
+        assert!(!msg.contains(" gh "));
+
+        // Pure-git config → "none needed", no CLI nag.
+        std::fs::write(
+            tmp.path().join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        let (kind, msg) = forge_cli_status(tmp.path());
+        assert_eq!(kind, ForgeKind::None);
+        assert!(msg.contains("none needed"));
     }
 
     #[test]
