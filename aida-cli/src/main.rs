@@ -24359,6 +24359,76 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             value,
             source,
         });
+
+        // TASK-866 (SPIKE-68): surface the three bwrap-specific knobs that were
+        // previously invisible here — operators conflate `enable` (Claude Code's
+        // native --settings sandbox) with `os_wrap` (the bwrap OS boundary). Each
+        // reuses the existing session.rs resolver rather than re-deriving.
+
+        // `os_wrap`: the bwrap OS-sandbox master switch. Distinct from `enable`;
+        // default OFF (the OS boundary is strictly opt-in). trace:TASK-866 | ai:claude
+        let os_wrap = crate::session::os_wrap_enabled(project_root);
+        let (value, source) = if os_wrap {
+            (
+                format!("{} (the bwrap OS sandbox)", "true".green()),
+                PolicySource::ProjectConfig,
+            )
+        } else {
+            (
+                "false (default; the bwrap OS sandbox — off unless set)"
+                    .dimmed()
+                    .to_string(),
+                PolicySource::Default,
+            )
+        };
+        rows.push(PolicyRow {
+            key: "os_wrap",
+            value,
+            source,
+        });
+
+        // `read_allowlist`: strict read-confinement paths under os_wrap. Empty =
+        // no read confinement (binds the host root ro). trace:TASK-866 | ai:claude
+        let read_allowlist = crate::session::contained_read_allowlist(project_root);
+        let (value, source) = if read_allowlist.is_empty() {
+            (
+                "(none — no read confinement)".dimmed().to_string(),
+                PolicySource::Default,
+            )
+        } else {
+            (read_allowlist.join(", "), PolicySource::ProjectConfig)
+        };
+        rows.push(PolicyRow {
+            key: "read_allowlist",
+            value,
+            source,
+        });
+
+        // `managed_domains_only`: hard egress deny (managed set + allowed_hosts),
+        // no approval prompt. Default OFF. trace:TASK-866 | ai:claude
+        let managed_only = crate::session::contained_managed_domains_only(project_root);
+        let (value, source) = if managed_only {
+            (
+                format!(
+                    "{} (hard egress deny — managed set + allowed_hosts)",
+                    "true".green()
+                ),
+                PolicySource::ProjectConfig,
+            )
+        } else {
+            (
+                "false (default; egress not hard-denied)"
+                    .dimmed()
+                    .to_string(),
+                PolicySource::Default,
+            )
+        };
+        rows.push(PolicyRow {
+            key: "managed_domains_only",
+            value,
+            source,
+        });
+
         PolicySection {
             section: "contained",
             header: "[contained] — sandbox + egress posture".to_string(),
