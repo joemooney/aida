@@ -14284,6 +14284,29 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                      for prompts. (See `aida add --help` for the full flag list.)"
                 );
             };
+            // TASK-888: reject an empty / whitespace-only title — a titleless
+            // spec is never useful, and the silent accept ("Added: TASK-N - ")
+            // hid the mistake. Trim is display-only here; the title is stored
+            // verbatim below. trace:TASK-888 | ai:claude
+            if title_resolved.trim().is_empty() {
+                anyhow::bail!("title cannot be empty — pass a non-blank `--title \"...\"`.");
+            }
+            // TASK-888: cap the title at a sane length. A 5000-char title was
+            // accepted unbounded; truncate (preserving char boundaries) and warn
+            // rather than hard-fail, so a paste accident still files something
+            // legible. trace:TASK-888 | ai:claude
+            const MAX_TITLE_LEN: usize = 200;
+            let title_resolved: String = if title_resolved.chars().count() > MAX_TITLE_LEN {
+                let truncated: String = title_resolved.chars().take(MAX_TITLE_LEN).collect();
+                eprintln!(
+                    "{} title exceeded {} characters — truncated. Put the detail in the description instead.",
+                    "Warning:".yellow().bold(),
+                    MAX_TITLE_LEN,
+                );
+                truncated
+            } else {
+                title_resolved
+            };
             // trace:BUG-22 | ai:claude
             if let Some(msg) = suspicious_title_signal(&title_resolved) {
                 eprintln!("{} {}", "Warning:".yellow().bold(), msg);
@@ -15035,7 +15058,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 let project_root = store_path
                     .parent()
                     .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
-                let resolved = resolve_pr_to_spec(project_root, pr, &store)?;
+                // TASK-888: a bare number (no `pr`/`#` prefix) routes to PR
+                // lookup, so a user expecting a spec lookup gets a PR-flavored
+                // error with no clue why. When the arg is a prefixless digit
+                // string, append a hint that spec ids carry a TYPE- prefix.
+                // trace:TASK-888 | ai:claude
+                let bare_number = id.trim().chars().all(|c| c.is_ascii_digit());
+                let resolved = resolve_pr_to_spec(project_root, pr, &store).map_err(|e| {
+                    if bare_number {
+                        anyhow::anyhow!(
+                            "{e}\n  note: spec ids look like TASK-12 — did you mean a spec id? \
+                             bare numbers are treated as PR lookups."
+                        )
+                    } else {
+                        e
+                    }
+                })?;
                 println!("showing {} (backs {})", resolved, id);
                 resolved_id = resolved;
             }
@@ -16539,6 +16577,32 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 "blocks" => RelationshipType::Blocks,
                 other => RelationshipType::Custom(other.to_string()),
             };
+
+            // TASK-887: a `--type` that isn't a standard relationship type lands
+            // as a `Custom` edge, which the graph traversals (--blocked-by,
+            // --blocks, --tree, --impact) silently won't follow. Don't hard-
+            // reject (custom types can be intentional), but surface a note —
+            // with a did-you-mean when it looks like a typo of a standard type —
+            // so a fat-fingered `blockedby`/`depends` doesn't create an
+            // invisible edge. trace:TASK-887 | ai:claude
+            if let RelationshipType::Custom(ref custom) = rel_type {
+                match nearest_standard_rel_type(custom) {
+                    Some(near) => eprintln!(
+                        "{} '{}' isn't a standard relationship type (did you mean '{}'?); \
+                         created as a custom edge — graph traversals won't follow it.",
+                        "note:".yellow().bold(),
+                        custom,
+                        near,
+                    ),
+                    None => eprintln!(
+                        "{} '{}' isn't a standard relationship type ({}); \
+                         created as a custom edge — graph traversals won't follow it.",
+                        "note:".yellow().bold(),
+                        custom,
+                        STANDARD_REL_TYPES.join(", "),
+                    ),
+                }
+            }
 
             // BUG-64: same terminal-status guard as `aida add --parent`,
             // applied here when the user is hand-rolling a parent edge
@@ -100244,6 +100308,77 @@ fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: boo
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
+/// The canonical user-facing spellings of the STANDARD relationship types — the
+/// ones `RelationshipType::from_str` recognizes and the graph queries
+/// (`--blocked-by`, `--blocks`, `--tree`, `--impact`) actually traverse. The
+/// did-you-mean lens for `aida rel add --type` is computed against this set.
+/// trace:TASK-887 | ai:claude
+const STANDARD_REL_TYPES: &[&str] = &[
+    "parent",
+    "child",
+    "duplicate",
+    "verifies",
+    "verified-by",
+    "references",
+    "blocked-by",
+    "blocks",
+];
+
+/// Plain Levenshtein edit distance between two strings (case folding is the
+/// caller's job). Small inputs only — relationship-type names are a handful of
+/// chars — so the O(n*m) DP is fine. trace:TASK-887 | ai:claude
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0usize; b.len() + 1];
+    for (i, &ca) in a.iter().enumerate() {
+        cur[0] = i + 1;
+        for (j, &cb) in b.iter().enumerate() {
+            let cost = if ca == cb { 0 } else { 1 };
+            cur[j + 1] = (prev[j + 1] + 1).min(cur[j] + 1).min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
+/// TASK-887: when `aida rel add --type <x>` gets a value that ISN'T a known
+/// standard relationship type, it's stored as a `Custom` edge — which the graph
+/// traversals silently won't follow. Returns the nearest standard type when the
+/// input is a plausible typo of one (edit distance small relative to its
+/// length), for a "did you mean" hint. Returns `None` for an already-standard
+/// type or a value too far from any standard to be a typo (a genuine custom
+/// type). Pure → unit-testable. trace:TASK-887 | ai:claude
+fn nearest_standard_rel_type(input: &str) -> Option<&'static str> {
+    let needle = input.trim().to_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    // Already standard (or an accepted alias normalizing to one) → no hint.
+    if !matches!(
+        RelationshipType::from_str(&needle),
+        RelationshipType::Custom(_)
+    ) {
+        return None;
+    }
+    let mut best: Option<(&'static str, usize)> = None;
+    for &std_ty in STANDARD_REL_TYPES {
+        let d = levenshtein(&needle, std_ty);
+        if best.is_none_or(|(_, bd)| d < bd) {
+            best = Some((std_ty, d));
+        }
+    }
+    match best {
+        // Only call it a typo when it's close: ≤2 edits. Empirically the
+        // standard-type typos sit at d≤2 while deliberate custom types
+        // ("supersedes", "implements", "relates-to") sit at d≥6, so this cleanly
+        // separates the two without nagging genuine custom edges.
+        Some((ty, d)) if d <= 2 => Some(ty),
+        _ => None,
+    }
+}
+
 fn add_relationship(
     storage: &Storage,
     from_str: &str,
@@ -100516,6 +100651,68 @@ mod task_679_canonical_rel_tests {
             std::collections::HashSet::from([can_id, leg_id]),
             "tree must find children from both the canonical and legacy edge orientations"
         );
+    }
+}
+
+#[cfg(test)]
+mod task_887_888_input_validation_tests {
+    use super::nearest_standard_rel_type;
+
+    #[test]
+    fn typos_of_standard_rel_types_get_a_did_you_mean() {
+        // The motivating cases from the dogfood: a fat-fingered standard type
+        // that lands as a Custom edge (NOT one of the accepted aliases).
+        assert_eq!(nearest_standard_rel_type("blcoks"), Some("blocks"));
+        assert_eq!(nearest_standard_rel_type("blok"), Some("blocks"));
+        assert_eq!(nearest_standard_rel_type("duplicat"), Some("duplicate"));
+        assert_eq!(nearest_standard_rel_type("blockd-by"), Some("blocked-by"));
+        // Case-insensitive.
+        assert_eq!(nearest_standard_rel_type("Blcoks"), Some("blocks"));
+    }
+
+    #[test]
+    fn standard_rel_types_and_aliases_get_no_hint() {
+        // Exact standard spellings → no hint (handled silently as today).
+        for t in [
+            "parent",
+            "child",
+            "duplicate",
+            "verifies",
+            "verified-by",
+            "references",
+            "blocked-by",
+            "blocks",
+        ] {
+            assert_eq!(nearest_standard_rel_type(t), None, "{t} is standard");
+        }
+        // Accepted aliases that `from_str` normalizes to a standard variant.
+        assert_eq!(nearest_standard_rel_type("blocked_by"), None);
+        assert_eq!(nearest_standard_rel_type("verifiedby"), None);
+    }
+
+    #[test]
+    fn deliberate_custom_types_are_not_nagged() {
+        // A genuine custom type far from any standard → no false did-you-mean.
+        assert_eq!(nearest_standard_rel_type("supersedes"), None);
+        assert_eq!(nearest_standard_rel_type("implements"), None);
+        assert_eq!(nearest_standard_rel_type("relates-to"), None);
+        assert_eq!(nearest_standard_rel_type(""), None);
+    }
+
+    // TASK-888: the empty-title rejection is a `title.trim().is_empty()` guard
+    // in the `aida add` handler. Pin the predicate directly so the rejection
+    // contract survives a refactor of the handler. trace:TASK-888 | ai:claude
+    fn title_is_rejected(title: &str) -> bool {
+        title.trim().is_empty()
+    }
+
+    #[test]
+    fn empty_and_whitespace_titles_are_rejected() {
+        assert!(title_is_rejected(""));
+        assert!(title_is_rejected("   "));
+        assert!(title_is_rejected("\t\n "));
+        assert!(!title_is_rejected("Real title"));
+        assert!(!title_is_rejected("  padded but real  "));
     }
 }
 
