@@ -19522,5 +19522,27 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1908
+- id: 019ee068-5dab-70e2-a300-adb8b165f9b5
+  target_id: 019ee068-5a1b-7441-8841-cf73ed7025a7
+  author: aida
+  node_id: '1'
+  lamport: 1909
+  timestamp: 2026-06-19T15:03:16.651662013Z
+  kind: !Create
+    title: aida advisor / aida advisor status include seeded META prompts as groomable drafts (BUG-464 fix did not reach the advisor surface)
+    description: |-
+      On a fresh aida init store with 7 user drafts + 6 seeded META prompts:
+      - aida status  → "Inbox: 7 untriaged drafts" (correct — BUG-464 already excludes META)
+      - aida advisor status → "13 draft(s) to triage" (7 + 6 META — META re-counted)
+      - aida advisor → groom section lists META-001..006 alongside real drafts, as if an advisor should approve/reject/defer AI-prompt templates
+
+      META (and folder) are stateless standing artifacts; they are not backlog work. BUG-464 ("aida status miscounts seeded META as untriaged drafts") and TASK-773 (exclude meta/folder/vision/... from open-work views) are both Completed, but the advisor count/worklist path is a separate codepath that never got the exclusion — a regression of the fixed behavior on the niche-defining surface.
+
+      Expected: advisor groom worklist and the advisor-status draft/intake count exclude meta/folder (and the other standing types) exactly like aida status does.
+
+      Repro: git init + aida init; AIDA_SESSION_ROLE=advisor aida advisor; aida advisor status.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1909
 node_id: '1'
