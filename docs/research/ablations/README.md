@@ -2,7 +2,7 @@
 
 The experimental arm of EPIC-48 (AIDA as a research probe). Each file is a dated, pre-registered experiment with deterministic grading where possible. These are the **evidence** behind the propositions in the theory paper (`../2026-06-16-coordinating-multi-vendor-agent-fleets.md`); read them when the paper cites a finding and you want the raw result.
 
-Two programs ran. Read them in order within each.
+Four programs ran. Read them in order within each.
 
 ## Program 1 — gate-vs-rule (P1, substrate-as-bouncer): COMPLETE, terminus reached
 
@@ -35,6 +35,14 @@ The question: *does AIDA's typed graph actually pay over plain markdown + git + 
 | File | Setup | Finding |
 |---|---|---|
 | `2026-06-19-ryo-friction-benchmark.md` | RYO (one md/spec + grep) vs AIDA (typed graph), same specs, 5 tasks incl. fairness | The axis is **question-shape, not graph-vs-grep.** Graph pays on **relational** (blocked-closure latency: ~80x at 500) + **rename** (silent ref-rot: RYO leaves 2 dangling refs at every scale ≥50; AIDA id-stable, 0). grep **wins** on **full-text** + **flat-list** (faster, zero-install). "Dead weight" reading **falsified for relational/rename work**; honest both/and by task. Cannot escape the section-10 team-adoption confound — measures capability-friction only. |
+
+## Program 4 — cross-vendor portability (P8b, near-zero onboarding cost): first row run
+
+The question: *can a brand-new vendor's agent become productive in a running AIDA fleet with zero bespoke integration?* P8b's business case (theory paper §7) rests on the onboarding cost being near-zero — the one thing single-vendor incumbents (Agent Teams, Codex sub-agents) structurally cannot show, because a rival vendor has no native seat in their coordination primitive at all. (Distinct from Program 2: this is the *onboarding-cost* leg, not the *operating-quality* leg.)
+
+| File | Setup | Finding |
+|---|---|---|
+| `2026-06-19-cross-vendor-portability.md` | cold Codex (`gpt-5.5`), stock `aida` CLI only + one-line prompt, throwaway live fleet, deterministic grading | Codex discovered → claimed → shipped → verified a `(SPEC-ID)`-trailered auto-completed spec in **~50 s with 0 lines of integration**. Onboarding-cost premise **moves from argument toward evidence** for one vendor pair (Claude↔Codex). Also *found + filed a bug* (BUG-583, the brief `## Setup` path assumption) — probe surfacing a fixable substrate defect. **n=1 vendor, n=1 trivial task, CLI-only** — existence-proof, not a study; 4+ vendor table + MCP leg are the next rows. |
 
 ## How to read a result honestly
 
