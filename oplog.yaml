@@ -18855,5 +18855,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1862
+- id: 019eddb9-af34-79e1-a9f9-47df43fcd450
+  target_id: 019eddb9-abf3-7f61-a3a2-b74ee1086df7
+  author: aida
+  node_id: '1'
+  lamport: 1863
+  timestamp: 2026-06-19T02:33:14.292851549Z
+  kind: !Create
+    title: aida init should detect the forge CLI (gh / glab) and configure it; warn when missing
+    description: 'aida pr auto-queue-review fails hard when gh is not on PATH (real operator hit: "gh CLI not on PATH - would have queued reviewer story for branch master"). aida init should detect the available forge CLI (gh for GitHub, glab for GitLab) and record the forge provider in config (ties to the EPIC-35 forge abstraction), and warn clearly when neither is present with install guidance. Only ask about glab if a GitLab remote/forge is actually in use. Reduces the "silent until you hit a pr command" failure.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1863
 node_id: '1'
