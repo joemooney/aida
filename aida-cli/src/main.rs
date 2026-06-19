@@ -857,6 +857,81 @@ mod story_423_asciinema_tests {
         );
     }
 
+    // trace:TASK-881 | ai:claude
+    #[test]
+    fn bare_queue_defaults_to_queue_list() {
+        use crate::cli::{Command, QueueCommand};
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+        // bare `aida queue` → `aida queue list`
+        let out = rewrite_queue_default_list(&s(&["aida", "queue"]));
+        assert_eq!(out, s(&["aida", "queue", "list"]));
+        assert!(matches!(
+            Cli::try_parse_from(out).unwrap().command,
+            Command::Queue(QueueCommand::List { .. })
+        ));
+
+        // Flags-only `aida queue --for implementer` (no subcommand) → spliced `list`
+        assert_eq!(
+            rewrite_queue_default_list(&s(&["aida", "queue", "--for", "implementer"])),
+            s(&["aida", "queue", "list", "--for", "implementer"])
+        );
+
+        // Recognized subcommands pass through unchanged.
+        for sub in [
+            "list",
+            "add",
+            "load",
+            "remove",
+            "move",
+            "clear",
+            "prune",
+            "next",
+            "advance",
+            "done",
+            "work",
+            "progress",
+            "rework",
+            "recover",
+            "integrate",
+        ] {
+            assert_eq!(
+                rewrite_queue_default_list(&s(&["aida", "queue", sub])),
+                s(&["aida", "queue", sub]),
+                "subcommand {sub} should pass through"
+            );
+        }
+
+        // `aida queue work TASK-1` still reaches the Work variant after the rewrite.
+        assert!(matches!(
+            Cli::try_parse_from(rewrite_queue_default_list(&s(&[
+                "aida", "queue", "work", "TASK-1"
+            ])))
+            .unwrap()
+            .command,
+            Command::Queue(QueueCommand::Work { .. })
+        ));
+
+        // Help flags + the `help` verb keep clap's parent help (untouched).
+        for help in [
+            &["aida", "queue", "--help"][..],
+            &["aida", "queue", "-h"][..],
+            &["aida", "queue", "help"][..],
+        ] {
+            assert_eq!(
+                rewrite_queue_default_list(&s(help)),
+                s(help),
+                "help form {help:?} should pass through"
+            );
+        }
+
+        // Non-queue commands are untouched.
+        assert_eq!(
+            rewrite_queue_default_list(&s(&["aida", "list"])),
+            s(&["aida", "list"])
+        );
+    }
+
     #[test]
     fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
         let cli = Cli::try_parse_from([
@@ -1193,6 +1268,53 @@ fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
     args.to_vec()
 }
 
+/// TASK-881: bare `aida queue` (no recognized subcommand) defaults to
+/// `aida queue list`, matching the `aida list` / `aida status` "bare form is
+/// the read view" ergonomics — instead of dumping the clap subcommand help
+/// wall (exit 2), which reads as an error to a newcomer asking "what's
+/// queued?". Recognized subcommands pass through unchanged, and `aida queue
+/// --help` / `-h` / `help` keep clap's parent help so the surface stays
+/// discoverable. Mirrors `rewrite_agent_default_new` (TASK-858); flags-only
+/// invocations (`aida queue --role implementer`) forward to `list`.
+// trace:TASK-881 | ai:claude
+fn rewrite_queue_default_list(args: &[String]) -> Vec<String> {
+    if args.len() >= 2 && args[1] == "queue" {
+        // The next token decides: a recognized subcommand or a help flag is
+        // left alone; anything else (including bare `aida queue` and
+        // flags-only forms) gets `list` spliced in so flags forward to it.
+        const KNOWN_SUBCOMMANDS: &[&str] = &[
+            "list",
+            "add",
+            "load",
+            "remove",
+            "move",
+            "clear",
+            "prune",
+            "next",
+            "advance",
+            "done",
+            "work",
+            "progress",
+            "rework",
+            "recover",
+            "integrate",
+            "help",
+        ];
+        let next = args.get(2).map(String::as_str);
+        let passthrough = matches!(next, Some(t) if
+            KNOWN_SUBCOMMANDS.contains(&t) || t == "--help" || t == "-h");
+        if !passthrough {
+            let mut out = Vec::with_capacity(args.len() + 1);
+            out.push(args[0].clone());
+            out.push("queue".to_string());
+            out.push("list".to_string());
+            out.extend_from_slice(&args[2..]);
+            return out;
+        }
+    }
+    args.to_vec()
+}
+
 /// One `aida list <lens>` argv-rewrite row. See [`LIST_LENS_ALIASES`].
 /// trace:STORY-667 | ai:claude
 pub(crate) struct ListLensAlias {
@@ -1347,8 +1469,11 @@ fn run() -> Result<()> {
     // TASK-862: `aida mylist` / `aida myqueue` personal-view shortcuts rewrite
     // before the list-lens / advisor-assess passes so `mylist` reaches the same
     // `list me` path the lens resolvers feed.
-    let mut cli = Cli::parse_from(rewrite_agent_default_new(&rewrite_list_alias(
-        &rewrite_advisor_assess(&rewrite_personal_view_alias(&raw_args)),
+    // trace:TASK-881 | ai:claude — bare `aida queue` -> `aida queue list`.
+    let mut cli = Cli::parse_from(rewrite_queue_default_list(&rewrite_agent_default_new(
+        &rewrite_list_alias(&rewrite_advisor_assess(&rewrite_personal_view_alias(
+            &raw_args,
+        ))),
     )));
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
