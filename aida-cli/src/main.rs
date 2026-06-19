@@ -31368,7 +31368,8 @@ fn store_status() -> Result<()> {
             );
         }
         (Some(p), Some(c)) => {
-            // Compute drift: how many commits is store HEAD ahead of/behind paired.
+            // Compute the commit counts: how many commits is store HEAD
+            // ahead of / behind the paired SHA.
             let drift = std::process::Command::new("git")
                 .arg("-C")
                 .arg(&store_path)
@@ -31390,28 +31391,50 @@ fn store_status() -> Result<()> {
                 }
                 _ => (-1, -1),
             };
-            if behind < 0 {
+            // The store legitimately advances ahead of the pin on every
+            // normal spec write — that is the healthy state, not drift. Only
+            // a genuine divergence (paired SHA not an ancestor of the current
+            // store HEAD) is worth flagging. trace:BUG-584
+            let is_ancestor = store_sha_is_ancestor(&store_path, p, c);
+            if behind <= 0 && is_ancestor {
+                // Fast-forward: store simply moved forward N commits.
+                if ahead > 0 {
+                    println!(
+                        "{} store ahead — {} normal spec-write commit(s) since this code commit was paired (healthy: the store moves forward as you file specs).",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        ahead
+                    );
+                } else {
+                    // Ancestor with zero ahead-count shouldn't happen (that's
+                    // the aligned arm), but stay quiet-and-clean if it does.
+                    println!(
+                        "{} store ahead — code commit was paired with an ancestor of the current store HEAD (healthy).",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    );
+                }
+            } else if behind < 0 {
                 println!(
-                    "{} drift — store moved since this commit was made (could not count commits, paired SHA may not exist locally).",
+                    "{} drift — store diverged since this commit was made (could not count commits, paired SHA may not exist locally).",
                     "·".yellow()
+                );
+                println!(
+                    "  v2 will offer: {}",
+                    "aida store checkout HEAD   # rewind .aida-store/ to the paired SHA".dimmed()
                 );
             } else {
                 println!(
-                    "{} drift — store moved {} commit(s) since this code commit was made.",
-                    "·".yellow(),
-                    ahead
+                    "{} drift — store diverged from the paired SHA (possible store-side history rewrite).",
+                    "·".yellow()
                 );
-                if behind > 0 {
-                    println!(
-                        "  Note: {} commit(s) on the paired SHA are not on the current store HEAD — possible store-side history rewrite.",
-                        behind
-                    );
-                }
+                println!(
+                    "  {} commit(s) on the paired SHA are not on the current store HEAD; {} commit(s) on the current store HEAD are not on the paired SHA.",
+                    behind, ahead
+                );
+                println!(
+                    "  v2 will offer: {}",
+                    "aida store checkout HEAD   # rewind .aida-store/ to the paired SHA".dimmed()
+                );
             }
-            println!(
-                "  v2 will offer: {}",
-                "aida store checkout HEAD   # rewind .aida-store/ to the paired SHA".dimmed()
-            );
         }
         (None, _) => {
             println!(
@@ -31438,23 +31461,72 @@ fn short_sha(sha: &str) -> String {
     }
 }
 
+/// Verdict for the code↔store SHA pairing. trace:BUG-584 | ai:claude
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum StoreDriftVerdict {
+    /// Nothing to compare — no trailer, or no `.aida-store/`.
+    NoVerdict,
+    /// Paired SHA == current store HEAD.
+    Aligned,
+    /// Current store HEAD is a fast-forward descendant of the paired SHA —
+    /// the store simply moved forward via normal spec writes (`aida add` /
+    /// `aida done`). This is the **normal, healthy** state, NOT drift: the
+    /// store SHOULD be ahead of a code commit's pin once you file specs.
+    StoreAhead,
+    /// The paired SHA is NOT an ancestor of the current store HEAD — a
+    /// genuine divergence: a store-side history rewrite, or a paired SHA that
+    /// no longer exists locally. This is the only state worth warning about.
+    Diverged,
+}
+
 /// Pure drift verdict: given the code commit's paired store SHA (from the
-/// `Aida-Store:` trailer) and the current orphan-store HEAD, decide whether
-/// the store has drifted away from the SHA the code was committed against.
+/// `Aida-Store:` trailer), the current orphan-store HEAD, and whether the
+/// paired SHA is an ancestor of the current store HEAD, decide the pairing
+/// state.
 ///
-/// Returns `Some(true)` when both SHAs are present and differ (drift),
-/// `Some(false)` when both are present and match (aligned), and `None` when
-/// either side is absent (no trailer, or no `.aida-store/`) — i.e. there is
-/// nothing to compare, so no drift claim is made.
-/// trace:STORY-49 | ai:claude
-fn store_sha_drift(
+/// The pin's purpose (STORY-49) is to detect when the store has genuinely
+/// *diverged* from what a code commit was paired against (a rewind/rewrite).
+/// But the orphan store legitimately advances ahead of the pin on every
+/// normal `aida add` / `aida done` write, so a bare `paired != current`
+/// comparison fires on day one after ordinary use (BUG-584). We only treat a
+/// difference as drift when the paired SHA is **not** an ancestor of the
+/// current store HEAD — i.e. the store has truly diverged, not merely moved
+/// forward.
+///
+/// `paired_is_ancestor_of_current` is the caller-supplied ancestry fact
+/// (`git merge-base --is-ancestor <paired> <current>`); kept as a parameter
+/// so this stays a pure, unit-testable function.
+/// trace:STORY-49 trace:BUG-584 | ai:claude
+fn store_drift_verdict(
     paired_store_sha: Option<&str>,
     current_store_head: Option<&str>,
-) -> Option<bool> {
+    paired_is_ancestor_of_current: bool,
+) -> StoreDriftVerdict {
     match (paired_store_sha, current_store_head) {
-        (Some(p), Some(c)) => Some(p.trim() != c.trim()),
-        _ => None,
+        (Some(p), Some(c)) if p.trim() == c.trim() => StoreDriftVerdict::Aligned,
+        (Some(_), Some(_)) if paired_is_ancestor_of_current => StoreDriftVerdict::StoreAhead,
+        (Some(_), Some(_)) => StoreDriftVerdict::Diverged,
+        _ => StoreDriftVerdict::NoVerdict,
     }
+}
+
+/// True when `ancestor` is an ancestor of (or equal to) `descendant` in the
+/// orphan store's git history — i.e. the store fast-forwarded from `ancestor`
+/// to `descendant`. Resolved via `git merge-base --is-ancestor` inside the
+/// `.aida-store/` worktree. Returns `false` on any git error or when either
+/// SHA is missing locally (which is itself a divergence signal, so the
+/// caller correctly reports drift). trace:BUG-584 | ai:claude
+fn store_sha_is_ancestor(store_path: &std::path::Path, ancestor: &str, descendant: &str) -> bool {
+    if !store_path.exists() {
+        return false;
+    }
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args(["merge-base", "--is-ancestor", ancestor, descendant])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// Read the `Aida-Store:` trailer SHA from the code HEAD commit message at
@@ -31518,18 +31590,29 @@ fn current_store_head_sha(project_root: &std::path::Path) -> Option<String> {
 
 /// STORY-49: one-line store/code SHA-drift warning for `aida status`.
 ///
-/// Warn-only: when the code HEAD's paired store SHA (`Aida-Store:` trailer)
-/// diverges from the current orphan-store HEAD, surface a single yellow line
-/// pointing at `aida store status` for detail. Silent when aligned, when
-/// there is no trailer (hook not installed / pre-hook commit), or when there
-/// is no `.aida-store/` — anything that isn't an unambiguous drift signal
-/// stays quiet so a fresh / unpaired project sees no nag. trace:STORY-49
+/// Warn-only, and only on **genuine** divergence. The code HEAD's paired
+/// store SHA (`Aida-Store:` trailer) is a pin recorded at commit time; the
+/// orphan store legitimately moves ahead of it on every normal `aida add` /
+/// `aida done`, so a bare "paired != current" comparison nagged on day one
+/// after ordinary use (BUG-584). We surface the yellow line only when the
+/// store has truly diverged (paired SHA is not an ancestor of the current
+/// store HEAD — a rewind/rewrite, or a paired SHA missing locally). Silent
+/// when aligned, when the store is simply ahead (the normal, healthy state),
+/// when there is no trailer (hook not installed / pre-hook commit), or when
+/// there is no `.aida-store/`. trace:STORY-49 trace:BUG-584
 fn print_status_store_drift_section(project_root: &std::path::Path) {
     let paired = paired_store_sha_for_head(project_root);
     let current = current_store_head_sha(project_root);
-    if let Some(true) = store_sha_drift(paired.as_deref(), current.as_deref()) {
+    let store_path = project_root.join(".aida-store");
+    let is_ancestor = match (paired.as_deref(), current.as_deref()) {
+        (Some(p), Some(c)) => store_sha_is_ancestor(&store_path, p, c),
+        _ => false,
+    };
+    if let StoreDriftVerdict::Diverged =
+        store_drift_verdict(paired.as_deref(), current.as_deref(), is_ancestor)
+    {
         println!(
-            "  {} code HEAD pinned store {} but current store is {} — run {} for detail",
+            "  {} code HEAD pinned store {} but the current store {} diverged from it — run {} for detail",
             "Store drift:".bold().yellow(),
             short_sha(paired.as_deref().unwrap_or("")).dimmed(),
             short_sha(current.as_deref().unwrap_or("")).dimmed(),
@@ -31541,41 +31624,72 @@ fn print_status_store_drift_section(project_root: &std::path::Path) {
 
 #[cfg(test)]
 mod story_49_store_drift_tests {
-    use super::store_sha_drift;
+    use super::{store_drift_verdict, StoreDriftVerdict};
 
     #[test]
     fn aligned_when_paired_equals_current() {
-        assert_eq!(store_sha_drift(Some("abc123"), Some("abc123")), Some(false));
-    }
-
-    #[test]
-    fn drift_when_paired_differs_from_current() {
-        assert_eq!(store_sha_drift(Some("abc123"), Some("def456")), Some(true));
+        // Ancestry is irrelevant when the two SHAs are equal.
+        assert_eq!(
+            store_drift_verdict(Some("abc123"), Some("abc123"), false),
+            StoreDriftVerdict::Aligned
+        );
     }
 
     #[test]
     fn whitespace_around_shas_is_ignored() {
         assert_eq!(
-            store_sha_drift(Some("  abc123\n"), Some("abc123")),
-            Some(false)
+            store_drift_verdict(Some("  abc123\n"), Some("abc123"), false),
+            StoreDriftVerdict::Aligned
+        );
+    }
+
+    // BUG-584: the store legitimately advances ahead of the pin on every
+    // normal `aida add` / `aida done`. When the paired SHA is an ancestor of
+    // the current store HEAD, that is the healthy "store ahead" state — NOT
+    // drift. This is the false-positive the day-one dogfood hit.
+    #[test]
+    fn store_ahead_is_not_drift() {
+        assert_eq!(
+            store_drift_verdict(Some("abc123"), Some("def456"), /* is_ancestor */ true),
+            StoreDriftVerdict::StoreAhead
+        );
+    }
+
+    // BUG-584: genuine divergence — paired SHA is NOT an ancestor of the
+    // current store HEAD (history rewrite / rewind, or paired SHA missing
+    // locally). This must still be reported as drift.
+    #[test]
+    fn genuine_divergence_is_drift() {
+        assert_eq!(
+            store_drift_verdict(Some("abc123"), Some("def456"), /* is_ancestor */ false),
+            StoreDriftVerdict::Diverged
         );
     }
 
     #[test]
     fn no_verdict_without_a_paired_sha() {
         // No `Aida-Store:` trailer on the commit — nothing to compare.
-        assert_eq!(store_sha_drift(None, Some("abc123")), None);
+        assert_eq!(
+            store_drift_verdict(None, Some("abc123"), false),
+            StoreDriftVerdict::NoVerdict
+        );
     }
 
     #[test]
     fn no_verdict_without_a_current_store_head() {
         // No `.aida-store/` worktree — nothing to compare.
-        assert_eq!(store_sha_drift(Some("abc123"), None), None);
+        assert_eq!(
+            store_drift_verdict(Some("abc123"), None, false),
+            StoreDriftVerdict::NoVerdict
+        );
     }
 
     #[test]
     fn no_verdict_when_both_absent() {
-        assert_eq!(store_sha_drift(None, None), None);
+        assert_eq!(
+            store_drift_verdict(None, None, false),
+            StoreDriftVerdict::NoVerdict
+        );
     }
 }
 
