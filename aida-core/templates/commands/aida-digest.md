@@ -1,3 +1,6 @@
+---
+description: "Produce a curated narrative work digest for a time window."
+---
 # AIDA Digest
 
 Produce a curated narrative work digest for a time window.

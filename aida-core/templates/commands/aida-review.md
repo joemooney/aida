@@ -1,3 +1,6 @@
+---
+description: "Drive a PR review to completion — checklist, verdicts, fix-forward, merge, mark-complete."
+---
 # AIDA Review
 
 Drive a PR review to completion — checklist, verdicts, fix-forward, merge, mark-complete.

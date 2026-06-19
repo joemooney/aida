@@ -292,6 +292,15 @@ pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> Strin
             format!("{}{}", header, raw_content)
         }
     } else if raw_content.starts_with("---\n") {
+        // Markdown with YAML frontmatter: insert the AIDA-Generated comment
+        // *after* the frontmatter. Two reasons: (1) Codex/agents expect `---`
+        // at byte 0 (BUG-375), and (2) Claude Code derives a slash-command's
+        // displayed description from its frontmatter `description:` (or, absent
+        // that, the first paragraph of the body) — so keeping the marker out of
+        // both positions stops the `<!-- AIDA Generated: ... -->` line leaking
+        // into the visible command help. The command templates therefore carry
+        // a `description:` frontmatter precisely so this marker stays a
+        // non-displayed artifact. trace:BUG-580 | ai:claude
         let after_open = 4; // past "---\n"
         if let Some(close_pos) = raw_content[after_open..].find("\n---\n") {
             let fm_end = after_open + close_pos + 5; // past "\n---\n"
@@ -2757,6 +2766,64 @@ mod tests {
         // Without frontmatter: must hash the whole content.
         let no_fm = "# heading\n\nbody\n";
         assert_eq!(checksum_for_stored_header(no_fm), compute_checksum(no_fm));
+    }
+
+    #[test]
+    fn generated_marker_never_leaks_into_slash_command_help() {
+        // trace:BUG-580 | ai:claude
+        // Regression: the `<!-- AIDA Generated: ... DO NOT EDIT DIRECTLY -->`
+        // marker must never be the first paragraph (or the frontmatter
+        // `description:`) of a scaffolded slash command, or Claude Code
+        // surfaces it as the command's visible help line. Every embedded
+        // command template therefore carries YAML frontmatter so the marker
+        // lands AFTER it. This walks every embedded command template, wraps it
+        // exactly as `apply` would, and asserts the marker is not on line 1.
+        use crate::templates::EMBEDDED_TEMPLATES;
+        let mut checked = 0;
+        for key in EMBEDDED_TEMPLATES.keys() {
+            let filename = match key.strip_prefix("commands/") {
+                Some(f) if f.ends_with(".md") => f,
+                _ => continue,
+            };
+            let raw = EMBEDDED_TEMPLATES.get(key).unwrap();
+            assert!(
+                raw.starts_with("---\n"),
+                "command template {} must start with YAML frontmatter so the \
+                 AIDA-Generated marker can be hidden after it",
+                filename
+            );
+            let path = PathBuf::from(format!(".claude/commands/{}", filename));
+            let wrapped = wrap_with_aida_header(&path, raw);
+            let first_line = wrapped.lines().next().unwrap_or("");
+            assert!(
+                !first_line.contains("AIDA Generated"),
+                "scaffolded {} must not put the AIDA-Generated marker on line 1 \
+                 (it leaks into slash-command help); first line was: {}",
+                filename,
+                first_line
+            );
+            // The frontmatter description (the help line Claude Code shows)
+            // must not be the marker either.
+            let mut in_fm = false;
+            for line in wrapped.lines() {
+                if line == "---" {
+                    in_fm = !in_fm;
+                    continue;
+                }
+                if in_fm && line.starts_with("description:") {
+                    assert!(
+                        !line.contains("AIDA Generated"),
+                        "{}: frontmatter description must not contain the marker",
+                        filename
+                    );
+                }
+            }
+            checked += 1;
+        }
+        assert!(
+            checked > 0,
+            "expected to check at least one command template"
+        );
     }
 
     fn create_test_store() -> RequirementsStore {

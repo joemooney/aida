@@ -1,3 +1,7 @@
+---
+name: aida-fasttrack
+description: "The low-ceremony lane for genuinely trivial work — a doc tweak, a one-line UX papercut, a string fix. File it, do it, and let CI be the only gate. No human-review round-trip."
+---
 # Fasttrack a trivial change
 
 The low-ceremony lane for genuinely trivial work — a doc tweak, a one-line UX

@@ -1,3 +1,6 @@
+---
+description: "Pull the next item routed to your active role, work it, mark it done."
+---
 # Pick Up Next Queued Item
 
 Pull the next item routed to your active role, work it, mark it done.

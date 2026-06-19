@@ -1,3 +1,6 @@
+---
+description: "Add a new requirement to the database with AI evaluation."
+---
 # Add AIDA Requirement
 
 Add a new requirement to the database with AI evaluation.

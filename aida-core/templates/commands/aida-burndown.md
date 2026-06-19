@@ -1,3 +1,6 @@
+---
+description: "Fan out worktree-isolated implementer subagents over the ready set, integrate their PRs, and loop until drained — the empirically-working autonomous drain, encoded so the \"never stop to ask\" rules are structural."
+---
 # Autonomously Burn Down the Backlog
 
 Fan out worktree-isolated implementer subagents over the ready set, integrate

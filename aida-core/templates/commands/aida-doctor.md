@@ -1,3 +1,6 @@
+---
+description: "Run a read-only multi-agent drift report on the AIDA project and surface fixes."
+---
 # /aida-doctor
 
 Follow the workflow in `.claude/skills/aida-doctor.md`:

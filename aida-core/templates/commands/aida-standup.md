@@ -1,3 +1,6 @@
+---
+description: "Generate daily standup summary from recent activity."
+---
 # Daily Standup
 
 Generate daily standup summary from recent activity.

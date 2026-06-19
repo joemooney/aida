@@ -1,3 +1,6 @@
+---
+description: "Sweep the whole decision inbox and loop the operator through each pending item interactively — record the chosen resolution, or author the missing acceptance — until the inbox is empty. The human-decision drain: the operator-at-the-keyboard mirror of `aida burndown run` (which drains the decision-FREE ready set headless)."
+---
 # Drain the Decision Inbox
 
 Sweep the whole decision inbox and loop the operator through each pending item

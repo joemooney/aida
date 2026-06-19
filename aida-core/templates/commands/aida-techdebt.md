@@ -1,3 +1,6 @@
+---
+description: "Run a read-only end-of-session sweep for duplication and code debt, then surface findings with a recommendation and filing verb each."
+---
 # Tech-Debt Scan
 
 Run a read-only end-of-session sweep for duplication and code debt, then surface findings with a recommendation and filing verb each.
