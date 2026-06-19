@@ -68811,6 +68811,78 @@ mod in_flight_linkage_integration_tests {
         ));
     }
 
+    // BUG-582: a finished (`Completed`) spec is NEVER reviews-awaiting, even
+    // when a lingering local branch still classifies as an OPEN review surface
+    // (the stale-Agent-tool-worktree false positive that put already-merged
+    // BUG-581 / PR-1048 back on the operator's seat). Constructed off the same
+    // GitLinkage + ChangeLookup seam the surface tests use — no repo/forge.
+    // trace:BUG-582 | ai:claude
+    #[test]
+    fn completed_spec_with_open_surface_is_not_review_awaiting() {
+        // A genuinely-open PR surface — the legitimate "needs review" shape...
+        let l = linkage(false, None, Some("worktree-agent-abc"), 2);
+        let found = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 1048,
+            url: "https://example/pr/1048".to_string(),
+            branch: "worktree-agent-abc".to_string(),
+            base: "main".to_string(),
+            title: None,
+        });
+        let surface = classify_review_surface(&l, Some(found));
+        assert!(
+            matches!(surface, ReviewSurface::OpenChange { .. }),
+            "precondition: lingering branch classifies as an open surface"
+        );
+        // ...but a Completed spec must STILL be excluded — the invariant.
+        assert!(
+            !spec_eligible_for_review_awaiting(aida_core::RequirementStatus::Completed, &surface),
+            "Completed spec must never be reviews-awaiting, even with an open surface"
+        );
+        // Rejected (abandoned) is likewise excluded.
+        assert!(!spec_eligible_for_review_awaiting(
+            aida_core::RequirementStatus::Rejected,
+            &surface
+        ));
+    }
+
+    // BUG-582: the LEGITIMATE case must still pass — a Done spec with an open
+    // PR not yet merged IS reviews-awaiting. trace:BUG-582 | ai:claude
+    #[test]
+    fn done_spec_with_open_pr_is_still_review_awaiting() {
+        let l = linkage(false, None, Some("story-553"), 2);
+        let found = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 42,
+            url: "https://example/pr/42".to_string(),
+            branch: "story-553".to_string(),
+            base: "main".to_string(),
+            title: None,
+        });
+        let surface = classify_review_surface(&l, Some(found));
+        for status in [
+            aida_core::RequirementStatus::Done,
+            aida_core::RequirementStatus::InProgress,
+            aida_core::RequirementStatus::Approved,
+        ] {
+            assert!(
+                spec_eligible_for_review_awaiting(status, &surface),
+                "an active spec with an OPEN PR must remain reviews-awaiting"
+            );
+        }
+    }
+
+    // BUG-582: a merged (`Shipped`) surface is not a review even for an active
+    // status — the merged-PR signal drops it. trace:BUG-582 | ai:claude
+    #[test]
+    fn merged_surface_is_not_review_awaiting() {
+        let l = linkage(true, Some(7), Some("story-553"), 1);
+        let surface = classify_review_surface(&l, None);
+        assert!(matches!(surface, ReviewSurface::Shipped { .. }));
+        assert!(!spec_eligible_for_review_awaiting(
+            aida_core::RequirementStatus::Done,
+            &surface
+        ));
+    }
+
     // BUG-539: `aida review <SPEC>` must short-circuit on a terminal/merged
     // spec rather than re-running a full review + Approve/Request-changes menu.
     #[test]
@@ -82272,7 +82344,19 @@ fn reviews_awaiting_human(
             .branch
             .as_deref()
             .map(|b| change_lookup_for_branch(project_root, b));
-        match classify_review_surface(&linkage, change) {
+        let surface = classify_review_surface(&linkage, change);
+        // BUG-582: the load-bearing invariant — a Completed/Rejected spec, or a
+        // merged/never-pushed surface, is NEVER reviews-awaiting. This is the
+        // gate the count and the render both flow through (the single `out`
+        // vec), so they stay consistent (BUG-579). The candidate pre-filter
+        // above already drops most of these for cost, but it reads the cache;
+        // this re-checks the live status so a stale cache row left over from a
+        // lingering Agent-tool worktree branch can't slip a finished spec back
+        // onto the operator's seat. trace:BUG-582 | ai:claude
+        if !spec_eligible_for_review_awaiting(req.status.clone(), &surface) {
+            continue;
+        }
+        match surface {
             ReviewSurface::OpenChange { number, .. } => {
                 let forge = crate::forge::resolve_forge_kind(project_root);
                 let reviewed = pr_has_approved_verdict(project_root, number);
@@ -82291,6 +82375,8 @@ fn reviews_awaiting_human(
                 });
             }
             // Already merged or never pushed — nothing for the human to review.
+            // (Unreachable: `spec_eligible_for_review_awaiting` already dropped
+            // these above; kept exhaustive for the match.)
             ReviewSurface::Shipped { .. } | ReviewSurface::Local => {}
         }
     }
@@ -103896,6 +103982,45 @@ fn classify_review_surface(
         },
         (None, _) => ReviewSurface::Local,
     }
+}
+
+/// BUG-582: the robust invariant guarding the `aida human` reviews-awaiting
+/// bucket — a finished spec can NEVER be resurrected onto the operator's seat
+/// by a lingering local branch / stale review surface.
+///
+/// Two stale-data leaks made BUG-581 (already `Completed`, PR-1048 already
+/// MERGED) surface as "needs review": (1) a spec whose status is terminal must
+/// never be a review candidate regardless of any branch the Agent-tool
+/// worktrees left lying around (`worktree-agent-*` branches accumulate), and
+/// (2) only a genuinely-open surface (`OpenChange` / `BranchNoChange`) is a
+/// review; a merged (`Shipped`) or never-pushed (`Local`) surface is not.
+///
+/// Centralizing both checks in one pure predicate keeps the guarantee from
+/// drifting: the candidate pre-filter in `reviews_awaiting_human` is a cost
+/// bound (it reads the cache, which can be stale), while THIS is the
+/// load-bearing invariant — even a stale cache row that slipped through the
+/// pre-filter is dropped here. Pure ⇒ unit-testable without a repo/forge.
+/// trace:BUG-582 | ai:claude
+fn spec_eligible_for_review_awaiting(
+    status: aida_core::RequirementStatus,
+    surface: &ReviewSurface,
+) -> bool {
+    // A finished (merged) or abandoned spec is never review work — a lingering
+    // local branch must not put it back on the operator's seat.
+    if matches!(
+        status,
+        aida_core::RequirementStatus::Completed | aida_core::RequirementStatus::Rejected
+    ) {
+        return false;
+    }
+    // Only a genuinely-open review surface counts. `Shipped` = the PR already
+    // merged (the merged-PR signal); `Local` = never pushed. Neither is a
+    // review awaiting a human. The LEGITIMATE case — Done-on-a-branch with an
+    // OPEN PR not yet merged — is `OpenChange` and stays included.
+    matches!(
+        surface,
+        ReviewSurface::OpenChange { .. } | ReviewSurface::BranchNoChange { .. }
+    )
 }
 
 /// BUG-511: RAII release for the review-verb lease — removing the lease
