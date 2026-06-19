@@ -1,0 +1,16 @@
+id: 019ee049-3169-7672-bba2-de1bd16ea90c
+spec_id: TASK-883
+agreed_id: TASK-883
+title: MCP post_punt accepts 'reason' as an alias for 'detail' but inputSchema only advertises 'detail' (hidden accepted arg)
+description: 'post_punt handler accepts either detail or reason (error on omitting both: "Missing required parameter: detail (or reason)"), but the published inputSchema only lists detail in properties/required. Agent-onboarding material and the stdio harness contract reference reason. A strict MCP client that generates calls purely from the advertised schema will use detail (works), but the cross-agent docs that say reason create a mismatch with the schema, and the accepted alias is invisible to schema-driven clients. Low severity. Fix: either add reason to the inputSchema properties (documenting it as an alias) or drop reason from the docs so schema and contract agree. Repro: tools/call post_punt {"spec_id":"BUG-2","reason":"x","category":"other"} -> success, read_punt shows detail:"x"; schema required=[spec_id, detail]. Verified-by-me (debug build sha fdb0a69fc).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T14:29:13.705744673Z
+modified_at: 2026-06-19T14:29:13.705744673Z
+req_type: Task
+tags:
+- from-dogfood
+- mcp
+- schema
