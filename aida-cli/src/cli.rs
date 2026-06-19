@@ -220,6 +220,28 @@ pub enum TraceCommand {
         #[clap(long)]
         block: bool,
     },
+
+    /// Trace-ROT detector: scan source for inline code-to-spec trace markers,
+    /// resolve each referenced id against the live requirement graph, and flag
+    /// dangling traces — markers whose target no longer exists (deleted,
+    /// renumbered) or resolves to a rejected spec. Reports total / resolved /
+    /// dangling + a rot rate. This makes a stale trace go "red" like a failing
+    /// type — the counterpart to `gate` (validates commit trailers) and
+    /// `coverage` (checks the code is traced). Report-only by default (exit 0);
+    /// `--block` exits non-zero when any dangling trace exists, for CI gating.
+    Check {
+        /// Path to scan (file or directory). Defaults to the project root.
+        path: Option<String>,
+
+        /// Emit machine-readable JSON instead of human text.
+        #[clap(long)]
+        json: bool,
+
+        /// Fail (exit non-zero) when any dangling trace exists. Default is
+        /// report-only: the report prints but the command succeeds.
+        #[clap(long)]
+        block: bool,
+    },
 }
 
 /// Commands for generating reports

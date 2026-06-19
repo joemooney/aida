@@ -58668,6 +58668,62 @@ mod statusline_tests {
         assert_eq!(violations[0].verdict, TrailerVerdict::Nonexistent);
     }
 
+    // ── TASK-868: trace-ROT resolution (`aida trace check` core) ──
+    //
+    // The rot decision is `resolve_trace_rot(store, id)`. Verify a resolving
+    // trace is NOT flagged, while each rotted shape (deleted/renumbered,
+    // rejected, archived) IS — and that the missing-store fallback is permissive.
+    // trace:TASK-868 | ai:claude
+    #[test]
+    fn trace_check_flags_rotted_resolves_clean_ones() {
+        use aida_core::{Requirement, RequirementStatus, RequirementsStore};
+
+        let mut store = RequirementsStore::default();
+
+        let mut live = Requirement::new("Live spec".to_string(), "desc".to_string());
+        live.spec_id = Some("TASK-868".to_string());
+        live.status = RequirementStatus::Approved;
+        store.requirements.push(live);
+
+        let mut rejected = Requirement::new("Dead spec".to_string(), "desc".to_string());
+        rejected.spec_id = Some("BUG-7".to_string());
+        rejected.status = RequirementStatus::Rejected;
+        store.requirements.push(rejected);
+
+        let mut archived = Requirement::new("Filed-away spec".to_string(), "desc".to_string());
+        archived.spec_id = Some("STORY-9".to_string());
+        archived.status = RequirementStatus::Completed;
+        archived.archived = true;
+        store.requirements.push(archived);
+
+        let s = Some(&store);
+
+        // A resolving trace is NOT rot and NOT flagged.
+        assert_eq!(resolve_trace_rot(s, "TASK-868"), TraceRotVerdict::Live);
+        assert!(!resolve_trace_rot(s, "TASK-868").is_rot());
+        assert!(!resolve_trace_rot(s, "TASK-868").is_flagged());
+        // case-insensitive resolution
+        assert_eq!(resolve_trace_rot(s, "task-868"), TraceRotVerdict::Live);
+
+        // A known-dangling trace (deleted/renumbered target) IS hard rot.
+        assert_eq!(resolve_trace_rot(s, "FR-99999"), TraceRotVerdict::Unknown);
+        assert!(resolve_trace_rot(s, "FR-99999").is_rot());
+        assert!(resolve_trace_rot(s, "FR-99999").is_flagged());
+
+        // Rejected target is a dead link → hard rot.
+        assert_eq!(resolve_trace_rot(s, "BUG-7"), TraceRotVerdict::Rejected);
+        assert!(resolve_trace_rot(s, "BUG-7").is_rot());
+
+        // Archived target still resolves: flagged (soft signal) but NOT hard rot
+        // — `--block` must not fail on it.
+        assert_eq!(resolve_trace_rot(s, "STORY-9"), TraceRotVerdict::Archived);
+        assert!(!resolve_trace_rot(s, "STORY-9").is_rot());
+        assert!(resolve_trace_rot(s, "STORY-9").is_flagged());
+
+        // No store reachable → permissive (never flag a whole tree).
+        assert_eq!(resolve_trace_rot(None, "FR-99999"), TraceRotVerdict::Live);
+    }
+
     // ── STORY-499: diff-level trace-COVERAGE core (fully-isolated) ──
     //
     // The whole point of STORY-499 is that the coverage decision (file →
@@ -98865,6 +98921,9 @@ fn handle_trace_command(cmd: &TraceCommand, storage: &Storage) -> Result<()> {
         TraceCommand::Coverage { range, json, block } => {
             handle_trace_coverage(range.as_deref(), *json, *block)?;
         }
+        TraceCommand::Check { path, json, block } => {
+            handle_trace_check(path.as_deref(), *json, *block)?;
+        }
     }
     Ok(())
 }
@@ -100189,6 +100248,252 @@ fn resolve_spec_in_store(store: Option<&aida_core::RequirementsStore>, id: &str)
         Some(r) if matches!(r.status, RequirementStatus::Rejected) => SpecResolution::Rejected,
         Some(_) => SpecResolution::Live,
     }
+}
+
+// ============================================================================
+// TASK-868: trace-ROT detector (`aida trace check`) — move #1 of EPIC-50.
+//
+// `gate` validates commit `(SPEC-ID)` trailers; `coverage` checks the changed
+// CODE carries provenance. `check` closes the third corner: it walks the inline
+// `// trace:SPEC-ID` markers *already in the source* and resolves each against
+// the live graph, flagging the ones that have ROTTED — the target was deleted,
+// renumbered, or rejected. This neutralizes the sharpest self-undercut of the
+// separate-model approach ("trace comments rot invisibly"): a stale trace now
+// goes red like a failing type. Report-only by default; `--block` for CI.
+//
+// Reuses `walk_source_for_traces` (the same inline scanner `aida doctor
+// validate-trace-comments` uses) and `resolve_spec_in_store` / `load_store_for_lookup`
+// (the same resolution `aida show` and `trace gate` use). trace:TASK-868
+// ============================================================================
+
+/// How a single inline `// trace:SPEC-ID` marker resolves. A superset of
+/// `SpecResolution` that also splits out the archived-but-live case so the
+/// report can call it cheaply (an archived target is a softer rot signal than a
+/// deleted one — the spec still exists, just hidden). trace:TASK-868
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum TraceRotVerdict {
+    /// Resolves to a live, non-archived, non-rejected spec — healthy.
+    Live,
+    /// Resolves to an archived spec — exists but hidden; soft rot.
+    Archived,
+    /// Resolves to a rejected spec — a dead provenance link.
+    Rejected,
+    /// Resolves to nothing — deleted / renumbered / typo'd target; hard rot.
+    Unknown,
+}
+
+impl TraceRotVerdict {
+    /// Whether this verdict counts as HARD trace-rot — a genuinely dead
+    /// provenance link (deleted/renumbered target or a rejected spec). This is
+    /// what `--block` fails on. An archived target is NOT hard rot: the spec
+    /// still exists in the graph, it's just hidden from default views, so its
+    /// trace still resolves — it's reported as a soft signal, not a failure.
+    fn is_rot(self) -> bool {
+        matches!(self, TraceRotVerdict::Rejected | TraceRotVerdict::Unknown)
+    }
+
+    /// Whether this verdict is worth surfacing at all (anything but healthy).
+    fn is_flagged(self) -> bool {
+        !matches!(self, TraceRotVerdict::Live)
+    }
+
+    fn reason(self) -> &'static str {
+        match self {
+            TraceRotVerdict::Live => "resolves to a live spec",
+            TraceRotVerdict::Archived => "target is archived",
+            TraceRotVerdict::Rejected => "target is rejected",
+            TraceRotVerdict::Unknown => "target does not exist (deleted/renumbered)",
+        }
+    }
+}
+
+/// Resolve a SPEC-ID against the store for the rot check, distinguishing
+/// archived from rejected from missing. When the store is unreachable, every id
+/// resolves `Live` (callers warn separately) so a checkout without store access
+/// doesn't flag the whole tree. trace:TASK-868
+fn resolve_trace_rot(store: Option<&aida_core::RequirementsStore>, id: &str) -> TraceRotVerdict {
+    let Some(store) = store else {
+        return TraceRotVerdict::Live;
+    };
+    let want = id.to_ascii_uppercase();
+    let found = store.requirements.iter().find(|r| {
+        r.spec_id
+            .as_deref()
+            .map(|s| s.eq_ignore_ascii_case(&want))
+            .unwrap_or(false)
+            || r.agreed_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+    });
+    match found {
+        None => TraceRotVerdict::Unknown,
+        Some(r) if matches!(r.status, RequirementStatus::Rejected) => TraceRotVerdict::Rejected,
+        Some(r) if r.archived => TraceRotVerdict::Archived,
+        Some(_) => TraceRotVerdict::Live,
+    }
+}
+
+/// One dangling (rotted) inline trace marker. trace:TASK-868
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct TraceRot {
+    /// The referenced SPEC-ID that rotted.
+    spec_id: String,
+    /// Project-relative file path.
+    file: String,
+    /// 1-based line number.
+    line: usize,
+    verdict: TraceRotVerdict,
+}
+
+/// CLI handler for `aida trace check`. Scans inline `// trace:SPEC-ID` markers,
+/// resolves each against the live graph, reports the rot, and exits non-zero
+/// (code 1) under `--block` when any dangling trace exists. trace:TASK-868
+fn handle_trace_check(path: Option<&str>, json: bool, block: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let scan_root = match path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => project_root.clone(),
+    };
+
+    let store = load_store_for_lookup(&project_root);
+    if store.is_none() && !json {
+        eprintln!(
+            "{} trace check: no requirement store reachable from {} — cannot resolve trace \
+             targets, so nothing can be flagged as rotted. Run where the store is attached \
+             (`aida cache rebuild` / fresh-clone auto-attach).",
+            crate::glyph(crate::glyphs::Glyph::Warning),
+            project_root.display()
+        );
+    }
+
+    // Same marker grammar + scanner the doctor trace check uses.
+    let trace_re = regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
+    let mut by_spec: std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>> =
+        std::collections::HashMap::new();
+    walk_source_for_traces(&scan_root, &trace_re, &mut by_spec);
+
+    // Resolve each unique id once; expand to per-location rows for the flagged ones.
+    let mut total_markers = 0usize;
+    let mut unique_ids = 0usize;
+    let mut resolved_markers = 0usize;
+    let mut flagged: Vec<TraceRot> = Vec::new();
+    let mut ids: Vec<&String> = by_spec.keys().collect();
+    ids.sort();
+    for id in ids {
+        unique_ids += 1;
+        let locations = &by_spec[id];
+        total_markers += locations.len();
+        let verdict = resolve_trace_rot(store.as_ref(), id);
+        if verdict.is_flagged() {
+            for (p, line) in locations {
+                let rel = p.strip_prefix(&project_root).unwrap_or(p);
+                flagged.push(TraceRot {
+                    spec_id: id.clone(),
+                    file: rel.display().to_string(),
+                    line: *line,
+                    verdict,
+                });
+            }
+        } else {
+            resolved_markers += locations.len();
+        }
+    }
+    flagged.sort_by(|a, b| (&a.file, a.line).cmp(&(&b.file, b.line)));
+
+    // Hard rot (dead links) is what `--block` fails on; archived is a soft signal.
+    let hard: Vec<&TraceRot> = flagged.iter().filter(|r| r.verdict.is_rot()).collect();
+    let archived = flagged.len() - hard.len();
+    let dangling = hard.len();
+    let unknown = hard
+        .iter()
+        .filter(|r| matches!(r.verdict, TraceRotVerdict::Unknown))
+        .count();
+    let rejected = dangling - unknown;
+    let rot_rate = if total_markers == 0 {
+        0.0
+    } else {
+        (dangling as f64) * 100.0 / (total_markers as f64)
+    };
+
+    if json {
+        let payload = serde_json::json!({
+            "scan_root": scan_root.display().to_string(),
+            "store_reachable": store.is_some(),
+            "total_traces": total_markers,
+            "unique_spec_ids": unique_ids,
+            "resolved": resolved_markers,
+            "dangling": dangling,
+            "dangling_unknown": unknown,
+            "dangling_rejected": rejected,
+            "archived": archived,
+            "rot_rate_pct": (rot_rate * 100.0).round() / 100.0,
+            "flagged": flagged,
+            "ok": dangling == 0,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else if dangling == 0 && archived == 0 {
+        println!(
+            "{} trace check: {} inline trace(s) across {} spec-id(s) — every marker resolves to a \
+             live spec (0 rotted)",
+            crate::glyph(crate::glyphs::Glyph::Check),
+            total_markers,
+            unique_ids
+        );
+    } else {
+        if dangling > 0 {
+            eprintln!(
+                "{} trace check: {} dangling/rotted trace marker(s) ({:.1}% rot rate — {} unknown, \
+                 {} rejected; {} of {} resolve):",
+                crate::glyph(crate::glyphs::Glyph::Cross),
+                dangling,
+                rot_rate,
+                unknown,
+                rejected,
+                resolved_markers,
+                total_markers
+            );
+            for r in &hard {
+                eprintln!(
+                    "  {}:{} → {} ({})",
+                    r.file,
+                    r.line,
+                    r.spec_id,
+                    r.verdict.reason()
+                );
+            }
+        } else {
+            println!(
+                "{} trace check: 0 dead trace links ({} of {} resolve)",
+                crate::glyph(crate::glyphs::Glyph::Check),
+                resolved_markers,
+                total_markers
+            );
+        }
+        if archived > 0 {
+            println!(
+                "\n{} {} trace(s) point at archived specs (still resolve; soft signal, not \
+                 blocking). Re-target or accept.",
+                crate::glyph(crate::glyphs::Glyph::Warning),
+                archived
+            );
+        }
+        if dangling > 0 {
+            eprintln!(
+                "\nA `// trace:SPEC-ID` marker must name a live requirement. Update the marker to \
+                 the spec's current id (after a merge-gate renumber the id changes), point it at a \
+                 real spec, or delete the stale comment. `aida doctor validate-trace-comments \
+                 --strip-dangling` can sweep the unknown ones in bulk."
+            );
+        }
+    }
+
+    if block && dangling > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
 }
 
 /// CLI handler for `aida trace gate`. Reads the commit range from git, runs the

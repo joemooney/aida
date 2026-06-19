@@ -152,12 +152,13 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 **One line** — bind code to the spec it satisfies (and verify that binding in CI).
 
-**Mental model.** `trace` is the **anti-drift loop** — the thing that makes AIDA more than a spec database. A `// trace:SPEC-ID` comment in code (or a `(SPEC-ID)` commit trailer) is a *bidirectional breadcrumb*: from a spec you can find the code that serves it; from a line of code you can find the spec that justifies it. The subcommands split into two jobs: **recording** links (`add` by hand, `scan` from inline comments, `sweep` from commit trailers, `list` to read them back) and **enforcing** them in CI (`gate` validates the trailer spec-ids resolve; `coverage` checks the changed *code* is traced).
+**Mental model.** `trace` is the **anti-drift loop** — the thing that makes AIDA more than a spec database. A `// trace:SPEC-ID` comment in code (or a `(SPEC-ID)` commit trailer) is a *bidirectional breadcrumb*: from a spec you can find the code that serves it; from a line of code you can find the spec that justifies it. The subcommands split into two jobs: **recording** links (`add` by hand, `scan` from inline comments, `sweep` from commit trailers, `list` to read them back) and **enforcing** them in CI (`gate` validates the trailer spec-ids resolve; `coverage` checks the changed *code* is traced; `check` flags inline trace markers whose target has rotted).
 
 **Reach for it when**
 - you've written code for a spec — leave the inline `// trace:SPEC-ID | ai:<tool>` comment (the everyday path), then `trace scan --update` picks it up.
 - you want to backfill provenance from history — `trace sweep` walks commits for `(SPEC-ID)` references.
-- you're wiring CI provenance gates — `trace gate` and `trace coverage` are the two checks.
+- you're wiring CI provenance gates — `trace gate`, `trace coverage`, and `trace check` are the three checks.
+- you suspect *existing* trace comments have gone stale (a spec was deleted, renumbered by the merge-gate, or rejected) — `trace check` scans the inline `// trace:SPEC-ID` markers already in the tree, resolves each against the live graph, and flags the dead links so a rotted trace goes red like a failing type.
 
 **Don't reach for it when** — you just want to *see* what code exists for a spec — `aida show <ID>` already renders the git linkage (commits/files/branch/PR) without you running `trace list`. And don't conflate the two CI checks: `gate` asks "do the cited spec-ids exist and aren't rejected?"; `coverage` asks "is the changed code actually traced?" — different failure modes.
 
@@ -167,6 +168,8 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 - `sweep --dry-run` — preview which commits reference specs before writing — the safe first pass on a long history.
 - `gate --range` / `coverage --range` — the commit range to check; defaults to "the commits this branch adds." The flag is how a CI job scopes to a PR's range explicitly.
 - `coverage --block` — flip coverage from report-only (CI stays green) to enforcing (CI fails on any uncovered coverable hunk). Report-only first while you tune exemptions; `--block` once the team's ready to require traces.
+- `check --block` — flip the rot check from report-only (exit 0) to enforcing (exit non-zero on any *dead* trace link). `check` treats a deleted/renumbered target (`unknown`) or a rejected target as hard rot that `--block` fails on; a marker pointing at an *archived* spec still resolves, so it's reported as a soft signal but never blocks.
+- `check --json` — machine-readable rot report (`total_traces`, `resolved`, `dangling`, `dangling_unknown`/`dangling_rejected`, `archived`, `rot_rate_pct`) for dashboards or a CI annotation step.
 
 **Gotchas.** Keep the `trace:` marker a plain `//` comment, *not* a `///` doc comment on a `clap` field — a doc comment is both code *and* `--help` output, and SPEC-IDs must never leak into user-facing text. `coverage` exempts tests/generated/docs/config/vendored/pure-deletion/fmt-only/trivial hunks by design, so a green coverage report doesn't mean *every* line is traced — only every *coverable* one.
 
