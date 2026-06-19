@@ -8,10 +8,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T06:50:33.648098135Z
-modified_at: 2026-06-19T06:50:33.648098135Z
+modified_at: 2026-06-19T06:59:10.533721289Z
 req_type: Bug
 tags:
 - accuracy
 - aida:human
 - operator-caught
 - reviews-awaiting
+comments:
+- id: 019edead-2845-7810-8d69-e98739fe9542
+  author: joe
+  content: Commit f749179d5 references this requirement
+  created_at: 2026-06-19T06:59:10.533721289Z
+  modified_at: 2026-06-19T06:59:10.533721289Z
