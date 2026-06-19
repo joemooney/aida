@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:32:55.679328402Z
-modified_at: 2026-06-19T02:32:55.679328402Z
+modified_at: 2026-06-19T03:03:54.363572070Z
 req_type: Spike
 tags:
 - aida:config
@@ -19,4 +19,10 @@ tags:
 - reliability
 - sandbox
 - security
+comments:
+- id: 019eddd5-c2fb-7493-a802-031d9ccbe3f1
+  author: joe
+  content: 'OPERATOR ANSWER (is bubblewrap working?): On THIS machine bwrap is installed (/usr/bin/bwrap) but NOT functional — the kernel blocks the unprivileged user namespace (Ubuntu AppArmor restriction). So bwrap confinement does NOT work here until you run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 (persist via /etc/sysctl.d). Separately (SPIKE-68 findings): even with userns working, AIDA only wraps the HEADLESS drain paths today, not the interactive aida agent new launch (TASK-864 wires that), it is default-OFF (os_wrap in .aida/config.toml), and it was invisible to init/doctor/config — TASK-865 (detect, shipping now) + TASK-866 (config show) + TASK-867 (docs) close those.'
+  created_at: 2026-06-19T03:03:54.363572070Z
+  modified_at: 2026-06-19T03:03:54.363572070Z
 human_only: true
