@@ -1108,7 +1108,8 @@ fn destructive_command_deny_rules() -> Vec<&'static str> {
 /// at `worktree_root`. Defaults to `false` (today's behavior) when unset,
 /// absent, malformed, or the config can't be read — the OS boundary is strictly
 /// opt-in, mirroring the slice-1 `allowed_hosts` rule. trace:STORY-612 | ai:claude
-fn os_wrap_enabled(worktree_root: &Path) -> bool {
+/// trace:TASK-866 | ai:claude
+pub(crate) fn os_wrap_enabled(worktree_root: &Path) -> bool {
     let cfg = crate::read_project_config_value(worktree_root);
     crate::config_lookup(cfg.as_ref(), "contained", "os_wrap")
         .and_then(|v| v.as_bool())
