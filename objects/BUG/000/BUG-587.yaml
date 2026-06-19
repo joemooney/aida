@@ -1,0 +1,28 @@
+id: 019edfef-028e-74d3-bb8d-a80b5b21f9d7
+spec_id: BUG-587
+agreed_id: BUG-587
+title: aida edit --tags writes no oplog operation (tag changes bypass the CRDT substrate)
+description: |-
+  Isolated single-clone repro (no merge involved), counting "^- id:" entries in .aida-store/oplog.yaml before/after each edit on one spec:
+    edit --priority  -> +1 op (SetPriority)
+    edit --status    -> +1 op (SetStatus)
+    edit --title     -> +1 op (SetTitle)
+    edit --tags      -> +0 ops   <-- tag change written ONLY to the YAML object, never to the oplog
+
+  ROOT CAUSE (grounded): aida-core/src/db/git_backend.rs stage_requirement_update diffs old-vs-new and records ops for title/status/priority/owner/description -- but has NO branch comparing old.tags vs requirement.tags. The OpKind::AddTag / RemoveTag variants exist in oplog.rs but are never emitted on the edit path. So tag edits skip the operation log entirely.
+
+  CONSEQUENCE: the oplog is the causal substrate that makes concurrent edits safe. A tag edit that never reaches it cannot be reconstructed/replayed in a merge -- its survival depends purely on which object snapshot wins LWW. (conflict.rs DOES set-union tags from both object snapshots, so the common case often survives, but the oplog is now an incomplete record of the spec history and any oplog-replay-based fix for BUG-586 would still miss tag changes.)
+
+  EXPECTED: every field edit emits a corresponding oplog op (AddTag/RemoveTag per added/removed tag), matching the documented "every status flip, priority change, tag edit lands as a structured row" invariant in CLAUDE.md.
+  SEVERITY: bug (substrate completeness). Fix: add a tags diff -> AddTag/RemoveTag emission block alongside the existing scalar diffs in stage_requirement_update.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T12:50:43.470795040Z
+modified_at: 2026-06-19T12:50:43.470795040Z
+req_type: Bug
+tags:
+- coordination
+- from-dogfood
+- multi-clone
