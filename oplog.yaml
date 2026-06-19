@@ -19143,5 +19143,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1886
+- id: 019ede69-c217-79e1-8d64-6c0f3df4877f
+  target_id: 019ede69-bee0-79b2-a759-f792cec43e69
+  author: aida
+  node_id: '1'
+  lamport: 1887
+  timestamp: 2026-06-19T05:45:33.463930351Z
+  kind: !Create
+    title: aida alias / aida alias list — a discoverable registry of built-in shortcuts
+    description: 'AIDA has accreted many shortcuts with no single discoverable view (each hides in its own --help): status lenses (open/closed/draft/approved/...), list lenses (queue/human/why/inflight, the new me / user:<name>), command aliases (intake->assess, aida agent -> aida agent new, the aida list <lens> argv rewrites, advisor assess -> assess). Build aida alias (or aida alias list) that enumerates them ALL, grouped by surface, each with its canonical expansion + a one-line meaning. SOURCE FROM THE EXISTING RESOLVERS - do not duplicate: rewrite_list_alias / rewrite_advisor_assess (main.rs ~1097), the status-shortcut/alias map, clap visible_aliases. Secondary benefit: this becomes the SINGLE SOURCE OF TRUTH for the sugar, which also feeds the aida list --help one-per-line ask (STORY-662) and prevents drift. --json for machine consumers. Scope: built-in shortcuts only (user-defined aliases are a separate, questioned follow-up).'
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 1887
 node_id: '1'
