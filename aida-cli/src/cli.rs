@@ -7429,6 +7429,16 @@ pub enum Command {
         // trace:STORY-660 | ai:claude
         #[clap(long)]
         judge: bool,
+
+        /// Which vendor renders the rubric judgment (claude or codex). The judge
+        /// PROMPT is identical for both — only the executing model changes — so a
+        /// codex judge over a claude-vs-codex run is no longer the same model
+        /// grading itself, removing the self-evaluation caveat. Defaults to
+        /// claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the
+        /// judge binary. Only applies with --judge.
+        // trace:TASK-869 | ai:claude
+        #[clap(long = "judge-vendor", default_value = "claude")]
+        judge_vendor: String,
     },
 
     /// Launch and track AI agent processes for this AIDA project.

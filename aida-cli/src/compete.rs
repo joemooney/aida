@@ -426,6 +426,88 @@ pub struct JudgeVerdict {
 /// trace:STORY-660 | ai:claude
 pub const JUDGE_JSON_CONTRACT: &str = r#"{"scores":[{"vendor":"<name>","spec_adherence":1-5,"correctness":1-5,"simplicity":1-5,"test_coverage":1-5}],"winner":"<vendor>","reasoning":"<one line>"}"#;
 
+/// Which vendor renders the rubric judgment. The judge PROMPT is identical for
+/// both; only the executing model changes. Default `Claude` preserves the
+/// pre-TASK-869 behaviour. Splitting the judge from the implementer vendor is
+/// what removes the self-evaluation caveat: a Codex judge over a Claude-vs-Codex
+/// bake-off is no longer Claude grading Claude. trace:TASK-869 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JudgeVendor {
+    #[default]
+    Claude,
+    Codex,
+}
+
+impl JudgeVendor {
+    /// Parse a `--judge-vendor` value. Case-insensitive. Returns `None` for an
+    /// unknown vendor so the caller can reject with a legible error.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "claude" => Some(JudgeVendor::Claude),
+            "codex" => Some(JudgeVendor::Codex),
+            _ => None,
+        }
+    }
+
+    /// The canonical lowercase name (also the `--judge-vendor` value).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            JudgeVendor::Claude => "claude",
+            JudgeVendor::Codex => "codex",
+        }
+    }
+
+    /// The default binary spawned for this judge vendor, before any
+    /// `AIDA_COMPETE_JUDGE` env override.
+    pub fn default_binary(self) -> &'static str {
+        match self {
+            JudgeVendor::Claude => "claude",
+            JudgeVendor::Codex => "codex",
+        }
+    }
+
+    /// Whether the judge process needs stdin closed. Codex `exec` reads stdin
+    /// and will hang waiting for it in a non-interactive run, so the caller must
+    /// redirect `</dev/null` (`Stdio::null()`); claude `-p` does not.
+    pub fn needs_stdin_closed(self) -> bool {
+        matches!(self, JudgeVendor::Codex)
+    }
+}
+
+/// Build the full judge argv (binary + args) for a vendor, with the prompt as
+/// the final positional argument. The binary is `AIDA_COMPETE_JUDGE` if set
+/// (parallels the vendor-binary override patterns), else the vendor default.
+///
+/// - claude: `claude -p --permission-mode bypassPermissions <prompt>`
+/// - codex:  `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`
+///
+/// Pure + unit-tested; the I/O (spawn, stdin-redirect, parse) is the caller's.
+/// `binary_override` is the resolved `AIDA_COMPETE_JUDGE` value (or `None`).
+/// trace:TASK-869 | ai:claude
+pub fn judge_command(
+    vendor: JudgeVendor,
+    binary_override: Option<&str>,
+    prompt: &str,
+) -> (String, Vec<String>) {
+    let binary = binary_override
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(vendor.default_binary())
+        .to_string();
+    let mut args: Vec<String> = match vendor {
+        JudgeVendor::Claude => vec![
+            "-p".to_string(),
+            "--permission-mode".to_string(),
+            "bypassPermissions".to_string(),
+        ],
+        JudgeVendor::Codex => vec![
+            "exec".to_string(),
+            "--dangerously-bypass-approvals-and-sandbox".to_string(),
+        ],
+    };
+    args.push(prompt.to_string());
+    (binary, args)
+}
+
 /// Build the rubric-judge prompt: the spec context + each candidate's diff, with
 /// the strict JSON contract. Pure — the I/O (gathering diffs, spawning the
 /// judge) is the caller's. `candidates` is `(vendor, diff_text)`.
@@ -979,5 +1061,71 @@ mod tests {
         let results = vec![arm("claude", Some(true), Some(190))];
         let line = render_recommended_winner(&verdict, &results);
         assert_eq!(line, "recommended winner: claude (compete/x-claude) — best");
+    }
+
+    // ---- TASK-869: cross-vendor judge ----
+    #[test]
+    fn judge_vendor_parse_is_case_insensitive_and_rejects_unknown() {
+        assert_eq!(JudgeVendor::parse("claude"), Some(JudgeVendor::Claude));
+        assert_eq!(JudgeVendor::parse("Codex"), Some(JudgeVendor::Codex));
+        assert_eq!(JudgeVendor::parse("  CODEX  "), Some(JudgeVendor::Codex));
+        assert_eq!(JudgeVendor::parse("gemini"), None);
+        assert_eq!(JudgeVendor::parse(""), None);
+        assert_eq!(JudgeVendor::default(), JudgeVendor::Claude);
+    }
+
+    #[test]
+    fn judge_command_claude_uses_claude_p_flags() {
+        let (bin, args) = judge_command(JudgeVendor::Claude, None, "JUDGE PROMPT");
+        assert_eq!(bin, "claude");
+        assert_eq!(
+            args,
+            vec![
+                "-p".to_string(),
+                "--permission-mode".to_string(),
+                "bypassPermissions".to_string(),
+                "JUDGE PROMPT".to_string(),
+            ]
+        );
+        assert!(!JudgeVendor::Claude.needs_stdin_closed());
+    }
+
+    #[test]
+    fn judge_command_codex_uses_exec_bypass_and_needs_stdin_closed() {
+        let (bin, args) = judge_command(JudgeVendor::Codex, None, "JUDGE PROMPT");
+        assert_eq!(bin, "codex");
+        assert_eq!(
+            args,
+            vec![
+                "exec".to_string(),
+                "--dangerously-bypass-approvals-and-sandbox".to_string(),
+                "JUDGE PROMPT".to_string(),
+            ]
+        );
+        // codex exec reads stdin → must be closed in a non-interactive run.
+        assert!(JudgeVendor::Codex.needs_stdin_closed());
+    }
+
+    #[test]
+    fn judge_command_honors_binary_override() {
+        let (bin, args) = judge_command(JudgeVendor::Codex, Some("/opt/bin/codex-wrap"), "P");
+        assert_eq!(bin, "/opt/bin/codex-wrap");
+        // override swaps the binary only — the exec args are unchanged.
+        assert_eq!(args[0], "exec");
+        // an empty/whitespace override falls back to the vendor default.
+        let (bin2, _) = judge_command(JudgeVendor::Claude, Some("   "), "P");
+        assert_eq!(bin2, "claude");
+    }
+
+    #[test]
+    fn judge_prompt_is_vendor_independent() {
+        // The rubric prompt must NOT depend on which vendor renders it — only
+        // the executing model changes. trace:TASK-869
+        let candidates = vec![("claude".to_string(), "diff a".to_string())];
+        let prompt = build_judge_prompt("TASK-869", "spec ctx", &candidates);
+        let (_, claude_args) = judge_command(JudgeVendor::Claude, None, &prompt);
+        let (_, codex_args) = judge_command(JudgeVendor::Codex, None, &prompt);
+        // Both carry the identical prompt as the final positional arg.
+        assert_eq!(claude_args.last(), codex_args.last());
     }
 }

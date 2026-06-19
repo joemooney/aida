@@ -65,6 +65,7 @@ spawns an agent.
 | `AIDA_AGENT_REGISTRY_TOKEN` | Auth token for agent-registry writes. | unset = `None`. | launch-path | process env |
 | `AIDA_ADVISOR_SESSION_UUID` | UUID of the live advisor session, used for fork-from-live discovery. | unset = falls back to an mtime scan. | launch-path (advisor orchestrator) | process env |
 | `AIDA_REGISTRY_PATH` | Path to the requirements registry file (legacy/centralized layouts). | Cascade: `AIDA_REGISTRY_PATH` → `REQ_REGISTRY_PATH` → default location. | user / dev | process env |
+| `AIDA_COMPETE_JUDGE` | Overrides the binary spawned for `aida compete --judge` (the rubric judge). The flags are still chosen by `--judge-vendor` (claude → `-p …`, codex → `exec …`); only the executable swaps — point it at a wrapper. | unset = the `--judge-vendor` default binary (`claude` / `codex`). Empty/whitespace falls back to the default. | user / dev | process env |
 
 ---
 

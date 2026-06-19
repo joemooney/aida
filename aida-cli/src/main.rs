@@ -1766,9 +1766,17 @@ fn run() -> Result<()> {
         gate,
         dry_run,
         judge,
+        judge_vendor,
     } = &cli.command
     {
-        return handle_compete_command(spec, vendors, gate.as_deref(), *dry_run, *judge);
+        return handle_compete_command(
+            spec,
+            vendors,
+            gate.as_deref(),
+            *dry_run,
+            *judge,
+            judge_vendor,
+        );
     }
 
     // `aida commit` is self-contained — git + the staged diff (for REQ-ID
@@ -76640,8 +76648,15 @@ fn handle_compete_command(
     gate: Option<&str>,
     dry_run: bool,
     judge: bool,
+    judge_vendor: &str,
 ) -> Result<()> {
     use compete::{ArmResult, Ran, ReportGlyphs, VendorAdapter};
+
+    // Resolve the judge vendor up front so a typo fails fast (before any vendor
+    // runs), not after the expensive arms. trace:TASK-869 | ai:claude
+    let judge_vendor = compete::JudgeVendor::parse(judge_vendor).ok_or_else(|| {
+        anyhow::anyhow!("unknown --judge-vendor `{judge_vendor}` — supported: claude, codex")
+    })?;
 
     if vendors.is_empty() {
         anyhow::bail!(
@@ -76856,7 +76871,7 @@ fn handle_compete_command(
     // 2. Rubric LLM judge — opt-in (`--judge`), report-only. Gated like every
     //    other LLM call: never in tests, and it needs the claude CLI on PATH.
     if judge {
-        run_compete_judge(&project_root, &spec_id, &brief, &results);
+        run_compete_judge(&project_root, &spec_id, &brief, &results, judge_vendor);
     } else if !ranked.is_empty() {
         println!(
             "{}",
@@ -76877,19 +76892,30 @@ fn handle_compete_command(
 
 /// Run the opt-in rubric LLM judge over the gate-passing candidates and print
 /// its verdict. REPORT-ONLY: it never merges. Gathers each gate-passing arm's
-/// diff, builds the judge prompt, spawns a one-shot `claude -p` judge, parses
-/// the structured verdict, and renders the score table + recommended winner.
-/// Any failure degrades gracefully to a note (the deterministic ranking still
-/// stands). trace:STORY-660 | ai:claude
+/// diff, builds the judge prompt, spawns a one-shot judge (claude or codex,
+/// per `--judge-vendor`), parses the structured verdict, and renders the score
+/// table + recommended winner. The judge PROMPT is vendor-independent — only the
+/// executing model changes, which is what removes the self-evaluation caveat
+/// (a Codex judge over a Claude-vs-Codex bake-off is no longer Claude grading
+/// Claude). Any failure degrades gracefully to a note (the deterministic ranking
+/// still stands). trace:STORY-660 trace:TASK-869 | ai:claude
 fn run_compete_judge(
     project_root: &std::path::Path,
     spec_id: &str,
     spec_context: &str,
     results: &[compete::ArmResult],
+    judge_vendor: compete::JudgeVendor,
 ) {
-    if !binary_on_path("claude") {
+    // The binary defaults to the vendor's own CLI; `AIDA_COMPETE_JUDGE` overrides
+    // it (parallels the other vendor-binary env knobs). trace:TASK-869
+    let binary_override = std::env::var("AIDA_COMPETE_JUDGE").ok();
+    let judge_bin = binary_override
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(judge_vendor.default_binary());
+    if !binary_on_path(judge_bin) {
         eprintln!(
-            "{} --judge needs the `claude` CLI on PATH — skipping the rubric judge \
+            "{} --judge needs the `{judge_bin}` CLI on PATH — skipping the rubric judge \
              (the deterministic ranking above still applies).",
             glyph(crate::glyphs::Glyph::Warning).yellow()
         );
@@ -76923,15 +76949,22 @@ fn run_compete_judge(
     }
 
     println!(
-        "{} running rubric judge over {} candidate(s)...",
+        "{} running {} rubric judge over {} candidate(s)...",
         glyph(crate::glyphs::Glyph::Hourglass),
+        judge_vendor.as_str(),
         candidates.len()
     );
     let prompt = compete::build_judge_prompt(spec_id, spec_context, &candidates);
-    let out = std::process::Command::new("claude")
-        .args(["-p", "--permission-mode", "bypassPermissions", &prompt])
-        .current_dir(project_root)
-        .output();
+    // Same prompt, vendor-chosen binary + flags. Codex `exec` reads stdin and
+    // would hang non-interactively, so close it. trace:TASK-869
+    let (cmd_bin, cmd_args) =
+        compete::judge_command(judge_vendor, binary_override.as_deref(), &prompt);
+    let mut judge_cmd = std::process::Command::new(&cmd_bin);
+    judge_cmd.args(&cmd_args).current_dir(project_root);
+    if judge_vendor.needs_stdin_closed() {
+        judge_cmd.stdin(std::process::Stdio::null());
+    }
+    let out = judge_cmd.output();
     let raw = match out {
         Ok(o) => {
             let mut s = String::from_utf8_lossy(&o.stdout).to_string();
