@@ -19544,5 +19544,27 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1909
+- id: 019ee068-9ed8-7972-b094-e51de72df11c
+  target_id: 019ee068-9b6c-7b02-af21-3b7fd287b9f2
+  author: aida
+  node_id: '1'
+  lamport: 1910
+  timestamp: 2026-06-19T15:03:33.336120870Z
+  kind: !Create
+    title: Advisor auto-gates (assess/backlog groom --pickable) do not honor keystone/supervised tags — only queue integrate does (TASK-813 partial)
+    description: |-
+      The grooming-must-not-shift-keystone-to-auto principle is enforced inconsistently across the advisor automation surfaces:
+      - queue integrate parks supervised/keystone (TASK-813, Completed) ✓
+      - aida backlog groom --pickable: a keystone+supervised spec (STORY-11) is parked ONLY because its inferred risk chip is high. With --risk high it is auto-selected to queue. Removing the risk inference (or a lower-risk keystone) would let it through. The pickable gate reads risk, not the keystone/supervised tags.
+      - aida assess --dry-run: the candidate fence honors excluded tags needs-human and strategic, but NOT keystone or supervised. With --risk high, STORY-11 (keystone, supervised) becomes an approve-eligible candidate the cold-boot advisor can bless.
+
+      So a spec the operator explicitly marked keystone/supervised can be auto-approved or auto-queued by the advisor automations under a permissive risk ceiling — exactly the human-judgment work that should be fenced.
+
+      Expected: keystone and supervised tags are first-class fences in BOTH assess and backlog groom --pickable, independent of risk inference (same as queue integrate).
+
+      Repro: tag a spec supervised,keystone; AIDA_SESSION_ROLE=advisor aida assess --dry-run --risk high (appears as candidate); aida backlog groom --pickable --risk high (appears in would-groom).
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1910
 node_id: '1'
