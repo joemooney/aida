@@ -19606,5 +19606,24 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1912
+- id: 019ee069-5ad4-7161-a882-5fa8d9c2c630
+  target_id: 019ee069-575b-7fb1-8ed1-df32d6cb26b4
+  author: aida
+  node_id: '1'
+  lamport: 1913
+  timestamp: 2026-06-19T15:04:21.460468148Z
+  kind: !Create
+    title: aida lint passes empty-body specs clean; advisor worklist has no decompose lane for draft epics
+    description: |-
+      Two smaller advisor-flow gaps found while dogfooding:
+
+      1. aida lint (EARS lens): TASK-3 ("fix the thing with the search") with NO description at all PASSES clean ("All specs passed the EARS lens"), while STORY-2 (one-line body) is flagged. The lens checks vague-trigger/missing-behavior in EXISTING text but has no "spec body is essentially empty" check, so the worst-specified spec gets a green tick. Add a missing-body/too-thin finding so an advisor linting for under-specification catches the emptiest specs. (lint --scope story otherwise works well: well-specified STORY-1/STORY-9 pass, vague ones flagged with actionable rewrites incl. catching "nice" as subjective.)
+
+      2. aida advisor worklist header describes partitioning into decompose/distill/bless/triage, but a draft EPIC (EPIC-6) appears in NO section — not groom, and there is no rendered decompose lane. A draft epic that needs breaking into children is invisible on the advisor worklist (it is correctly fenced from assess, but nothing surfaces it for the decompose action). Render a decompose lane (or list draft epics with the aida decompose hint).
+
+      Minor copy nit: aida questions answer <spec> 1 prints both "✓ no spec change (noop)" and "✓ bound the decision into ## Acceptance" — contradictory.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1913
 node_id: '1'
