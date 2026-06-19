@@ -8,10 +8,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:06:29.156126154Z
-modified_at: 2026-06-18T06:06:29.156126154Z
+modified_at: 2026-06-19T00:22:15.091170773Z
 req_type: Task
 tags:
 - citations
 - parent:EPIC-48
 - probe
 - research
+comments:
+- id: 019edd41-c333-7832-917c-51fd44166d47
+  author: joe
+  content: Commit c9f3c505e references this requirement
+  created_at: 2026-06-19T00:22:15.091170773Z
+  modified_at: 2026-06-19T00:22:15.091170773Z
