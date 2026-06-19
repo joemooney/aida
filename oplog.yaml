@@ -18843,5 +18843,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1861
+- id: 019eddb9-9a33-7a02-af59-db0429850156
+  target_id: 019eddb9-96e4-7b21-85ab-1d5bff3cd24a
+  author: aida
+  node_id: '1'
+  lamport: 1862
+  timestamp: 2026-06-19T02:33:08.915899732Z
+  kind: !Create
+    title: Generated-marker HTML comment leaks into slash-command help display (/aida-pr shows the checksum DO-NOT-EDIT line)
+    description: 'A slash command rendered its generated-marker comment in the visible help, e.g. /aida-pr displayed: AIDA Generated v2.0.0 | checksum:3a08c110 | DO NOT EDIT DIRECTLY (project). That internal scaffolding marker should not surface to the user. Also: /aida-release had help-rendering issues in another environment (work; not reproducible here) - investigate whether the same marker/format is the cause. Fix: strip/hide the generated-marker comment from the rendered slash-command help across the skill/command templates; ensure the marker stays a non-displayed comment.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1862
 node_id: '1'
