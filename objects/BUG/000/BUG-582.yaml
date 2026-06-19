@@ -3,12 +3,12 @@ spec_id: BUG-582
 agreed_id: BUG-582
 title: aida human reviews-awaiting flags Completed/merged-PR specs (stale local branch false-positive)
 description: 'Operator caught it: aida human listed BUG-581 under reviews-awaiting [PR-1048] when PR-1048 was already MERGED and BUG-581 already Completed. Cause: the reviews-awaiting detection keyed off a lingering local branch/PR surface for the spec without checking that the PR is MERGED / the spec is already Completed. Stale Agent-tool worktrees (worktree-agent-*) accumulate and leave such branches around (98 had piled up), so this false-positive recurs. FIX (robust invariant): a spec whose status is Completed (or Done with a merged PR) must NEVER appear in the reviews-awaiting bucket - exclude it in the reviews-awaiting computation (filter on spec status + PR merge state), so a lingering local branch can''t resurrect a finished spec onto the operator''s seat. Add a regression test: a Completed spec with a lingering local branch is NOT in reviews-awaiting. Companion to BUG-579 (the earlier count==render fix) - same surface, different stale-data leak.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T06:50:33.648098135Z
-modified_at: 2026-06-19T06:59:10.533721289Z
+modified_at: 2026-06-19T07:06:29.826557698Z
 req_type: Bug
 tags:
 - accuracy
@@ -21,3 +21,21 @@ comments:
   content: Commit f749179d5 references this requirement
   created_at: 2026-06-19T06:59:10.533721289Z
   modified_at: 2026-06-19T06:59:10.533721289Z
+history:
+- id: 019edeb3-dc3d-7b30-b35b-311e05996e55
+  author: aida-auto-bump
+  timestamp: 2026-06-19T07:06:29.821800558Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edeb3-dc42-7e71-9c0f-78e891de6117
+  timestamp: 2026-06-19T07:06:29.826557108Z
+  agent: aida
+  commit_sha: 0a9ef0a58c56f572639622edf6146f95d73d63be
+  summary: Completed via merge 0a9ef0a5
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T07:06:29.657626701Z
+  completion_sha: 0a9ef0a58c56f572639622edf6146f95d73d63be
