@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:49.828016312Z
-modified_at: 2026-06-19T02:45:49.828016312Z
+modified_at: 2026-06-19T08:41:49.680000197Z
 req_type: Task
 tags:
 - compete
@@ -17,3 +17,6 @@ tags:
 - interop
 - parent:EPIC-50
 - tilt-verdict
+deferred: true
+deferred_at: 2026-06-19T08:41:49.680000197Z
+deferred_until: GitHub spec-kit (specify) installed so the scaffold→import→graph seam can be demoed against the real tool, not a mock
