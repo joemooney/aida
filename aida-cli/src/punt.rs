@@ -96,67 +96,6 @@ pub fn ledger_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("punts.jsonl")
 }
 
-/// The three empirical design forks of the day, seeded for backfill as a structured corpus.
-pub fn get_backfill_seeds() -> Vec<PuntRecord> {
-    use chrono::TimeZone;
-    vec![
-        PuntRecord {
-            timestamp: Utc.with_ymd_and_hms(2026, 5, 22, 20, 0, 0).unwrap(),
-            spec: "TASK-340".to_string(),
-            category: PuntCategory::DesignFork,
-            detail: "implementer punted on PuntRecord.resolved_at + drain-state persistence design forks".to_string(),
-            lean: None,
-            raised_by: Some("implementer".to_string()),
-            resolution_path: "punted".to_string(),
-            classification: Some("PREREQ-GAP".to_string()),
-            escalation_reason: None,
-            answer: None,
-            answered_by: None,
-            decision: Some("deferred".to_string()),
-            principle_link: None,
-            calibration_pair: None,
-            paused_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 20, 0, 0).unwrap()),
-            resolved_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 21, 30, 0).unwrap()),
-        },
-        PuntRecord {
-            timestamp: Utc.with_ymd_and_hms(2026, 5, 22, 21, 0, 0).unwrap(),
-            spec: "TASK-403".to_string(),
-            category: PuntCategory::Other,
-            detail: "demo-meta-task misrouted to implementer queue".to_string(),
-            lean: None,
-            raised_by: Some("implementer".to_string()),
-            resolution_path: "advisor-resolved".to_string(),
-            classification: Some("SCOPE-MISMATCH".to_string()),
-            escalation_reason: None,
-            answer: Some("route to operator queue".to_string()),
-            answered_by: Some("advisor".to_string()),
-            decision: Some("route-to-operator".to_string()),
-            principle_link: Some("established operator curation tasks".to_string()),
-            calibration_pair: None,
-            paused_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 21, 0, 0).unwrap()),
-            resolved_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 21, 5, 0).unwrap()),
-        },
-        PuntRecord {
-            timestamp: Utc.with_ymd_and_hms(2026, 5, 22, 22, 0, 0).unwrap(),
-            spec: "TASK-440".to_string(),
-            category: PuntCategory::DesignFork,
-            detail: "spec body says 'defer until first MCP client surfaces need' but spec sits Approved".to_string(),
-            lean: None,
-            raised_by: Some("implementer".to_string()),
-            resolution_path: "escalated-to-human".to_string(),
-            classification: Some("DEFER-VS-DO-CONTRADICTION".to_string()),
-            escalation_reason: Some("genuinely-needs-human-judgment".to_string()),
-            answer: None,
-            answered_by: Some("advisor".to_string()),
-            decision: Some("escalated".to_string()),
-            principle_link: None,
-            calibration_pair: None,
-            paused_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 22, 0, 0).unwrap()),
-            resolved_at: Some(Utc.with_ymd_and_hms(2026, 5, 22, 22, 45, 0).unwrap()),
-        },
-    ]
-}
-
 /// `resolution_path` slug for an orchestrator shelving on phase failure
 /// (EPIC-28). The punt ledger is the project's "paused decisions" corpus —
 /// a phase failure that parked a spec in `NeedsAttention` belongs in the
@@ -230,18 +169,17 @@ pub fn append_to_ledger(project_root: &Path, record: &PuntRecord) -> anyhow::Res
 /// Read every punt-ledger record from `.aida/punts.jsonl`, in append order
 /// (oldest first). Bad or forward-incompatible lines are skipped rather than
 /// aborting the read; an absent ledger reads as empty. trace:STORY-306
+///
+/// A fresh project's ledger starts EMPTY. The advisor decisions / findings
+/// surface only ever shows decisions this project actually made. (BUG-592:
+/// `read_ledger` used to auto-backfill AIDA's own development design-fork
+/// fixtures into every downstream `.aida/punts.jsonl` on first read — gated
+/// only on telemetry being enabled — so a brand-new store's advisor surface
+/// cited AIDA-internal spec IDs the user never created. The dev-corpus seeds
+/// are gone; an absent ledger is the empty corpus it claims to be.)
+/// trace:BUG-592 | ai:claude
 pub fn read_ledger(project_root: &Path) -> Vec<PuntRecord> {
     let path = ledger_path(project_root);
-    if !path.exists() {
-        // Automatically backfill with the empirical seeds if telemetry is allowed
-        let seeds = get_backfill_seeds();
-        if crate::usage::is_enabled(Some(project_root)) {
-            for seed in &seeds {
-                let _ = append_to_ledger(project_root, seed);
-            }
-        }
-        return seeds;
-    }
     let Ok(body) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
@@ -612,6 +550,38 @@ mod tests {
         assert!(
             err.contains("design-fork"),
             "error should list valid: {err}"
+        );
+    }
+
+    /// BUG-592: a fresh project's ledger must read as EMPTY. `read_ledger`
+    /// used to backfill AIDA's own dev design-fork fixtures (TASK-340/403/440)
+    /// into every downstream `.aida/punts.jsonl` on first read, so a brand-new
+    /// store's advisor surface cited spec IDs the user never created. The seeds
+    /// are gone — an absent ledger injects nothing and writes nothing.
+    #[test]
+    fn fresh_ledger_is_empty_and_injects_no_dev_seeds() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        // Absent ledger → empty corpus, regardless of telemetry state.
+        let records = read_ledger(root);
+        assert!(
+            records.is_empty(),
+            "a fresh project must start with no punt records, got {records:?}"
+        );
+
+        // No phantom AIDA-internal spec IDs leaked in.
+        for phantom in ["TASK-340", "TASK-403", "TASK-440"] {
+            assert!(
+                !records.iter().any(|r| r.spec == phantom),
+                "fresh ledger must not contain dev-corpus fixture {phantom}"
+            );
+        }
+
+        // The read must not have created/written the ledger file either.
+        assert!(
+            !ledger_path(root).exists(),
+            "reading an absent ledger must not write any file"
         );
     }
 
