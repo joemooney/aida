@@ -31643,6 +31643,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-878: merged Agent-tool worktree GC. Runs git ancestry probes + a forge
+    // merged-PR lookup, so it is kept OUT of the hot `collect_doctor_findings`
+    // path and appended here where only `aida doctor` reaches it. Honours the
+    // same `--category` filter. trace:TASK-878 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "merged-agent-worktrees")? {
+        findings.extend(scan_merged_agent_worktrees(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     let mut report = DoctorReport::from_findings(findings);
     report.hidden_completed_without_commit = hidden_completed_without_commit;
 
@@ -32237,6 +32246,15 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         | "remote-branch"
         | "remote-branches"
         | "remote-branch-prune" => "stale-remote-branches",
+        // TASK-878: merged Agent-tool isolation worktrees
+        // (.claude/worktrees/agent-* on worktree-agent-* branches) that
+        // accumulate. trace:TASK-878 | ai:claude
+        "merged-agent-worktree"
+        | "merged-agent-worktrees"
+        | "agent-worktree"
+        | "agent-worktrees"
+        | "worktree-gc"
+        | "agent-worktree-gc" => "merged-agent-worktrees",
         "stale-reviewer" | "stale-reviewer-lease" | "stale-reviewer-leases" => {
             "stale-reviewer-leases"
         }
@@ -32279,9 +32297,10 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
-             orphan-branches, stale-remote-branches, orphan-queue-entries, \
-             stale-reviewer-leases, stale-locks, dead-agents, OBE-briefs, \
-             completed-without-commit, legacy-store-cruft, store-tracked-runtime)",
+             orphan-branches, stale-remote-branches, merged-agent-worktrees, \
+             orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
+             OBE-briefs, completed-without-commit, legacy-store-cruft, \
+             store-tracked-runtime)",
             other
         ),
     };
@@ -32767,6 +32786,359 @@ fn heal_doctor_stale_remote_branch(
         action: "deleted stale remote branch".to_string(),
         status: if status.success() { "healed" } else { "failed" }.to_string(),
         detail: None,
+    })
+}
+
+// ============================================================================
+// TASK-878: auto-GC merged Agent-tool worktrees.
+//
+// The Agent tool (and `aida agent new --isolation worktree`) leaves an isolated
+// worktree under `.claude/worktrees/agent-<id>` on a `worktree-agent-<id>`
+// branch. `git worktree prune` only removes worktrees whose DIRECTORY is gone —
+// these keep their dir + branch, so they accumulate (98 piled up in one fan-out
+// session, BUG-582) and the stale local branches make `aida human`'s
+// reviews-awaiting view false-positive on already-merged work.
+//
+// This adds a `merged-agent-worktrees` doctor category that surfaces those
+// worktrees and verify-and-removes them under a squash-aware safety model:
+//
+//   removable iff a positive "this work has shipped" signal AND no risk:
+//     - the branch HEAD is an ancestor of origin/main (ff / non-squash merge), OR
+//     - the branch's PR is MERGED on the forge (covers squash merges, where the
+//       branch tip keeps a different SHA but the work shipped)
+//   AND none of the KEEP conditions apply:
+//     - the worktree has uncommitted changes (clean != no work — never delete), OR
+//     - the branch carries genuinely-unique unmerged commits not in main
+//   When NO merged signal exists at all, the worktree is KEPT and flagged for the
+//   operator (never auto-removed).
+//
+// Read-only by default (list + per-worktree verdict). The heal is DESTRUCTIVE
+// (removes a worktree + deletes its branch) so `safe_heal=false`: it routes
+// through the STORY-666 destructive-heal gate — refused in an unattended /
+// autonomous context, performed only under explicit interactive --yes --force
+// sign-off. trace:TASK-878
+// ============================================================================
+
+/// Is this worktree one of the AIDA/Agent-tool managed isolation worktrees that
+/// accumulate? Matched on EITHER the conventional path segment
+/// (`.claude/worktrees/agent-<id>`) OR the conventional branch name
+/// (`worktree-agent-<id>`) — both are stamped by the same launcher, and matching
+/// either keeps detached or oddly-pathed cases in scope. Pure → unit-testable.
+/// trace:TASK-878 | ai:claude
+fn is_agent_managed_worktree(path: &std::path::Path, branch: Option<&str>) -> bool {
+    let path_str = path.to_string_lossy().replace('\\', "/");
+    let path_match = path_str.contains("/.claude/worktrees/agent-")
+        || path_str.contains(".claude/worktrees/agent-");
+    let branch_match = branch
+        .map(|b| b.starts_with("worktree-agent-"))
+        .unwrap_or(false);
+    path_match || branch_match
+}
+
+/// The classification verdict for one agent-managed worktree. trace:TASK-878
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum AgentWorktreeVerdict {
+    /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
+    Removable(String),
+    /// Dirty, carrying unmerged work, or no merge signal → keep, flag operator.
+    Keep(String),
+}
+
+/// Inputs to the pure agent-worktree classifier — every git/forge probe result
+/// the safety model needs, gathered once per worktree by the scanner. Keeping
+/// the classification pure makes the squash-aware safety model unit-testable
+/// without git or a forge. trace:TASK-878
+#[derive(Debug, Clone)]
+struct AgentWorktreeFacts {
+    /// True when the worktree has uncommitted changes (tracked or staged dirt,
+    /// or untracked files). A dirty worktree is NEVER removed — clean != no work,
+    /// and dirty is unambiguously "has work".
+    dirty: bool,
+    /// True when the branch HEAD is an ancestor of origin/main (fully merged —
+    /// covers fast-forward / non-squash merges; implies zero unique commits).
+    ancestor_of_main: bool,
+    /// True when the forge reports a MERGED PR for this branch (covers squash
+    /// merges, where the branch tip keeps a different SHA but the work shipped).
+    pr_merged: bool,
+    /// Count of commits on the branch not reachable from origin/main. Zero means
+    /// nothing unique is at risk; non-zero with no ancestor signal means the
+    /// branch carries unique unmerged work that must be KEPT.
+    unique_unmerged_commits: u32,
+}
+
+/// Pure squash-aware classification of one agent-managed worktree. No git/forge
+/// — every input is pre-gathered in `AgentWorktreeFacts`. This is the safety
+/// model: a dirty worktree is always kept; removal needs a positive merged
+/// signal AND zero unique unmerged commits; otherwise the worktree is kept and
+/// flagged. trace:TASK-878 | ai:claude
+fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
+    // KEEP first — uncommitted work is unambiguously "has work". Clean != no
+    // work, but dirty is definitely work; never delete it.
+    if facts.dirty {
+        return AgentWorktreeVerdict::Keep(
+            "uncommitted changes present — never auto-removed".to_string(),
+        );
+    }
+
+    // A positive "this work has shipped" signal — either suffices.
+    let merged_reason = if facts.ancestor_of_main {
+        Some("branch is an ancestor of origin/main (merged)")
+    } else if facts.pr_merged {
+        Some("its PR is merged (squash-merged)")
+    } else {
+        None
+    };
+
+    let Some(merged_reason) = merged_reason else {
+        // No merged signal at all → never remove; flag for the operator.
+        return AgentWorktreeVerdict::Keep("no merge signal — operator decision".to_string());
+    };
+
+    // Even with a merged signal, a branch carrying genuinely-unique unmerged
+    // commits (e.g. extra commits added after the PR squash-merged) must be KEPT
+    // — removing it would lose work. Ancestor-of-main implies zero unique
+    // commits, so this only bites the squash-merge path.
+    if facts.unique_unmerged_commits > 0 && !facts.ancestor_of_main {
+        return AgentWorktreeVerdict::Keep(format!(
+            "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
+            facts.unique_unmerged_commits
+        ));
+    }
+
+    AgentWorktreeVerdict::Removable(merged_reason.to_string())
+}
+
+/// TASK-878: scan AIDA/Agent-tool managed worktrees and classify each under the
+/// squash-aware safety model. Read-only — performs git ancestry/rev-list probes
+/// and one forge merged-PR lookup per branch, never mutates anything. Returns a
+/// `merged-agent-worktrees` finding for every agent worktree that is either
+/// Removable (verified merged + clean + no unique commits; `safe_heal=false` so
+/// removal stays gated behind --yes --force + the STORY-666 sign-off) or Keep
+/// (flagged for the operator, never auto-removed). The project's own worktree
+/// and the `aida-store` worktree are skipped. trace:TASK-878
+fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    use std::process::Command as PCmd;
+
+    let git = |args: &[&str]| -> Option<u32> {
+        PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+            })
+    };
+
+    // Without a resolvable default branch we cannot corroborate merges; stay
+    // silent rather than risk flagging live worktrees.
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+
+    let project_canon = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+
+    let mut findings = Vec::new();
+    for wt in list_worktrees(project_root) {
+        let wt_canon = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
+        // Never touch the main worktree or the store worktree.
+        if wt_canon == project_canon || wt.branch.as_deref() == Some("aida-store") {
+            continue;
+        }
+        if !is_agent_managed_worktree(&wt.path, wt.branch.as_deref()) {
+            continue;
+        }
+        let Some(branch) = wt.branch.as_deref() else {
+            // A detached agent worktree carries no branch to verify against
+            // origin/main — keep it; the operator can inspect by hand.
+            findings.push(DoctorFinding {
+                category: "merged-agent-worktrees".to_string(),
+                id: wt.path.display().to_string(),
+                summary: format!(
+                    "agent worktree {} is detached (no branch) — flagged",
+                    wt.path.display()
+                ),
+                action: "operator decision: inspect, then `git worktree remove` by hand"
+                    .to_string(),
+                safe_heal: false,
+            });
+            continue;
+        };
+
+        let dirty = !worktree_dirty_entries(&wt.path).is_empty();
+        let ancestor_of_main = git(&["rev-list", "--count", &format!("{default_ref}..{branch}")])
+            .map(|n| n == 0)
+            .unwrap_or(false);
+        let unique_unmerged_commits =
+            git(&["rev-list", "--count", &format!("{default_ref}..{branch}")]).unwrap_or(0);
+        // Only consult the forge when the cheap ancestry probe was inconclusive
+        // (covers the squash-merge case) and the worktree is clean — a dirty
+        // worktree is kept regardless, so skip the network call.
+        let pr_merged = if !ancestor_of_main && !dirty {
+            matches!(
+                detect_merged_pr_for_branch_via_forge(project_root, branch),
+                PrLookup::Found(_)
+            )
+        } else {
+            false
+        };
+
+        let facts = AgentWorktreeFacts {
+            dirty,
+            ancestor_of_main,
+            pr_merged,
+            unique_unmerged_commits,
+        };
+
+        match classify_agent_worktree(&facts) {
+            AgentWorktreeVerdict::Removable(reason) => {
+                findings.push(DoctorFinding {
+                    category: "merged-agent-worktrees".to_string(),
+                    id: wt.path.display().to_string(),
+                    summary: format!(
+                        "agent worktree {} on `{branch}` is mergeable-and-gone ({reason})",
+                        wt.path.display()
+                    ),
+                    action: format!(
+                        "remove worktree + delete branch `{branch}` (`aida doctor --heal \
+                         --category merged-agent-worktrees --yes --force`)"
+                    ),
+                    // DESTRUCTIVE (worktree removal + branch deletion) → gated
+                    // behind --yes --force AND the STORY-666 autonomous-context
+                    // refusal in `heal_doctor_findings`.
+                    safe_heal: false,
+                });
+            }
+            AgentWorktreeVerdict::Keep(reason) => {
+                findings.push(DoctorFinding {
+                    category: "merged-agent-worktrees".to_string(),
+                    id: wt.path.display().to_string(),
+                    summary: format!(
+                        "agent worktree {} on `{branch}` flagged: {reason}",
+                        wt.path.display()
+                    ),
+                    action: "operator decision: review and keep, or remove by hand".to_string(),
+                    // Never auto-removed — flag-only.
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+    findings.sort_by(|a, b| a.id.cmp(&b.id));
+    findings
+}
+
+/// TASK-878: remove one merged agent worktree + delete its branch. Only
+/// reachable when the finding surfaced it as Removable AND the caller passed
+/// --yes --force under an interactive (non-autonomous) context — the STORY-666
+/// destructive-heal gate in `heal_doctor_findings` fails closed otherwise. A
+/// Keep-flagged worktree never routes here (its action string is operator-only).
+/// Re-verifies the worktree is still clean right before removing (a salvage
+/// patch is written if anything appeared since the scan) and only deletes the
+/// branch after the worktree is gone. trace:TASK-878 | ai:claude
+fn heal_doctor_merged_agent_worktree(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    // Keep-flagged findings carry an operator-only action and must never be
+    // auto-removed, even under --yes --force.
+    if !finding.action.contains("--category merged-agent-worktrees") {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some("flagged for operator decision — not auto-removed".to_string()),
+        });
+    }
+    let worktree = std::path::PathBuf::from(&finding.id);
+    if !worktree.exists() {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some(format!("{} already gone", worktree.display())),
+        });
+    }
+
+    // Resolve the worktree's branch so we can delete it after removal.
+    let branch = list_worktrees(project_root)
+        .into_iter()
+        .find(|wt| {
+            wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone())
+                == worktree.canonicalize().unwrap_or_else(|_| worktree.clone())
+        })
+        .and_then(|wt| wt.branch);
+
+    // Re-check: never delete uncommitted work that appeared between scan and
+    // heal. Salvage anything dirty, then refuse to remove. trace:TASK-878
+    if !worktree_dirty_entries(&worktree).is_empty() {
+        let salvage =
+            salvage_worktree_patch(project_root, "merged-agent-worktree", None, &worktree)?;
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "skipped".to_string(),
+            detail: Some(format!(
+                "worktree became dirty since scan — NOT removed{}",
+                salvage
+                    .map(|p| format!(" (salvage patch: {})", p.display()))
+                    .unwrap_or_default()
+            )),
+        });
+    }
+
+    let removed = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "remove", "--force"])
+        .arg(&worktree)
+        .status()
+        .with_context(|| format!("removing worktree {}", worktree.display()))?;
+    if !removed.success() {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "failed".to_string(),
+            detail: Some(format!("git worktree remove {} failed", worktree.display())),
+        });
+    }
+
+    // Delete the now-unused local branch (the stale-branch source of the
+    // `aida human` false-positives). `-D` because a squash-merged branch isn't
+    // recognized as merged by `-d`, and the scan already verified it shipped.
+    let mut detail = None;
+    if let Some(branch) = branch {
+        let deleted = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["branch", "-D", &branch])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        detail = Some(if deleted {
+            format!("removed worktree + deleted branch `{branch}`")
+        } else {
+            format!("removed worktree (branch `{branch}` delete failed or already gone)")
+        });
+    }
+
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "removed merged agent worktree".to_string(),
+        status: "healed".to_string(),
+        detail,
     })
 }
 
@@ -33376,6 +33748,14 @@ fn heal_doctor_finding(
         // trace:TASK-717
         "stale-remote-branches" if opts.force && opts.yes => {
             heal_doctor_stale_remote_branch(project_root, finding)
+        }
+        // TASK-878: GC a merged Agent-tool worktree + its branch. DESTRUCTIVE
+        // (worktree removal + branch deletion) so force+yes gated like the
+        // stale-remote-branch deletion above, AND routed through the STORY-666
+        // autonomous-context refusal in heal_doctor_findings (safe_heal=false).
+        // trace:TASK-878
+        "merged-agent-worktrees" if opts.force && opts.yes => {
+            heal_doctor_merged_agent_worktree(project_root, finding)
         }
         // TASK-673: re-open an uncorroborated Completed spec to Done so it
         // surfaces in the queue's "awaiting commit" lane for triage rather than
@@ -34112,6 +34492,24 @@ mod story_462_doctor_tests {
         }
     }
 
+    #[test]
+    fn normalize_doctor_category_accepts_merged_agent_worktrees() {
+        // TASK-878
+        for alias in [
+            "merged-agent-worktrees",
+            "merged-agent-worktree",
+            "agent-worktree",
+            "agent-worktrees",
+            "worktree-gc",
+            "agent-worktree-gc",
+        ] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                "merged-agent-worktrees"
+            );
+        }
+    }
+
     fn remote_facts() -> RemoteBranchFacts {
         RemoteBranchFacts {
             protected: false,
@@ -34217,6 +34615,138 @@ mod story_462_doctor_tests {
             classify_stale_remote_branch(&facts),
             RemoteBranchVerdict::Excluded(_)
         ));
+    }
+
+    fn agent_wt_facts() -> AgentWorktreeFacts {
+        AgentWorktreeFacts {
+            dirty: false,
+            ancestor_of_main: false,
+            pr_merged: false,
+            unique_unmerged_commits: 0,
+        }
+    }
+
+    #[test]
+    fn classify_ancestor_of_main_agent_worktree_is_removable() {
+        // TASK-878: fast-forward / non-squash merge → branch is an ancestor of
+        // origin/main, clean, zero unique commits → safe to GC.
+        let facts = AgentWorktreeFacts {
+            ancestor_of_main: true,
+            ..agent_wt_facts()
+        };
+        assert!(matches!(
+            classify_agent_worktree(&facts),
+            AgentWorktreeVerdict::Removable(_)
+        ));
+    }
+
+    #[test]
+    fn classify_squash_merged_agent_worktree_is_removable() {
+        // TASK-878: squash-merged → branch tip differs (NOT ancestor) but the
+        // forge reports a merged PR and there are zero unique commits → removable.
+        let facts = AgentWorktreeFacts {
+            pr_merged: true,
+            ..agent_wt_facts()
+        };
+        assert!(matches!(
+            classify_agent_worktree(&facts),
+            AgentWorktreeVerdict::Removable(_)
+        ));
+    }
+
+    #[test]
+    fn classify_unmerged_commits_agent_worktree_is_kept() {
+        // TASK-878: PR merged BUT the branch carries genuinely-unique unmerged
+        // commits (extra work added after the squash merge) → KEEP, never remove.
+        let facts = AgentWorktreeFacts {
+            pr_merged: true,
+            unique_unmerged_commits: 2,
+            ..agent_wt_facts()
+        };
+        assert!(matches!(
+            classify_agent_worktree(&facts),
+            AgentWorktreeVerdict::Keep(_)
+        ));
+    }
+
+    #[test]
+    fn classify_dirty_agent_worktree_is_kept_even_when_merged() {
+        // TASK-878: clean != no work, but DIRTY is unambiguously work — a
+        // worktree with uncommitted changes is KEPT even when its branch merged.
+        let facts = AgentWorktreeFacts {
+            dirty: true,
+            ancestor_of_main: true,
+            pr_merged: true,
+            ..agent_wt_facts()
+        };
+        assert!(matches!(
+            classify_agent_worktree(&facts),
+            AgentWorktreeVerdict::Keep(_)
+        ));
+    }
+
+    #[test]
+    fn classify_no_merge_signal_agent_worktree_is_kept() {
+        // TASK-878: no merge signal at all (unmerged work in flight) → never
+        // remove; flag for the operator.
+        let facts = AgentWorktreeFacts {
+            unique_unmerged_commits: 5,
+            ..agent_wt_facts()
+        };
+        assert!(matches!(
+            classify_agent_worktree(&facts),
+            AgentWorktreeVerdict::Keep(_)
+        ));
+    }
+
+    #[test]
+    fn is_agent_managed_worktree_matches_path_and_branch() {
+        // TASK-878: scoped to the Agent-tool isolation worktrees by EITHER the
+        // path segment or the branch convention.
+        use std::path::Path;
+        assert!(is_agent_managed_worktree(
+            Path::new("/repo/.claude/worktrees/agent-abc123"),
+            Some("worktree-agent-abc123"),
+        ));
+        // Path-only match (branch missing / detached).
+        assert!(is_agent_managed_worktree(
+            Path::new("/repo/.claude/worktrees/agent-deadbeef"),
+            None,
+        ));
+        // Branch-only match (oddly-pathed but conventional branch).
+        assert!(is_agent_managed_worktree(
+            Path::new("/tmp/scratch"),
+            Some("worktree-agent-9f9f"),
+        ));
+        // A normal work-branch worktree is NOT in scope.
+        assert!(!is_agent_managed_worktree(
+            Path::new("/repo/wt/task-281"),
+            Some("task-281-foo"),
+        ));
+    }
+
+    #[test]
+    fn merged_agent_worktree_heal_is_gated_in_autonomous_context() {
+        // TASK-878 + STORY-666: a merged-agent-worktree finding is destructive
+        // (safe_heal=false), so the per-category disposition GATES it in an
+        // autonomous context even with --force --yes, and PROCEEDS interactively.
+        // matches the finding's classification (destructive → never safe_heal)
+        let safe_heal = false;
+        // Unattended (autonomous) → fail-closed refusal.
+        assert_eq!(
+            doctor_heal_disposition(safe_heal, /*force*/ true, /*yes*/ true, /*auto*/ true),
+            HealDisposition::GateAutonomous,
+        );
+        // Interactive TTY sign-off → proceeds.
+        assert_eq!(
+            doctor_heal_disposition(safe_heal, /*force*/ true, /*yes*/ true, /*auto*/ false),
+            HealDisposition::Proceed,
+        );
+        // Without --force --yes it's the pre-existing manual-decision skip.
+        assert_eq!(
+            doctor_heal_disposition(safe_heal, /*force*/ false, /*yes*/ false, /*auto*/ false),
+            HealDisposition::SkipNeedsForce,
+        );
     }
 
     #[test]
