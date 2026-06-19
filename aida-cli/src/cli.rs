@@ -7276,6 +7276,17 @@ pub enum Command {
         #[clap(long, value_name = "REF_OR_DATE")]
         since: Option<String>,
 
+        /// Print the guided, copy-pasteable steps to bring the OS sandbox
+        /// (bubblewrap write-confinement) up on this host: detect the current
+        /// state, the exact sysctl to persist if the kernel blocks unprivileged
+        /// user namespaces, how to opt in, and the verify command. Prints the
+        /// sequence — sudo steps are clearly marked "run this yourself"; it
+        /// never silently runs sudo. Runs the non-sudo availability re-probe as
+        /// a smoke check.
+        // trace:STORY-665 | ai:claude
+        #[clap(long)]
+        fix_sandbox: bool,
+
         /// Legacy maintenance subcommand or focused doctor action.
         #[clap(subcommand)]
         cmd: Option<DoctorCommand>,

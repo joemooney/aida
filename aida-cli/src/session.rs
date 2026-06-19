@@ -1442,6 +1442,22 @@ fn bwrap_userns_remediation_hint(full: &str) -> String {
         .to_string()
 }
 
+/// The exact command that lifts the kernel's unprivileged-userns restriction
+/// for the CURRENT boot (does not survive a reboot). Single source of truth so
+/// the doctor remediation, the guided setup printer, and the docs can't drift.
+/// trace:STORY-665 | ai:claude
+pub(crate) const BWRAP_USERNS_SYSCTL_RUNTIME: &str =
+    "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0";
+
+/// The command that PERSISTS the userns sysctl across reboots via a
+/// `/etc/sysctl.d` drop-in. trace:STORY-665 | ai:claude
+pub(crate) const BWRAP_USERNS_SYSCTL_PERSIST: &str =
+    "echo 'kernel.apparmor_restrict_unprivileged_userns=0' \
+     | sudo tee /etc/sysctl.d/99-aida-bwrap-userns.conf";
+
+/// The Debian/Ubuntu install command for bubblewrap. trace:STORY-665 | ai:claude
+pub(crate) const BWRAP_INSTALL_DEBIAN: &str = "sudo apt install bubblewrap";
+
 /// Minimal PATH lookup for an executable name (avoids pulling in a `which`
 /// crate). Returns the first matching path, or `None`. trace:STORY-612 | ai:claude
 fn which_on_path(exe: &str) -> Option<PathBuf> {
@@ -2313,6 +2329,28 @@ mod tests {
             hint,
             "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0"
         );
+    }
+
+    // STORY-665: the shared remediation constants are the single source of
+    // truth for the doctor remediation, the `--fix-sandbox` printer, and the
+    // docs. Pin their exact text so a copy-paste from any surface is correct
+    // and they can't silently drift apart. trace:STORY-665 | ai:claude
+    #[test]
+    fn bwrap_remediation_constants_are_exact_and_copy_pasteable() {
+        assert_eq!(
+            BWRAP_USERNS_SYSCTL_RUNTIME,
+            "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0"
+        );
+        assert_eq!(
+            BWRAP_USERNS_SYSCTL_PERSIST,
+            "echo 'kernel.apparmor_restrict_unprivileged_userns=0' \
+             | sudo tee /etc/sysctl.d/99-aida-bwrap-userns.conf"
+        );
+        assert_eq!(BWRAP_INSTALL_DEBIAN, "sudo apt install bubblewrap");
+        // The persist drop-in must land under /etc/sysctl.d so it survives a
+        // reboot, and the runtime form must be the non-persisting `sysctl -w`.
+        assert!(BWRAP_USERNS_SYSCTL_PERSIST.contains("/etc/sysctl.d/"));
+        assert!(BWRAP_USERNS_SYSCTL_RUNTIME.contains("sysctl -w"));
     }
 
     // TASK-865: when the expected marker is absent, fall back to a complete
