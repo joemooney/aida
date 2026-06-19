@@ -8,14 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T01:36:45.413199316Z
-modified_at: 2026-06-19T02:18:32.866148371Z
+modified_at: 2026-06-19T02:45:54.057934622Z
 req_type: Spike
 tags:
 - field-study
 - from-i4-terminus
-- parent:EPIC-48
-- probe
-- research
+- parent:EPIC-50
+- tilt-verdict
 deferred: true
 deferred_at: 2026-06-19T02:18:32.866148371Z
 deferred_until: operator green-lights the field study (build the observe-only rule-violation logger for real drains)
