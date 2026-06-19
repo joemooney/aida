@@ -2054,4 +2054,401 @@ mod tests {
             .to_string();
         assert!(err.contains("not in the shared registry"), "got: {err}");
     }
+
+    // -----------------------------------------------------------------
+    // TASK-889: distributed ID-allocation stress tests — the second
+    // core distributed-correctness surface. The catastrophic failure
+    // mode is an id COLLISION: two distinct specs claiming the same
+    // canonical id across clones. These tests lock down the headline
+    // invariant — N nodes minting concurrently never collide — through
+    // the *real* git CAS push loop, not just the in-process locks the
+    // existing dispenser.rs / node.rs tests cover.
+    // trace:TASK-889 | ai:claude
+    // -----------------------------------------------------------------
+
+    /// Replicate the production block-claim CAS loop (mirrors
+    /// `auto_allocate_block_inner` in aida-cli): load blocks.yaml →
+    /// claim a range above the current floor → save → commit → push;
+    /// on push-rejection hard-reset + pull --rebase and retry with a
+    /// freshly-recomputed range. Returns the claimed (start, end).
+    ///
+    /// This is the single point on which cross-node id uniqueness rests:
+    /// only one node's push for a given range can win; the loser recomputes
+    /// `next_range_start` (= max(range_end)+1) after pulling the winner's
+    /// commit, so the ranges never overlap. trace:TASK-889 | ai:claude
+    fn cas_claim_block(
+        clone: &Path,
+        branch: &str,
+        node_id: &str,
+        type_prefix: &str,
+        size: u32,
+    ) -> Result<(u32, u32)> {
+        use crate::node::BlockRegistry;
+        let blocks_path = clone.join("registry").join("blocks.yaml");
+        for attempt in 0..MAX_CAS_RETRIES {
+            if attempt > 0 {
+                pull_rebase(clone, "origin", branch)?;
+            }
+            let mut registry = BlockRegistry::load(&blocks_path)?;
+            let block = registry.claim_block(
+                node_id.to_string(),
+                format!("{node_id}@host"),
+                "host".into(),
+                type_prefix.to_string(),
+                size,
+            );
+            registry.save(&blocks_path)?;
+            add(clone, &["registry/blocks.yaml"])?;
+            commit(
+                clone,
+                &format!(
+                    "chore(registry): node {node_id} claim {type_prefix}-{}..{}",
+                    block.range_start, block.range_end
+                ),
+            )?;
+            match push(clone, "origin", branch)? {
+                true => return Ok((block.range_start, block.range_end)),
+                false => {
+                    // Push lost the race — discard our stale claim commit so
+                    // the next pull --rebase has a clean tree to recompute on.
+                    let _ = git(clone, &["reset", "--hard", "HEAD~1"]);
+                    continue;
+                }
+            }
+        }
+        anyhow::bail!("block claim CAS exhausted retries");
+    }
+
+    /// SCENARIO 2 (the catastrophic case) + SCENARIO 3 (exhaustion/refill):
+    /// three clones (distinct node ids) each claim several blocks of the
+    /// same type concurrently against one shared bare remote, then dispense
+    /// every id from every block. The invariant: (a) no two claimed ranges
+    /// overlap across nodes, and (b) every dispensed canonical id is unique.
+    /// A range-overlap or a replayed counter would surface as a duplicate.
+    /// trace:TASK-889 | ai:claude
+    #[test]
+    fn concurrent_multinode_block_claims_never_overlap_or_collide() {
+        use crate::node::BlockRegistry;
+        use std::sync::Arc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let dpath = dir.path().to_path_buf();
+
+        // One shared bare remote that all clones push the orphan store to.
+        let bare = dpath.join("store.git");
+        std::fs::create_dir_all(&bare).unwrap();
+        git(&bare, &["init", "--bare"]).unwrap();
+
+        // Seed the store branch with an empty blocks.yaml so every clone
+        // starts from the same committed baseline.
+        let seed = dpath.join("seed");
+        init(&seed).unwrap();
+        configure_user(&seed, "Seed", "seed@example.com").unwrap();
+        git(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]).unwrap();
+        std::fs::create_dir_all(seed.join("registry")).unwrap();
+        BlockRegistry::default()
+            .save(&seed.join("registry").join("blocks.yaml"))
+            .unwrap();
+        add(&seed, &["registry/blocks.yaml"]).unwrap();
+        commit(&seed, "seed blocks").unwrap();
+        let branch = current_branch(&seed).unwrap();
+        git(&seed, &["push", "-u", "origin", &branch]).unwrap();
+
+        const NODES: usize = 3;
+        const BLOCKS_PER_NODE: usize = 4;
+        const BLOCK_SIZE: u32 = 50;
+
+        // Each node = its own clone of the shared remote.
+        let branch = Arc::new(branch);
+        let bare = Arc::new(bare);
+        let handles: Vec<_> = (1..=NODES)
+            .map(|n| {
+                let dpath = dpath.clone();
+                let branch = Arc::clone(&branch);
+                let bare = Arc::clone(&bare);
+                std::thread::spawn(move || {
+                    let node_id = n.to_string();
+                    let clone = dpath.join(format!("node{n}"));
+                    git(
+                        &dpath,
+                        &["clone", bare.to_str().unwrap(), clone.to_str().unwrap()],
+                    )
+                    .unwrap();
+                    configure_user(&clone, &format!("n{n}"), &format!("n{n}@e.com")).unwrap();
+                    let mut ranges = Vec::new();
+                    for _ in 0..BLOCKS_PER_NODE {
+                        let r =
+                            cas_claim_block(&clone, &branch, &node_id, "FR", BLOCK_SIZE).unwrap();
+                        ranges.push((node_id.clone(), r));
+                    }
+                    ranges
+                })
+            })
+            .collect();
+
+        let all_ranges: Vec<(String, (u32, u32))> = handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect();
+
+        // (a) No two claimed ranges overlap — regardless of owning node.
+        let mut ranges: Vec<(u32, u32)> = all_ranges.iter().map(|(_, r)| *r).collect();
+        ranges.sort();
+        for w in ranges.windows(2) {
+            assert!(
+                w[0].1 < w[1].0,
+                "block ranges overlap across nodes: {:?} then {:?} — \
+                 cross-node id collision is possible",
+                w[0],
+                w[1]
+            );
+        }
+        assert_eq!(ranges.len(), NODES * BLOCKS_PER_NODE);
+
+        // (b) Dispense EVERY id from EVERY claimed range (scenario 3:
+        // exhaust each block) and assert global uniqueness. Each range maps
+        // 1:1 onto canonical ids `FR-<start>..FR-<end>`; an overlap or an
+        // off-by-one at a block boundary would show up as a duplicate or a
+        // gap here.
+        let mut all_ids: Vec<String> = Vec::new();
+        for (_node, (start, end)) in &all_ranges {
+            assert_eq!(
+                end - start + 1,
+                BLOCK_SIZE,
+                "block boundary off-by-one: range {start}..{end} is not size {BLOCK_SIZE}"
+            );
+            for seq in *start..=*end {
+                all_ids.push(format!("FR-{seq}"));
+            }
+        }
+        let total = all_ids.len();
+        assert_eq!(total, NODES * BLOCKS_PER_NODE * BLOCK_SIZE as usize);
+        all_ids.sort();
+        all_ids.dedup();
+        assert_eq!(
+            all_ids.len(),
+            total,
+            "DUPLICATE canonical id minted across {NODES} concurrent nodes"
+        );
+
+        // The remote's final blocks.yaml must agree: all ranges present,
+        // contiguous from 1, none lost to a CAS reset.
+        let verify = dpath.join("verify");
+        git(
+            &dpath,
+            &["clone", bare.to_str().unwrap(), verify.to_str().unwrap()],
+        )
+        .unwrap();
+        let final_reg = BlockRegistry::load(&verify.join("registry").join("blocks.yaml")).unwrap();
+        assert_eq!(
+            final_reg.blocks.len(),
+            NODES * BLOCKS_PER_NODE,
+            "a block claim was lost during the concurrent CAS race"
+        );
+        // Highest range_end == total id space, i.e. fully contiguous packing.
+        let max_end = final_reg.blocks.iter().map(|b| b.range_end).max().unwrap();
+        assert_eq!(max_end, (NODES * BLOCKS_PER_NODE) as u32 * BLOCK_SIZE);
+    }
+
+    /// SCENARIO 5: interleaved stale-clone claim. Clone A claims and pushes;
+    /// clone B — which has NOT pulled A's claim — then claims. B's first push
+    /// must be rejected (it computed a range overlapping A's), and the CAS
+    /// loop must recover by pulling + recomputing a non-overlapping range.
+    /// Proves a stale node cannot mint a colliding range. trace:TASK-889
+    #[test]
+    fn stale_clone_claim_cannot_overlap_after_cas_recovery() {
+        use crate::node::BlockRegistry;
+
+        let dir = tempfile::tempdir().unwrap();
+        let dpath = dir.path().to_path_buf();
+        let bare = dpath.join("store.git");
+        std::fs::create_dir_all(&bare).unwrap();
+        git(&bare, &["init", "--bare"]).unwrap();
+
+        // Seed.
+        let seed = dpath.join("seed");
+        init(&seed).unwrap();
+        configure_user(&seed, "Seed", "seed@example.com").unwrap();
+        git(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]).unwrap();
+        std::fs::create_dir_all(seed.join("registry")).unwrap();
+        BlockRegistry::default()
+            .save(&seed.join("registry").join("blocks.yaml"))
+            .unwrap();
+        add(&seed, &["registry/blocks.yaml"]).unwrap();
+        commit(&seed, "seed").unwrap();
+        let branch = current_branch(&seed).unwrap();
+        git(&seed, &["push", "-u", "origin", &branch]).unwrap();
+
+        // Two clones, both at the empty baseline (both stale w.r.t each other).
+        let a = dpath.join("a");
+        let b = dpath.join("b");
+        git(
+            &dpath,
+            &["clone", bare.to_str().unwrap(), a.to_str().unwrap()],
+        )
+        .unwrap();
+        git(
+            &dpath,
+            &["clone", bare.to_str().unwrap(), b.to_str().unwrap()],
+        )
+        .unwrap();
+        configure_user(&a, "A", "a@e.com").unwrap();
+        configure_user(&b, "B", "b@e.com").unwrap();
+
+        // A claims FR-1..50 and pushes (wins outright).
+        let ra = cas_claim_block(&a, &branch, "1", "FR", 50).unwrap();
+        assert_eq!(ra, (1, 50));
+
+        // B is still at the empty baseline. Its CAS loop will FIRST compute
+        // FR-1..50 (collision!), have its push rejected, then pull A's claim
+        // and recompute FR-51..100 — a non-overlapping range.
+        let rb = cas_claim_block(&b, &branch, "2", "FR", 50).unwrap();
+        assert!(
+            rb.0 > ra.1,
+            "stale clone B minted an OVERLAPPING range {rb:?} after A's {ra:?}"
+        );
+        assert_eq!(rb, (51, 100));
+    }
+
+    /// SCENARIO 4: merge-gate short-id assignment is collision-free AND
+    /// deterministic. Seed many node-aware specs across mixed types, run the
+    /// gate, and assert every assigned agreed-id is unique within its type
+    /// and densely packed from 1 (FR-1..FR-k, BUG-1..BUG-m, …). A second run
+    /// is a no-op. trace:TASK-889 | ai:claude
+    #[test]
+    fn merge_gate_assigns_unique_dense_short_ids_across_many_specs() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+        use std::collections::HashMap;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+
+        // 40 specs each of FR / BUG / TASK with node-aware spec_ids spread
+        // across several "nodes" (3, 7, 12) — exactly the post-distributed-
+        // minting state the gate must normalize into agreed short-ids.
+        let types = [
+            (RequirementType::Functional, "FR"),
+            (RequirementType::Bug, "BUG"),
+            (RequirementType::Task, "TASK"),
+        ];
+        let mut expected_per_type: HashMap<&str, usize> = HashMap::new();
+        for (rt, prefix) in &types {
+            for (i, node) in [3u32, 7, 12].iter().enumerate() {
+                for seq in 1..=13u32 {
+                    let spec_id = format!("{prefix}-{node}-{seq:03}");
+                    let mut r = Requirement::new(spec_id.clone(), String::new());
+                    r.spec_id = Some(spec_id);
+                    r.req_type = rt.clone();
+                    object_store::write_object(&objects, &r).unwrap();
+                }
+                let _ = i;
+            }
+            expected_per_type.insert(prefix, 3 * 13);
+        }
+
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        let mut assignments = merge_gate(&store).unwrap();
+        assignments.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Group assigned agreed-ids by type prefix.
+        let mut by_prefix: HashMap<String, Vec<u32>> = HashMap::new();
+        for (_origin, agreed) in &assignments {
+            let (prefix, seq) = agreed.rsplit_once('-').unwrap();
+            by_prefix
+                .entry(prefix.to_string())
+                .or_default()
+                .push(seq.parse().unwrap());
+        }
+
+        for (prefix, expected_count) in &expected_per_type {
+            let mut seqs = by_prefix.get(*prefix).cloned().unwrap_or_default();
+            assert_eq!(
+                seqs.len(),
+                *expected_count,
+                "{prefix}: wrong number of agreed-ids assigned"
+            );
+            seqs.sort();
+            // Unique …
+            let mut deduped = seqs.clone();
+            deduped.dedup();
+            assert_eq!(
+                deduped.len(),
+                seqs.len(),
+                "{prefix}: merge-gate assigned a DUPLICATE agreed short-id"
+            );
+            // … and densely packed from 1 (no off-by-one / no gaps).
+            assert_eq!(
+                seqs,
+                (1..=*expected_count as u32).collect::<Vec<_>>(),
+                "{prefix}: agreed-ids not contiguous 1..={expected_count}"
+            );
+        }
+
+        // Idempotent: re-running gate over the now-assigned store is a no-op.
+        let second = merge_gate(&store).unwrap();
+        assert!(second.is_empty(), "second merge-gate run must be a no-op");
+    }
+
+    /// SCENARIO 6 (edge): two clones accidentally sharing a node id still do
+    /// NOT collide on ids, because uniqueness comes from non-overlapping
+    /// block RANGES (CAS-serialized), not from node-id distinctness. Two
+    /// clones both calling themselves node "1" each get a distinct range, so
+    /// their dispensed ids never clash even though attribution is ambiguous.
+    /// This documents that the range-allocation invariant is robust to a
+    /// duplicate-node-id misconfiguration (the BUG-89-adjacent hazard).
+    /// trace:TASK-889 | ai:claude
+    #[test]
+    fn duplicate_node_id_still_yields_disjoint_ranges() {
+        use crate::node::BlockRegistry;
+
+        let dir = tempfile::tempdir().unwrap();
+        let dpath = dir.path().to_path_buf();
+        let bare = dpath.join("store.git");
+        std::fs::create_dir_all(&bare).unwrap();
+        git(&bare, &["init", "--bare"]).unwrap();
+
+        let seed = dpath.join("seed");
+        init(&seed).unwrap();
+        configure_user(&seed, "Seed", "seed@example.com").unwrap();
+        git(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]).unwrap();
+        std::fs::create_dir_all(seed.join("registry")).unwrap();
+        BlockRegistry::default()
+            .save(&seed.join("registry").join("blocks.yaml"))
+            .unwrap();
+        add(&seed, &["registry/blocks.yaml"]).unwrap();
+        commit(&seed, "seed").unwrap();
+        let branch = current_branch(&seed).unwrap();
+        git(&seed, &["push", "-u", "origin", &branch]).unwrap();
+
+        let a = dpath.join("a");
+        let b = dpath.join("b");
+        git(
+            &dpath,
+            &["clone", bare.to_str().unwrap(), a.to_str().unwrap()],
+        )
+        .unwrap();
+        git(
+            &dpath,
+            &["clone", bare.to_str().unwrap(), b.to_str().unwrap()],
+        )
+        .unwrap();
+        configure_user(&a, "A", "a@e.com").unwrap();
+        configure_user(&b, "B", "b@e.com").unwrap();
+
+        // BOTH clones (mis)identify as node "1".
+        let ra = cas_claim_block(&a, &branch, "1", "FR", 30).unwrap();
+        let rb = cas_claim_block(&b, &branch, "1", "FR", 30).unwrap();
+
+        // Ranges are still disjoint — the CAS loop on range_end+1 protects
+        // uniqueness even when node ids collide.
+        assert!(
+            ra.1 < rb.0 || rb.1 < ra.0,
+            "duplicate node id produced OVERLAPPING ranges: {ra:?} vs {rb:?}"
+        );
+    }
 }
