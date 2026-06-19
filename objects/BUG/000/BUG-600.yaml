@@ -8,14 +8,32 @@ description: |-
   Also exit-0-on-refusal: aida edit STORY-1 --status approved as a non-advisor (no AIDA_SESSION_ROLE) correctly REFUSES with a clear message ("promoting a Draft spec to Approved needs advisor authority ...") and leaves status unchanged — but EXITS 0.
 
   Impact (BUG-573 class): exit-0 on an error poisons usage telemetry (recorded as success) and breaks scripts/agents that gate on exit code — a wrapper doing `aida show $ID && proceed` proceeds on a not-found, and `aida edit ... --status approved && echo ok` reports ok on a silent refusal. Fix: aida show on not-found should exit non-zero (match edit/defer/archive); the non-advisor status-promotion refusal in edit should exit non-zero too. Audit for other exit-0-on-error paths in the same family.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T17:28:42.163134312Z
-modified_at: 2026-06-19T17:28:42.163134312Z
+modified_at: 2026-06-19T17:53:28.538836958Z
 req_type: Bug
 tags:
 - error-paths
 - from-dogfood
 - ux
+history:
+- id: 019ee104-2fd6-72f2-9a8b-1425ba946c00
+  author: aida-auto-bump
+  timestamp: 2026-06-19T17:53:28.534050957Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee104-2fda-7560-afbf-03630e4750e1
+  timestamp: 2026-06-19T17:53:28.538836048Z
+  agent: aida
+  commit_sha: 85519faeec8bccef8bcf8de0823ee5f75a9c8f6f
+  summary: Completed via merge 85519fae
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T17:53:28.363214951Z
+  completion_sha: 85519faeec8bccef8bcf8de0823ee5f75a9c8f6f
