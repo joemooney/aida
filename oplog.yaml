@@ -19083,5 +19083,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1881
+- id: 019eddc5-29e4-73f2-8cab-626f5f6bac6b
+  target_id: 019eddc5-26b9-7592-8202-7961cbd377e1
+  author: aida
+  node_id: '1'
+  lamport: 1882
+  timestamp: 2026-06-19T02:45:46.596112345Z
+  kind: !Create
+    title: Cold-boot substrate-richness ablation (P3) - the open upper-stack experiment
+    description: 'MOVE 10. Hold the model fixed; vary only how much context the cold-boot advisors substrate carries (lean brief vs full graph+history+traces); measure resolution quality on punts. WHY: P3 (under stateless escalation, substrate enrichment is the cheapest autonomy lever) is scoped but UN-ablated (section 13.4) - unlike P1 it has not hit a ceiling, a genuinely open experiment in the defensible upper stack. EVIDENCE: resolution-quality vs substrate-richness curve at fixed model. Size M. HONEST CONFOUND (section 9): substrate-richness correlates with better-specified (easier) specs - must control for spec difficulty or it measures problem difficulty. Judge-dependent (pairs with move 3).'
+    req_type: Spike
+    status: Approved
+    priority: Medium
+clock: 1882
 node_id: '1'
