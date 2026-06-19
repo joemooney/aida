@@ -3,15 +3,33 @@ spec_id: TASK-849
 agreed_id: TASK-849
 title: 'spec dryrun polish: graft Codex micro-improvements (get_requirement_by_spec_id reuse + &static str dimension names)'
 description: 'From the SPIKE-64 synthesis verdict: the Claude arm shipped as aida spec dryrun (STORY-656). Two cheap grafts from the Codex arm: (1) replace the inline spec lookup with store.get_requirement_by_spec_id (+ UUID fallback) to drop duplicated match logic; (2) make the Dimension name field &static str (compile-time constants) to drop per-score allocations. ~20 min, modest payoff.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T06:46:17.832970379Z
-modified_at: 2026-06-18T06:46:17.832970379Z
+modified_at: 2026-06-19T00:44:38.397034489Z
 req_type: Task
 tags:
 - aida:spec
 - from-synthesis
 - parent:STORY-656
 - polish
+history:
+- id: 019edd56-4278-7e82-991e-17652881a0eb
+  author: aida-auto-bump
+  timestamp: 2026-06-19T00:44:38.392496056Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edd56-427d-7162-8731-75ec5d4b92ad
+  timestamp: 2026-06-19T00:44:38.397033857Z
+  agent: aida
+  commit_sha: 0d290253dc297717a0f251b2cd206f6a7f35cf83
+  summary: Completed via merge 0d290253
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T00:44:38.232905533Z
+  completion_sha: 0d290253dc297717a0f251b2cd206f6a7f35cf83
