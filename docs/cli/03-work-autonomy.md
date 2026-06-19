@@ -212,6 +212,33 @@ These three support the autonomy machinery rather than driving work directly.
 
 **`aida goal`** — derive a *machine-checkable* completion condition from spec metadata, ready to paste into `/goal` or `/schedule`. Each flag is one clause (`--batch`, `--epic`, `--queue-empty`, …); flags compose with AND; every clause carries an explicit verification command. **Reach for it when** you want a loop/drain to stop on a *deterministic* condition rather than a vague "make it pass." **Don't** pick a clause whose mechanism your drain bypasses (e.g. a `--queue-empty` condition met trivially because autonomous-merge skipped that queue) — the clause must match how the work actually routes.
 
+### The OS sandbox — `[contained] os_wrap`
+
+<!-- trace:TASK-867 -->
+
+`os_wrap` is the master switch for AIDA's **own** OS-level agent sandbox, built on [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`). It is distinct from `[contained] enable` (Claude Code's *native* `--settings` sandbox): `os_wrap` is an OS boundary AIDA itself wraps around the agent process.
+
+```toml
+# .aida/config.toml
+[contained]
+os_wrap = true
+```
+
+When `os_wrap = true`, a headless `claude` launch is spawned as `bwrap <confinement-flags> claude …` with:
+
+- `--ro-bind / /` — the whole host filesystem mounted **read-only**, so the agent can read but never write outside its allowed set;
+- read-**write** binds for only the code worktree, its sibling `.aida-store`, and the build/auth caches the toolchain needs (`$CARGO_HOME`/`~/.cargo`, `~/.npm`, `~/.claude`, `~/.claude.json`);
+- a fresh `/dev`, `/proc`, and a `tmpfs` `/tmp`; `--die-with-parent` so a killed drain leaves nothing behind;
+- **shared network** — `os_wrap` is a *write*-confinement boundary, not a network jail (egress is governed separately by `allowed_hosts` / `managed_domains_only`).
+
+It is **strictly opt-in (default OFF)** and **fail-closed**: if `bwrap` is not on `PATH`, or it is installed but the host blocks unprivileged user namespaces, the launch **errors with remediation** rather than silently running the agent unconfined.
+
+> **Current scope: headless drains only.** Today `os_wrap` wraps the **headless** drain paths (`aida queue work --auto-complete --no-human`, the `claude -p` launches). The interactive `aida agent new` launch is **not** yet wrapped — that's tracked separately (deferred until userns confinement is reliable on the dev host). So enabling `os_wrap` confines unattended drains, not your keyboard-driven sessions.
+
+> **Host requirement: unprivileged user namespaces.** `bwrap` needs the kernel to allow unprivileged user namespaces. On recent Ubuntu (23.10+/24.04) AppArmor blocks this by default, so even with `bwrap` installed the sandbox fails-closed until you run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist it under `/etc/sysctl.d/`). **Discovery path:** `aida doctor` reports whether `bwrap` is available and confinement-capable on this host, and `aida config show` renders the resolved `[contained]` posture (including `os_wrap`) — start there before enabling it.
+
+The full mechanism, the bind list, and the host setup are documented in [`../agents/claude-bubblewrap-sandbox.md`](../agents/claude-bubblewrap-sandbox.md).
+
 ### Contained-mode network egress — `[contained] allowed_hosts`
 
 When the **contained** posture is on (`--contained` / `[agents] contained`), an agent's Bash runs inside Claude Code's sandbox (bubblewrap on Linux). By default that sandbox prompts the first time a command reaches a new network domain. To pre-restrict egress to a known allowlist, set a project config:
