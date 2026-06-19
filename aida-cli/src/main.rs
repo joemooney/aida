@@ -17,6 +17,7 @@ mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod commit;
 mod compete;
 mod complexity_calibration;
 mod coordination;
@@ -1652,6 +1653,32 @@ fn run() -> Result<()> {
         return handle_compete_command(spec, vendors, gate.as_deref(), *dry_run, *judge);
     }
 
+    // `aida commit` is self-contained — git + the staged diff (for REQ-ID
+    // inference), no requirements store. Dispatch before storage init like
+    // goal / ultraplan. trace:STORY-663 | ai:claude
+    if let Command::Commit {
+        commit_type,
+        scope,
+        message,
+        spec,
+        ai,
+        no_ai,
+        all,
+        dry_run,
+    } = &cli.command
+    {
+        return commit::handle_commit_command(&commit::CommitArgs {
+            commit_type: commit_type.clone(),
+            scope: scope.clone(),
+            message: message.clone(),
+            spec: spec.clone(),
+            ai: ai.clone(),
+            no_ai: *no_ai,
+            all: *all,
+            dry_run: *dry_run,
+        });
+    }
+
     // `aida goal` is a pure condition generator — no store needed.
     // trace:TASK-242 | ai:claude
     if let Command::Goal {
@@ -2448,6 +2475,7 @@ fn run() -> Result<()> {
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
+        Command::Commit { .. } => unreachable!("commit is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -12687,6 +12715,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
+        Command::Commit { .. } => unreachable!("commit is dispatched before storage init"),
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),

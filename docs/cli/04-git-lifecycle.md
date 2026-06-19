@@ -27,6 +27,24 @@ Keep this table in your head and every command below is obvious.
 
 ---
 
+### `aida commit`
+
+**One line** — author a commit message that *can't* trip the commit-msg hook, then commit.
+
+**Mental model.** AIDA's commit-msg hook insists on the conventional shape `[AI:tool]? type(scope): description (REQ-ID)`. A reflexive `git commit -am "fix stuff"` gets rejected. `aida commit` is the *builder*: you give it the parts (`--type`, optional `--scope`, `--message`, optional `--spec`) and it assembles a compliant message, **validates it against the same rules the hook enforces**, and runs `git commit`. It's the CLI-native, plain-terminal (and Codex) counterpart to the `/aida-commit` skill, which does the same job from inside a Claude session.
+
+**Reach for it when** — you're committing from a plain terminal and don't want to hand-format the message (or remember whether feat/fix needs a REQ-ID, or whether the `[AI:tool]` prefix is required). Especially after the hook just rejected a casual `git commit`.
+
+**Don't reach for it when** — you're already in a Claude session (use `/aida-commit`, which also links specs), or you genuinely want a non-conventional message (then it's `git commit --no-verify`, deliberately).
+
+**What it infers.** If you omit `--spec`, it scans the staged diff for `// trace:SPEC-ID` comments — exactly one distinct spec → it becomes the `(REQ-ID)`; multiple or none → no trailer (fine for chore/docs). The `[AI:tool]` prefix is added only when an AI-authored trace (`trace:ID | ai:...`) is staged, matching the hook's own rule; `--ai <tool>` forces it on, `--no-ai` forces it off. `feat`/`fix` require a REQ-ID, so it errors early with guidance if none can be resolved.
+
+**Gotchas.** `--dry-run` prints the assembled message without committing — use it to preview. Without `-a/--all`, something must be staged. The message is self-checked before the commit fires, so what you see is what the hook will accept.
+
+**Chains with** — `git add` (stage) → `aida commit` → `aida pull` (after merge, auto-bump to Completed).
+
+---
+
 ### `aida done`
 
 *(Covered in [Chapter 1](01-getting-started.md#aida-done).)* The newcomer shortcut — "I finished it." Once you're on a real pipeline, **stop using it** and use `aida queue done` (lands **Done**, the precise "finished on a branch" state) so the merge can earn **Completed**. `aida done`'s simplicity is also its limitation: it doesn't know where in the lifecycle you are.
