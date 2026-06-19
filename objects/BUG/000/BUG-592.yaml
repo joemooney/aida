@@ -12,14 +12,32 @@ description: |-
   Expected: a fresh project shows zero advisor decisions; dev-corpus fixtures must never leak into downstream stores. Either drop the auto-backfill, or gate it behind an explicit dev/demo flag.
 
   Repro: git init + aida init --no-skills; AIDA_SESSION_ROLE=advisor aida findings list.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:02:54.590200161Z
-modified_at: 2026-06-19T15:02:54.590200161Z
+modified_at: 2026-06-19T15:35:59.565239333Z
 req_type: Bug
 tags:
 - advisor
 - from-dogfood
 - intake
+history:
+- id: 019ee086-5148-7eb0-beeb-a5645a5b567e
+  author: aida-auto-bump
+  timestamp: 2026-06-19T15:35:59.560374536Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee086-514d-7781-ad68-53e3c6fa22dc
+  timestamp: 2026-06-19T15:35:59.565238824Z
+  agent: aida
+  commit_sha: c51029e3c38c12b299225dcb2ff470027e2a366f
+  summary: Completed via merge c51029e3
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T15:35:59.390388919Z
+  completion_sha: c51029e3c38c12b299225dcb2ff470027e2a366f
