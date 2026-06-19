@@ -19444,5 +19444,23 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1904
+- id: 019ee049-17be-7e53-9e76-ef8764ba23ac
+  target_id: 019ee049-0e2b-7c60-a6af-b4d11641cd2b
+  author: aida
+  node_id: '1'
+  lamport: 1905
+  timestamp: 2026-06-19T14:29:07.134388647Z
+  kind: !Create
+    title: 'MCP history tool lags aida history CLI: exposes only spec_id+since, missing --events/--type/--author/--until/--limit/--shipped/--all etc.'
+    description: |-
+      STORY-82 says the core MCP tools mirror the CLI filter surface. The history tool drifts: its inputSchema exposes only {spec_id, since}, while aida history --help offers --limit/-n, --max-commits, --events, --id (spec-id), --type, --author, --since, --until, --status-changes, --shipped, --comments, --oneline, --all. Notably an MCP agent cannot:
+      - switch to the per-event chronological feed (--events) - the MCP default appears to return the per-event JSON regardless, but there is no digest/events toggle;
+      - bound results with a limit (no limit arg) - the tool returned all 9 events in the test store with no way to cap;
+      - filter by --type / --author / --until / --shipped.
+
+      This is a read-side parity gap, not a breakage (history works; BUG-588 UUID-resolution fix holds - history with spec_id resolves cleanly). Mirror the high-value CLI filters (at least limit, type, since/until, events-vs-digest, shipped) onto the history tool schema+handler so an MCP agent can ask the same questions the CLI can. Source: compare aida history --help against the history tool descriptor in aida-cli/src/mcp.rs. Verified-by-me: tools/call history {} returned count:9 with no limit honored; schema has only spec_id+since (debug build sha fdb0a69fc).
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1905
 node_id: '1'
