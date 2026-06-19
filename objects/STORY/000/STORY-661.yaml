@@ -3,12 +3,12 @@ spec_id: STORY-661
 agreed_id: STORY-661
 title: aida config menu — a navigable TUI menu of configurable items
 description: 'A navigable TUI (aida config menu, or aida config --menu) listing every configurable item (the AIDA_* env knobs + .aida/config.toml fields) with current value, default, scope, and a one-line explanation, editable inline. Smallest-valuable-slice first: a read+navigate view over the known config surface (reuse the canonical list from docs/environment-variables.md + the config struct), then make the highest-value items settable. Ties to the TUI (EPIC-26) and complements aida init prompting.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:32:59.829525353Z
-modified_at: 2026-06-19T03:48:03.088781387Z
+modified_at: 2026-06-19T03:55:14.537554433Z
 req_type: Story
 tags:
 - aida:config
@@ -23,3 +23,21 @@ comments:
   content: Commit 0f51caa5b references this requirement
   created_at: 2026-06-19T03:48:03.088781387Z
   modified_at: 2026-06-19T03:48:03.088781387Z
+history:
+- id: 019ede04-c2e4-7b23-a9cd-6a436b2eb9d3
+  author: aida-auto-bump
+  timestamp: 2026-06-19T03:55:14.532941410Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ede04-c2e9-7c21-b256-7bf9826eee5a
+  timestamp: 2026-06-19T03:55:14.537553815Z
+  agent: aida
+  commit_sha: 660767eabb0acc4a0832e879de0f5b06f826e942
+  summary: Completed via merge 660767ea
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T03:55:14.368216385Z
+  completion_sha: 660767eabb0acc4a0832e879de0f5b06f826e942
