@@ -19284,5 +19284,30 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1897
+- id: 019edfc6-7221-70d1-8419-f860b1adca10
+  target_id: 019edfc6-6e25-7571-a4be-5e231bff1b39
+  author: aida
+  node_id: '1'
+  lamport: 1898
+  timestamp: 2026-06-19T12:06:25.057082442Z
+  kind: !Create
+    title: init teaches 'aida done <ID>' as the loop's final step, but it fails non-interactively with circular guidance
+    description: |-
+      Dogfood (2026-06-19, fresh throwaway, aida 0.14.0). The `aida init` output literally teaches "the loop" with `aida done TASK-1` as step 4 ("mark it finished"). But running it non-interactively (agent/script/piped stdin) fails:
+
+        $ aida done TASK-1
+        Error: marking TASK-1 done needs an interactive terminal (or the advisor role). Run `aida done TASK-1` directly in your shell.
+        (exit 1)
+
+      TWO problems:
+      1. The error message suggests `Run aida done TASK-1 directly in your shell` — which is EXACTLY the command that just failed. Circular, unactionable guidance for the very caller hitting it (a non-TTY agent/script does not get a different result by re-running). It does not mention the actual escape hatch the code uses: AIDA_SESSION_ROLE=advisor.
+      2. The onboarding contradiction: init advertises `aida done <ID>` as a core first-user step, but a first-user driving AIDA via an agent (the primary intended caller per project framing) cannot complete it. Reproduced on both TASK-1 and TASK-2. Workaround that DOES work: `AIDA_SESSION_ROLE=advisor aida done TASK-1` (jumped Draft -> Completed since the referencing commit was already on local main).
+
+      EXPECTED: either (a) the error names the real workaround (AIDA_SESSION_ROLE=advisor or the precise non-interactive path), not a re-run of the failing command; or (b) the init "loop" guidance flags that `aida done` is a human/advisor-gated step so a scripted user is not surprised. The current message points the user in a circle.
+
+      SEVERITY: medium — blocks the taught happy-path for non-TTY first-users; the message actively misdirects.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1898
 node_id: '1'
