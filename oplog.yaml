@@ -19259,5 +19259,30 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 1896
+- id: 019edfc6-20af-78c3-9a2a-31befaa74697
+  target_id: 019edfc6-1d4c-74d0-a2dc-17cff0e74262
+  author: aida
+  node_id: '1'
+  lamport: 1897
+  timestamp: 2026-06-19T12:06:04.207672273Z
+  kind: !Create
+    title: aida status shows perpetual 'Store drift' false alarm during normal use — alarming to new users
+    description: |-
+      Dogfood (2026-06-19, fresh /tmp throwaway, aida 0.14.0). In a brand-new repo (git init -b main; aida init) with ZERO code commits authored by the user, after filing two specs (aida add) and running the basic loop, `aida status` shows under Claude Code:
+
+        Store drift: code HEAD pinned store 2949cb9 but current store is 82411b6 — run aida store status for detail
+
+      `aida store status` elaborates: "drift — store moved 2 commit(s) since this code commit was made." The cache line directly below says Status: FRESH, which reads as contradictory.
+
+      ROOT CAUSE: the code<->store SHA pin is set at the time of the last code commit and never updates when `aida add`/`aida done` write new store commits. So EVERY normal AIDA action (filing or completing a spec) immediately re-introduces drift. Reproduced repeatedly: aida commit re-pinned to 82411b6, then completing TASK-1 wrote store commit 00b7649, drift re-appeared ("store moved 1 commit").
+
+      WHY IT MATTERS: `aida status` is the explicitly-recommended entry point (bare `aida` says "aida status is the best entry point for what is going on here"). A new user opening their primary dashboard immediately after init sees a scary "drift" warning that is in fact the normal, healthy state of having used the tool. The drift message even points at `aida store checkout HEAD` (STORY-49, Completed) as the remedy — but rewinding the store is exactly the WRONG action here; the store SHOULD be ahead.
+
+      EXPECTED: in a project that has only ever moved the store forward via normal spec writes, `aida status` should NOT report "drift" — or should distinguish "store ahead of code pin (normal — you filed specs)" from genuine divergence/rewind-needed. Consider re-pinning on store writes, or suppressing the warning when the store is a fast-forward descendant of the pin with no code-side concern.
+
+      SEVERITY: medium (no data loss) but HIGH visibility — hits the primary onboarding surface on day one.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1897
 node_id: '1'
