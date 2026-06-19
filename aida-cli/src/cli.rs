@@ -5854,13 +5854,42 @@ pub enum Command {
 
     /// List all requirements
     List {
-        /// Optional status shortcut: `aida list approved` is the same as
-        /// `aida list --status approved`. Accepts a single status, a
-        /// comma-separated OR set (`draft,approved`), or an alias (`open`,
-        /// `closed`). An unrecognized token errors with guidance rather than
+        /// Optional positional shortcut (e.g. `aida list approved`).
+        ///
+        /// A positional alternative to `--status` / `--user` / the lens flags.
+        /// Accepts a single status, a comma-separated OR set (`draft,approved`),
+        /// a status alias, a `user:<name>` / `me` owner-or-assignee filter, or a
+        /// lens word. An unrecognized token errors with guidance rather than
         /// being silently ignored.
+        ///
+        /// Statuses (one per line):
+        ///   draft           - filed, not yet approved
+        ///   approved        - blessed, ready to plan/queue
+        ///   planned         - designed, awaiting implementation
+        ///   in-progress     - actively being worked
+        ///   needs-attention - parked by a drain; needs a human triage
+        ///   done            - work finished on a branch (pre-merge)
+        ///   completed       - merged to the default branch
+        ///   rejected        - declined; will not be done
+        ///
+        /// Status aliases:
+        ///   open            - Draft, Approved, Planned, InProgress, NeedsAttention
+        ///   closed          - Done, Completed, Rejected
+        ///
+        /// User filters (owner OR assignee):
+        ///   me              - your shell identity ($AIDA_USER / $USER)
+        ///   user:<name>     - the named person (e.g. `user:joe`)
+        ///
+        /// Lens words (route to a focused view):
+        ///   human           - the "what needs me?" human-attention view
+        ///   queue           - your role's queue (= `aida queue list`)
+        ///   advisor         - the advisor dashboard (= `aida advisor`)
+        ///   why             - the burndown classifier (= `aida burndown explain`)
+        ///   inflight        - active leases + drain status
         // trace:TASK-0415 | ai:claude — plain `//` keeps the marker out of `--help`.
-        #[clap(value_name = "STATUS")]
+        // trace:STORY-662 | ai:claude — verbatim_doc_comment preserves the
+        // one-shortcut-per-line layout (clap otherwise reflows into paragraphs).
+        #[clap(value_name = "STATUS", verbatim_doc_comment)]
         shortcut: Option<String>,
 
         /// Filter by status. Accepts a comma-separated OR set
@@ -6044,6 +6073,15 @@ pub enum Command {
         // trace:STORY-639 | ai:claude
         #[clap(long, value_name = "USER")]
         assigned: Option<String>,
+
+        /// Show only specs whose OWNER or ASSIGNEE is <user>. `me` resolves to
+        /// your shell identity ($AIDA_USER / $USER — the same resolution the
+        /// queue uses). Broader than `--assigned`, which matches assignee only.
+        /// Also reachable as the positional `aida list me` / `aida list
+        /// user:<name>`. Composes with every other filter.
+        // trace:STORY-662 | ai:claude
+        #[clap(long, value_name = "USER")]
+        user: Option<String>,
     },
 
     /// Show details for a specific requirement
@@ -9248,6 +9286,42 @@ mod tests {
             } => {
                 assert_eq!(shortcut, None);
                 assert_eq!(status.as_deref(), Some("open"));
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+    }
+
+    // trace:STORY-662 — the `--user <name>` flag parses, and the positional
+    // `me` / `user:<name>` tokens land in `shortcut` (peeled into the user
+    // filter at runtime, not at the clap layer).
+    #[test]
+    fn list_user_flag_and_positional_parse() {
+        // --user flag.
+        let cli = Cli::try_parse_from(["aida", "list", "--user", "joe"]).unwrap();
+        match cli.command {
+            Command::List { user, shortcut, .. } => {
+                assert_eq!(user.as_deref(), Some("joe"));
+                assert_eq!(shortcut, None);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // Positional `me`.
+        let cli = Cli::try_parse_from(["aida", "list", "me"]).unwrap();
+        match cli.command {
+            Command::List { shortcut, user, .. } => {
+                assert_eq!(shortcut.as_deref(), Some("me"));
+                assert_eq!(user, None);
+            }
+            other => panic!("expected List, got {other:?}"),
+        }
+
+        // Positional `user:<name>`.
+        let cli = Cli::try_parse_from(["aida", "list", "user:alice"]).unwrap();
+        match cli.command {
+            Command::List { shortcut, user, .. } => {
+                assert_eq!(shortcut.as_deref(), Some("user:alice"));
+                assert_eq!(user, None);
             }
             other => panic!("expected List, got {other:?}"),
         }
