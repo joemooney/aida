@@ -18915,5 +18915,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 1867
+- id: 019eddba-8914-75d0-8f24-4bd25a824cda
+  target_id: 019eddba-8632-7251-86bb-7e3403c68202
+  author: aida
+  node_id: '1'
+  lamport: 1868
+  timestamp: 2026-06-19T02:34:10.068111861Z
+  kind: !Create
+    title: aida commit — produce a conventional-format-compliant commit message
+    description: 'Operator hit the commit-msg hook rejecting git commit -am "aida updates" (non-conventional). Provide aida commit that helps author a compliant [AI:tool]? type(scope): description (REQ-ID) message - e.g. prompt for type/scope/description (+ infer REQ-ID from staged trace: comments or the active spec), or accept flags (aida commit --type fix --scope x --desc "..." --spec BUG-1). There is already a /aida-commit SKILL; this is the CLI-native, non-Claude-session path (works for plain terminal use, codex, etc.). Smallest slice: a flag-driven builder + a sensible default that passes the commit-msg hook; interactive prompt as a follow-up.'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 1868
 node_id: '1'
