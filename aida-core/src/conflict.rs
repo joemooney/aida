@@ -345,10 +345,12 @@ pub fn merge_spec_three_way(
         &theirs.processing_record,
     ]);
 
-    // Tags: set union across both edited sides.
-    let mut tags = ours.tags.clone();
-    tags.extend(theirs.tags.iter().cloned());
-    merged.tags = tags;
+    // Tags: 3-way set merge against base, so a concurrent REMOVAL wins over the
+    // other side's mere retention instead of being resurrected by a 2-way union
+    // (the classic G-Set "can't remove" problem). An item present in `base` but
+    // absent from a side means that side removed it; the removal survives. Items
+    // added by either side (absent from base) survive. trace:BUG-602 | ai:claude
+    merged.tags = merge_string_set_three_way(&base.tags, &ours.tags, &theirs.tags);
 
     // Relationships: set union keyed by the natural identity (rel_type,
     // target_id). Without this, the LWW scalar base would silently drop the
@@ -356,16 +358,21 @@ pub fn merge_spec_three_way(
     // `aida rel add` on the SAME spec produced a manual conflict (STORY-645).
     // The first occurrence of a key wins, so its created_at/created_by metadata
     // is preserved deterministically.
-    merged.relationships = union_relationships(&[
+    // 3-way set merge against base keyed by (rel_type, target_id): an edge in
+    // base but absent from a side was REMOVED by that side, and the removal wins
+    // over the other side's retention (no tombstone resurrection — BUG-602).
+    // Edges added by either side (absent from base) survive. trace:STORY-645
+    // trace:BUG-602 | ai:claude
+    merged.relationships = merge_relationships_three_way(
         &base.relationships,
         &ours.relationships,
         &theirs.relationships,
-    ]);
+    );
 
-    // Dependencies: set union by target uuid (a plain `Vec<Uuid>` used as a
-    // set), order-stable. Same rationale as relationships.
+    // Dependencies: 3-way set merge by target uuid, same removal-wins rationale.
+    // trace:STORY-645 trace:BUG-602 | ai:claude
     merged.dependencies =
-        union_dependencies(&[&base.dependencies, &ours.dependencies, &theirs.dependencies]);
+        merge_dependencies_three_way(&base.dependencies, &ours.dependencies, &theirs.dependencies);
 
     merged
 }
@@ -513,40 +520,95 @@ fn union_processing_records(
     out
 }
 
-/// Union Relationship arrays by the natural key `(rel_type, target_id)`.
+/// 3-way set merge of a string set (tags) against the merge base.
 ///
-/// `Relationship` has no surrogate id, so identity is the type+target edge. The
-/// first source to contribute a given key wins (so created_at/created_by stays
-/// deterministic); ordering preserves first-seen insertion so the output is
-/// stable across runs. trace:STORY-645
-fn union_relationships(
-    sources: &[&Vec<crate::models::Relationship>],
+/// The 2-way union (`ours ∪ theirs`) is WRONG for a removable set: an item the
+/// base had and ONE side removed gets resurrected because the other side still
+/// carries it (the classic G-Set "can't remove" problem the red-team flagged).
+///
+/// The correct 3-way rule mirrors `merge_scalar`:
+/// - an item ADDED by either side (absent from `base`) survives;
+/// - an item REMOVED by either side (present in `base`, absent on that side)
+///   stays removed — the removal wins over the other side's mere retention;
+/// - an item present everywhere survives.
+///
+/// Formally: `result = (ours ∪ theirs) − removed`, where
+/// `removed = (base − ours) ∪ (base − theirs)`. An item that one side removed
+/// AND the other side re-added is treated as removed (the removal is the newer
+/// intent relative to base for the removing side; we bias to removal so a stale
+/// retention can never silently undo a delete — symmetric with how `merge_scalar`
+/// lets a single-side change win). trace:BUG-602 | ai:claude
+fn merge_string_set_three_way(
+    base: &std::collections::HashSet<String>,
+    ours: &std::collections::HashSet<String>,
+    theirs: &std::collections::HashSet<String>,
+) -> std::collections::HashSet<String> {
+    let mut result: std::collections::HashSet<String> = ours.union(theirs).cloned().collect();
+    // Remove anything either side deleted relative to base.
+    for item in base {
+        let removed_by_ours = !ours.contains(item);
+        let removed_by_theirs = !theirs.contains(item);
+        if removed_by_ours || removed_by_theirs {
+            result.remove(item);
+        }
+    }
+    result
+}
+
+/// 3-way set merge of Relationship edges keyed by `(rel_type, target_id)`.
+///
+/// Same removal-wins semantics as `merge_string_set_three_way`: an edge in
+/// `base` that a side dropped stays dropped (no tombstone resurrection); an edge
+/// either side added survives. The first surviving occurrence's metadata
+/// (created_at/created_by) is kept for determinism; output order is first-seen.
+/// trace:STORY-645 trace:BUG-602 | ai:claude
+fn merge_relationships_three_way(
+    base: &[crate::models::Relationship],
+    ours: &[crate::models::Relationship],
+    theirs: &[crate::models::Relationship],
 ) -> Vec<crate::models::Relationship> {
     use std::collections::HashSet;
-    let mut seen: HashSet<(crate::models::RelationshipType, Uuid)> = HashSet::new();
+    type Key = (crate::models::RelationshipType, Uuid);
+    let key = |r: &crate::models::Relationship| (r.rel_type.clone(), r.target_id);
+    let keyset =
+        |src: &[crate::models::Relationship]| -> HashSet<Key> { src.iter().map(key).collect() };
+    let base_keys = keyset(base);
+    let ours_keys = keyset(ours);
+    let theirs_keys = keyset(theirs);
+
+    let mut seen: HashSet<Key> = HashSet::new();
     let mut out: Vec<crate::models::Relationship> = Vec::new();
-    for src in sources {
-        for rel in src.iter() {
-            let key = (rel.rel_type.clone(), rel.target_id);
-            if seen.insert(key) {
-                out.push(rel.clone());
-            }
+    // Union of ours+theirs in first-seen order, minus anything either side
+    // removed relative to base.
+    for rel in ours.iter().chain(theirs.iter()) {
+        let k = key(rel);
+        // Skip edges that base had but a side deleted.
+        if base_keys.contains(&k) && (!ours_keys.contains(&k) || !theirs_keys.contains(&k)) {
+            continue;
+        }
+        if seen.insert(k) {
+            out.push(rel.clone());
         }
     }
     out
 }
 
-/// Union dependency uuid lists (a `Vec<Uuid>` used as a set), first-seen order.
-/// trace:STORY-645
-fn union_dependencies(sources: &[&Vec<Uuid>]) -> Vec<Uuid> {
+/// 3-way set merge of dependency uuid lists, removal-wins (BUG-602).
+/// trace:STORY-645 trace:BUG-602 | ai:claude
+fn merge_dependencies_three_way(base: &[Uuid], ours: &[Uuid], theirs: &[Uuid]) -> Vec<Uuid> {
     use std::collections::HashSet;
+    let base_set: HashSet<Uuid> = base.iter().copied().collect();
+    let ours_set: HashSet<Uuid> = ours.iter().copied().collect();
+    let theirs_set: HashSet<Uuid> = theirs.iter().copied().collect();
+
     let mut seen: HashSet<Uuid> = HashSet::new();
     let mut out: Vec<Uuid> = Vec::new();
-    for src in sources {
-        for dep in src.iter() {
-            if seen.insert(*dep) {
-                out.push(*dep);
-            }
+    for dep in ours.iter().chain(theirs.iter()) {
+        if base_set.contains(dep) && (!ours_set.contains(dep) || !theirs_set.contains(dep)) {
+            continue; // removed by a side relative to base
+        }
+        if seen.insert(*dep) {
+            out.push(*dep);
         }
     }
     out
@@ -1349,6 +1411,378 @@ mod tests {
         // Both changed differently -> winner decides.
         assert_eq!(merge_scalar(&"base", &"ours", &"theirs", true), &"ours");
         assert_eq!(merge_scalar(&"base", &"ours", &"theirs", false), &"theirs");
+    }
+
+    // ===== BUG-602 / stress hardening: tombstones, associativity, idempotence =====
+    //
+    // These lock down the concurrent-merge correctness properties that the
+    // simple 2-field BUG-586 dogfood didn't cover. The niche's most critical
+    // surface — never silently lose a committed edit, never resurrect a deleted
+    // item, converge deterministically and order-independently.
+
+    fn ts(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
+    // SCENARIO 1 — 3-way concurrent: three clones each edit a DIFFERENT scalar
+    // field; all three edits survive, and the result is the same regardless of
+    // the order the pairwise merges run (associativity / commutativity). Each
+    // pairwise merge re-anchors against the ORIGINAL base, as the rebase does.
+    // trace:BUG-602 | ai:claude
+    #[test]
+    fn test_merge_three_way_disjoint_scalars_associative() {
+        let mut base = make_req("Base", "Draft");
+        base.owner = String::new();
+        base.priority = crate::models::RequirementPriority::Low;
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.title = "A title".to_string();
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        let mut c = base.clone();
+        c.priority = crate::models::RequirementPriority::High;
+        c.modified_at = ts("2026-01-04T00:00:00Z");
+
+        let abc = merge_spec_three_way(&base, &merge_spec_three_way(&base, &a, &b), &c);
+        let cba = merge_spec_three_way(&base, &merge_spec_three_way(&base, &c, &b), &a);
+        let bca = merge_spec_three_way(&base, &merge_spec_three_way(&base, &b, &c), &a);
+
+        // All three disjoint edits survive.
+        assert_eq!(abc.title, "A title", "A's title lost in 3-way");
+        assert_eq!(abc.owner, "bob", "B's owner lost in 3-way");
+        assert_eq!(
+            abc.effective_priority(),
+            "High",
+            "C's priority lost in 3-way"
+        );
+        // Order-independent: every merge order converges to the same result.
+        for other in [&cba, &bca] {
+            assert_eq!(abc.title, other.title);
+            assert_eq!(abc.owner, other.owner);
+            assert_eq!(abc.effective_priority(), other.effective_priority());
+        }
+    }
+
+    // SCENARIO 4 — TOMBSTONE (tag removal). A removes a tag while B keeps it (and
+    // edits an unrelated scalar). The removal MUST win; a 2-way union would
+    // resurrect the deleted tag (the classic G-Set "can't remove" problem the
+    // P4 red-team flagged). This is the BUG-602 regression. trace:BUG-602
+    #[test]
+    fn test_merge_tag_removal_wins_over_concurrent_edit() {
+        let mut base = make_req("Base", "Draft");
+        base.tags.insert("keep".to_string());
+        base.tags.insert("doomed".to_string());
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.tags.remove("doomed");
+        a.priority = crate::models::RequirementPriority::High;
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string(); // never touched tags
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert!(merged.tags.contains("keep"), "untouched tag dropped");
+            assert!(
+                !merged.tags.contains("doomed"),
+                "removed tag resurrected by union (G-Set bug)"
+            );
+            // The concurrent scalar edits both still survive.
+            assert_eq!(merged.effective_priority(), "High");
+            assert_eq!(merged.owner, "bob");
+        }
+    }
+
+    // SCENARIO 4 — concurrent ADD on one side, REMOVE-different on the other: a
+    // tag added by A and a different tag removed by B both apply (add survives,
+    // remove sticks). trace:BUG-602
+    #[test]
+    fn test_merge_tag_add_and_remove_compose() {
+        let mut base = make_req("Base", "Draft");
+        base.tags.insert("old".to_string());
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.tags.insert("new".to_string()); // ADD new
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.tags.remove("old"); // REMOVE old
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert!(merged.tags.contains("new"), "added tag lost");
+            assert!(!merged.tags.contains("old"), "removed tag resurrected");
+        }
+    }
+
+    // SCENARIO 4b — TOMBSTONE (relationship removal). A removes an edge, B keeps
+    // it and edits a scalar. The removal wins; the edge is not resurrected.
+    // trace:BUG-602 trace:STORY-645
+    #[test]
+    fn test_merge_relationship_removal_wins_over_concurrent_edit() {
+        let target = Uuid::now_v7();
+        let mut base = make_req("Base", "Draft");
+        base.relationships = vec![rel(RelationshipType::BlockedBy, target)];
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.relationships.clear(); // remove the edge
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string(); // keeps edge, edits scalar
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert_eq!(
+                merged.relationships.len(),
+                0,
+                "removed relationship resurrected by union"
+            );
+            assert_eq!(merged.owner, "bob");
+        }
+    }
+
+    // SCENARIO 4b — add-vs-remove on relationships concurrently: A removes the
+    // base edge, B adds a new edge; result has only the new edge. trace:BUG-602
+    #[test]
+    fn test_merge_relationship_add_and_remove_compose() {
+        let base_target = Uuid::now_v7();
+        let new_target = Uuid::now_v7();
+        let mut base = make_req("Base", "Draft");
+        base.relationships = vec![rel(RelationshipType::BlockedBy, base_target)];
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.relationships.clear(); // remove base edge
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.relationships
+            .push(rel(RelationshipType::BlockedBy, new_target)); // add new edge
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            let targets: std::collections::HashSet<_> =
+                merged.relationships.iter().map(|r| r.target_id).collect();
+            assert!(!targets.contains(&base_target), "removed edge resurrected");
+            assert!(targets.contains(&new_target), "added edge lost");
+            assert_eq!(merged.relationships.len(), 1);
+        }
+    }
+
+    // SCENARIO 4 — dependency removal wins over retention. trace:BUG-602
+    #[test]
+    fn test_merge_dependency_removal_wins() {
+        let dep = Uuid::now_v7();
+        let kept = Uuid::now_v7();
+        let mut base = make_req("Base", "Draft");
+        base.dependencies = vec![dep, kept];
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.dependencies.retain(|d| *d != dep); // remove dep
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert!(
+                !merged.dependencies.contains(&dep),
+                "removed dep resurrected"
+            );
+            assert!(merged.dependencies.contains(&kept), "kept dep lost");
+        }
+    }
+
+    // SCENARIO 3 — mixed scalar + array + tag in one merge, with a tag REMOVAL
+    // on one side: A edits priority + adds comment + adds tag X; B edits owner +
+    // adds a different comment + removes tag Y. After merge: both scalars, BOTH
+    // comments, tag X present, tag Y gone. trace:BUG-602
+    #[test]
+    fn test_merge_mixed_scalar_array_tag_with_removal() {
+        let mut base = make_req("Base", "Draft");
+        base.tags.insert("Y".to_string());
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.priority = crate::models::RequirementPriority::High;
+        a.tags.insert("X".to_string());
+        a.comments = vec![Comment::new("a".to_string(), "from A".to_string())];
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.tags.remove("Y");
+        b.comments = vec![Comment::new("b".to_string(), "from B".to_string())];
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert_eq!(merged.effective_priority(), "High", "A priority lost");
+            assert_eq!(merged.owner, "bob", "B owner lost");
+            assert!(merged.tags.contains("X"), "added tag X lost");
+            assert!(!merged.tags.contains("Y"), "removed tag Y resurrected");
+            assert_eq!(merged.comments.len(), 2, "a comment was lost");
+        }
+    }
+
+    // SCENARIO 5 — rapid sequences: many edits on each side before the merge.
+    // The LATEST per-field value wins; no intermediate value leaks. Modeled by
+    // each side's final snapshot carrying its last value + its full appended
+    // history; the union must keep every history row and the final scalars.
+    // trace:BUG-602
+    #[test]
+    fn test_merge_rapid_sequences_latest_value_wins() {
+        let mut base = make_req("Base", "Draft");
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+        base.history = vec![hist("base", "2026-01-01T00:00:00Z")];
+
+        // A: title walked v1->v2->v3, three history rows, final = "A-v3".
+        let mut a = base.clone();
+        a.title = "A-v3".to_string();
+        a.history.push(hist("a", "2026-01-02T00:00:01Z"));
+        a.history.push(hist("a", "2026-01-02T00:00:02Z"));
+        a.history.push(hist("a", "2026-01-02T00:00:03Z"));
+        a.modified_at = ts("2026-01-02T00:00:03Z");
+
+        // B: owner walked through several values, final = "bob"; two history rows.
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.history.push(hist("b", "2026-01-03T00:00:01Z"));
+        b.history.push(hist("b", "2026-01-03T00:00:02Z"));
+        b.modified_at = ts("2026-01-03T00:00:02Z");
+
+        let merged = merge_spec_three_way(&base, &a, &b);
+        assert_eq!(merged.title, "A-v3", "intermediate title leaked");
+        assert_eq!(merged.owner, "bob");
+        // Every appended history row survives the union (1 base + 3 A + 2 B = 6).
+        assert_eq!(merged.history.len(), 6, "history rows lost in union");
+    }
+
+    // SCENARIO 6 — idempotence: merging the same two states twice == once. No
+    // duplicated array entries; converged scalars stay stable. trace:BUG-602
+    #[test]
+    fn test_merge_idempotent() {
+        let mut base = make_req("Base", "Draft");
+        base.tags.insert("shared".to_string());
+        base.history = vec![hist("base", "2026-01-01T00:00:00Z")];
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.priority = crate::models::RequirementPriority::High;
+        a.tags.insert("a-tag".to_string());
+        a.comments = vec![Comment::new("a".to_string(), "a".to_string())];
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.tags.insert("b-tag".to_string());
+        b.comments = vec![Comment::new("b".to_string(), "b".to_string())];
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        let once = merge_spec_three_way(&base, &a, &b);
+        // Feed the merged result back in as `ours` against the same base+theirs.
+        let twice = merge_spec_three_way(&base, &once, &b);
+
+        assert_eq!(once.tags, twice.tags, "tags duplicated/changed on re-merge");
+        assert_eq!(
+            once.comments.len(),
+            twice.comments.len(),
+            "comments duplicated on re-merge"
+        );
+        assert_eq!(once.effective_priority(), twice.effective_priority());
+        assert_eq!(once.owner, twice.owner);
+        assert_eq!(once.history.len(), twice.history.len());
+    }
+
+    // SCENARIO 7 — base == ours == theirs is a clean no-op (already covered for
+    // content; this asserts arrays/relationships/deps too). trace:BUG-602
+    #[test]
+    fn test_merge_noop_all_fields() {
+        let target = Uuid::now_v7();
+        let dep = Uuid::now_v7();
+        let mut base = make_req("Base", "Draft");
+        base.tags.insert("t".to_string());
+        base.relationships = vec![rel(RelationshipType::BlockedBy, target)];
+        base.dependencies = vec![dep];
+        base.history = vec![hist("base", "2026-01-01T00:00:00Z")];
+        let ours = base.clone();
+        let theirs = base.clone();
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(merged.tags, base.tags);
+        assert_eq!(merged.relationships.len(), 1);
+        assert_eq!(merged.dependencies, vec![dep]);
+        assert_eq!(merged.history.len(), 1);
+    }
+
+    // SCENARIO 7 — archived/deferred view flags: a flag flipped on only one side
+    // (a scalar) survives; the concurrent unrelated scalar edit survives too.
+    // trace:BUG-602
+    #[test]
+    fn test_merge_archived_and_deferred_flags() {
+        let mut base = make_req("Base", "Draft");
+        base.modified_at = ts("2026-01-01T00:00:00Z");
+
+        let mut a = base.clone();
+        a.archived = true;
+        a.deferred = true;
+        a.modified_at = ts("2026-01-02T00:00:00Z");
+
+        let mut b = base.clone();
+        b.owner = "bob".to_string();
+        b.modified_at = ts("2026-01-03T00:00:00Z");
+
+        for (x, y) in [(&a, &b), (&b, &a)] {
+            let merged = merge_spec_three_way(&base, x, y);
+            assert!(merged.archived, "archived flag lost");
+            assert!(merged.deferred, "deferred flag lost");
+            assert_eq!(merged.owner, "bob");
+        }
+    }
+
+    // Direct unit coverage of the 3-way set helper (the BUG-602 core). trace:BUG-602
+    #[test]
+    fn test_merge_string_set_three_way_rules() {
+        use std::collections::HashSet;
+        let set =
+            |items: &[&str]| -> HashSet<String> { items.iter().map(|s| s.to_string()).collect() };
+        // base={a,b}; ours removes b; theirs keeps both -> {a} (removal wins).
+        assert_eq!(
+            merge_string_set_three_way(&set(&["a", "b"]), &set(&["a"]), &set(&["a", "b"])),
+            set(&["a"])
+        );
+        // base={a}; ours adds c; theirs adds d -> {a,c,d} (both adds survive).
+        assert_eq!(
+            merge_string_set_three_way(&set(&["a"]), &set(&["a", "c"]), &set(&["a", "d"])),
+            set(&["a", "c", "d"])
+        );
+        // base={a}; ours removes a; theirs re-adds a (kept) -> removal wins -> {}.
+        assert_eq!(
+            merge_string_set_three_way(&set(&["a"]), &set(&[]), &set(&["a"])),
+            set(&[])
+        );
+        // base={}; ours adds a; theirs adds a -> {a} (idempotent add).
+        assert_eq!(
+            merge_string_set_three_way(&set(&[]), &set(&["a"]), &set(&["a"])),
+            set(&["a"])
+        );
     }
 
     // trace:BUG-475 — emoji (4-byte) at the cutoff truncates on a char boundary.
