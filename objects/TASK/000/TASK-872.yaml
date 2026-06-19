@@ -3,12 +3,12 @@ spec_id: TASK-872
 agreed_id: TASK-872
 title: 'Trace-read-rate audit: prove the graph is consulted, not just written'
 description: 'MOVE 7. Instrument query_graph/show_requirement READ volume vs trace/add_relationship WRITE volume across real sessions. WHY: section 3/13.3 names this the cheap INTERNAL falsifier for P2b - if the graph is written-but-not-consulted (high write, near-zero read) the typing is dead weight maintained out of discipline. A high read:write ratio is direct evidence the rich layer earns its keep. EVIDENCE: read:write ratio per spec over the dogfood history. Honest cap: high read could be operator discipline (section-10 confound), but written-but-unread would FALSIFY P2b cleanly - the asymmetry makes even a positive informative. Size S (usage.jsonl plumbing exists; add an MCP read counter).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:33.392973374Z
-modified_at: 2026-06-19T02:45:33.392973374Z
+modified_at: 2026-06-19T04:17:11.101004138Z
 req_type: Task
 tags:
 - evidence
@@ -17,3 +17,21 @@ tags:
 - telemetry
 - tilt-verdict
 - traces
+history:
+- id: 019ede18-d9b8-79f0-a7ee-5bd7522c7e85
+  author: aida-auto-bump
+  timestamp: 2026-06-19T04:17:11.096431747Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ede18-d9bd-7931-a10d-565d808f6b28
+  timestamp: 2026-06-19T04:17:11.101003607Z
+  agent: aida
+  commit_sha: 4d9aa6d9bcd7fda087432710cc42185ea49b7947
+  summary: Completed via merge 4d9aa6d9
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T04:17:10.942264628Z
+  completion_sha: 4d9aa6d9bcd7fda087432710cc42185ea49b7947
