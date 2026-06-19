@@ -19400,5 +19400,34 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1902
+- id: 019ee048-5aeb-7f20-a281-ba25b0a046ca
+  target_id: 019ee048-5119-7493-9f47-9ff417fcd69e
+  author: aida
+  node_id: '1'
+  lamport: 1903
+  timestamp: 2026-06-19T14:28:18.795202444Z
+  kind: !Create
+    title: MCP status-gate refusals tell agents to 'role_enter advisor' — but role_enter is peek-only and can't unlock the gate
+    description: |-
+      Dogfooding the MCP server as a fresh agent: update_requirement, triage_finding (promote), and the Draft->InProgress gate all refuse with the remediation text "Enter an advisor role (role_enter advisor), ... or run the CLI as the advisor (AIDA_SESSION_ROLE=advisor)." For an MCP-speaking agent this primary remediation is a dead end on two counts:
+
+      (1) The MCP role_enter tool is explicitly PEEK-ONLY: its own response says "Entering a role sets the shells active role (AIDA_SESSION_ROLE) - a shell-env act the MCP server does not perform for you." So calling role_enter cannot unlock the gate for the same MCP session. The only working unlock for an MCP client is launching mcp-serve with AIDA_SESSION_ROLE=advisor in its environment (verified: with that env set, update_requirement Draft->Approved succeeds).
+
+      (2) The suggested syntax "role_enter advisor" does not match the tool schema - role_enter requires the parameter name=, not a positional/role= arg. An agent that literally follows the hint calls role_enter with the wrong shape OR calls it correctly, gets the peek response, and loops without ever unlocking.
+
+      Net: an MCP agent that hits the gate is steered into a non-working remediation loop. The CLI escape hatch (AIDA_SESSION_ROLE=advisor) is mentioned second but the role_enter advice is listed first and reads as the in-band path.
+
+      Source: aida-cli/src/mcp.rs:5264-5276 (two format! arms). Fix: for the MCP-facing message, drop or de-emphasize role_enter as a remediation (it cannot self-elevate), lead with the working path (relaunch mcp-serve with AIDA_SESSION_ROLE=advisor / have the advisor act), and if role_enter is mentioned at all, describe it accurately as peek-only.
+
+      Repro (MCP over stdio, fresh aida init store):
+      tools/call update_requirement {"id":"TASK-009","status":"approved"} ->
+      isError: "Cannot set status to Approved via MCP: ... Enter an advisor role (role_enter advisor), ... or run the CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
+      tools/call role_enter {"name":"advisor"} -> "Entering a role sets the shells active role (AIDA_SESSION_ROLE) - a shell-env act the MCP server does not perform for you. ... Run: aida role enter advisor" (gate still locked afterward)
+      With mcp-serve launched under AIDA_SESSION_ROLE=advisor: same update_requirement call -> "Updated TASK-009: status: Draft -> Approved".
+
+      Verified-by-me on this dogfood run (debug build sha fdb0a69fc).
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1903
 node_id: '1'
