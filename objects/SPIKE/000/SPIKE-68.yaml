@@ -1,0 +1,22 @@
+id: 019eddb9-667f-7761-b4c6-d0845863fb83
+spec_id: SPIKE-68
+agreed_id: SPIKE-68
+title: 'Bubblewrap sandbox: verify it works, document configuration, check at init, expose in config'
+description: 'Operator: "we need that working". Investigate + report the current bubblewrap (bwrap) sandbox state and close the gaps. There is a CI live-confinement gate (bwrap_write_confinement_live_or_fail_closed) and a doc docs/agents/claude-bubblewrap-sandbox.md (currently untracked). Deliverables: (1) Is bwrap actually used at runtime for agent execution today, and on which paths? Verify against code, not docs. (2) How is it configured (env vars, .aida/config.toml)? Document the knobs in docs/environment-variables.md + the config reference. (3) aida init should DETECT bwrap availability (is bwrap on PATH? does a confinement smoke pass?) and report/guide. (4) Expose the bwrap posture in aida config (a readable + settable knob). Output a SPIKE report + child TASKs for the init-check and config-exposure slices. Tie to the agent permission-posture work (STORY-495 / ~/.aida/agents.toml).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:32:55.679328402Z
+modified_at: 2026-06-19T02:32:55.679328402Z
+req_type: Spike
+tags:
+- aida:config
+- aida:init
+- batch:operator-asks-0619
+- bubblewrap
+- from-operator
+- reliability
+- sandbox
+- security
+human_only: true
