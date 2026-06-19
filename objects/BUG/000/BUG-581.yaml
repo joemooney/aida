@@ -3,14 +3,32 @@ spec_id: BUG-581
 agreed_id: BUG-581
 title: 'Flaky os_wrap tests: AIDA_OS_WRAP env leak across parallel test threads'
 description: 'session.rs os_wrap tests share one process environment under cargo parallel test execution. The mutator tests aida_os_wrap_env_overrides_config and interactive_path_wraps_when_enabled_unchanged_when_off set/remove AIDA_OS_WRAP guarded only by a FUNCTION-LOCAL static ENV_LOCK, so reader tests (os_wrap_off_leaves_launch_unwrapped, os_wrap_binds_managed_settings_only_when_opted_in, bwrap_write_confinement_live_or_fail_closed) that assume a clean env intermittently observe the leaked value and fail in CI. Fix: a single module-level OS_WRAP_ENV_LOCK plus an RAII guard that saves/clears/restores AIDA_OS_WRAP, applied to all affected tests.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T06:21:16.917157460Z
-modified_at: 2026-06-19T06:21:16.917157460Z
+modified_at: 2026-06-19T06:41:26.699392915Z
 req_type: Bug
 tags:
 - ci
 - flaky
 - test-isolation
+history:
+- id: 019ede9c-eca6-7e31-9180-2c7cefcd0e8f
+  author: aida-auto-bump
+  timestamp: 2026-06-19T06:41:26.694738525Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ede9c-ecab-7151-995c-0a366e134b4f
+  timestamp: 2026-06-19T06:41:26.699392336Z
+  agent: reviewer
+  commit_sha: fdef91fc4f2a41c121f69c7eb6fc7d1e630d708e
+  summary: Completed via merge fdef91fc
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T06:41:26.528505484Z
+  completion_sha: fdef91fc4f2a41c121f69c7eb6fc7d1e630d708e
