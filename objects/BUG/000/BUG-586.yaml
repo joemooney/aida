@@ -19,14 +19,32 @@ description: |-
 
   SEVERITY: high -- silent data loss of a committed edit on the niche core surface (two collaborators editing the same spec). No error, no audit row (see companion finding: history array not written).
   Code: aida-core/src/conflict.rs merge_spec_three_way; oplog union is correct, object materialization is not.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T12:50:23.272187301Z
-modified_at: 2026-06-19T12:50:23.272187301Z
+modified_at: 2026-06-19T13:12:56.137748135Z
 req_type: Bug
 tags:
 - coordination
 - from-dogfood
 - multi-clone
+history:
+- id: 019ee003-5845-7290-9e9e-baa8532f423f
+  author: aida-auto-bump
+  timestamp: 2026-06-19T13:12:56.133085523Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee003-5849-7162-b5f9-b9bd656f2822
+  timestamp: 2026-06-19T13:12:56.137747477Z
+  agent: aida
+  commit_sha: c811d4a1881a9c3ac3f52c850082ecb06a0194bd
+  summary: Completed via merge c811d4a1
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T13:12:55.963475052Z
+  completion_sha: c811d4a1881a9c3ac3f52c850082ecb06a0194bd
