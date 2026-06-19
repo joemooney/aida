@@ -3,12 +3,12 @@ spec_id: STORY-668
 agreed_id: STORY-668
 title: /aida-solo skill — the WARM interactive solo-driver (live session as advisor+integrator)
 description: 'Add a /aida-solo skill (+ command) that puts the CURRENT (warm) Claude session in the solo advisor+integrator seat and runs the supervised loop WITH live judgment - the better-judgment counterpart to the headless cold-boot ''aida solo run''. Encodes tonight''s empirically-working loop: (1) aida solo (enter the mode -> the statusline marker lights up via presence::statusline_solo_marker, 24h TTL); (2) GROOM with judgment - cross-spec advisor pass over open specs (worth-doing, dedup, dispose), bless+queue the pickable approved set; (3) IMPLEMENT - fan worktree-isolated implementers, one bounded ready spec each -> PR (PARK keystone/supervised: security, architecture, the autonomy machinery); (4) INTEGRATE - serial merge authority: CI-green-gate -> merge -> pull -> combined-main build/test between batches (punt-and-continue: a blocker parks ONE spec, never halts); (5) loop; (6) aida solo stop on exit. Guardrails: never ship keystone unattended (surface for human), destructive ops need sign-off (STORY-666), combined-main green between batches. COMPOSE the existing verbs (aida intake, aida burndown run, aida queue integrate) - do NOT reinvent. DELINEATE clearly: points at ''aida solo run'' for the headless engine + /aida-drain-queue (implement-only) + /aida-burndown (fan-only) so it''s not redundant surface - this skill''s unique value is the WARM full-judgment end-to-end loop. Template: edit master in aida-core/templates/skills/ + commands/, make sync-templates. trace:EPIC-43'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T07:06:35.415079735Z
-modified_at: 2026-06-19T07:09:59.879515084Z
+modified_at: 2026-06-19T07:24:03.006434659Z
 req_type: Story
 tags:
 - aida:solo
@@ -22,3 +22,21 @@ comments:
   content: Commit d877cae03 references this requirement
   created_at: 2026-06-19T07:09:59.879515084Z
   modified_at: 2026-06-19T07:09:59.879515084Z
+history:
+- id: 019edec3-ee39-7883-87b4-90674a90af45
+  author: aida-auto-bump
+  timestamp: 2026-06-19T07:24:03.001722099Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edec3-ee3e-7611-924d-39fa2d8d1432
+  timestamp: 2026-06-19T07:24:03.006433786Z
+  agent: aida
+  commit_sha: 70120671a4742955270ab5dfd4ea95e71dfa013c
+  summary: Completed via merge 70120671
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T07:24:02.834832922Z
+  completion_sha: 70120671a4742955270ab5dfd4ea95e71dfa013c
