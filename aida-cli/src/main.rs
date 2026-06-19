@@ -1615,9 +1615,17 @@ fn run() -> Result<()> {
         force,
         all,
         since,
+        fix_sandbox,
         cmd,
     } = &cli.command
     {
+        // STORY-665: `aida doctor --fix-sandbox` is a guided printer for bringing
+        // bwrap OS-confinement up on a new machine. Short-circuit before the
+        // multi-agent drift scan — it's a standalone setup helper, not a check.
+        // trace:STORY-665 | ai:claude
+        if *fix_sandbox {
+            return doctor_fix_sandbox();
+        }
         return handle_doctor_command(
             *heal,
             *yes,
@@ -10736,11 +10744,21 @@ fn complete_init_scaffolding(
             }
         };
         println!("  {} {}", glyph, bwrap_status_line());
-        println!(
-            "    {}",
-            "OS sandbox is opt-in (off by default); enable via [contained] os_wrap once available"
-                .dimmed()
-        );
+        // STORY-665: when confinement isn't ready, point at the guided setup
+        // command instead of just naming the knob — the operator needs a path,
+        // not a hint. trace:STORY-665 | ai:claude
+        if avail == crate::session::BwrapAvailability::Ok {
+            println!(
+                "    {}",
+                "OS sandbox is opt-in (off by default); enable via [contained] os_wrap".dimmed()
+            );
+        } else {
+            println!(
+                "    {}",
+                "OS sandbox is opt-in (off by default); run `aida doctor --fix-sandbox` for the setup steps"
+                    .dimmed()
+            );
+        }
         println!();
     }
 
@@ -32881,7 +32899,11 @@ fn bwrap_status_line() -> String {
 }
 
 /// Render the bwrap availability row in `aida doctor`'s environment section,
-/// colourised to match the doctor-check output style. trace:TASK-865 | ai:claude
+/// colourised to match the doctor-check output style. When confinement is
+/// blocked or bwrap is missing, print the EXACT copy-pasteable remediation
+/// (not just a one-line prose hint) plus a pointer at the guided setup command;
+/// when it's ready, confirm how to opt in. trace:TASK-865 | ai:claude
+/// trace:STORY-665 | ai:claude
 fn render_doctor_bwrap_row() {
     let avail = crate::session::bwrap_availability();
     let glyph = match avail {
@@ -32894,13 +32916,193 @@ fn render_doctor_bwrap_row() {
         }
     };
     println!("  {} {}", glyph, bwrap_status_line());
-    if avail == crate::session::BwrapAvailability::NotInstalled {
+    match avail {
+        crate::session::BwrapAvailability::Ok => {
+            // Ready — confirm + point at how to opt in (it's off by default).
+            println!(
+                "    {}",
+                "OS sandbox is ready. Opt in with [contained] os_wrap = true in .aida/config.toml \
+                 (a per-host AIDA_OS_WRAP env override is incoming)."
+                    .dimmed()
+            );
+        }
+        crate::session::BwrapAvailability::NotInstalled => {
+            // Exact install command, then the guided-setup pointer.
+            println!("    {}", "Install bubblewrap, then enable:".dimmed());
+            println!("      {}", crate::session::BWRAP_INSTALL_DEBIAN.cyan());
+            println!(
+                "    {}",
+                "Then run `aida doctor --fix-sandbox` for the full setup steps.".dimmed()
+            );
+        }
+        crate::session::BwrapAvailability::UsernsBlocked { .. } => {
+            // The kernel blocks unprivileged userns — print the EXACT runtime +
+            // persist sysctl commands, clearly marked as sudo. trace:STORY-665
+            println!(
+                "    {}",
+                "Kernel blocks unprivileged user namespaces. Fix (run these yourself):".dimmed()
+            );
+            println!(
+                "      {}  {}",
+                crate::session::BWRAP_USERNS_SYSCTL_RUNTIME.cyan(),
+                "# this boot".dimmed()
+            );
+            println!(
+                "      {}  {}",
+                crate::session::BWRAP_USERNS_SYSCTL_PERSIST.cyan(),
+                "# persist".dimmed()
+            );
+            println!(
+                "    {}",
+                "Then run `aida doctor --fix-sandbox` for the full setup + verify steps.".dimmed()
+            );
+        }
+    }
+}
+
+/// `aida doctor --fix-sandbox` — guided, copy-pasteable bring-up of the OS
+/// sandbox (bubblewrap write-confinement) on the current host. A PRINTER, not a
+/// silent sudo-runner: it detects the current state, prints the exact ordered
+/// sequence (install / persist-sysctl / opt-in / verify) with sudo steps marked
+/// "run this yourself", and runs the NON-sudo availability re-probe as a smoke
+/// check. Honest + safe — it never escalates privileges on the user's behalf.
+/// trace:STORY-665 | ai:claude
+fn doctor_fix_sandbox() -> Result<()> {
+    use crate::session::{
+        bwrap_availability, BwrapAvailability, BWRAP_INSTALL_DEBIAN, BWRAP_USERNS_SYSCTL_PERSIST,
+        BWRAP_USERNS_SYSCTL_RUNTIME,
+    };
+
+    println!(
+        "{}",
+        "Guided OS-sandbox setup (bubblewrap write-confinement)"
+            .bold()
+            .cyan()
+    );
+    println!(
+        "{}",
+        "AIDA can run the agent it launches under an OS-level write-confinement \n\
+         sandbox (bwrap). It is opt-in and off by default. This walks you through \n\
+         bringing it up on THIS host. sudo steps are yours to run."
+            .dimmed()
+    );
+    println!();
+
+    let avail = bwrap_availability();
+
+    // Step 1 — detected state.
+    println!("{}", "1. Detected state".bold());
+    match &avail {
+        BwrapAvailability::Ok => println!(
+            "   {} bwrap is installed and the unprivileged-userns self-test passes.",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        ),
+        BwrapAvailability::NotInstalled => println!(
+            "   {} bwrap is not installed on this host.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        ),
+        BwrapAvailability::UsernsBlocked { .. } => println!(
+            "   {} bwrap is installed, but the kernel is blocking the unprivileged \n      user namespace it needs (Ubuntu 23.10+/24.04 AppArmor default).",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        ),
+    }
+    println!();
+
+    let mut step = 2;
+
+    // Step 2 — install (only if missing).
+    if avail == BwrapAvailability::NotInstalled {
+        println!("{}", format!("{step}. Install bubblewrap").bold());
+        println!("   {}", "Run this yourself (sudo):".dimmed());
+        println!("      {}", BWRAP_INSTALL_DEBIAN.cyan());
         println!(
-            "    {}",
-            "OS sandbox is opt-in (off by default); set [contained] os_wrap to enable once available"
+            "   {}",
+            "(non-Debian: use your package manager's `bubblewrap` package)".dimmed()
+        );
+        println!();
+        step += 1;
+    }
+
+    // Step (conditional) — lift + persist the userns sysctl.
+    if matches!(avail, BwrapAvailability::UsernsBlocked { .. })
+        || avail == BwrapAvailability::NotInstalled
+    {
+        println!(
+            "{}",
+            format!("{step}. Permit unprivileged user namespaces").bold()
+        );
+        println!(
+            "   {}",
+            "Run these yourself (sudo). First applies it now, second persists across reboots:"
                 .dimmed()
         );
+        println!(
+            "      {}  {}",
+            BWRAP_USERNS_SYSCTL_RUNTIME.cyan(),
+            "# this boot".dimmed()
+        );
+        println!(
+            "      {}  {}",
+            BWRAP_USERNS_SYSCTL_PERSIST.cyan(),
+            "# persist".dimmed()
+        );
+        println!();
+        step += 1;
     }
+
+    // Step — opt in (the knob is off by default regardless of host state).
+    println!("{}", format!("{step}. Enable the sandbox (opt-in)").bold());
+    println!(
+        "   {}",
+        "Set the knob in .aida/config.toml (off by default):".dimmed()
+    );
+    println!("      {}", "[contained]".cyan());
+    println!("      {}", "os_wrap = true".cyan());
+    println!(
+        "   {}",
+        "A per-host AIDA_OS_WRAP=1 env override is incoming; for now use the config knob.".dimmed()
+    );
+    println!();
+    step += 1;
+
+    // Step — verify.
+    println!("{}", format!("{step}. Verify").bold());
+    println!(
+        "   {}",
+        "Re-run this command (or `aida doctor`) — step 1 should report a passing self-test:"
+            .dimmed()
+    );
+    println!("      {}", "aida doctor --fix-sandbox".cyan());
+    println!(
+        "   {}",
+        "Once enabled, `aida config show` renders the resolved [contained] posture.".dimmed()
+    );
+    println!();
+
+    // Non-sudo smoke: re-probe availability and report the live verdict so the
+    // operator sees whether the host is already there without touching sudo.
+    println!("{}", "Live smoke check (non-sudo re-probe)".bold());
+    match bwrap_availability() {
+        BwrapAvailability::Ok => println!(
+            "   {} Confinement self-test PASSES — this host is ready; just set os_wrap = true.",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        ),
+        BwrapAvailability::NotInstalled => println!(
+            "   {} bwrap still not on PATH — run the install step above.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        ),
+        BwrapAvailability::UsernsBlocked { .. } => println!(
+            "   {} Self-test still failing — run the sudo sysctl step above, then re-check.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        ),
+    }
+    println!();
+    println!(
+        "   {}",
+        "Full reference: docs/agents/claude-bubblewrap-sandbox.md".dimmed()
+    );
+
+    Ok(())
 }
 
 fn heal_doctor_findings(
@@ -33718,6 +33920,7 @@ mod story_462_doctor_tests {
             force,
             all,
             since,
+            fix_sandbox,
             cmd,
         } = cli.command
         else {
@@ -33730,6 +33933,7 @@ mod story_462_doctor_tests {
         assert!(!force);
         assert!(!all);
         assert!(since.is_none());
+        assert!(!fix_sandbox);
         assert!(cmd.is_none());
     }
 

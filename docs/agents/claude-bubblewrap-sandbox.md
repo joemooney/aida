@@ -87,6 +87,72 @@ sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 Until userns is permitted, enabling `os_wrap` will (correctly) refuse to launch
 drains rather than run them unconfined.
 
+## Enabling the OS sandbox on a new machine
+
+<!-- trace:STORY-665 -->
+
+This is the **single place** to bring a fresh host to a working-confinement
+state. The whole sequence is also available as a guided, copy-pasteable printer:
+
+```bash
+aida doctor --fix-sandbox
+```
+
+It detects the current state of *this* host, prints only the steps that host
+actually needs (with sudo steps clearly marked "run this yourself"), and runs a
+non-sudo self-test smoke as the final check. It never runs sudo for you.
+
+### Prerequisites
+
+- **Linux.** bubblewrap is Linux-only.
+- **The `bwrap` package.** Install it from your distro:
+  ```bash
+  sudo apt install bubblewrap        # Debian / Ubuntu
+  # other distros: install the `bubblewrap` package via your package manager
+  ```
+- **Unprivileged user namespaces permitted by the kernel** (see next step).
+
+### Step 1 — permit unprivileged user namespaces
+
+On recent Ubuntu (23.10+/24.04) AppArmor blocks unprivileged userns by default,
+so even with `bwrap` installed the confinement self-test fails and `os_wrap`
+fails-closed. Run **both** of these (the first applies it for the current boot,
+the second persists it across reboots):
+
+```bash
+# Apply now (this boot only):
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+# Persist across reboots (drop-in under /etc/sysctl.d/):
+echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/99-aida-bwrap-userns.conf
+```
+
+(Alternatively, install an AppArmor profile granting `bwrap` userns — see
+`/etc/apparmor.d`.)
+
+### Step 2 — opt in
+
+The OS sandbox is off by default. Enable it in `.aida/config.toml`:
+
+```toml
+[contained]
+os_wrap = true
+```
+
+> A per-host `AIDA_OS_WRAP=1` environment override is incoming. Until it merges,
+> use the `[contained] os_wrap` config knob.
+
+### Step 3 — verify
+
+```bash
+aida doctor --fix-sandbox    # step 1 should report a passing self-test
+aida config show             # renders the resolved [contained] posture
+```
+
+`aida doctor` (and `aida init`) also report bwrap availability inline: a green
+check once confinement is ready, or the **exact** install / sysctl remediation
+when it is not — with a pointer back to `aida doctor --fix-sandbox`.
+
 ## Configuration
 
 All knobs live under `[contained]` in `.aida/config.toml`. There are **no
@@ -135,14 +201,20 @@ read-confinement) are in [`../cli/03-work-autonomy.md`](../cli/03-work-autonomy.
 Two read-only surfaces tell you where you stand before enabling anything:
 
 - **`aida doctor`** reports whether `bwrap` is available on this host —
-  installed, confinement-capable, or installed-but-userns-blocked (with the
-  one-line `sysctl` remediation hint).
+  installed, confinement-capable, or installed-but-userns-blocked — and prints
+  the **exact** copy-pasteable remediation (install command or runtime+persist
+  sysctl) for the not-ready states, plus a pointer at the guided setup printer.
+- **`aida doctor --fix-sandbox`** prints the full, host-specific bring-up
+  sequence (see [Enabling the OS sandbox on a new
+  machine](#enabling-the-os-sandbox-on-a-new-machine) above) and runs a non-sudo
+  self-test smoke. The single command to run on a fresh machine.
 - **`aida config show`** renders the resolved `[contained]` posture, including
   `os_wrap`, `read_allowlist`, `allowed_hosts`, and `managed_domains_only` —
   each with its effective value and source (project config vs. default).
 
-Start there: confirm `bwrap` is confinement-capable via `aida doctor`, then opt
-in with `os_wrap = true` and verify with `aida config show`.
+Start there: confirm `bwrap` is confinement-capable via `aida doctor`
+(or run `aida doctor --fix-sandbox` for the guided steps), then opt in with
+`os_wrap = true` and verify with `aida config show`.
 
 ## Related
 
