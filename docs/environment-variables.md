@@ -329,6 +329,7 @@ hits.
 | Variable | Purpose |
 | --- | --- |
 | `AIDA_TEST_HOME` | Overrides the home dir in `#[cfg(test)]` advisor/session isolation. |
+| `AIDA_REQUIRE_BWRAP_LIVE` | **CI / test-only.** When set, forces the bubblewrap live-confinement test (`bwrap_write_confinement_live_or_fail_closed`) to take the *live* arm — it must successfully create an unprivileged user namespace, otherwise the test fails rather than skipping. CI sets `AIDA_REQUIRE_BWRAP_LIVE=1` so a host that silently lost userns support can't make the confinement test pass by being skipped. Not a product knob; never set it on a normal machine. Opt-in (presence-checked, any value). Read at `aida-cli/src/session.rs`. |
 | `AIDA_TEST_GH_BINARY` | Injects a mock `gh` binary path in tests. |
 | `AIDA_TEST_GLAB_BINARY` | Injects a mock `glab` binary path in tests — the GitLab sibling of `AIDA_TEST_GH_BINARY`. |
 | `AIDA_TEST_GUARD_NESTED` / `_RESET` / `_RESTORE` / `_UNSET` | `EnvVarGuard` unit-test fixtures. |
@@ -368,6 +369,34 @@ use shell `${VAR:-default}` defaulting.
 | `AIDA_CACHE_PATH` | Cache DB path used by `scripts/migrate-tag-namespace.sh`. | `.aida/cache.db`. | user | process env |
 
 ---
+
+## Sandbox config knobs (`[contained]`, not env vars)
+
+<!-- trace:TASK-867 -->
+
+The OS-level agent sandbox (bubblewrap, the `os_wrap` mechanism) and its
+egress/read posture are configured under `[contained]` in `.aida/config.toml` —
+there are **no `AIDA_*` env vars** for them. The only bwrap-related environment
+variable is `AIDA_REQUIRE_BWRAP_LIVE` (CI/test-only, documented above).
+
+These knobs default OFF (the OS boundary is strictly opt-in), and today they
+apply only to the **headless drain** paths — not the interactive `aida agent new`
+launch. `aida config show` renders the resolved `[contained]` posture, and
+`aida doctor` reports whether `bwrap` is available on this host.
+
+| Knob | What it does | Default |
+|---|---|---|
+| `[contained] os_wrap` | Master switch for AIDA's bubblewrap OS sandbox. When `true`, headless `claude` launches are wrapped in `bwrap` with a read-only root and a small read-write set (worktree + `.aida-store` + cargo/npm/`~/.claude` caches). Fail-closed: errors rather than launching unconfined if `bwrap` is missing or unprivileged user namespaces are blocked. Distinct from `enable`. | `false` |
+| `[contained] read_allowlist` | Strict read-confinement: a list of extra absolute paths bound read-only. When **non-empty**, replaces the broad read-only root with an enumerated set (essential toolchain paths + this allowlist + the worktree) so host secrets outside it are simply absent. Empty = no read confinement. Requires `os_wrap = true`. | `[]` |
+| `[contained] allowed_hosts` | Network-egress allowlist injected into the contained `--settings` (`sandbox.network.allowedDomains`). Empty = **no** restriction (full egress), **not** deny-all. Non-empty restricts egress to those hosts (wildcards like `*.crates.io` work). | `[]` |
+| `[contained] managed_domains_only` | Hard default-deny egress (block without prompt) for the headless path, delivered via the managed-settings tier inside the bwrap namespace. Requires `os_wrap = true`. | `false` |
+| `[contained] enable` (alias of legacy `[agents] contained`) | The **Claude-Code-native** sandbox posture (its own `--settings` bubblewrap + egress proxy). Distinct from `os_wrap`, which is AIDA's *own* OS boundary. | `false` |
+
+**Full reference + the actual mechanism:** the canonical narrative for each knob
+lives in [`cli/03-work-autonomy.md`](cli/03-work-autonomy.md) (the per-knob
+sections), and the bwrap mechanism itself — what gets bound, fail-closed
+behavior, host requirements, current scope — is documented in
+[`agents/claude-bubblewrap-sandbox.md`](agents/claude-bubblewrap-sandbox.md).
 
 ## Team RBAC config knobs (`[team]`, not env vars)
 
