@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:33:08.068242218Z
-modified_at: 2026-06-19T02:33:08.068242218Z
+modified_at: 2026-06-19T02:42:50.828123772Z
 req_type: Bug
 tags:
 - aida:skills
@@ -16,3 +16,9 @@ tags:
 - from-operator
 - papercut
 - slash-commands
+comments:
+- id: 019eddc2-7b4c-7db3-be50-f5e632b46b0c
+  author: joe
+  content: Commit 7136c3aa6 references this requirement
+  created_at: 2026-06-19T02:42:50.828123772Z
+  modified_at: 2026-06-19T02:42:50.828123772Z
