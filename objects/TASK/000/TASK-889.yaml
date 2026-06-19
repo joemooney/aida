@@ -3,12 +3,12 @@ spec_id: TASK-889
 agreed_id: TASK-889
 title: Stress-test + lock down distributed ID-allocation uniqueness across concurrent nodes
 description: 'Verified the catastrophic invariant — N clones/nodes minting ids concurrently never collide — and added permanent regression tests. Coverage added: (1) 3-node concurrent block-claim via the real git CAS push loop, asserting non-overlapping ranges + globally-unique dispensed ids + no lost claims; (2) stale-clone claim recovers via CAS to a non-overlapping range; (3) duplicate-node-id misconfiguration still yields disjoint ranges (uniqueness rests on CAS-serialized ranges, not node-id distinctness); (4) merge-gate assigns unique, dense, deterministic short-ids across 117 mixed-type specs + is idempotent; (5) new-block floor boundary (must start above both max range_end AND agreed-counter floor — no off-by-one). Result: id-allocation holds; no collision/dup/off-by-one found. Tests in aida-core/src/git_ops.rs + node.rs.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T19:15:38.942187831Z
-modified_at: 2026-06-19T19:16:35.576471430Z
+modified_at: 2026-06-19T19:25:40.941802656Z
 req_type: Task
 tags:
 - from-dogfood
@@ -25,3 +25,21 @@ comments:
   content: Commit 063409a8a references this requirement
   created_at: 2026-06-19T19:16:35.576471430Z
   modified_at: 2026-06-19T19:16:35.576471430Z
+history:
+- id: 019ee158-9ac9-7640-96f2-b8bfbc8a46c8
+  author: aida-auto-bump
+  timestamp: 2026-06-19T19:25:40.937026090Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee158-9acd-79e0-b41f-8828cd49c22b
+  timestamp: 2026-06-19T19:25:40.941802217Z
+  agent: aida
+  commit_sha: adaffe6cd8beade75f4d949ceaee61c144c9cd1b
+  summary: Completed via merge adaffe6c
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T19:25:40.766785949Z
+  completion_sha: adaffe6cd8beade75f4d949ceaee61c144c9cd1b

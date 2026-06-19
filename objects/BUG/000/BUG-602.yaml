@@ -10,12 +10,12 @@ description: |-
   Root cause: tags/relationships/dependencies used a 2-way union helper that ignores the merge base, so it cannot distinguish "added by one side" from "removed by one side". Scalars were already correctly 3-way-merged against base (BUG-586); the set fields were not.
 
   Fix: 3-way set merge against base — result = (ours ∪ theirs) − removed, where removed = (base−ours) ∪ (base−theirs). Adds survive, removals win over a stale retention. Verified by failing-then-passing regression tests in conflict.rs (test_merge_tag_removal_wins_over_concurrent_edit, test_merge_relationship_removal_wins_over_concurrent_edit, test_merge_dependency_removal_wins, test_merge_string_set_three_way_rules).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T18:52:58.595299580Z
-modified_at: 2026-06-19T18:58:38.908324670Z
+modified_at: 2026-06-19T19:25:40.937017240Z
 req_type: Bug
 tags:
 - conflict-merge
@@ -27,3 +27,21 @@ comments:
   content: Commit 2752429a7 references this requirement
   created_at: 2026-06-19T18:58:38.908324670Z
   modified_at: 2026-06-19T18:58:38.908324670Z
+history:
+- id: 019ee158-9ac4-7e53-9101-f571de4921d7
+  author: aida-auto-bump
+  timestamp: 2026-06-19T19:25:40.932171097Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee158-9ac9-7640-96f2-b8a457a66da6
+  timestamp: 2026-06-19T19:25:40.937016741Z
+  agent: aida
+  commit_sha: 4af951aad137d8891767a0418dcde02a8d95d8bc
+  summary: Completed via merge 4af951aa
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T19:25:40.766785949Z
+  completion_sha: 4af951aad137d8891767a0418dcde02a8d95d8bc
