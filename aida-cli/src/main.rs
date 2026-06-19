@@ -12975,6 +12975,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             no_rebase_check,
             dry_run,
             json,
+            no_notice,
         } => {
             // TASK-106: AIDA_PUSH_DEFAULT lets a user flip the default
             // scope when neither flag is passed explicitly.
@@ -12994,6 +12995,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 store_only,
                 message.as_deref(),
                 *no_rebase_check,
+                *no_notice,
             );
         }
         Command::Pull {
@@ -69145,6 +69147,96 @@ mod push_pull_scope_tests {
         assert!(Cli::try_parse_from(["aida", "push", "--code-only", "--store-only"]).is_err());
     }
 
+    /// TASK-863: --no-notice parses and lands on the Push variant.
+    #[test]
+    fn push_no_notice_flag_parses() {
+        let cli = Cli::try_parse_from(["aida", "push", "--no-notice"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                no_notice: true,
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "push"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Push {
+                no_notice: false,
+                ..
+            }
+        ));
+    }
+
+    /// TASK-863: the uncommitted-change counter returns `Some(n)` on a dirty
+    /// tree and `None` on a clean one (so the caller stays silent).
+    #[test]
+    fn uncommitted_change_count_dirty_vs_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.email", "t@e.st"]);
+        run(&["config", "user.name", "Test"]);
+        std::fs::write(repo.join("a.txt"), "hello").unwrap();
+        run(&["add", "a.txt"]);
+        run(&["commit", "-q", "-m", "init"]);
+
+        // Clean tree → None (silent).
+        assert_eq!(super::uncommitted_change_count(repo), None);
+
+        // One unstaged modification → Some(1).
+        std::fs::write(repo.join("a.txt"), "changed").unwrap();
+        assert_eq!(super::uncommitted_change_count(repo), Some(1));
+
+        // A second untracked file → Some(2).
+        std::fs::write(repo.join("b.txt"), "new").unwrap();
+        assert_eq!(super::uncommitted_change_count(repo), Some(2));
+
+        // Non-git path → None (never block on a status failure).
+        let nonrepo = tempfile::tempdir().unwrap();
+        assert_eq!(super::uncommitted_change_count(nonrepo.path()), None);
+    }
+
+    /// TASK-863: AIDA_PUSH_QUIET suppression honors truthy/falsey values.
+    /// Serialized via a global env var, so guarded against parallel test
+    /// interference by setting+clearing within the single test.
+    #[test]
+    fn push_notice_env_suppression() {
+        // Save + restore the ambient value so we don't clobber a real env.
+        let saved = std::env::var("AIDA_PUSH_QUIET").ok();
+
+        std::env::remove_var("AIDA_PUSH_QUIET");
+        assert!(!super::push_notice_suppressed_by_env());
+
+        std::env::set_var("AIDA_PUSH_QUIET", "1");
+        assert!(super::push_notice_suppressed_by_env());
+
+        std::env::set_var("AIDA_PUSH_QUIET", "true");
+        assert!(super::push_notice_suppressed_by_env());
+
+        std::env::set_var("AIDA_PUSH_QUIET", "0");
+        assert!(!super::push_notice_suppressed_by_env());
+
+        std::env::set_var("AIDA_PUSH_QUIET", "false");
+        assert!(!super::push_notice_suppressed_by_env());
+
+        std::env::set_var("AIDA_PUSH_QUIET", "");
+        assert!(!super::push_notice_suppressed_by_env());
+
+        match saved {
+            Some(v) => std::env::set_var("AIDA_PUSH_QUIET", v),
+            None => std::env::remove_var("AIDA_PUSH_QUIET"),
+        }
+    }
+
     /// Same four combinations for `aida pull`.
     #[test]
     fn pull_flag_combinations_parse() {
@@ -88144,12 +88236,54 @@ fn handle_pull_dry_run(
     Ok(())
 }
 
+/// TASK-863: count uncommitted/unstaged changes in the code working tree via a
+/// single cheap `git status --porcelain`. Returns `Some(n)` when there are `n`
+/// changed entries (n > 0), `None` for a clean tree (so the caller stays
+/// silent) or when status can't be read (e.g. not a git repo) — we never
+/// fabricate a count or block on a status failure. Each porcelain line is one
+/// changed path (staged and/or unstaged), so the line count is the change
+/// count. trace:TASK-863 | ai:claude
+fn uncommitted_change_count(repo: &std::path::Path) -> Option<usize> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["status", "--porcelain"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let n = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
+    if n == 0 {
+        None
+    } else {
+        Some(n)
+    }
+}
+
+/// TASK-863: the uncommitted-changes notice is suppressible via the
+/// `AIDA_PUSH_QUIET` env var (any non-empty, non-"0"/"false" value). The
+/// `--no-notice` flag is the per-invocation equivalent. trace:TASK-863 | ai:claude
+fn push_notice_suppressed_by_env() -> bool {
+    match std::env::var("AIDA_PUSH_QUIET") {
+        Ok(v) => {
+            let v = v.trim().to_ascii_lowercase();
+            !v.is_empty() && v != "0" && v != "false" && v != "no"
+        }
+        Err(_) => false,
+    }
+}
+
 fn handle_push_command(
     store_path: &std::path::Path,
     code_only: bool,
     store_only: bool,
     message: Option<&str>,
     no_rebase_check: bool,
+    no_notice: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -88157,6 +88291,24 @@ fn handle_push_command(
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // TASK-863: gentle non-blocking notice when the code working tree has
+    // uncommitted/unstaged changes that won't be part of this push. `git push`
+    // pushes commits, not the working tree, so this is expected git behavior —
+    // a hard warning (let alone a block) would be noise. We surface a single
+    // informational line so the operator isn't surprised, then proceed
+    // normally. Clean tree → silent. Suppress with --no-notice or
+    // AIDA_PUSH_QUIET. Store-only pushes don't touch the code tree, so skip.
+    // trace:TASK-863 | ai:claude
+    if !store_only && !no_notice && !push_notice_suppressed_by_env() {
+        if let Some(n) = uncommitted_change_count(&project_root) {
+            eprintln!(
+                "{} {} uncommitted change(s) not included in this push",
+                "note:".dimmed(),
+                n,
+            );
+        }
+    }
 
     // STORY-537: with no `origin`, both push legs would silently skip. Offer a
     // guided origin bootstrap (TTY) so the user isn't left to manually create
