@@ -3,12 +3,12 @@ spec_id: STORY-667
 agreed_id: STORY-667
 title: aida alias / aida alias list — a discoverable registry of built-in shortcuts
 description: 'AIDA has accreted many shortcuts with no single discoverable view (each hides in its own --help): status lenses (open/closed/draft/approved/...), list lenses (queue/human/why/inflight, the new me / user:<name>), command aliases (intake->assess, aida agent -> aida agent new, the aida list <lens> argv rewrites, advisor assess -> assess). Build aida alias (or aida alias list) that enumerates them ALL, grouped by surface, each with its canonical expansion + a one-line meaning. SOURCE FROM THE EXISTING RESOLVERS - do not duplicate: rewrite_list_alias / rewrite_advisor_assess (main.rs ~1097), the status-shortcut/alias map, clap visible_aliases. Secondary benefit: this becomes the SINGLE SOURCE OF TRUTH for the sugar, which also feeds the aida list --help one-per-line ask (STORY-662) and prevents drift. --json for machine consumers. Scope: built-in shortcuts only (user-defined aliases are a separate, questioned follow-up).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T05:45:32.640769865Z
-modified_at: 2026-06-19T06:07:55.317198109Z
+modified_at: 2026-06-19T06:15:59.883489904Z
 req_type: Story
 tags:
 - aida:alias
@@ -22,3 +22,21 @@ comments:
   content: Commit 2cc1e8a69 references this requirement
   created_at: 2026-06-19T06:07:55.317198109Z
   modified_at: 2026-06-19T06:07:55.317198109Z
+history:
+- id: 019ede85-a086-7332-b444-d3526c58c36a
+  author: aida-auto-bump
+  timestamp: 2026-06-19T06:15:59.878838817Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ede85-a08b-72a1-8fab-efcfd49a397d
+  timestamp: 2026-06-19T06:15:59.883489245Z
+  agent: aida
+  commit_sha: 66835ea5d7cdbf0edffdb80616826296a283bbdf
+  summary: Completed via merge 66835ea5
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T06:15:59.720174849Z
+  completion_sha: 66835ea5d7cdbf0edffdb80616826296a283bbdf
