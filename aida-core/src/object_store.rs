@@ -77,6 +77,19 @@ pub fn relative_object_path(spec_id: &str) -> Result<String> {
     ))
 }
 
+/// Whether a user-typed string is shaped like a spec_id at all
+/// (`TYPE-SEQ` or `TYPE-NODE-SEQ`, e.g. `STORY-1` / `FR-7-042`).
+///
+/// BUG-599: distinguishes "the user typed something that can't possibly be a
+/// spec id" (a typo / UUID-shaped string) from "a well-formed id that simply
+/// doesn't resolve to any stored spec". The former deserves a friendly
+/// format hint; the latter deserves the plain not-found message. Neither
+/// should ever hit `parse_failure_hint` (which is for on-disk YAML that
+/// actually failed to parse). trace:BUG-599 | ai:claude
+pub fn valid_spec_id_format(spec_id: &str) -> bool {
+    parse_spec_id(spec_id).is_ok()
+}
+
 /// Parse a spec_id into (type_prefix, sequence_number).
 ///
 /// Handles both centralized and distributed formats:
@@ -376,6 +389,21 @@ mod tests {
         assert!(parse_spec_id("FR-abc").is_err());
         assert!(parse_spec_id("FR-7-abc").is_err());
         assert!(parse_spec_id("A-B-C-D").is_err());
+    }
+
+    // BUG-599: the public format-validity predicate the CLI uses to tell a
+    // typo'd / UUID-shaped argument from a well-formed-but-absent spec id.
+    #[test]
+    fn test_valid_spec_id_format() {
+        assert!(valid_spec_id_format("STORY-1"));
+        assert!(valid_spec_id_format("FR-7-42"));
+        assert!(valid_spec_id_format("story-1")); // case-insensitive
+        assert!(!valid_spec_id_format("not-a-real-id"));
+        assert!(!valid_spec_id_format("BADID"));
+        assert!(!valid_spec_id_format("FR-abc"));
+        assert!(!valid_spec_id_format(
+            "019ee0ed-2e4d-7652-a71e-d521f071af27"
+        ));
     }
 
     #[test]
