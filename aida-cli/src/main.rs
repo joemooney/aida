@@ -8570,9 +8570,14 @@ fn handle_done_command(
     if status_advance_requires_advisor_authority(&req.status, &new_status)
         && !has_advisor_authority()
     {
+        // BUG-585: name the ACTUAL escape hatches, not a circular re-run of the
+        // same command. A non-TTY agent/script gets nothing new by re-running
+        // `aida done`; the working path is a real terminal OR the advisor role
+        // (AIDA_SESSION_ROLE=advisor satisfies `advisor_authority_from`).
+        // trace:BUG-585 | ai:claude
         anyhow::bail!(
-            "marking {display_id} done needs an interactive terminal (or the advisor role). \
-             Run `aida done {display_id}` directly in your shell."
+            "marking {display_id} done needs a TTY or the advisor role. \
+             Run it in an interactive shell, or set `AIDA_SESSION_ROLE=advisor` (for scripts/agents)."
         );
     }
     let old = req.status.to_string();
@@ -10814,6 +10819,14 @@ fn complete_init_scaffolding(
         "    {}{}mark it finished",
         "aida done TASK-1".cyan(),
         " ".repeat(14)
+    );
+    // BUG-585: `aida done` is advisor-gated off a TTY, so a scripted/agent
+    // first-user (a primary intended caller) would hit the gate on this taught
+    // step. Name the non-interactive escape hatch inline so it doesn't
+    // dead-end. trace:BUG-585 | ai:claude
+    println!(
+        "    {}",
+        "      (scripts/agents: prefix AIDA_SESSION_ROLE=advisor)".dimmed()
     );
     println!(
         "    {}{}see your commit linked to the task — {}",
