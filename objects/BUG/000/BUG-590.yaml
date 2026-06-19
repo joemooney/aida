@@ -11,9 +11,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T14:28:38.025732172Z
-modified_at: 2026-06-19T14:28:38.025732172Z
+modified_at: 2026-06-19T14:45:07.430173037Z
 req_type: Bug
 tags:
 - from-dogfood
 - mcp
 - parity
+comments:
+- id: 019ee057-bee6-74d2-b478-4d275e57e8b3
+  author: joe
+  content: Commit 243c9eabc references this requirement
+  created_at: 2026-06-19T14:45:07.430173037Z
+  modified_at: 2026-06-19T14:45:07.430173037Z
