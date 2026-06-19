@@ -3,12 +3,12 @@ spec_id: STORY-663
 agreed_id: STORY-663
 title: aida commit — produce a conventional-format-compliant commit message
 description: 'Operator hit the commit-msg hook rejecting git commit -am "aida updates" (non-conventional). Provide aida commit that helps author a compliant [AI:tool]? type(scope): description (REQ-ID) message - e.g. prompt for type/scope/description (+ infer REQ-ID from staged trace: comments or the active spec), or accept flags (aida commit --type fix --scope x --desc "..." --spec BUG-1). There is already a /aida-commit SKILL; this is the CLI-native, non-Claude-session path (works for plain terminal use, codex, etc.). Smallest slice: a flag-driven builder + a sensible default that passes the commit-msg hook; interactive prompt as a follow-up.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:34:09.330437659Z
-modified_at: 2026-06-19T03:02:33.147416679Z
+modified_at: 2026-06-19T03:10:14.309507824Z
 req_type: Story
 tags:
 - aida:commit
@@ -23,3 +23,21 @@ comments:
   content: Commit da66ed504 references this requirement
   created_at: 2026-06-19T03:02:33.147416679Z
   modified_at: 2026-06-19T03:02:33.147416679Z
+history:
+- id: 019edddb-8f20-7c61-bf76-a2ed465cb8d5
+  author: aida-auto-bump
+  timestamp: 2026-06-19T03:10:14.304246304Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edddb-8f25-7f10-ae7d-fb7e928fcb07
+  timestamp: 2026-06-19T03:10:14.309506732Z
+  agent: aida
+  commit_sha: 69b184ffeca2611f473433ac836080e62a1a7fac
+  summary: Completed via merge 69b184ff
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T03:10:14.053150393Z
+  completion_sha: 69b184ffeca2611f473433ac836080e62a1a7fac
