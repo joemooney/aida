@@ -1,0 +1,19 @@
+id: 019eddba-754c-7240-a5e3-bdb5fe3631ac
+spec_id: TASK-863
+agreed_id: TASK-863
+title: 'aida push: consider warning when there is uncommitted/unstaged work'
+description: 'OPEN QUESTION FOR OPERATOR (recorded 2026-06-19, do not block): the operator noted aida push does not warn if there is unstaged work, and was unsure if it should. Advisor lean: unstaged/uncommitted work is not pushed anyway (expected git behavior; raw git push does not warn either), so a hard warning risks noise. A GENTLE one-line notice ("note: N uncommitted change(s) not included in this push") is defensible and low-cost; a block is not. Proposed slice: a non-blocking notice only, opt-out-able. Decide warn-vs-silent on operator input before building.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:34:05.004422685Z
+modified_at: 2026-06-19T02:34:05.004422685Z
+req_type: Task
+tags:
+- aida:push
+- batch:operator-asks-0619
+- from-operator
+- git
+- has-open-question
+- ux
