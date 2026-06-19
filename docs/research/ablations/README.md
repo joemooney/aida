@@ -27,6 +27,7 @@ The question: *what does running N vendors on the same work actually buy?*
 |---|---|---|
 | `2026-06-17-competitive-claude-vs-codex.md` | prescriptive brief, Claude vs Codex, rubric judge | Claude won; the contest measured **conscientiousness, not creativity** — the loser lost at the fine print (skipped a named gate). This is the program's one observed rule-drop, and it is uncontrolled (real-ish task, n=1) — the anchor the gate-vs-rule program kept failing to reproduce. |
 | `2026-06-18-open-brief-convergence.md` | **open** brief (conjecture: open briefs diverge) | Conjecture **falsified** — convergence is **substrate-driven**, not brief-driven. Multi-vendor competition pays as **quality-variance QA**, not design diversity. Productized as `aida compete`. |
+| `2026-06-19-compete-quality-variance.md` | `aida compete` over 3 moderate tasks, **cross-vendor judge** (codex grading claude-vs-codex), deterministic gate | Competition-as-QA measured at n=3: variance is **task-dependent**. 1/3 tasks showed a real, demonstrable correctness delta (a u64-overflow version-compare bug single-vendor would have shipped) and the cross-vendor judge caught it; the other 2 were near-ties where the judge's margin came from diff focus / a process artifact, not code quality. **Corollary: competition pays on high-unstated-edge work, not fully-specified small functions.** |
 
 ## Program 3 — roll-your-own friction (P2b, does the rich layer pay over markdown+git+grep?): COMPLETE
 
