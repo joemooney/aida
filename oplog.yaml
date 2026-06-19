@@ -19729,5 +19729,24 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1917
+- id: 019ee0ed-31c4-7b21-a506-484d175cccb0
+  target_id: 019ee0ed-2e4d-7652-a71e-d521f071af27
+  author: aida
+  node_id: '1'
+  lamport: 1918
+  timestamp: 2026-06-19T17:28:21.700703890Z
+  kind: !Create
+    title: User typo of a spec ID triggers misleading 'binary version mismatch — rebuild aida' guidance
+    description: |-
+      Reproduce (in-repo target/release/aida, any store): aida show not-a-real-id (or any malformed ID arg, e.g. a UUID-shaped string). Output is a clean Err (exit 1, no panic) but the message is parse_failure_hint() from aida-core/src/object_store.rs:278 — designed for FILE parse failures where a newer binary wrote YAML the reader cannot parse.
+
+      It says: "Likely cause: binary version mismatch ... rebuild aida from a branch with the missing variant ... aida cache rebuild ... aida dev activate". For a user who simply typo'd an ID arg this is WRONG, alarming guidance (BUG-585 circular/wrong-guidance class): the actual cause is a malformed ID string, not version skew.
+
+      By contrast aida show NOPE-999 (well-formed but absent) correctly says "Requirement not found ... Hint: check the spec ID (try aida list ...)". Only the MALFORMED-FORMAT path hits the version-mismatch hint. Same misleading text fires for aida edit BADID --status done (shorter variant).
+
+      Fix: when the failure is parsing a USER-SUPPLIED id argument (not a file on disk), emit a format hint instead — e.g. "Invalid spec ID: not-a-real-id. Expected TYPE-SEQ (e.g. STORY-1) or TYPE-NODE-SEQ. Check the ID with aida list / aida search." Reserve parse_failure_hint for actual on-disk read_object failures. This is the highest-impact error-path finding from the dogfood sweep.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1918
 node_id: '1'
