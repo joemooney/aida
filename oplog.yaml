@@ -19585,5 +19585,26 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1911
+- id: 019ee069-1e75-7b71-b046-268b42b628cf
+  target_id: 019ee069-1b3e-7e52-ac65-37e3bcf15b7a
+  author: aida
+  node_id: '1'
+  lamport: 1912
+  timestamp: 2026-06-19T15:04:06.005265062Z
+  kind: !Create
+    title: questions sweep flags approved specs for 'missing acceptance' but never the thin DRAFTS the advisor's distill section points at
+    description: |-
+      aida advisor distill section says "2 specs under-specified — pose a question: aida questions sweep / aida clarify". But:
+
+      1. aida questions sweep (default scope=backlog) and even scope=all flag only STORY-11 and SPIKE-7 (both Approved) for "missing acceptance criteria". The thin DRAFTS — STORY-2 ("Make the dashboard better"), TASK-3 ("fix the thing with the search", empty body), STORY-10 ("Maybe add dark mode someday") — are never flagged. sweep --help confirms it excludes drafts by design (scope defaults to approved/planned/in-progress), so the under-specified drafts sitting in the advisor groom worklist can never be reached by clarify while they are drafts. The distill hint and the sweep behavior contradict each other.
+      2. SPIKE-7 is a false positive: a spike legitimately has no ## Acceptance section (it has a clear timebox + output). Flagging spikes for missing acceptance is noise (cf. BUG-495 which already cleaned up sweep non-implementable handling — spikes appear to have regressed/escaped).
+      3. The advisor distill hint prints the literal command "aida clarify" which does NOT exist — it errors (unrecognized subcommand). The real verbs are aida questions clarify / aida decide. Broken copy on the advisor worklist.
+
+      Expected: the distill/clarify path should reach under-specified DRAFTS (the groom set), skip spikes for the acceptance-section check, and print a runnable command.
+
+      Repro: AIDA_SESSION_ROLE=advisor aida advisor (distill hint); aida questions sweep all; aida clarify STORY-2 (errors).
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1912
 node_id: '1'
