@@ -2314,6 +2314,49 @@ pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>, contained: bo
 mod tests {
     use super::*;
 
+    // BUG-581: every test that reads or mutates os_wrap touches the
+    // process-global `AIDA_OS_WRAP` env var (via `os_wrap_env_override`). cargo
+    // runs tests in parallel threads sharing ONE process environment, so a
+    // mutator test mid-flight (with AIDA_OS_WRAP set) leaks into reader tests
+    // that assume a clean baseline and they fail intermittently in CI. This
+    // single MODULE-LEVEL lock + the `OsWrapEnvGuard` RAII helper below give all
+    // os_wrap tests mutual exclusion AND a deterministic clean env.
+    // trace:BUG-581 | ai:claude
+    static OS_WRAP_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// RAII guard for the os_wrap env tests (BUG-581). On construction it locks
+    /// the shared `OS_WRAP_ENV_LOCK` (recovering from a poisoned lock so one
+    /// panicking test can't cascade), saves the ambient `AIDA_OS_WRAP`, and
+    /// REMOVES it so the test starts from a clean baseline. On drop it restores
+    /// the saved value, so the rest of the suite is unaffected. Every os_wrap
+    /// test acquires this at its top; mutators still set/remove the var within
+    /// their body — those changes are also undone by the drop restore.
+    /// trace:BUG-581 | ai:claude
+    struct OsWrapEnvGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        saved: Option<std::ffi::OsString>,
+    }
+
+    impl OsWrapEnvGuard {
+        fn acquire() -> Self {
+            let lock = OS_WRAP_ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let saved = std::env::var_os("AIDA_OS_WRAP");
+            std::env::remove_var("AIDA_OS_WRAP");
+            Self { _lock: lock, saved }
+        }
+    }
+
+    impl Drop for OsWrapEnvGuard {
+        fn drop(&mut self) {
+            match &self.saved {
+                Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
+                None => std::env::remove_var("AIDA_OS_WRAP"),
+            }
+        }
+    }
+
     // TASK-865: the doctor/init bwrap row distils bwrap_preflight's long
     // fail-closed message down to a single clean remediation line — the first
     // concrete `sysctl` step, with the parenthetical aside and soft-wrap
@@ -2470,6 +2513,8 @@ mod tests {
     // no such bind (unchanged STORY-612 posture). trace:TASK-809 | ai:claude
     #[test]
     fn os_wrap_binds_managed_settings_only_when_opted_in() {
+        // Clean, serialized os_wrap env baseline (BUG-581). trace:BUG-581
+        let _env = OsWrapEnvGuard::acquire();
         // Helper: build a worktree with the given config, return the bwrap argv
         // (or None when the host can't create a userns / bwrap is absent — then
         // the launch fails closed and we can't inspect the argv, so we skip).
@@ -3233,6 +3278,8 @@ mod tests {
     // slice-1 empty-allowlist test. trace:STORY-612 | ai:claude
     #[test]
     fn os_wrap_off_leaves_launch_unwrapped() {
+        // Clean, serialized os_wrap env baseline (BUG-581). trace:BUG-581
+        let _env = OsWrapEnvGuard::acquire();
         // A project root with no `[contained] os_wrap` (here: an empty temp dir
         // with no config at all) must return ("claude", <args unchanged>).
         let tmp = tempfile::tempdir().unwrap();
@@ -3268,6 +3315,10 @@ mod tests {
     /// trace:STORY-612 | ai:claude
     #[test]
     fn bwrap_write_confinement_live_or_fail_closed() {
+        // Clean, serialized os_wrap env baseline (BUG-581) — a leaked
+        // AIDA_OS_WRAP=0 would otherwise force this on-config launch off.
+        // trace:BUG-581
+        let _env = OsWrapEnvGuard::acquire();
         // A worktree with `[contained] os_wrap = true`.
         let tmp = tempfile::tempdir().unwrap();
         let wt = tmp.path();
@@ -3363,9 +3414,9 @@ mod tests {
     /// they run serially under a shared mutex. trace:TASK-876 | ai:claude
     #[test]
     fn aida_os_wrap_env_overrides_config() {
-        // Serialize env mutation across the os_wrap env tests.
-        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _g = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        // Serialize env mutation across the os_wrap tests + start clean; the
+        // guard's drop restores the ambient AIDA_OS_WRAP (BUG-581). trace:BUG-581
+        let _env = OsWrapEnvGuard::acquire();
 
         // Config says OFF (no config at all).
         let off_dir = tempfile::tempdir().unwrap();
@@ -3377,13 +3428,6 @@ mod tests {
             "[contained]\nos_wrap = true\n",
         )
         .unwrap();
-
-        // Save + restore the ambient value so the rest of the suite is unaffected.
-        let saved = std::env::var_os("AIDA_OS_WRAP");
-        let restore = || match &saved {
-            Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
-            None => std::env::remove_var("AIDA_OS_WRAP"),
-        };
 
         // Override ON forces true even when config is off.
         for truthy in ["1", "true", "TRUE", "Yes", " yes "] {
@@ -3418,8 +3462,6 @@ mod tests {
         std::env::remove_var("AIDA_OS_WRAP");
         assert!(!os_wrap_enabled(off_dir.path()));
         assert!(os_wrap_enabled(on_dir.path()));
-
-        restore();
     }
 
     /// TASK-864: the INTERACTIVE launch path (which calls
@@ -3429,12 +3471,9 @@ mod tests {
     /// host) when os_wrap is ON. trace:TASK-864 | ai:claude
     #[test]
     fn interactive_path_wraps_when_enabled_unchanged_when_off() {
-        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _g = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
-
-        let saved = std::env::var_os("AIDA_OS_WRAP");
-        // Force a known state independent of the ambient shell.
-        std::env::remove_var("AIDA_OS_WRAP");
+        // Serialize + clean env baseline; the guard restores it on drop
+        // (BUG-581). trace:BUG-581
+        let _env = OsWrapEnvGuard::acquire();
 
         let resolved_binary = "/usr/local/bin/claude";
         let args = vec![
@@ -3485,11 +3524,6 @@ mod tests {
                     "enabled-but-unrunnable must fail closed with remediation: {msg}"
                 );
             }
-        }
-
-        match &saved {
-            Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
-            None => std::env::remove_var("AIDA_OS_WRAP"),
         }
     }
 }
