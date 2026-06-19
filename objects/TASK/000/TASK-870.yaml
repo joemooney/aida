@@ -3,12 +3,12 @@ spec_id: TASK-870
 agreed_id: TASK-870
 title: 'Cross-vendor portability test: time-to-productive for a new vendor agent, zero bespoke integration'
 description: 'MOVE 4. Drop a brand-new vendor agent (Gemini/Jules/Cursor) into a RUNNING AIDA fleet with only the CLI/MCP; measure time-to-first-productive-action (read a brief, claim a lease, ship a trailered commit). WHY: P8bs business case rests on this being near-zero (section 13.7); attacks the largest red-team hole (the gap existing != a small player capturing it) with the one thing incumbents structurally cannot show - a rival vendor joining with ZERO integration code (Agent Teams / Codex sub-agents are single-vendor). EVIDENCE: a time-to-productive table across 4+ vendors with "lines of bespoke integration = 0" as the headline column. Size S (extend the 2026-06-14 mailbox demo to the full graph surface + a stopwatch).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:21.165056350Z
-modified_at: 2026-06-19T09:39:02.373402528Z
+modified_at: 2026-06-19T09:46:25.411519127Z
 req_type: Task
 tags:
 - cross-vendor
@@ -23,3 +23,21 @@ comments:
   content: Commit d7d324ece references this requirement
   created_at: 2026-06-19T09:39:02.373402528Z
   modified_at: 2026-06-19T09:39:02.373402528Z
+history:
+- id: 019edf46-46fe-78a3-8112-11227c838eba
+  author: aida-auto-bump
+  timestamp: 2026-06-19T09:46:25.406833861Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edf46-4703-7ac3-a29c-d6cf00840bdd
+  timestamp: 2026-06-19T09:46:25.411518402Z
+  agent: aida
+  commit_sha: 7cb2cf47b7936a1216a721b0410699ec95270cf3
+  summary: Completed via merge 7cb2cf47
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T09:46:25.247220053Z
+  completion_sha: 7cb2cf47b7936a1216a721b0410699ec95270cf3
