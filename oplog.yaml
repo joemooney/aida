@@ -19765,5 +19765,26 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1919
+- id: 019ee0ed-d27b-7010-8790-8c8c2799f7d6
+  target_id: 019ee0ed-bbb9-73b3-9af0-5202ba4f0463
+  author: aida
+  node_id: '1'
+  lamport: 1920
+  timestamp: 2026-06-19T17:29:02.843807083Z
+  kind: !Create
+    title: aida graph not-found gives wrong 'no aida store found / cd into project root' guidance from a valid project root
+    description: |-
+      Reproduce (in-repo target/release/aida) from a valid project root that DOES contain .aida/config.toml and an attached .aida-store: aida graph NOPE-999 prints:
+
+        Error: Requirement not found: NOPE-999
+          Searched in: (no aida store found at /tmp/... or any parent)
+          Hint: cd into the project root (a directory containing .aida/config.toml or requirements.db), or pass --project <path> if the command supports it.
+
+      This guidance is WRONG: the store IS present and attached (aida graph STORY-1 works fine from the very same cwd, and ls shows .aida/config.toml + .aida-store). The "no store found / cd into project root" branch is being taken for a simply-nonexistent spec. Every sibling command (show / defer / archive / done / comment add / rel add) prints the CORRECT not-found message for the same condition: "Searched in: <abs>/.aida-store, Mode: distributed git-canonical, Hint: check the spec ID (try aida list ...)".
+
+      Impact: misleading guidance (BUG-585 class) sends the user chasing a non-problem (wrong directory) when they just typo'd an ID. Fix: route aida graph's not-found through the same shared not-found message as show/defer/archive (distinguish "store missing" from "spec missing within an existing store").
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1920
 node_id: '1'
