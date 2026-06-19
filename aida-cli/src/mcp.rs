@@ -2027,6 +2027,22 @@ impl<'a> McpServer<'a> {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_string);
+        // BUG-588: the event ledger is keyed by spec_id, but a caller may pass
+        // the raw UUID (the id `show_requirement` returns). Resolve a UUID to
+        // its canonical spec_id so the filter matches — mirrors the CLI's
+        // `resolve_history_id_filter`. trace:BUG-588 | ai:claude
+        let spec_id = spec_id.map(|raw| {
+            if let Ok(uuid) = uuid::Uuid::parse_str(&raw) {
+                if let Ok(store) = self.storage.load() {
+                    if let Some(req) = store.requirements.iter().find(|r| r.id == uuid) {
+                        if let Some(sid) = &req.spec_id {
+                            return sid.clone();
+                        }
+                    }
+                }
+            }
+            raw
+        });
         let since = args
             .get("since")
             .and_then(|v| v.as_str())

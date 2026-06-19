@@ -11669,6 +11669,63 @@ mod task_631_init_self_commit_tests {
     }
 }
 
+// trace:BUG-588 | ai:claude
+#[cfg(test)]
+mod bug_588_history_id_resolves_uuid_tests {
+    use super::*;
+    use aida_core::db::{DatabaseBackend, GitBackend};
+    use aida_core::{Requirement, RequirementsStore};
+
+    /// BUG-588: `aida history --id <X>` keys on spec_id (the orphan-branch
+    /// event decoder tags every event with the YAML's spec_id). `aida show`
+    /// prints the raw UUID, so a user copying it into `--id <uuid>` got an
+    /// empty "(no recent activity)" — the filter never matched. The resolver
+    /// must turn a UUID into its canonical spec_id so the documented
+    /// invocation works.
+    ///
+    /// Fail-old/pass-new: before the fix the UUID was passed through verbatim
+    /// (the filter then compared a UUID against spec_ids and matched nothing);
+    /// the new resolver returns the spec_id. A non-UUID (real spec_id) and an
+    /// unknown UUID both pass through unchanged.
+    #[test]
+    fn resolve_history_id_filter_maps_uuid_to_spec_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let mut req = Requirement::new("Spec under test".into(), "desc".into());
+        req.spec_id = Some("TASK-42".into());
+        let uuid = req.id;
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        backend.save(&store).unwrap();
+
+        // The bug's exact reproduction: feeding the UUID resolves to the
+        // spec_id the event decoder keys on.
+        assert_eq!(
+            resolve_history_id_filter(&backend, &uuid.to_string()),
+            "TASK-42",
+            "a UUID must resolve to its canonical spec_id (BUG-588)"
+        );
+
+        // A spec_id argument passes through untouched (no double-resolution).
+        assert_eq!(
+            resolve_history_id_filter(&backend, "TASK-42"),
+            "TASK-42",
+            "a spec_id argument must pass through unchanged"
+        );
+
+        // An unknown UUID has nothing to resolve to → pass through verbatim
+        // (it will simply match no events, which is the honest answer).
+        let unknown = uuid::Uuid::new_v4().to_string();
+        assert_eq!(
+            resolve_history_id_filter(&backend, &unknown),
+            unknown,
+            "an unresolvable UUID must pass through unchanged"
+        );
+    }
+}
+
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
 ///
@@ -12867,6 +12924,27 @@ fn remove_blocked_by_edge(
 }
 
 /// Handle commands routed to the GitBackend (when --file points to a directory).
+/// Resolve an `aida history --id <X>` argument to the canonical spec_id the
+/// orphan-branch event decoder keys on. `aida history` walks the git log and
+/// tags every event with the YAML's `spec_id`, so a UUID (which `aida show`
+/// prints) or an agreed_id never matched the filter and produced an empty
+/// "(no recent activity)" — the symptom BUG-588 reports. When the argument
+/// parses as a UUID we look the spec up and substitute its spec_id; otherwise
+/// we pass the argument through unchanged (it's already a spec_id, or a
+/// not-found value that will simply match nothing). Best-effort: a backend
+/// lookup error falls back to the raw argument rather than failing the command.
+/// trace:BUG-588 | ai:claude
+fn resolve_history_id_filter<B: aida_core::db::DatabaseBackend>(backend: &B, raw: &str) -> String {
+    if let Ok(uuid) = uuid::Uuid::parse_str(raw.trim()) {
+        if let Ok(Some(req)) = backend.get_requirement(&uuid) {
+            if let Some(spec_id) = req.spec_id {
+                return spec_id;
+            }
+        }
+    }
+    raw.to_string()
+}
+
 fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -> Result<()> {
     // STORY-43: warn loudly when this clone has been hijacked. Runs once
     // per invocation before any command executes. The marker doesn't block
@@ -17057,12 +17135,21 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 ),
                 _ => None,
             };
+            // BUG-588: `aida history` filters by spec_id (the orphan-branch git
+            // log is the source-of-truth for spec-state time series, and each
+            // event is keyed by the YAML's spec_id). But `aida show` prints the
+            // raw UUID, and a user who copies that into `--id <uuid>` got an
+            // empty "(no recent activity)" — the filter never matched because it
+            // only ever compared against spec_id. Resolve a UUID (or agreed_id)
+            // to its canonical spec_id here so the documented invocation works.
+            // trace:BUG-588 | ai:claude
+            let id_filter = id.as_ref().map(|raw| resolve_history_id_filter(&backend, raw));
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
                 // TASK-507: --shipped is an events-mode filter; imply it.
                 events_mode: *events || *shipped,
-                id_filter: id.clone(),
+                id_filter,
                 type_filter: r#type.clone(),
                 author_filter: author.clone(),
                 since: since.clone(),
