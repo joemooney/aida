@@ -19071,5 +19071,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1880
+- id: 019eddc5-1982-7f73-a911-2d351b17fe43
+  target_id: 019eddc5-1657-72a2-9cb1-3fae533e18d6
+  author: aida
+  node_id: '1'
+  lamport: 1881
+  timestamp: 2026-06-19T02:45:42.402809261Z
+  kind: !Create
+    title: aida compete regression-catch rate at n>1 (productize the QA framing)
+    description: 'MOVE 9. Run aida compete (N vendors + judge) across SEVERAL real specs; tally how often the judge catches a regression the losing vendor shipped that would have merged. WHY: the bake-offs reframed multi-vendor competition as quality-variance QA not design diversity (section 7) - novel + defensible, only a neutral substrate-owner can offer. But it rests on n=1 per run (2 regressions caught). A regression-catch RATE converts anecdote into a QA metric. EVIDENCE: "X regressions caught per N competed specs that single-vendor would have merged." Size M. DEPENDS ON the cross-vendor judge (move 3) or inherits the self-eval caveat. HAZARD: no E2E on a real spec (parks NeedsAttention + files findings) - use throwaway/gate-bail specs.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1881
 node_id: '1'
