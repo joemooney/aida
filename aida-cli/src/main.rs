@@ -32921,8 +32921,8 @@ fn render_doctor_bwrap_row() {
             // Ready — confirm + point at how to opt in (it's off by default).
             println!(
                 "    {}",
-                "OS sandbox is ready. Opt in with [contained] os_wrap = true in .aida/config.toml \
-                 (a per-host AIDA_OS_WRAP env override is incoming)."
+                "OS sandbox is ready. Opt in per-host with `export AIDA_OS_WRAP=1` (recommended — \
+                 no shared-config change), or repo-wide with [contained] os_wrap = true in .aida/config.toml."
                     .dimmed()
             );
         }
@@ -33060,7 +33060,7 @@ fn doctor_fix_sandbox() -> Result<()> {
     println!("      {}", "os_wrap = true".cyan());
     println!(
         "   {}",
-        "A per-host AIDA_OS_WRAP=1 env override is incoming; for now use the config knob.".dimmed()
+        "Recommended: enable per-host with `export AIDA_OS_WRAP=1` (no shared-config change). The config knob above enables it repo-wide.".dimmed()
     );
     println!();
     step += 1;
