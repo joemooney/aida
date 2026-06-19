@@ -3,15 +3,33 @@ spec_id: TASK-878
 agreed_id: TASK-878
 title: Auto-GC merged Agent-tool worktrees (worktree-agent-*) — they accumulate + cause stale-branch false-positives
 description: 'Incident 2026-06-19: 98 Agent-tool isolation worktrees (.claude/worktrees/agent-*) had accumulated over a fan-out-heavy session - never pruned because git worktree prune only removes worktrees whose DIR is gone, and these keep their dir + a worktree-agent-<id> branch. Consequences: disk clutter AND stale local branches that make aida human''s reviews-awaiting (and possibly other branch-derived views) false-positive on already-merged work (see the companion BUG). FIX: a safe auto-GC for merged agent worktrees - extend aida doctor''s existing dead-PID/lease reaping (or a new aida worktree gc / aida doctor --heal category) to remove worktrees whose branch''s PR is MERGED (or branch fully in main), NEVER removing worktrees with unmerged commits (clean != no work - verify before delete). Respect the destructive-heal-needs-signoff rail (STORY-666): in autonomous context, removing worktrees is destructive -> gate it. Manual best-effort cleanup of the current 98 was done this session (down to ~3 unmerged).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T06:50:41.268755972Z
-modified_at: 2026-06-19T06:50:41.268755972Z
+modified_at: 2026-06-19T08:06:56.581855892Z
 req_type: Task
 tags:
 - aida:doctor
 - from-incident
 - hygiene
 - worktree
+history:
+- id: 019edeeb-3341-7bd1-9f0c-c4c268771381
+  author: aida-auto-bump
+  timestamp: 2026-06-19T08:06:56.577191179Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edeeb-3345-7772-9910-bcc4992b20be
+  timestamp: 2026-06-19T08:06:56.581855036Z
+  agent: aida
+  commit_sha: 6e45064533d8e375429e3721725b86279a4b57dd
+  summary: Completed via merge 6e450645
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T08:06:56.414917207Z
+  completion_sha: 6e45064533d8e375429e3721725b86279a4b57dd
