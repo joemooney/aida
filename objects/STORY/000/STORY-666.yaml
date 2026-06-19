@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T05:26:51.854420455Z
-modified_at: 2026-06-19T05:26:51.854420455Z
+modified_at: 2026-06-19T05:38:23.425822604Z
 req_type: Story
 tags:
 - aida:doctor
@@ -17,3 +17,9 @@ tags:
 - governance
 - safety
 - substrate-as-bouncer
+comments:
+- id: 019ede63-3241-7821-a77f-564b40d76c3f
+  author: joe
+  content: Commit cb8c341ec references this requirement
+  created_at: 2026-06-19T05:38:23.425822604Z
+  modified_at: 2026-06-19T05:38:23.425822604Z
