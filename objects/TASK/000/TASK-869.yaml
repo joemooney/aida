@@ -1,0 +1,19 @@
+id: 019eddc4-b65c-7842-af56-6b34909e79ba
+spec_id: TASK-869
+agreed_id: TASK-869
+title: Cross-vendor judge for aida compete (kill the self-evaluation caveat on the apex evidence)
+description: 'MOVE 3. Augment/replace the Claude-grading-Claude-vs-Codex judge with a SECOND-vendor judge (Codex/Gemini) or a deterministic rubric. WHY: both bake-offs carry the same fatal caveat (self-evaluating Claude judge, section 10) that caps the substrate-shapes-output finding (the deepest statement of AIDAs bet). Removing it upgrades P2/L5s strongest evidence from "pilot, self-graded" toward credible. EVIDENCE: re-run the open-brief bake-off with a cross-vendor judge; if Claude still wins on the same correctness axis, the finding survives its sharpest objection. Size S-M (harness is vendor-parameterized; rubric design is the work). PRECEDES move 9 (compete regression-rate).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:45:17.020661297Z
+modified_at: 2026-06-19T02:45:17.020661297Z
+req_type: Task
+tags:
+- compete
+- cross-vendor
+- evidence
+- from-discovery-0619
+- parent:EPIC-50
+- tilt-verdict
