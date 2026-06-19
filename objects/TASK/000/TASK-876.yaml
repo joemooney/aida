@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T04:49:56.217526484Z
-modified_at: 2026-06-19T05:07:40.845835892Z
+modified_at: 2026-06-19T05:15:53.410076848Z
 req_type: Task
 tags:
 - aida:config
@@ -16,6 +16,12 @@ tags:
 - from-operator
 - parent:SPIKE-68
 - sandbox
+comments:
+- id: 019ede4e-98c2-7311-ba49-4c143540b720
+  author: joe
+  content: Commit ec0bebf47 references this requirement
+  created_at: 2026-06-19T05:15:53.410076848Z
+  modified_at: 2026-06-19T05:15:53.410076848Z
 history:
 - id: 019ede47-14a9-7602-a8d0-f7fea3d77bc2
   author: aida-auto-bump
