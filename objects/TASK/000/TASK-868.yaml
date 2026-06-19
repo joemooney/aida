@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:13.109354966Z
-modified_at: 2026-06-19T02:45:13.109354966Z
+modified_at: 2026-06-19T03:03:54.794251643Z
 req_type: Task
 tags:
 - evidence
@@ -17,3 +17,9 @@ tags:
 - tier1
 - tilt-verdict
 - traces
+comments:
+- id: 019eddd5-c4aa-7f53-af9b-d9ad28f36711
+  author: joe
+  content: 'EVIDENCE (verdict-tilt move 1): aida trace check on AIDAs own codebase found 442 dead trace links (6.52% hard rot) out of 6777 inline traces — 415 unknown (deleted/renumbered targets), 27 rejected; plus 3068 pointing at archived specs (soft signal). This is the concrete proof the papers self-undercut ("traces rot invisibly") was REAL — 6.52% rot existed undetected — and is now catchable by a gate. Follow-up: a chunk of the 415 unknown are deliberate EXAMPLE spec-ids in docs/skill templates (FR-0042 etc.), not real code traces — a refinement should exclude doc/template paths from the hard-rot denominator for an honest code-only rate.'
+  created_at: 2026-06-19T03:03:54.794251643Z
+  modified_at: 2026-06-19T03:03:54.794251643Z
