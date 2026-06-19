@@ -1,0 +1,25 @@
+id: 019ee0ee-522d-7742-b47d-15f58f0d7244
+spec_id: TASK-888
+agreed_id: TASK-888
+title: 'Error-path message-quality nits (grouped): empty-title accepted silently, bare-digit show routes to PR with no hint, unbounded title length'
+description: |-
+  Grouped low-priority message-quality nits found in the error-path dogfood sweep (in-repo target/release/aida). Most of AIDA's error handling graded WELL — clap flag errors suggest near-matches (--statuss => "a similar argument exists: --status"), bad enums list valid values (type/status/priority all good), missing custom-arg messages are actionable (add: "title is required — pass --title", comment add: "comment body required: pass it positionally or via --content"). The following are minor polish items, not blockers:
+
+  1. Empty/whitespace-only title accepted silently: aida add --title "" and aida add --title "   " both succeed ("Added: TASK-N - ") with no warning. A whitespace title is almost always a mistake; consider trimming + warning or rejecting empty.
+
+  2. aida show 12345 (bare digits) is silently interpreted as a PR lookup: "Error: PR-12345 has no backing specs". A user expecting spec lookup gets a PR-flavored error with no hint that bare numbers route to PR mode. Minor; consider a hint that spec IDs need a TYPE- prefix.
+
+  3. Very long title (5000 chars) accepted without truncation/warning — not harmful, just unbounded.
+
+  These three are cosmetic/UX-polish; filing as one task per the group-the-nits guidance. The genuinely-bad error paths (misleading version-mismatch text, exit-0-on-error, graph wrong-store guidance, silent custom rel) are filed individually as BUG-599/600/601 and TASK-887.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T17:29:35.533750638Z
+modified_at: 2026-06-19T17:29:35.533750638Z
+req_type: Task
+tags:
+- error-paths
+- from-dogfood
+- ux
