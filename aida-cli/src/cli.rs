@@ -6901,6 +6901,45 @@ pub enum Command {
         quiet: bool,
     },
 
+    /// Author a conventional-format-compliant commit and run `git commit`.
+    /// Builds the `[AI:tool]? type(scope): description (REQ-ID)` shape the
+    /// commit-msg hook requires, so a plain-terminal commit can't be rejected
+    /// for format. The REQ-ID is inferred from staged trace comments when a
+    /// single spec is present; `--spec` sets it explicitly. The CLI-native
+    /// counterpart to the `/aida-commit` skill.
+    ///
+    /// Example: aida commit --type fix --scope rel --message "accept --spec alias" --spec <SPEC-ID>
+    // trace:STORY-663 | ai:claude
+    Commit {
+        /// Conventional commit type: feat, fix, docs, style, refactor, perf,
+        /// test, build, ci, chore, revert.
+        #[clap(long = "type", value_name = "TYPE")]
+        commit_type: String,
+        /// Optional scope (component/area), e.g. --scope rel.
+        #[clap(long)]
+        scope: Option<String>,
+        /// The commit description (the part after the colon).
+        #[clap(long, short = 'm')]
+        message: String,
+        /// Spec id for the (REQ-ID) trailer, e.g. `--spec BUG-N`. When omitted,
+        /// inferred from staged trace comments if exactly one spec is present.
+        #[clap(long)]
+        spec: Option<String>,
+        /// AI tool for the [AI:tool] prefix (default: claude when AI-authored
+        /// traces are staged). Use --no-ai to force it off.
+        #[clap(long)]
+        ai: Option<String>,
+        /// Omit the [AI:tool] prefix even if AI-authored traces are staged.
+        #[clap(long, conflicts_with = "ai")]
+        no_ai: bool,
+        /// Stage and commit all tracked changes (git commit -a).
+        #[clap(long, short = 'a')]
+        all: bool,
+        /// Print the assembled message without committing.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Pull code branch AND orphan aida-store branch from origin. Use
     /// --code-only or --store-only to scope. Symmetric to `aida push`:
     /// equivalent to `git pull --ff-only` on the current branch
