@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-13T02:49:16.215550754Z
-modified_at: 2026-06-13T04:22:03.113583307Z
+modified_at: 2026-06-19T14:45:10.398219161Z
 req_type: Story
 tags:
 - aida:list
@@ -52,6 +52,11 @@ comments:
       - (Maybe) an age-based `aida defer --older-than` bulk sweep, if demand appears (archive has one)
   created_at: 2026-06-13T03:44:56.212996452Z
   modified_at: 2026-06-13T03:44:56.212996452Z
+- id: 019ee057-ca7e-7403-ba4d-23222adbc595
+  author: joe
+  content: Commit 243c9eabc references this requirement
+  created_at: 2026-06-19T14:45:10.398219161Z
+  modified_at: 2026-06-19T14:45:10.398219161Z
 history:
 - id: 019ebf37-26fe-7a22-b61a-0a1d09dabc32
   author: aida-auto-bump
