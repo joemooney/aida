@@ -216,6 +216,38 @@ Start there: confirm `bwrap` is confinement-capable via `aida doctor`
 (or run `aida doctor --fix-sandbox` for the guided steps), then opt in with
 `os_wrap = true` and verify with `aida config show`.
 
+## Performance overhead
+
+**Effectively zero for AIDA's use case.** `bwrap` is a thin namespace wrapper —
+not a container runtime or VM. There is no daemon, no image layer, and no
+syscall interception. The cost is a **one-time ~9–10 ms at process spawn**
+(creating the user namespace + setting up the bind mounts); after `exec` the
+agent runs at **native speed**.
+
+Measured on a dev host (Linux, userns enabled):
+
+| | bare | under `os_wrap` (bwrap) | overhead |
+|---|---|---|---|
+| trivial spawn (`true`, 50×) | 0.47 ms | 9.36 ms | ~9 ms |
+| `node --version` (20×) | 4.7 ms | 14.2 ms | ~9.5 ms |
+
+The overhead is **fixed per spawn, not proportional to the work** — note the
+delta is the same ~9.5 ms whether the wrapped program does nothing or starts a
+runtime. Because `os_wrap` wraps the **outer** agent process once (subprocesses
+the agent spawns are already inside the namespace — no re-wrapping) and that
+agent then runs for **minutes**, the one-time cost is ~0.005% of a session —
+lost in the noise. Specifics:
+
+- **Filesystem:** bind mounts are zero-copy passthrough (no I/O penalty); `/tmp`
+  is a tmpfs (RAM-backed, often *faster* for scratch writes).
+- **Network:** `os_wrap` is a write-confinement boundary with shared net — no
+  network overhead (egress is governed separately).
+- **CPU / memory:** native; namespaces are cheap.
+
+The only workload that would notice is one spawning *thousands* of short-lived
+wrapped processes — which AIDA does not do (it wraps long-lived agents). For
+confining an agent session, enabling `os_wrap` is essentially free.
+
 ## Related
 
 - [`../cli/03-work-autonomy.md`](../cli/03-work-autonomy.md) — the per-knob
