@@ -102,6 +102,41 @@ pub fn requirement_not_found(id: &str, store_path: Option<&Path>) -> anyhow::Err
 // aida_core::object_store::parse_failure_hint so both aida-cli and
 // aida-core can use it. Import it directly from there.
 
+/// Build the "spec doesn't exist, but the store does" not-found error for a
+/// caller that holds a loaded, non-empty store but can't thread the store path
+/// through to `requirement_not_found`.
+///
+/// BUG-601: `aida graph NOPE-999` from a valid project root used to take the
+/// `StoreMode::None` "no aida store found / cd into the project root" branch
+/// (because `parse_requirement_id` passed `None` for the path) even though the
+/// store was attached and other ids resolved fine from the same cwd. When the
+/// store is demonstrably present (it loaded with rows), say "check the spec ID"
+/// — the same hint the GitCanonical branch gives — not "wrong directory".
+/// trace:BUG-601 | ai:claude
+pub fn requirement_not_found_in_loaded_store(id: &str) -> anyhow::Error {
+    anyhow::anyhow!(
+        "Requirement not found: {id}\n  \
+         Hint: check the spec ID (try `aida list` or `aida search <terms>`)."
+    )
+}
+
+/// Build the "that's not a spec id" error for a user-typed argument whose
+/// shape can't possibly resolve (a typo, a UUID-shaped string, anything that
+/// isn't `TYPE-SEQ` / `TYPE-NODE-SEQ`).
+///
+/// BUG-599: this is the friendly counterpart to `parse_failure_hint` — the
+/// latter is for on-disk YAML that genuinely failed to parse (binary/version
+/// skew), and must NOT fire for a malformed argument. A bad id the user typed
+/// gets a format hint that names the expected shape and points at `aida list`,
+/// matching the tone of `requirement_not_found`. trace:BUG-599 | ai:claude
+pub fn invalid_spec_id_format(id: &str) -> anyhow::Error {
+    anyhow::anyhow!(
+        "Requirement not found: {id} (not a valid spec ID)\n  \
+         Expected TYPE-SEQ (e.g. STORY-1) or TYPE-NODE-SEQ (e.g. FR-7-42).\n  \
+         Hint: check the spec ID (try `aida list` or `aida search <terms>`)."
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,4 +209,30 @@ mod tests {
 
     // BUG-97 / TASK-223: parse_failure_hint tests moved to
     // aida-core/src/object_store.rs alongside the function's new home.
+
+    // BUG-599: a malformed (user-typed) id gets a friendly format hint, NOT
+    // the version-mismatch/rebuild wall (`parse_failure_hint`).
+    #[test]
+    fn invalid_spec_id_format_is_friendly_not_rebuild_wall() {
+        let s = format!("{}", invalid_spec_id_format("not-a-real-id"));
+        assert!(s.contains("Requirement not found: not-a-real-id"));
+        assert!(s.contains("not a valid spec ID"));
+        assert!(s.contains("TYPE-SEQ"));
+        assert!(s.contains("aida list") || s.contains("aida search"));
+        // Must NOT carry the on-disk-parse / binary-version-mismatch wall.
+        assert!(!s.contains("binary version mismatch"));
+        assert!(!s.contains("cache rebuild"));
+        assert!(!s.contains("dev activate"));
+    }
+
+    // BUG-601: a loaded, non-empty store yields the "check the spec ID" hint,
+    // NOT the "no aida store found / cd into project root" guidance.
+    #[test]
+    fn loaded_store_not_found_does_not_blame_directory() {
+        let s = format!("{}", requirement_not_found_in_loaded_store("NOPE-999"));
+        assert!(s.contains("Requirement not found: NOPE-999"));
+        assert!(s.contains("check the spec ID"));
+        assert!(!s.contains("no aida store found"));
+        assert!(!s.contains("cd into the project root"));
+    }
 }

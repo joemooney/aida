@@ -585,6 +585,17 @@ impl DatabaseBackend for GitBackend {
         // wrong-spec-id investigation when the YAML was actually fine,
         // just incompatible with the binary's enums.
         // trace:BUG-97 | ai:claude
+        //
+        // BUG-599: a malformed id (e.g. `not-a-real-id`, a UUID-shaped string)
+        // makes `object_path`/`object_exists` return Err("Invalid spec_id
+        // format ..."), which a caller would then dress up with the
+        // version-mismatch `parse_failure_hint` — alarming, wrong guidance for
+        // a simple typo. A malformed id can never name a stored object, so
+        // treat it as a plain not-found (Ok(None)); the CLI surfaces a friendly
+        // format hint before this point. trace:BUG-599 | ai:claude
+        if !object_store::valid_spec_id_format(&spec_id) {
+            return Ok(None);
+        }
         if object_store::object_exists(&self.objects_root, &spec_id)? {
             // File exists; any error from read_object now is a parse
             // failure worth propagating (with the file path + serde
@@ -1002,6 +1013,28 @@ mod tests {
         let store = backend.load().unwrap();
         assert_eq!(store.requirements.len(), 0);
         assert!(store.name.is_empty());
+    }
+
+    // BUG-599: a malformed id (not TYPE-SEQ / TYPE-NODE-SEQ) must resolve to a
+    // plain Ok(None) not-found, NOT an Err that the CLI would dress up with the
+    // version-mismatch/rebuild `parse_failure_hint`.
+    #[test]
+    fn malformed_spec_id_is_not_found_not_parse_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        for bad in [
+            "not-a-real-id",
+            "BADID",
+            "019ee0ed-2e4d-7652-a71e-d521f071af27",
+        ] {
+            let got = backend.get_requirement_by_spec_id(bad);
+            assert!(
+                matches!(got, Ok(None)),
+                "malformed id {bad:?} should be Ok(None), got {got:?}"
+            );
+        }
     }
 
     #[test]

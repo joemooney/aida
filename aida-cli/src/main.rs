@@ -15064,6 +15064,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // sending the user down a wrong-spec-id chase. git_backend's
             // get_requirement_by_spec_id now propagates parse errors;
             // wrap them here with the actionable hint. trace:BUG-97
+            // BUG-599: a malformed id the user typed (not TYPE-SEQ /
+            // TYPE-NODE-SEQ) is a typo, not an on-disk parse failure — give a
+            // friendly format hint instead of the version-mismatch/rebuild wall
+            // (which `parse_failure_hint` is reserved for below). trace:BUG-599
+            if !aida_core::object_store::valid_spec_id_format(id) {
+                return Err(not_found::invalid_spec_id_format(id));
+            }
+            // The id is well-formed, so any Err here is a genuine on-disk parse
+            // failure (binary/version skew) worth the rebuild hint. A
+            // well-formed-but-absent id comes back as Ok(None) and is handled
+            // as a plain not-found below. trace:BUG-97 trace:BUG-599
             let lookup = backend.get_requirement_by_spec_id(id).map_err(|e| {
                 anyhow::anyhow!(
                     "Parse failed: {}\n  Detail: {:#}\n{}",
@@ -15079,7 +15090,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         render_tree(&backend, &root, *depth)?;
                     }
                     None => {
-                        eprintln!("{}", not_found::requirement_not_found(id, Some(store_path)));
+                        // BUG-600: a not-found lookup is a failure — return the
+                        // error (exit non-zero) like edit/defer/archive, don't
+                        // print-and-exit-0. trace:BUG-600 | ai:claude
+                        return Err(not_found::requirement_not_found(id, Some(store_path)));
                     }
                 }
                 return Ok(());
@@ -15541,7 +15555,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     );
                 }
                 None => {
-                    eprintln!("{}", not_found::requirement_not_found(id, Some(store_path)));
+                    // BUG-600: not-found is a failure — return the error so the
+                    // process exits non-zero, matching edit/defer/archive and
+                    // keeping script gating + usage telemetry honest (was a
+                    // print-and-exit-0). trace:BUG-600 | ai:claude
+                    return Err(not_found::requirement_not_found(id, Some(store_path)));
                 }
             }
         }
@@ -15580,6 +15598,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
             let id = &resolved_id;
 
+            // BUG-599: a malformed id is a typo, not an on-disk parse failure
+            // — friendly format hint instead of the bare "Invalid spec_id
+            // format" (or, via the lookup, the version-mismatch wall).
+            // trace:BUG-599 | ai:claude
+            if !aida_core::object_store::valid_spec_id_format(id) {
+                return Err(not_found::invalid_spec_id_format(id));
+            }
             // BUG-68: record activity AFTER successful lookup AND
             // after the TASK-47 terminal-status guard, so a refused
             // re-open doesn't leave a phantom edit entry.
@@ -24358,11 +24383,18 @@ fn parse_requirement_id(id_str: &str, store: &RequirementsStore) -> Result<Uuid>
         return Ok(req.id);
     }
 
-    // The legacy helper doesn't have the storage path threaded through, so
-    // we use the None-path variant which inspects cwd and reports "no aida
-    // store found" / "cd into project root" — the right hint for the most
-    // common failure mode (running aida from outside any AIDA project).
-    Err(not_found::requirement_not_found(id_str, None))
+    // BUG-601: a loaded, non-empty store proves the store IS attached, so the
+    // failure is a simply-nonexistent spec — emit the "check the spec ID" hint
+    // rather than the misleading "no aida store found / cd into project root"
+    // guidance that the None-path variant prints. The store-path isn't threaded
+    // through this legacy helper, but store-emptiness is the signal we need:
+    // non-empty ⇒ store present (spec-missing), empty ⇒ likely no store / wrong
+    // directory (the original common failure mode). trace:BUG-601 | ai:claude
+    if store.requirements.is_empty() {
+        Err(not_found::requirement_not_found(id_str, None))
+    } else {
+        Err(not_found::requirement_not_found_in_loaded_store(id_str))
+    }
 }
 
 fn parse_status(status_str: &str) -> Result<RequirementStatus> {
