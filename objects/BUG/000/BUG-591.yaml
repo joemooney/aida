@@ -1,0 +1,31 @@
+id: 019ee04a-7468-78b1-bc16-2ac9992e1c1b
+spec_id: BUG-591
+agreed_id: BUG-591
+title: MCP list_requirements + search_requirements ignore the archive/deferred view tiers — show archived rows the CLI hides, and offer no archived/deferred/all filter
+description: |-
+  Dogfooding the MCP server: the archive (STORY-441) and deferred (STORY-584) view tiers are entirely absent from the MCP read surface, in two ways.
+
+  (A) BEHAVIORAL DRIFT (the worse half). The CLI hides archived (and deferred) rows from the DEFAULT views of aida list / aida search. The MCP list_requirements and search_requirements do NOT - they show archived rows in their default output. Verified end to end on a fresh store with a clean cache rebuild (so this is not cache staleness):
+  - aida archive BUG-2 --force; aida cache rebuild
+  - CLI: aida list -> BUG-2 hidden (correct); aida search seed -> BUG-2 hidden (correct)
+  - MCP: list_requirements {limit:100} -> BUG-2 PRESENT; search_requirements {query:"seed"} -> BUG-2 PRESENT
+  So an MCP-speaking agents view of open work is polluted with archived/deferred specs the operator deliberately filed away. STORY-82 says these tools mirror the CLI; the default-hide semantics are part of that surface and have drifted.
+
+  (B) MISSING FILTERS. The CLI offers list --archived / --deferred / --all (and search inherits the same archive filter). list_requirements inputSchema has none of {archived, deferred, all}; there is no way for an MCP agent to audit the archive, view the deferred shelf, or get the union. Even once (A) is fixed (default hides), an agent would then have NO way to surface archived/deferred rows at all.
+
+  Impact: this is the single highest-impact MCP parity gap found in this dogfood pass - it affects every agents baseline picture of the project (the core agent-context surface), not an edge tool.
+
+  Fix: route list_requirements + search_requirements through the same archive/deferred view predicate the CLI uses (default = hide both tiers), and add archived/deferred/all boolean filters to the list_requirements (and search where applicable) inputSchema + handler, mirroring aida list. Source: compare aida list --help (--all/--archived/--deferred) and the CLI list/search view-tier filtering against the list_requirements/search_requirements handlers in aida-cli/src/mcp.rs.
+
+  Verified-by-me on this dogfood run (debug build sha fdb0a69fc), JSON repro captured.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T14:30:36.392208865Z
+modified_at: 2026-06-19T14:30:36.392208865Z
+req_type: Bug
+tags:
+- from-dogfood
+- mcp
+- parity
