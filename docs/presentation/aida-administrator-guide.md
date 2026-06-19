@@ -123,9 +123,29 @@ The **queue** is keyed off the **shell's user id**, not the node id. Resolution 
 | `[telemetry]` | `enabled` — local usage log on/off |
 | `[drain]` | `gh_verify_retries`, `no_progress_minutes`, `phase_ceiling_minutes` |
 | `[store.sync]` | `auto_push`: manual / session-end / per-write |
+| `[contained]` | `os_wrap` (bubblewrap OS sandbox), `read_allowlist`, `managed_domains_only` — see the OS-sandbox slide |
 
 <!--
 [drain] is the newest section (drain-reliability tuning). [store.sync] auto_push="session-end" is the recommended multi-node default. Verify exact keys with the parsers in aida-cli/src before quoting in a real deployment.
+-->
+
+---
+
+## OS sandbox: `os_wrap` (bubblewrap)
+
+Confine an agent's **writes** to the worktree — read-only root, read-write only the worktree / `.aida-store` / build caches, fail-closed.
+
+- **Enable per-host:** `export AIDA_OS_WRAP=1` (recommended — no shared-config change) · or `[contained] os_wrap = true` to set it repo-wide
+- **Linux only:** needs `bubblewrap` + unprivileged user namespaces. `aida doctor` reports availability; `aida doctor --fix-sandbox` prints the exact setup (incl. the Ubuntu/AppArmor `sysctl`)
+- **Fail-closed:** if `bwrap`/userns is missing, the launch **errors** — it never runs unconfined
+- **Overhead: ~9–10 ms one-time per launch, native speed after** — a namespace wrapper, *not* a VM/container. ~0.005% of a minutes-long agent session
+
+> Gate the blast radius without taxing the work. In autonomous flows, `aida doctor --heal` won't perform destructive fixes unattended.
+
+<small>Full guide: `docs/agents/claude-bubblewrap-sandbox.md` (setup, config, limitations, measured overhead)</small>
+
+<!--
+SPEAKER NOTES: os_wrap is off by default. The per-host AIDA_OS_WRAP env override (TASK-876) is the safe enable — committing os_wrap=true to the shared config would fail-closed for any teammate without bwrap (e.g. macOS). Overhead is fixed-per-spawn, not proportional to work — measured ~9.5ms delta for both `true` and `node`. bwrap wraps the OUTER agent once; subprocesses inherit the namespace.
 -->
 
 ---
