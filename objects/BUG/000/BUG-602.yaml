@@ -1,0 +1,23 @@
+id: 019ee13a-a963-7a51-abbc-e0422d25c96c
+spec_id: BUG-602
+agreed_id: BUG-602
+title: Concurrent set-field merge resurrects tombstones (removed tags/relationships/dependencies come back via 2-way union)
+description: |-
+  merge_spec_three_way (aida-core/src/conflict.rs) resolved tags, relationships, and dependencies with a 2-way SET UNION (ours ∪ theirs ∪ base). This is the classic G-Set "can't remove" problem the P4 red-team flagged: when one clone REMOVES a tag/relationship/dependency while another clone concurrently edits the same spec (and still carries the removed item in its snapshot), the union RESURRECTS the deleted item — silently undoing a committed removal.
+
+  Repro (unit, deterministic): base spec has tags {keep, doomed}. Clone A removes "doomed" + edits priority. Clone B edits owner (never touches tags). merge_spec_three_way(base, A, B) yields tags {keep, doomed} — "doomed" is back. Same for relationship-edge removal and dependency removal.
+
+  Root cause: tags/relationships/dependencies used a 2-way union helper that ignores the merge base, so it cannot distinguish "added by one side" from "removed by one side". Scalars were already correctly 3-way-merged against base (BUG-586); the set fields were not.
+
+  Fix: 3-way set merge against base — result = (ours ∪ theirs) − removed, where removed = (base−ours) ∪ (base−theirs). Adds survive, removals win over a stale retention. Verified by failing-then-passing regression tests in conflict.rs (test_merge_tag_removal_wins_over_concurrent_edit, test_merge_relationship_removal_wins_over_concurrent_edit, test_merge_dependency_removal_wins, test_merge_string_set_three_way_rules).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T18:52:58.595299580Z
+modified_at: 2026-06-19T18:52:58.595299580Z
+req_type: Bug
+tags:
+- conflict-merge
+- from-dogfood
+- stress
