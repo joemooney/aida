@@ -3,15 +3,33 @@ spec_id: TASK-866
 agreed_id: TASK-866
 title: Expose [contained] os_wrap / read_allowlist / managed_domains_only in aida config show
 description: 'aida config show currently surfaces only [contained] enable and [contained] allowed_hosts (aida-cli/src/main.rs:24169-24223). The bwrap-specific knobs are NOT shown: os_wrap (os_wrap_enabled, session.rs:1111), read_allowlist (contained_read_allowlist, session.rs:960), managed_domains_only (contained_managed_domains_only, session.rs:946). Note os_wrap (the OS bwrap boundary) is DISTINCT from enable (Claude Code native --settings sandbox) — operators conflate them. Slice: add os_wrap, read_allowlist, managed_domains_only rows to the [contained] PolicySection, each with source/effective resolution, reusing the existing helpers. Acceptance: aida config show lists all four [contained] bwrap/sandbox knobs with their effective values + source. (Separate larger question — a writable aida config set <section>.<key> — is out of scope; config set does not exist today, only ID-format/user/hints subcommands.)'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:40:51.080930986Z
-modified_at: 2026-06-19T02:40:51.080930986Z
+modified_at: 2026-06-19T03:29:03.382722346Z
 req_type: Task
 tags:
 - aida:config
 - bubblewrap
 - from-spike
 - parent:SPIKE-68
+history:
+- id: 019eddec-c992-7a11-a2e8-76cc87a6daad
+  author: aida-auto-bump
+  timestamp: 2026-06-19T03:29:03.378170481Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019eddec-c996-7950-b178-4a0570592c40
+  timestamp: 2026-06-19T03:29:03.382721791Z
+  agent: aida
+  commit_sha: afe844283ccbfb642ffc836de9bdcfe645545d74
+  summary: Completed via merge afe84428
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T03:29:03.217027517Z
+  completion_sha: afe844283ccbfb642ffc836de9bdcfe645545d74
