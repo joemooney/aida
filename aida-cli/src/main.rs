@@ -1361,6 +1361,15 @@ fn run() -> Result<()> {
                 eprintln!("  {} starter memory pack skipped: {}", "Note:".dimmed(), e);
             }
         }
+        // TASK-859: surface a small curated set of high-value config knobs that
+        // are otherwise silent defaults (telemetry opt-out today) and offer to
+        // open `aida config menu` for the full surface. TTY-gated + idempotent,
+        // mirroring the agent-posture prompt above — non-interactive init writes
+        // nothing and keeps every default. Non-fatal: a hiccup here must not
+        // abort an otherwise-successful init. trace:TASK-859 | ai:claude
+        if let Err(e) = maybe_prompt_init_config(&statusline_project_root()) {
+            eprintln!("  {} config prompts skipped: {}", "Note:".dimmed(), e);
+        }
         return Ok(());
     }
 
@@ -37918,6 +37927,103 @@ fn maybe_prompt_agent_posture() -> Result<()> {
     Ok(())
 }
 
+/// TASK-859: after the core scaffold, prompt for a small curated set of
+/// high-value config knobs that would otherwise sit at silent defaults, then
+/// offer to open `aida config menu` for the full surface.
+///
+/// Deliberately tasteful — one knob (telemetry opt-out) plus the config-menu
+/// offer, not an interrogation. The point is *discoverability* of config, not
+/// friction. Mirrors `maybe_prompt_agent_posture`: TTY-gated (non-interactive
+/// init writes nothing and keeps every default) and idempotent (a knob already
+/// present in `.aida/config.toml` is detected and skipped, so re-running
+/// `aida init --force` never re-prompts settled choices). Skips re-prompting
+/// the things init already prompted for (agent posture, node name).
+/// trace:TASK-859 | ai:claude
+fn maybe_prompt_init_config(project_root: &std::path::Path) -> Result<()> {
+    // TTY-gated: non-interactive init (--yes, CI, the test suite) writes
+    // nothing and keeps the current defaults. This is the critical regression
+    // guard — every default must survive a headless init untouched.
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Ok(());
+    }
+
+    let config_path = project_root.join(".aida").join("config.toml");
+
+    // Telemetry opt-out (STORY-122). Idempotent: if the project config already
+    // carries a `[telemetry]` decision, leave it alone — never re-prompt a
+    // settled choice on a re-run.
+    let telemetry_already_set = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|c| crate::usage::parse_telemetry_enabled(&c))
+        .is_some();
+    if !telemetry_already_set {
+        eprintln!();
+        eprintln!("{}", "Project setup — usage telemetry".bold());
+        eprintln!("  AIDA logs a one-line-per-command local usage trail (command shape,");
+        eprintln!("  exit code, duration — never arguments, paths, or content). It is");
+        eprintln!("  local-only and never phoned home. Keep it on?");
+        let keep = prompt_yes_no("  Keep usage telemetry on? [Y/n]: ", true)?;
+        if !keep {
+            append_telemetry_disabled(&config_path)?;
+            eprintln!(
+                "  {} telemetry disabled ({} in .aida/config.toml).",
+                "+".green(),
+                "[telemetry] enabled = false".cyan()
+            );
+        } else {
+            eprintln!(
+                "  {} telemetry left on (default; opt out anytime with {}).",
+                "Note:".dimmed(),
+                "AIDA_TELEMETRY=0".cyan()
+            );
+        }
+    }
+
+    // Offer the full config surface via the new TUI (STORY-661). Declining (or
+    // a build without the TUI feature) just prints the pointer and moves on.
+    eprintln!();
+    let configure_more = prompt_yes_no(
+        "  Configure more settings now (opens the config menu)? [y/N]: ",
+        false,
+    )?;
+    if configure_more {
+        // `handle_config_menu_command` is itself TTY-gated and reads the cwd,
+        // so it degrades gracefully if the terminal is gone by now.
+        handle_config_menu_command()?;
+    } else {
+        eprintln!(
+            "  {} run {} anytime to review or change settings.",
+            "Note:".dimmed(),
+            "aida config menu".cyan()
+        );
+    }
+    Ok(())
+}
+
+/// TASK-859: append a `[telemetry] enabled = false` block to the project's
+/// `.aida/config.toml`, opting out of the local usage trail. The config file
+/// already exists (the scaffold wrote it just before this prompt runs); we
+/// only append, never rewrite, so the rest of the scaffolded config is
+/// untouched. trace:TASK-859 | ai:claude
+fn append_telemetry_disabled(config_path: &std::path::Path) -> Result<()> {
+    use std::io::Write as _;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config_path)
+        .with_context(|| format!("opening {}", config_path.display()))?;
+    write!(
+        f,
+        "\n# Usage telemetry opt-out (chosen at init, TASK-859 / STORY-122).\n\
+         # Local-only command-shape trail; never phoned home. Re-enable by\n\
+         # deleting this block or setting `enabled = true`.\n\
+         [telemetry]\n\
+         enabled = false\n"
+    )
+    .with_context(|| format!("appending telemetry opt-out to {}", config_path.display()))?;
+    Ok(())
+}
+
 /// Write the global `~/.aida/agents.toml` recording the chosen permission
 /// posture. Creates `~/.aida/` if needed. trace:TASK-698 | ai:claude
 fn write_global_agents_posture(path: &std::path::Path, bypass: bool) -> Result<()> {
@@ -62592,6 +62698,23 @@ mod bug_231_findings_promote_tests {
     #[test]
     fn resolve_node_name_rejects_invalid() {
         assert!(resolve_node_name(Some("bad name!"), "imac", "joe", "1").is_err());
+    }
+
+    /// TASK-859: appending the telemetry opt-out leaves prior config intact and
+    /// produces a `[telemetry] enabled = false` that `parse_telemetry_enabled`
+    /// (the live reader) recognises — proving the init prompt's write round-trips
+    /// to the actual opt-out path. trace:TASK-859
+    #[test]
+    fn append_telemetry_disabled_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = dir.path().join("config.toml");
+        std::fs::write(&cfg, "[id_format]\npolicy = \"blocks-then-fallback\"\n").unwrap();
+        append_telemetry_disabled(&cfg).unwrap();
+        let body = std::fs::read_to_string(&cfg).unwrap();
+        // Prior content survives.
+        assert!(body.contains("[id_format]"));
+        // The opt-out is readable by the live telemetry reader.
+        assert_eq!(crate::usage::parse_telemetry_enabled(&body), Some(false));
     }
 
     /// `--for <role>` overrides the default queue route. trace:BUG-231
