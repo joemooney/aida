@@ -78185,6 +78185,11 @@ const GETTING_STARTED: &[(&str, &str)] = &[
     ("list", "List requirements"),
     ("show", "Show details for one requirement"),
     ("done", "Mark a spec done — the simple \"I finished it\""),
+    // trace:TASK-879 | ai:claude — surface the solo loop on the first screen.
+    (
+        "solo",
+        "Run your project solo — groom → implement → integrate, end-to-end",
+    ),
 ];
 
 /// The full grouped command surface, organized by function. Used by both the
@@ -78233,6 +78238,11 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ),
                 ("rework", "Send a spec back for rework"),
                 ("burndown", "Autonomous backlog burn-down"),
+                // trace:TASK-879 | ai:claude — the solo loop alongside the other drain verbs.
+                (
+                    "solo",
+                    "Run your project solo — groom → implement → integrate, end-to-end",
+                ),
                 ("findings", "Triage findings filed by drain phases"),
                 ("punt", "Pause a spec at a design-fork"),
                 ("questions", "The async decision inbox"),
@@ -78507,7 +78517,8 @@ mod help_grouping_tests {
     #[test]
     fn getting_started_is_the_curated_core_loop() {
         let names: Vec<&str> = GETTING_STARTED.iter().map(|(n, _)| *n).collect();
-        assert_eq!(names, ["init", "add", "list", "show", "done"]);
+        // trace:TASK-879 | ai:claude — `solo` joins the curated first screen.
+        assert_eq!(names, ["init", "add", "list", "show", "done", "solo"]);
     }
 
     // trace:STORY-556 | ai:claude
