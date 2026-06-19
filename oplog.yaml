@@ -19059,5 +19059,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1879
+- id: 019eddc5-0983-77a3-8789-6144c585db8f
+  target_id: 019eddc5-0659-73f0-a0a5-9e4b6e0ac9c4
+  author: aida
+  node_id: '1'
+  lamport: 1880
+  timestamp: 2026-06-19T02:45:38.307376977Z
+  kind: !Create
+    title: Lifecycle-authority gate demonstration vs the fields merge-time gates
+    description: 'MOVE 8. Focused demo of AIDAs AUTHORITY gates (advisor-only Draft->Approved, merge-driven completion, trailer auto-complete) contrasted with the familys merge-time verification gates (Gas Towns Refinery CI queue) and Beads 3 UNENFORCED states. WHY: section 15 Tier-1 isolates this as genuinely distinctive - AIDA gates the AUTHORITY TO CHANGE INTENT STATE; the family gates what merges. A rarer, uncontested enforcement point, currently asserted not shown. EVIDENCE: demo a non-advisor identity refused an Approved transition + a "done" thats a property of git ancestry not assertion, vs a Beads state set by convention. Size S (gates exist; this is demonstration).'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1880
 node_id: '1'
