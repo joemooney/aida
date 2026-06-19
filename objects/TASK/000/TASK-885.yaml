@@ -1,0 +1,28 @@
+id: 019ee092-f1fe-7853-8de0-1d03b43286bd
+spec_id: TASK-885
+agreed_id: TASK-885
+title: 'OVERVIEW.md drift: wrong command names (goal-helper, db rel-def), stale skill count (22), incomplete type list (12/19), aida-tui crate omitted from workspace layout'
+description: |
+  Dogfood of OVERVIEW.md (2026-06-19) vs CLI v0.14.0. The doc is mostly accurate (all 20 doc links resolve, ports 8080/5173 correct, MCP tools/resources exist, headline commands work). Concrete drifts:
+
+  HIGH:
+  - Line ~112: `aida goal-helper` does not exist -> "unrecognized subcommand 'goal-helper'". Command is `aida goal`. (The next bullet + CLAUDE.md use `aida goal` correctly.)
+  - Line ~196: `aida db rel-def` is wrong path -> "unrecognized subcommand 'rel-def'". It is top-level `aida rel-def`.
+  - Line ~210: skill count stale "22 skills as of writing". A fresh `aida init` scaffolds ~48 skills (repo .claude/skills has 47, templates 48). (CLAUDE.md's "40 skills" is also stale - separate fix.)
+  - Line ~194: type list incomplete (12 of 19). Missing: change-request, principle, vision, constraint, decision, term, doc. (RequirementType enum aida-core/src/models.rs has 19 variants.)
+
+  MEDIUM:
+  - Lines ~172-184: workspace-layout block lists 5 crates and OMITS aida-tui, even though the TUI is the doc's headline "public face". Cargo.toml has 6 members incl. aida-tui.
+
+  Verified in throwaway store + source. (Skill-count cross-doc note: CLAUDE.md also says 40 - consider sweeping both.)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T15:49:47.134974912Z
+modified_at: 2026-06-19T15:49:47.134974912Z
+req_type: Task
+tags:
+- docs
+- drift
+- from-dogfood
