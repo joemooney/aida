@@ -21,12 +21,12 @@ description: |
   - Footer version stale (line ~1103): "Generated for AIDA v0.1.0" (current 0.14.0).
 
   NOTE: the daily-driver CLI sections (add/list filters/rel/rel-def/db/export-import/meta/show/gitlab) were re-verified and DO hold up - this is targeted staleness, not a full rewrite. Verified in throwaway store + source grep.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:49:31.085199147Z
-modified_at: 2026-06-19T15:55:49.815744258Z
+modified_at: 2026-06-19T16:03:52.157352355Z
 req_type: Bug
 tags:
 - docs
@@ -38,3 +38,21 @@ comments:
   content: Commit 0b1410e10 references this requirement
   created_at: 2026-06-19T15:55:49.815744258Z
   modified_at: 2026-06-19T15:55:49.815744258Z
+history:
+- id: 019ee09f-d6d8-7660-ae70-7f2dd26ff858
+  author: aida-auto-bump
+  timestamp: 2026-06-19T16:03:52.152537638Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee09f-d6dd-7ac2-abd0-062886282356
+  timestamp: 2026-06-19T16:03:52.157351665Z
+  agent: aida
+  commit_sha: 880766ea6bc865b3ec1e5aa91470d63e7aaad1cc
+  summary: Completed via merge 880766ea
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T16:03:51.986941993Z
+  completion_sha: 880766ea6bc865b3ec1e5aa91470d63e7aaad1cc

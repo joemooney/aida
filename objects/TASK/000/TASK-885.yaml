@@ -15,12 +15,12 @@ description: |
   - Lines ~172-184: workspace-layout block lists 5 crates and OMITS aida-tui, even though the TUI is the doc's headline "public face". Cargo.toml has 6 members incl. aida-tui.
 
   Verified in throwaway store + source. (Skill-count cross-doc note: CLAUDE.md also says 40 - consider sweeping both.)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T15:49:47.134974912Z
-modified_at: 2026-06-19T15:55:51.349592710Z
+modified_at: 2026-06-19T16:03:52.162059691Z
 req_type: Task
 tags:
 - docs
@@ -32,3 +32,21 @@ comments:
   content: Commit 0b1410e10 references this requirement
   created_at: 2026-06-19T15:55:51.349592710Z
   modified_at: 2026-06-19T15:55:51.349592710Z
+history:
+- id: 019ee09f-d6dd-7ac2-abd0-063b9aae4b56
+  author: aida-auto-bump
+  timestamp: 2026-06-19T16:03:52.157374512Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee09f-d6e2-7842-b10e-f4fb29aa4fa0
+  timestamp: 2026-06-19T16:03:52.162059021Z
+  agent: aida
+  commit_sha: 880766ea6bc865b3ec1e5aa91470d63e7aaad1cc
+  summary: Completed via merge 880766ea
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T16:03:51.986941993Z
+  completion_sha: 880766ea6bc865b3ec1e5aa91470d63e7aaad1cc
