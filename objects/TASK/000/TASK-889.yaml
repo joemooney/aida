@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T19:15:38.942187831Z
-modified_at: 2026-06-19T19:16:22.428586262Z
+modified_at: 2026-06-19T19:16:35.576471430Z
 req_type: Task
 tags:
 - from-dogfood
@@ -20,3 +20,8 @@ comments:
   content: Commit 4ee22acc7 references this requirement
   created_at: 2026-06-19T19:16:22.428586262Z
   modified_at: 2026-06-19T19:16:22.428586262Z
+- id: 019ee150-4878-71e3-8ed8-87b15a576bb9
+  author: joe
+  content: Commit 063409a8a references this requirement
+  created_at: 2026-06-19T19:16:35.576471430Z
+  modified_at: 2026-06-19T19:16:35.576471430Z
