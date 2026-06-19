@@ -1,0 +1,21 @@
+id: 019ee0ed-81b3-7921-85d2-930229c7b007
+spec_id: BUG-600
+agreed_id: BUG-600
+title: aida show exits 0 on not-found; non-advisor status-promotion refusal also exits 0 (exit-code-0-on-error)
+description: |-
+  Reproduce (in-repo target/release/aida, any store): aida show NOPE-999 and aida show STORY-999 (well-formed but nonexistent IDs) print "Requirement not found ..." but EXIT 0. Verified: aida show NOPE-999 >/dev/null 2>&1; echo $? => 0. Every sibling command for the SAME not-found condition exits 1: aida edit STORY-999 --status done (exit 1), aida comment add NOPE-999 "x" (exit 1), aida defer/archive/done NOPE-999 (exit 1).
+
+  Also exit-0-on-refusal: aida edit STORY-1 --status approved as a non-advisor (no AIDA_SESSION_ROLE) correctly REFUSES with a clear message ("promoting a Draft spec to Approved needs advisor authority ...") and leaves status unchanged — but EXITS 0.
+
+  Impact (BUG-573 class): exit-0 on an error poisons usage telemetry (recorded as success) and breaks scripts/agents that gate on exit code — a wrapper doing `aida show $ID && proceed` proceeds on a not-found, and `aida edit ... --status approved && echo ok` reports ok on a silent refusal. Fix: aida show on not-found should exit non-zero (match edit/defer/archive); the non-advisor status-promotion refusal in edit should exit non-zero too. Audit for other exit-0-on-error paths in the same family.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T17:28:42.163134312Z
+modified_at: 2026-06-19T17:28:42.163134312Z
+req_type: Bug
+tags:
+- error-paths
+- from-dogfood
+- ux
