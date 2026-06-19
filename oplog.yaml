@@ -19223,5 +19223,17 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 1893
+- id: 019edeb4-07b2-7b32-b361-e89977642c20
+  target_id: 019edeb4-0413-7aa0-b8d4-daf097ef9598
+  author: aida
+  node_id: '1'
+  lamport: 1894
+  timestamp: 2026-06-19T07:06:40.946301980Z
+  kind: !Create
+    title: 'aida solo discoverability: surface it in getting-started + help (the command exists but is hidden)'
+    description: The operator asked 'should we have a solo command?' - we DO (aida solo / aida solo run, STORY-625), which means it is under-surfaced. Add solo to the GETTING_STARTED set (main.rs ~78110) and/or a prominent line in print_tiered_help so a new user discovers 'run my project solo end-to-end'. Mention it where the autonomy story is told (aida help group, the user-walkthrough deck). Keep it tasteful (one entry). trace:EPIC-43
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1894
 node_id: '1'
