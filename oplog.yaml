@@ -19187,5 +19187,17 @@ operations:
   timestamp: 2026-06-19T06:49:41.885559267Z
   kind: !SetStatus
     status: Completed
-clock: 1890
+- id: 019edea5-48a5-78b1-af81-447b48b8ea4a
+  target_id: 019edea5-4530-78b2-b8b3-f15954f740f2
+  author: aida
+  node_id: '1'
+  lamport: 1891
+  timestamp: 2026-06-19T06:50:34.533852425Z
+  kind: !Create
+    title: aida human reviews-awaiting flags Completed/merged-PR specs (stale local branch false-positive)
+    description: 'Operator caught it: aida human listed BUG-581 under reviews-awaiting [PR-1048] when PR-1048 was already MERGED and BUG-581 already Completed. Cause: the reviews-awaiting detection keyed off a lingering local branch/PR surface for the spec without checking that the PR is MERGED / the spec is already Completed. Stale Agent-tool worktrees (worktree-agent-*) accumulate and leave such branches around (98 had piled up), so this false-positive recurs. FIX (robust invariant): a spec whose status is Completed (or Done with a merged PR) must NEVER appear in the reviews-awaiting bucket - exclude it in the reviews-awaiting computation (filter on spec status + PR merge state), so a lingering local branch can''t resurrect a finished spec onto the operator''s seat. Add a regression test: a Completed spec with a lingering local branch is NOT in reviews-awaiting. Companion to BUG-579 (the earlier count==render fix) - same surface, different stale-data leak.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 1891
 node_id: '1'
