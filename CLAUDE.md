@@ -28,7 +28,7 @@ For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For 
 
 PostgreSQL is opt-in via the `postgres` feature flag. Legacy standalone YAML/SQLite backends still exist for the deprecated `aida init --centralized` opt-in path; they print a deprecation warning at init time. **Don't** add new code paths that use them.
 
-Architecture: `aida-core/src/hlc.rs`, `dispenser.rs`, `node.rs`, `object_store.rs`, `db/git_backend.rs`, `db/cache.rs`, `db/cached_git_backend.rs`, `git_ops.rs`, `conflict.rs`.
+Architecture: `aida-core/src/dispenser.rs`, `node.rs`, `object_store.rs`, `db/git_backend.rs`, `db/cache.rs`, `db/cached_git_backend.rs`, `git_ops.rs`, `conflict.rs`.
 
 **Every `AIDA_*` environment variable** — what it does, default, who sets it, scope — has one canonical reference: `docs/environment-variables.md`. When you add a new `AIDA_*` read, add a row there in the same change.
 
