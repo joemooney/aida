@@ -254,22 +254,30 @@ The [Spec lifecycle](#spec-lifecycle) above is the map. This is the same trip ru
 
 > Reading time: ~4 min. Following along on your own project: ~10–15 min.
 
+<!-- trace:BUG-597 -->
+
 **1. File the spec.** Everything in AIDA starts as a spec.
 
 ```
-$ aida add --title "User can log in with email and password" \
-           --type story --status approved
-Requirement added successfully!
-UUID: 019e3220-f160-7413-af64-a030e84c99ff
-ID: STORY-1
+$ aida add --title "User can log in with email and password" --type story
+Added: STORY-1 - User can log in with email and password
 ```
 
-`--status approved` skips Draft — you've already agreed this should happen. STORY-1 is now **Approved**: agreed, ready to schedule.
+A fresh spec lands in **Draft**. `aida add` prints one line: the new spec id and its title.
+
+**Approving and queueing need advisor authority.** The next two steps — promoting a spec out of Draft and routing it to a work queue — are gated to the **advisor** role (or an interactive session). The role you start in by default is **implementer**, which files and implements work but doesn't approve or queue it; running these as the implementer is refused or silently downgraded, on purpose. Working solo? Prefix those commands with `AIDA_SESSION_ROLE=advisor` to wear both hats (the prefix also prints a one-line `ℹ You're operating as advisor…` reminder — harmless, just informational):
+
+```
+$ AIDA_SESSION_ROLE=advisor aida edit STORY-1 --status approved
+Updated: STORY-1
+```
+
+That moves STORY-1 out of Draft — you've agreed this should happen. STORY-1 is now **Approved**: agreed, ready to schedule.
 
 **2. Route it to a work queue.** Queues are per-role; send STORY-1 to whoever does the coding.
 
 ```
-$ aida queue add STORY-1 --for implementer
+$ AIDA_SESSION_ROLE=advisor aida queue add STORY-1 --for implementer
 ✓ Added STORY-1 (User can log in with email and password) to queue [for:implementer]
 ```
 
