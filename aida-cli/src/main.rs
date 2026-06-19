@@ -33105,11 +33105,81 @@ fn doctor_fix_sandbox() -> Result<()> {
     Ok(())
 }
 
+/// STORY-666: is THIS process an autonomous / unattended context for the
+/// purposes of the destructive-heal gate? Pure so it is unit-testable without
+/// touching the real terminal or environment — `doctor_running_autonomously`
+/// (below) feeds it the live signals.
+///
+/// **Autonomous = no interactive TTY OR a corroborated live orchestrator run.**
+///
+/// Deliberately NOT keyed on `--yes` alone: a human at a keyboard typing
+/// `aida doctor --heal --force --yes` IS the explicit sign-off, and that
+/// interactive path must stay exactly as it is today (STORY-666 req #3). The
+/// `--yes` flag only ever *reaches* a destructive heal together with `--force`,
+/// and at a TTY that combination is a deliberate human decision; what we must
+/// fail-closed against is the genuinely unattended case — piped/CI stdin (no
+/// TTY) or an `--auto-complete` drain (orchestrator token live). trace:STORY-666
+fn doctor_context_is_autonomous(stdin_is_tty: bool, orchestrated: bool) -> bool {
+    !stdin_is_tty || orchestrated
+}
+
+/// STORY-666: live-signal wrapper for [`doctor_context_is_autonomous`] — reads
+/// the real TTY state + the corroborated orchestrator verdict for `project_root`.
+// trace:STORY-666 | ai:claude
+fn doctor_running_autonomously(project_root: &std::path::Path) -> bool {
+    let orchestrated = orchestrator::detect(project_root).is_orchestrated();
+    doctor_context_is_autonomous(std::io::stdin().is_terminal(), orchestrated)
+}
+
+/// STORY-666: the heal disposition for one finding-category, decided by its
+/// safe/destructive classification, the requested flags, and whether we are in
+/// an autonomous context. Pure → unit-testable. The single place the
+/// fail-closed invariant lives. trace:STORY-666 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HealDisposition {
+    /// Apply the category's heals (safe always; destructive only with explicit
+    /// interactive sign-off).
+    Proceed,
+    /// A destructive category was requested via `--force --yes` but we are in a
+    /// non-interactive/autonomous context — refuse and report (fail-closed).
+    GateAutonomous,
+    /// A destructive category WITHOUT the `--force --yes` opt-in — the
+    /// pre-existing "needs a manual decision" skip (unchanged).
+    SkipNeedsForce,
+}
+
+fn doctor_heal_disposition(
+    safe: bool,
+    force: bool,
+    yes: bool,
+    autonomous: bool,
+) -> HealDisposition {
+    if safe {
+        // Safe, reversible heals proceed in every context — the safe
+        // classification IS the bouncer. Never over-gate routine fixes.
+        return HealDisposition::Proceed;
+    }
+    // Destructive from here down.
+    if !(force && yes) {
+        return HealDisposition::SkipNeedsForce;
+    }
+    if autonomous {
+        // Fail-closed: a destructive heal must not execute silently with no one
+        // to make the check-before-delete judgment.
+        return HealDisposition::GateAutonomous;
+    }
+    // Destructive + --force --yes + interactive TTY = explicit human sign-off.
+    HealDisposition::Proceed
+}
+
 fn heal_doctor_findings(
     project_root: &std::path::Path,
     findings: &[DoctorFinding],
     opts: &DoctorRunOptions,
 ) -> Result<Vec<DoctorHealResult>> {
+    // STORY-666: detect the autonomous/unattended context ONCE for the whole
+    // run — the destructive-heal gate keys off it. trace:STORY-666 | ai:claude
+    let autonomous = doctor_running_autonomously(project_root);
     let mut out = Vec::new();
     let mut by_category: std::collections::BTreeMap<String, Vec<&DoctorFinding>> =
         std::collections::BTreeMap::new();
@@ -33121,17 +33191,43 @@ fn heal_doctor_findings(
     }
     for (category, items) in by_category {
         let safe = items.iter().all(|item| item.safe_heal);
-        if !(safe || opts.force && opts.yes) {
-            out.push(DoctorHealResult {
-                category: category.clone(),
-                id: category.clone(),
-                action: "skipped category requiring manual decision".to_string(),
-                status: "skipped".to_string(),
-                detail: Some(
-                    "pass --yes --force only when you want destructive branch cleanup".into(),
-                ),
-            });
-            continue;
+        match doctor_heal_disposition(safe, opts.force, opts.yes, autonomous) {
+            HealDisposition::Proceed => {}
+            HealDisposition::SkipNeedsForce => {
+                out.push(DoctorHealResult {
+                    category: category.clone(),
+                    id: category.clone(),
+                    action: "skipped category requiring manual decision".to_string(),
+                    status: "skipped".to_string(),
+                    detail: Some(
+                        "pass --yes --force only when you want destructive branch cleanup".into(),
+                    ),
+                });
+                continue;
+            }
+            HealDisposition::GateAutonomous => {
+                // STORY-666: fail-closed. A destructive heal was requested
+                // (--force --yes) but we are unattended (no TTY / live drain).
+                // Refuse it, name exactly what was skipped, and print the precise
+                // interactive command to run it under human sign-off. The
+                // `skipped` status keeps the audit trail legible and the heal
+                // never executes. trace:STORY-666 | ai:claude
+                out.push(DoctorHealResult {
+                    category: category.clone(),
+                    id: category.clone(),
+                    action: format!(
+                        "gated — destructive heal of {} finding(s) withheld (unattended context)",
+                        items.len()
+                    ),
+                    status: "skipped".to_string(),
+                    detail: Some(format!(
+                        "destructive fixes require sign-off and were NOT applied in this \
+                         unattended context. Re-run it at an interactive terminal: \
+                         `aida doctor --heal --force --yes --category {category}`"
+                    )),
+                });
+                continue;
+            }
         }
         if !opts.yes && !confirm_doctor_category(&category, items.len())? {
             out.push(DoctorHealResult {
@@ -34591,6 +34687,188 @@ mod story_462_doctor_tests {
     #[test]
     fn confirm_doctor_category_declines_in_non_interactive_shell() {
         assert!(!confirm_doctor_category("stale-leases", 3).unwrap());
+    }
+
+    // ------------------------------------------------------------------
+    // STORY-666: destructive `--heal` requires sign-off in autonomous
+    // contexts; safe fixes proceed everywhere. trace:STORY-666 | ai:claude
+    // ------------------------------------------------------------------
+
+    /// The pure disposition matrix — the single place the fail-closed invariant
+    /// lives. Locks every cell.
+    #[test]
+    fn doctor_heal_disposition_matrix() {
+        use HealDisposition::*;
+        // Safe fixes ALWAYS proceed — every context, regardless of flags.
+        for &force in &[false, true] {
+            for &yes in &[false, true] {
+                for &auto in &[false, true] {
+                    assert_eq!(
+                        doctor_heal_disposition(true, force, yes, auto),
+                        Proceed,
+                        "safe heal must proceed (force={force} yes={yes} auto={auto})"
+                    );
+                }
+            }
+        }
+        // Destructive without the --force --yes opt-in → the pre-existing
+        // needs-a-decision skip, in EVERY context (unchanged).
+        for &auto in &[false, true] {
+            assert_eq!(
+                doctor_heal_disposition(false, false, false, auto),
+                SkipNeedsForce
+            );
+            assert_eq!(
+                doctor_heal_disposition(false, true, false, auto),
+                SkipNeedsForce
+            );
+            assert_eq!(
+                doctor_heal_disposition(false, false, true, auto),
+                SkipNeedsForce
+            );
+        }
+        // Destructive + --force --yes + INTERACTIVE (TTY) = explicit human
+        // sign-off → proceeds (req #3: interactive path unchanged).
+        assert_eq!(doctor_heal_disposition(false, true, true, false), Proceed);
+        // Destructive + --force --yes + AUTONOMOUS = fail-closed gate (the
+        // invariant): the heal must NOT execute.
+        assert_eq!(
+            doctor_heal_disposition(false, true, true, true),
+            GateAutonomous
+        );
+    }
+
+    /// The autonomous-context detector: no TTY OR a live orchestrator.
+    #[test]
+    fn doctor_context_is_autonomous_signals() {
+        // Interactive TTY, no orchestrator → attended.
+        assert!(!doctor_context_is_autonomous(true, false));
+        // No TTY (piped / CI) → autonomous.
+        assert!(doctor_context_is_autonomous(false, false));
+        // Live orchestrator drain even at a "TTY" → autonomous.
+        assert!(doctor_context_is_autonomous(true, true));
+        assert!(doctor_context_is_autonomous(false, true));
+    }
+
+    /// End-to-end: in a simulated non-interactive context (under `cargo test`
+    /// stdin is not a TTY, and the tempdir has no live drain → autonomous),
+    /// a DESTRUCTIVE finding requested with `--force --yes` is GATED — the heal
+    /// never executes and the spec is left untouched. This is the heart of the
+    /// safety rail: it FAILS against the old code (which would re-open the spec)
+    /// and PASSES with the gate. trace:STORY-666 | ai:claude
+    #[test]
+    fn destructive_heal_is_gated_in_autonomous_context() {
+        let (tmp, storage) = integrity_fixture();
+        let root = tmp.path();
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![completed_spec("TASK-666")];
+        storage.save(&store).unwrap();
+
+        // `completed-without-commit` is a destructive (safe_heal=false) category:
+        // its heal re-opens a Completed spec back to Done.
+        let finding = DoctorFinding {
+            category: "completed-without-commit".to_string(),
+            id: "TASK-666".to_string(),
+            summary: "Completed spec TASK-666 has no commit".to_string(),
+            action: "re-open".to_string(),
+            safe_heal: false,
+        };
+
+        // --force --yes requested, but we are unattended (no TTY under test).
+        let results = heal_doctor_findings(
+            root,
+            &[finding],
+            &DoctorRunOptions {
+                heal: true,
+                yes: true,
+                category: Some("completed-without-commit".to_string()),
+                json: false,
+                force: true,
+                all: false,
+                since: None,
+            },
+        )
+        .unwrap();
+
+        // The category was gated (skipped), not healed.
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].status, "skipped");
+        assert!(
+            results[0].action.contains("gated"),
+            "expected a gate result, got: {:?}",
+            results[0]
+        );
+        assert!(
+            results[0]
+                .detail
+                .as_deref()
+                .unwrap_or("")
+                .contains("--force --yes --category"),
+            "gate detail must name the interactive resume command"
+        );
+
+        // The destructive action did NOT run: the spec is still Completed.
+        let reloaded = storage.load().unwrap();
+        assert_eq!(
+            reloaded.requirements[0].status,
+            RequirementStatus::Completed,
+            "destructive heal must NOT have executed in the autonomous context"
+        );
+    }
+
+    /// End-to-end companion: in the SAME autonomous context, a SAFE
+    /// (reversible) fix DOES proceed — the gate is scoped to the destructive
+    /// subset only and must never over-gate routine reversible fixes.
+    /// trace:STORY-666 | ai:claude
+    #[test]
+    fn safe_heal_proceeds_in_autonomous_context() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path();
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
+        let storage = Storage::new(project_root.join(".aida-store"));
+        let mut req = Requirement::new("orphaned in-progress".into(), String::new());
+        req.spec_id = Some("TASK-667".into());
+        req.status = RequirementStatus::InProgress;
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![req];
+        storage.save(&store).unwrap();
+
+        // `spec-status-drift` (in-progress with no lease → revert to Approved)
+        // is a SAFE (safe_heal=true) reversible fix.
+        let finding = DoctorFinding {
+            category: "spec-status-drift".to_string(),
+            id: "TASK-667".to_string(),
+            summary: "TASK-667 is In Progress but no active lease holds it".to_string(),
+            action: "revert spec to Approved (no active lease found)".to_string(),
+            safe_heal: true,
+        };
+
+        // Note: no --force, --yes set (so the safe-category TTY confirm is
+        // skipped) — and we are non-interactive (autonomous) under test.
+        let results = heal_doctor_findings(
+            project_root,
+            &[finding],
+            &DoctorRunOptions {
+                heal: true,
+                yes: true,
+                category: Some("spec-status-drift".to_string()),
+                json: false,
+                force: false,
+                all: false,
+                since: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].status, "healed",
+            "safe reversible fix must proceed in the autonomous context, got: {:?}",
+            results[0]
+        );
+        let reloaded = storage.load().unwrap();
+        assert_eq!(reloaded.requirements[0].status, RequirementStatus::Approved);
     }
 
     #[test]
