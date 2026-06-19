@@ -16,14 +16,32 @@ description: |-
   EXPECTED: either (a) the error names the real workaround (AIDA_SESSION_ROLE=advisor or the precise non-interactive path), not a re-run of the failing command; or (b) the init "loop" guidance flags that `aida done` is a human/advisor-gated step so a scripted user is not surprised. The current message points the user in a circle.
 
   SEVERITY: medium — blocks the taught happy-path for non-TTY first-users; the message actively misdirects.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T12:06:24.037720891Z
-modified_at: 2026-06-19T12:06:24.037720891Z
+modified_at: 2026-06-19T12:38:24.062668952Z
 req_type: Bug
 tags:
 - from-dogfood
 - onboarding
 - papercut
+history:
+- id: 019edfe3-ba3a-7d32-a828-501fe1af513b
+  author: aida-auto-bump
+  timestamp: 2026-06-19T12:38:24.058038904Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edfe3-ba3e-7d82-baaa-59f7305535e8
+  timestamp: 2026-06-19T12:38:24.062668355Z
+  agent: aida
+  commit_sha: 4ad17e87384f9297e5e91944fb4a924b4b9e47c4
+  summary: Completed via merge 4ad17e87
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T12:38:23.897905253Z
+  completion_sha: 4ad17e87384f9297e5e91944fb4a924b4b9e47c4
