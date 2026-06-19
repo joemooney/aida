@@ -4419,11 +4419,23 @@ fn disposition_gating_tag(tags: &std::collections::HashSet<String>) -> Option<St
 /// hold/approve/reject, not a design decision that binds the implementer);
 /// `keeps_parked` suppresses the R3 auto-queue (the resolution deliberately
 /// left the spec held — rejected, kept-parked, or newly parking-tagged).
+/// `binds_acceptance` is true only when a genuine design refinement was made
+/// that should be written into `## Acceptance` — `noop`, an unrecognized token,
+/// or a no-op edit (empty tag, tag-not-present) mutate nothing and so must NOT
+/// claim to have bound a decision (else the printout contradicts itself:
+/// "no spec change (noop)" + "bound the decision into ## Acceptance"). trace:TASK-884
 // trace:STORY-555 | ai:claude
 struct ResolutionApplied {
     effects: Vec<String>,
+    /// TASK-884: superseded by `binds_acceptance` for the bind decision (a
+    /// disposition AND a noop both must not bind), but retained as the explicit
+    /// disposition-vs-refinement classification the tests assert on.
+    #[allow(dead_code)]
     is_disposition: bool,
     keeps_parked: bool,
+    /// Whether this resolution made a real design refinement worth binding into
+    /// `## Acceptance`. trace:TASK-884
+    binds_acceptance: bool,
 }
 
 /// Apply a DecisionChoice `resolution` token to `req` in place — the slice-2
@@ -4472,6 +4484,7 @@ fn apply_resolution_token(
                     effects,
                     is_disposition: true,
                     keeps_parked: false,
+                    binds_acceptance: false,
                 }
             }
             "reject" => {
@@ -4480,6 +4493,7 @@ fn apply_resolution_token(
                     effects: vec!["set status → Rejected".to_string()],
                     is_disposition: true,
                     keeps_parked: true,
+                    binds_acceptance: false,
                 }
             }
             "keep-parked" => {
@@ -4488,6 +4502,7 @@ fn apply_resolution_token(
                     effects: vec!["recorded why-open; left parked".to_string()],
                     is_disposition: true,
                     keeps_parked: true,
+                    binds_acceptance: false,
                 }
             }
             other => ResolutionApplied {
@@ -4496,6 +4511,7 @@ fn apply_resolution_token(
                 )],
                 is_disposition: true,
                 keeps_parked: true,
+                binds_acceptance: false,
             },
         };
     }
@@ -4509,6 +4525,7 @@ fn apply_resolution_token(
                     effects: vec!["empty tag in resolution — recorded only".to_string()],
                     is_disposition: false,
                     keeps_parked: false,
+                    binds_acceptance: false,
                 };
             }
             let existed = req.tags.iter().any(|x| x.eq_ignore_ascii_case(tag));
@@ -4522,6 +4539,9 @@ fn apply_resolution_token(
                 effects: vec![format!("added tag `{tag}`")],
                 is_disposition: false,
                 keeps_parked: parks,
+                // A genuine tag mutation is a refinement worth binding; a
+                // no-op (tag already present) is not. trace:TASK-884
+                binds_acceptance: !existed,
             };
         }
         if let Some(tag) = rest.strip_prefix('-') {
@@ -4543,6 +4563,9 @@ fn apply_resolution_token(
                 }],
                 is_disposition: false,
                 keeps_parked: false,
+                // Removing a present tag is a refinement; "not present" is a
+                // no-op and does not bind. trace:TASK-884
+                binds_acceptance: !removed.is_empty(),
             };
         }
     }
@@ -4559,12 +4582,16 @@ fn apply_resolution_token(
                     effects: vec![format!("set status → {st}")],
                     is_disposition: false,
                     keeps_parked: keeps,
+                    // A status refinement (e.g. status:planned) is a real
+                    // decision worth binding. trace:TASK-884
+                    binds_acceptance: true,
                 }
             }
             Err(_) => ResolutionApplied {
                 effects: vec![format!("unrecognized status `{rest}` — recorded only")],
                 is_disposition: false,
                 keeps_parked: false,
+                binds_acceptance: false,
             },
         };
     }
@@ -4574,6 +4601,8 @@ fn apply_resolution_token(
             effects: vec!["no spec change (noop)".to_string()],
             is_disposition: false,
             keeps_parked: false,
+            // noop mutates nothing — it must NOT claim to bind a decision. trace:TASK-884
+            binds_acceptance: false,
         };
     }
 
@@ -4581,6 +4610,7 @@ fn apply_resolution_token(
         effects: vec![format!("unrecognized resolution `{t}` — recorded only")],
         is_disposition: false,
         keeps_parked: false,
+        binds_acceptance: false,
     }
 }
 
@@ -4718,8 +4748,10 @@ fn finalize_answer(
     );
 
     // R1(a): bind a genuine design decision into ## Acceptance. A disposition
-    // (approve/reject/keep) is NOT a design refinement, so it is skipped.
-    if !applied.is_disposition {
+    // (approve/reject/keep) is NOT a design refinement; nor is a noop / no-op
+    // edit — `binds_acceptance` is the single predicate so the printout below
+    // and the actual mutation never disagree. trace:TASK-884
+    if applied.binds_acceptance {
         req.description = append_resolved_to_acceptance(
             &req.description,
             &resolved_acceptance_line(&choice.label, &choice.consequence),
@@ -4758,7 +4790,7 @@ fn finalize_answer(
             crate::glyph(crate::glyphs::Glyph::Check).green()
         );
     }
-    if !applied.is_disposition {
+    if applied.binds_acceptance {
         println!(
             "  {} bound the decision into ## Acceptance",
             crate::glyph(crate::glyphs::Glyph::Check).green()
@@ -6314,6 +6346,60 @@ mod questions_tests {
         assert!(!applied.keeps_parked);
         assert!(req.tags.is_empty());
         assert_eq!(req.status, RequirementStatus::Approved);
+    }
+
+    // A noop (or any no-op resolution) must NOT claim to bind a decision into
+    // ## Acceptance — that produced the contradictory "no spec change (noop)" +
+    // "bound the decision into ## Acceptance" printout. trace:TASK-884
+    #[test]
+    fn apply_token_noop_does_not_bind_acceptance() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "noop", "Proceed", "stays");
+        assert!(
+            !applied.binds_acceptance,
+            "noop is a no-op; it must not bind into ## Acceptance"
+        );
+    }
+
+    #[test]
+    fn apply_token_unknown_does_not_bind_acceptance() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "garbage-token", "x", "y");
+        assert!(
+            !applied.binds_acceptance,
+            "an unrecognized token mutates nothing and must not bind"
+        );
+    }
+
+    #[test]
+    fn apply_token_redundant_tag_add_does_not_bind() {
+        let mut req = sample_requirement("STORY-N", "body");
+        req.tags.insert("already-here".to_string());
+        let applied = apply_resolution_token(&mut req, "tag:+already-here", "x", "y");
+        assert!(
+            !applied.binds_acceptance,
+            "adding a tag that already exists is a no-op and must not bind"
+        );
+    }
+
+    #[test]
+    fn apply_token_real_tag_add_binds_acceptance() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "tag:+chose-option-a", "x", "y");
+        assert!(
+            applied.binds_acceptance,
+            "a genuine tag refinement binds into ## Acceptance"
+        );
+    }
+
+    #[test]
+    fn apply_disposition_does_not_bind_acceptance() {
+        let mut req = sample_requirement("STORY-N", "body");
+        let applied = apply_resolution_token(&mut req, "disposition:reject", "Reject", "no");
+        assert!(
+            !applied.binds_acceptance,
+            "a disposition is not a design refinement and must not bind"
+        );
     }
 
     #[test]
@@ -73672,7 +73758,22 @@ fn handle_lint_command(spec: Option<&str>, scope: Option<&str>, json: bool) -> R
                 text.push('\n');
                 text.push_str(acc);
             }
-            let report = lint_text(&text);
+            let mut report = lint_text(&text);
+            // Don't over-flag legitimately-terse stateless types: a folder, a
+            // meta prompt holder, or a glossary term is allowed to carry little
+            // body. The other EARS heuristics never fire on these (they have no
+            // behavior clause to mis-read), so we only suppress the empty-body
+            // finding for them. trace:TASK-884
+            if matches!(
+                req.req_type,
+                aida_core::RequirementType::Folder
+                    | aida_core::RequirementType::Meta
+                    | aida_core::RequirementType::Term
+            ) {
+                report
+                    .findings
+                    .retain(|f| f.category != aida_core::ears_lint::Category::EmptyBody);
+            }
             SpecLint { req, report }
         })
         .collect();
@@ -82884,12 +82985,18 @@ fn collect_open_facts(
         // `aida graph --tree` prints) so `explain_open` can surface a fully-
         // delivered epic ("N/N children Completed") as ready-to-close rather
         // than the generic umbrella. `None` for non-epics and childless epics.
-        let epic_rollup = if matches!(req.req_type, aida_core::RequirementType::Epic) {
-            let r = aida_core::graph_walk::child_status_rollup(store, req.id);
-            (r.total > 0).then_some((r.completed, r.total))
-        } else {
-            None
-        };
+        // TASK-884: also note whether any child is actually in motion
+        // (Completed / Done / InProgress). An epic with children that are all
+        // un-started reads as `Umbrella` (decompose lane), not the invisible
+        // InProgress bucket. trace:TASK-884
+        let (epic_rollup, epic_children_in_motion) =
+            if matches!(req.req_type, aida_core::RequirementType::Epic) {
+                let r = aida_core::graph_walk::child_status_rollup(store, req.id);
+                let in_motion = r.completed + r.done + r.in_progress > 0;
+                ((r.total > 0).then_some((r.completed, r.total)), in_motion)
+            } else {
+                (None, false)
+            };
         facts.push(burndown::OpenFacts {
             id,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
@@ -82914,6 +83021,7 @@ fn collect_open_facts(
             // `aida list human` exactly as it does in the queue.
             // trace:BUG-564 | ai:claude
             human_only: req.human_only,
+            epic_children_in_motion,
         });
     }
     facts

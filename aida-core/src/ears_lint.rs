@@ -35,6 +35,10 @@ use std::fmt;
 /// The four heuristic categories an EARS lint finding can fall into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Category {
+    /// The spec body is empty or so thin there is nothing to specify against —
+    /// no description and no acceptance criteria. The worst-specified spec of
+    /// all, and exactly what the lens exists to catch. trace:TASK-884
+    EmptyBody,
     /// A fuzzy stimulus/condition word instead of a concrete EARS trigger.
     VagueTrigger,
     /// No observable "shall <do X>" expected behavior present.
@@ -49,6 +53,7 @@ impl Category {
     /// Stable machine token (used in `--json` output and tests).
     pub fn slug(&self) -> &'static str {
         match self {
+            Category::EmptyBody => "empty-body",
             Category::VagueTrigger => "vague-trigger",
             Category::MissingBehavior => "missing-behavior",
             Category::ConflictingConstraint => "conflicting-constraint",
@@ -223,6 +228,30 @@ pub fn lint_text(text: &str) -> LintReport {
     let mut findings = Vec::new();
     let lower = text.to_ascii_lowercase();
 
+    // --- empty-body ----------------------------------------------------------
+    // A spec with no body (or one too thin to specify against) is the worst-
+    // specified spec there is — and prior to TASK-884 it slipped through with a
+    // clean tick because every downstream heuristic is guarded on non-empty
+    // text. Flag it first and short-circuit: a one-word body has nothing for the
+    // other heuristics to chew on, so a single actionable finding is clearer
+    // than a pile of spurious ones. "Near-empty" = fewer than 3 meaningful
+    // tokens once markdown scaffolding (headings, list bullets) is stripped.
+    // trace:TASK-884
+    if is_essentially_empty(text) {
+        findings.push(Finding {
+            category: Category::EmptyBody,
+            message: "spec body is empty or too thin to specify against — no description \
+                      and no acceptance criteria for the lens to evaluate"
+                .to_string(),
+            evidence: None,
+            suggestion: "Write at least a one-sentence description and an `## Acceptance` \
+                         section with a concrete, testable criterion, e.g. \"WHEN <event> \
+                         THE SYSTEM SHALL <observable response>\"."
+                .to_string(),
+        });
+        return LintReport { findings };
+    }
+
     // --- vague-trigger -------------------------------------------------------
     for word in VAGUE_TRIGGER_WORDS {
         if contains_word(&lower, word) {
@@ -294,6 +323,34 @@ pub fn lint_text(text: &str) -> LintReport {
     }
 
     LintReport { findings }
+}
+
+/// True when a spec body carries essentially no specifiable content: empty,
+/// whitespace-only, or fewer than 3 meaningful word-tokens once markdown
+/// scaffolding (heading hashes, list bullets/numbers, blockquote markers) is
+/// stripped. A bare `## Acceptance` heading with nothing under it, or a stub
+/// like "fix the thing", lands here. trace:TASK-884
+fn is_essentially_empty(text: &str) -> bool {
+    let mut tokens = 0usize;
+    for raw_line in text.lines() {
+        // Strip leading markdown scaffolding so a heading or empty bullet does
+        // not count as content.
+        let line = raw_line
+            .trim()
+            .trim_start_matches('#')
+            .trim_start_matches('>')
+            .trim_start_matches(|c: char| c == '-' || c == '*' || c == '+')
+            .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ')')
+            .trim();
+        for word in line.split_whitespace() {
+            // A "word" must contain at least one alphanumeric char to count —
+            // bare punctuation / checkbox brackets (`[ ]`) do not.
+            if word.chars().any(|c| c.is_alphanumeric()) {
+                tokens += 1;
+            }
+        }
+    }
+    tokens < 3
 }
 
 /// Detect a pair of clauses that contradict each other. Heuristic and
@@ -430,9 +487,49 @@ mod tests {
         assert!(contains_word("fix various bugs", "various"));
     }
 
+    // --- empty-body (TASK-884) ----------------------------------------------
+    // Pre-TASK-884 an empty body got a clean tick — the worst-specified spec
+    // passing the quality lens. It must now be flagged.
+
     #[test]
-    fn empty_text_is_clean() {
+    fn whitespace_only_text_is_flagged_empty_body() {
         let report = lint_text("   ");
-        assert!(report.is_clean());
+        assert!(!report.is_clean(), "an empty body must not pass clean");
+        assert_eq!(report.count(Category::EmptyBody), 1);
+    }
+
+    #[test]
+    fn empty_string_is_flagged_empty_body() {
+        let report = lint_text("");
+        assert_eq!(report.count(Category::EmptyBody), 1);
+    }
+
+    #[test]
+    fn near_empty_stub_is_flagged_empty_body() {
+        // "fix the thing with the search" has content; a true stub does not.
+        let report = lint_text("fix it");
+        assert_eq!(report.count(Category::EmptyBody), 1);
+    }
+
+    #[test]
+    fn bare_acceptance_heading_is_flagged_empty_body() {
+        // Markdown scaffolding with no real content under it.
+        let report = lint_text("## Acceptance\n\n- [ ]");
+        assert_eq!(report.count(Category::EmptyBody), 1);
+    }
+
+    #[test]
+    fn empty_body_short_circuits_other_heuristics() {
+        // A flagged empty body emits exactly one finding (no spurious pile).
+        let report = lint_text("   ");
+        assert_eq!(report.findings.len(), 1);
+    }
+
+    #[test]
+    fn substantive_body_is_not_flagged_empty_body() {
+        let text = "WHEN the user submits an empty form THE SYSTEM SHALL reject the \
+                    submission and display a validation error within 200ms.";
+        let report = lint_text(text);
+        assert_eq!(report.count(Category::EmptyBody), 0);
     }
 }

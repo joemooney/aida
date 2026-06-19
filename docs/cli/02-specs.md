@@ -220,7 +220,7 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 **One line** — an opt-in EARS-style clarity lens over a spec's text.
 
-**Mental model.** `lint` is a *deliberately optional* quality lens, never a required schema — AIDA stays graph-first (stable IDs, typed edges, traces), and clarity scoring is a bolt-on you reach for, not a gate you pass. It reads a spec's description + acceptance criteria and flags vague triggers, missing expected-behavior, conflicting constraints, and low-testability wording, printing suggested rewrites **as drafts only**. It is read-only and deterministic (no LLM call) — it *never* edits the spec.
+**Mental model.** `lint` is a *deliberately optional* quality lens, never a required schema — AIDA stays graph-first (stable IDs, typed edges, traces), and clarity scoring is a bolt-on you reach for, not a gate you pass. It reads a spec's description + acceptance criteria and flags an empty/too-thin body, vague triggers, missing expected-behavior, conflicting constraints, and low-testability wording, printing suggested rewrites **as drafts only**. It is read-only and deterministic (no LLM call) — it *never* edits the spec.
 
 **Reach for it when** — you're sharpening a spec before it goes to an implementer and want a mechanical second opinion on whether the acceptance criteria are testable, or you want to sweep a whole kind of spec for clarity debt (`--scope story`).
 
