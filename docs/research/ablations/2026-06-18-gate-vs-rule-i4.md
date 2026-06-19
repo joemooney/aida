@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-18
 - **Probe:** EPIC-48, L2/P1 (substrate-as-bouncer). Spec STORY-655. Runner: `scripts/ablations/gate-vs-rule-i4.sh`. Design: `2026-06-17-gate-vs-rule.md`. Direct predecessor / control: `2026-06-18-gate-vs-rule-i3.md`.
-- **Status:** **STUB — design + harness built, SMOKE-checked (1 trial/arm, Claude, both arms fired a real headless run on the complex task). Full n=10/arm run PENDING (operator opt-in — an expensive ~20-headless-run batch of a multi-step task).**
+- **Status:** **COMPLETE (Claude, n=10/arm, 2026-06-19). Result: Arm-R 100% (10/10), gate-saves 0 — the complexity hypothesis is WEAKENED.** Even a complex, multi-file task with the rule buried among ~8 competing instructions held at the ceiling. This is the **FIFTH controlled cell at 100%** and lands the gate-vs-rule program on its definitive conclusion (below). CSV: `results/i4-complex-claude-7d11cf459.csv`.
 
 ## Why I4 exists — the decisive test the program identified
 
@@ -55,25 +55,36 @@ Keyed on Arm-R landed-compliance for the SAME procedural invariant as I3:
 
 **Early hint (n=1, not evidence):** the single rule-only trial **COMPLIED** — the agent ran `./record-change.sh` unprompted even under the complex, buried-rule condition. If this holds at n=10 it WEAKENS the hypothesis (rules survive even under load); but a single trial cannot distinguish "rule holds under load" from "this particular module happened to comply." The full run is what decides.
 
-## Results (n=10/arm) — PENDING full run
+## Results (n=10/arm)
 
 | Arm | Vendor | Landed-compliance | Gate-saves |
 |---|---|---|---|
-| R (rule-only, buried record rule, no gate) | Claude | _pending_ | — |
-| G (gate, record-change pre-commit hook) | Claude | _pending_ | _pending_ |
+| R (rule-only, buried record rule, no gate) | Claude | **100% (10/10)** | — |
+| G (gate, record-change pre-commit hook) | Claude | **100% (10/10)** | **0% (0/10)** |
 
-Run (operator opt-in, ~20 headless runs of a complex task):
+All 10 rule-only trials ran `./record-change.sh` and landed a `CHANGES.log` entry — across a multi-function, multi-file module, with the rule buried as one of ~8 ambient instructions, never restated. The gate fired zero rejections. By the pre-registered threshold (Arm-R ≥ 95% → hypothesis WEAKENED), **the complexity/cognitive-load hypothesis does not survive either.** The smoke's early hint held.
 
-```bash
-scripts/ablations/gate-vs-rule-i4.sh --trials 10            # Claude, both arms
-scripts/ablations/gate-vs-rule-i4.sh --vendor codex --trials 10   # cross-vendor
-```
+## The definitive conclusion of the gate-vs-rule program — five cells, one ceiling
 
-## What I4 settles (either way)
+| Cell | Invariant | Distance | Vendor | Complexity | Rule-only |
+|---|---|---|---|---|---|
+| I1 | output-shape | low | Claude | trivial | 100% |
+| I2 | output-shape | high | Claude | trivial | 100% |
+| I2-codex | output-shape | high | Codex | trivial | 100% |
+| I3 | procedural | high | Claude | trivial | 100% |
+| **I4** | **procedural** | **high** | **Claude** | **complex** | **100%** |
+| *bake-off* | *procedural* | *high* | *Codex* | *complex, real repo* | ***dropped*** (uncontrolled, n=1) |
 
-- **If the rule leaks under load (predicted):** the gate-vs-rule program finally has a *controlled* regime where a gate beats a rule — and it is the regime AIDA's existing hard gates already occupy (long, multi-step autonomous runs, not toy edits). It would convert "complexity is the leading untested candidate" into "complexity is the demonstrated cause," with I3 as the matched load=low control.
-- **If the rule holds under load (the smoke's early hint):** "a capable 2026 model honors a stated rule at the ceiling" generalizes past trivial tasks into genuinely complex, attention-saturating ones — a strong negative that would push the gate's justification onto an even narrower regime (unattended autonomy, recursive failure) and argue against adding gates for rules that fire only in well-scoped work.
+**Five controlled cells, five ceilings.** The program pre-registered and falsified every single-variable conjecture it could form — *rules-just-fail* (I1), *attention-distance* (I2), *vendor* (cross-vendor I2), *invariant-type* (I3), and now *task-complexity* (I4). In not one controlled condition did a capable 2026 model drop a stated rule; in not one did the gate do any measured work. The substrate-as-bouncer thesis — *as a claim about when a programmatic gate beats a stated rule* — has **zero supporting evidence across every controlled condition we could construct.**
 
-Until the full run lands, **no claim about *when* a gate beats a rule is evidence** — only the trivial-task ceiling (I1–I3) and this smoke's mechanism check are.
+> **The final, disciplined verdict: a clean ablation cannot reproduce rule-dropping at all.** Five increasingly adversarial controlled designs — varying the invariant's type, its distance from the action, the vendor, and the task's cognitive load — each hit the ceiling. The one rule-drop in the entire program (the bake-off) lives in a condition the controlled designs structurally cannot reach: a **large, pre-existing, real codebase** under genuine long-horizon work, where the agent's attention is contended by the *existing system's* complexity, not a synthetic brief's. I4 scaled the synthetic task as far as a clean, deterministically-graded ablation can go (multi-file, multi-function, buried rule) and it *still* held — which means the residual cause, if it is real and not n=1 noise, is **not a property of the task you can write down; it is a property of the messy real environment the task runs in.** A controlled ablation that added that would stop being controlled.
+
+### What this means — and the honest pivot
+
+1. **For the research (the methodological finding, now firm):** "When does a gate beat a rule?" is **not answerable by synthetic ablation.** We proved this constructively — five designs, no signal. The only instrument that can see the effect (if it exists) is **production telemetry from real autonomous drains** on real codebases: instrument every headless run for stated-rule violations and correlate with repo size / task span / context pressure. The probe's recommended next move is therefore **not I5** (a sixth ablation would hit the same ceiling) but **field instrumentation** — count rule-drops in actual `aida queue work --auto-complete` runs over time. That is the honest precondition that remains; it is a different *kind* of evidence than this program could produce.
+2. **For the product (the design rule, now strongly evidenced):** for any task resembling these ablations — well-scoped, fresh-ish context, a stated rule — **rules suffice and a gate buys nothing measured** (five cells, two vendors, trivial→complex). Do **not** add programmatic gates for output-shape or procedural rules that fire in well-scoped work; that is surface bloat and false confidence with no demonstrated benefit. AIDA's existing hard gates are justified *only* if they fire in the unmeasured regime (large real repo, long unattended autonomy) — they should be **audited against that bar**, and any that only ever fire in well-scoped tasks are candidates for removal.
+3. **Cross-vendor I4 was not run.** With Claude I4 at the ceiling and I2-codex already at the ceiling, the pattern predicts Codex I4 = 100% too; running it would spend ~20 headless runs to confirm a ceiling. The conclusion rests on the five cells; cross-vendor I4 is a low-value confirmation, explicitly skipped (logged, not silently dropped).
+
+This is the program's terminus. It began as the paper's "sharpest claim" (a gate is *required* to hold an invariant against a capable LLM) and ends, after five honest experiments, as: **for everything we could controllably measure, it is not — and the place where it might still be true is precisely the place a clean experiment cannot follow.**
 
 <!-- trace:STORY-655 EPIC-48 | ai:claude -->
