@@ -48,7 +48,9 @@ pub enum Resolution {
     AcceptLocal,
     /// Keep the remote version for all conflicting fields
     AcceptRemote,
-    /// Keep the version with the later timestamp (LWW)
+    /// Keep the version with the later timestamp (LWW). On an exact timestamp
+    /// tie the winner is the deterministic content-hash winner (a data-function
+    /// both clones compute identically), not "local". trace:BUG-578
     LastWriteWins,
 }
 
@@ -142,10 +144,14 @@ pub fn resolve_conflict(
         Resolution::AcceptLocal => local.clone(),
         Resolution::AcceptRemote => remote.clone(),
         Resolution::LastWriteWins => {
-            if local.modified_at >= remote.modified_at {
-                local.clone()
-            } else {
-                remote.clone()
+            // Later modified_at wins; on an EXACT tie a deterministic
+            // data-function (greater stable content hash) decides, so the
+            // outcome is order-independent across clones rather than
+            // "local"-wins. trace:BUG-578 | ai:claude
+            match local.modified_at.cmp(&remote.modified_at) {
+                std::cmp::Ordering::Greater => local.clone(),
+                std::cmp::Ordering::Less => remote.clone(),
+                std::cmp::Ordering::Equal => deterministic_scalar_winner(local, remote),
             }
         }
     }
@@ -168,7 +174,12 @@ pub fn resolve_conflict(
 /// `modified_at`) and never silently dropping an edit:
 /// - **Scalar fields** (title, description, status, priority, owner, …):
 ///   take the whole `ours`/`theirs` requirement that has the later
-///   `modified_at` as the scalar base (LWW). Ties → `ours`.
+///   `modified_at` as the scalar base (LWW). On an *exact* `modified_at` tie
+///   (ms collision or clock skew), the winner is the variant with the greater
+///   stable content hash — a pure function of the data that BOTH clones compute
+///   identically, so two clones merging the same concurrent same-field edits in
+///   opposite roles converge to the SAME winner. (Previously "ties → ours",
+///   which was order-dependent / last-puller-wins — BUG-578.)
 /// - **`history:`** — union by `HistoryEntry.id` (dedupe), ordered by
 ///   `timestamp` then `id` for determinism. Both clones' entries survive.
 /// - **`comments:`** — union by `Comment.id`, ordered by `created_at` then
@@ -192,14 +203,17 @@ pub fn merge_spec_three_way(
     ours: &Requirement,
     theirs: &Requirement,
 ) -> Requirement {
-    // Scalar base: last-write-wins by modified_at (ties → ours). This carries
-    // title / description / status / priority / owner / feature / weight /
+    // Scalar base: last-write-wins by modified_at. This carries title /
+    // description / status / priority / owner / feature / weight /
     // relationships / dependencies / archived / etc. from whichever side wrote
-    // most recently — the same rule resolve_conflict applies.
-    let mut merged = if ours.modified_at >= theirs.modified_at {
-        ours.clone()
-    } else {
-        theirs.clone()
+    // most recently — the same rule resolve_conflict applies. On an EXACT
+    // modified_at tie the winner is decided by a deterministic data-function
+    // (greater stable content hash), NOT by "ours", so both clones converge to
+    // the same winner regardless of which side runs the merge. trace:BUG-578 | ai:claude
+    let mut merged = match ours.modified_at.cmp(&theirs.modified_at) {
+        std::cmp::Ordering::Greater => ours.clone(),
+        std::cmp::Ordering::Less => theirs.clone(),
+        std::cmp::Ordering::Equal => deterministic_scalar_winner(ours, theirs),
     };
 
     // History: union by entry id, deterministic order. base contributes
@@ -241,6 +255,53 @@ pub fn merge_spec_three_way(
         union_dependencies(&[&base.dependencies, &ours.dependencies, &theirs.dependencies]);
 
     merged
+}
+
+/// Decide the scalar-base winner when two versions have the EXACT same
+/// `modified_at` (a millisecond collision or clock skew).
+///
+/// The discriminator MUST be a pure function of the data that both clones
+/// compute identically, so a same-field concurrent edit converges to the same
+/// winner no matter which clone runs the merge (the old "ours"/"local" fallback
+/// was order-dependent — BUG-578). We compare a stable content hash and pick the
+/// greater; the UUID `id` breaks the (astronomically unlikely) hash collision so
+/// the function is total and never falls back to side-identity.
+///
+/// trace:BUG-578 | ai:claude
+fn deterministic_scalar_winner(a: &Requirement, b: &Requirement) -> Requirement {
+    let (ha, hb) = (stable_content_hash(a), stable_content_hash(b));
+    let winner = match ha.cmp(&hb) {
+        std::cmp::Ordering::Greater => a,
+        std::cmp::Ordering::Less => b,
+        // Hash collision (or genuinely identical content): fall back to the
+        // UUID, which is still a data-function — never "ours".
+        std::cmp::Ordering::Equal => {
+            if a.id >= b.id {
+                a
+            } else {
+                b
+            }
+        }
+    };
+    winner.clone()
+}
+
+/// A stable, order-independent content hash of a requirement, used only to
+/// break exact `modified_at` ties deterministically. Hashes the deterministic
+/// YAML serialization (the same byte form AIDA writes on disk, which has a
+/// fixed field order), so both clones derive an identical value for identical
+/// content. If serialization somehow fails, fall back to a debug-format hash so
+/// the function is total.
+///
+/// trace:BUG-578 | ai:claude
+fn stable_content_hash(req: &Requirement) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    match serde_yaml::to_string(req) {
+        Ok(s) => s.hash(&mut hasher),
+        Err(_) => format!("{req:?}").hash(&mut hasher),
+    }
+    hasher.finish()
 }
 
 /// Union HistoryEntry arrays by `id`, ordered by `(timestamp, id)`.
@@ -625,6 +686,85 @@ mod tests {
             .with_timezone(&Utc);
         let merged2 = merge_spec_three_way(&base, &ours2, &theirs);
         assert_eq!(merged2.effective_status(), "Approved");
+    }
+
+    // trace:BUG-578 — EXACT modified_at tie must converge to the SAME winner no
+    // matter which clone runs the merge. Two concurrent same-field edits with an
+    // identical timestamp: merging (ours=A, theirs=B) and (ours=B, theirs=A)
+    // MUST pick the same title. The old "ties → ours" code FAILS this (each side
+    // keeps its own edit = divergence / last-puller-wins).
+    #[test]
+    fn test_merge_scalar_tie_is_order_independent() {
+        let base = make_req("Title", "Draft");
+        let tie_ts = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut edit_a = base.clone();
+        edit_a.title = "Edit A".to_string();
+        edit_a.modified_at = tie_ts;
+
+        let mut edit_b = base.clone();
+        edit_b.title = "Edit B".to_string();
+        edit_b.modified_at = tie_ts;
+
+        // Clone 1 sees A as ours, B as theirs.
+        let merged_1 = merge_spec_three_way(&base, &edit_a, &edit_b);
+        // Clone 2 sees the SAME pair in the opposite roles.
+        let merged_2 = merge_spec_three_way(&base, &edit_b, &edit_a);
+
+        // Order-independence: both clones converge to the same scalar winner.
+        assert_eq!(
+            merged_1.title, merged_2.title,
+            "exact modified_at tie must be resolved by a data-function, not by which side is 'ours'"
+        );
+        // And the winner is one of the two real edits (not silently the base).
+        assert!(merged_1.title == "Edit A" || merged_1.title == "Edit B");
+    }
+
+    // trace:BUG-578 — resolve_conflict's LastWriteWins must also be
+    // order-independent on an exact timestamp tie.
+    #[test]
+    fn test_resolve_lww_tie_is_order_independent() {
+        let tie_ts = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut a = make_req("Edit A", "Draft");
+        a.modified_at = tie_ts;
+        let mut b = make_req("Edit B", "Draft");
+        b.modified_at = tie_ts;
+
+        let r1 = resolve_conflict(&a, &b, Resolution::LastWriteWins);
+        let r2 = resolve_conflict(&b, &a, Resolution::LastWriteWins);
+        assert_eq!(
+            r1.title, r2.title,
+            "LastWriteWins tie must resolve identically regardless of local/remote roles"
+        );
+        assert!(r1.title == "Edit A" || r1.title == "Edit B");
+    }
+
+    // trace:BUG-578 — sanity: a strictly later modified_at still wins (LWW not
+    // broken by the deterministic tie-break).
+    #[test]
+    fn test_merge_scalar_later_wins_not_broken_by_tiebreak() {
+        let base = make_req("Title", "Draft");
+
+        let mut older = base.clone();
+        older.title = "Older".to_string();
+        older.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut newer = base.clone();
+        newer.title = "Newer".to_string();
+        newer.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        // newer wins regardless of argument order.
+        assert_eq!(merge_spec_three_way(&base, &older, &newer).title, "Newer");
+        assert_eq!(merge_spec_three_way(&base, &newer, &older).title, "Newer");
     }
 
     // trace:STORY-641 — tags union across both sides.
