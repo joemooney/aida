@@ -18903,5 +18903,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 1866
+- id: 019eddba-782f-7d61-9991-c7f6b7e453e8
+  target_id: 019eddba-754c-7240-a5e3-bdb5fe3631ac
+  author: aida
+  node_id: '1'
+  lamport: 1867
+  timestamp: 2026-06-19T02:34:05.743088176Z
+  kind: !Create
+    title: 'aida push: consider warning when there is uncommitted/unstaged work'
+    description: 'OPEN QUESTION FOR OPERATOR (recorded 2026-06-19, do not block): the operator noted aida push does not warn if there is unstaged work, and was unsure if it should. Advisor lean: unstaged/uncommitted work is not pushed anyway (expected git behavior; raw git push does not warn either), so a hard warning risks noise. A GENTLE one-line notice ("note: N uncommitted change(s) not included in this push") is defensible and low-cost; a block is not. Proposed slice: a non-blocking notice only, opt-out-able. Decide warn-vs-silent on operator input before building.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 1867
 node_id: '1'
