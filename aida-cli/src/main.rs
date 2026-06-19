@@ -738,6 +738,70 @@ mod story_423_asciinema_tests {
         );
     }
 
+    /// TASK-858: bare `aida agent` (and `aida agent <flags>` with no recognized
+    /// subcommand) rewrites to `aida agent new`, forwarding flags; recognized
+    /// subcommands and `--help`/`-h` pass through unchanged.
+    #[test]
+    fn bare_agent_defaults_to_agent_new() {
+        use crate::cli::{AgentCommand, Command};
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+        // bare `aida agent` → `aida agent new`
+        let out = rewrite_agent_default_new(&s(&["aida", "agent"]));
+        assert_eq!(out, s(&["aida", "agent", "new"]));
+        assert!(matches!(
+            Cli::try_parse_from(out).unwrap().command,
+            Command::Agent(AgentCommand::New { command: None })
+        ));
+
+        // `aida agent --role X` (a `new` flag, no subcommand) → spliced `new`
+        assert_eq!(
+            rewrite_agent_default_new(&s(&["aida", "agent", "--show-context"])),
+            s(&["aida", "agent", "new", "--show-context"])
+        );
+
+        // Recognized subcommands pass through unchanged.
+        for sub in ["new", "ls", "status", "register", "pause", "resume", "stop"] {
+            assert_eq!(
+                rewrite_agent_default_new(&s(&["aida", "agent", sub])),
+                s(&["aida", "agent", sub]),
+                "subcommand {sub} should pass through"
+            );
+        }
+        assert_eq!(
+            rewrite_agent_default_new(&s(&["aida", "agent", "list-roles", "--json"])),
+            s(&["aida", "agent", "list-roles", "--json"])
+        );
+
+        // `aida agent ls` still reaches the Ls variant after the rewrite.
+        assert!(matches!(
+            Cli::try_parse_from(rewrite_agent_default_new(&s(&["aida", "agent", "ls"])))
+                .unwrap()
+                .command,
+            Command::Agent(AgentCommand::Ls)
+        ));
+
+        // Help flags + the `help` verb keep clap's parent help (untouched).
+        assert_eq!(
+            rewrite_agent_default_new(&s(&["aida", "agent", "--help"])),
+            s(&["aida", "agent", "--help"])
+        );
+        assert_eq!(
+            rewrite_agent_default_new(&s(&["aida", "agent", "-h"])),
+            s(&["aida", "agent", "-h"])
+        );
+        assert_eq!(
+            rewrite_agent_default_new(&s(&["aida", "agent", "help"])),
+            s(&["aida", "agent", "help"])
+        );
+
+        // Non-agent commands are untouched.
+        assert_eq!(
+            rewrite_agent_default_new(&s(&["aida", "list"])),
+            s(&["aida", "list"])
+        );
+    }
+
     #[test]
     fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
         let cli = Cli::try_parse_from([
@@ -1035,6 +1099,45 @@ fn rewrite_advisor_assess(args: &[String]) -> Vec<String> {
     args.to_vec()
 }
 
+/// TASK-858: bare `aida agent` (no recognized subcommand) defaults to
+/// `aida agent new`, git-style, forwarding any flags/args to `new`. The
+/// recognized subcommands (`new`, `register`, `ls`, `status`, `pause`,
+/// `resume`, `stop`, `list-roles`) pass through unchanged, and `aida agent
+/// --help` / `-h` keeps clap's parent help (so the surface stays
+/// discoverable). Mirrors the pre-clap argv-rewrite pattern used for the
+/// `list` lens aliases and `advisor assess`.
+// trace:TASK-858 | ai:claude
+fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
+    if args.len() >= 2 && args[1] == "agent" {
+        // The next token decides: a recognized subcommand or a help flag is
+        // left alone; anything else (including bare `aida agent`) gets `new`
+        // spliced in so flags/args forward to the `new` launcher.
+        const KNOWN_SUBCOMMANDS: &[&str] = &[
+            "new",
+            "register",
+            "ls",
+            "status",
+            "pause",
+            "resume",
+            "stop",
+            "list-roles",
+            "help",
+        ];
+        let next = args.get(2).map(String::as_str);
+        let passthrough = matches!(next, Some(t) if
+            KNOWN_SUBCOMMANDS.contains(&t) || t == "--help" || t == "-h");
+        if !passthrough {
+            let mut out = Vec::with_capacity(args.len() + 1);
+            out.push(args[0].clone());
+            out.push("agent".to_string());
+            out.push("new".to_string());
+            out.extend_from_slice(&args[2..]);
+            return out;
+        }
+    }
+    args.to_vec()
+}
+
 fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "list" {
         let target: Option<&[&str]> = match args[2].as_str() {
@@ -1100,7 +1203,9 @@ fn run() -> Result<()> {
     // advisor's verb spelled under its seat). `aida assess` itself + the `intake`
     // alias are handled by clap's visible_alias on the Assess variant.
     // trace:TASK-822 trace:TASK-824 trace:STORY-623 | ai:claude
-    let mut cli = Cli::parse_from(rewrite_list_alias(&rewrite_advisor_assess(&raw_args)));
+    let mut cli = Cli::parse_from(rewrite_agent_default_new(&rewrite_list_alias(
+        &rewrite_advisor_assess(&raw_args),
+    )));
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
         if let Some(exit_code) = maybe_run_asciinema_wrapper(&raw_args, &cli)? {
