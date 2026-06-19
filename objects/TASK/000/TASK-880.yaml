@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T07:06:50.453803769Z
-modified_at: 2026-06-19T07:06:50.453803769Z
+modified_at: 2026-06-19T07:22:58.035533849Z
 req_type: Task
 tags:
 - aida:solo
 - from-operator
 - parent:EPIC-43
 - statusline
+comments:
+- id: 019edec2-f073-7e30-b23c-4389906ea1f2
+  author: joe
+  content: Commit 66a00f3a8 references this requirement
+  created_at: 2026-06-19T07:22:58.035533849Z
+  modified_at: 2026-06-19T07:22:58.035533849Z
