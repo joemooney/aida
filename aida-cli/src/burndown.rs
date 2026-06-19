@@ -412,6 +412,53 @@ impl OpenBucket {
     }
 }
 
+/// BUG-579: the fixed, most-actionable-first render order for the DERIVED buckets
+/// in `aida human`. The single source of truth — `handle_list_human` iterates
+/// this, and [`classified_row_is_rendered`] checks against it so the count and
+/// the render can never silently disagree. trace:BUG-579 | ai:claude
+pub(crate) const HUMAN_DERIVED_BUCKET_ORDER: [OpenBucket; 5] = [
+    OpenBucket::ReadyToClose,
+    OpenBucket::HeldForReview,
+    OpenBucket::BuildSupervised,
+    OpenBucket::Ungroomed,
+    OpenBucket::Umbrella,
+];
+
+/// BUG-579: does a `classified` row get rendered somewhere in `aida human`?
+///
+/// A classified row is *counted* toward the "N items need a human" total
+/// unconditionally; it is only *rendered* if it is covered by one of:
+///   1. the ordered derived-bucket loop ([`HUMAN_DERIVED_BUCKET_ORDER`]), or
+///   2. the first-class "decisions-awaiting" bucket — but that bucket only lists
+///      `AwaitingDecision` specs that carry a real `DecisionRequest`
+///      (`has_pending_decision`).
+///
+/// The bug: an `AwaitingDecision` spec with NO posed `DecisionRequest`
+/// (`has_pending_decision == false`) satisfies neither — it is counted but
+/// invisible, the phantom "1 item needs a human" with no bucket to act on. This
+/// predicate returns `false` for exactly those rows, so the catch-all in
+/// `handle_list_human` can surface them and restore the count==render invariant.
+/// trace:BUG-579 | ai:claude
+pub(crate) fn classified_row_is_rendered(bucket: OpenBucket, has_pending_decision: bool) -> bool {
+    HUMAN_DERIVED_BUCKET_ORDER.contains(&bucket)
+        || (bucket == OpenBucket::AwaitingDecision && has_pending_decision)
+}
+
+/// BUG-579: a short, actionable hint for a counted-but-unrendered classified row
+/// in the `aida human` catch-all. `AwaitingDecision` with no posed question is
+/// the common case (a Spike that needs a decision but has no formal
+/// `DecisionRequest`); other buckets fall back to their derived reason text.
+/// trace:BUG-579 | ai:claude
+pub(crate) fn needs_attention_hint(bucket: OpenBucket) -> &'static str {
+    match bucket {
+        OpenBucket::AwaitingDecision => {
+            "needs a decision — no question posed yet; pose one with `aida clarify` \
+             / `aida questions sweep`, or groom it"
+        }
+        _ => "needs a human — no bucket-specific action derived yet",
+    }
+}
+
 /// Already-probed facts about one OPEN spec. `status` is normalized to
 /// alphanumeric-lowercase (`inprogress`, `needsattention`, …) by the caller so
 /// this stays pure + exhaustively testable. trace:STORY-547
@@ -1454,6 +1501,74 @@ mod tests {
             human_clause(true, OpenBucket::Actionable),
             "a groomed (non-Ungroomed) human_only spec must still reach the operator"
         );
+    }
+
+    // BUG-579: the phantom "N items need a human" bug — a `classified`
+    // AwaitingDecision row with NO posed DecisionRequest is COUNTED toward the
+    // total but, before the fix, was rendered by neither the ordered derived-
+    // bucket loop nor the decisions-awaiting bucket (which only lists rows with a
+    // real DecisionRequest). `aida human`'s catch-all renders exactly the rows
+    // for which `classified_row_is_rendered` returns false, so this asserts that
+    // such a row IS surfaced (count==render). The test FAILS against the old code
+    // (AwaitingDecision was excluded from `order` AND from decisions-awaiting
+    // when has_pending_decision==false → invisible). trace:BUG-579 | ai:claude
+    #[test]
+    fn awaiting_decision_without_posed_question_is_rendered_not_just_counted() {
+        // The exact case from BUG-579: a Spike classified AwaitingDecision with
+        // no formal DecisionRequest. It is NOT covered by the ordered buckets and
+        // NOT covered by the decisions-awaiting bucket → must be caught by the
+        // catch-all (predicate returns false → catch-all renders it).
+        assert!(
+            !classified_row_is_rendered(OpenBucket::AwaitingDecision, false),
+            "AwaitingDecision with no DecisionRequest must NOT be considered \
+             already-rendered — the catch-all must surface it (BUG-579)"
+        );
+        // It gets the actionable, decision-specific hint, not the generic one.
+        assert!(
+            needs_attention_hint(OpenBucket::AwaitingDecision).contains("decision"),
+            "the needs-attention hint must point the operator at posing a decision"
+        );
+
+        // The complement: an AwaitingDecision row WITH a posed DecisionRequest is
+        // already rendered by the first-class decisions-awaiting bucket — the
+        // catch-all must NOT double-render it.
+        assert!(
+            classified_row_is_rendered(OpenBucket::AwaitingDecision, true),
+            "AwaitingDecision WITH a DecisionRequest is shown by the decisions \
+             bucket — the catch-all must not re-render it"
+        );
+
+        // The predicate must stay the exact mirror of the render order — if a
+        // bucket is in `HUMAN_DERIVED_BUCKET_ORDER` it is rendered by the ordered
+        // loop; otherwise it is rendered only via decisions-awaiting (and only
+        // with a posed question) or, failing that, the catch-all. This guards the
+        // predicate from drifting away from the loop and silently re-introducing
+        // the count!=render gap. trace:BUG-579
+        use OpenBucket::*;
+        for b in HUMAN_DERIVED_BUCKET_ORDER {
+            assert!(
+                classified_row_is_rendered(b, false),
+                "{b:?} is in the render order but the predicate calls it unrendered"
+            );
+        }
+        // Buckets NOT in the order array (other than AwaitingDecision-with-a-
+        // question) are reported unrendered → the catch-all is responsible for
+        // them. Spot-check the variants that can reach `classified` outside the
+        // ordered set.
+        for b in [
+            InFlight,
+            Deferred,
+            Blocked,
+            LongLived,
+            AwaitingMerge,
+            InProgress,
+            Actionable,
+        ] {
+            assert!(
+                !classified_row_is_rendered(b, false),
+                "{b:?} is outside the ordered loop — the catch-all must own it"
+            );
+        }
     }
 
     #[test]
