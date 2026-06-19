@@ -19309,5 +19309,24 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1898
+- id: 019edfc6-b7ce-7dc3-b884-b0707c6f2356
+  target_id: 019edfc6-b482-7e73-a594-ba51a12db7cd
+  author: aida
+  node_id: '1'
+  lamport: 1899
+  timestamp: 2026-06-19T12:06:42.894295330Z
+  kind: !Create
+    title: bare 'aida queue' dumps the full subcommand help (exit 2) instead of routing to 'aida queue list'
+    description: |-
+      Dogfood (2026-06-19, fresh throwaway, aida 0.14.0). A newcomer who types `aida queue` to answer "what is queued for me?" gets a ~25-line wall of clap subcommand help (list/add/load/remove/move/clear/prune/next/advance/done/work/progress/rework/recover/integrate) and exit code 2, not an answer.
+
+      Contrast: `aida list` (bare) shows the list, `aida status` shows a snapshot. The intuitive `aida queue` should behave like `aida queue list` (which correctly prints "Your queue is empty."). Several other AIDA verbs default their bare form to the obvious read action; `queue` is the odd one out and the wall-of-help reads as an error to a new user.
+
+      EXPECTED: bare `aida queue` defaults to `aida queue list` (the read view), matching `aida list`/`aida status` ergonomics. Low severity but a clean consistency papercut on a core daily verb.
+
+      SEVERITY: low (cosmetic/consistency).
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1899
 node_id: '1'
