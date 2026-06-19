@@ -54,8 +54,9 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 - `migrate` — rewrites existing IDs to a new format. The escape hatch for "I picked the wrong scheme," not a routine command — it touches every spec.
 - `hints` — toggles the state-transition hints printed inline (queue drained → open PR, etc.). `false` quiets them project-wide; the `AIDA_HINTS=false` env var overrides per-shell without writing config.
 - `user` — writes `~/.aida/preferences.toml` (preferred node id, fallback email). Machine-global, not per-project — it seeds defaults for future `init`s.
+- `menu` — a navigable TUI listing every configurable item — per row the knob's name, current value, built-in default, where it was set (scope: `.aida/config.toml` / env / built-in default), and a one-line explanation. The visual companion to `config show`: same resolved surface (it reuses the same policy registry), one scrollable screen, arrow-key navigation (↑/↓ or j/k, PgUp/PgDn, g/G, q/Esc). Read-only for now — edit knobs with the matching `config` subcommand or your `config.toml`. Needs a TTY; without one it prints a pointer to `config show` and exits cleanly.
 
-**Gotchas.** `config user` is *machine-global* (`~/.aida/`), while `config show`/`format`/etc. are *project-local*. Same command noun, two scopes — don't expect `config user` to behave per-project.
+**Gotchas.** `config user` is *machine-global* (`~/.aida/`), while `config show`/`format`/`menu`/etc. are *project-local*. Same command noun, two scopes — don't expect `config user` to behave per-project.
 
 **Chains with** — set once near `init`; `migrate` is the rare follow-up. Pairs with `type` / `feature` to define the ID *taxonomy*.
 

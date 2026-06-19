@@ -21,6 +21,7 @@
 mod actions;
 mod app;
 mod config;
+mod config_menu;
 mod dashboard;
 mod event;
 mod help;
@@ -39,6 +40,7 @@ mod welcome;
 
 pub use app::{App, ExitKind};
 pub use config::{TuiConfig, TuiMode};
+pub use config_menu::{run as run_config_menu, ConfigMenuItem};
 pub use launcher::LauncherOptions;
 pub use theme::{Theme, ThemeName};
 
