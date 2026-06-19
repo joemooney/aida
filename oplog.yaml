@@ -18891,5 +18891,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 1865
+- id: 019eddba-5f8c-7151-99e0-7794d92fa88f
+  target_id: 019eddba-5ab3-7793-b1dc-d732ca4a8fdb
+  author: aida
+  node_id: '1'
+  lamport: 1866
+  timestamp: 2026-06-19T02:33:59.436508157Z
+  kind: !Create
+    title: 'Personal-view shortcuts: aida mylist / aida myqueue (and the aida list default-scope question)'
+    description: 'Add aida mylist (= aida list me) and aida myqueue (= the current-user queue view) as discoverable personal-view shortcuts, complementing the global aida list / aida queue. OPEN QUESTION FOR OPERATOR (recorded 2026-06-19, do not block): the operator asked whether aida list should default to the current user. Verified: aida list (requirements) already shows ALL, not me-scoped - only the QUEUE is user-scoped (BUG-89). So no default needs changing for list; the actionable piece is the mylist/myqueue shortcuts + the me/user: filter (separate spec). If the operator instead wants the QUEUE views renamed/clarified (queue = mine vs a global queue view), that is a follow-up - revisit on their input.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 1866
 node_id: '1'
