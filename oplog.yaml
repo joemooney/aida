@@ -18771,5 +18771,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1855
+- id: 019edd85-fce0-7a43-8890-f26c040c7a23
+  target_id: 019edd85-f965-76e0-90bf-ce458f1de256
+  author: aida
+  node_id: '1'
+  lamport: 1856
+  timestamp: 2026-06-19T01:36:46.304428626Z
+  kind: !Create
+    title: Field instrumentation of stated-rule violations in real drains — the only remaining gate-vs-rule evidence path
+    description: 'The gate-vs-rule ablation program reached its terminus (STORY-655): five controlled cells (I1-I4 + cross-vendor I2), all 100% rule-only / 0 gate-saves — every single-variable conjecture (rules-fail, attention-distance, vendor, invariant-type, complexity) falsified. The definitive conclusion is methodological: a CLEAN ABLATION CANNOT reproduce rule-dropping at all; the lone observed drop (the bake-off, n=1) lives in a regime controlled designs cannot reach (large real codebase, long-horizon autonomy). The ONLY remaining instrument is FIELD telemetry. Smallest-valuable-slice: an OBSERVE-ONLY rule-adherence logger that, during real aida queue work --auto-complete drains, records when an existing stated-rule check (trace-comment presence, commit-format) WOULD have blocked — without blocking — plus context (repo size, task span/spec, headless?). Reuses the existing checks + the existing ~/.aida telemetry; honors the telemetry privacy floor (no content/paths/values). Query via an aida usage-style surface. The DATA harvests over weeks of real use (plant-the-sensor-now, harvest-later) — this is why it is a multi-week study, not an afternoon experiment. Revisit-trigger to actually BUILD: operator green-lights the field study (it is a new research thread + a product observability feature with design choices, distinct from the now-complete ablation program). Hypothesis it would test: do stated-rule violations rise with repo size / task span / context pressure — the unmeasured residual the ablations could not reach.'
+    req_type: Spike
+    status: Approved
+    priority: Medium
+clock: 1856
 node_id: '1'
