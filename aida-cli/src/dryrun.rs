@@ -84,11 +84,19 @@ impl SpecSnapshot {
 }
 
 /// One scored dimension of readiness: did it pass, and the one-line why.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Serialize-only: the `name` is a `&'static str` (a compile-time constant, never
+/// allocated per score), which cannot be the target of a `Deserialize`. These
+/// verdicts are only ever *produced* here and rendered to JSON/human output; no
+/// code path parses them back, so dropping `Deserialize` is non-behavioral.
+/// trace:TASK-849 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Dimension {
     /// Stable machine name (`"description"`, `"acceptance"`, …) — usable as a
-    /// JSON key / filter token; never localized.
-    pub name: String,
+    /// JSON key / filter token; never localized. A compile-time constant: these
+    /// names are fixed in source, so `&'static str` avoids a per-score
+    /// allocation. trace:TASK-849 | ai:claude
+    pub name: &'static str,
     /// Whether this dimension is satisfied.
     pub pass: bool,
     /// A single human-readable line explaining the verdict.
@@ -98,7 +106,11 @@ pub struct Dimension {
 }
 
 /// The full deterministic readiness verdict for one spec.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// Serialize-only for the same reason as [`Dimension`]: it owns `Dimension`s
+/// whose `&'static str` names rule out `Deserialize`, and nothing parses a
+/// verdict back. trace:TASK-849 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Readiness {
     /// 0-100 readiness score: sum of passing dimensions' weights (weights sum
     /// to exactly 100).
@@ -148,7 +160,7 @@ pub fn score(spec: &SpecSnapshot) -> Readiness {
     let desc_len = desc.chars().count();
     let desc_pass = desc_len >= DESCRIPTION_FLOOR;
     dimensions.push(Dimension {
-        name: "description".to_string(),
+        name: "description",
         pass: desc_pass,
         reason: if desc.is_empty() {
             "description is empty".to_string()
@@ -163,7 +175,7 @@ pub fn score(spec: &SpecSnapshot) -> Readiness {
     // 2. Description contains an acceptance section / criteria.
     let accept_pass = has_acceptance(desc);
     dimensions.push(Dimension {
-        name: "acceptance".to_string(),
+        name: "acceptance",
         pass: accept_pass,
         reason: if accept_pass {
             "found an acceptance section / criteria".to_string()
@@ -179,7 +191,7 @@ pub fn score(spec: &SpecSnapshot) -> Readiness {
     //    not work an implementer picks up).
     let type_pass = is_implementable_type(&spec.req_type);
     dimensions.push(Dimension {
-        name: "type".to_string(),
+        name: "type",
         pass: type_pass,
         reason: if type_pass {
             format!("type `{}` is implementable", spec.req_type)
@@ -194,7 +206,7 @@ pub fn score(spec: &SpecSnapshot) -> Readiness {
 
     // 4. Priority set.
     dimensions.push(Dimension {
-        name: "priority".to_string(),
+        name: "priority",
         pass: spec.has_priority,
         reason: if spec.has_priority {
             "priority is set".to_string()
@@ -207,7 +219,7 @@ pub fn score(spec: &SpecSnapshot) -> Readiness {
     // 5. Has a linked parent OR is a top-level epic/vision.
     let parent_pass = spec.has_parent || spec.is_top_level;
     dimensions.push(Dimension {
-        name: "parent".to_string(),
+        name: "parent",
         pass: parent_pass,
         reason: if spec.has_parent {
             "linked to a parent spec".to_string()
@@ -223,7 +235,7 @@ pub fn score(spec: &SpecSnapshot) -> Readiness {
     //    carry concrete nouns/verbs.
     let (vague_pass, vague_reason) = not_too_vague(desc);
     dimensions.push(Dimension {
-        name: "not_vague".to_string(),
+        name: "not_vague",
         pass: vague_pass,
         reason: vague_reason,
         weight: W_NOT_VAGUE,
