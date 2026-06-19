@@ -233,7 +233,7 @@ When `os_wrap = true`, a headless `claude` launch is spawned as `bwrap <confinem
 
 It is **strictly opt-in (default OFF)** and **fail-closed**: if `bwrap` is not on `PATH`, or it is installed but the host blocks unprivileged user namespaces, the launch **errors with remediation** rather than silently running the agent unconfined.
 
-> **Current scope: headless drains only.** Today `os_wrap` wraps the **headless** drain paths (`aida queue work --auto-complete --no-human`, the `claude -p` launches). The interactive `aida agent new` launch is **not** yet wrapped — that's tracked separately (TASK-864, deferred until userns confinement is reliable on the dev host). So enabling `os_wrap` confines unattended drains, not your keyboard-driven sessions.
+> **Current scope: headless drains only.** Today `os_wrap` wraps the **headless** drain paths (`aida queue work --auto-complete --no-human`, the `claude -p` launches). The interactive `aida agent new` launch is **not** yet wrapped — that's tracked separately (deferred until userns confinement is reliable on the dev host). So enabling `os_wrap` confines unattended drains, not your keyboard-driven sessions.
 
 > **Host requirement: unprivileged user namespaces.** `bwrap` needs the kernel to allow unprivileged user namespaces. On recent Ubuntu (23.10+/24.04) AppArmor blocks this by default, so even with `bwrap` installed the sandbox fails-closed until you run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist it under `/etc/sysctl.d/`). **Discovery path:** `aida doctor` reports whether `bwrap` is available and confinement-capable on this host, and `aida config show` renders the resolved `[contained]` posture (including `os_wrap`) — start there before enabling it.
 
