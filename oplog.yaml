@@ -19047,5 +19047,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 1878
+- id: 019eddc4-f980-7b12-a3c2-b9eb32f505ee
+  target_id: 019eddc4-f650-70d1-a37d-6abcff9edf0b
+  author: aida
+  node_id: '1'
+  lamport: 1879
+  timestamp: 2026-06-19T02:45:34.208982562Z
+  kind: !Create
+    title: 'Trace-read-rate audit: prove the graph is consulted, not just written'
+    description: 'MOVE 7. Instrument query_graph/show_requirement READ volume vs trace/add_relationship WRITE volume across real sessions. WHY: section 3/13.3 names this the cheap INTERNAL falsifier for P2b - if the graph is written-but-not-consulted (high write, near-zero read) the typing is dead weight maintained out of discipline. A high read:write ratio is direct evidence the rich layer earns its keep. EVIDENCE: read:write ratio per spec over the dogfood history. Honest cap: high read could be operator discipline (section-10 confound), but written-but-unread would FALSIFY P2b cleanly - the asymmetry makes even a positive informative. Size S (usage.jsonl plumbing exists; add an MCP read counter).'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1879
 node_id: '1'
