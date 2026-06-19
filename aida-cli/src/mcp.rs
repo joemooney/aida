@@ -93,6 +93,64 @@ use crate::punt::{
 const VALID_MCP_REQUIREMENT_TYPES: &str =
     "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc";
 
+/// BUG-591: the archive (STORY-441) + deferred (STORY-584) view-tier predicate,
+/// shared by `list_requirements` and `search_requirements` so the MCP read
+/// surface hides filed-away specs by default exactly like `aida list` /
+/// `aida search` (the STORY-82 "MCP mirrors CLI" contract). The three tiers are
+/// active (default) / deferred / archived; a row's tier is `archived` if
+/// `Requirement::archived`, else `deferred` if `intake::is_deferred` (flag set
+/// OR a legacy `deferred:*` parking tag), else `active`.
+///
+/// Filter resolution mirrors `aida list`:
+/// - default (no flags): admit only ACTIVE rows
+/// - `archived`: admit only archived rows (defer axis kept open so the audit is complete)
+/// - `deferred`: admit only deferred rows
+/// - `all` (highest precedence): admit every tier
+///
+/// trace:BUG-591 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ViewTierFilter {
+    /// Active rows only — neither archived nor deferred (the default view).
+    ActiveOnly,
+    /// Archived rows only.
+    ArchivedOnly,
+    /// Deferred rows only.
+    DeferredOnly,
+    /// Every tier (active + deferred + archived).
+    All,
+}
+
+impl ViewTierFilter {
+    /// Resolve the three boolean flags into a single tier filter, matching the
+    /// CLI precedence (`--all` wins over `--archived` over `--deferred`).
+    fn resolve(all: bool, archived: bool, deferred: bool) -> Self {
+        if all {
+            ViewTierFilter::All
+        } else if archived {
+            ViewTierFilter::ArchivedOnly
+        } else if deferred {
+            ViewTierFilter::DeferredOnly
+        } else {
+            ViewTierFilter::ActiveOnly
+        }
+    }
+
+    /// Whether this requirement passes the current view-tier filter.
+    fn admits(&self, r: &Requirement) -> bool {
+        let archived = r.archived;
+        let tags: Vec<String> = r.tags.iter().cloned().collect();
+        let deferred = crate::intake::is_deferred(r.deferred, &tags);
+        match self {
+            ViewTierFilter::All => true,
+            ViewTierFilter::ArchivedOnly => archived,
+            // A row can be both deferred and archived; archive is the stronger
+            // tier, so the deferred-only view excludes archived rows.
+            ViewTierFilter::DeferredOnly => deferred && !archived,
+            ViewTierFilter::ActiveOnly => !archived && !deferred,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct McpBinaryIdentity {
     version: String,
@@ -1312,6 +1370,23 @@ impl<'a> McpServer<'a> {
             std::collections::HashSet::new()
         };
 
+        // BUG-591: mirror the CLI's archive (STORY-441) + deferred (STORY-584)
+        // view tiers. The default view hides BOTH archived and deferred rows so
+        // an MCP agent's baseline picture matches `aida list` — the STORY-82
+        // "MCP mirrors CLI" contract. `archived` / `deferred` narrow to that one
+        // tier; `all` widens to the union of all three tiers. Resolved into the
+        // shared two-axis predicate below. trace:BUG-591 | ai:claude
+        let show_all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let archived_only = args
+            .get("archived")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let deferred_only = args
+            .get("deferred")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let view = ViewTierFilter::resolve(show_all, archived_only, deferred_only);
+
         let filtered: Vec<&Requirement> = store
             .requirements
             .iter()
@@ -1377,6 +1452,12 @@ impl<'a> McpServer<'a> {
                     if sid == "?" || !in_flight_scopes.contains(&sid) {
                         return false;
                     }
+                }
+                // BUG-591: apply the same view-tier predicate the CLI uses so
+                // archived/deferred rows are hidden by default and surfaced only
+                // via the explicit filters. trace:BUG-591 | ai:claude
+                if !view.admits(r) {
+                    return false;
                 }
                 true
             })
@@ -1859,6 +1940,20 @@ impl<'a> McpServer<'a> {
         let type_filter = args.get("type").and_then(|v| v.as_str());
         let status_filter = args.get("status").and_then(|v| v.as_str());
 
+        // BUG-591: `aida search` inherits the same archive/deferred view-tier
+        // filtering as `aida list` — hide filed-away specs by default, surface
+        // them via archived/deferred/all. trace:BUG-591 | ai:claude
+        let show_all = args.get("all").and_then(|v| v.as_bool()).unwrap_or(false);
+        let archived_only = args
+            .get("archived")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let deferred_only = args
+            .get("deferred")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let view = ViewTierFilter::resolve(show_all, archived_only, deferred_only);
+
         let matches: Vec<&Requirement> = store
             .requirements
             .iter()
@@ -1890,6 +1985,11 @@ impl<'a> McpServer<'a> {
                     if !mcp_filter_eq(&r.status.to_string(), status) {
                         return false;
                     }
+                }
+                // BUG-591: hide archived/deferred rows by default, mirroring the
+                // CLI search view. trace:BUG-591 | ai:claude
+                if !view.admits(r) {
+                    return false;
                 }
                 true
             })
@@ -2741,7 +2841,10 @@ impl<'a> McpServer<'a> {
         }
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
-        Ok(format!("Finding {} {}d", id, action.to_ascii_lowercase()))
+        // BUG-590: emit the proper past tense ("dismissed"/"promoted") instead of
+        // blindly suffixing "d" to the raw action (which yielded "dismissd").
+        // `verb` is already the correct past-tense form. trace:BUG-590 | ai:claude
+        Ok(format!("Finding {} {}", id, verb))
     }
 
     // ========================================================================
@@ -5260,19 +5363,29 @@ fn mcp_status_gate_message_for(
         return None;
     }
 
+    // BUG-589: lead with the remediation that actually works for an MCP client.
+    // `role_enter` is PEEK-ONLY — it cannot set the shell's AIDA_SESSION_ROLE for
+    // the running MCP server, so it can never unlock this gate for the same
+    // session (steering an agent into role_enter just loops). The only working
+    // unlock for an MCP caller is launching `aida mcp-serve` with
+    // AIDA_SESSION_ROLE=advisor in its environment; the fallback is to leave the
+    // status to the advisor (file it / have the advisor act). trace:BUG-589 | ai:claude
     match to {
         RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
             "Cannot set status to {to} via MCP: approving or planning a spec is the \
-             advisor's triage decision and needs advisor authority. Enter an advisor role \
-             (role_enter advisor), file the spec and let the advisor promote it, or run the \
-             CLI as the advisor (AIDA_SESSION_ROLE=advisor)."
+             advisor's triage decision and needs advisor authority. To unlock this from an \
+             MCP client, (re)launch `aida mcp-serve` with AIDA_SESSION_ROLE=advisor in its \
+             environment, then retry. Otherwise file the spec and let the advisor promote it. \
+             (Note: the role_enter tool is peek-only — it cannot self-elevate this session, \
+             so it will NOT unlock the gate.)"
         )),
         _ => Some(format!(
             "Cannot advance {from} → {to} via MCP: moving an un-triaged or punted spec \
-             into the execution pipeline needs advisor authority. Enter an advisor role \
-             (role_enter advisor), let the advisor approve it first (it will then flip to \
-             {to} as implementation proceeds), or run the CLI as the advisor \
-             (AIDA_SESSION_ROLE=advisor)."
+             into the execution pipeline needs advisor authority. To unlock this from an MCP \
+             client, (re)launch `aida mcp-serve` with AIDA_SESSION_ROLE=advisor in its \
+             environment, then retry. Otherwise let the advisor approve it first (it will then \
+             flip to {to} as implementation proceeds). (Note: the role_enter tool is peek-only \
+             — it cannot self-elevate this session, so it will NOT unlock the gate.)"
         )),
     }
 }
@@ -5812,7 +5925,7 @@ pub fn tool_descriptors() -> Value {
         {
             "name": "list_requirements",
             // trace:STORY-82 | ai:claude
-            "description": "List requirements from the AIDA database, optionally filtered by status, type, feature category, priority, tags, batch, parent, owner role, or in-flight state. Mirrors the current `aida list` filter surface. Returns a summarized list of matching requirements.",
+            "description": "List requirements from the AIDA database, optionally filtered by status, type, feature category, priority, tags, batch, parent, owner role, or in-flight state. Mirrors the current `aida list` filter surface — including the archive/deferred view tiers: by DEFAULT archived (STORY-441) and deferred (STORY-584) specs are hidden, exactly like `aida list`. Use `archived` / `deferred` / `all` to surface those tiers. Returns a summarized list of matching requirements.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -5878,6 +5991,21 @@ pub fn tool_descriptors() -> Value {
                     "in_flight": {
                         "type": "boolean",
                         "description": "When true, restrict to requirements with a live session/claim lease (work currently in flight). When false or omitted (default), no in-flight filter is applied.",
+                        "example": true
+                    },
+                    "archived": {
+                        "type": "boolean",
+                        "description": "Show ONLY archived specs (STORY-441). Archived rows are hidden from the default view; set this to audit the archive. Mirrors `aida list --archived`.",
+                        "example": true
+                    },
+                    "deferred": {
+                        "type": "boolean",
+                        "description": "Show ONLY deferred specs — the primed/conditional shelf (STORY-584; deferred view-flag set OR a legacy `deferred:*` parking tag). Deferred rows are hidden from the default view. Mirrors `aida list --deferred`.",
+                        "example": true
+                    },
+                    "all": {
+                        "type": "boolean",
+                        "description": "Show the union of ALL view tiers — active + deferred + archived. Mirrors `aida list --all`. Takes precedence over `archived` / `deferred`.",
                         "example": true
                     },
                     "limit": {
@@ -6054,7 +6182,7 @@ pub fn tool_descriptors() -> Value {
         {
             "name": "search_requirements",
             // trace:STORY-82 | ai:claude
-            "description": "Case-insensitive keyword search across requirement titles, descriptions, and SPEC-IDs, optionally narrowed by type and/or status. Mirrors `aida search`.",
+            "description": "Case-insensitive keyword search across requirement titles, descriptions, and SPEC-IDs, optionally narrowed by type and/or status. Mirrors `aida search` — including the archive/deferred view tiers: by DEFAULT archived (STORY-441) and deferred (STORY-584) specs are hidden. Use `archived` / `deferred` / `all` to surface those tiers.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -6074,6 +6202,21 @@ pub fn tool_descriptors() -> Value {
                         "description": "Restrict results to this status.",
                         "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"],
                         "example": "in-progress"
+                    },
+                    "archived": {
+                        "type": "boolean",
+                        "description": "Show ONLY archived specs (STORY-441), hidden from the default search view. Mirrors `aida search --archived`.",
+                        "example": true
+                    },
+                    "deferred": {
+                        "type": "boolean",
+                        "description": "Show ONLY deferred specs — the primed shelf (STORY-584), hidden from the default search view. Mirrors `aida search --deferred`.",
+                        "example": true
+                    },
+                    "all": {
+                        "type": "boolean",
+                        "description": "Show the union of ALL view tiers (active + deferred + archived). Takes precedence over `archived` / `deferred`.",
+                        "example": true
                     }
                 },
                 "required": ["query"]
@@ -6303,8 +6446,13 @@ pub fn tool_descriptors() -> Value {
                     },
                     "detail": {
                         "type": "string",
-                        "description": "Detailed human-readable description of the obstacle or design fork.",
+                        "description": "Detailed human-readable description of the obstacle or design fork. Alias: `reason`.",
                         "example": "The downstream service API has updated its rate limits from 100/min to 10/min, breaking our batch ingest assumption."
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Alias for `detail` (TASK-883) — the obstacle/design-fork description. Provide either `detail` or `reason`; `detail` wins if both are set.",
+                        "example": "Two equally-valid storage layouts; need a decision before proceeding."
                     },
                     "category": {
                         "type": "string",
@@ -8323,6 +8471,228 @@ mod tests {
             .unwrap();
         assert!(out.contains(&child_id), "child must show: {out}");
         assert!(!out.contains(&stray_id), "stray must not show: {out}");
+    }
+
+    /// Set the `archived` view-flag directly in the store, bypassing the gate —
+    /// mirrors `aida archive <ID>`. trace:BUG-591 | ai:claude
+    fn force_archive(server: &McpServer<'static>, spec_id: &str) {
+        let mut store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id_mut(spec_id)
+            .expect("spec should exist for force_archive");
+        req.archived = true;
+        server.storage.save(&store).unwrap();
+    }
+
+    /// Set the `deferred` view-flag directly in the store — mirrors
+    /// `aida defer <ID>`. trace:BUG-591 | ai:claude
+    fn force_defer(server: &McpServer<'static>, spec_id: &str) {
+        let mut store = server.storage.load().unwrap();
+        let req = store
+            .get_requirement_by_spec_id_mut(spec_id)
+            .expect("spec should exist for force_defer");
+        req.deferred = true;
+        server.storage.save(&store).unwrap();
+    }
+
+    /// BUG-591: `list_requirements` must apply the same archive/deferred view
+    /// tiers as `aida list` — archived + deferred rows hidden by DEFAULT, and
+    /// surfaced via the `archived` / `deferred` / `all` filters.
+    // trace:BUG-591 | ai:claude
+    #[test]
+    fn mcp_list_requirements_honors_archive_and_defer_view_tiers() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let active = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "Active spec",
+                    "description": "stays visible",
+                    "type": "task",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+        let archived = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "Archived spec",
+                    "description": "filed away",
+                    "type": "task",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+        let deferred = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "Deferred spec",
+                    "description": "primed shelf",
+                    "type": "task",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+        force_archive(&server, &archived);
+        force_defer(&server, &deferred);
+
+        // DEFAULT view: active only; archived + deferred are hidden.
+        let default = server.tool_list_requirements(&json!({})).unwrap();
+        assert!(
+            default.contains(&active),
+            "active must show by default: {default}"
+        );
+        assert!(
+            !default.contains(&archived),
+            "archived must be hidden by default: {default}"
+        );
+        assert!(
+            !default.contains(&deferred),
+            "deferred must be hidden by default: {default}"
+        );
+
+        // archived=true → only the archived row.
+        let arc = server
+            .tool_list_requirements(&json!({ "archived": true }))
+            .unwrap();
+        assert!(
+            arc.contains(&archived),
+            "archived view must show archived: {arc}"
+        );
+        assert!(
+            !arc.contains(&active),
+            "archived view excludes active: {arc}"
+        );
+        assert!(
+            !arc.contains(&deferred),
+            "archived view excludes deferred: {arc}"
+        );
+
+        // deferred=true → only the deferred row.
+        let def = server
+            .tool_list_requirements(&json!({ "deferred": true }))
+            .unwrap();
+        assert!(
+            def.contains(&deferred),
+            "deferred view must show deferred: {def}"
+        );
+        assert!(
+            !def.contains(&active),
+            "deferred view excludes active: {def}"
+        );
+        assert!(
+            !def.contains(&archived),
+            "deferred view excludes archived: {def}"
+        );
+
+        // all=true → the union of all three tiers.
+        let all = server
+            .tool_list_requirements(&json!({ "all": true }))
+            .unwrap();
+        assert!(all.contains(&active), "all view shows active: {all}");
+        assert!(all.contains(&archived), "all view shows archived: {all}");
+        assert!(all.contains(&deferred), "all view shows deferred: {all}");
+    }
+
+    /// BUG-591: `search_requirements` mirrors the same view-tier default-hide as
+    /// `aida search` — an archived spec matching the query is hidden by default
+    /// but surfaced with `archived` / `all`.
+    // trace:BUG-591 | ai:claude
+    #[test]
+    fn mcp_search_requirements_honors_archive_view_tiers() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let active = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "seedling active",
+                    "description": "matches seedquery",
+                    "type": "task",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+        let archived = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "seedling archived",
+                    "description": "matches seedquery",
+                    "type": "task",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+        force_archive(&server, &archived);
+
+        // DEFAULT search hides the archived match.
+        let default = server
+            .tool_search_requirements(&json!({ "query": "seedquery" }))
+            .unwrap();
+        assert!(
+            default.contains(&active),
+            "active match must show: {default}"
+        );
+        assert!(
+            !default.contains(&archived),
+            "archived match must be hidden by default: {default}"
+        );
+
+        // archived=true surfaces it.
+        let arc = server
+            .tool_search_requirements(&json!({ "query": "seedquery", "archived": true }))
+            .unwrap();
+        assert!(
+            arc.contains(&archived),
+            "archived search must show archived: {arc}"
+        );
+        assert!(
+            !arc.contains(&active),
+            "archived search excludes active: {arc}"
+        );
+
+        // all=true → both.
+        let all = server
+            .tool_search_requirements(&json!({ "query": "seedquery", "all": true }))
+            .unwrap();
+        assert!(all.contains(&active), "all search shows active: {all}");
+        assert!(all.contains(&archived), "all search shows archived: {all}");
+    }
+
+    /// BUG-591: the list_requirements descriptor advertises the new view-tier
+    /// filters so schema-driven MCP clients can request them.
+    // trace:BUG-591 | ai:claude
+    #[test]
+    fn mcp_list_and_search_descriptors_advertise_view_tier_filters() {
+        let desc = tool_descriptors();
+        let arr = desc.as_array().unwrap();
+        for tool_name in ["list_requirements", "search_requirements"] {
+            let tool = arr
+                .iter()
+                .find(|t| t.get("name").and_then(|v| v.as_str()) == Some(tool_name))
+                .unwrap_or_else(|| panic!("{tool_name} descriptor must exist"));
+            let props = tool
+                .pointer("/inputSchema/properties")
+                .and_then(|v| v.as_object())
+                .unwrap();
+            for p in ["archived", "deferred", "all"] {
+                assert!(props.contains_key(p), "{tool_name} must advertise `{p}`");
+            }
+        }
+        // TASK-883: post_punt advertises the `reason` alias.
+        let post_punt = arr
+            .iter()
+            .find(|t| t.get("name").and_then(|v| v.as_str()) == Some("post_punt"))
+            .expect("post_punt descriptor must exist");
+        let pp_props = post_punt
+            .pointer("/inputSchema/properties")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        assert!(
+            pp_props.contains_key("reason"),
+            "post_punt must advertise the `reason` alias"
+        );
     }
 
     // trace:STORY-82 | ai:claude

@@ -34,11 +34,11 @@ AIDA's MCP server exposes **58 tools** in six clusters:
 
 ### Cluster 1 — Spec graph (12 tools)
 
-- `list_requirements({status})` → list specs (optionally filtered)
+- `list_requirements({status, archived?, deferred?, all?, ...})` → list specs (optionally filtered). Mirrors `aida list`: archived (STORY-441) and deferred (STORY-584) specs are hidden by DEFAULT; pass `archived` / `deferred` to surface that one tier, or `all` for the union.
 - `show_requirement({id})` → full spec content, relationships, comments
 - `add_requirement({title, description, type, ...})` → file a new spec. `type` is required and must be one of the canonical taxonomy values: `functional`, `non-functional`, `system`, `user`, `change-request`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `principle`, `vision`, `constraint`, `decision`, `term`, `doc` (the last five — `principle`/`vision`/`constraint`/`decision`/`term` — are the ADR + knowledge-graph family). AIDA auto-assigns the ID prefix from that type (for example, `task` → `TASK-N`), so agents should not invent generic `SPEC-N` IDs.
 - `update_requirement({id, ...})` → edit
-- `search_requirements({query})` → FTS5 search
+- `search_requirements({query, archived?, deferred?, all?, ...})` → FTS5 search. Like `list_requirements`, archived/deferred specs are hidden by default; `archived` / `deferred` / `all` surface them.
 - `add_comment({id, text})` → comment on a spec  *(arg is `text`, not `body`)*
 - `add_relationship({spec_id, relationship_type, target_spec_id, bidirectional?, force_parent?})` → add a typed relationship between existing specs. Built-ins include `parent`, `child`, `duplicate`, `verifies`, `verified-by`, `references`, `blocked-by`, and `blocks`; `depends-on` aliases to `blocked-by`, and custom non-empty names are accepted for CLI parity.
 - `query_graph({spec_id, mode?, depth?, follow?})` → query the cross-spec relationship graph from a root spec, equivalent to `aida graph`. `mode` ∈ `tree` (Parent/Child descendants + status rollup, default), `blocked-by` / `blocks` (transitive chains), `impact` (reverse closure — what is blocked by the root). `follow` (array of type names, e.g. `["begets"]`) traverses arbitrary custom/built-in edge types outgoing, overriding `mode` (FR-282). Returns JSON `{root, mode, count, nodes:[{id,title,status,resolved}], rollup}`. The typed-graph query a flat per-feature spec store can't answer.
@@ -52,7 +52,7 @@ These mirror the `aida list / show / add / edit / search / comment / history` CL
 ### Cluster 2 — Coordination (17 tools, STORY-361 + STORY-426)
 
 - **Punt channel:**
-  - `post_punt({spec_id, detail, category?, lean?, raised_by?})` — required: `spec_id`, `detail`. Append a punt record to `.aida/punts.jsonl`. Does NOT modify spec status — pair with `update_requirement` to flip to `needs-attention`.
+  - `post_punt({spec_id, detail, reason?, category?, lean?, raised_by?})` — required: `spec_id`, and one of `detail` / `reason` (`reason` is an accepted alias for `detail`; `detail` wins if both are given). Append a punt record to `.aida/punts.jsonl`. Does NOT modify spec status — pair with `update_requirement` to flip to `needs-attention`.
   - `list_punts({status?})` — list punt records
   - `read_punt({spec_id})` — read the most recent punt for a spec
   - `resolve_punt({spec_id, answer, reasoning, classification?})` — required: `spec_id`, `answer`, `reasoning`. Write a PuntResponse marking the punt resolved.
