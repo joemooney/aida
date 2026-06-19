@@ -19380,5 +19380,25 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 1901
+- id: 019edfef-52d9-7f83-bff3-e36a2e415f0f
+  target_id: 019edfef-4f83-7342-a791-2d83d76a4276
+  author: aida
+  node_id: '1'
+  lamport: 1902
+  timestamp: 2026-06-19T12:51:04.025841796Z
+  kind: !Create
+    title: 'aida edit writes no history: array row to the spec YAML (audit trail missing; --id history empty)'
+    description: |-
+      Observed across the dogfood run. After multiple aida edit operations (priority, status, title, owner, tags) on TASK-1 and BUG-1001, the materialized YAML at .aida-store/objects/.../<SPEC>.yaml has NO history: array at all. CLAUDE.md (Storage model section) states the per-spec YAML carries a history: array of HistoryEntry records and that "every status flip, priority change, tag edit, owner change lands here as a structured row" -- positioned as the source-of-truth for spec-state time series. In practice the edits land in oplog.yaml but the per-spec history: array is absent.
+
+      EVIDENCE: full cat of BUG-1001.yaml after concurrent priority+tags edits shows id/spec_id/title/status/priority/tags/... but no history: key. aida history --id <uuid> returned "(no recent activity)". The merge code (conflict.rs) carefully unions history by entry id -- but if no entries are ever written, there is nothing to union, and any reviewer building a burn-down by "walking these arrays directly" (as CLAUDE.md instructs) gets nothing.
+
+      This is a substrate/doc-contract gap and compounds BUG-586: the silently-lost concurrent edit also leaves no audit row, so the loss is undetectable after the fact.
+
+      EXPECTED: each edit appends a HistoryEntry {id, author, timestamp, changes:[{field_name, old_value, new_value}]} to the spec YAML, OR the CLAUDE.md / docs claim is corrected to point only at the oplog. Verify which side is wrong (code vs doc) per the verify-lore-against-code convention.
+      SEVERITY: bug (audit-trail completeness / doc-contract mismatch). Note: cache.db does not expose history rows, so the YAML/oplog IS the only time-series substrate -- this gap matters.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1902
 node_id: '1'
