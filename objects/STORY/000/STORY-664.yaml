@@ -1,0 +1,19 @@
+id: 019eddc4-e632-7d30-ab75-7ea371f3e219
+spec_id: STORY-664
+agreed_id: STORY-664
+title: Beads -> AIDA one-way importer (turn the nearest competitors traction into AIDAs funnel)
+description: 'MOVE 6. bd export JSONL -> AIDA spec-types + relationship-graph importer (one-way), preserving bd- ids as aliases. WHY: section 12 concludes the right compose move is exactly this - let a neighbors users opt INTO the governance layer (trace, lifecycle+history, the requirements category Beads abdicates by design) without leaving their graph. Converts the Beads distribution threat (Yegges reach) into a bridge; attacks "distribution not features is the real gap". EVIDENCE: import a real Beads graph, then run aida trace check + a lifecycle drain on it - the imported graph gains capabilities its origin tool structurally lacks. Size M. CAVEAT: verify the live issues.jsonl schema first (it churns). Builds on SPIKE-53/SPIKE-65.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:45:29.266230594Z
+modified_at: 2026-06-19T02:45:29.266230594Z
+req_type: Story
+tags:
+- beads
+- compete
+- from-discovery-0619
+- interop
+- parent:EPIC-50
+- tilt-verdict
