@@ -19708,5 +19708,26 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1916
+- id: 019ee093-345f-72f0-bc4f-969158a1ab38
+  target_id: 019ee093-313f-7a30-b5aa-30086d99c843
+  author: aida
+  node_id: '1'
+  lamport: 1917
+  timestamp: 2026-06-19T15:50:04.127869128Z
+  kind: !Create
+    title: 'docs/getting-started.md: ''aida comment add --content'' flag does not exist (positional only); minor walkthrough drifts'
+    description: |
+      Dogfood of docs/getting-started.md (2026-06-19) vs CLI v0.14.0. Mostly accurate (install paths, init, add/list/show/done/search/rel/del/github/db/cache all verified), one wrong flag + minor items:
+
+      MEDIUM:
+      - Lines ~193 and ~284 (Quick Reference table): `aida comment add TASK-1 --content "..."` shows a --content flag that does NOT exist. `aida comment add --help` has positional [CONTENT] only (flags: --author/--parent/--interactive). The command should be `aida comment add TASK-1 "Needs OAuth2 support"`. A newcomer copying the --content form gets "unexpected argument '--content'".
+
+      LOW / context:
+      - The "Add Your First Requirement" example `aida add --title ... --status draft` works for any role, but note (cf. BUG-597) `--status approved` would downgrade for the default implementer role; getting-started avoids approved here so it's fine - flagging only for consistency with the onboarding-authority fix.
+
+      Verified against /home/joe/ai/aida/target/release/aida 0.14.0.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1917
 node_id: '1'
