@@ -296,6 +296,17 @@ To move claims from (M)(D) to confirmed empirical results:
 
 *Identity and authorization.* *Authenticated Delegation* (South et al., arXiv:2501.09674, 2025) extends OAuth/OIDC with agent-ID and delegation tokens so a third party can verify an agent acts for a named principal within granted permissions. It is a trust substrate a coordination layer can sit *atop* — complementary, and a natural pairing for a cross-vendor fleet that must prove who authorized what.
 
+### References
+
+Formal citations for the foundational scholarly works invoked above (verified June 2026). The tool and standard *neighbors* named inline (spec-kit, Kiro, OpenSpec, Backlog.md, GNAP, Beads, Gas Town, graft, LangGraph, CrewAI, the Microsoft Agent Framework / Agent 365, Temporal, Claude Squad, Conductor, and the rest) are living projects cited by name; their canonical sources are their own repositories and spec sites, and the dated landscape survey behind them is `docs/competitive-analysis/` (a deliberately living, dated artifact, not a frozen bibliography). The interop standards — MCP (Model Context Protocol), A2A (Agent-to-Agent), and ACP (merged into A2A) — are cited to their published specifications.
+
+1. Shapiro, M., Preguiça, N., Baquero, C., & Zawirski, M. (2011). *Conflict-Free Replicated Data Types.* In Proc. 13th Int. Symp. on Stabilization, Safety, and Security of Distributed Systems (SSS 2011), LNCS 6976, pp. 386–400. Springer. (Extended as INRIA Research Report RR-7506, *A Comprehensive Study of Convergent and Commutative Replicated Data Types*, 2011.) — the G-Set / LWW-Register / OR-Set foundations §5 applies in git.
+2. Hevner, A. R., March, S. T., Park, J., & Ram, S. (2004). *Design Science in Information Systems Research.* MIS Quarterly, 28(1), 75–105. — the design-science method frame (build an artifact as a probe to produce knowledge) this paper operates under.
+3. Erman, L. D., Hayes-Roth, F., Lesser, V. R., & Reddy, D. R. (1980). *The Hearsay-II Speech-Understanding System: Integrating Knowledge to Resolve Uncertainty.* ACM Computing Surveys, 12(2), 213–253. — the original blackboard architecture; AIDA's shared-store-plus-messages coordination is a modern, vendor-neutral blackboard.
+4. South, T., Marro, S., Hardjono, T., Mahari, R., Whitney, C. D., Greenwood, D., Chan, A., & Pentland, A. (2025). *Authenticated Delegation and Authorized AI Agents.* arXiv:2501.09674. — the OAuth/OIDC-extending trust substrate a cross-vendor coordination layer can sit atop.
+
+(The "structured markdown as context" floor AIDA builds above is attributed to A. Karpathy's informal public commentary, not a formal publication.)
+
 ---
 
 ## 15. What the probe produced — distinctive value, honestly assessed
