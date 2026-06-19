@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:34:05.004422685Z
-modified_at: 2026-06-19T02:34:05.004422685Z
+modified_at: 2026-06-19T09:42:42.496110918Z
 req_type: Task
 tags:
 - aida:push
@@ -17,3 +17,9 @@ tags:
 - git
 - has-open-question
 - ux
+comments:
+- id: 019edf42-e040-7303-b6a0-f2a1e577bef0
+  author: joe
+  content: Commit c5ae4dc6e references this requirement
+  created_at: 2026-06-19T09:42:42.496110918Z
+  modified_at: 2026-06-19T09:42:42.496110918Z
