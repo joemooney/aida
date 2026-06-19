@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:18:34.174271621Z
-modified_at: 2026-06-19T02:18:34.174271621Z
+modified_at: 2026-06-19T02:26:28.980496956Z
 req_type: Bug
 tags:
 - aida:human
@@ -16,3 +16,9 @@ tags:
 - legibility
 - operator-caught
 - papercut
+comments:
+- id: 019eddb3-7ff4-7b30-8424-9aa20d73fc16
+  author: joe
+  content: Commit 894a1a4d8 references this requirement
+  created_at: 2026-06-19T02:26:28.980496956Z
+  modified_at: 2026-06-19T02:26:28.980496956Z
