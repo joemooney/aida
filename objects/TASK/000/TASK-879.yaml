@@ -1,0 +1,18 @@
+id: 019edeb4-0413-7aa0-b8d4-daf097ef9598
+spec_id: TASK-879
+agreed_id: TASK-879
+title: 'aida solo discoverability: surface it in getting-started + help (the command exists but is hidden)'
+description: The operator asked 'should we have a solo command?' - we DO (aida solo / aida solo run, STORY-625), which means it is under-surfaced. Add solo to the GETTING_STARTED set (main.rs ~78110) and/or a prominent line in print_tiered_help so a new user discovers 'run my project solo end-to-end'. Mention it where the autonomy story is told (aida help group, the user-walkthrough deck). Keep it tasteful (one entry). trace:EPIC-43
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T07:06:40.019478587Z
+modified_at: 2026-06-19T07:06:40.019478587Z
+req_type: Task
+tags:
+- aida:solo
+- from-operator
+- legibility
+- onboarding
+- parent:EPIC-43
