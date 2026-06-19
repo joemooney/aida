@@ -1,0 +1,17 @@
+id: 019eddba-2b03-7110-bf03-674fef12115c
+spec_id: TASK-861
+agreed_id: TASK-861
+title: aida help <topic> should show help for a topic group (it lists topics but cannot open one)
+description: aida help (bare) lists topic groups but there is no way to drill into one. Support aida help <topic> (e.g. aida help queue) to show that group expanded - the commands in the group with descriptions. Today only aida help --all (everything) and aida <command> --help (one command) exist; the middle granularity is missing.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:33:45.987752827Z
+modified_at: 2026-06-19T02:33:45.987752827Z
+req_type: Task
+tags:
+- aida:help
+- batch:operator-asks-0619
+- from-operator
+- legibility
