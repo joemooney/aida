@@ -24,12 +24,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T12:50:23.272187301Z
-modified_at: 2026-06-19T13:12:56.137748135Z
+modified_at: 2026-06-19T18:58:37.627778650Z
 req_type: Bug
 tags:
 - coordination
 - from-dogfood
 - multi-clone
+comments:
+- id: 019ee13f-d5bb-7272-8de5-367ec68b70a5
+  author: joe
+  content: Commit 2752429a7 references this requirement
+  created_at: 2026-06-19T18:58:37.627778650Z
+  modified_at: 2026-06-19T18:58:37.627778650Z
 history:
 - id: 019ee003-5845-7290-9e9e-baa8532f423f
   author: aida-auto-bump
