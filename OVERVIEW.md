@@ -6,7 +6,8 @@
 
 **Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
 
-For day-to-day usage see [docs/user-guide.md](docs/user-guide.md). For project conventions, build commands, and developer workflow see [CLAUDE.md](CLAUDE.md). For getting set up see [docs/getting-started.md](docs/getting-started.md). For *"how does AIDA fit alongside X?"* — neighbor-by-neighbor comparisons against `/ultrareview`, Karpathy-style structured markdown, Linear/Jira, etc. — see [docs/positioning/](docs/positioning/).
+<!-- trace:TASK-885 -->
+For day-to-day usage see the [CLI reference](docs/cli/README.md). For project conventions, build commands, and developer workflow see [CLAUDE.md](CLAUDE.md). For getting set up see [docs/getting-started.md](docs/getting-started.md). For *"how does AIDA fit alongside X?"* — neighbor-by-neighbor comparisons against `/ultrareview`, Karpathy-style structured markdown, Linear/Jira, etc. — see [docs/positioning/](docs/positioning/).
 
 ---
 
@@ -109,7 +110,7 @@ The exceptions are interesting: `/ultraplan` and `/ultrareview` ARE semi-vertica
 
 The strategic implication: AIDA should keep doing the vertical depth that the horizontal primitives can't reach. Concretely:
 
-- **Don't compete with `/goal`** — compose with it via `aida goal-helper` ([TASK-242](docs/plans/)), which derives machine-checkable conditions from the requirement graph
+- **Don't compete with `/goal`** — compose with it via `aida goal` ([TASK-242](docs/plans/)), which derives machine-checkable conditions from the requirement graph
 - **Don't compete with `/ultraplan`** — compose with it via `aida ultraplan SPEC` ([TASK-113](docs/plans/)) for prompt assembly + `/aida-import-plan` ([TASK-114](docs/plans/)) for output persistence
 - **Don't compete with `/ultrareview`** — compose with it via `/aida-review`'s spec-walk + adversarial-pass discipline (STORY-109, shipped) that uses requirement metadata `/ultrareview` doesn't know about
 - **Don't compete with Claude Code's session model** — extend it via worktree-isolated implementer sessions, role-pure boundaries, queue routing, the (planned) TUI that hosts Claude Code itself ([EPIC-26](docs/positioning/))
@@ -176,6 +177,7 @@ aida/
 ├── aida-crate/            Published `aida` crate metadata
 ├── aida-server/           REST + gRPC server (port 8080)
 ├── aida-generate-types/   Rust → TypeScript types (ts-rs)
+├── aida-tui/              `aida tui` terminal shell — the public face (EPIC-26)
 ├── aida-web-react/        React 19 + Vite + Tailwind dashboard (port 5173 dev)
 ├── proto/                 Protocol Buffers definitions
 ├── docs/                  Markdown docs (incl. plans/ archive)
@@ -187,13 +189,13 @@ aida/
 
 ## Feature surface (high level)
 
-For details on any of these see [docs/user-guide.md](docs/user-guide.md).
+For details on any of these see the [CLI reference](docs/cli/README.md).
 
 ### Requirements
 
-- **Types**: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta
+- **Types** (19): functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
 - **Status workflows** are type-specific (e.g., the standard `draft → approved → in-progress → completed | rejected`)
-- **Relationships** with typed cardinalities: parent/child, verifies/verified-by, references, duplicate, plus user-defined types via `aida db rel-def`
+- **Relationships** with typed cardinalities: parent/child, verifies/verified-by, references, duplicate, plus user-defined types via `aida rel-def`
 - **Comments** with threaded replies and configurable emoji reactions
 - **Custom fields** per type definition
 - **Meta requirements** (META-002…006) store the AI prompt templates as editable requirements; `aida edit META-002 --description …` customizes evaluation/duplicates/relationships/improve/generate-children prompts
@@ -207,7 +209,7 @@ For details on any of these see [docs/user-guide.md](docs/user-guide.md).
 
 ### AI / agent integration
 
-- **Claude Code skills** scaffolded by `aida init` under `.claude/skills/` and `.claude/commands/` (22 skills as of writing): daily drivers `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-search`, `/aida-plan`, `/aida-onboard`, `/aida-pickup`
+- **Claude Code skills** scaffolded by `aida init` under `.claude/skills/` and `.claude/commands/` (47 skills, 48 commands as of writing): daily drivers `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-search`, `/aida-plan`, `/aida-onboard`, `/aida-pickup`
 - **Codex (AGENTS.md)** profile scaffolded in parallel; `aida init --agent codex` for Codex-only, `--agent both` (default) for both
 - **MCP tools**: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`
 - **MCP resources**: `aida://project/summary`, `aida://requirements/tree`
@@ -257,7 +259,7 @@ For project conventions (commit format, scaffold/template architecture, CLI refe
 | [README.md](README.md) | Quick start and project structure |
 | [CLAUDE.md](CLAUDE.md) | Conventions, build commands, scaffold/template architecture, CLI reference |
 | [docs/getting-started.md](docs/getting-started.md) | First-time setup walkthrough |
-| [docs/user-guide.md](docs/user-guide.md) | CLI / web dashboard usage, use-case tutorials, integration recipes |
+| [docs/cli/](docs/cli/README.md) | The CLI reference manual — when and why to use every command (12 chapters) |
 | [docs/admin-guide.md](docs/admin-guide.md) | Storage administration, multi-user configuration |
 | [docs/storage-modes.md](docs/storage-modes.md) | Deeper dive on storage modes and migration paths |
 | [docs/architecture/autonomy-and-escalation.md](docs/architecture/autonomy-and-escalation.md) | The autonomy modes, the implementer → advisor → human escalation cascade, the advisor's Type A/B/C calibration, the inter-agent comms substrate |
