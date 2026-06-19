@@ -1,0 +1,18 @@
+id: 019eddb9-8724-7762-87d7-e6dcb541327c
+spec_id: TASK-859
+agreed_id: TASK-859
+title: aida init should prompt for configurable items (optionally launch aida config menu)
+description: At init (TTY), prompt for the handful of high-value configurable items rather than leaving them at silent defaults (e.g. agent permission posture, bwrap posture, forge CLI, telemetry opt-out, node name). Optionally offer to launch aida config menu for the full surface. Non-interactive init keeps current defaults (no prompts). Builds on the existing first-machine agent-posture prompt (TASK-698) + node-name prompt.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:33:04.036028280Z
+modified_at: 2026-06-19T02:33:04.036028280Z
+req_type: Task
+tags:
+- aida:init
+- batch:operator-asks-0619
+- depends-on:config-menu
+- from-operator
+- onboarding
