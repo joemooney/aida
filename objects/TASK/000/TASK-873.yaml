@@ -3,12 +3,12 @@ spec_id: TASK-873
 agreed_id: TASK-873
 title: Lifecycle-authority gate demonstration vs the fields merge-time gates
 description: 'MOVE 8. Focused demo of AIDAs AUTHORITY gates (advisor-only Draft->Approved, merge-driven completion, trailer auto-complete) contrasted with the familys merge-time verification gates (Gas Towns Refinery CI queue) and Beads 3 UNENFORCED states. WHY: section 15 Tier-1 isolates this as genuinely distinctive - AIDA gates the AUTHORITY TO CHANGE INTENT STATE; the family gates what merges. A rarer, uncontested enforcement point, currently asserted not shown. EVIDENCE: demo a non-advisor identity refused an Approved transition + a "done" thats a property of git ancestry not assertion, vs a Beads state set by convention. Size S (gates exist; this is demonstration).'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:45:37.497637879Z
-modified_at: 2026-06-19T08:33:05.944679441Z
+modified_at: 2026-06-19T08:41:09.695642633Z
 req_type: Task
 tags:
 - demo
@@ -23,3 +23,21 @@ comments:
   content: Commit 0e7a538b7 references this requirement
   created_at: 2026-06-19T08:33:05.944679441Z
   modified_at: 2026-06-19T08:33:05.944679441Z
+history:
+- id: 019edf0a-873a-7b41-8cbd-f65aa3d0d49b
+  author: aida-auto-bump
+  timestamp: 2026-06-19T08:41:09.690892314Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019edf0a-873f-7b62-80ef-59450eb3bc07
+  timestamp: 2026-06-19T08:41:09.695642082Z
+  agent: aida
+  commit_sha: aff78b98daacea4f485811e7a2373df4f006fce5
+  summary: Completed via merge aff78b98
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T08:41:09.533216164Z
+  completion_sha: aff78b98daacea4f485811e7a2373df4f006fce5
