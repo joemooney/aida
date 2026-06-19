@@ -1,0 +1,23 @@
+id: 019ee068-d868-78a3-9038-5251eb0b6298
+spec_id: BUG-595
+agreed_id: BUG-595
+title: assess risk heuristic over-flags well-specified specs as high-risk, fencing them out while thin specs pass
+description: |-
+  aida assess --dry-run (default --risk medium) on a 7-draft backlog admits only 3 candidates (BUG-5, TASK-3, TASK-8). The genuinely well-specified STORY-1 (full EARS description + ## Acceptance: expiry, single-use, rate-limit) is fenced out as "risk above ceiling (high)", while the one-line vague TASK-3 ("fix the thing with the search", no description) passes the fence.
+
+  The risk inference inverts the intended signal: a complete, well-formed spec is rated riskier than an empty one, so the default assess pass skips most real, ready drafts and considers the thinnest. backlog list --json shows STORY-1 and STORY-9 both risk=high with no visible reason — the heuristic appears to fire on surface keywords (password/auth/notification) rather than spec quality or blast radius.
+
+  Expected: risk inference should not rate a fully-specified low-blast-radius spec as high; at minimum surface the risk reason so an advisor can trust/override it. As-is the default intake pass has poor coverage of the real ready set.
+
+  Repro: seed a well-specified draft + a one-line draft; AIDA_SESSION_ROLE=advisor aida assess --dry-run.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T15:03:48.072407147Z
+modified_at: 2026-06-19T15:03:48.072407147Z
+req_type: Bug
+tags:
+- advisor
+- from-dogfood
+- intake
