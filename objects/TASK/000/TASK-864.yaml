@@ -3,12 +3,12 @@ spec_id: TASK-864
 agreed_id: TASK-864
 title: Wire bwrap os_wrap into the interactive agent-launch path (aida agent new), not just headless drains
 description: 'Today the bwrap OS-wrapper (claude_program_and_args / os_wrap_enabled in aida-cli/src/session.rs:1111,1229) is applied ONLY on the three HEADLESS claude -p spawn paths (spawn_claude_headless :792, exec_claude_headless :1386, spawn_claude_headless_resume :1479). The interactive launcher aida agent new (agent_new_claude -> agent_new_with_config -> run_tracked_agent in aida-cli/src/main.rs:36550,36744) spawns claude DIRECTLY with no bwrap wrap — it only applies Claude-Code-native contained flags (tool_contained_flags), never the OS boundary. Slice: route the interactive foreground claude launch through claude_program_and_args (or an equivalent wrap step) when [contained] os_wrap=true, with the same fail-closed bwrap-on-PATH + preflight checks. Acceptance: an interactive aida agent new with os_wrap=true execs bwrap-wrapped claude; bwrap absent -> fail-closed error, never silent unconfined launch. Verify against the actual spawn site, not docs.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:39:56.700622713Z
-modified_at: 2026-06-19T04:48:57.832581280Z
+modified_at: 2026-06-19T05:07:40.841108588Z
 req_type: Task
 tags:
 - bubblewrap
@@ -16,3 +16,21 @@ tags:
 - parent:SPIKE-68
 - reliability
 - sandbox
+history:
+- id: 019ede47-14a4-71c2-8cb0-69a0933e2c9a
+  author: aida-auto-bump
+  timestamp: 2026-06-19T05:07:40.836301284Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ede47-14a9-7602-a8d0-f7efbbff0e10
+  timestamp: 2026-06-19T05:07:40.841107454Z
+  agent: aida
+  commit_sha: f05d31906d4227782b21fe410fd78db0b3134277
+  summary: Completed via merge f05d3190
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T05:07:40.674355090Z
+  completion_sha: f05d31906d4227782b21fe410fd78db0b3134277
