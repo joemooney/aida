@@ -19328,5 +19328,33 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 1899
+- id: 019edfee-b7b0-7b00-b479-bc4ad7388a89
+  target_id: 019edfee-b3a8-78b0-9454-49c5118787c3
+  author: aida
+  node_id: '1'
+  lamport: 1900
+  timestamp: 2026-06-19T12:50:24.304990409Z
+  kind: !Create
+    title: Concurrent same-spec different-scalar-field edits silently lose one side (object LWW ignores unioned oplog)
+    description: |-
+      Observed in a hand-driven 2-clone dogfood (bare origin + clone A/B, target/release).
+
+      REPRO (both edits via the supported oplog path):
+      - Baseline TASK-1 synced to both clones (priority=Low, owner empty).
+      - Clone A: aida edit TASK-1 --priority high   (writes OpKind::SetPriority{High}, modified_at=T1)
+      - Clone B: aida edit TASK-1 --owner bob        (writes OpKind::SetOwner{bob},     modified_at=T2 > T1)
+      - A pushes first (ok). B push rejected -> aida pull auto-merges.
+
+      Pull reported SUCCESS: "auto-merged TASK-1 ... status LWW=Planned" and "auto-merged oplog: 8 operations after union". The unioned oplog DOES contain A SetPriority{High} (verified in .aida-store/oplog.yaml). BUT the materialized object .aida-store/objects/TASK/000/TASK-1.yaml shows priority=Low, owner=bob. A different-field edit (priority=High) was SILENTLY DROPPED with no conflict, no warning, exit 0. Both clones converge to the wrong value.
+
+      ROOT CAUSE (grounded): conflict.rs merge_spec_three_way resolves ALL scalars (title/description/status/priority/owner/feature/weight) with a SINGLE object-level last-write-wins on modified_at -- it picks one whole side snapshot. It then unions history/comments/tags/relationships/dependencies, but it does NOT field-merge scalars and does NOT replay the unioned oplog ops onto the result. So the side with the older modified_at loses EVERY scalar edit it made, including fields the winner never touched.
+
+      EXPECTED (2-person team): concurrent edits to DIFFERENT fields of the same spec both survive (the oplog already captures them correctly; the object merge should replay/field-merge rather than whole-snapshot LWW). At minimum the lost edit should surface a conflict/warning, never silently revert. Note this contradicts the spirit of STORY-641/645 (per-field auto-merge) for scalar fields.
+
+      SEVERITY: high -- silent data loss of a committed edit on the niche core surface (two collaborators editing the same spec). No error, no audit row (see companion finding: history array not written).
+      Code: aida-core/src/conflict.rs merge_spec_three_way; oplog union is correct, object materialization is not.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1900
 node_id: '1'
