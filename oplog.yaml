@@ -18951,5 +18951,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 1870
+- id: 019eddc0-ae31-7290-897e-d4bc4f8ce405
+  target_id: 019eddc0-a788-7da1-a3f5-94d8fceae95c
+  author: aida
+  node_id: '1'
+  lamport: 1871
+  timestamp: 2026-06-19T02:40:52.785206558Z
+  kind: !Create
+    title: Expose [contained] os_wrap / read_allowlist / managed_domains_only in aida config show
+    description: 'aida config show currently surfaces only [contained] enable and [contained] allowed_hosts (aida-cli/src/main.rs:24169-24223). The bwrap-specific knobs are NOT shown: os_wrap (os_wrap_enabled, session.rs:1111), read_allowlist (contained_read_allowlist, session.rs:960), managed_domains_only (contained_managed_domains_only, session.rs:946). Note os_wrap (the OS bwrap boundary) is DISTINCT from enable (Claude Code native --settings sandbox) — operators conflate them. Slice: add os_wrap, read_allowlist, managed_domains_only rows to the [contained] PolicySection, each with source/effective resolution, reusing the existing helpers. Acceptance: aida config show lists all four [contained] bwrap/sandbox knobs with their effective values + source. (Separate larger question — a writable aida config set <section>.<key> — is out of scope; config set does not exist today, only ID-format/user/hints subcommands.)'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 1871
 node_id: '1'
