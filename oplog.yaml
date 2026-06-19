@@ -19167,5 +19167,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 1888
+- id: 019ede8a-7ab3-7332-af1a-ce1b7347fdd9
+  target_id: 019ede8a-76f5-7cb3-9c3e-0d4b90eac006
+  author: aida
+  node_id: '1'
+  lamport: 1889
+  timestamp: 2026-06-19T06:21:17.875029880Z
+  kind: !Create
+    title: 'Flaky os_wrap tests: AIDA_OS_WRAP env leak across parallel test threads'
+    description: 'session.rs os_wrap tests share one process environment under cargo parallel test execution. The mutator tests aida_os_wrap_env_overrides_config and interactive_path_wraps_when_enabled_unchanged_when_off set/remove AIDA_OS_WRAP guarded only by a FUNCTION-LOCAL static ENV_LOCK, so reader tests (os_wrap_off_leaves_launch_unwrapped, os_wrap_binds_managed_settings_only_when_opted_in, bwrap_write_confinement_live_or_fail_closed) that assume a clean env intermittently observe the leaked value and fail in CI. Fix: a single module-level OS_WRAP_ENV_LOCK plus an RAII guard that saves/clears/restores AIDA_OS_WRAP, applied to all affected tests.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 1889
 node_id: '1'
