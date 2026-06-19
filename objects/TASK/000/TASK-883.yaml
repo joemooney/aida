@@ -8,9 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T14:29:13.705744673Z
-modified_at: 2026-06-19T14:29:13.705744673Z
+modified_at: 2026-06-19T14:45:11.593664947Z
 req_type: Task
 tags:
 - from-dogfood
 - mcp
 - schema
+comments:
+- id: 019ee057-cf29-7a23-9fff-ed5de4c15d63
+  author: joe
+  content: Commit 243c9eabc references this requirement
+  created_at: 2026-06-19T14:45:11.593664947Z
+  modified_at: 2026-06-19T14:45:11.593664947Z
