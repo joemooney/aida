@@ -1,0 +1,19 @@
+id: 019eddc5-3684-79c3-9ab7-b5677b790e2d
+spec_id: TASK-875
+agreed_id: TASK-875
+title: 'Spec Kit composition-seam demo: scaffold there, graph + trace + lifecycle here'
+description: 'MOVE 11. Demonstrate the documented seam: scaffold a feature with GitHub Spec Kit, import via aida plan scan, then show the cross-feature graph + traces + lifecycle AIDA adds that Spec Kit structurally drops after /implement. WHY: Spec Kit is the nearest competitor with ~100x distribution; the honest positioning is composable-not-competing, but the seam is described not shown. Answers "why not just Spec Kit?" with an artifact - a Spec Kit feature kept queryable/traced/lifecycle-tracked AFTER it ships, six features later. EVIDENCE: before/after - a Spec Kit feature dir vs the same feature in AIDAs graph, "whats blocked across this epic?" answerable in one, unanswerable in the other. Size S-M (aida plan scan exists).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:45:49.828016312Z
+modified_at: 2026-06-19T02:45:49.828016312Z
+req_type: Task
+tags:
+- compete
+- demo
+- from-discovery-0619
+- interop
+- parent:EPIC-50
+- tilt-verdict
