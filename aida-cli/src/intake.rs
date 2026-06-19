@@ -251,6 +251,10 @@ pub struct IntakeSpec {
     /// Advisory risk token (`low` / `medium` / `high` / `unknown`) — the same
     /// chip `aida backlog list` shows. Used for the `--risk` ceiling.
     pub risk: crate::backlog::RiskLevel,
+    /// BUG-595: the one-line reason the risk level was assigned, so a fenced
+    /// spec's disposition is legible ("risk above ceiling (unknown) —
+    /// under-specified …") rather than an opaque chip. trace:BUG-595 | ai:claude
+    pub risk_reason: String,
 }
 
 /// The canonical "is this spec in the deferred tier?" predicate, shared so the
@@ -278,8 +282,15 @@ pub enum FenceReason {
     /// legacy `deferred:*` parking tag. Re-blessing it would undo the operator's
     /// deferral curation. trace:BUG-561
     Deferred,
-    /// Risk above the `--risk` ceiling.
-    RiskCeiling(crate::backlog::RiskLevel),
+    /// BUG-594: keystone / supervised work the operator explicitly reserved for
+    /// human judgment (`keystone` / `supervised` / `architecture` / `security` /
+    /// epic, etc.). Fenced INDEPENDENT of the risk ceiling — the same invariant
+    /// `aida queue integrate` enforces (TASK-813). Carries the matched marker.
+    /// trace:BUG-594 | ai:claude
+    Keystone(String),
+    /// Risk above the `--risk` ceiling. BUG-595: carries the per-spec risk
+    /// reason so the disposition is legible, not just the chip.
+    RiskCeiling(crate::backlog::RiskLevel, String),
 }
 
 impl FenceReason {
@@ -291,7 +302,12 @@ impl FenceReason {
             FenceReason::ExcludedTag(t) => format!("excluded tag `{t}`"),
             FenceReason::NotOnlyTag(t) => format!("missing required tag `{t}`"),
             FenceReason::Deferred => "deferred".to_string(),
-            FenceReason::RiskCeiling(r) => format!("risk above ceiling ({})", r.token()),
+            FenceReason::Keystone(marker) => {
+                format!("keystone/supervised (`{marker}`) — reserved for human review")
+            }
+            FenceReason::RiskCeiling(r, reason) => {
+                format!("risk above ceiling ({}) — {reason}", r.token())
+            }
         }
     }
 }
@@ -321,6 +337,39 @@ impl Default for IntakeFilters {
 
 fn tags_contain(tags: &[String], name: &str) -> bool {
     tags.iter().any(|t| t.trim().eq_ignore_ascii_case(name))
+}
+
+/// BUG-594: is this spec keystone / supervised — work the operator reserved for
+/// human judgment? Reuses the canonical [`crate::presence::is_keystone_class`]
+/// detector (epic type, or any `keystone` / `architecture` / `security` /
+/// `supervised` / `needs-supervised-build` / `blast-radius:high` / `risk:high`
+/// tag) so assess can never disagree with the drain / `queue integrate` on what
+/// keystone means. Returns the matched marker for the fence reason.
+/// trace:BUG-594 | ai:claude
+fn keystone_marker(req_type: &str, tags: &[String]) -> Option<String> {
+    if !crate::presence::is_keystone_class(req_type, tags.iter().map(|s| s.as_str())) {
+        return None;
+    }
+    if req_type.trim().eq_ignore_ascii_case("epic") {
+        return Some("epic".to_string());
+    }
+    // Surface the specific tag that triggered the fence (most informative).
+    const KEYSTONE_TAGS: &[&str] = &[
+        "keystone",
+        "supervised",
+        "architecture",
+        "security",
+        "needs-supervised-build",
+        "blast-radius:high",
+        "risk:high",
+    ];
+    tags.iter()
+        .find(|t| {
+            let lo = t.trim().to_ascii_lowercase();
+            KEYSTONE_TAGS.contains(&lo.as_str())
+        })
+        .map(|t| t.trim().to_string())
+        .or_else(|| Some("keystone".to_string()))
 }
 
 /// Pure candidate FENCE. Partition the open specs into `(eligible, fenced)`:
@@ -355,6 +404,17 @@ pub fn select_intake_candidates(
             fenced.push((spec.id.clone(), FenceReason::Deferred));
             continue;
         }
+        // BUG-594: keystone / supervised work is fenced INDEPENDENT of the risk
+        // ceiling — the same human-judgment invariant `aida queue integrate`
+        // enforces (TASK-813). Without this, a `keystone,supervised` spec whose
+        // inferred risk happens to sit under the ceiling (or `--risk high`)
+        // becomes an approve/queue candidate the cold-boot advisor can bless —
+        // exactly the work the operator reserved for themselves. Reuses the
+        // canonical `presence::is_keystone_class` detector. trace:BUG-594
+        if let Some(marker) = keystone_marker(&spec.req_type, &spec.tags) {
+            fenced.push((spec.id.clone(), FenceReason::Keystone(marker)));
+            continue;
+        }
         // P2 always-on tag exclusions + the per-run --exclude-tag.
         if let Some(t) = ALWAYS_EXCLUDE_TAGS
             .iter()
@@ -378,7 +438,10 @@ pub fn select_intake_candidates(
         }
         // Risk ceiling.
         if !spec.risk.within_ceiling(filters.max_risk) {
-            fenced.push((spec.id.clone(), FenceReason::RiskCeiling(spec.risk)));
+            fenced.push((
+                spec.id.clone(),
+                FenceReason::RiskCeiling(spec.risk, spec.risk_reason.clone()),
+            ));
             continue;
         }
         eligible.push(spec.id.clone());
@@ -463,6 +526,7 @@ mod tests {
             tags: tag_vec,
             deferred,
             risk,
+            risk_reason: format!("{} (test)", risk.token()),
         }
     }
 
@@ -630,7 +694,50 @@ workflow_hints = true
         let (eligible, fenced) = select_intake_candidates(&specs, &cfg, &filters);
         assert_eq!(eligible, vec!["STORY-1"]);
         assert_eq!(fenced.len(), 2);
-        assert!(matches!(fenced[0].1, FenceReason::RiskCeiling(_)));
+        assert!(matches!(fenced[0].1, FenceReason::RiskCeiling(_, _)));
+    }
+
+    // BUG-594: keystone / supervised work is fenced INDEPENDENT of the risk
+    // ceiling — the same human-judgment invariant `queue integrate` enforces.
+    #[test]
+    fn keystone_is_fenced_even_under_permissive_risk_ceiling() {
+        let cfg = IntakeConfig::default();
+        let filters = IntakeFilters {
+            max_risk: RiskLevel::High, // permissive: admits everything by risk
+            ..Default::default()
+        };
+        let specs = vec![
+            spec(
+                "STORY-11",
+                "story",
+                &["keystone", "supervised"],
+                RiskLevel::Low,
+            ),
+            spec("TASK-1", "task", &[], RiskLevel::Low),
+        ];
+        let (eligible, fenced) = select_intake_candidates(&specs, &cfg, &filters);
+        // The keystone spec is fenced even though its risk is under the ceiling.
+        assert_eq!(eligible, vec!["TASK-1"]);
+        assert!(
+            fenced
+                .iter()
+                .any(|(id, r)| id == "STORY-11" && matches!(r, FenceReason::Keystone(_))),
+            "keystone spec must be fenced, got: {fenced:?}"
+        );
+    }
+
+    // BUG-594: a bare `supervised` tag (no `keystone`) is also fenced.
+    #[test]
+    fn supervised_alone_is_fenced() {
+        let cfg = IntakeConfig::default();
+        let filters = IntakeFilters {
+            max_risk: RiskLevel::High,
+            ..Default::default()
+        };
+        let specs = vec![spec("TASK-9", "task", &["supervised"], RiskLevel::Low)];
+        let (eligible, fenced) = select_intake_candidates(&specs, &cfg, &filters);
+        assert!(eligible.is_empty());
+        assert!(matches!(fenced[0].1, FenceReason::Keystone(_)));
     }
 
     #[test]
