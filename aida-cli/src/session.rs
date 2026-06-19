@@ -1336,6 +1336,64 @@ fn bwrap_preflight() -> Result<()> {
     }
 }
 
+/// Availability of the bubblewrap (`bwrap`) OS sandbox on this host, as
+/// reported by `aida doctor` / `aida init`. A read-only probe — it does NOT
+/// enable `os_wrap` (the `[contained] os_wrap` config knob, exposed separately
+/// by TASK-866); it only tells the user whether userns confinement *could* be
+/// used. trace:TASK-865 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum BwrapAvailability {
+    /// `bwrap` is on PATH and the userns self-test passes.
+    Ok,
+    /// `bwrap` is not installed / not on PATH.
+    NotInstalled,
+    /// `bwrap` is installed but the kernel refuses the unprivileged user
+    /// namespace it needs — carries the remediation hint from `bwrap_preflight`.
+    UsernsBlocked { hint: String },
+}
+
+/// Probe whether the bubblewrap OS sandbox is available on this host: is
+/// `bwrap` on PATH, and does the trivial userns self-test pass? Reuses
+/// `which_on_path` + `bwrap_preflight` so the doctor/init report matches what
+/// the launch path actually checks. Read-only — never enables confinement.
+/// trace:TASK-865 | ai:claude
+pub(crate) fn bwrap_availability() -> BwrapAvailability {
+    if which_on_path("bwrap").is_none() {
+        return BwrapAvailability::NotInstalled;
+    }
+    match bwrap_preflight() {
+        Ok(()) => BwrapAvailability::Ok,
+        Err(e) => BwrapAvailability::UsernsBlocked {
+            hint: bwrap_userns_remediation_hint(&e.to_string()),
+        },
+    }
+}
+
+/// Distil `bwrap_preflight`'s long fail-closed message down to the one-line
+/// remediation a doctor/init status row wants. Falls back to the full text if
+/// the expected `Remediate with ONE of:` marker is absent. trace:TASK-865 | ai:claude
+fn bwrap_userns_remediation_hint(full: &str) -> String {
+    // The preflight message lists remediations after a "Remediate with ONE of:"
+    // marker; surface the first concrete `sysctl` line as the short hint.
+    if let Some(rest) = full.split("Remediate with ONE of:").nth(1) {
+        for line in rest.lines() {
+            // The source lines are `  - sudo sysctl … (host-wide)\n  ` — strip
+            // the leading bullet, the trailing soft-wrap whitespace, and any
+            // parenthetical aside so the one-liner is a clean copy-paste hint.
+            let trimmed = line.trim().trim_start_matches('-').trim();
+            let trimmed = trimmed.split("   ").next().unwrap_or(trimmed).trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+    "the kernel is refusing the unprivileged user namespace bwrap needs (on \
+     Ubuntu 23.10+/24.04, AppArmor's apparmor_restrict_unprivileged_userns); \
+     run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` or \
+     install an AppArmor profile granting bwrap userns"
+        .to_string()
+}
+
 /// Minimal PATH lookup for an executable name (avoids pulling in a `which`
 /// crate). Returns the first matching path, or `None`. trace:STORY-612 | ai:claude
 fn which_on_path(exe: &str) -> Option<PathBuf> {
@@ -2191,6 +2249,32 @@ pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>, contained: bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TASK-865: the doctor/init bwrap row distils bwrap_preflight's long
+    // fail-closed message down to a single clean remediation line — the first
+    // concrete `sysctl` step, with the parenthetical aside and soft-wrap
+    // whitespace stripped. trace:TASK-865 | ai:claude
+    #[test]
+    fn bwrap_remediation_hint_extracts_first_concrete_step() {
+        let full = "[contained] os_wrap is enabled and `bwrap` is installed, but a sandbox \
+                    self-test failed. Remediate with ONE of:\n  \
+                    - sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0   (host-wide)\n  \
+                    - install an AppArmor profile granting bwrap userns";
+        let hint = bwrap_userns_remediation_hint(full);
+        assert_eq!(
+            hint,
+            "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0"
+        );
+    }
+
+    // TASK-865: when the expected marker is absent, fall back to a complete
+    // self-contained hint rather than returning an empty string.
+    #[test]
+    fn bwrap_remediation_hint_falls_back_without_marker() {
+        let hint = bwrap_userns_remediation_hint("some unexpected error text");
+        assert!(hint.contains("apparmor_restrict_unprivileged_userns"));
+        assert!(!hint.is_empty());
+    }
 
     // STORY-605: an EMPTY egress allowlist must leave the contained settings
     // unchanged — the network-egress restriction is strictly opt-in. The
