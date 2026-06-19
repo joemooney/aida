@@ -18795,5 +18795,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 1857
+- id: 019eddb9-5971-7a43-a3fd-cefd195e01e7
+  target_id: 019eddb9-5638-7562-be70-2a78569f6fc0
+  author: aida
+  node_id: '1'
+  lamport: 1858
+  timestamp: 2026-06-19T02:32:52.337820610Z
+  kind: !Create
+    title: aida agent (bare) should alias to aida agent new
+    description: aida agent is a parent command (new/ls/list-roles); bare aida agent currently errors (clap requires a subcommand). Make bare aida agent default to aida agent new (git-style default subcommand), forwarding all flags to new. Keep aida agent ls / new / list-roles working. Small UX convenience.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 1858
 node_id: '1'
