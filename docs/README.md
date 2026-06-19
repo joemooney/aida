@@ -27,7 +27,7 @@ you at all? Jump to [Deciding whether to adopt](#deciding-whether-to-adopt).
 | Doc | What it gives you |
 |-----|-------------------|
 | **[cli/](cli/README.md)** | **The CLI reference manual** — *when and why* to use every command and option (not just *what*, which is `aida <cmd> --help`), with a lifecycle journey spine. 11 chapters; readable as an mdBook (`mdbook serve docs/cli`). The deepest day-to-day reference. |
-| [user-guide.md](user-guide.md) | Daily-use reference for the CLI and the dashboard. |
+| [user-guide.md](user-guide.md) | *Retired* — a stale `v0.1.0`-era duplicate; now a pointer to the docs above. |
 | [requirement-types.md](requirement-types.md) | What each of the 19 requirement types is *for* and how to write one well — the intent + best-practice layer over the enum's reference list. |
 | [lifecycle.md](lifecycle.md) | The Draft → Approved → Planned → In Progress → Done → Completed → Released state machine, the verb for each transition, and the edge cases. |
 | [review-process.md](review-process.md) | **Who reviews, by execution mode** — the advisor-by-hand / reviewer-phase / headless-tier topology, the fasttrack-vs-review tag split, and the completion handoff loop. The authoritative source for the review/escalation model. |

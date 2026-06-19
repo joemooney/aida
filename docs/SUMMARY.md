@@ -36,7 +36,7 @@
 
 # Operating & setup
 
-- [User guide](user-guide.md)
+- [User guide (retired)](user-guide.md)
 - [Admin guide](admin-guide.md)
 - [Storage modes](storage-modes.md)
 - [Multi-user setup](multi-user-setup.md)
