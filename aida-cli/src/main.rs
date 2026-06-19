@@ -10662,6 +10662,32 @@ fn complete_init_scaffolding(
     }
     println!();
 
+    // TASK-865: report the bubblewrap OS-sandbox availability so a new user
+    // learns up front whether userns confinement is available on this host.
+    // Informational only — never a prompt, never blocks init, and never enables
+    // `os_wrap` (that knob is opt-in / off by default). trace:TASK-865 | ai:claude
+    {
+        let avail = crate::session::bwrap_availability();
+        let glyph = match avail {
+            crate::session::BwrapAvailability::Ok => {
+                crate::glyph(crate::glyphs::Glyph::Check).green()
+            }
+            crate::session::BwrapAvailability::NotInstalled => {
+                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+            }
+            crate::session::BwrapAvailability::UsernsBlocked { .. } => {
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            }
+        };
+        println!("  {} {}", glyph, bwrap_status_line());
+        println!(
+            "    {}",
+            "OS sandbox is opt-in (off by default); enable via [contained] os_wrap once available"
+                .dimmed()
+        );
+        println!();
+    }
+
     // TASK-631: commit init's OWN scaffolding now that every scaffolded path
     // is on disk — auto when non-interactive, prompt default-Y on a TTY,
     // scoped to init-created paths (never `git add .`). This dissolves the
@@ -31106,6 +31132,9 @@ struct DoctorReport {
     hidden_completed_without_commit: usize,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     healed: Vec<DoctorHealResult>,
+    /// TASK-865: read-only bubblewrap OS-sandbox availability status line.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bwrap: Option<String>,
 }
 
 impl DoctorReport {
@@ -31115,6 +31144,7 @@ impl DoctorReport {
             findings,
             hidden_completed_without_commit: 0,
             healed: Vec::new(),
+            bwrap: Some(bwrap_status_line()),
         }
     }
 }
@@ -32420,7 +32450,53 @@ fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
     } else if !report.findings.is_empty() {
         println!("  Re-run with {} to apply safe fixes.", "--heal".cyan());
     }
+
+    // TASK-865: report read-only environment facts the operator wants when
+    // triaging launch confinement — currently the bubblewrap OS-sandbox status.
+    // Availability only; this never enables `os_wrap`. trace:TASK-865 | ai:claude
+    println!();
+    println!("{}", "─── Environment ───".bold());
+    render_doctor_bwrap_row();
     Ok(())
+}
+
+/// One-line bubblewrap (`bwrap`) OS-sandbox availability status, shared by
+/// `aida doctor` and `aida init`. Reports AVAILABILITY only — it does not
+/// enable `os_wrap` (the `[contained] os_wrap` knob is a separate concern).
+/// trace:TASK-865 | ai:claude
+fn bwrap_status_line() -> String {
+    match crate::session::bwrap_availability() {
+        crate::session::BwrapAvailability::Ok => {
+            "bwrap: OK (userns confinement available)".to_string()
+        }
+        crate::session::BwrapAvailability::NotInstalled => "bwrap: not installed".to_string(),
+        crate::session::BwrapAvailability::UsernsBlocked { hint } => {
+            format!("bwrap: installed but userns blocked — {hint}")
+        }
+    }
+}
+
+/// Render the bwrap availability row in `aida doctor`'s environment section,
+/// colourised to match the doctor-check output style. trace:TASK-865 | ai:claude
+fn render_doctor_bwrap_row() {
+    let avail = crate::session::bwrap_availability();
+    let glyph = match avail {
+        crate::session::BwrapAvailability::Ok => crate::glyph(crate::glyphs::Glyph::Check).green(),
+        crate::session::BwrapAvailability::NotInstalled => {
+            crate::glyph(crate::glyphs::Glyph::Bullet).dimmed()
+        }
+        crate::session::BwrapAvailability::UsernsBlocked { .. } => {
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        }
+    };
+    println!("  {} {}", glyph, bwrap_status_line());
+    if avail == crate::session::BwrapAvailability::NotInstalled {
+        println!(
+            "    {}",
+            "OS sandbox is opt-in (off by default); set [contained] os_wrap to enable once available"
+                .dimmed()
+        );
+    }
 }
 
 fn heal_doctor_findings(
