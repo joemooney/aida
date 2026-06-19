@@ -193,28 +193,141 @@ pub fn resolve_conflict(
 ///   instead of the LWW base silently dropping the loser's edge (STORY-645).
 /// - **`dependencies:`** — set union by target uuid, same rationale.
 ///
-/// `base` is the merge-base version; it is currently used only to anchor the
-/// id-keyed unions implicitly (ours+theirs is a superset of base for
-/// append-only arrays). It is accepted so the signature is a true three-way
-/// merge and so future field-level policies can diff against the base.
+/// **Scalar fields are merged FIELD-BY-FIELD against the base, not by picking
+/// one whole snapshot (BUG-586).** The old policy resolved ALL scalars with a
+/// single object-level LWW — it took the entire later-`modified_at` snapshot,
+/// so a concurrent edit to a *different* field on the older side (e.g. clone A
+/// sets priority, clone B sets owner) was silently dropped even though the two
+/// edits never touched the same field. The unioned oplog already captured both,
+/// but materialization ignored it. Now each scalar resolves independently
+/// (`merge_scalar`): a field changed on only ONE side relative to `base` takes
+/// that side's value; a field changed on BOTH sides to different values is a
+/// genuine conflict resolved by the deterministic LWW winner (BUG-578), never
+/// order-dependently. So different-field concurrent edits both survive.
+///
+/// `base` anchors the field-level 3-way diff (which side changed each field) and
+/// the id-keyed array unions.
+// trace:BUG-586 | ai:claude
 // trace:STORY-645 | ai:claude
 pub fn merge_spec_three_way(
     base: &Requirement,
     ours: &Requirement,
     theirs: &Requirement,
 ) -> Requirement {
-    // Scalar base: last-write-wins by modified_at. This carries title /
-    // description / status / priority / owner / feature / weight /
-    // relationships / dependencies / archived / etc. from whichever side wrote
-    // most recently — the same rule resolve_conflict applies. On an EXACT
-    // modified_at tie the winner is decided by a deterministic data-function
-    // (greater stable content hash), NOT by "ours", so both clones converge to
-    // the same winner regardless of which side runs the merge. trace:BUG-578 | ai:claude
-    let mut merged = match ours.modified_at.cmp(&theirs.modified_at) {
-        std::cmp::Ordering::Greater => ours.clone(),
-        std::cmp::Ordering::Less => theirs.clone(),
-        std::cmp::Ordering::Equal => deterministic_scalar_winner(ours, theirs),
+    // Determine the deterministic conflict-winner snapshot ONCE: the side with
+    // the later modified_at, or — on an EXACT tie — the greater stable content
+    // hash (a data-function both clones compute identically, never "ours"). This
+    // is used ONLY to break genuine same-field-both-sides conflicts, so the
+    // outcome is order-independent across clones. trace:BUG-578 | ai:claude
+    let ours_is_winner = match ours.modified_at.cmp(&theirs.modified_at) {
+        std::cmp::Ordering::Greater => true,
+        std::cmp::Ordering::Less => false,
+        // EXACT modified_at tie: defer to the same deterministic data-function
+        // resolve_conflict uses — greater stable content hash, UUID as the final
+        // tiebreak. Both clones compute this identically, so merging the same
+        // pair in opposite ours/theirs roles converges to the SAME winner.
+        std::cmp::Ordering::Equal => deterministic_winner_is_a(ours, theirs),
     };
+
+    // Start from the conflict-winner snapshot so any field NOT explicitly
+    // field-merged below (custom_fields maps, optional metadata blobs, etc.)
+    // still has a deterministic, order-independent value. The scalar fields are
+    // then OVERRIDDEN by the per-field 3-way merge so different-field edits both
+    // survive. trace:BUG-586 | ai:claude
+    let winner: &Requirement = if ours_is_winner { ours } else { theirs };
+    let mut merged = winner.clone();
+
+    // ---- BUG-586: field-by-field scalar merge against the base ----
+    // For each scalar, `merge_scalar` returns the side that changed it (when
+    // only one side did) or the conflict-winner's value (when both sides changed
+    // it to different values). `winner`/`loser` give the deterministic tie-break
+    // direction. trace:BUG-586 | ai:claude
+    merged.title = merge_scalar(&base.title, &ours.title, &theirs.title, ours_is_winner).clone();
+    merged.description = merge_scalar(
+        &base.description,
+        &ours.description,
+        &theirs.description,
+        ours_is_winner,
+    )
+    .clone();
+    merged.status =
+        merge_scalar(&base.status, &ours.status, &theirs.status, ours_is_winner).clone();
+    merged.custom_status = merge_scalar(
+        &base.custom_status,
+        &ours.custom_status,
+        &theirs.custom_status,
+        ours_is_winner,
+    )
+    .clone();
+    merged.priority = merge_scalar(
+        &base.priority,
+        &ours.priority,
+        &theirs.priority,
+        ours_is_winner,
+    )
+    .clone();
+    merged.custom_priority = merge_scalar(
+        &base.custom_priority,
+        &ours.custom_priority,
+        &theirs.custom_priority,
+        ours_is_winner,
+    )
+    .clone();
+    merged.owner = merge_scalar(&base.owner, &ours.owner, &theirs.owner, ours_is_winner).clone();
+    merged.assignee = merge_scalar(
+        &base.assignee,
+        &ours.assignee,
+        &theirs.assignee,
+        ours_is_winner,
+    )
+    .clone();
+    merged.feature = merge_scalar(
+        &base.feature,
+        &ours.feature,
+        &theirs.feature,
+        ours_is_winner,
+    )
+    .clone();
+    merged.weight = *merge_scalar(&base.weight, &ours.weight, &theirs.weight, ours_is_winner);
+    merged.archived = *merge_scalar(
+        &base.archived,
+        &ours.archived,
+        &theirs.archived,
+        ours_is_winner,
+    );
+    merged.archived_at = merge_scalar(
+        &base.archived_at,
+        &ours.archived_at,
+        &theirs.archived_at,
+        ours_is_winner,
+    )
+    .clone();
+    merged.deferred = *merge_scalar(
+        &base.deferred,
+        &ours.deferred,
+        &theirs.deferred,
+        ours_is_winner,
+    );
+    merged.deferred_at = merge_scalar(
+        &base.deferred_at,
+        &ours.deferred_at,
+        &theirs.deferred_at,
+        ours_is_winner,
+    )
+    .clone();
+    merged.deferred_until = merge_scalar(
+        &base.deferred_until,
+        &ours.deferred_until,
+        &theirs.deferred_until,
+        ours_is_winner,
+    )
+    .clone();
+    merged.human_only = *merge_scalar(
+        &base.human_only,
+        &ours.human_only,
+        &theirs.human_only,
+        ours_is_winner,
+    );
 
     // History: union by entry id, deterministic order. base contributes
     // nothing new (append-only ⇒ ours+theirs ⊇ base) but we fold it in too so
@@ -257,6 +370,51 @@ pub fn merge_spec_three_way(
     merged
 }
 
+/// Three-way merge of a single scalar field against the merge base (BUG-586).
+///
+/// The whole point: a field changed on only ONE side must take that side's
+/// value, so two clones editing DIFFERENT fields of the same spec both keep
+/// their edits instead of the older-`modified_at` side losing everything.
+///
+/// Rules (a true 3-way per-field merge):
+/// - `ours == theirs`            → no divergence, return that value.
+/// - only `ours` changed vs base → take `ours`.
+/// - only `theirs` changed vs base → take `theirs`.
+/// - BOTH changed to *different* values → a genuine same-field conflict;
+///   resolve by the deterministic LWW winner (`ours_is_winner`, computed once
+///   from `modified_at` + the BUG-578 content-hash tie-break), so the outcome is
+///   order-independent across clones. trace:BUG-586 | ai:claude
+fn merge_scalar<'a, T: PartialEq>(
+    base: &T,
+    ours: &'a T,
+    theirs: &'a T,
+    ours_is_winner: bool,
+) -> &'a T {
+    if ours == theirs {
+        // Both sides agree (either neither touched it, or both set the same
+        // value) — no conflict.
+        return ours;
+    }
+    let ours_changed = ours != base;
+    let theirs_changed = theirs != base;
+    match (ours_changed, theirs_changed) {
+        // Only one side changed it: that side's edit survives. This is the case
+        // BUG-586 was silently dropping for the older-modified_at side.
+        (true, false) => ours,
+        (false, true) => theirs,
+        // Both changed it to different values (genuine conflict) — or, defensively,
+        // neither differs from base yet the two sides differ (impossible given the
+        // ours==theirs guard, but total). Deterministic LWW winner decides.
+        (true, true) | (false, false) => {
+            if ours_is_winner {
+                ours
+            } else {
+                theirs
+            }
+        }
+    }
+}
+
 /// Decide the scalar-base winner when two versions have the EXACT same
 /// `modified_at` (a millisecond collision or clock skew).
 ///
@@ -269,21 +427,26 @@ pub fn merge_spec_three_way(
 ///
 /// trace:BUG-578 | ai:claude
 fn deterministic_scalar_winner(a: &Requirement, b: &Requirement) -> Requirement {
+    if deterministic_winner_is_a(a, b) {
+        a.clone()
+    } else {
+        b.clone()
+    }
+}
+
+/// The deterministic-tiebreak predicate: `true` iff `a` is the winner of an
+/// exact-`modified_at` tie. Compares the stable content hash (greater wins) and
+/// falls back to the UUID — both pure data-functions, so two clones agree no
+/// matter which side they call `a`. trace:BUG-578 | ai:claude
+fn deterministic_winner_is_a(a: &Requirement, b: &Requirement) -> bool {
     let (ha, hb) = (stable_content_hash(a), stable_content_hash(b));
-    let winner = match ha.cmp(&hb) {
-        std::cmp::Ordering::Greater => a,
-        std::cmp::Ordering::Less => b,
+    match ha.cmp(&hb) {
+        std::cmp::Ordering::Greater => true,
+        std::cmp::Ordering::Less => false,
         // Hash collision (or genuinely identical content): fall back to the
         // UUID, which is still a data-function — never "ours".
-        std::cmp::Ordering::Equal => {
-            if a.id >= b.id {
-                a
-            } else {
-                b
-            }
-        }
-    };
-    winner.clone()
+        std::cmp::Ordering::Equal => a.id >= b.id,
+    }
 }
 
 /// A stable, order-independent content hash of a requirement, used only to
@@ -955,6 +1118,237 @@ mod tests {
         assert!(ids.contains(&shared.id));
         assert!(ids.contains(&c_ours.id));
         assert!(ids.contains(&c_theirs.id));
+    }
+
+    // ----- BUG-586: field-level scalar merge (concurrent DIFFERENT-field edits) -----
+
+    // trace:BUG-586 — THE DOGFOOD REPRO. base spec; side A sets priority=High;
+    // side B sets owner=bob; three-way merge MUST keep BOTH. Against the old
+    // object-level LWW this FAILS (the older-modified_at side's edit is silently
+    // dropped); with the field-level merge it PASSES.
+    #[test]
+    fn test_merge_concurrent_different_scalar_fields_both_survive() {
+        let mut base = make_req("Title", "Draft");
+        base.priority = crate::models::RequirementPriority::Low;
+        base.owner = String::new();
+        base.modified_at = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        // Side A: priority -> High, modified_at = T1 (the OLDER side).
+        let mut side_a = base.clone();
+        side_a.priority = crate::models::RequirementPriority::High;
+        side_a.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        // Side B: owner -> bob, modified_at = T2 > T1 (the LWW winner under the
+        // old policy — so it would have dropped A's priority edit).
+        let mut side_b = base.clone();
+        side_b.owner = "bob".to_string();
+        side_b.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let merged = merge_spec_three_way(&base, &side_a, &side_b);
+
+        assert_eq!(
+            merged.effective_priority(),
+            "High",
+            "side A's priority edit must survive even though it has the older modified_at"
+        );
+        assert_eq!(merged.owner, "bob", "side B's owner edit must survive");
+
+        // Order-independence: opposite roles converge to the same result.
+        let merged_rev = merge_spec_three_way(&base, &side_b, &side_a);
+        assert_eq!(merged_rev.effective_priority(), "High");
+        assert_eq!(merged_rev.owner, "bob");
+    }
+
+    // trace:BUG-586 — many DIFFERENT field pairs each survive a concurrent merge.
+    #[test]
+    fn test_merge_many_different_field_pairs_survive() {
+        let base = make_req("Base Title", "Draft");
+
+        // ours changes title + status; theirs changes owner + description +
+        // priority. Disjoint field sets => all five edits must survive.
+        let mut ours = base.clone();
+        ours.title = "Ours Title".to_string();
+        ours.set_status_from_str("Approved");
+        ours.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut theirs = base.clone();
+        theirs.owner = "carol".to_string();
+        theirs.description = "Theirs description".to_string();
+        theirs.priority = crate::models::RequirementPriority::High;
+        theirs.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        for (a, b) in [(&ours, &theirs), (&theirs, &ours)] {
+            let merged = merge_spec_three_way(&base, a, b);
+            assert_eq!(merged.title, "Ours Title");
+            assert_eq!(merged.effective_status(), "Approved");
+            assert_eq!(merged.owner, "carol");
+            assert_eq!(merged.description, "Theirs description");
+            assert_eq!(merged.effective_priority(), "High");
+        }
+    }
+
+    // trace:BUG-586 — a field changed on only ONE side, regardless of which side
+    // is the LWW winner, takes that side's value (the other field stays at base).
+    #[test]
+    fn test_merge_single_side_field_change_wins_against_base() {
+        let mut base = make_req("Title", "Draft");
+        base.owner = "original".to_string();
+
+        // Only `ours` touches title; `theirs` is the newer (LWW-winner) snapshot
+        // but left title untouched.
+        let mut ours = base.clone();
+        ours.title = "Ours Only".to_string();
+        ours.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut theirs = base.clone();
+        theirs.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(
+            merged.title, "Ours Only",
+            "the only side that changed title must win even though it is not the LWW snapshot"
+        );
+        assert_eq!(merged.owner, "original");
+    }
+
+    // trace:BUG-586 / BUG-578 — a GENUINE same-field-both-sides conflict still
+    // resolves deterministically (LWW by modified_at; content-hash on a tie) and
+    // is order-independent.
+    #[test]
+    fn test_merge_same_field_both_sides_deterministic_winner() {
+        let base = make_req("Base", "Draft");
+
+        // Both change title to DIFFERENT values; theirs is strictly newer.
+        let mut ours = base.clone();
+        ours.title = "Ours".to_string();
+        ours.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut theirs = base.clone();
+        theirs.title = "Theirs".to_string();
+        theirs.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        // Newer side wins, regardless of argument order (no silent loss, no panic).
+        assert_eq!(merge_spec_three_way(&base, &ours, &theirs).title, "Theirs");
+        assert_eq!(merge_spec_three_way(&base, &theirs, &ours).title, "Theirs");
+    }
+
+    // trace:BUG-586 / BUG-578 — same-field conflict on an EXACT modified_at tie:
+    // both clones converge to the same winner via the content-hash data-function.
+    #[test]
+    fn test_merge_same_field_tie_order_independent() {
+        let base = make_req("Base", "Draft");
+        let tie_ts = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut ours = base.clone();
+        ours.owner = "alice".to_string();
+        ours.modified_at = tie_ts;
+
+        let mut theirs = base.clone();
+        theirs.owner = "bob".to_string();
+        theirs.modified_at = tie_ts;
+
+        let m1 = merge_spec_three_way(&base, &ours, &theirs);
+        let m2 = merge_spec_three_way(&base, &theirs, &ours);
+        assert_eq!(
+            m1.owner, m2.owner,
+            "exact-tie same-field conflict must converge"
+        );
+        assert!(m1.owner == "alice" || m1.owner == "bob");
+    }
+
+    // trace:BUG-586 — different-field edits survive even when both sides share an
+    // EXACT modified_at (the worst case for the old object-LWW: a tie would pick
+    // one whole snapshot and drop the other's field).
+    #[test]
+    fn test_merge_different_fields_on_exact_tie_both_survive() {
+        let base = make_req("Title", "Draft");
+        let tie_ts = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut ours = base.clone();
+        ours.priority = crate::models::RequirementPriority::High;
+        ours.modified_at = tie_ts;
+
+        let mut theirs = base.clone();
+        theirs.owner = "bob".to_string();
+        theirs.modified_at = tie_ts;
+
+        for (a, b) in [(&ours, &theirs), (&theirs, &ours)] {
+            let merged = merge_spec_three_way(&base, a, b);
+            assert_eq!(merged.effective_priority(), "High");
+            assert_eq!(merged.owner, "bob");
+        }
+    }
+
+    // trace:BUG-586 — concurrent edits to scalar fields AND arrays both survive:
+    // the field-level scalar merge must not regress the STORY-641/645 array
+    // unions (history/comments/tags/relationships).
+    #[test]
+    fn test_merge_scalars_and_arrays_compose() {
+        let mut base = make_req("Title", "Draft");
+        base.tags.insert("shared".to_string());
+
+        let mut ours = base.clone();
+        ours.priority = crate::models::RequirementPriority::High; // scalar edit
+        ours.tags.insert("ours-tag".to_string()); // array edit
+        ours.comments = vec![Comment::new("a".to_string(), "ours".to_string())];
+        ours.modified_at = DateTime::parse_from_rfc3339("2026-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let mut theirs = base.clone();
+        theirs.owner = "bob".to_string(); // different scalar edit
+        theirs.tags.insert("theirs-tag".to_string()); // array edit
+        theirs.comments = vec![Comment::new("b".to_string(), "theirs".to_string())];
+        theirs.modified_at = DateTime::parse_from_rfc3339("2026-01-03T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        // Both scalar edits survive.
+        assert_eq!(merged.effective_priority(), "High");
+        assert_eq!(merged.owner, "bob");
+        // All tags survive (set union).
+        assert!(merged.tags.contains("shared"));
+        assert!(merged.tags.contains("ours-tag"));
+        assert!(merged.tags.contains("theirs-tag"));
+        // Both comments survive (id union).
+        assert_eq!(merged.comments.len(), 2);
+    }
+
+    // trace:BUG-586 — direct unit coverage of the per-field 3-way helper.
+    #[test]
+    fn test_merge_scalar_helper_rules() {
+        // Both equal -> that value.
+        assert_eq!(merge_scalar(&"base", &"x", &"x", true), &"x");
+        // Only ours changed -> ours (even when ours is NOT the winner).
+        assert_eq!(merge_scalar(&"base", &"ours", &"base", false), &"ours");
+        // Only theirs changed -> theirs (even when theirs is NOT the winner).
+        assert_eq!(merge_scalar(&"base", &"base", &"theirs", true), &"theirs");
+        // Both changed differently -> winner decides.
+        assert_eq!(merge_scalar(&"base", &"ours", &"theirs", true), &"ours");
+        assert_eq!(merge_scalar(&"base", &"ours", &"theirs", false), &"theirs");
     }
 
     // trace:BUG-475 — emoji (4-byte) at the cutoff truncates on a char boundary.

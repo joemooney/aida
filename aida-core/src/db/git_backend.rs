@@ -416,6 +416,27 @@ impl GitBackend {
                     },
                 );
             }
+            // BUG-587: tag edits must reach the oplog too. Previously `aida edit
+            // --tags` wrote ONLY the YAML object and recorded no operation, so
+            // tag changes bypassed the CRDT substrate entirely — the oplog was an
+            // incomplete record of the spec's history. Emit one AddTag per added
+            // tag and one RemoveTag per removed tag, matching the documented
+            // "every status flip, priority change, tag edit lands as a structured
+            // row" invariant. trace:BUG-587 | ai:claude
+            for added in requirement.tags.difference(&old.tags) {
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::AddTag { tag: added.clone() },
+                );
+            }
+            for removed in old.tags.difference(&requirement.tags) {
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::RemoveTag {
+                        tag: removed.clone(),
+                    },
+                );
+            }
         }
 
         let wrote = object_store::write_object_if_changed(&self.objects_root, requirement)?;
@@ -1612,5 +1633,91 @@ mod tests {
         // The dispenser should be injected into loaded stores
         let store = backend.load().unwrap();
         assert!(store.dispenser.is_some());
+    }
+
+    // trace:BUG-587 — `aida edit --tags` must emit AddTag/RemoveTag oplog ops.
+    // Before the fix `stage_requirement_update` had no tags branch, so tag edits
+    // wrote ONLY the YAML object and recorded zero operations — bypassing the
+    // CRDT substrate. This counts ops on the edit path and asserts tag deltas
+    // now land in the oplog like every other field edit.
+    #[test]
+    fn test_tag_edit_emits_oplog_ops() {
+        use crate::oplog::{OpKind, OpLog};
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        // Disable auto_commit so the test doesn't need a git repo; oplog is
+        // independent of the commit step.
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+
+        // Seed an on-disk object (the diff branch only fires when the old
+        // object exists). Use update_requirement so the same edit path runs.
+        let mut req = Requirement::new("Tagged".into(), "desc".into());
+        req.spec_id = Some("TASK-1".into());
+        req.tags.insert("keep".to_string());
+        req.tags.insert("drop".to_string());
+        object_store::write_object_if_changed(&backend.objects_root, &req).unwrap();
+
+        let oplog_path = root.join("oplog.yaml");
+
+        // Edit: add "added", remove "drop", keep "keep".
+        let mut edited = req.clone();
+        edited.tags.remove("drop");
+        edited.tags.insert("added".to_string());
+        backend.update_requirement(&edited).unwrap();
+
+        let log = OpLog::load(&oplog_path).unwrap();
+        let mut added = Vec::new();
+        let mut removed = Vec::new();
+        for op in &log.operations {
+            match &op.kind {
+                OpKind::AddTag { tag } => added.push(tag.clone()),
+                OpKind::RemoveTag { tag } => removed.push(tag.clone()),
+                _ => {}
+            }
+        }
+        assert!(
+            added.contains(&"added".to_string()),
+            "AddTag op for the newly-added tag must be recorded (got added={added:?})"
+        );
+        assert!(
+            removed.contains(&"drop".to_string()),
+            "RemoveTag op for the removed tag must be recorded (got removed={removed:?})"
+        );
+        // The untouched tag must NOT churn an op.
+        assert!(!added.contains(&"keep".to_string()));
+        assert!(!removed.contains(&"keep".to_string()));
+    }
+
+    // trace:BUG-587 — a tag-only edit alongside a scalar edit records BOTH an
+    // AddTag op and the scalar op (substrate stays a complete record).
+    #[test]
+    fn test_tag_and_scalar_edit_both_recorded() {
+        use crate::oplog::{OpKind, OpLog};
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+
+        let mut req = Requirement::new("Title".into(), "desc".into());
+        req.spec_id = Some("TASK-2".into());
+        object_store::write_object_if_changed(&backend.objects_root, &req).unwrap();
+
+        let mut edited = req.clone();
+        edited.tags.insert("newtag".to_string());
+        edited.title = "New Title".to_string();
+        backend.update_requirement(&edited).unwrap();
+
+        let log = OpLog::load(&root.join("oplog.yaml")).unwrap();
+        let has_addtag = log
+            .operations
+            .iter()
+            .any(|op| matches!(&op.kind, OpKind::AddTag { tag } if tag == "newtag"));
+        let has_settitle = log
+            .operations
+            .iter()
+            .any(|op| matches!(&op.kind, OpKind::SetTitle { title } if title == "New Title"));
+        assert!(has_addtag, "tag edit must emit AddTag");
+        assert!(has_settitle, "scalar edit must still emit SetTitle");
     }
 }
