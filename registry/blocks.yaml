@@ -237,7 +237,7 @@ blocks:
   type_prefix: BUG
   range_start: 517
   range_end: 616
-  next: 583
+  next: 584
   allocated_at: 2026-05-16T20:38:49.330503240Z
 - node_id: '1'
   owner: joe

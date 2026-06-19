@@ -1,0 +1,18 @@
+id: 019edf43-b27c-7b70-8a60-609400d11c73
+spec_id: BUG-583
+agreed_id: BUG-583
+title: 'Brief generated ## Setup block hardcodes the binary repo path, not the target project — misdirects a cold vendor'
+description: 'Found by the TASK-870 cross-vendor portability experiment: a fresh Codex agent, given only the stock aida CLI, became productive in ~50s with ZERO integration - BUT the brief''s generated ''## Setup'' section hardcoded the AIDA BINARY''s own repo path instead of the target project''s path. Codex correctly ignored it, but a cold vendor following the Setup steps literally would cd OUT of its project into the wrong directory - directly undermining the zero-integration onboarding that is AIDA''s portability wedge. FIX: the brief generator (grep the brief Setup-block emission in aida-cli) must emit the TARGET PROJECT''s path/cwd (or a relative/$PWD-based instruction), never the binary''s compiled-in repo path. Add a test that a generated brief''s Setup block does not contain the aida source-repo path. This is a portability/onboarding defect on the exact surface the niche depends on.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T09:43:36.316062348Z
+modified_at: 2026-06-19T09:43:36.316062348Z
+req_type: Bug
+tags:
+- aida:brief
+- from-experiment
+- onboarding
+- papercut
+- portability
