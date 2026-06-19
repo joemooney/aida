@@ -9,12 +9,12 @@ description: |-
   - filter by --type / --author / --until / --shipped.
 
   This is a read-side parity gap, not a breakage (history works; BUG-588 UUID-resolution fix holds - history with spec_id resolves cleanly). Mirror the high-value CLI filters (at least limit, type, since/until, events-vs-digest, shipped) onto the history tool schema+handler so an MCP agent can ask the same questions the CLI can. Source: compare aida history --help against the history tool descriptor in aida-cli/src/mcp.rs. Verified-by-me: tools/call history {} returned count:9 with no limit honored; schema has only spec_id+since (debug build sha fdb0a69fc).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T14:29:04.683533264Z
-modified_at: 2026-06-19T16:17:21.609444020Z
+modified_at: 2026-06-19T16:25:33.565161684Z
 req_type: Task
 tags:
 - from-dogfood
@@ -26,3 +26,21 @@ comments:
   content: Commit cef109b72 references this requirement
   created_at: 2026-06-19T16:17:21.609444020Z
   modified_at: 2026-06-19T16:17:21.609444020Z
+history:
+- id: 019ee0b3-b278-7102-b5eb-053665bad902
+  author: aida-auto-bump
+  timestamp: 2026-06-19T16:25:33.560151757Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 019ee0b3-b27d-7b23-a3cc-267015cf829c
+  timestamp: 2026-06-19T16:25:33.565160495Z
+  agent: aida
+  commit_sha: 328e803d81ae6a3a948f14bff9d709f31b9da761
+  summary: Completed via merge 328e803d
+implementation_info:
+  implemented: false
+  completed_at: 2026-06-19T16:25:33.397608623Z
+  completion_sha: 328e803d81ae6a3a948f14bff9d709f31b9da761
