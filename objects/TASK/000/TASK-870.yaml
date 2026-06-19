@@ -1,0 +1,19 @@
+id: 019eddc4-c68d-7221-a4a8-1a993b286622
+spec_id: TASK-870
+agreed_id: TASK-870
+title: 'Cross-vendor portability test: time-to-productive for a new vendor agent, zero bespoke integration'
+description: 'MOVE 4. Drop a brand-new vendor agent (Gemini/Jules/Cursor) into a RUNNING AIDA fleet with only the CLI/MCP; measure time-to-first-productive-action (read a brief, claim a lease, ship a trailered commit). WHY: P8bs business case rests on this being near-zero (section 13.7); attacks the largest red-team hole (the gap existing != a small player capturing it) with the one thing incumbents structurally cannot show - a rival vendor joining with ZERO integration code (Agent Teams / Codex sub-agents are single-vendor). EVIDENCE: a time-to-productive table across 4+ vendors with "lines of bespoke integration = 0" as the headline column. Size S (extend the 2026-06-14 mailbox demo to the full graph surface + a stopwatch).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T02:45:21.165056350Z
+modified_at: 2026-06-19T02:45:21.165056350Z
+req_type: Task
+tags:
+- cross-vendor
+- evidence
+- from-discovery-0619
+- niche
+- parent:EPIC-50
+- tilt-verdict
