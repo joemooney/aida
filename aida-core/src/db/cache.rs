@@ -214,6 +214,10 @@ pub struct ListFilter {
     /// Exact match on assignee (team-member handle). Powers `aida list --mine`
     /// and `--assigned <user>`. trace:STORY-639 | ai:claude
     pub assignee: Option<String>,
+    /// Exact match on EITHER owner OR assignee (handle). Powers `aida list
+    /// --user <name>` / `me` / `user:<name>` — broader than the owner-only or
+    /// assignee-only filters. trace:STORY-662 | ai:claude
+    pub owner_or_assignee: Option<String>,
     /// Exact match on feature.
     pub feature: Option<String>,
     /// All listed tags must be present on the requirement (AND, not OR).
@@ -824,6 +828,13 @@ impl Cache {
             sql.push_str(" AND assignee = ?");
             args.push(a.clone());
         }
+        // trace:STORY-662 | ai:claude — `--user <name>` / `me` / `user:<name>`
+        // matches owner OR assignee, so a person sees specs they own OR are on.
+        if let Some(u) = &filter.owner_or_assignee {
+            sql.push_str(" AND (owner = ? OR assignee = ?)");
+            args.push(u.clone());
+            args.push(u.clone());
+        }
         if let Some(f) = &filter.feature {
             sql.push_str(" AND feature = ?");
             args.push(f.clone());
@@ -1412,6 +1423,53 @@ mod tests {
         let nobody = cache
             .list_summaries(&ListFilter {
                 assignee: Some("carol".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(nobody.is_empty());
+    }
+
+    /// STORY-662: the `owner_or_assignee` filter (behind `aida list --user
+    /// <name>` / `me` / `user:<name>`) matches a spec the person OWNS or is
+    /// ASSIGNED — broader than the owner-only or assignee-only filters.
+    /// trace:STORY-662 | ai:claude
+    #[test]
+    fn list_summaries_filter_by_owner_or_assignee() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        // owned by joe (sample_req default), unassigned.
+        let owned = sample_req("FR-1-001", "owned-by-joe");
+        // owned by spock, ASSIGNED to joe.
+        let mut assigned = sample_req("FR-1-002", "assigned-to-joe");
+        assigned.owner = "spock".into();
+        assigned.assignee = Some("joe".into());
+        // neither owned by nor assigned to joe.
+        let mut neither = sample_req("FR-1-003", "spocks");
+        neither.owner = "spock".into();
+        neither.assignee = Some("uhura".into());
+        store.requirements.push(owned);
+        store.requirements.push(assigned);
+        store.requirements.push(neither);
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // joe's view: the owned one AND the assigned-to-joe one, not spock's.
+        let joes = cache
+            .list_summaries(&ListFilter {
+                owner_or_assignee: Some("joe".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        let mut ids: Vec<&str> = joes.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, vec!["FR-1-001", "FR-1-002"]);
+
+        // A handle that neither owns nor is assigned anything matches nothing.
+        let nobody = cache
+            .list_summaries(&ListFilter {
+                owner_or_assignee: Some("carol".into()),
                 ..Default::default()
             })
             .unwrap();
