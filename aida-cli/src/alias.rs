@@ -165,6 +165,18 @@ pub fn registry() -> Vec<AliasGroup> {
             "aida help-all",
             "the full grouped command inventory",
         ),
+        // TASK-862: personal-view shortcuts (pre-clap argv rewrites in main.rs:
+        // `rewrite_personal_view_alias`).
+        row(
+            "aida mylist",
+            "aida list me",
+            "your specs — the ones you own or are assigned (shell identity)",
+        ),
+        row(
+            "aida myqueue",
+            "aida queue list",
+            "your work queue (the queue is already user-scoped)",
+        ),
     ];
 
     vec![
@@ -301,8 +313,14 @@ mod tests {
         ] {
             assert!(joined.contains(needle), "registry missing `{needle}`");
         }
-        // Command aliases
-        for needle in ["aida intake", "aida advisor assess", "aida agent <args>"] {
+        // Command aliases (incl. the TASK-862 personal-view shortcuts)
+        for needle in [
+            "aida intake",
+            "aida advisor assess",
+            "aida agent <args>",
+            "aida mylist",
+            "aida myqueue",
+        ] {
             assert!(joined.contains(needle), "registry missing `{needle}`");
         }
     }
@@ -333,6 +351,16 @@ mod tests {
             Cli::try_parse_from(["aida", "intake"]).unwrap().command,
             Command::Assess { .. }
         ));
+        // TASK-862: the personal-view shortcuts must rewrite exactly as the
+        // registry advertises (`mylist` -> `list me`, `myqueue` -> `queue list`).
+        assert_eq!(
+            crate::rewrite_personal_view_alias(&s(&["aida", "mylist"])),
+            s(&["aida", "list", "me"]),
+        );
+        assert_eq!(
+            crate::rewrite_personal_view_alias(&s(&["aida", "myqueue"])),
+            s(&["aida", "queue", "list"]),
+        );
     }
 
     /// `--json` output is valid JSON and round-trips the group shape.

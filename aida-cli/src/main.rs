@@ -707,6 +707,59 @@ mod story_423_asciinema_tests {
         );
     }
 
+    /// TASK-862: `aida mylist` rewrites to `aida list me` (forwarding flags) and
+    /// `aida myqueue` rewrites to `aida queue list`; everything else passes
+    /// through untouched, and the `aida list` default scope is never changed.
+    #[test]
+    fn personal_view_shortcuts_rewrite() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+        // `aida mylist` → `aida list me`
+        assert_eq!(
+            rewrite_personal_view_alias(&s(&["aida", "mylist"])),
+            s(&["aida", "list", "me"])
+        );
+        // extra flags forward through the rewrite
+        assert_eq!(
+            rewrite_personal_view_alias(&s(&["aida", "mylist", "--status", "open"])),
+            s(&["aida", "list", "me", "--status", "open"])
+        );
+        // `aida myqueue` → `aida queue list`
+        assert_eq!(
+            rewrite_personal_view_alias(&s(&["aida", "myqueue"])),
+            s(&["aida", "queue", "list"])
+        );
+        assert_eq!(
+            rewrite_personal_view_alias(&s(&["aida", "myqueue", "--no-in-flight"])),
+            s(&["aida", "queue", "list", "--no-in-flight"])
+        );
+
+        // The rewrites reach the real commands once clap parses them.
+        assert!(matches!(
+            Cli::try_parse_from(rewrite_personal_view_alias(&s(&["aida", "mylist"])))
+                .unwrap()
+                .command,
+            Command::List { .. }
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(rewrite_personal_view_alias(&s(&["aida", "myqueue"])))
+                .unwrap()
+                .command,
+            Command::Queue(_)
+        ));
+
+        // Plain `aida list` / `aida queue list` are untouched — the default
+        // scope question stays unactioned.
+        assert_eq!(
+            rewrite_personal_view_alias(&s(&["aida", "list"])),
+            s(&["aida", "list"])
+        );
+        assert_eq!(
+            rewrite_personal_view_alias(&s(&["aida", "queue", "list"])),
+            s(&["aida", "queue", "list"])
+        );
+    }
+
     /// STORY-623: `aida assess` is canonical, `aida intake` is the clap alias,
     /// and `aida advisor assess` rewrites to `aida assess` — all three reach the
     /// same Assess command with flags passed through.
@@ -1181,6 +1234,42 @@ pub(crate) const LIST_LENS_ALIASES: &[ListLensAlias] = &[
     },
 ];
 
+/// TASK-862: top-level personal-view shortcuts. `aida mylist` rewrites to
+/// `aida list me` (the current user's owned/assigned specs — STORY-662's `me`
+/// filter), forwarding any extra flags (`aida mylist --status open`). `aida
+/// myqueue` rewrites to `aida queue list`, which is already user-scoped via
+/// `current_user_id()` (BUG-89) — so `myqueue` is just a discoverable alias for
+/// "my queue". Both are pre-clap argv rewrites, the same idiom as
+/// `rewrite_list_alias` / `rewrite_advisor_assess`, so every downstream flag
+/// passes through unchanged. They deliberately do NOT touch the `aida list`
+/// default scope (`aida list` still shows ALL) — the default-scope question is
+/// recorded on the spec for the operator, not actioned here.
+// trace:TASK-862 | ai:claude
+fn rewrite_personal_view_alias(args: &[String]) -> Vec<String> {
+    if args.len() >= 2 {
+        match args[1].as_str() {
+            "mylist" => {
+                let mut out = Vec::with_capacity(args.len() + 1);
+                out.push(args[0].clone());
+                out.push("list".to_string());
+                out.push("me".to_string());
+                out.extend_from_slice(&args[2..]);
+                return out;
+            }
+            "myqueue" => {
+                let mut out = Vec::with_capacity(args.len() + 1);
+                out.push(args[0].clone());
+                out.push("queue".to_string());
+                out.push("list".to_string());
+                out.extend_from_slice(&args[2..]);
+                return out;
+            }
+            _ => {}
+        }
+    }
+    args.to_vec()
+}
+
 fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 3 && args[1] == "list" {
         let target: Option<&[&str]> = LIST_LENS_ALIASES
@@ -1255,8 +1344,11 @@ fn run() -> Result<()> {
     // advisor's verb spelled under its seat). `aida assess` itself + the `intake`
     // alias are handled by clap's visible_alias on the Assess variant.
     // trace:TASK-822 trace:TASK-824 trace:STORY-623 | ai:claude
+    // TASK-862: `aida mylist` / `aida myqueue` personal-view shortcuts rewrite
+    // before the list-lens / advisor-assess passes so `mylist` reaches the same
+    // `list me` path the lens resolvers feed.
     let mut cli = Cli::parse_from(rewrite_agent_default_new(&rewrite_list_alias(
-        &rewrite_advisor_assess(&raw_args),
+        &rewrite_advisor_assess(&rewrite_personal_view_alias(&raw_args)),
     )));
 
     if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
