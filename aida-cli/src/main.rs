@@ -38645,11 +38645,31 @@ fn run_tracked_agent(
     launch_context: Option<&AgentLaunchContext>,
     prompt_args: &[String],
 ) -> Result<()> {
-    let mut command = std::process::Command::new(binary);
+    // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
+    // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
+    // (or the TASK-876 `AIDA_OS_WRAP` per-host override is set) and the agent is
+    // claude, the resolved binary + all args are wrapped in `bwrap …` with the
+    // SAME fail-closed contract (bwrap missing / userns blocked → error with
+    // remediation, never a silent unconfined launch). When os_wrap is OFF this
+    // returns the bare program + args, so a normal `aida agent new` is
+    // byte-identical to today's behavior. Non-claude agents keep the bare path.
+    // trace:TASK-864 | ai:claude
+    let mut all_args: Vec<String> = config.default_args.clone();
+    all_args.extend(prompt_args.iter().cloned());
+    let (program, exec_args): (std::ffi::OsString, Vec<String>) = if config.agent_type == "claude" {
+        let (prog, args) = crate::session::os_wrapped_program_and_args(
+            &plan.launch_cwd,
+            &binary.to_string_lossy(),
+            all_args,
+        )?;
+        (std::ffi::OsString::from(prog), args)
+    } else {
+        (binary.as_os_str().to_os_string(), all_args)
+    };
+    let mut command = std::process::Command::new(&program);
     command
         .current_dir(&plan.launch_cwd)
-        .args(&config.default_args)
-        .args(prompt_args)
+        .args(&exec_args)
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: export AIDA_USER = the stable name so the spawned agent's
