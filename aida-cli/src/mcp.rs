@@ -2143,28 +2143,62 @@ impl<'a> McpServer<'a> {
             }
             raw
         });
-        let since = args
-            .get("since")
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
+        // TASK-882: reach CLI parity. Mirror `aida history`'s filter surface
+        // onto the MCP tool so an agent can ask the same questions the CLI can:
+        // --events/--type/--author/--since/--until/--limit/--shipped/--status-changes/
+        // --comments/--oneline. The string filters trim+empty-drop like spec_id.
+        // trace:TASK-882 | ai:claude
+        let str_arg = |key: &str| -> Option<String> {
+            args.get(key)
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+        let bool_arg =
+            |key: &str| -> bool { args.get(key).and_then(|v| v.as_bool()).unwrap_or(false) };
+
+        let since = str_arg("since");
+        let until = str_arg("until");
+        let type_filter = str_arg("type");
+        let author_filter = str_arg("author");
+        let shipped_only = bool_arg("shipped");
+        // `--shipped` implies events mode, mirroring the CLI. The MCP default has
+        // always been events mode (the structured ledger), so `events` defaults
+        // true here and a caller passing `events: false` only matters for the
+        // digest-vs-events distinction the CLI surfaces.
+        let events_mode =
+            args.get("events").and_then(|v| v.as_bool()).unwrap_or(true) || shipped_only;
+        let status_changes_only = bool_arg("status_changes");
+        let comments_only = bool_arg("comments");
+        let oneline = bool_arg("oneline");
+        // `limit` caps decoded events; default preserves the historical 100.
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .filter(|&n| n > 0)
+            .unwrap_or(100);
+        // Walk at least 5x the limit (CLI events-mode default) so the cap is met.
+        let max_commits = (limit.saturating_mul(5)).max(500);
 
         let opts = HistoryOpts {
-            limit: 100,
-            max_commits: 500,
-            events_mode: true,
+            limit,
+            max_commits,
+            events_mode,
             id_filter: spec_id,
-            type_filter: None,
-            author_filter: None,
+            type_filter,
+            author_filter,
             since,
-            until: None,
-            status_changes_only: false,
-            shipped_only: false,
-            comments_only: false,
-            oneline: false,
-            // MCP consumers expect an event ledger, not the CLI's
-            // day-to-day archived-work filter.
+            until,
+            status_changes_only,
+            shipped_only,
+            comments_only,
+            oneline,
+            // MCP consumers expect the full event ledger, not the CLI's
+            // day-to-day archived/deferred-work filter. The ledger is therefore
+            // already equivalent to `aida history --all`; no `all` toggle is
+            // needed because nothing is hidden by default here.
             archived_specs: std::collections::HashSet::new(),
             archived_only_specs: None,
             // STORY-584: same — no defer filtering on the MCP ledger.
@@ -6372,20 +6406,72 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "history",
-            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history --events` for MCP consumers. Returns pretty-printed JSON with structured event records.",
+            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history --events` for MCP consumers. Returns pretty-printed JSON with structured event records. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "spec_id": {
                         "type": "string",
-                        "description": "Optional SPEC-ID filter for a single requirement's event history.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "description": "Optional SPEC-ID filter for a single requirement's event history (mirrors `aida history --id`). Accepts the raw UUID `show_requirement` returns; it is resolved to the canonical SPEC-ID before filtering.",
                         "example": "TASK-538"
+                    },
+                    "events": {
+                        "type": "boolean",
+                        "description": "Per-event chronological mode (mirrors `aida history --events`). The MCP tool defaults to true (the structured event ledger).",
+                        "default": true,
+                        "example": true
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Only events for requirements of this type (mirrors `aida history --type`).",
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
+                        "example": "bug"
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Only events authored by this user (mirrors `aida history --author`; matches the YAML `last_modified_by` HLC field if present, else the git committer email).",
+                        "example": "joe@example.com"
                     },
                     "since": {
                         "type": "string",
                         "description": "Optional lower time bound, passed through to git just like `aida history --since` (RFC3339 or relative expressions supported by git).",
                         "example": "24 hours ago"
+                    },
+                    "until": {
+                        "type": "string",
+                        "description": "Optional upper time bound (mirrors `aida history --until`; RFC3339 or relative expressions supported by git).",
+                        "example": "2026-06-01"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Cap the number of decoded events returned (mirrors `aida history --limit`). Defaults to 100.",
+                        "minimum": 1,
+                        "default": 100,
+                        "example": 20
+                    },
+                    "shipped": {
+                        "type": "boolean",
+                        "description": "Only Done->Completed ship transitions, newest first — the 'did my ship register?' view (mirrors `aida history --shipped`). Implies events mode; composes with since/until/limit.",
+                        "default": false,
+                        "example": true
+                    },
+                    "status_changes": {
+                        "type": "boolean",
+                        "description": "Filter to status-transition events only (mirrors `aida history --status-changes`; events mode).",
+                        "default": false,
+                        "example": true
+                    },
+                    "comments": {
+                        "type": "boolean",
+                        "description": "Filter to comment events only (mirrors `aida history --comments`; events mode).",
+                        "default": false,
+                        "example": true
+                    },
+                    "oneline": {
+                        "type": "boolean",
+                        "description": "Terse one-line-per-event detail (mirrors `aida history --oneline`; events mode).",
+                        "default": false,
+                        "example": true
                     }
                 }
             },
