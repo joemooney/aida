@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-19T02:39:56.700622713Z
-modified_at: 2026-06-19T05:07:40.841108588Z
+modified_at: 2026-06-19T07:51:34.925536622Z
 req_type: Task
 tags:
 - bubblewrap
@@ -16,6 +16,12 @@ tags:
 - parent:SPIKE-68
 - reliability
 - sandbox
+comments:
+- id: 019ededd-230d-7580-8619-f2f7a6af03ef
+  author: joe
+  content: 'Live re-verification 2026-06-19 (after operator set kernel.apparmor_restrict_unprivileged_userns=0): TASK-864 was already merged via PR-1042 (f05d3190); worktree HEAD has zero diff vs origin/main. Re-ran the gate with the live arm forced: AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --bin aida -- interactive_path_wraps_when_enabled_unchanged_when_off bwrap_write_confinement_live_or_fail_closed aida_os_wrap_env_overrides_config => 3 passed. The live confinement arm actually executed bwrap on this host (inside-worktree write persists, outside read-only-root write BLOCKED, no leak). fmt --check / clippy correctness / glyph-lint --block all green. Off-path (os_wrap OFF) confirmed byte-identical (program==resolved binary, args unchanged). No new PR needed.'
+  created_at: 2026-06-19T07:51:34.925536622Z
+  modified_at: 2026-06-19T07:51:34.925536622Z
 history:
 - id: 019ede47-14a4-71c2-8cb0-69a0933e2c9a
   author: aida-auto-bump
