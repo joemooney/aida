@@ -6932,6 +6932,11 @@ pub enum Command {
         // trace:TASK-108 | ai:claude
         #[clap(long)]
         json: bool,
+        /// Suppress the non-blocking "N uncommitted change(s) not
+        /// included" notice (also honors AIDA_PUSH_QUIET).
+        // trace:TASK-863 | ai:claude
+        #[clap(long)]
+        no_notice: bool,
     },
 
     /// Fetch remote refs for both legs (code + orphan store) without
