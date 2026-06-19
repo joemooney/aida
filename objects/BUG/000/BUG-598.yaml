@@ -1,0 +1,34 @@
+id: 019ee092-b34d-72c3-91ca-701df0ab1e7a
+spec_id: BUG-598
+agreed_id: BUG-598
+title: 'docs/user-guide.md is broadly stale (v0.1.0 footer): wrong env vars, removed commands, wrong type prefixes, 4-state model, desktop-app sections'
+description: |
+  Dogfood of docs/user-guide.md (2026-06-19) vs CLI v0.14.0. The doc footer reads "Generated for AIDA v0.1.0"; large parts have drifted. Verified findings (each reproduced against the binary or grepped in source):
+
+  HIGH (would error or mislead):
+  - `aida list --search "login"` (line ~139) does NOT exist -> "unexpected argument '--search'". Search is `aida search <query>`.
+  - `aida feature rename` and `aida feature move` (lines ~196,199) do NOT exist. feature subcommands are only add/list/show/edit.
+  - Default-feature env var is wrong (lines ~569-574, 864): doc says AIDA_FEATURE; code reads REQ_FEATURE (aida-core/src/models.rs:3978, aida-cli/src/prompts.rs:58, cli.rs:5750). AIDA_FEATURE has no effect.
+  - AIDA_DB_NAME env var (line ~863) does not exist in source; also dead since the project registry/--project was removed.
+  - Type prefixes wrong (lines ~403-407): doc says FUNC/NFUNC/SYS/USER; actual are FR/NFR/SR/UR (verified by adding specs). Only CR is correct.
+  - Status/Type tables outdated (lines ~325, 377-416): doc shows a 4-state model (Draft/Approved/Completed/Rejected) and ~5 types; real system has 7 active states + needs-attention and 19 types (epic/story/task/bug/spike/sprint/folder/meta/... entirely absent). cf. prior TASK-716 which fixed the same drift in CLAUDE.md.
+  - Troubleshooting recommends removed `aida db add` (lines ~1080-1081); errors as unrecognized subcommand and contradicts the doc's own "one store per repo" section.
+
+  MEDIUM:
+  - Dead link DEVELOPER_GUIDE.md (line ~7) - file does not exist in docs/.
+  - Desktop-app surface is gone from this repo (lines ~695-727 shortcuts, ~794 ~/.aida_gui_settings.yaml, ~1091-1093 troubleshooting; line-3 tagline "CLI, web dashboard, and desktop app"). Native client was extracted 2026-05-02. No mention of the shipped `aida tui` terminal shell.
+  - Stale backup tip (line ~1063) frames legacy single-file SQLite/YAML backends as a normal workflow; predates git-canonical mode.
+  - Footer version stale (line ~1103): "Generated for AIDA v0.1.0" (current 0.14.0).
+
+  NOTE: the daily-driver CLI sections (add/list filters/rel/rel-def/db/export-import/meta/show/gitlab) were re-verified and DO hold up - this is targeted staleness, not a full rewrite. Verified in throwaway store + source grep.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-06-19T15:49:31.085199147Z
+modified_at: 2026-06-19T15:49:31.085199147Z
+req_type: Bug
+tags:
+- docs
+- drift
+- from-dogfood
